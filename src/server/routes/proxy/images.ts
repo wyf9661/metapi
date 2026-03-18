@@ -176,7 +176,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
             body: cloneFormDataWithOverrides(multipartForm, {
               model: selected.actualModel || requestedModel,
             }) as any,
-          })
+          }, getProxyUrlFromExtraConfig(selected.account.extraConfig))
           : withSiteRecordProxyRequestInit(selected.site, {
             method: 'POST',
             headers: {
@@ -187,7 +187,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
               ...(jsonBody || {}),
               model: selected.actualModel || requestedModel,
             }),
-          });
+          }, getProxyUrlFromExtraConfig(selected.account.extraConfig));
 
         const upstream = await fetch(targetUrl, requestInit);
         const text = await upstream.text();
