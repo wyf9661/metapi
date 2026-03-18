@@ -56,7 +56,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
       excludeChannelIds.push(selected.channel.id);
 
       const targetUrl = buildUpstreamUrl(selected.site.url, '/v1/embeddings');
-      const forwardBody = { ...body, model: selected.actualModel };
+      const forwardBody = { ...body, model: selected.actualModel || requestedModel };
       const startTime = Date.now();
 
       try {
