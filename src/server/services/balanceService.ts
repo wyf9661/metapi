@@ -429,12 +429,12 @@ export async function refreshBalance(accountId: number) {
 
     if (canTryManagedSub2ApiRefresh) {
       try {
-        const refreshed = await refreshSub2ApiManagedSession({
+        const refreshed = await withAccountProxyOverride(accountProxyUrl, () => refreshSub2ApiManagedSession({
           account,
           site,
           currentAccessToken: activeAccessToken,
           currentExtraConfig: activeExtraConfig,
-        });
+        }));
         activeAccessToken = refreshed.accessToken;
         activeExtraConfig = refreshed.extraConfig;
         balanceInfo = await readBalance(activeAccessToken);
@@ -467,12 +467,12 @@ export async function refreshBalance(accountId: number) {
     supportsTodayIncomeLogFallback(site.platform)
   ) {
     try {
-      const fallbackIncome = await fetchTodayIncomeFromLogs({
+      const fallbackIncome = await withAccountProxyOverride(accountProxyUrl, () => fetchTodayIncomeFromLogs({
         baseUrl: site.url,
         accessToken: activeAccessToken,
         platform: site.platform,
         platformUserId,
-      });
+      }));
       if (typeof fallbackIncome === 'number' && Number.isFinite(fallbackIncome)) {
         balanceInfo.todayIncome = fallbackIncome;
       }
