@@ -1869,6 +1869,11 @@ body {
   color: var(--color-text-muted);
 }
 
+.badge-purple {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
 .badge-link {
   display: inline-flex;
   text-decoration: none;

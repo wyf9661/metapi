@@ -1601,7 +1601,7 @@ export default function Accounts() {
                               {connectionMode === 'apikey' ? 'API Key' : 'Session'}
                             </span>
                             {(() => { try { return JSON.parse(a.extraConfig || '{}')?.proxyUrl; } catch { return null; } })() && (
-                              <span className="badge badge-outline" style={{ fontSize: 10 }}>代理</span>
+                              <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
                             )}
                           </div>
                         )}
@@ -1814,7 +1814,7 @@ export default function Accounts() {
                               {connectionMode === 'apikey' ? 'API Key' : 'Session'}
                             </span>
                             {(() => { try { return JSON.parse(a.extraConfig || '{}')?.proxyUrl; } catch { return null; } })() && (
-                              <span className="badge badge-outline" style={{ fontSize: 10 }}>代理</span>
+                              <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
                             )}
                           </div>
                         </td>
