@@ -71,7 +71,7 @@ export async function completionsProxyRoute(app: FastifyInstance) {
             'Authorization': `Bearer ${selected.tokenValue}`,
           },
           body: JSON.stringify(forwardBody),
-        }));
+        }, getProxyUrlFromExtraConfig(selected.account.extraConfig)));
 
         if (!upstream.ok) {
           const errText = await upstream.text().catch(() => 'unknown error');

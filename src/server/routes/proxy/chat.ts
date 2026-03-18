@@ -839,7 +839,7 @@ async function handleClaudeCountTokensRequest(
           method: 'POST',
           headers: requestForFetch.headers,
           body: JSON.stringify(requestForFetch.body),
-        }),
+        }, resolveChannelProxyUrl(selected.site, selected.account.extraConfig)),
       });
 
       if (upstream.status === 401 && oauth) {
@@ -859,7 +859,7 @@ async function handleClaudeCountTokensRequest(
               method: 'POST',
               headers: requestForFetch.headers,
               body: JSON.stringify(requestForFetch.body),
-            }),
+            }, resolveChannelProxyUrl(selected.site, selected.account.extraConfig)),
           });
         } catch {
           // Fall through to the regular upstream error handling below.
