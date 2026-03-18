@@ -496,6 +496,7 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
   const site = row.sites;
   const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
   const adapter = getAdapter(site.platform);
+  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
 
   const accountTokens = await db.select()
     .from(schema.accountTokens)
@@ -525,7 +526,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       const codexModels = await withTimeout(
-        () => discoverCodexModelsFromCloud({ site, account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => discoverCodexModelsFromCloud({ site, account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `codex model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -595,7 +597,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       await withTimeout(
-        () => validateClaudeOauthConnection({ site, account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => validateClaudeOauthConnection({ site, account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `claude oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -661,7 +664,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       await withTimeout(
-        () => validateGeminiCliOauthConnection({ account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => validateGeminiCliOauthConnection({ account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -727,7 +731,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       const antigravityModels = await withTimeout(
-        () => discoverAntigravityModelsFromCloud({ site, account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => discoverAntigravityModelsFromCloud({ site, account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `antigravity model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -797,7 +802,6 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
   }
 
   const platformUserId = resolvePlatformUserId(account.extraConfig, account.username);
-  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
   let discoveredApiToken: string | null = null;
 
   if (!account.apiToken && account.accessToken) {
