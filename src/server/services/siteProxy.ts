@@ -154,19 +154,23 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
   return siteProxyCache.rows;
 }
 
-function getDispatcherByProxyUrl(proxyUrl: string): Dispatcher | undefined {
+function getDispatcherByProxyUrl(proxyUrl: string, skipCache = false): Dispatcher | undefined {
   const normalized = normalizeSiteProxyUrl(proxyUrl);
   if (!normalized) return undefined;
 
-  const cached = dispatcherCache.get(normalized);
-  if (cached) return cached;
+  if (!skipCache) {
+    const cached = dispatcherCache.get(normalized);
+    if (cached) return cached;
+  }
 
   try {
     const parsedProxyUrl = new URL(normalized);
     const dispatcher = SOCKS_PROXY_PROTOCOLS.has(parsedProxyUrl.protocol.toLowerCase())
       ? createSocksDispatcher(parsedProxyUrl)
       : new ProxyAgent(normalized);
-    dispatcherCache.set(normalized, dispatcher);
+    if (!skipCache) {
+      dispatcherCache.set(normalized, dispatcher);
+    }
     return dispatcher;
   } catch {
     return undefined;
@@ -413,7 +417,7 @@ export async function withSiteProxyRequestInit(
     return nextOptions;
   }
 
-  const dispatcher = getDispatcherByProxyUrl(proxyUrl);
+  const dispatcher = getDispatcherByProxyUrl(proxyUrl, alsOverride != null);
   if (!dispatcher) {
     return nextOptions;
   }
@@ -427,11 +431,12 @@ export async function withSiteProxyRequestInit(
 export function withExplicitProxyRequestInit(
   proxyUrl: string | null | undefined,
   options?: UndiciRequestInit,
+  skipCache = false,
 ): UndiciRequestInit {
   const normalized = normalizeSiteProxyUrl(proxyUrl);
   if (!normalized) return options ?? {};
 
-  const dispatcher = getDispatcherByProxyUrl(normalized);
+  const dispatcher = getDispatcherByProxyUrl(normalized, skipCache);
   if (!dispatcher) return options ?? {};
 
   return {
@@ -457,8 +462,9 @@ export function withSiteRecordProxyRequestInit(
   if (mergedHeaders) {
     nextOptions.headers = mergedHeaders;
   }
-  const proxyUrl = normalizeSiteProxyUrl(accountProxyUrl) || resolveProxyUrlForSite(site);
-  return withExplicitProxyRequestInit(proxyUrl, nextOptions);
+  const accountNormalized = normalizeSiteProxyUrl(accountProxyUrl);
+  const proxyUrl = accountNormalized || resolveProxyUrlForSite(site);
+  return withExplicitProxyRequestInit(proxyUrl, nextOptions, !!accountNormalized);
 }
 
 export function resolveChannelProxyUrl(
