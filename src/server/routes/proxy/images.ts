@@ -109,7 +109,23 @@ export async function imagesProxyRoute(app: FastifyInstance) {
         return reply.code(upstream.status).send(data);
       } catch (err: any) {
         tokenRouter.recordFailure(selected.channel.id);
-        logProxy(selected, requestedModel, 'failed', 0, Date.now() - startTime, err.message, retryCount, logDownstreamApiKeyId ? downstreamApiKeyId : null);, async (request: FastifyRequest, reply: FastifyReply) => {
+        logProxy(selected, requestedModel, 'failed', 0, Date.now() - startTime, err.message, retryCount, logDownstreamApiKeyId ? downstreamApiKeyId : null);
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          continue;
+        }
+        await reportProxyAllFailed({
+          model: requestedModel,
+          reason: err.message || 'network failure',
+        });
+        return reply.code(502).send({
+          error: { message: `Upstream error: ${err.message}`, type: 'upstream_error' },
+        });
+      }
+    }
+  });
+
+  app.post('/v1/images/edits', async (request: FastifyRequest, reply: FastifyReply) => {
     const multipartForm = await parseMultipartFormData(request);
     const jsonBody = (!multipartForm && request.body && typeof request.body === 'object')
       ? request.body as Record<string, unknown>
