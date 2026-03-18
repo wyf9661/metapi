@@ -95,6 +95,32 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
           return reply.code(upstream.status).send({ error: { message: text, type: 'upstream_error' } });
         }
 
+        let data: any = {};
+        try { data = JSON.parse(text); } catch { data = {}; }
+        const parsedUsage = parseProxyUsage(data);
+        const latency = Date.now() - startTime;
+        const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
+          site: selected.site,
+          account: selected.account,
+          tokenValue: selected.tokenValue,
+          tokenName: selected.tokenName,
+          modelName: selected.actualModel || requestedModel,
+          requestStartedAtMs: startTime,
+          requestEndedAtMs: startTime + latency,
+          localLatencyMs: latency,
+          usage: {
+            promptTokens: parsedUsage.promptTokens,
+            completionTokens: parsedUsage.completionTokens,
+            totalTokens: parsedUsage.totalTokens,
+          },
+        });
+        const { estimatedCost, billingDetails } = await resolveProxyLogBilling({
+          site: selected.site,
+          account: selected.account,
+          modelName: selected.actualModel || requestedModel,
+          parsedUsage,
+          resolvedUsage,
+        });
         tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
         recordDownstreamCostUsage(request, estimatedCost);
         logProxy(
