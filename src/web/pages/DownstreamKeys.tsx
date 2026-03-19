@@ -277,13 +277,13 @@ function buildEditorForm(item?: ManagedItem | DownstreamApiKeyItem | null): Edit
 }
 
 function summarizeModelLimit(models: string[]): string {
-  if (!Array.isArray(models) || models.length === 0) return '全部模型';
+  if (!Array.isArray(models) || models.length === 0) return '未授权模型';
   if (models.length === 1) return models[0];
   return `${models[0]} +${models.length - 1}`;
 }
 
 function summarizeRouteLimit(routeIds: number[], routeMap: Map<number, RouteSelectorItem>): string {
-  if (!Array.isArray(routeIds) || routeIds.length === 0) return '全部群组';
+  if (!Array.isArray(routeIds) || routeIds.length === 0) return '未授权群组';
   const names = routeIds
     .map((id) => routeMap.get(id))
     .filter(Boolean)
@@ -956,11 +956,26 @@ function EditorModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div>
                     <div className="downstream-key-modal-section-title">模型白名单</div>
-                    <div className="downstream-key-modal-help">只展示精确模型，未勾选则视为全部模型可用</div>
+                    <div className="downstream-key-modal-help">只展示精确模型；未勾选时默认不允许任何精确模型，可点“全选”一次性放开。</div>
                   </div>
-                  <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedModels: [] }))}>
-                    清空
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedModels: exactModels }))}
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedModels: [] }))}
+                    >
+                      清空
+                    </button>
+                  </div>
                 </div>
                 <div className="downstream-key-modal-meta">已选 {selectedModelCount} 个模型</div>
                 <div className="toolbar-search" style={{ maxWidth: '100%' }}>
@@ -995,11 +1010,26 @@ function EditorModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div>
                     <div className="downstream-key-modal-section-title">群组范围</div>
-                    <div className="downstream-key-modal-help">限制可访问的群组路由，未勾选则视为全部群组可用</div>
+                    <div className="downstream-key-modal-help">限制可访问的群组路由；未勾选时默认不允许任何群组，可点“全选”一次性放开。</div>
                   </div>
-                  <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: [] }))}>
-                    清空
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: groupRouteOptions.map((route) => route.id) }))}
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: [] }))}
+                    >
+                      清空
+                    </button>
+                  </div>
                 </div>
                 <div className="downstream-key-modal-meta">已选 {selectedGroupCount} 个群组</div>
                 <div className="toolbar-search" style={{ maxWidth: '100%' }}>

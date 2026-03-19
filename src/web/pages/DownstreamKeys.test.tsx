@@ -404,6 +404,80 @@ describe('DownstreamKeys page', () => {
     }
   });
 
+  it('lets operators explicitly select all exact models and all group routes before saving', async () => {
+    apiMock.getRoutesLite.mockResolvedValue([
+      { id: 11, modelPattern: 'claude-*', displayName: '默认群组', enabled: true },
+      { id: 12, modelPattern: 'gpt-4.1-mini', displayName: 'GPT 4.1 Mini', enabled: true },
+      { id: 13, modelPattern: 're:^gemini-2\\..*$', displayName: 'Gemini 全家桶', enabled: true },
+      { id: 14, modelPattern: 'claude-opus-4-6', displayName: 'Claude Opus 4.6', enabled: true },
+    ]);
+
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const createBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
+      await act(async () => {
+        createBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const advancedBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('高级配置'))[0];
+      await act(async () => {
+        advancedBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const panels = root!.root.findAll((node) => node.props.className === 'downstream-key-advanced-panel');
+      const modelPanel = panels.find((node) => collectText(node).includes('模型白名单'));
+      const groupPanel = panels.find((node) => collectText(node).includes('群组范围'));
+      expect(modelPanel).toBeTruthy();
+      expect(groupPanel).toBeTruthy();
+
+      const modelSelectAllBtn = modelPanel!.findAll((node) => node.type === 'button' && collectText(node).includes('全选'))[0];
+      const groupSelectAllBtn = groupPanel!.findAll((node) => node.type === 'button' && collectText(node).includes('全选'))[0];
+
+      await act(async () => {
+        modelSelectAllBtn.props.onClick();
+        groupSelectAllBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const inputs = root!.root.findAllByType('input');
+      const nameInput = inputs.find((node) => node.props.placeholder === '例如：项目 A / 移动端');
+      const keyInput = inputs.find((node) => node.props.placeholder === 'sk-...');
+      await act(async () => {
+        nameInput!.props.onChange({ target: { value: 'select-all-key' } });
+        keyInput!.props.onChange({ target: { value: 'sk-select-all-key-0319' } });
+      });
+      await flushMicrotasks();
+
+      const saveBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('创建密钥'))[0];
+      await act(async () => {
+        saveBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.createDownstreamApiKey).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'select-all-key',
+        key: 'sk-select-all-key-0319',
+        supportedModels: ['claude-opus-4-6', 'gpt-4.1-mini'],
+        allowedRouteIds: [11, 13],
+      }));
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('uses backend batch api for selected rows', async () => {
     let root: ReturnType<typeof create> | null = null;
     try {

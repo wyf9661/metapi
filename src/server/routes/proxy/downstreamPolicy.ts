@@ -4,7 +4,9 @@ import { isModelAllowedByPolicyOrAllowedRoutes, recordManagedKeyCostUsage } from
 import { EMPTY_DOWNSTREAM_ROUTING_POLICY, type DownstreamRoutingPolicy } from '../../services/downstreamPolicyTypes.js';
 
 export function getDownstreamRoutingPolicy(request: FastifyRequest): DownstreamRoutingPolicy {
-  return getProxyAuthContext(request)?.policy || EMPTY_DOWNSTREAM_ROUTING_POLICY;
+  const authContext = getProxyAuthContext(request);
+  if (!authContext) return EMPTY_DOWNSTREAM_ROUTING_POLICY;
+  return authContext.policy;
 }
 
 export async function ensureModelAllowedForDownstreamKey(
