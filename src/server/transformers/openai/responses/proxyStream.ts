@@ -3,6 +3,7 @@ import { type ParsedSseEvent } from '../../shared/normalized.js';
 import { completeResponsesStream, createOpenAiResponsesAggregateState, failResponsesStream, serializeConvertedResponsesEvents } from './aggregator.js';
 import { openAiResponsesOutbound } from './outbound.js';
 import { openAiResponsesStream } from './stream.js';
+import { config } from '../../../config.js';
 
 type StreamReader = {
   read(): Promise<{ done: boolean; value?: Uint8Array }>;
@@ -38,6 +39,62 @@ type ResponsesProxyStreamSessionInput = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
+}
+
+function hasNonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasMeaningfulContentPart(part: unknown): boolean {
+  if (!isRecord(part)) return false;
+  const partType = typeof part.type === 'string' ? part.type.trim().toLowerCase() : '';
+  if (partType === 'output_text' || partType === 'text') {
+    return hasNonEmptyString(part.text);
+  }
+  return partType.length > 0;
+}
+
+function hasMeaningfulOutputItem(item: unknown): boolean {
+  if (!isRecord(item)) return false;
+  const itemType = typeof item.type === 'string' ? item.type.trim().toLowerCase() : '';
+  if (itemType === 'message') {
+    return Array.isArray(item.content) && item.content.some((part) => hasMeaningfulContentPart(part));
+  }
+  if (itemType === 'reasoning') {
+    return (
+      (Array.isArray(item.summary) && item.summary.some((part) => hasMeaningfulContentPart(part)))
+      || hasNonEmptyString(item.encrypted_content)
+    );
+  }
+  return itemType.length > 0;
+}
+
+function hasMeaningfulResponsesPayloadOutput(payload: unknown): boolean {
+  if (!isRecord(payload)) return false;
+  if (hasNonEmptyString(payload.output_text)) return true;
+  return Array.isArray(payload.output) && payload.output.some((item) => hasMeaningfulOutputItem(item));
+}
+
+function hasMeaningfulAggregateOutput(state: ReturnType<typeof createOpenAiResponsesAggregateState>): boolean {
+  return state.outputItems.some((item) => hasMeaningfulOutputItem(item));
+}
+
+function shouldFailEmptyResponsesCompletion(input: {
+  payload: unknown;
+  state: ReturnType<typeof createOpenAiResponsesAggregateState>;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}): boolean {
+  if (!config.proxyEmptyContentFailEnabled) return false;
+  const responsePayload = isRecord(input.payload) && isRecord(input.payload.response)
+    ? input.payload.response
+    : null;
+  if (hasMeaningfulAggregateOutput(input.state)) return false;
+  if (responsePayload && hasMeaningfulResponsesPayloadOutput(responsePayload)) return false;
+  return input.usage.completionTokens <= 0 && input.usage.totalTokens <= 0;
 }
 
 function getResponsesStreamFailureMessage(payload: unknown, fallback = 'upstream stream failed'): string {
@@ -145,12 +202,29 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
 
     if (parsedPayload && typeof parsedPayload === 'object') {
       const normalizedEvent = openAiResponsesStream.normalizeEvent(parsedPayload, streamContext, input.modelName);
-      input.writeLines(serializeConvertedResponsesEvents({
+      const convertedLines = serializeConvertedResponsesEvents({
         state: responsesState,
         streamContext,
         event: normalizedEvent,
         usage: input.getUsage(),
-      }));
+      });
+      if (
+        (eventBlock.event === 'response.completed' || payloadType === 'response.completed')
+        && shouldFailEmptyResponsesCompletion({
+          payload: parsedPayload,
+          state: responsesState,
+          usage: input.getUsage(),
+        })
+      ) {
+        fail({
+          type: 'response.failed',
+          error: {
+            message: 'Upstream returned empty content',
+          },
+        }, 'Upstream returned empty content');
+        return true;
+      }
+      input.writeLines(convertedLines);
       if (eventBlock.event === 'response.completed' || payloadType === 'response.completed') {
         complete();
       }
@@ -192,6 +266,20 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
         usage: input.getUsage(),
         serializationMode: 'response',
       });
+      if (shouldFailEmptyResponsesCompletion({
+        payload: { type: 'response.completed', response: streamPayload },
+        state: responsesState,
+        usage: input.getUsage(),
+      })) {
+        fail({
+          type: 'response.failed',
+          error: {
+            message: 'Upstream returned empty content',
+          },
+        }, 'Upstream returned empty content');
+        response?.end();
+        return terminalResult;
+      }
       const createdPayload = {
         ...streamPayload,
         status: 'in_progress',

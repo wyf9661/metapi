@@ -24,12 +24,100 @@ function getResponsesFailureMessage(payload: Record<string, unknown>): string {
   return 'upstream stream failed';
 }
 
+function hasMeaningfulMessageContent(content: unknown): boolean {
+  if (!Array.isArray(content)) return false;
+  return content.some((part) => {
+    if (!isRecord(part)) return false;
+    const partType = typeof part.type === 'string' ? part.type.trim().toLowerCase() : '';
+    if (partType === 'output_text' || partType === 'text') {
+      return typeof part.text === 'string' && part.text.length > 0;
+    }
+    return true;
+  });
+}
+
+function hasMeaningfulResponsesOutput(output: unknown): boolean {
+  if (!Array.isArray(output)) return false;
+  return output.some((item) => {
+    if (!isRecord(item)) return false;
+    const itemType = typeof item.type === 'string' ? item.type.trim().toLowerCase() : '';
+    if (itemType === 'message') {
+      return hasMeaningfulMessageContent(item.content);
+    }
+    if (itemType === 'reasoning') {
+      return (
+        (Array.isArray(item.summary) && item.summary.length > 0)
+        || (typeof item.encrypted_content === 'string' && item.encrypted_content.trim().length > 0)
+      );
+    }
+    return itemType.length > 0;
+  });
+}
+
 function hasCompleteFinalResponsesPayload(payload: Record<string, unknown>): boolean {
   return (
     payload.object === 'response.compaction'
     || Array.isArray(payload.output)
     || Object.prototype.hasOwnProperty.call(payload, 'output_text')
   );
+}
+
+function hasMeaningfulFinalResponsesPayload(payload: Record<string, unknown>): boolean {
+  if (payload.object === 'response.compaction') {
+    return Array.isArray(payload.output) && payload.output.length > 0;
+  }
+  if (typeof payload.output_text === 'string' && payload.output_text.length > 0) {
+    return true;
+  }
+  return hasMeaningfulResponsesOutput(payload.output);
+}
+
+function rememberStreamResponseEnvelope(
+  streamContext: ReturnType<typeof openAiResponsesTransformer.createStreamContext>,
+  payload: Record<string, unknown>,
+): void {
+  const responsePayload = isRecord(payload.response) ? payload.response : payload;
+  if (typeof responsePayload.id === 'string' && responsePayload.id.trim().length > 0) {
+    streamContext.id = responsePayload.id;
+  }
+  if (typeof responsePayload.model === 'string' && responsePayload.model.trim().length > 0) {
+    streamContext.model = responsePayload.model;
+  }
+  const createdAt = (
+    typeof responsePayload.created_at === 'number' && Number.isFinite(responsePayload.created_at)
+      ? responsePayload.created_at
+      : (typeof responsePayload.created === 'number' && Number.isFinite(responsePayload.created)
+        ? responsePayload.created
+        : null)
+  );
+  if (createdAt !== null) {
+    streamContext.created = createdAt;
+  }
+}
+
+function materializeCompletedPayloadFromAggregate(
+  aggregateState: ReturnType<typeof openAiResponsesTransformer.aggregator.createState>,
+  streamContext: ReturnType<typeof openAiResponsesTransformer.createStreamContext>,
+  usage: ReturnType<typeof parseProxyUsage>,
+): Record<string, unknown> | null {
+  const lines = openAiResponsesTransformer.aggregator.complete(
+    aggregateState,
+    streamContext,
+    usage,
+  );
+  const { events } = openAiResponsesTransformer.pullSseEvents(lines.join(''));
+  for (const event of events) {
+    if (event.data === '[DONE]') continue;
+    const payload = parseResponsesSsePayload(event.data);
+    if (!payload) continue;
+    if (event.event === 'response.completed' && isRecord(payload.response)) {
+      return payload.response;
+    }
+    if (payload.type === 'response.completed' && hasCompleteFinalResponsesPayload(payload)) {
+      return payload;
+    }
+  }
+  return null;
 }
 
 export async function collectResponsesFinalPayloadFromSse(
@@ -92,12 +180,17 @@ export async function collectResponsesFinalPayloadFromSse(
 
     const payloadType = typeof payload.type === 'string' ? payload.type : '';
     const eventType = payloadType || event.event;
+    rememberStreamResponseEnvelope(streamContext, payload);
     usage = mergeProxyUsage(usage, parseProxyUsage(payload));
     captureCompletedPayloadFromEvent(eventType, payload);
     if (completedPayload) {
       continue;
     }
-    const normalizedEvent = openAiResponsesTransformer.transformStreamEvent(payload, streamContext, modelName);
+    const normalizedEvent = openAiResponsesTransformer.transformStreamEvent(
+      payload,
+      streamContext,
+      modelName,
+    );
     captureCompletedPayloadFromLines(openAiResponsesTransformer.aggregator.serialize({
       state: aggregateState,
       streamContext,
@@ -106,12 +199,19 @@ export async function collectResponsesFinalPayloadFromSse(
     }));
   }
 
+  if (
+    completedPayload
+    && !hasMeaningfulFinalResponsesPayload(completedPayload)
+    && hasMeaningfulResponsesOutput(aggregateState.outputItems)
+  ) {
+    completedPayload = materializeCompletedPayloadFromAggregate(aggregateState, streamContext, usage);
+  }
+
   if (!completedPayload) {
-    captureCompletedPayloadFromLines(openAiResponsesTransformer.aggregator.complete(
-      aggregateState,
-      streamContext,
-      usage,
-    ));
+    const materialized = materializeCompletedPayloadFromAggregate(aggregateState, streamContext, usage);
+    if (materialized) {
+      completedPayload = materialized;
+    }
   }
 
   if (completedPayload) {

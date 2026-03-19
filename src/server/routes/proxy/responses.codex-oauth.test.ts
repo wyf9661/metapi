@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '../../config.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
@@ -17,6 +18,7 @@ const resolveProxyUsageWithSelfLogFallbackMock = vi.fn(async ({ usage }: any) =>
 const refreshOauthAccessTokenSingleflightMock = vi.fn();
 const recordOauthQuotaResetHintMock = vi.fn();
 const insertedProxyLogs: Record<string, unknown>[] = [];
+const originalProxyEmptyContentFailEnabled = config.proxyEmptyContentFailEnabled;
 const dbInsertMock = vi.fn((_arg?: any) => ({
   values: (values: Record<string, unknown>) => {
     insertedProxyLogs.push(values);
@@ -109,6 +111,7 @@ describe('responses proxy codex oauth refresh', () => {
   });
 
   beforeEach(() => {
+    config.proxyEmptyContentFailEnabled = false;
     fetchMock.mockReset();
     selectChannelMock.mockReset();
     selectNextChannelMock.mockReset();
@@ -152,6 +155,7 @@ describe('responses proxy codex oauth refresh', () => {
   });
 
   afterAll(async () => {
+    config.proxyEmptyContentFailEnabled = originalProxyEmptyContentFailEnabled;
     await app.close();
   });
 
@@ -499,6 +503,39 @@ describe('responses proxy codex oauth refresh', () => {
       httpStatus: 200,
     });
     expect(String(insertedProxyLogs.at(-1)?.errorMessage || '')).toContain('stream closed before response.completed');
+  });
+
+  it('does not record success when a native responses stream completes with empty content and empty usage while empty-content failure is enabled', async () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    fetchMock.mockResolvedValue(createSseResponse([
+      'event: response.created\n',
+      'data: {"type":"response.created","response":{"id":"resp_codex_empty","model":"gpt-5.4","created_at":1706000000,"status":"in_progress","output":[]}}\n\n',
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_codex_empty","model":"gpt-5.4","status":"completed","output":[],"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.4',
+        input: 'hello codex',
+        stream: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('event: response.failed');
+    expect(response.body).not.toContain('event: response.completed');
+    expect(recordSuccessMock).not.toHaveBeenCalled();
+    expect(recordFailureMock).toHaveBeenCalledTimes(1);
+    expect(insertedProxyLogs.at(-1)).toMatchObject({
+      status: 'failed',
+      httpStatus: 200,
+    });
+    expect(String(insertedProxyLogs.at(-1)?.errorMessage || '')).toContain('empty content');
   });
 
   it('does not retry or mark failure after converting a non-stream upstream payload into SSE when post-stream usage accounting fails', async () => {
