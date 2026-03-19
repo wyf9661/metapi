@@ -55,6 +55,7 @@ describe('settings and auth events', () => {
     (config as any).telegramApiBaseUrl = 'https://api.telegram.org';
     (config as any).telegramBotToken = '';
     (config as any).telegramChatId = '';
+    (config as any).telegramUseSystemProxy = false;
   });
 
   afterAll(async () => {
@@ -217,6 +218,32 @@ describe('settings and auth events', () => {
     expect(response.statusCode).toBe(400);
     const body = response.json() as { message?: string };
     expect(body.message).toContain('Telegram API Base URL');
+  });
+
+  it('persists and returns telegram use system proxy from runtime settings', async () => {
+    const updateResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/runtime',
+      payload: {
+        telegramUseSystemProxy: true,
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    const updated = updateResponse.json() as { telegramUseSystemProxy?: boolean };
+    expect(updated.telegramUseSystemProxy).toBe(true);
+    expect((config as any).telegramUseSystemProxy).toBe(true);
+
+    const saved = await db.select().from(schema.settings).where(eq(schema.settings.key, 'telegram_use_system_proxy')).get();
+    expect(saved?.value).toBe(JSON.stringify(true));
+
+    const getResponse = await app.inject({
+      method: 'GET',
+      url: '/api/settings/runtime',
+    });
+    expect(getResponse.statusCode).toBe(200);
+    const runtime = getResponse.json() as { telegramUseSystemProxy?: boolean };
+    expect(runtime.telegramUseSystemProxy).toBe(true);
   });
 
   it('persists and returns routing fallback unit cost from runtime settings', async () => {
