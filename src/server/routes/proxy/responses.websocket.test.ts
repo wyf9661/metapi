@@ -526,7 +526,7 @@ describe('responses websocket transport', () => {
 
     const socket = new WebSocket(`${baseUrl}/v1/responses`);
     await waitForSocketOpen(socket);
-    const messagesPromise = waitForSocketMessages(socket, 3, 400);
+    const messagesPromise = waitForSocketMessages(socket, 6, 400);
 
     socket.send(JSON.stringify({
       type: 'response.create',
@@ -546,9 +546,12 @@ describe('responses websocket transport', () => {
     expect(messages.map((message) => message.type)).toEqual([
       'response.created',
       'response.output_text.delta',
-      'error',
+      'response.output_text.done',
+      'response.content_part.done',
+      'response.output_item.done',
+      'response.failed',
     ]);
-    expect(messages[2]?.status).toBe(408);
-    expect(messages[2]?.error?.message).toContain('stream closed before response.completed');
+    expect(messages[5]?.response?.status).toBe('failed');
+    expect(messages[5]?.error?.message).toContain('stream closed before response.completed');
   });
 });

@@ -58,6 +58,9 @@ function getResponsesStreamFailureMessage(payload: unknown, fallback = 'upstream
 export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSessionInput) {
   const streamContext = openAiResponsesStream.createContext(input.modelName);
   const responsesState = createOpenAiResponsesAggregateState(input.modelName);
+  const requiresExplicitTerminalEvent = input.strictTerminalEvents
+    || input.successfulUpstreamPath.endsWith('/responses')
+    || input.successfulUpstreamPath.endsWith('/responses/compact');
   let finalized = false;
   let terminalResult: ResponsesProxyStreamResult = {
     status: 'completed',
@@ -84,14 +87,24 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
     input.writeLines(failResponsesStream(responsesState, streamContext, input.getUsage(), payload));
   };
 
+  const complete = () => {
+    if (finalized) return;
+    finalized = true;
+    terminalResult = {
+      status: 'completed',
+      errorMessage: null,
+    };
+  };
+
   const closeOut = () => {
     if (finalized) return;
-    if (input.strictTerminalEvents) {
-      finalized = true;
-      terminalResult = {
-        status: 'failed',
-        errorMessage: 'stream closed before response.completed',
-      };
+    if (requiresExplicitTerminalEvent) {
+      fail({
+        type: 'response.failed',
+        error: {
+          message: 'stream closed before response.completed',
+        },
+      }, 'stream closed before response.completed');
       return;
     }
     finalize();
@@ -120,8 +133,10 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
     const isFailureEvent = (
       eventBlock.event === 'error'
       || eventBlock.event === 'response.failed'
+      || eventBlock.event === 'response.incomplete'
       || payloadType === 'error'
       || payloadType === 'response.failed'
+      || payloadType === 'response.incomplete'
     );
     if (isFailureEvent) {
       fail(parsedPayload);
@@ -136,6 +151,9 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
         event: normalizedEvent,
         usage: input.getUsage(),
       }));
+      if (eventBlock.event === 'response.completed' || payloadType === 'response.completed') {
+        complete();
+      }
       return false;
     }
 
