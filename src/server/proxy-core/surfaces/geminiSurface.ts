@@ -114,10 +114,10 @@ function resolveUpstreamPath(apiVersion: string, modelActionPath: string): strin
   return `/${normalizedVersion}/${normalizedAction}`;
 }
 
-function hasDownstreamModelRestrictions(policy: { supportedModels?: unknown; allowedRouteIds?: unknown }): boolean {
+function hasDownstreamModelRestrictions(policy: { supportedModels?: unknown; allowedRouteIds?: unknown; denyAllWhenEmpty?: unknown }): boolean {
   const supportedModels = Array.isArray(policy.supportedModels) ? policy.supportedModels : [];
   const allowedRouteIds = Array.isArray(policy.allowedRouteIds) ? policy.allowedRouteIds : [];
-  return supportedModels.length > 0 || allowedRouteIds.length > 0;
+  return supportedModels.length > 0 || allowedRouteIds.length > 0 || policy.denyAllWhenEmpty === true;
 }
 
 function extractGeminiListedModelName(item: unknown): string {

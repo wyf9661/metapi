@@ -137,6 +137,7 @@ describe('TokenRouter downstream policy', () => {
       allowedRouteIds: [],
       supportedModels: [],
       siteWeightMultipliers: {},
+      denyAllWhenEmpty: true,
     });
 
     expect(deniedPick).toBeNull();

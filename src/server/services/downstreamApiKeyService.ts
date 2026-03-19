@@ -234,7 +234,7 @@ export async function isModelAllowedByPolicyOrAllowedRoutes(model: string, polic
   const hasPatternRules = patterns.length > 0;
   const hasRouteRules = allowedRouteIds.length > 0;
 
-  if (!hasPatternRules && !hasRouteRules) return false;
+  if (!hasPatternRules && !hasRouteRules) return policy.denyAllWhenEmpty === true ? false : true;
 
   if (hasPatternRules && patterns.some((pattern) => matchesDownstreamModelPattern(model, pattern))) {
     return true;
@@ -278,6 +278,7 @@ export function toPolicyFromView(view: Pick<DownstreamApiKeyPolicyView, 'support
     supportedModels: normalizeSupportedModelsInput(view.supportedModels),
     allowedRouteIds: normalizeAllowedRouteIdsInput(view.allowedRouteIds),
     siteWeightMultipliers: normalizeSiteWeightMultipliersInput(view.siteWeightMultipliers),
+    denyAllWhenEmpty: true,
   };
 }
 

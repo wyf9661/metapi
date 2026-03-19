@@ -141,6 +141,7 @@ describe('downstreamApiKeyService', () => {
       supportedModels: [],
       allowedRouteIds: [],
       siteWeightMultipliers: {},
+      denyAllWhenEmpty: true,
     };
 
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gpt-4o-mini', policy)).toBe(false);

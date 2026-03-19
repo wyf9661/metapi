@@ -537,7 +537,7 @@ function isModelAllowedByDownstreamPolicy(requestedModel: string, policy: Downst
     : [];
   const hasSupportedPatterns = supportedPatterns.length > 0;
   const hasAllowedRoutes = policy.allowedRouteIds.length > 0;
-  if (!hasSupportedPatterns && !hasAllowedRoutes) return false;
+  if (!hasSupportedPatterns && !hasAllowedRoutes) return policy.denyAllWhenEmpty === true ? false : true;
   const matchedSupportedPattern = supportedPatterns.some((pattern) => matchesModelPattern(requestedModel, pattern));
   if (matchedSupportedPattern) return true;
   if (hasAllowedRoutes) return true;
