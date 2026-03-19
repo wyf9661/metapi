@@ -245,4 +245,38 @@ describe('chat proxy codex oauth compatibility', () => {
     expect(response.body).not.toContain('event: response.created');
     expect(response.body).not.toContain('"type":"response.output_text.delta"');
   });
+
+  it('still translates raw codex SSE into OpenAI chat completion chunks when upstream mislabels the content-type', async () => {
+    fetchMock.mockResolvedValue(new Response([
+      'event: response.created\n',
+      'data: {"type":"response.created","response":{"id":"resp_codex_openai_stream_header_miss","model":"gpt-5.4","created_at":1706000000,"status":"in_progress","output":[]}}\n\n',
+      'event: response.output_item.added\n',
+      'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_codex_openai_stream_header_miss","type":"message","role":"assistant","status":"in_progress","content":[]}}\n\n',
+      'event: response.output_text.delta\n',
+      'data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_codex_openai_stream_header_miss","delta":"pong from codex"}\n\n',
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_codex_openai_stream_header_miss","model":"gpt-5.4","status":"completed","usage":{"input_tokens":9,"output_tokens":3,"total_tokens":12}}}\n\n',
+      'data: [DONE]\n\n',
+    ].join(''), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-5.4',
+        stream: true,
+        messages: [{ role: 'user', content: 'hello codex' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.body).toContain('"object":"chat.completion.chunk"');
+    expect(response.body).toContain('pong from codex');
+    expect(response.body).not.toContain('event: response.created');
+    expect(response.body).not.toContain('"type":"response.output_text.delta"');
+  });
 });

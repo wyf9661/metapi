@@ -34,7 +34,12 @@ import {
 import { getOauthInfoFromExtraConfig } from '../../services/oauth/oauthAccount.js';
 import { recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
-import { collectResponsesFinalPayloadFromSse } from '../../routes/proxy/responsesSseFinal.js';
+import {
+  collectResponsesFinalPayloadFromSse,
+  collectResponsesFinalPayloadFromSseText,
+  createSingleChunkStreamReader,
+  looksLikeResponsesSseText,
+} from '../../routes/proxy/responsesSseFinal.js';
 import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
@@ -541,6 +546,39 @@ export async function handleOpenAiResponsesSurfaceRequest(
           });
           if (!upstreamContentType.includes('text/event-stream')) {
             const rawText = await upstream.text();
+            if (looksLikeResponsesSseText(rawText)) {
+              startSseResponse();
+              const streamResult = await streamSession.run(
+                createSingleChunkStreamReader(rawText),
+                reply.raw,
+              );
+              const latency = Date.now() - startTime;
+              if (streamResult.status === 'failed') {
+                tokenRouter.recordFailure(selected.channel.id);
+                logProxy(
+                  selected,
+                  requestedModel,
+                  'failed',
+                  200,
+                  latency,
+                  streamResult.errorMessage,
+                  retryCount,
+                  downstreamPath,
+                  parsedUsage.promptTokens,
+                  parsedUsage.completionTokens,
+                  parsedUsage.totalTokens,
+                  0,
+                  null,
+                  successfulUpstreamPath,
+                  clientContext,
+                  logDownstreamApiKeyId ? downstreamApiKeyId : null,
+                );
+                return;
+              }
+
+              await finalizeStreamSuccess(parsedUsage, latency);
+              return;
+            }
             let upstreamData: unknown = rawText;
             try {
               upstreamData = JSON.parse(rawText);
@@ -692,11 +730,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
           upstreamData = collected.payload;
         } else {
           rawText = await upstream.text();
-          upstreamData = rawText;
-          try {
-            upstreamData = JSON.parse(rawText);
-          } catch {
+          if (looksLikeResponsesSseText(rawText)) {
+            upstreamData = collectResponsesFinalPayloadFromSseText(rawText, modelName).payload;
+          } else {
             upstreamData = rawText;
+            try {
+              upstreamData = JSON.parse(rawText);
+            } catch {
+              upstreamData = rawText;
+            }
           }
         }
         if (String(selected.site.platform || '').trim().toLowerCase() === 'gemini-cli') {

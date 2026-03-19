@@ -120,11 +120,43 @@ function materializeCompletedPayloadFromAggregate(
   return null;
 }
 
-export async function collectResponsesFinalPayloadFromSse(
-  upstream: { text(): Promise<string> },
+export function looksLikeResponsesSseText(rawText: string): boolean {
+  const { events, rest } = openAiResponsesTransformer.pullSseEvents(rawText);
+  if (events.length === 0 || rest.trim().length > 0) return false;
+  return events.some((event) => {
+    if (event.data === '[DONE]') return true;
+    if (event.event === 'error' || event.event.startsWith('response.')) return true;
+    const payload = parseResponsesSsePayload(event.data);
+    const payloadType = typeof payload?.type === 'string' ? payload.type : '';
+    return payloadType === 'error' || payloadType.startsWith('response.');
+  });
+}
+
+export function createSingleChunkStreamReader(rawText: string): {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+  cancel(reason?: unknown): Promise<unknown>;
+  releaseLock(): void;
+} {
+  const chunk = Buffer.from(rawText, 'utf8');
+  let done = false;
+  return {
+    async read() {
+      if (done) return { done: true };
+      done = true;
+      return { done: false, value: chunk };
+    },
+    async cancel() {
+      done = true;
+      return undefined;
+    },
+    releaseLock() {},
+  };
+}
+
+export function collectResponsesFinalPayloadFromSseText(
+  rawText: string,
   modelName: string,
-): Promise<{ payload: Record<string, unknown>; rawText: string }> {
-  const rawText = await upstream.text();
+): { payload: Record<string, unknown>; rawText: string } {
   const { events } = openAiResponsesTransformer.pullSseEvents(rawText);
   const streamContext = openAiResponsesTransformer.createStreamContext(modelName);
   const aggregateState = openAiResponsesTransformer.aggregator.createState(modelName);
@@ -222,4 +254,11 @@ export async function collectResponsesFinalPayloadFromSse(
   }
 
   throw new Error('stream disconnected before response.completed');
+}
+
+export async function collectResponsesFinalPayloadFromSse(
+  upstream: { text(): Promise<string> },
+  modelName: string,
+): Promise<{ payload: Record<string, unknown>; rawText: string }> {
+  return collectResponsesFinalPayloadFromSseText(await upstream.text(), modelName);
 }
