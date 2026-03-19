@@ -9,3 +9,9 @@ export const EMPTY_DOWNSTREAM_ROUTING_POLICY: DownstreamRoutingPolicy = {
   allowedRouteIds: [],
   siteWeightMultipliers: {},
 };
+
+export const GLOBAL_UNRESTRICTED_DOWNSTREAM_ROUTING_POLICY: DownstreamRoutingPolicy = {
+  supportedModels: ['*'],
+  allowedRouteIds: [],
+  siteWeightMultipliers: {},
+};

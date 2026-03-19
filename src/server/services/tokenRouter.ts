@@ -535,10 +535,13 @@ function isModelAllowedByDownstreamPolicy(requestedModel: string, policy: Downst
   const supportedPatterns = Array.isArray(policy.supportedModels)
     ? policy.supportedModels
     : [];
+  const hasSupportedPatterns = supportedPatterns.length > 0;
+  const hasAllowedRoutes = policy.allowedRouteIds.length > 0;
+  if (!hasSupportedPatterns && !hasAllowedRoutes) return false;
   const matchedSupportedPattern = supportedPatterns.some((pattern) => matchesModelPattern(requestedModel, pattern));
   if (matchedSupportedPattern) return true;
-  if (policy.allowedRouteIds.length > 0) return true;
-  return supportedPatterns.length === 0;
+  if (hasAllowedRoutes) return true;
+  return false;
 }
 
 function resolveMappedModel(requestedModel: string, modelMapping?: string | null): string {

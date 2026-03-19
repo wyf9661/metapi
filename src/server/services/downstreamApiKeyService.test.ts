@@ -136,6 +136,17 @@ describe('downstreamApiKeyService', () => {
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gemini-2.0-flash', policy)).toBe(false);
   });
 
+  it('denies all models when both supportedModels and allowedRouteIds are empty', async () => {
+    const policy = {
+      supportedModels: [],
+      allowedRouteIds: [],
+      siteWeightMultipliers: {},
+    };
+
+    expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gpt-4o-mini', policy)).toBe(false);
+    expect(await service.isModelAllowedByPolicyOrAllowedRoutes('claude-opus-4-6', policy)).toBe(false);
+  });
+
   it('authorizes by selected group model pattern only, not arbitrary internal models', async () => {
     const virtualModelGroup = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'claude-opus-4-6',

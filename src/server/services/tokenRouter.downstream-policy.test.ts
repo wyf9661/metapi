@@ -102,6 +102,46 @@ describe('TokenRouter downstream policy', () => {
     expect(blockedPick).toBeNull();
   });
 
+  it('rejects route selection when both supportedModels and allowedRouteIds are empty', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'site-deny-all',
+      url: 'https://deny-all.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'user-deny-all',
+      accessToken: 'access-deny-all',
+      apiToken: 'sk-deny-all',
+      status: 'active',
+    }).returning().get();
+
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'gpt-4o-mini',
+      enabled: true,
+    }).returning().get();
+
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      tokenId: null,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+    }).run();
+
+    const router = new TokenRouter();
+    const deniedPick = await router.selectChannel('gpt-4o-mini', {
+      allowedRouteIds: [],
+      supportedModels: [],
+      siteWeightMultipliers: {},
+    });
+
+    expect(deniedPick).toBeNull();
+  });
+
   it('applies site weight multipliers to probability explanation', async () => {
     const siteHigh = await db.insert(schema.sites).values({
       name: 'high-site',

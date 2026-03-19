@@ -1,10 +1,17 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { getProxyAuthContext } from '../../middleware/auth.js';
 import { isModelAllowedByPolicyOrAllowedRoutes, recordManagedKeyCostUsage } from '../../services/downstreamApiKeyService.js';
-import { EMPTY_DOWNSTREAM_ROUTING_POLICY, type DownstreamRoutingPolicy } from '../../services/downstreamPolicyTypes.js';
+import {
+  EMPTY_DOWNSTREAM_ROUTING_POLICY,
+  GLOBAL_UNRESTRICTED_DOWNSTREAM_ROUTING_POLICY,
+  type DownstreamRoutingPolicy,
+} from '../../services/downstreamPolicyTypes.js';
 
 export function getDownstreamRoutingPolicy(request: FastifyRequest): DownstreamRoutingPolicy {
-  return getProxyAuthContext(request)?.policy || EMPTY_DOWNSTREAM_ROUTING_POLICY;
+  const authContext = getProxyAuthContext(request);
+  if (!authContext) return EMPTY_DOWNSTREAM_ROUTING_POLICY;
+  if (authContext.keyId === null) return GLOBAL_UNRESTRICTED_DOWNSTREAM_ROUTING_POLICY;
+  return authContext.policy;
 }
 
 export async function ensureModelAllowedForDownstreamKey(
@@ -14,6 +21,7 @@ export async function ensureModelAllowedForDownstreamKey(
 ): Promise<boolean> {
   const authContext = getProxyAuthContext(request);
   if (!authContext) return true;
+  if (authContext.keyId === null) return true;
 
   if (await isModelAllowedByPolicyOrAllowedRoutes(requestedModel, authContext.policy)) {
     return true;

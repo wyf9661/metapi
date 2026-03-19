@@ -234,7 +234,7 @@ export async function isModelAllowedByPolicyOrAllowedRoutes(model: string, polic
   const hasPatternRules = patterns.length > 0;
   const hasRouteRules = allowedRouteIds.length > 0;
 
-  if (!hasPatternRules && !hasRouteRules) return true;
+  if (!hasPatternRules && !hasRouteRules) return false;
 
   if (hasPatternRules && patterns.some((pattern) => matchesDownstreamModelPattern(model, pattern))) {
     return true;
