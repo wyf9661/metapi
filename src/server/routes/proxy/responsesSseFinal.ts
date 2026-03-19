@@ -24,6 +24,14 @@ function getResponsesFailureMessage(payload: Record<string, unknown>): string {
   return 'upstream stream failed';
 }
 
+function hasCompleteFinalResponsesPayload(payload: Record<string, unknown>): boolean {
+  return (
+    payload.object === 'response.compaction'
+    || Array.isArray(payload.output)
+    || Object.prototype.hasOwnProperty.call(payload, 'output_text')
+  );
+}
+
 export async function collectResponsesFinalPayloadFromSse(
   upstream: { text(): Promise<string> },
   modelName: string,
@@ -42,18 +50,36 @@ export async function collectResponsesFinalPayloadFromSse(
   };
   let completedPayload: Record<string, unknown> | null = null;
 
-  const captureCompletedPayload = (lines: string[]) => {
+  const captureCompletedPayloadFromEvent = (
+    eventType: string,
+    payload: Record<string, unknown>,
+  ) => {
+    if (completedPayload) return;
+    if (eventType === 'response.failed' || eventType === 'response.incomplete' || eventType === 'error') {
+      throw new Error(getResponsesFailureMessage(payload));
+    }
+    if (eventType !== 'response.completed') {
+      return;
+    }
+    if (isRecord(payload.response) && hasCompleteFinalResponsesPayload(payload.response)) {
+      completedPayload = payload.response;
+      return;
+    }
+    if (hasCompleteFinalResponsesPayload(payload)) {
+      completedPayload = payload;
+    }
+  };
+
+  const captureCompletedPayloadFromLines = (lines: string[]) => {
     if (completedPayload) return;
     const parsed = openAiResponsesTransformer.pullSseEvents(lines.join(''));
     for (const event of parsed.events) {
       if (event.data === '[DONE]') continue;
       const payload = parseResponsesSsePayload(event.data);
       if (!payload) continue;
-      if (payload.type === 'response.failed') {
-        throw new Error(getResponsesFailureMessage(payload));
-      }
-      if (payload.type === 'response.completed' && isRecord(payload.response)) {
-        completedPayload = payload.response;
+      const payloadType = typeof payload.type === 'string' ? payload.type : '';
+      captureCompletedPayloadFromEvent(payloadType || event.event, payload);
+      if (completedPayload) {
         return;
       }
     }
@@ -64,13 +90,15 @@ export async function collectResponsesFinalPayloadFromSse(
     const payload = parseResponsesSsePayload(event.data);
     if (!payload) continue;
 
-    if (payload.type === 'response.failed') {
-      throw new Error(getResponsesFailureMessage(payload));
-    }
-
+    const payloadType = typeof payload.type === 'string' ? payload.type : '';
+    const eventType = payloadType || event.event;
     usage = mergeProxyUsage(usage, parseProxyUsage(payload));
+    captureCompletedPayloadFromEvent(eventType, payload);
+    if (completedPayload) {
+      continue;
+    }
     const normalizedEvent = openAiResponsesTransformer.transformStreamEvent(payload, streamContext, modelName);
-    captureCompletedPayload(openAiResponsesTransformer.aggregator.serialize({
+    captureCompletedPayloadFromLines(openAiResponsesTransformer.aggregator.serialize({
       state: aggregateState,
       streamContext,
       event: normalizedEvent,
@@ -79,7 +107,7 @@ export async function collectResponsesFinalPayloadFromSse(
   }
 
   if (!completedPayload) {
-    captureCompletedPayload(openAiResponsesTransformer.aggregator.complete(
+    captureCompletedPayloadFromLines(openAiResponsesTransformer.aggregator.complete(
       aggregateState,
       streamContext,
       usage,
