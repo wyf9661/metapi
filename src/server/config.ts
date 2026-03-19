@@ -73,6 +73,7 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     telegramApiBaseUrl: 'https://api.telegram.org',
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || '',
     telegramChatId: env.TELEGRAM_CHAT_ID || '',
+    telegramUseSystemProxy: parseBoolean(env.TELEGRAM_USE_SYSTEM_PROXY, false),
     smtpEnabled: parseBoolean(env.SMTP_ENABLED, false),
     smtpHost: env.SMTP_HOST || '',
     smtpPort: parseInt(env.SMTP_PORT || '587'),
