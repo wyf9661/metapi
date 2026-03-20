@@ -15,7 +15,7 @@ import {
   testDatabaseConnection,
   type MigrationDialect,
 } from '../../services/databaseMigrationService.js';
-import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
+import { formatUtcSqlDateTime, getResolvedTimeZone } from '../../services/localTimeService.js';
 import { extractClientIp, isIpAllowed } from '../../middleware/auth.js';
 import { invalidateSiteProxyCache, normalizeSiteProxyUrl } from '../../services/siteProxy.js';
 import { performFactoryReset } from '../../services/factoryResetService.js';
@@ -442,6 +442,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     notifyCooldownSec: config.notifyCooldownSec,
     adminIpAllowlist: config.adminIpAllowlist,
     currentAdminIp,
+    serverTimeZone: getResolvedTimeZone(),
     systemProxyUrl: config.systemProxyUrl,
     proxyErrorKeywords: config.proxyErrorKeywords,
     proxyEmptyContentFailEnabled: config.proxyEmptyContentFailEnabled,
