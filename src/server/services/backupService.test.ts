@@ -596,4 +596,254 @@ describe('backupService', () => {
     expect(restoredAccount?.oauthAccountKey).toBe('oauth-user@example.com');
     expect(restoredAccount?.oauthProjectId).toBe('oauth-project-id');
   });
+
+  it('exports configured backup payload to webdav and records sync state', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fetchSpy.mockResolvedValue(new Response(null, { status: 201 }));
+
+    await db.insert(schema.settings).values({
+      key: 'backup_webdav_config_v1',
+      value: JSON.stringify({
+        enabled: true,
+        fileUrl: 'https://dav.example.com/backups/metapi-preferences.json',
+        username: 'alice',
+        password: 'secret-pass',
+        exportType: 'preferences',
+        autoSyncEnabled: false,
+        autoSyncCron: '0 * * * *',
+      }),
+    }).run();
+    await db.insert(schema.settings).values({
+      key: 'ui_locale',
+      value: JSON.stringify('zh-CN'),
+    }).run();
+
+    const result = await (backupService as any).exportBackupToWebdav();
+
+    expect(result).toMatchObject({
+      success: true,
+      fileUrl: 'https://dav.example.com/backups/metapi-preferences.json',
+      exportType: 'preferences',
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [targetUrl, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(targetUrl).toBe('https://dav.example.com/backups/metapi-preferences.json');
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toMatchObject({
+      Authorization: `Basic ${Buffer.from('alice:secret-pass').toString('base64')}`,
+      'Content-Type': 'application/json',
+    });
+    const payload = JSON.parse(String(init.body));
+    expect(payload.type).toBe('preferences');
+    expect(payload.preferences.settings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'ui_locale', value: 'zh-CN' }),
+      ]),
+    );
+
+    const syncState = await db.select().from(schema.settings).where(eq(schema.settings.key, 'backup_webdav_state_v1')).get();
+    expect(syncState?.value).toContain('"lastSyncAt"');
+    expect(syncState?.value).toContain('"lastError":null');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('imports backup payload from webdav into local data', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const remotePayload = {
+      version: '2.0',
+      timestamp: Date.now(),
+      accounts: {
+        sites: [
+          {
+            id: 1,
+            name: 'remote-site',
+            url: 'https://remote.example.com',
+            platform: 'new-api',
+            externalCheckinUrl: null,
+            proxyUrl: null,
+            useSystemProxy: false,
+            customHeaders: null,
+            status: 'active',
+            isPinned: false,
+            sortOrder: 0,
+            globalWeight: 1,
+            apiKey: null,
+            createdAt: '2026-03-20T00:00:00.000Z',
+            updatedAt: '2026-03-20T00:00:00.000Z',
+          },
+        ],
+        accounts: [
+          {
+            id: 1,
+            siteId: 1,
+            username: 'remote-user',
+            accessToken: 'remote-session',
+            apiToken: null,
+            oauthProvider: null,
+            oauthAccountKey: null,
+            oauthProjectId: null,
+            balance: 0,
+            balanceUsed: 0,
+            quota: 0,
+            unitCost: null,
+            valueScore: 0,
+            status: 'active',
+            isPinned: false,
+            sortOrder: 0,
+            checkinEnabled: false,
+            lastCheckinAt: null,
+            lastBalanceRefresh: null,
+            extraConfig: null,
+            createdAt: '2026-03-20T00:00:00.000Z',
+            updatedAt: '2026-03-20T00:00:00.000Z',
+          },
+        ],
+        accountTokens: [],
+        tokenRoutes: [],
+        routeChannels: [],
+        routeGroupSources: [],
+      },
+    };
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(remotePayload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    await db.insert(schema.settings).values({
+      key: 'backup_webdav_config_v1',
+      value: JSON.stringify({
+        enabled: true,
+        fileUrl: 'https://dav.example.com/backups/metapi-all.json',
+        username: 'alice',
+        password: 'secret-pass',
+        exportType: 'all',
+        autoSyncEnabled: false,
+        autoSyncCron: '0 * * * *',
+      }),
+    }).run();
+
+    const result = await (backupService as any).importBackupFromWebdav();
+
+    expect(result.success).toBe(true);
+    expect(result.sections.accounts).toBe(true);
+    const sites = await db.select().from(schema.sites).all();
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(sites).toHaveLength(1);
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].username).toBe('remote-user');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://dav.example.com/backups/metapi-all.json',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('times out stalled webdav export requests', async () => {
+    vi.useFakeTimers();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fetchSpy.mockImplementation((_, init) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      if (!signal) {
+        return Promise.reject(new Error('missing abort signal')) as Promise<Response>;
+      }
+      return new Promise<Response>((_, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        }, { once: true });
+      });
+    });
+
+    try {
+      await db.insert(schema.settings).values({
+        key: 'backup_webdav_config_v1',
+        value: JSON.stringify({
+          enabled: true,
+          fileUrl: 'https://dav.example.com/backups/metapi.json',
+          username: 'alice',
+          password: 'secret-pass',
+          exportType: 'all',
+          autoSyncEnabled: false,
+          autoSyncCron: '0 */6 * * *',
+        }),
+      }).run();
+
+      const exportAssertion = expect(backupService.exportBackupToWebdav()).rejects.toThrow('WebDAV 请求超时');
+      await vi.advanceTimersByTimeAsync(16_000);
+      await exportAssertion;
+    } finally {
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out stalled webdav import requests', async () => {
+    vi.useFakeTimers();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fetchSpy.mockImplementation((_, init) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      if (!signal) {
+        return Promise.reject(new Error('missing abort signal')) as Promise<Response>;
+      }
+      return new Promise<Response>((_, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        }, { once: true });
+      });
+    });
+
+    try {
+      await db.insert(schema.settings).values({
+        key: 'backup_webdav_config_v1',
+        value: JSON.stringify({
+          enabled: true,
+          fileUrl: 'https://dav.example.com/backups/metapi.json',
+          username: 'alice',
+          password: 'secret-pass',
+          exportType: 'all',
+          autoSyncEnabled: false,
+          autoSyncCron: '0 */6 * * *',
+        }),
+      }).run();
+
+      const importAssertion = expect(backupService.importBackupFromWebdav()).rejects.toThrow('WebDAV 请求超时');
+      await vi.advanceTimersByTimeAsync(16_000);
+      await importAssertion;
+    } finally {
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not schedule malformed imported webdav config', async () => {
+    const cronModule = await import('node-cron');
+    const scheduleSpy = vi.spyOn(cronModule.default, 'schedule');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+
+    try {
+      await db.insert(schema.settings).values({
+        key: 'backup_webdav_config_v1',
+        value: JSON.stringify({
+          enabled: true,
+          fileUrl: 'not-a-valid-url',
+          username: 'alice',
+          password: 'secret-pass',
+          exportType: 'all',
+          autoSyncEnabled: true,
+          autoSyncCron: '0 */6 * * *',
+        }),
+      }).run();
+
+      await expect(backupService.reloadBackupWebdavScheduler()).resolves.toBeUndefined();
+      expect(scheduleSpy).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('invalid config'));
+    } finally {
+      backupService.__resetBackupWebdavSchedulerForTests();
+      scheduleSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
 });
