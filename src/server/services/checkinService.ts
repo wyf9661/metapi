@@ -226,10 +226,12 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
       updates.updatedAt = new Date().toISOString();
     }
 
-    await db.update(schema.accounts)
-      .set(updates)
-      .where(eq(schema.accounts.id, accountId))
-      .run();
+    if (Object.keys(updates).length > 0) {
+      await db.update(schema.accounts)
+        .set(updates)
+        .where(eq(schema.accounts.id, accountId))
+        .run();
+    }
 
     if (shouldRefreshBalance) {
       try {

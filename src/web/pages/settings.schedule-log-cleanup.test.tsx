@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
+import ModernSelect from '../components/ModernSelect.js';
 import Settings from './Settings.js';
 
 const { apiMock } = vi.hoisted(() => ({
@@ -141,6 +142,34 @@ describe('Settings log cleanup schedule', () => {
       await flushMicrotasks();
 
       expect(apiMock.triggerCheckinAll).toHaveBeenCalledTimes(1);
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('renders schedule mode controls with modern selects and ghost action styling', async () => {
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <Settings />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const triggerButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '测试一次签到'
+      ));
+
+      expect(root.root.findAllByType('select')).toHaveLength(0);
+      expect(root.root.findAllByType(ModernSelect).length).toBeGreaterThanOrEqual(3);
+      expect(String(triggerButton.props.className || '')).toContain('btn-ghost');
     } finally {
       root?.unmount();
     }
