@@ -2,8 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
-import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { clearFocusParams, readFocusAnnouncementId } from './helpers/navigationFocus.js';
+import {
+  formatSiteAnnouncementSeenAt,
+  readClientTimeZone,
+  SiteAnnouncementContent,
+} from './helpers/siteAnnouncementPresentation.js';
 import { tr } from '../i18n.js';
 
 type SiteAnnouncementRow = {
@@ -38,6 +42,7 @@ export default function SiteAnnouncements() {
   const [highlightAnnouncementId, setHighlightAnnouncementId] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const highlightTimerRef = useRef<number | null>(null);
+  const viewerTimeZone = useMemo(() => readClientTimeZone(), []);
 
   const siteNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -211,9 +216,12 @@ export default function SiteAnnouncements() {
                   <span className={`badge ${row.readAt ? 'badge-muted' : 'badge-warning'}`}>{row.readAt ? '已读' : '未读'}</span>
                 </div>
               </div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{row.content}</div>
-              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>
-                首次发现：{formatDateTimeLocal(row.firstSeenAt || row.lastSeenAt || '')}
+              <SiteAnnouncementContent content={row.content} />
+              <div
+                style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}
+                title={viewerTimeZone ? `本地时区：${viewerTimeZone}` : undefined}
+              >
+                首次发现：{formatSiteAnnouncementSeenAt(row.firstSeenAt || row.lastSeenAt || '', viewerTimeZone)}
               </div>
             </div>
           ))
