@@ -131,16 +131,14 @@ export function normalizeSupportedModelsInput(input: unknown): string[] {
   if (Array.isArray(input)) {
     return input
       .map((item) => (typeof item === 'string' ? item.trim() : ''))
-      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index)
-      .slice(0, 200);
+      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index);
   }
 
   if (typeof input === 'string') {
     return input
       .split(/\r?\n|,/g)
       .map((item) => item.trim())
-      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index)
-      .slice(0, 200);
+      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index);
   }
 
   return [];
