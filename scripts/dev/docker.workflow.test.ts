@@ -31,4 +31,11 @@ describe('docker workflows', () => {
     expect(dockerfile).toContain('FROM node:22-bookworm-slim AS builder');
     expect(dockerfile).toContain('FROM node:22-bookworm-slim');
   });
+
+  it('keeps server docker builds isolated from desktop packaging dependencies', () => {
+    const dockerfile = readFileSync(resolve(process.cwd(), 'docker/Dockerfile'), 'utf8');
+
+    expect(dockerfile).toContain('npm ci --omit=peer --no-audit --no-fund');
+    expect(dockerfile).toContain('RUN npm run build:web && npm run build:server');
+  });
 });

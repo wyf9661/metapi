@@ -10,10 +10,10 @@ RUN apt-get update \
 ENV PYTHON=/usr/bin/python3
 
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=peer --no-audit --no-fund
 
 COPY . .
-RUN npm run build
+RUN npm run build:web && npm run build:server
 RUN --mount=type=cache,target=/root/.npm npm prune --omit=dev --no-audit --no-fund
 
 FROM node:22-bookworm-slim
