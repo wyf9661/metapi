@@ -921,13 +921,13 @@ export default function Sites() {
             )}
           </div>
           <input
-            placeholder="站点代理 URL（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）"
+            placeholder="站点代理（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）"
             value={form.proxyUrl}
             onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
             style={formInputStyle}
           />
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            留空则直连；填写后优先于系统代理。
+            填写后优先使用站点代理；留空则使用系统代理或直连(取决于设置开关状态)。
           </div>
           <label style={{
             display: 'flex',

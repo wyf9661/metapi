@@ -19,6 +19,7 @@ import { ensureModelAllowedForDownstreamKey, getDownstreamRoutingPolicy, recordD
 import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
+import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
@@ -341,7 +342,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
             };
             const refreshedRequest = buildEndpointRequest(ctx.request.endpoint);
-            const refreshedTargetUrl = `${selected.site.url}${refreshedRequest.path}`;
+            const refreshedTargetUrl = buildUpstreamUrl(selected.site.url, refreshedRequest.path);
             const refreshedResponse = await dispatchRequest(refreshedRequest, refreshedTargetUrl);
             if (refreshedResponse.ok) {
               return {

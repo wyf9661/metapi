@@ -214,6 +214,69 @@ describe('responses proxy codex oauth refresh', () => {
     expect(response.json()?.output_text).toContain('ok after codex token refresh');
   });
 
+  it('retries oauth responses requests with a normalized upstream URL after refresh', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'openai-site', url: 'https://gateway.example.com/v1/', platform: 'openai' },
+      account: {
+        id: 33,
+        username: 'oauth-user@example.com',
+        extraConfig: JSON.stringify({
+          credentialMode: 'session',
+          oauth: {
+            provider: 'codex',
+            accountId: 'chatgpt-account-123',
+            email: 'oauth-user@example.com',
+            planType: 'plus',
+          },
+        }),
+      },
+      tokenName: 'default',
+      tokenValue: 'expired-access-token',
+      actualModel: 'gpt-4.1-mini',
+    });
+
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'expired token', type: 'invalid_request_error' },
+      }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_openai_refreshed',
+        object: 'response',
+        model: 'gpt-4.1-mini',
+        status: 'completed',
+        output_text: 'ok after refresh',
+        usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-4.1-mini',
+        input: 'hello oauth',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(33);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const [firstUrl, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [secondUrl, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(firstUrl).toBe('https://gateway.example.com/v1/responses');
+    expect(secondUrl).toBe('https://gateway.example.com/v1/responses');
+    expect(firstOptions.headers.Authorization).toBe('Bearer expired-access-token');
+    expect(secondOptions.headers.Authorization).toBe('Bearer fresh-access-token');
+    expect(response.json()?.output_text).toBe('ok after refresh');
+  });
+
   it('sends an explicit empty instructions field to codex responses when downstream body has no system prompt', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
       id: 'resp_codex_no_system',
