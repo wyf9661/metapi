@@ -30,6 +30,7 @@ import { migrateSiteApiKeysToAccounts } from './services/siteApiKeyMigrationServ
 import { ensureDefaultSitesSeeded } from './services/defaultSiteSeedService.js';
 import { startOAuthLoopbackCallbackServers, stopOAuthLoopbackCallbackServers } from './services/oauth/localCallbackServer.js';
 import { startSiteAnnouncementPolling } from './services/siteAnnouncementPollingService.js';
+import { reloadBackupWebdavScheduler } from './services/backupService.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
 import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
 import { existsSync } from 'fs';
@@ -399,6 +400,7 @@ if (existsSync(webDir)) {
 
 // Start scheduler
 await startScheduler();
+await reloadBackupWebdavScheduler();
 startSiteAnnouncementPolling();
 try {
   await startOAuthLoopbackCallbackServers();

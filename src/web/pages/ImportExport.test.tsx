@@ -7,6 +7,10 @@ const { apiMock, toastMock } = vi.hoisted(() => ({
   apiMock: {
     exportBackup: vi.fn(),
     importBackup: vi.fn(),
+    getBackupWebdavConfig: vi.fn(),
+    saveBackupWebdavConfig: vi.fn(),
+    exportBackupToWebdav: vi.fn(),
+    importBackupFromWebdav: vi.fn(),
   },
   toastMock: {
     success: vi.fn(),
@@ -185,6 +189,53 @@ describe('ImportExport', () => {
     vi.stubGlobal('window', {
       confirm: vi.fn(() => true),
     });
+    apiMock.getBackupWebdavConfig.mockResolvedValue({
+      success: true,
+      config: {
+        enabled: true,
+        fileUrl: 'https://dav.example.com/backups/metapi.json',
+        username: 'alice',
+        exportType: 'all',
+        autoSyncEnabled: true,
+        autoSyncCron: '0 */6 * * *',
+        hasPassword: true,
+        passwordMasked: 'se****ss',
+      },
+      state: {
+        lastSyncAt: null,
+        lastError: null,
+      },
+    });
+    apiMock.saveBackupWebdavConfig.mockResolvedValue({
+      success: true,
+      config: {
+        enabled: true,
+        fileUrl: 'https://dav.example.com/backups/metapi.json',
+        username: 'alice',
+        exportType: 'all',
+        autoSyncEnabled: true,
+        autoSyncCron: '0 */6 * * *',
+        hasPassword: true,
+        passwordMasked: 'se****ss',
+      },
+      state: {
+        lastSyncAt: null,
+        lastError: null,
+      },
+    });
+    apiMock.exportBackupToWebdav.mockResolvedValue({
+      success: true,
+      fileUrl: 'https://dav.example.com/backups/metapi.json',
+      exportType: 'all',
+    });
+    apiMock.importBackupFromWebdav.mockResolvedValue({
+      success: true,
+      sections: {
+        accounts: true,
+        preferences: true,
+      },
+      appliedSettings: [],
+    });
     apiMock.importBackup.mockResolvedValue({
       allImported: true,
       sections: {
@@ -301,6 +352,43 @@ describe('ImportExport', () => {
       expect(toastMock.success).toHaveBeenCalledWith(
         expect.stringContaining('accounts.bookmarks、channelConfigs、tagStore'),
       );
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('loads webdav config and saves updates from the import/export page', async () => {
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ImportExport />
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const rendered = collectText(root!.root);
+      expect(apiMock.getBackupWebdavConfig).toHaveBeenCalledTimes(1);
+      expect(rendered).toContain('WebDAV');
+      expect(rendered).toContain('自动同步');
+
+      const saveButton = root!.root.findAll((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('保存 WebDAV 配置')
+      )).at(-1);
+
+      expect(saveButton).toBeTruthy();
+
+      await act(async () => {
+        saveButton!.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.saveBackupWebdavConfig).toHaveBeenCalledTimes(1);
     } finally {
       root?.unmount();
     }

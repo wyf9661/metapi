@@ -7,7 +7,16 @@ import { upsertSetting } from '../../db/upsertSetting.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
 import { updateBalanceRefreshCron, updateCheckinSchedule, updateLogCleanupSettings } from '../../services/checkinScheduler.js';
 import { sendNotification } from '../../services/notifyService.js';
-import { exportBackup, importBackup, type BackupExportType } from '../../services/backupService.js';
+import {
+  exportBackup,
+  exportBackupToWebdav,
+  getBackupWebdavConfig,
+  importBackup,
+  importBackupFromWebdav,
+  reloadBackupWebdavScheduler,
+  saveBackupWebdavConfig,
+  type BackupExportType,
+} from '../../services/backupService.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
 import {
   maskConnectionString,
@@ -73,6 +82,17 @@ interface DatabaseMigrationBody {
 
 interface SystemProxyTestBody {
   proxyUrl?: unknown;
+}
+
+interface BackupWebdavConfigBody {
+  enabled?: unknown;
+  fileUrl?: unknown;
+  username?: unknown;
+  password?: unknown;
+  clearPassword?: unknown;
+  exportType?: unknown;
+  autoSyncEnabled?: unknown;
+  autoSyncCron?: unknown;
 }
 
 type RuntimeDatabaseConfig = {
@@ -1267,6 +1287,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       for (const item of result.appliedSettings) {
         applyImportedSettingToRuntime(item.key, item.value);
       }
+      if (result.appliedSettings.some((item) => item.key === 'backup_webdav_config_v1')) {
+        await reloadBackupWebdavScheduler();
+      }
       return {
         success: true,
         message: '导入完成',
@@ -1276,6 +1299,65 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.code(400).send({
         success: false,
         message: err?.message || '导入失败',
+      });
+    }
+  });
+
+  app.get('/api/settings/backup/webdav', async () => {
+    return getBackupWebdavConfig();
+  });
+
+  app.put<{ Body: BackupWebdavConfigBody }>('/api/settings/backup/webdav', async (request, reply) => {
+    try {
+      const body = request.body || {};
+      const result = await saveBackupWebdavConfig({
+        enabled: body.enabled === undefined ? undefined : body.enabled === true,
+        fileUrl: body.fileUrl === undefined ? undefined : String(body.fileUrl || ''),
+        username: body.username === undefined ? undefined : String(body.username || ''),
+        password: body.password === undefined ? undefined : String(body.password),
+        clearPassword: body.clearPassword === true,
+        exportType: body.exportType === undefined ? undefined : String(body.exportType || '') as BackupExportType,
+        autoSyncEnabled: body.autoSyncEnabled === undefined ? undefined : body.autoSyncEnabled === true,
+        autoSyncCron: body.autoSyncCron === undefined ? undefined : String(body.autoSyncCron || ''),
+      });
+      return result;
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        message: err?.message || 'WebDAV 配置保存失败',
+      });
+    }
+  });
+
+  app.post<{ Body: { type?: string } }>('/api/settings/backup/webdav/export', async (request, reply) => {
+    try {
+      const rawType = typeof request.body?.type === 'string' ? request.body.type.trim().toLowerCase() : '';
+      const type: BackupExportType | undefined = rawType === 'all' || rawType === 'accounts' || rawType === 'preferences'
+        ? rawType
+        : undefined;
+      return await exportBackupToWebdav(type);
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        message: err?.message || 'WebDAV 导出失败',
+      });
+    }
+  });
+
+  app.post('/api/settings/backup/webdav/import', async (_, reply) => {
+    try {
+      const result = await importBackupFromWebdav();
+      for (const item of result.appliedSettings) {
+        applyImportedSettingToRuntime(item.key, item.value);
+      }
+      if (result.appliedSettings.some((item) => item.key === 'backup_webdav_config_v1')) {
+        await reloadBackupWebdavScheduler();
+      }
+      return result;
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        message: err?.message || 'WebDAV 导入失败',
       });
     }
   });

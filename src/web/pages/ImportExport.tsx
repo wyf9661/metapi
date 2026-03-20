@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { tr } from '../i18n.js';
@@ -22,6 +22,35 @@ type ParsedSummary = {
   channelsCount: number;
   settingsCount: number;
   ignoredSections: string[];
+};
+
+type WebdavConfigForm = {
+  enabled: boolean;
+  fileUrl: string;
+  username: string;
+  password: string;
+  exportType: BackupType;
+  autoSyncEnabled: boolean;
+  autoSyncCron: string;
+  hasPassword: boolean;
+  passwordMasked: string;
+};
+
+type WebdavSyncState = {
+  lastSyncAt: string | null;
+  lastError: string | null;
+};
+
+const DEFAULT_WEBDAV_CONFIG: WebdavConfigForm = {
+  enabled: false,
+  fileUrl: '',
+  username: '',
+  password: '',
+  exportType: 'all',
+  autoSyncEnabled: false,
+  autoSyncCron: '0 */6 * * *',
+  hasPassword: false,
+  passwordMasked: '',
 };
 
 function downloadJsonFile(data: unknown, filename: string) {
@@ -188,9 +217,45 @@ export default function ImportExport() {
   const [importData, setImportData] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [webdavConfig, setWebdavConfig] = useState<WebdavConfigForm>(DEFAULT_WEBDAV_CONFIG);
+  const [webdavState, setWebdavState] = useState<WebdavSyncState>({ lastSyncAt: null, lastError: null });
+  const [webdavSaving, setWebdavSaving] = useState(false);
+  const [webdavAction, setWebdavAction] = useState<'export' | 'import' | ''>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const summary = useMemo(() => parseImportSummary(importData), [importData]);
+
+  useEffect(() => {
+    let alive = true;
+    void api.getBackupWebdavConfig()
+      .then((result: any) => {
+        if (!alive) return;
+        const config = result?.config || {};
+        const state = result?.state || {};
+        setWebdavConfig({
+          enabled: config.enabled === true,
+          fileUrl: String(config.fileUrl || ''),
+          username: String(config.username || ''),
+          password: '',
+          exportType: config.exportType === 'accounts' || config.exportType === 'preferences' ? config.exportType : 'all',
+          autoSyncEnabled: config.autoSyncEnabled === true,
+          autoSyncCron: String(config.autoSyncCron || DEFAULT_WEBDAV_CONFIG.autoSyncCron),
+          hasPassword: config.hasPassword === true,
+          passwordMasked: String(config.passwordMasked || ''),
+        });
+        setWebdavState({
+          lastSyncAt: typeof state.lastSyncAt === 'string' ? state.lastSyncAt : null,
+          lastError: typeof state.lastError === 'string' ? state.lastError : null,
+        });
+      })
+      .catch((err: any) => {
+        if (!alive) return;
+        toast.error(err?.message || '加载 WebDAV 配置失败');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [toast]);
 
   const handleExport = async (type: BackupType) => {
     setExportingType(type);
@@ -278,6 +343,85 @@ export default function ImportExport() {
       toast.error(err?.message || '导入失败');
     } finally {
       setImporting(false);
+    }
+  };
+
+  const applyWebdavResponse = (result: any) => {
+    const config = result?.config;
+    if (config) {
+      setWebdavConfig((prev) => ({
+        enabled: config.enabled === true,
+        fileUrl: String(config.fileUrl || ''),
+        username: String(config.username || ''),
+        password: '',
+        exportType: config.exportType === 'accounts' || config.exportType === 'preferences' ? config.exportType : 'all',
+        autoSyncEnabled: config.autoSyncEnabled === true,
+        autoSyncCron: String(config.autoSyncCron || prev.autoSyncCron || DEFAULT_WEBDAV_CONFIG.autoSyncCron),
+        hasPassword: config.hasPassword === true,
+        passwordMasked: String(config.passwordMasked || ''),
+      }));
+    }
+    const state = result?.state || result;
+    setWebdavState((prev) => ({
+      lastSyncAt: typeof state?.lastSyncAt === 'string' ? state.lastSyncAt : prev.lastSyncAt,
+      lastError: typeof state?.lastError === 'string'
+        ? state.lastError
+        : (state?.lastError === null ? null : prev.lastError),
+    }));
+  };
+
+  const handleSaveWebdavConfig = async () => {
+    setWebdavSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        enabled: webdavConfig.enabled,
+        fileUrl: webdavConfig.fileUrl,
+        username: webdavConfig.username,
+        exportType: webdavConfig.exportType,
+        autoSyncEnabled: webdavConfig.autoSyncEnabled,
+        autoSyncCron: webdavConfig.autoSyncCron,
+      };
+      if (webdavConfig.password.trim()) {
+        payload.password = webdavConfig.password;
+      }
+      const result = await api.saveBackupWebdavConfig(payload as any);
+      applyWebdavResponse(result);
+      setWebdavConfig((prev) => ({ ...prev, password: '' }));
+      toast.success('WebDAV 配置已保存');
+    } catch (err: any) {
+      toast.error(err?.message || '保存 WebDAV 配置失败');
+    } finally {
+      setWebdavSaving(false);
+    }
+  };
+
+  const handleExportToWebdav = async () => {
+    setWebdavAction('export');
+    try {
+      const result = await api.exportBackupToWebdav(webdavConfig.exportType);
+      applyWebdavResponse(result);
+      toast.success(`已导出到 WebDAV：${result?.fileUrl || webdavConfig.fileUrl}`);
+    } catch (err: any) {
+      toast.error(err?.message || '导出到 WebDAV 失败');
+    } finally {
+      setWebdavAction('');
+    }
+  };
+
+  const handleImportFromWebdav = async () => {
+    const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+      ? true
+      : window.confirm('从 WebDAV 导入会覆盖本地账号/路由或系统设置，确认继续？');
+    if (!confirmed) return;
+    setWebdavAction('import');
+    try {
+      const result = await api.importBackupFromWebdav();
+      applyWebdavResponse(result);
+      toast.success(buildImportSuccessMessage(result));
+    } catch (err: any) {
+      toast.error(err?.message || '从 WebDAV 导入失败');
+    } finally {
+      setWebdavAction('');
     }
   };
 
@@ -483,7 +627,119 @@ export default function ImportExport() {
         </div>
       </div>
 
-      <div className="card animate-slide-up stagger-3" style={{ marginTop: 14, padding: 16 }}>
+      <div className="card animate-slide-up stagger-3" style={{ marginTop: 14, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999A5.002 5.002 0 006 9a4 4 0 00-3 6z" />
+          </svg>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>WebDAV 同步</span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
+          支持手动推送、手动拉取，以及定时自动导出到 WebDAV。
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 10 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>文件 URL</span>
+            <input
+              value={webdavConfig.fileUrl}
+              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, fileUrl: e.target.value }))}
+              placeholder="https://dav.example.com/backups/metapi.json"
+              style={{ width: '100%' }}
+            />
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>用户名</span>
+            <input
+              value={webdavConfig.username}
+              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, username: e.target.value }))}
+              placeholder="可留空"
+              style={{ width: '100%' }}
+            />
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>密码</span>
+            <input
+              type="password"
+              value={webdavConfig.password}
+              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, password: e.target.value }))}
+              placeholder={webdavConfig.hasPassword ? `已保存 ${webdavConfig.passwordMasked}，留空则保持不变` : '请输入密码'}
+              style={{ width: '100%' }}
+            />
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>导出分区</span>
+            <select
+              value={webdavConfig.exportType}
+              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, exportType: e.target.value as BackupType }))}
+            >
+              <option value="all">全部</option>
+              <option value="accounts">账号与路由</option>
+              <option value="preferences">系统设置</option>
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>自动同步 Cron</span>
+            <input
+              value={webdavConfig.autoSyncCron}
+              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, autoSyncCron: e.target.value }))}
+              placeholder="0 */6 * * *"
+              style={{ width: '100%' }}
+            />
+          </label>
+          <div style={{ display: 'grid', gap: 8, alignContent: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={webdavConfig.enabled}
+                onChange={(e) => setWebdavConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+              />
+              启用 WebDAV
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={webdavConfig.autoSyncEnabled}
+                onChange={(e) => setWebdavConfig((prev) => ({ ...prev, autoSyncEnabled: e.target.checked }))}
+              />
+              自动同步
+            </label>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+          <button
+            onClick={handleSaveWebdavConfig}
+            disabled={webdavSaving}
+            className="btn btn-primary"
+          >
+            {webdavSaving ? '保存中...' : '保存 WebDAV 配置'}
+          </button>
+          <button
+            onClick={handleExportToWebdav}
+            disabled={webdavAction !== ''}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {webdavAction === 'export' ? '导出中...' : '立即导出到 WebDAV'}
+          </button>
+          <button
+            onClick={handleImportFromWebdav}
+            disabled={webdavAction !== ''}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {webdavAction === 'import' ? '拉取中...' : '从 WebDAV 拉取'}
+          </button>
+        </div>
+
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.7 }}>
+          <div>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未同步'}</div>
+          <div>最近错误：{webdavState.lastError || '无'}</div>
+        </div>
+      </div>
+
+      <div className="card animate-slide-up stagger-4" style={{ marginTop: 14, padding: 16 }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>注意事项</div>
         <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.75 }}>
           <div>1. 导入账号分区会覆盖现有站点、账号、令牌和路由配置。</div>

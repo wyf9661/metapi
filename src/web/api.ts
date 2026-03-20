@@ -587,6 +587,33 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ data }),
     }),
+  getBackupWebdavConfig: () => request('/api/settings/backup/webdav'),
+  saveBackupWebdavConfig: (data: {
+    enabled: boolean;
+    fileUrl: string;
+    username: string;
+    password?: string;
+    clearPassword?: boolean;
+    exportType: 'all' | 'accounts' | 'preferences';
+    autoSyncEnabled: boolean;
+    autoSyncCron: string;
+  }) =>
+    request('/api/settings/backup/webdav', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  exportBackupToWebdav: (type?: 'all' | 'accounts' | 'preferences') =>
+    request('/api/settings/backup/webdav/export', {
+      method: 'POST',
+      body: JSON.stringify(type ? { type } : {}),
+      timeoutMs: 60_000,
+    }),
+  importBackupFromWebdav: () =>
+    request('/api/settings/backup/webdav/import', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      timeoutMs: 60_000,
+    }),
   clearRuntimeCache: () => request('/api/settings/maintenance/clear-cache', { method: 'POST' }),
   clearUsageData: () => request('/api/settings/maintenance/clear-usage', { method: 'POST' }),
   factoryReset: () => request('/api/settings/maintenance/factory-reset', { method: 'POST' }),
