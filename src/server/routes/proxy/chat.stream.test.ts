@@ -2290,7 +2290,7 @@ describe('chat proxy stream behavior', () => {
     });
   });
 
-  it('returns clear 400 when input_file file_url is sent to a claude-only upstream without native responses support', async () => {
+  it('converts input_file file_url into Claude document url blocks for claude-only upstreams', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
       site: { name: 'claude-site', url: 'https://upstream.example.com', platform: 'claude' },
@@ -2299,6 +2299,18 @@ describe('chat proxy stream behavior', () => {
       tokenValue: 'sk-demo',
       actualModel: 'upstream-claude',
     });
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      id: 'msg_file_url_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'upstream-claude',
+      content: [{ type: 'text', text: 'hello from claude messages' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 7, output_tokens: 3 },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
 
     const response = await app.inject({
       method: 'POST',
@@ -2322,12 +2334,119 @@ describe('chat proxy stream behavior', () => {
       },
     });
 
-    expect(response.statusCode).toBe(400);
-    const body = response.json();
-    expect(body?.error?.type).toBe('invalid_request_error');
-    expect(body?.error?.message).toContain('input_file.file_url');
-    expect(body?.error?.message).toContain('/v1/responses');
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [targetUrl, options] = fetchMock.mock.calls[0] as [string, any];
+    expect(targetUrl).toContain('/v1/messages');
+    const forwardedBody = JSON.parse(options.body);
+    expect(forwardedBody.messages[0].content[1]).toMatchObject({
+      type: 'document',
+      title: 'remote.pdf',
+      source: {
+        type: 'url',
+        url: 'https://example.com/remote.pdf',
+      },
+    });
+  });
+
+  it('does not let remote document url success poison later inline document endpoint preference', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'generic-site', url: 'https://upstream.example.com', platform: 'new-api' },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'upstream-gpt',
+    });
+    fetchMock.mockImplementation(async (target: unknown) => {
+      const url = String(target);
+      if (url.includes('/v1/responses')) {
+        return new Response(JSON.stringify({
+          id: 'resp_file_url_runtime_1',
+          object: 'response',
+          model: 'upstream-gpt',
+          output_text: 'hello from responses upstream',
+          output: [
+            {
+              id: 'msg_file_url_runtime_1',
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'output_text', text: 'hello from responses upstream' }],
+            },
+          ],
+          status: 'completed',
+          usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10 },
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/v1/messages')) {
+        return new Response(JSON.stringify({
+          id: 'msg_inline_runtime_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'upstream-gpt',
+          content: [{ type: 'text', text: 'hello from messages upstream' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 7, output_tokens: 3 },
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected target url: ${url}`);
+    });
+
+    const remoteResponse = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'claude-haiku-4-5-20251001',
+        input: [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              { type: 'input_text', text: 'read this remote file' },
+              {
+                type: 'input_file',
+                filename: 'remote.pdf',
+                file_url: 'https://example.com/remote.pdf',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(remoteResponse.statusCode).toBe(200);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/v1/responses');
+
+    const inlineResponse = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'claude-haiku-4-5-20251001',
+        input: [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              { type: 'input_text', text: 'read this inline file' },
+              {
+                type: 'input_file',
+                filename: 'brief.pdf',
+                file_data: 'data:application/pdf;base64,JVBERi0xLjQK',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(inlineResponse.statusCode).toBe(200);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/v1/messages');
   });
 
   it('prefers native /v1/responses for claude-family /v1/responses requests that opt into reasoning without injecting a generic default include', async () => {

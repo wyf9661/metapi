@@ -21,7 +21,7 @@ export function resolveConversationFileCapability(
     return {
       supported: true,
       documentMode: 'inline_only',
-      reason: '当前协议会以内联文档方式发送会话附件。',
+      reason: '当前界面的会话附件会以内联文档方式发送。',
     };
   }
 

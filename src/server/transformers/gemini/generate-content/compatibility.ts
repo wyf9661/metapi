@@ -11,6 +11,10 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function isImageMimeType(mimeType: string): boolean {
+  return mimeType.toLowerCase().startsWith('image/');
+}
+
 function parseJsonIfPossible(value: string): unknown {
   const trimmed = value.trim();
   if (!trimmed) return {};
@@ -30,6 +34,26 @@ function buildDataUrl(part: GeminiRecord): string | null {
   return `data:${mimeType};base64,${data}`;
 }
 
+function buildOpenAiFileBlock(input: {
+  fileData?: string;
+  fileUrl?: string;
+  mimeType?: string;
+}): Record<string, unknown> | null {
+  const fileData = asTrimmedString(input.fileData);
+  const fileUrl = asTrimmedString(input.fileUrl);
+  const mimeType = asTrimmedString(input.mimeType);
+  if (!fileData && !fileUrl) return null;
+
+  const file: Record<string, unknown> = {};
+  if (fileData) file.file_data = fileData;
+  if (fileUrl && !fileData) file.file_url = fileUrl;
+  if (mimeType) file.mime_type = mimeType;
+  return {
+    type: 'file',
+    file,
+  };
+}
+
 function toOpenAiContent(contentParts: GeminiRecord[]): string | Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = [];
   let textContent = '';
@@ -43,10 +67,39 @@ function toOpenAiContent(contentParts: GeminiRecord[]): string | Array<Record<st
 
     const dataUrl = buildDataUrl(part);
     if (dataUrl) {
-      blocks.push({
-        type: 'image_url',
-        image_url: { url: dataUrl },
-      });
+      const inlineData = isRecord(part.inlineData) ? part.inlineData : null;
+      const mimeType = asTrimmedString(inlineData?.mime_type ?? inlineData?.mimeType) || 'application/octet-stream';
+      if (isImageMimeType(mimeType)) {
+        blocks.push({
+          type: 'image_url',
+          image_url: { url: dataUrl },
+        });
+      } else {
+        const fileBlock = buildOpenAiFileBlock({
+          fileData: asTrimmedString(inlineData?.data),
+          mimeType,
+        });
+        if (fileBlock) blocks.push(fileBlock);
+      }
+      continue;
+    }
+
+    const fileData = isRecord(part.fileData) ? part.fileData : null;
+    const fileUri = asTrimmedString(fileData?.fileUri ?? fileData?.file_uri);
+    if (fileUri) {
+      const mimeType = asTrimmedString(fileData?.mimeType ?? fileData?.mime_type);
+      if (mimeType && isImageMimeType(mimeType)) {
+        blocks.push({
+          type: 'image_url',
+          image_url: { url: fileUri },
+        });
+      } else {
+        const fileBlock = buildOpenAiFileBlock({
+          fileUrl: fileUri,
+          mimeType: mimeType || undefined,
+        });
+        if (fileBlock) blocks.push(fileBlock);
+      }
     }
   }
 

@@ -15,6 +15,7 @@ import {
   collectModelTesterModelNames,
   countConversationTurns,
   createConversationUserMessage,
+  extractConversationUploadedFilesFromMessage,
   filterModelTesterModelNames,
   parseCustomRequestBody,
   parseModelTesterSession,
@@ -218,6 +219,56 @@ describe('modelTesterSession', () => {
         fileId: 'file-metapi-123',
         filename: 'paper.pdf',
         mimeType: 'application/pdf',
+      },
+    ]);
+  });
+
+  it('extracts inline conversation file data for retry flows', () => {
+    const files = extractConversationUploadedFilesFromMessage({
+      id: 'u1',
+      role: 'user',
+      content: '请总结附件',
+      createAt: 1,
+      parts: [
+        {
+          type: 'input_file',
+          filename: 'brief.pdf',
+          mimeType: 'application/pdf',
+          data: 'data:application/pdf;base64,JVBERi0xLjQK',
+        },
+      ],
+    });
+
+    expect(files).toEqual([
+      {
+        filename: 'brief.pdf',
+        mimeType: 'application/pdf',
+        data: 'data:application/pdf;base64,JVBERi0xLjQK',
+      },
+    ]);
+  });
+
+  it('extracts uploaded file references for retry flows', () => {
+    const files = extractConversationUploadedFilesFromMessage({
+      id: 'u2',
+      role: 'user',
+      content: '请继续分析',
+      createAt: 2,
+      parts: [
+        {
+          type: 'input_file',
+          fileId: 'file-metapi-456',
+          filename: 'appendix.txt',
+          mimeType: 'text/plain',
+        },
+      ],
+    });
+
+    expect(files).toEqual([
+      {
+        fileId: 'file-metapi-456',
+        filename: 'appendix.txt',
+        mimeType: 'text/plain',
       },
     ]);
   });

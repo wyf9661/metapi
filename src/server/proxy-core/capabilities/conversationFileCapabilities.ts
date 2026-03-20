@@ -151,8 +151,8 @@ export function resolveConversationFileEndpointCapability(input: {
       return {
         image: 'native',
         audio: 'unsupported',
-        document: 'inline_only',
-        preservesRemoteDocumentUrl: false,
+        document: 'native',
+        preservesRemoteDocumentUrl: true,
       };
     }
     return {
