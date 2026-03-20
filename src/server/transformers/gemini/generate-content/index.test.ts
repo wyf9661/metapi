@@ -95,6 +95,49 @@ describe('geminiGenerateContentTransformer.inbound', () => {
     });
   });
 
+  it('compatibility preserves inline document parts as OpenAI file blocks', () => {
+    const body = geminiGenerateContentTransformer.compatibility.buildOpenAiBodyFromGeminiRequest({
+      modelName: 'gpt-5.4',
+      stream: false,
+      body: {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: 'summarize this file' },
+              {
+                inlineData: {
+                  mimeType: 'application/pdf',
+                  data: 'JVBERi0x',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(body).toEqual({
+      model: 'gpt-5.4',
+      stream: false,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'summarize this file' },
+            {
+              type: 'file',
+              file: {
+                file_data: 'JVBERi0x',
+                mime_type: 'application/pdf',
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('preserves native Gemini request fields through normalization', () => {
     const body = geminiGenerateContentTransformer.inbound.normalizeRequest({
       contents: [

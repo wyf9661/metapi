@@ -15,6 +15,7 @@ import {
   collectModelTesterModelNames,
   countConversationTurns,
   createConversationUserMessage,
+  extractConversationUploadedFilesFromMessage,
   filterModelTesterModelNames,
   parseCustomRequestBody,
   parseModelTesterSession,
@@ -218,6 +219,34 @@ describe('modelTesterSession', () => {
         fileId: 'file-metapi-123',
         filename: 'paper.pdf',
         mimeType: 'application/pdf',
+      },
+    ]);
+  });
+
+  it('extracts both uploaded references and inline attachments from user messages', () => {
+    const message = createConversationUserMessage('请重新发送附件', [
+      {
+        fileId: 'file-metapi-123',
+        filename: 'paper.pdf',
+        mimeType: 'application/pdf',
+      },
+      {
+        filename: 'voice.mp3',
+        mimeType: 'audio/mpeg',
+        data: 'data:audio/mpeg;base64,QUFBQQ==',
+      },
+    ]);
+
+    expect(extractConversationUploadedFilesFromMessage(message)).toEqual([
+      {
+        fileId: 'file-metapi-123',
+        filename: 'paper.pdf',
+        mimeType: 'application/pdf',
+      },
+      {
+        filename: 'voice.mp3',
+        mimeType: 'audio/mpeg',
+        data: 'data:audio/mpeg;base64,QUFBQQ==',
       },
     ]);
   });
@@ -476,6 +505,54 @@ describe('modelTesterSession', () => {
                 data: 'JVBERi0xLjc=',
               },
               title: 'brief.pdf',
+            },
+          ],
+        },
+      ],
+      temperature: 0.7,
+    });
+  });
+
+  it('builds Claude conversation payloads with image blocks for inline image attachments', () => {
+    const payload = buildApiPayload(
+      [{
+        id: 'u1',
+        role: 'user',
+        content: 'describe this image',
+        createAt: 1,
+        parts: [
+          {
+            type: 'input_file',
+            filename: 'chart.png',
+            mimeType: 'image/png',
+            data: 'data:image/png;base64,QUFBQQ==',
+          },
+        ],
+      } as ChatMessage],
+      {
+        ...DEFAULT_INPUTS,
+        model: 'claude-opus-4-6',
+        protocol: 'claude',
+      },
+      DEFAULT_PARAMETER_ENABLED,
+    );
+
+    expect(payload.jsonBody).toEqual({
+      model: 'claude-opus-4-6',
+      stream: false,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'describe this image' },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'QUFBQQ==',
+              },
             },
           ],
         },

@@ -23,6 +23,7 @@ import {
   createLoadingAssistantMessage,
   createMessage,
   createConversationUserMessage,
+  extractConversationUploadedFilesFromMessage,
   filterModelTesterModelNames,
   finalizeIncompleteMessage,
   findLastLoadingAssistantIndex,
@@ -44,7 +45,12 @@ import {
   type TestTargetFormat,
   type TestChatPayload,
 } from './helpers/modelTesterSession.js';
-import { resolveConversationFileCapability } from './helpers/conversationFileCapabilities.js';
+import {
+  buildConversationFileAccept,
+  buildConversationFileHint,
+  isConversationUploadedFileSupported,
+  resolveConversationFileCapability,
+} from './helpers/conversationFileCapabilities.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { tr } from '../i18n.js';
@@ -76,7 +82,6 @@ type ConversationFileState = UploadState & {
 };
 
 const POLL_INTERVAL_MS = 1200;
-const CONVERSATION_FILE_ACCEPT = '.pdf,.txt,.md,.markdown,.json,image/*,audio/*';
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const createConversationFileLocalId = () =>
@@ -689,6 +694,19 @@ export default function ModelTester() {
   const restoredSessionRef = useRef<ReturnType<typeof parseModelTesterSession>>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamStopRequestedRef = useRef(false);
+  const conversationFileCapability = useMemo(
+    () => resolveConversationFileCapability(inputs.protocol),
+    [inputs.protocol],
+  );
+  const conversationFileSupported = conversationFileCapability.supported;
+  const conversationFileAccept = useMemo(
+    () => buildConversationFileAccept(conversationFileCapability),
+    [conversationFileCapability],
+  );
+  const conversationFileHint = useMemo(
+    () => buildConversationFileHint(conversationFileCapability),
+    [conversationFileCapability],
+  );
 
   const pushDebug = useCallback((level: DebugTimelineEntry['level'], text: string) => {
     const now = new Date().toISOString();
@@ -880,37 +898,40 @@ export default function ModelTester() {
         name: file.name,
         mimeType: file.type || 'application/octet-stream',
         dataUrl: await readFileAsDataUrl(file),
-        fileId: null,
-        status: 'pending' as const,
-        errorMessage: null,
-      })));
-      setConversationFiles((prev) => [...prev, ...nextFiles]);
-      pushDebug('info', `已添加 ${nextFiles.length} 个会话附件。`);
+          fileId: null,
+          status: 'pending' as const,
+          errorMessage: null,
+        })));
+      const acceptedFiles = nextFiles.filter((file) => isConversationUploadedFileSupported(
+        conversationFileCapability,
+        { filename: file.name, mimeType: file.mimeType },
+      ));
+      const rejectedFiles = nextFiles.filter((file) => !isConversationUploadedFileSupported(
+        conversationFileCapability,
+        { filename: file.name, mimeType: file.mimeType },
+      ));
+
+      if (acceptedFiles.length > 0) {
+        setConversationFiles((prev) => [...prev, ...acceptedFiles]);
+        pushDebug('info', `已添加 ${acceptedFiles.length} 个会话附件。`);
+      }
+
+      if (rejectedFiles.length > 0) {
+        const message = `当前协议不支持这些会话附件：${rejectedFiles.map((file) => file.name).join('、')}。${conversationFileHint}`;
+        setError(message);
+        pushDebug('warn', message);
+      }
     } catch (readError: any) {
       const message = readError?.message || '读取附件失败';
       setError(message);
       pushDebug('error', message);
     }
-  }, [pushDebug]);
+  }, [conversationFileCapability, conversationFileHint, pushDebug]);
 
   const removeConversationFile = useCallback((localId: string) => {
     if (sending) return;
     setConversationFiles((prev) => prev.filter((item) => item.localId !== localId));
   }, [sending]);
-
-  const extractUploadedFilesFromMessage = useCallback((message: ChatMessage): ConversationUploadedFile[] => {
-    const parts = Array.isArray(message.parts) ? message.parts : [];
-    return parts.flatMap((part) => {
-      if (part.type !== 'input_file') return [];
-      const fileId = typeof part.fileId === 'string' ? part.fileId.trim() : '';
-      if (!fileId) return [];
-      return [{
-        fileId,
-        filename: typeof part.filename === 'string' && part.filename.trim() ? part.filename.trim() : null,
-        mimeType: typeof part.mimeType === 'string' && part.mimeType.trim() ? part.mimeType.trim() : null,
-      }];
-    });
-  }, []);
 
   const uploadConversationFiles = useCallback(async (): Promise<ConversationUploadedFile[]> => {
     if (conversationFiles.length <= 0) return [];
@@ -978,6 +999,20 @@ export default function ModelTester() {
       mimeType: item.mimeType,
       data: item.dataUrl,
     })), [conversationFiles]);
+
+  const ensureSupportedConversationFiles = useCallback((files: ConversationUploadedFile[]): boolean => {
+    const unsupported = files.filter((file) => !isConversationUploadedFileSupported(conversationFileCapability, file));
+    if (unsupported.length <= 0) return true;
+
+    const names = unsupported.map((file, index) => {
+      const filename = typeof file.filename === 'string' ? file.filename.trim() : '';
+      return filename || `附件${index + 1}`;
+    });
+    const message = `当前协议不支持这些会话附件：${names.join('、')}。${conversationFileHint}`;
+    setError(message);
+    pushDebug('warn', message);
+    return false;
+  }, [conversationFileCapability, conversationFileHint, pushDebug]);
 
   const buildConversationMessagesWithSystem = useCallback((baseMessages: ChatMessage[]) => {
     if (!inputs.systemPrompt.trim()) return baseMessages;
@@ -1348,11 +1383,6 @@ export default function ModelTester() {
     () => filteredModels.map((item) => ({ value: item, label: item })),
     [filteredModels],
   );
-  const conversationFileCapability = useMemo(
-    () => resolveConversationFileCapability(inputs.protocol),
-    [inputs.protocol],
-  );
-  const conversationFileSupported = conversationFileCapability.supported;
   const canSend = useMemo(() => {
     if (sending || pendingJobId || !inputs.model) return false;
     if (inputs.mode !== 'conversation') {
@@ -1775,6 +1805,9 @@ export default function ModelTester() {
     baseMessages: ChatMessage[],
     files: ConversationUploadedFile[] = [],
   ) => {
+    if (!ensureSupportedConversationFiles(files)) {
+      return;
+    }
     const userMessage = createConversationUserMessage(prompt, files);
     const loadingAssistant = createLoadingAssistantMessage();
     const nextMessages = [...baseMessages, userMessage, loadingAssistant];
@@ -1793,7 +1826,7 @@ export default function ModelTester() {
     }
 
     await dispatchPayload(nextMessages, payload, { syncedCustomBody });
-  }, [buildConversationProxyEnvelope, buildPayloadWithMessages, createConversationUserMessage, customRequestMode, dispatchPayload, dispatchProxyEnvelope, inputs.protocol, pushDebug]);
+  }, [buildConversationProxyEnvelope, buildPayloadWithMessages, createConversationUserMessage, customRequestMode, dispatchPayload, dispatchProxyEnvelope, ensureSupportedConversationFiles, inputs.protocol, pushDebug]);
 
   const sendModeRequest = useCallback(async () => {
     const envelope = buildModeProxyEnvelope();
@@ -1830,8 +1863,13 @@ export default function ModelTester() {
     if (!customRequestMode && conversationFileSupported && conversationFiles.length > 0) {
       setSending(true);
       try {
+        const draftFiles = inlineConversationFiles();
+        if (!ensureSupportedConversationFiles(draftFiles)) {
+          setSending(false);
+          return;
+        }
         const uploadedFiles = conversationFileCapability.documentMode === 'inline_only'
-          ? inlineConversationFiles()
+          ? draftFiles
           : await uploadConversationFiles();
         setInput('');
         setConversationFiles([]);
@@ -1870,7 +1908,7 @@ export default function ModelTester() {
         { stream: inputs.stream, jobMode: !inputs.stream },
       ),
     );
-  }, [canSend, conversationFileCapability, conversationFileSupported, conversationFiles.length, customRequestBody, customRequestMode, dispatchPayload, inlineConversationFiles, input, inputs.mode, messages, pushDebug, sendModeRequest, sendWithPrompt, uploadConversationFiles]);
+  }, [canSend, conversationFileCapability, conversationFileSupported, conversationFiles.length, customRequestBody, customRequestMode, dispatchPayload, ensureSupportedConversationFiles, inlineConversationFiles, input, inputs.mode, messages, pushDebug, sendModeRequest, sendWithPrompt, uploadConversationFiles]);
 
   const retryPending = useCallback(async () => {
     if (sending || pendingJobId || !pendingPayload) return;
@@ -2047,11 +2085,11 @@ export default function ModelTester() {
 
     const base = messages.slice(0, userIndex);
     const prompt = messages[userIndex].content;
-    const files = extractUploadedFilesFromMessage(messages[userIndex]);
+    const files = extractConversationUploadedFilesFromMessage(messages[userIndex]);
     setEditingMessageId(null);
     setEditValue('');
     void sendWithPrompt(prompt, base, files);
-  }, [extractUploadedFilesFromMessage, messages, pendingJobId, sendWithPrompt, sending]);
+  }, [messages, pendingJobId, sendWithPrompt, sending]);
 
   const startEditMessage = useCallback((target: ChatMessage) => {
     if (sending) return;
@@ -2085,9 +2123,9 @@ export default function ModelTester() {
 
     if (retry && target.role === 'user') {
       const base = updated.slice(0, targetIndex);
-      void sendWithPrompt(nextContent, base, extractUploadedFilesFromMessage(target));
+      void sendWithPrompt(nextContent, base, extractConversationUploadedFilesFromMessage(target));
     }
-  }, [cancelEditMessage, editValue, editingMessageId, extractUploadedFilesFromMessage, messages, sendWithPrompt]);
+  }, [cancelEditMessage, editValue, editingMessageId, messages, sendWithPrompt]);
 
   const syncMessageToBody = useCallback(() => {
     const nextBody = syncMessagesToCustomRequestBody(customRequestBody, messages, inputs);
@@ -2806,7 +2844,7 @@ export default function ModelTester() {
                       ref={conversationFileInputRef}
                       type="file"
                       multiple
-                      accept={CONVERSATION_FILE_ACCEPT}
+                      accept={conversationFileAccept}
                       style={{ display: 'none' }}
                       onChange={(event) => {
                         void handleConversationFilesChange(event.target.files);
@@ -2828,9 +2866,7 @@ export default function ModelTester() {
                           ? '自定义请求模式不会自动上传这些附件；关闭自定义模式后可走标准 /v1/files 链路。'
                           : !conversationFileSupported
                             ? (conversationFileCapability.reason || '当前协议暂不支持会话附件注入。')
-                            : conversationFileCapability.documentMode === 'inline_only'
-                              ? '支持 PDF / TXT / Markdown / JSON / 图片 / 音频；发送时会以内联文档方式注入。'
-                              : '支持 PDF / TXT / Markdown / JSON / 图片 / 音频；发送前会先上传到 /v1/files。'}
+                            : conversationFileHint}
                       </span>
                     </div>
                     {conversationFiles.length > 0 && (

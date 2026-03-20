@@ -1,3 +1,4 @@
+import { toOpenAiChatFileBlock } from '../../shared/inputFile.js';
 import type { NormalizedFinalResponse } from '../../shared/normalized.js';
 import { extractReasoningMetadataFromGeminiRequest } from './convert.js';
 
@@ -30,6 +31,60 @@ function buildDataUrl(part: GeminiRecord): string | null {
   return `data:${mimeType};base64,${data}`;
 }
 
+function buildInlineData(
+  part: GeminiRecord,
+): { mimeType: string; data: string } | null {
+  const inlineData = isRecord(part.inlineData) ? part.inlineData : null;
+  if (!inlineData) return null;
+  const mimeType = asTrimmedString(inlineData.mime_type ?? inlineData.mimeType) || 'application/octet-stream';
+  const data = asTrimmedString(inlineData.data);
+  if (!data) return null;
+  return { mimeType, data };
+}
+
+function buildFileDataSource(
+  part: GeminiRecord,
+): { fileUri: string; mimeType: string | null } | null {
+  const fileData = isRecord(part.fileData) ? part.fileData : null;
+  if (!fileData) return null;
+  const fileUri = asTrimmedString(fileData.fileUri ?? fileData.file_uri);
+  if (!fileUri) return null;
+  const mimeType = asTrimmedString(fileData.mimeType ?? fileData.mime_type) || null;
+  return { fileUri, mimeType };
+}
+
+function toOpenAiBlockFromGeminiPart(part: GeminiRecord): Record<string, unknown> | null {
+  const inlineData = buildInlineData(part);
+  if (inlineData) {
+    const normalizedMimeType = inlineData.mimeType.toLowerCase();
+    if (normalizedMimeType.startsWith('image/')) {
+      return {
+        type: 'image_url',
+        image_url: { url: buildDataUrl(part)! },
+      };
+    }
+
+    return toOpenAiChatFileBlock({
+      fileData: inlineData.data,
+      mimeType: inlineData.mimeType,
+    });
+  }
+
+  const fileData = buildFileDataSource(part);
+  if (!fileData) return null;
+  if (fileData.mimeType?.toLowerCase().startsWith('image/')) {
+    return {
+      type: 'image_url',
+      image_url: { url: fileData.fileUri },
+    };
+  }
+
+  return toOpenAiChatFileBlock({
+    fileUrl: fileData.fileUri,
+    mimeType: fileData.mimeType,
+  });
+}
+
 function toOpenAiContent(contentParts: GeminiRecord[]): string | Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = [];
   let textContent = '';
@@ -41,12 +96,9 @@ function toOpenAiContent(contentParts: GeminiRecord[]): string | Array<Record<st
       continue;
     }
 
-    const dataUrl = buildDataUrl(part);
-    if (dataUrl) {
-      blocks.push({
-        type: 'image_url',
-        image_url: { url: dataUrl },
-      });
+    const block = toOpenAiBlockFromGeminiPart(part);
+    if (block) {
+      blocks.push(block);
     }
   }
 
