@@ -164,6 +164,7 @@ export async function handleChatSurfaceRequest(
       requestedModelHint: requestedModel,
       requestCapabilities: {
         hasNonImageFileInput,
+        conversationFileSummary,
       },
     };
     const buildProviderHeaders = () => (

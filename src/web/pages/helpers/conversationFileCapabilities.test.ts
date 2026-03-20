@@ -16,16 +16,16 @@ describe('resolveConversationFileCapability', () => {
     });
   });
 
-  it('marks Claude and Gemini as inline-only document transports', () => {
+  it('marks Claude and Gemini picker flows as inline-only document transports', () => {
     expect(resolveConversationFileCapability('claude')).toEqual({
       supported: true,
       documentMode: 'inline_only',
-      reason: '当前协议会以内联文档方式发送会话附件。',
+      reason: '当前界面的会话附件会以内联文档方式发送。',
     });
     expect(resolveConversationFileCapability('gemini')).toEqual({
       supported: true,
       documentMode: 'inline_only',
-      reason: '当前协议会以内联文档方式发送会话附件。',
+      reason: '当前界面的会话附件会以内联文档方式发送。',
     });
   });
 });

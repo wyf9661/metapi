@@ -42,6 +42,7 @@ export type EndpointPreference = DownstreamFormat | 'responses';
 type EndpointCapabilityProfile = {
   preferMessagesForClaudeModel: boolean;
   hasNonImageFileInput: boolean;
+  hasRemoteDocumentUrl: boolean;
   wantsNativeResponsesReasoning: boolean;
 };
 
@@ -619,6 +620,9 @@ function buildEndpointCapabilityProfile(input?: {
       input?.requestCapabilities?.conversationFileSummary?.hasDocument === true
       || input?.requestCapabilities?.hasNonImageFileInput === true
     ),
+    hasRemoteDocumentUrl: (
+      input?.requestCapabilities?.conversationFileSummary?.hasRemoteDocumentUrl === true
+    ),
     wantsNativeResponsesReasoning: input?.requestCapabilities?.wantsNativeResponsesReasoning === true,
   };
 }
@@ -634,6 +638,7 @@ function buildEndpointRuntimeStateKey(input: {
     input.downstreamFormat,
     capabilityProfile.preferMessagesForClaudeModel ? 'claude' : 'generic',
     capabilityProfile.hasNonImageFileInput ? 'files' : 'nofiles',
+    capabilityProfile.hasRemoteDocumentUrl ? 'remoteurl' : 'noremoteurl',
     capabilityProfile.wantsNativeResponsesReasoning ? 'reasoning' : 'noreasoning',
   ].join(':');
 }

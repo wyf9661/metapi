@@ -23,6 +23,7 @@ import {
   createLoadingAssistantMessage,
   createMessage,
   createConversationUserMessage,
+  extractConversationUploadedFilesFromMessage,
   filterModelTesterModelNames,
   finalizeIncompleteMessage,
   findLastLoadingAssistantIndex,
@@ -897,20 +898,6 @@ export default function ModelTester() {
     if (sending) return;
     setConversationFiles((prev) => prev.filter((item) => item.localId !== localId));
   }, [sending]);
-
-  const extractUploadedFilesFromMessage = useCallback((message: ChatMessage): ConversationUploadedFile[] => {
-    const parts = Array.isArray(message.parts) ? message.parts : [];
-    return parts.flatMap((part) => {
-      if (part.type !== 'input_file') return [];
-      const fileId = typeof part.fileId === 'string' ? part.fileId.trim() : '';
-      if (!fileId) return [];
-      return [{
-        fileId,
-        filename: typeof part.filename === 'string' && part.filename.trim() ? part.filename.trim() : null,
-        mimeType: typeof part.mimeType === 'string' && part.mimeType.trim() ? part.mimeType.trim() : null,
-      }];
-    });
-  }, []);
 
   const uploadConversationFiles = useCallback(async (): Promise<ConversationUploadedFile[]> => {
     if (conversationFiles.length <= 0) return [];
@@ -2047,11 +2034,11 @@ export default function ModelTester() {
 
     const base = messages.slice(0, userIndex);
     const prompt = messages[userIndex].content;
-    const files = extractUploadedFilesFromMessage(messages[userIndex]);
+    const files = extractConversationUploadedFilesFromMessage(messages[userIndex]);
     setEditingMessageId(null);
     setEditValue('');
     void sendWithPrompt(prompt, base, files);
-  }, [extractUploadedFilesFromMessage, messages, pendingJobId, sendWithPrompt, sending]);
+  }, [messages, pendingJobId, sendWithPrompt, sending]);
 
   const startEditMessage = useCallback((target: ChatMessage) => {
     if (sending) return;
@@ -2085,9 +2072,9 @@ export default function ModelTester() {
 
     if (retry && target.role === 'user') {
       const base = updated.slice(0, targetIndex);
-      void sendWithPrompt(nextContent, base, extractUploadedFilesFromMessage(target));
+      void sendWithPrompt(nextContent, base, extractConversationUploadedFilesFromMessage(target));
     }
-  }, [cancelEditMessage, editValue, editingMessageId, extractUploadedFilesFromMessage, messages, sendWithPrompt]);
+  }, [cancelEditMessage, editValue, editingMessageId, messages, sendWithPrompt]);
 
   const syncMessageToBody = useCallback(() => {
     const nextBody = syncMessagesToCustomRequestBody(customRequestBody, messages, inputs);

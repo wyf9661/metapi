@@ -34,6 +34,46 @@ describe('anthropicMessagesTransformer protocol contract', () => {
     });
   });
 
+  it('parses native document blocks into canonical file parts', () => {
+    const result = anthropicMessagesTransformer.parseRequest({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 256,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'summarize this pdf' },
+            {
+              type: 'document',
+              title: 'brief.pdf',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: 'JVBERi0xLjQK',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.value?.messages).toEqual([
+      {
+        role: 'user',
+        parts: [
+          { type: 'text', text: 'summarize this pdf' },
+          {
+            type: 'file',
+            filename: 'brief.pdf',
+            mimeType: 'application/pdf',
+            fileData: 'JVBERi0xLjQK',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('builds native messages requests from canonical envelopes', () => {
     const body = anthropicMessagesTransformer.buildProtocolRequest({
       operation: 'count_tokens',

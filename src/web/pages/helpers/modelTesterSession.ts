@@ -901,6 +901,37 @@ export const createConversationUserMessage = (
   });
 };
 
+export const extractConversationUploadedFilesFromMessage = (
+  message: ChatMessage,
+): ConversationUploadedFile[] => {
+  const parts = Array.isArray(message.parts) ? message.parts : [];
+  return parts.flatMap((part) => {
+    if (part.type !== 'input_file') return [];
+
+    const fileId = typeof part.fileId === 'string' && part.fileId.trim()
+      ? part.fileId.trim()
+      : null;
+    const filename = typeof part.filename === 'string' && part.filename.trim()
+      ? part.filename.trim()
+      : null;
+    const mimeType = typeof part.mimeType === 'string' && part.mimeType.trim()
+      ? part.mimeType.trim()
+      : null;
+    const data = typeof part.data === 'string' && part.data.trim()
+      ? part.data.trim()
+      : null;
+
+    if (!fileId && !data) return [];
+
+    return [{
+      ...(fileId ? { fileId } : {}),
+      ...(filename ? { filename } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      ...(data ? { data } : {}),
+    }];
+  });
+};
+
 export const createLoadingAssistantMessage = (): ChatMessage =>
   createMessage('assistant', '', {
     status: MESSAGE_STATUS.LOADING,

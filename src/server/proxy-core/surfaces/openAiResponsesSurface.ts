@@ -237,14 +237,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
       const responsesConversationFileSummary = summarizeConversationFileInputsInResponsesBody(normalizedResponsesBody);
       const requiresNativeResponsesFileUrl = responsesConversationFileSummary.hasRemoteDocumentUrl
         || carriesResponsesFileUrlInput(normalizedResponsesBody.input);
-      if (requiresNativeResponsesFileUrl && String(selected.site.platform || '').trim().toLowerCase() === 'claude') {
-        return reply.code(400).send({
-          error: {
-            message: 'Responses input_file.file_url requires an upstream /v1/responses endpoint; current site only supports /v1/messages.',
-            type: 'invalid_request_error',
-          },
-        });
-      }
       const endpointCandidates = await resolveUpstreamEndpointCandidates(
         {
           site: selected.site,
@@ -259,9 +251,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
           wantsNativeResponsesReasoning: prefersNativeResponsesReasoning,
         },
       );
-      if (requiresNativeResponsesFileUrl) {
-        endpointCandidates.splice(0, endpointCandidates.length, 'responses');
-      }
       if (endpointCandidates.length === 0) {
         endpointCandidates.push('responses', 'chat', 'messages');
       }
@@ -272,6 +261,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         requestedModelHint: requestedModel,
         requestCapabilities: {
           hasNonImageFileInput,
+          conversationFileSummary,
           wantsNativeResponsesReasoning: prefersNativeResponsesReasoning,
         },
       };
