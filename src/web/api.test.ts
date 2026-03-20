@@ -97,4 +97,33 @@ describe('api proxy test timeout handling', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     await expect(promise).resolves.toMatchObject({ message: '请求超时（30s）' });
   });
+
+  it('loads proxy file content as a data URL for replay hydration', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      new Blob([Buffer.from('PDF')], { type: 'application/pdf' }),
+      {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'content-disposition': 'inline; filename="brief.pdf"',
+        },
+      },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const getProxyFileContentDataUrl = (api as Record<string, any>).getProxyFileContentDataUrl;
+    const result = await getProxyFileContentDataUrl?.('file-metapi-123');
+
+    expect(fetchMock).toHaveBeenCalledWith('/v1/files/file-metapi-123/content', expect.objectContaining({
+      method: 'GET',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer token-1',
+      }),
+    }));
+    expect(result).toEqual({
+      filename: 'brief.pdf',
+      mimeType: 'application/pdf',
+      data: 'data:application/pdf;base64,UERG',
+    });
+  });
 });

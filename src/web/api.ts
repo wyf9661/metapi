@@ -4,6 +4,73 @@ type RequestOptions = RequestInit & {
   timeoutMs?: number;
 };
 
+function requireAuthToken(): string {
+  const token = getAuthToken(localStorage);
+  if (!token) {
+    const hadToken = !!localStorage.getItem('auth_token');
+    clearAuthSession(localStorage);
+    if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+      window.location.reload();
+    }
+    throw new Error('Session expired');
+  }
+  return token;
+}
+
+async function extractResponseErrorMessage(res: Response): Promise<string> {
+  let message = `HTTP ${res.status}`;
+  try {
+    const text = await res.text();
+    if (text) {
+      try {
+        const json = JSON.parse(text);
+        if (json?.message && typeof json.message === 'string') {
+          message = json.message;
+        } else if (json?.error && typeof json.error === 'string') {
+          message = json.error;
+        } else if (json?.error?.message && typeof json.error.message === 'string') {
+          message = json.error.message;
+        } else {
+          message = `${message}: ${text.slice(0, 120)}`;
+        }
+      } catch {
+        message = `${message}: ${text.slice(0, 120)}`;
+      }
+    }
+  } catch { }
+  return message;
+}
+
+function parseContentDispositionFilename(headerValue: string | null): string | null {
+  if (!headerValue) return null;
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(headerValue);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const quotedMatch = /filename="([^"]+)"/i.exec(headerValue);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  const bareMatch = /filename=([^;]+)/i.exec(headerValue);
+  return bareMatch?.[1]?.trim() || null;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(buffer).toString('base64');
+  }
+
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
 async function request(url: string, options: RequestOptions = {}) {
   const { timeoutMs = 30_000, signal: externalSignal, ...fetchOptions } = options;
   const controller = new AbortController();
@@ -22,15 +89,7 @@ async function request(url: string, options: RequestOptions = {}) {
     }
   }
 
-  const token = getAuthToken(localStorage);
-  if (!token) {
-    const hadToken = !!localStorage.getItem('auth_token');
-    clearAuthSession(localStorage);
-    if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
-      window.location.reload();
-    }
-    throw new Error('Session expired');
-  }
+  const token = requireAuthToken();
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${token}`,
   };
@@ -52,25 +111,7 @@ async function request(url: string, options: RequestOptions = {}) {
       throw new Error('Session expired');
     }
     if (!res.ok) {
-      let message = `HTTP ${res.status}`;
-      try {
-        const text = await res.text();
-        if (text) {
-          try {
-            const json = JSON.parse(text);
-            if (json?.message && typeof json.message === 'string') {
-              message = json.message;
-            } else if (json?.error && typeof json.error === 'string') {
-              message = json.error;
-            } else {
-              message = `${message}: ${text.slice(0, 120)}`;
-            }
-          } catch {
-            message = `${message}: ${text.slice(0, 120)}`;
-          }
-        }
-      } catch { }
-      throw new Error(message);
+      throw new Error(await extractResponseErrorMessage(res));
     }
     return res.json();
   } catch (error: any) {
@@ -623,6 +664,37 @@ export const api = {
     }),
   getProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`),
   deleteProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }),
+  getProxyFileContentDataUrl: async (fileId: string) => {
+    const token = requireAuthToken();
+    const response = await fetch(`/v1/files/${encodeURIComponent(fileId)}/content`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (response.status === 401 || response.status === 403) {
+      const hadToken = !!getAuthToken(localStorage);
+      clearAuthSession(localStorage);
+      if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+        window.location.reload();
+      }
+      throw new Error('Session expired');
+    }
+    if (!response.ok) {
+      throw new Error(await extractResponseErrorMessage(response));
+    }
+
+    const mimeType = (response.headers.get('content-type') || 'application/octet-stream')
+      .split(';')[0]
+      .trim() || 'application/octet-stream';
+    const filename = parseContentDispositionFilename(response.headers.get('content-disposition'));
+    const base64 = arrayBufferToBase64(await response.arrayBuffer());
+    return {
+      filename,
+      mimeType,
+      data: `data:${mimeType};base64,${base64}`,
+    };
+  },
   testProxy: (data: ProxyTestRequestEnvelope) =>
     request('/api/test/proxy', {
       method: 'POST',

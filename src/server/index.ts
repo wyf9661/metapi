@@ -23,6 +23,7 @@ import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { proxyRoutes } from './routes/proxy/router.js';
 import { startScheduler } from './services/checkinScheduler.js';
 import { rebuildTokenRoutesFromAvailability } from './services/modelService.js';
+import { startProxyFileRetentionService, stopProxyFileRetentionService } from './services/proxyFileRetentionService.js';
 import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService } from './services/proxyLogRetentionService.js';
 import { buildStartupSummaryLines } from './services/startupInfo.js';
 import { repairStoredCreatedAtValues } from './services/storedTimestampRepairService.js';
@@ -406,7 +407,9 @@ try {
   console.warn(`Failed to start OAuth callback listeners: ${(error as Error)?.message || 'unknown error'}`);
 }
 setLegacyProxyLogRetentionFallbackEnabled(!config.logCleanupConfigured);
+startProxyFileRetentionService();
 app.addHook('onClose', async () => {
+  stopProxyFileRetentionService();
   stopProxyLogRetentionService();
   await stopOAuthLoopbackCallbackServers();
 });

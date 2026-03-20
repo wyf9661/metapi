@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as modelTesterSessionModule from './modelTesterSession.js';
 import {
   DEBUG_TABS,
   DEFAULT_INPUTS,
@@ -80,6 +81,17 @@ describe('modelTesterSession', () => {
       customRequestBody: '{"model":"gemini-2.5-pro","contents":[]}',
       showDebugPanel: true,
       activeDebugTab: DEBUG_TABS.REQUEST,
+      conversationFiles: [
+        {
+          localId: 'draft-file-1',
+          name: 'draft.pdf',
+          mimeType: 'application/pdf',
+          dataUrl: 'data:application/pdf;base64,JVBERi0x',
+          fileId: 'file-metapi-draft',
+          status: 'uploaded',
+          errorMessage: null,
+        },
+      ],
       modeState: {
         ...DEFAULT_MODE_STATE,
         searchQuery: 'hello',
@@ -269,6 +281,37 @@ describe('modelTesterSession', () => {
         fileId: 'file-metapi-456',
         filename: 'appendix.txt',
         mimeType: 'text/plain',
+      },
+    ]);
+  });
+
+  it('hydrates local file ids into inline replay files for claude', async () => {
+    const resolveConversationReplayFiles = (modelTesterSessionModule as Record<string, any>).resolveConversationReplayFiles;
+    const loader = vi.fn(async () => ({
+      filename: 'brief.pdf',
+      mimeType: 'application/pdf',
+      data: 'data:application/pdf;base64,JVBERi0x',
+    }));
+
+    const files = await resolveConversationReplayFiles?.(
+      [
+        {
+          fileId: 'file-metapi-123',
+          filename: 'brief.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
+      'claude',
+      loader,
+    );
+
+    expect(loader).toHaveBeenCalledWith('file-metapi-123');
+    expect(files).toEqual([
+      {
+        fileId: 'file-metapi-123',
+        filename: 'brief.pdf',
+        mimeType: 'application/pdf',
+        data: 'data:application/pdf;base64,JVBERi0x',
       },
     ]);
   });
@@ -483,6 +526,136 @@ describe('modelTesterSession', () => {
       ],
       stream: false,
       temperature: 0.7,
+    });
+  });
+
+  it('prefers native file ids over inline backups for OpenAI and Responses payloads', () => {
+    const message = {
+      id: 'u1',
+      role: 'user' as const,
+      content: 'reuse native file id',
+      createAt: 1,
+      parts: [
+        {
+          type: 'input_file' as const,
+          fileId: 'file-metapi-123',
+          filename: 'brief.pdf',
+          mimeType: 'application/pdf',
+          data: 'data:application/pdf;base64,JVBERi0x',
+        },
+      ],
+    };
+
+    const openAiPayload = buildApiPayload(
+      [message],
+      {
+        ...DEFAULT_INPUTS,
+        model: 'gpt-4.1',
+        protocol: 'openai',
+      },
+      DEFAULT_PARAMETER_ENABLED,
+    );
+
+    expect(openAiPayload.jsonBody).toEqual({
+      model: 'gpt-4.1',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'reuse native file id' },
+            {
+              type: 'file',
+              file: {
+                file_id: 'file-metapi-123',
+                filename: 'brief.pdf',
+                mime_type: 'application/pdf',
+              },
+            },
+          ],
+        },
+      ],
+      stream: false,
+      temperature: 0.7,
+      frequency_penalty: 0,
+      presence_penalty: 0,
+    });
+
+    const responsesPayload = buildApiPayload(
+      [message],
+      {
+        ...DEFAULT_INPUTS,
+        model: 'gpt-4.1',
+        protocol: 'responses',
+      },
+      DEFAULT_PARAMETER_ENABLED,
+    );
+
+    expect(responsesPayload.jsonBody).toEqual({
+      model: 'gpt-4.1',
+      input: [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: 'reuse native file id' },
+            {
+              type: 'input_file',
+              file_id: 'file-metapi-123',
+              filename: 'brief.pdf',
+            },
+          ],
+        },
+      ],
+      stream: false,
+      temperature: 0.7,
+    });
+  });
+
+  it('strips data URL wrappers when replaying inline files into OpenAI chat payloads', () => {
+    const payload = buildApiPayload(
+      [{
+        id: 'u1',
+        role: 'user',
+        content: 'summarize this inline file',
+        createAt: 1,
+        parts: [
+          {
+            type: 'input_file',
+            filename: 'brief.pdf',
+            mimeType: 'application/pdf',
+            data: 'data:application/pdf;base64,JVBERi0x',
+          },
+        ],
+      } as ChatMessage],
+      {
+        ...DEFAULT_INPUTS,
+        model: 'gpt-4.1',
+        protocol: 'openai',
+      },
+      DEFAULT_PARAMETER_ENABLED,
+    );
+
+    expect(payload.jsonBody).toEqual({
+      model: 'gpt-4.1',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'summarize this inline file' },
+            {
+              type: 'file',
+              file: {
+                file_data: 'JVBERi0x',
+                filename: 'brief.pdf',
+                mime_type: 'application/pdf',
+              },
+            },
+          ],
+        },
+      ],
+      stream: false,
+      temperature: 0.7,
+      frequency_penalty: 0,
+      presence_penalty: 0,
     });
   });
 
