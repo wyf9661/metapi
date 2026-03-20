@@ -33,6 +33,16 @@ describe('isCodexResponsesSurface', () => {
     })).toBe(true);
   });
 
+  it('detects broader Codex official-client family headers from user-agent and originator prefixes', () => {
+    expect(isCodexResponsesSurface({
+      'user-agent': 'Mozilla/5.0 codex_chatgpt_desktop/1.2.3',
+    })).toBe(true);
+
+    expect(isCodexResponsesSurface({
+      originator: 'codex_vscode',
+    })).toBe(true);
+  });
+
   it('returns false for generic responses clients', () => {
     expect(isCodexResponsesSurface({
       'content-type': 'application/json',
@@ -50,6 +60,9 @@ describe('detectDownstreamClientContext', () => {
       },
     })).toEqual({
       clientKind: 'codex',
+      clientAppId: 'codex_cli_rs',
+      clientAppName: 'Codex CLI',
+      clientConfidence: 'exact',
       sessionId: 'codex-session-123',
       traceHint: 'codex-session-123',
     });
@@ -63,6 +76,37 @@ describe('detectDownstreamClientContext', () => {
       },
     })).toEqual({
       clientKind: 'codex',
+      clientAppId: 'codex',
+      clientAppName: 'Codex',
+      clientConfidence: 'heuristic',
+    });
+  });
+
+  it('recognizes broader Codex official-client user-agent families without requiring stainless headers', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/responses',
+      headers: {
+        'user-agent': 'Mozilla/5.0 codex_chatgpt_desktop/1.2.3',
+      },
+    })).toEqual({
+      clientKind: 'codex',
+      clientAppId: 'codex_chatgpt_desktop',
+      clientAppName: 'Codex Desktop',
+      clientConfidence: 'exact',
+    });
+  });
+
+  it('recognizes broader Codex official-client originator prefixes', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/responses',
+      headers: {
+        originator: 'codex_exec',
+      },
+    })).toEqual({
+      clientKind: 'codex',
+      clientAppId: 'codex_exec',
+      clientAppName: 'Codex Exec',
+      clientConfidence: 'exact',
     });
   });
 
@@ -79,6 +123,9 @@ describe('detectDownstreamClientContext', () => {
       body,
     })).toEqual({
       clientKind: 'claude_code',
+      clientAppId: 'claude_code',
+      clientAppName: 'Claude Code',
+      clientConfidence: 'exact',
       sessionId: 'f25958b8-e75c-455d-8b40-f006d87cc2a4',
       traceHint: 'f25958b8-e75c-455d-8b40-f006d87cc2a4',
     });
@@ -128,6 +175,9 @@ describe('detectDownstreamClientContext', () => {
       },
     })).toEqual({
       clientKind: 'gemini_cli',
+      clientAppId: 'gemini_cli',
+      clientAppName: 'Gemini CLI',
+      clientConfidence: 'exact',
     });
   });
 
