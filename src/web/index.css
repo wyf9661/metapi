@@ -1629,6 +1629,107 @@ body {
   animation: row-focus-glow 2.2s ease;
 }
 
+.announcement-rich-content {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.announcement-rich-content > :first-child {
+  margin-top: 0;
+}
+
+.announcement-rich-content > :last-child {
+  margin-bottom: 0;
+}
+
+.announcement-rich-content p,
+.announcement-rich-content ul,
+.announcement-rich-content ol,
+.announcement-rich-content blockquote,
+.announcement-rich-content pre,
+.announcement-rich-content table,
+.announcement-rich-content h1,
+.announcement-rich-content h2,
+.announcement-rich-content h3,
+.announcement-rich-content h4,
+.announcement-rich-content h5,
+.announcement-rich-content h6 {
+  margin: 0 0 10px 0;
+}
+
+.announcement-rich-content h1,
+.announcement-rich-content h2,
+.announcement-rich-content h3,
+.announcement-rich-content h4,
+.announcement-rich-content h5,
+.announcement-rich-content h6 {
+  color: var(--color-text-primary);
+  line-height: 1.45;
+}
+
+.announcement-rich-content ul,
+.announcement-rich-content ol {
+  padding-left: 20px;
+}
+
+.announcement-rich-content blockquote {
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-surface-subtle);
+  border-radius: 8px;
+}
+
+.announcement-rich-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-primary);
+}
+
+.announcement-rich-content pre {
+  overflow-x: auto;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.announcement-rich-content pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+
+.announcement-rich-content a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.announcement-rich-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+}
+
+.announcement-rich-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.announcement-rich-content th,
+.announcement-rich-content td {
+  border: 1px solid var(--color-border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
 @keyframes rebind-panel-glow {
   0% {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 42%, transparent);
