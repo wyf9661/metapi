@@ -5,6 +5,7 @@ import {
   SiteAnnouncementContent,
   formatSiteAnnouncementSeenAt,
   readClientTimeZone,
+  resolveSiteAnnouncementTimeZone,
 } from './siteAnnouncementPresentation.js';
 
 type BrowserGlobals = {
@@ -83,6 +84,11 @@ describe('siteAnnouncementPresentation helpers', () => {
 
   it('formats first-seen time in the requested local timezone', () => {
     expect(formatSiteAnnouncementSeenAt('2026-03-20 04:23:27', 'Asia/Shanghai')).toBe('2026/03/20 12:23:27');
+  });
+
+  it('prefers client timezone over server timezone', () => {
+    expect(resolveSiteAnnouncementTimeZone('Asia/Shanghai', 'UTC')).toBe('Asia/Shanghai');
+    expect(resolveSiteAnnouncementTimeZone('', 'UTC')).toBe('UTC');
   });
 
   it('reads the browser timezone when available', () => {
