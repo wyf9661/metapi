@@ -347,6 +347,7 @@ docker run -d --name metapi \
 > Docker 镜像支持 `amd64`、`arm64` 和 `armv7l`（`linux/arm/v7`）服务端部署。
 > 当前 `armv7l` 支持范围仅限服务端 / Docker 运行，不包含桌面安装包。
 
+<!-- markdownlint-disable-next-line MD028 -->
 > [!IMPORTANT]
 > 请务必修改 `AUTH_TOKEN` 和 `PROXY_TOKEN`，不要使用默认值。数据存储在 `./data` 目录，升级不会丢失。
 

@@ -105,6 +105,7 @@ const EXCLUDED_SETTING_KEYS = new Set<string>([
 const BACKUP_WEBDAV_CONFIG_SETTING_KEY = 'backup_webdav_config_v1';
 const BACKUP_WEBDAV_STATE_SETTING_KEY = 'backup_webdav_state_v1';
 const BACKUP_WEBDAV_DEFAULT_AUTO_SYNC_CRON = '0 */6 * * *';
+const BACKUP_WEBDAV_FETCH_TIMEOUT_MS = 15_000;
 let backupWebdavTask: cron.ScheduledTask | null = null;
 
 const DIRECT_API_PLATFORMS = new Set([
@@ -848,6 +849,30 @@ function validateBackupWebdavConfig(config: BackupWebdavConfig) {
   }
 }
 
+async function fetchBackupWebdav(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    controller.abort();
+  }, BACKUP_WEBDAV_FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`WebDAV 请求超时（${Math.max(1, Math.round(BACKUP_WEBDAV_FETCH_TIMEOUT_MS / 1000))}s）`);
+    }
+    throw error;
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
+  }
+}
+
 function stopBackupWebdavScheduler() {
   backupWebdavTask?.stop();
   backupWebdavTask = null;
@@ -1294,7 +1319,7 @@ export async function exportBackupToWebdav(type?: BackupExportType) {
   if (authHeader) headers.Authorization = authHeader;
 
   try {
-    const response = await fetch(config.fileUrl, {
+    const response = await fetchBackupWebdav(config.fileUrl, {
       method: 'PUT',
       headers,
       body: JSON.stringify(payload, null, 2),
@@ -1342,7 +1367,7 @@ export async function importBackupFromWebdav() {
   if (authHeader) headers.Authorization = authHeader;
 
   try {
-    const response = await fetch(config.fileUrl, {
+    const response = await fetchBackupWebdav(config.fileUrl, {
       method: 'GET',
       headers,
     });
@@ -1381,9 +1406,12 @@ export async function importBackupFromWebdav() {
 export async function reloadBackupWebdavScheduler() {
   stopBackupWebdavScheduler();
   const config = await loadBackupWebdavConfig();
-  if (!config.enabled || !config.autoSyncEnabled || !config.fileUrl) return;
-  if (!cron.validate(config.autoSyncCron)) {
-    console.warn(`[backup/webdav] invalid auto sync cron: ${config.autoSyncCron}`);
+  if (!config.enabled || !config.autoSyncEnabled) return;
+
+  try {
+    validateBackupWebdavConfig(config);
+  } catch (error: any) {
+    console.warn(`[backup/webdav] invalid config: ${error?.message || 'unknown error'}`);
     return;
   }
 

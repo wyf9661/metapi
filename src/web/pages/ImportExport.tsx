@@ -41,6 +41,16 @@ type WebdavSyncState = {
   lastError: string | null;
 };
 
+type WebdavConfigSnapshot = {
+  enabled: boolean;
+  fileUrl: string;
+  username: string;
+  exportType: BackupType;
+  autoSyncEnabled: boolean;
+  autoSyncCron: string;
+  hasPassword: boolean;
+};
+
 const DEFAULT_WEBDAV_CONFIG: WebdavConfigForm = {
   enabled: false,
   fileUrl: '',
@@ -51,6 +61,16 @@ const DEFAULT_WEBDAV_CONFIG: WebdavConfigForm = {
   autoSyncCron: '0 */6 * * *',
   hasPassword: false,
   passwordMasked: '',
+};
+
+const DEFAULT_WEBDAV_SNAPSHOT: WebdavConfigSnapshot = {
+  enabled: false,
+  fileUrl: '',
+  username: '',
+  exportType: 'all',
+  autoSyncEnabled: false,
+  autoSyncCron: '0 */6 * * *',
+  hasPassword: false,
 };
 
 function downloadJsonFile(data: unknown, filename: string) {
@@ -218,35 +238,71 @@ export default function ImportExport() {
   const [selectedFileName, setSelectedFileName] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [webdavConfig, setWebdavConfig] = useState<WebdavConfigForm>(DEFAULT_WEBDAV_CONFIG);
+  const [savedWebdavConfig, setSavedWebdavConfig] = useState<WebdavConfigSnapshot>(DEFAULT_WEBDAV_SNAPSHOT);
   const [webdavState, setWebdavState] = useState<WebdavSyncState>({ lastSyncAt: null, lastError: null });
   const [webdavSaving, setWebdavSaving] = useState(false);
   const [webdavAction, setWebdavAction] = useState<'export' | 'import' | ''>('');
+  const [clearWebdavPassword, setClearWebdavPassword] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const summary = useMemo(() => parseImportSummary(importData), [importData]);
+
+  const buildWebdavForm = (config: any): WebdavConfigForm => ({
+    enabled: config.enabled === true,
+    fileUrl: String(config.fileUrl || ''),
+    username: String(config.username || ''),
+    password: '',
+    exportType: config.exportType === 'accounts' || config.exportType === 'preferences' ? config.exportType : 'all',
+    autoSyncEnabled: config.autoSyncEnabled === true,
+    autoSyncCron: String(config.autoSyncCron || DEFAULT_WEBDAV_CONFIG.autoSyncCron),
+    hasPassword: config.hasPassword === true,
+    passwordMasked: String(config.passwordMasked || ''),
+  });
+
+  const buildWebdavSnapshot = (config: any): WebdavConfigSnapshot => ({
+    enabled: config.enabled === true,
+    fileUrl: String(config.fileUrl || ''),
+    username: String(config.username || ''),
+    exportType: config.exportType === 'accounts' || config.exportType === 'preferences' ? config.exportType : 'all',
+    autoSyncEnabled: config.autoSyncEnabled === true,
+    autoSyncCron: String(config.autoSyncCron || DEFAULT_WEBDAV_CONFIG.autoSyncCron),
+    hasPassword: config.hasPassword === true,
+  });
+
+  const applyWebdavResponse = (result: any) => {
+    const config = result?.config;
+    if (config) {
+      setWebdavConfig(buildWebdavForm(config));
+      setSavedWebdavConfig(buildWebdavSnapshot(config));
+      setClearWebdavPassword(false);
+    }
+    const state = result?.state || result;
+    setWebdavState((prev) => ({
+      lastSyncAt: typeof state?.lastSyncAt === 'string' ? state.lastSyncAt : prev.lastSyncAt,
+      lastError: typeof state?.lastError === 'string'
+        ? state.lastError
+        : (state?.lastError === null ? null : prev.lastError),
+    }));
+  };
+
+  const webdavConfigDirty = (
+    webdavConfig.enabled !== savedWebdavConfig.enabled
+    || webdavConfig.fileUrl !== savedWebdavConfig.fileUrl
+    || webdavConfig.username !== savedWebdavConfig.username
+    || webdavConfig.exportType !== savedWebdavConfig.exportType
+    || webdavConfig.autoSyncEnabled !== savedWebdavConfig.autoSyncEnabled
+    || webdavConfig.autoSyncCron !== savedWebdavConfig.autoSyncCron
+    || webdavConfig.hasPassword !== savedWebdavConfig.hasPassword
+    || webdavConfig.password.trim().length > 0
+    || clearWebdavPassword
+  );
 
   useEffect(() => {
     let alive = true;
     void api.getBackupWebdavConfig()
       .then((result: any) => {
         if (!alive) return;
-        const config = result?.config || {};
-        const state = result?.state || {};
-        setWebdavConfig({
-          enabled: config.enabled === true,
-          fileUrl: String(config.fileUrl || ''),
-          username: String(config.username || ''),
-          password: '',
-          exportType: config.exportType === 'accounts' || config.exportType === 'preferences' ? config.exportType : 'all',
-          autoSyncEnabled: config.autoSyncEnabled === true,
-          autoSyncCron: String(config.autoSyncCron || DEFAULT_WEBDAV_CONFIG.autoSyncCron),
-          hasPassword: config.hasPassword === true,
-          passwordMasked: String(config.passwordMasked || ''),
-        });
-        setWebdavState({
-          lastSyncAt: typeof state.lastSyncAt === 'string' ? state.lastSyncAt : null,
-          lastError: typeof state.lastError === 'string' ? state.lastError : null,
-        });
+        applyWebdavResponse(result);
       })
       .catch((err: any) => {
         if (!alive) return;
@@ -346,33 +402,10 @@ export default function ImportExport() {
     }
   };
 
-  const applyWebdavResponse = (result: any) => {
-    const config = result?.config;
-    if (config) {
-      setWebdavConfig((prev) => ({
-        enabled: config.enabled === true,
-        fileUrl: String(config.fileUrl || ''),
-        username: String(config.username || ''),
-        password: '',
-        exportType: config.exportType === 'accounts' || config.exportType === 'preferences' ? config.exportType : 'all',
-        autoSyncEnabled: config.autoSyncEnabled === true,
-        autoSyncCron: String(config.autoSyncCron || prev.autoSyncCron || DEFAULT_WEBDAV_CONFIG.autoSyncCron),
-        hasPassword: config.hasPassword === true,
-        passwordMasked: String(config.passwordMasked || ''),
-      }));
-    }
-    const state = result?.state || result;
-    setWebdavState((prev) => ({
-      lastSyncAt: typeof state?.lastSyncAt === 'string' ? state.lastSyncAt : prev.lastSyncAt,
-      lastError: typeof state?.lastError === 'string'
-        ? state.lastError
-        : (state?.lastError === null ? null : prev.lastError),
-    }));
-  };
-
   const handleSaveWebdavConfig = async () => {
     setWebdavSaving(true);
     try {
+      const nextPassword = webdavConfig.password.trim();
       const payload: Record<string, unknown> = {
         enabled: webdavConfig.enabled,
         fileUrl: webdavConfig.fileUrl,
@@ -381,12 +414,13 @@ export default function ImportExport() {
         autoSyncEnabled: webdavConfig.autoSyncEnabled,
         autoSyncCron: webdavConfig.autoSyncCron,
       };
-      if (webdavConfig.password.trim()) {
+      if (nextPassword) {
         payload.password = webdavConfig.password;
+      } else if (clearWebdavPassword) {
+        payload.clearPassword = true;
       }
       const result = await api.saveBackupWebdavConfig(payload as any);
       applyWebdavResponse(result);
-      setWebdavConfig((prev) => ({ ...prev, password: '' }));
       toast.success('WebDAV 配置已保存');
     } catch (err: any) {
       toast.error(err?.message || '保存 WebDAV 配置失败');
@@ -662,10 +696,35 @@ export default function ImportExport() {
             <input
               type="password"
               value={webdavConfig.password}
-              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, password: e.target.value }))}
-              placeholder={webdavConfig.hasPassword ? `已保存 ${webdavConfig.passwordMasked}，留空则保持不变` : '请输入密码'}
+              onChange={(e) => {
+                const nextPassword = e.target.value;
+                setWebdavConfig((prev) => ({ ...prev, password: nextPassword }));
+                if (nextPassword.trim()) {
+                  setClearWebdavPassword(false);
+                }
+              }}
+              placeholder={clearWebdavPassword
+                ? '保存后将清空已存密码'
+                : (webdavConfig.hasPassword ? `已保存 ${webdavConfig.passwordMasked}，留空则保持不变` : '请输入密码')}
+              disabled={clearWebdavPassword}
               style={{ width: '100%' }}
             />
+            {webdavConfig.hasPassword ? (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={clearWebdavPassword}
+                  onChange={(e) => {
+                    const checked = e.target.checked === true;
+                    setClearWebdavPassword(checked);
+                    if (checked) {
+                      setWebdavConfig((prev) => ({ ...prev, password: '' }));
+                    }
+                  }}
+                />
+                清空已保存密码
+              </label>
+            ) : null}
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>导出分区</span>
@@ -717,7 +776,7 @@ export default function ImportExport() {
           </button>
           <button
             onClick={handleExportToWebdav}
-            disabled={webdavAction !== ''}
+            disabled={webdavAction !== '' || webdavSaving || webdavConfigDirty}
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)' }}
           >
@@ -725,13 +784,19 @@ export default function ImportExport() {
           </button>
           <button
             onClick={handleImportFromWebdav}
-            disabled={webdavAction !== ''}
+            disabled={webdavAction !== '' || webdavSaving || webdavConfigDirty}
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)' }}
           >
             {webdavAction === 'import' ? '拉取中...' : '从 WebDAV 拉取'}
           </button>
         </div>
+
+        {webdavConfigDirty ? (
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-warning)' }}>
+            当前 WebDAV 配置有未保存改动，请先保存后再执行导入或导出。
+          </div>
+        ) : null}
 
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.7 }}>
           <div>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未同步'}</div>

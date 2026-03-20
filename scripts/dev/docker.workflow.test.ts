@@ -15,4 +15,13 @@ describe('docker workflows', () => {
     expect(releaseWorkflow).toContain('platform: linux/arm/v7');
     expect(releaseWorkflow).toContain('"${tag}-armv7"');
   });
+
+  it('smoke builds the armv7 docker image on pull requests', () => {
+    const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+
+    expect(ciWorkflow).toContain('Docker Smoke Build (armv7)');
+    expect(ciWorkflow).toContain('if: github.event_name == \'pull_request\'');
+    expect(ciWorkflow).toContain('platforms: linux/arm/v7');
+    expect(ciWorkflow).toContain('push: false');
+  });
 });

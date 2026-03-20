@@ -348,6 +348,7 @@ After starting, visit `http://localhost:4000` and log in with your `AUTH_TOKEN`!
 > Docker images support `amd64`, `arm64`, and `armv7l` (`linux/arm/v7`) server deployments.
 > Current `armv7l` support is limited to server / Docker usage and does not include Electron desktop packaging support.
 
+<!-- markdownlint-disable-next-line MD028 -->
 > [!IMPORTANT]
 > Make sure to change `AUTH_TOKEN` and `PROXY_TOKEN` — do not use default values. Data is stored in the `./data` directory and persists across upgrades.
 

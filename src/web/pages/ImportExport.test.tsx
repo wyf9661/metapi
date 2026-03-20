@@ -393,4 +393,110 @@ describe('ImportExport', () => {
       root?.unmount();
     }
   });
+
+  it('disables webdav actions while config has unsaved changes', async () => {
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ImportExport />
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const fileUrlInput = root!.root.findAll((node) => (
+        node.type === 'input'
+        && node.props.placeholder === 'https://dav.example.com/backups/metapi.json'
+      )).at(-1);
+
+      expect(fileUrlInput).toBeTruthy();
+
+      await act(async () => {
+        fileUrlInput!.props.onChange({ target: { value: 'https://dav.example.com/backups/changed.json' } });
+      });
+      await flushMicrotasks();
+
+      const exportButton = root!.root.findAll((node) => (
+        node.type === 'button'
+        && collectText(node).includes('立即导出到 WebDAV')
+      )).at(-1);
+      const importButton = root!.root.findAll((node) => (
+        node.type === 'button'
+        && collectText(node).includes('从 WebDAV 拉取')
+      )).at(-1);
+
+      expect(exportButton?.props.disabled).toBe(true);
+      expect(importButton?.props.disabled).toBe(true);
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('can clear a saved webdav password', async () => {
+    apiMock.saveBackupWebdavConfig.mockResolvedValueOnce({
+      success: true,
+      config: {
+        enabled: true,
+        fileUrl: 'https://dav.example.com/backups/metapi.json',
+        username: 'alice',
+        exportType: 'all',
+        autoSyncEnabled: true,
+        autoSyncCron: '0 */6 * * *',
+        hasPassword: false,
+        passwordMasked: '',
+      },
+      state: {
+        lastSyncAt: null,
+        lastError: null,
+      },
+    });
+
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ImportExport />
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const clearPasswordToggle = root!.root.findAll((node) => (
+        node.type === 'label'
+        && collectText(node).includes('清空已保存密码')
+      )).at(-1);
+
+      expect(clearPasswordToggle).toBeTruthy();
+
+      const checkbox = clearPasswordToggle!.findByType('input');
+      await act(async () => {
+        checkbox.props.onChange({ target: { checked: true } });
+      });
+      await flushMicrotasks();
+
+      const saveButton = root!.root.findAll((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('保存 WebDAV 配置')
+      )).at(-1);
+
+      expect(saveButton).toBeTruthy();
+
+      await act(async () => {
+        saveButton!.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.saveBackupWebdavConfig).toHaveBeenCalledWith(expect.objectContaining({
+        clearPassword: true,
+      }));
+    } finally {
+      root?.unmount();
+    }
+  });
 });
