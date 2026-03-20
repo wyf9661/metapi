@@ -156,6 +156,21 @@ export type ProxyTestJobResponse = {
   expiresAt?: string;
 };
 
+export type SystemProxyTestRequest = {
+  proxyUrl?: string;
+};
+
+export type SystemProxyTestResponse = {
+  success: true;
+  proxyUrl: string;
+  probeUrl: string;
+  finalUrl: string;
+  reachable: true;
+  ok: boolean;
+  statusCode: number;
+  latencyMs: number;
+};
+
 export type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
 export type ProxyLogClientConfidence = 'exact' | 'heuristic' | 'unknown' | null;
 
@@ -510,6 +525,11 @@ export const api = {
   updateRuntimeSettings: (data: any) => request('/api/settings/runtime', {
     method: 'PUT',
     body: JSON.stringify(data),
+  }),
+  testSystemProxy: (data: SystemProxyTestRequest) => request('/api/settings/system-proxy/test', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    timeoutMs: 20_000,
   }),
   getRuntimeDatabaseConfig: () => request('/api/settings/database/runtime'),
   updateRuntimeDatabaseConfig: (data: { dialect: 'sqlite' | 'mysql' | 'postgres'; connectionString: string; ssl?: boolean }) =>

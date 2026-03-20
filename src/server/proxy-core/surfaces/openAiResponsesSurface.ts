@@ -7,7 +7,7 @@ import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
 import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
-import { resolveProxyUrlForSite, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
+import { withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import {
   buildUpstreamEndpointRequest,
@@ -19,6 +19,7 @@ import { ensureModelAllowedForDownstreamKey, getDownstreamRoutingPolicy, recordD
 import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
+import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
@@ -341,7 +342,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
             };
             const refreshedRequest = buildEndpointRequest(ctx.request.endpoint);
-            const refreshedTargetUrl = `${selected.site.url}${refreshedRequest.path}`;
+            const refreshedTargetUrl = buildUpstreamUrl(selected.site.url, refreshedRequest.path);
             const refreshedResponse = await dispatchRequest(refreshedRequest, refreshedTargetUrl);
             if (refreshedResponse.ok) {
               return {
@@ -364,7 +365,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
       try {
         const endpointResult = await executeEndpointFlow({
           siteUrl: selected.site.url,
-          proxyUrl: resolveProxyUrlForSite(selected.site),
           endpointCandidates,
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),
           dispatchRequest,
