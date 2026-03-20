@@ -193,6 +193,33 @@ describe('ProxyLogs server-driven page', () => {
     }
   });
 
+  it('keeps the model badge sized to the model name in desktop rows', async () => {
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/logs']}>
+            <ToastProvider>
+              <ProxyLogs />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const modelBadge = root!.root.find((node) => (
+        node.type === 'span'
+        && collectText(node) === 'gpt-4o'
+        && node.props.style?.display === 'inline-flex'
+      ));
+
+      expect(modelBadge.props.style?.alignSelf).toBe('flex-start');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('re-queries the server for status, client, and search changes instead of filtering locally', async () => {
     let root: ReturnType<typeof create> | null = null;
 
