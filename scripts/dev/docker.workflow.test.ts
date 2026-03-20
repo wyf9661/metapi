@@ -24,4 +24,11 @@ describe('docker workflows', () => {
     expect(ciWorkflow).toContain('platforms: linux/arm/v7');
     expect(ciWorkflow).toContain('push: false');
   });
+
+  it('uses an armv7-capable node base image in the Dockerfile', () => {
+    const dockerfile = readFileSync(resolve(process.cwd(), 'docker/Dockerfile'), 'utf8');
+
+    expect(dockerfile).toContain('FROM node:22-bookworm-slim AS builder');
+    expect(dockerfile).toContain('FROM node:22-bookworm-slim');
+  });
 });
