@@ -70,9 +70,10 @@ export type PlaygroundMultipartFile = {
 };
 
 export type ConversationUploadedFile = {
-  fileId: string;
+  fileId?: string | null;
   filename?: string | null;
   mimeType?: string | null;
+  data?: string | null;
 };
 
 export type TesterProxyEnvelope = {
@@ -295,9 +296,9 @@ const toOpenAiContentPart = (part: ConversationContentPart): Record<string, unkn
 
   if (part.type === 'input_file') {
     const filePayload: Record<string, unknown> = {};
-    if (typeof part.fileId === 'string' && part.fileId.trim()) filePayload.file_id = part.fileId.trim();
-    if (typeof part.filename === 'string' && part.filename.trim()) filePayload.filename = part.filename.trim();
     if (typeof part.data === 'string' && part.data.trim()) filePayload.file_data = part.data.trim();
+    else if (typeof part.fileId === 'string' && part.fileId.trim()) filePayload.file_id = part.fileId.trim();
+    if (typeof part.filename === 'string' && part.filename.trim()) filePayload.filename = part.filename.trim();
     if (typeof part.mimeType === 'string' && part.mimeType.trim()) filePayload.mime_type = part.mimeType.trim();
     if (Object.keys(filePayload).length === 0) return null;
     return {
@@ -340,11 +341,88 @@ const toResponsesContentPart = (part: ConversationContentPart): Record<string, u
     const fileBlock: Record<string, unknown> = {
       type: 'input_file',
     };
-    if (typeof part.fileId === 'string' && part.fileId.trim()) fileBlock.file_id = part.fileId.trim();
-    if (typeof part.filename === 'string' && part.filename.trim()) fileBlock.filename = part.filename.trim();
     if (typeof part.data === 'string' && part.data.trim()) fileBlock.file_data = part.data.trim();
+    else if (typeof part.fileId === 'string' && part.fileId.trim()) fileBlock.file_id = part.fileId.trim();
+    if (typeof part.filename === 'string' && part.filename.trim()) fileBlock.filename = part.filename.trim();
     if (Object.keys(fileBlock).length === 1) return null;
     return fileBlock;
+  }
+
+  return null;
+};
+
+const toClaudeContentPart = (part: ConversationContentPart): Record<string, unknown> | null => {
+  if (part.type !== 'input_file' || typeof part.data !== 'string' || !part.data.trim()) return null;
+  const parsed = parseDataUrl(part.data);
+  if (!parsed) return null;
+  return {
+    type: 'document',
+    source: {
+      type: 'base64',
+      media_type: part.mimeType || parsed.mimeType || 'application/octet-stream',
+      data: parsed.data,
+    },
+    ...(typeof part.filename === 'string' && part.filename.trim()
+      ? { title: part.filename.trim() }
+      : {}),
+  };
+};
+
+const toGeminiContentPart = (part: ConversationContentPart): Record<string, unknown> | null => {
+  if (part.type === 'image_url') {
+    return {
+      fileData: {
+        fileUri: part.url,
+      },
+    };
+  }
+
+  if (part.type === 'image_inline') {
+    const parsed = parseDataUrl(part.dataUrl);
+    if (!parsed) return null;
+    return {
+      inlineData: {
+        mimeType: part.mimeType || parsed.mimeType,
+        data: parsed.data,
+      },
+    };
+  }
+
+  if (part.type === 'input_audio') {
+    const parsed = parseDataUrl(part.dataUrl);
+    if (!parsed) return null;
+    return {
+      inlineData: {
+        mimeType: part.mimeType || parsed.mimeType,
+        data: parsed.data,
+      },
+    };
+  }
+
+  if (part.type === 'input_file') {
+    if (typeof part.data === 'string' && part.data.trim()) {
+      const parsed = parseDataUrl(part.data);
+      if (!parsed) return null;
+      return {
+        inlineData: {
+          mimeType: part.mimeType || parsed.mimeType || 'application/octet-stream',
+          data: parsed.data,
+        },
+      };
+    }
+
+    const fileUri = typeof part.fileId === 'string' && part.fileId.trim()
+      ? part.fileId.trim()
+      : '';
+    if (!fileUri) return null;
+    return {
+      fileData: {
+        fileUri,
+        ...(typeof part.mimeType === 'string' && part.mimeType.trim()
+          ? { mimeType: part.mimeType.trim() }
+          : {}),
+      },
+    };
   }
 
   return null;
@@ -353,8 +431,15 @@ const toResponsesContentPart = (part: ConversationContentPart): Record<string, u
 const toGeminiContents = (messages: ApiChatMessage[]) =>
   messages.map((message) => ({
     role: message.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: message.content }],
-  }));
+    parts: [
+      ...(message.content.trim() ? [{ text: message.content }] : []),
+      ...((Array.isArray(message.parts)
+        ? message.parts
+          .map((part) => toGeminiContentPart(part))
+          .filter((item): item is Record<string, unknown> => !!item)
+        : [])),
+    ],
+  })).filter((message) => Array.isArray(message.parts) && message.parts.length > 0);
 
 const toOpenAiMessageContent = (message: ApiChatMessage): unknown => {
   const parts = Array.isArray(message.parts)
@@ -409,10 +494,21 @@ const toResponsesInput = (messages: ApiChatMessage[]) => {
 const toClaudeMessages = (messages: ApiChatMessage[]) =>
   messages
     .filter((message) => message.role !== 'system' && message.role !== 'developer')
-    .map((message) => ({
-      role: message.role === 'assistant' ? 'assistant' : 'user',
-      content: message.content,
-    }));
+    .map((message) => {
+      const parts = [
+        ...(message.content.trim() ? [{ type: 'text', text: message.content }] : []),
+        ...((Array.isArray(message.parts)
+          ? message.parts
+            .map((part) => toClaudeContentPart(part))
+            .filter((item): item is Record<string, unknown> => !!item)
+          : [])),
+      ];
+
+      return {
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: parts.length > 0 ? parts : message.content,
+      };
+    });
 
 const buildConversationJsonBody = (
   messages: ChatMessage[],
@@ -779,9 +875,18 @@ export const createConversationInputFilePart = (
   file: ConversationUploadedFile,
 ): ConversationContentPart => ({
   type: 'input_file',
-  fileId: file.fileId,
-  filename: file.filename ?? null,
-  mimeType: file.mimeType ?? null,
+  ...(typeof file.fileId === 'string' && file.fileId.trim()
+    ? { fileId: file.fileId.trim() }
+    : {}),
+  ...(typeof file.filename === 'string' && file.filename.trim()
+    ? { filename: file.filename.trim() }
+    : {}),
+  ...(typeof file.mimeType === 'string' && file.mimeType.trim()
+    ? { mimeType: file.mimeType.trim() }
+    : {}),
+  ...(typeof file.data === 'string' && file.data.trim()
+    ? { data: file.data.trim() }
+    : {}),
 });
 
 export const createConversationUserMessage = (

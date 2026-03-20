@@ -435,6 +435,98 @@ describe('modelTesterSession', () => {
     });
   });
 
+  it('builds Claude conversation payloads with inline document blocks for conversation files', () => {
+    const payload = buildApiPayload(
+      [{
+        id: 'u1',
+        role: 'user',
+        content: 'summarize this',
+        createAt: 1,
+        parts: [
+          {
+            type: 'input_file',
+            filename: 'brief.pdf',
+            mimeType: 'application/pdf',
+            data: 'data:application/pdf;base64,JVBERi0xLjc=',
+          },
+        ],
+      } as ChatMessage],
+      {
+        ...DEFAULT_INPUTS,
+        model: 'claude-opus-4-6',
+        protocol: 'claude',
+      },
+      DEFAULT_PARAMETER_ENABLED,
+    );
+
+    expect(payload.jsonBody).toEqual({
+      model: 'claude-opus-4-6',
+      stream: false,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'summarize this' },
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: 'JVBERi0xLjc=',
+              },
+              title: 'brief.pdf',
+            },
+          ],
+        },
+      ],
+      temperature: 0.7,
+    });
+  });
+
+  it('builds Gemini conversation payloads with inlineData document parts for conversation files', () => {
+    const payload = buildApiPayload(
+      [{
+        id: 'u1',
+        role: 'user',
+        content: 'summarize this',
+        createAt: 1,
+        parts: [
+          {
+            type: 'input_file',
+            filename: 'brief.pdf',
+            mimeType: 'application/pdf',
+            data: 'data:application/pdf;base64,JVBERi0xLjc=',
+          },
+        ],
+      } as ChatMessage],
+      {
+        ...DEFAULT_INPUTS,
+        model: 'gemini-2.5-pro',
+        protocol: 'gemini',
+      },
+      DEFAULT_PARAMETER_ENABLED,
+    );
+
+    expect(payload.jsonBody).toEqual({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: 'summarize this' },
+            {
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: 'JVBERi0xLjc=',
+              },
+            },
+          ],
+        },
+      ],
+      generationConfig: { temperature: 0.7 },
+    });
+  });
+
   it('builds embeddings and search envelopes', () => {
     expect(buildEmbeddingsRequestEnvelope('hello', { ...DEFAULT_INPUTS, model: 'text-embedding-3-large' })).toEqual({
       method: 'POST',

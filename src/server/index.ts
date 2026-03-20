@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { buildFastifyOptions, config } from './config.js';
+import { normalizePayloadRulesConfig } from './services/payloadRules.js';
 import { authMiddleware } from './middleware/auth.js';
 import { sitesRoutes } from './routes/api/sites.js';
 import { accountsRoutes } from './routes/api/accounts.js';
@@ -137,6 +138,23 @@ function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const proxyEmptyContentFailEnabled = parseSettingFromMap<boolean>(settingsMap, 'proxy_empty_content_fail_enabled');
   if (typeof proxyEmptyContentFailEnabled === 'boolean') {
     config.proxyEmptyContentFailEnabled = proxyEmptyContentFailEnabled;
+  }
+
+  const codexHeaderDefaults = parseSettingFromMap<unknown>(settingsMap, 'codex_header_defaults');
+  if (codexHeaderDefaults && typeof codexHeaderDefaults === 'object') {
+    const next = codexHeaderDefaults as Record<string, unknown>;
+    config.codexHeaderDefaults = {
+      userAgent: typeof next.userAgent === 'string'
+        ? next.userAgent.trim()
+        : (typeof next['user-agent'] === 'string' ? next['user-agent'].trim() : config.codexHeaderDefaults.userAgent),
+      betaFeatures: typeof next.betaFeatures === 'string'
+        ? next.betaFeatures.trim()
+        : (typeof next['beta-features'] === 'string' ? next['beta-features'].trim() : config.codexHeaderDefaults.betaFeatures),
+    };
+  }
+
+  if (settingsMap.has('payload_rules')) {
+    config.payloadRules = normalizePayloadRulesConfig(parseSettingFromMap<unknown>(settingsMap, 'payload_rules'));
   }
 
   const checkinCron = parseSettingFromMap<string>(settingsMap, 'checkin_cron');

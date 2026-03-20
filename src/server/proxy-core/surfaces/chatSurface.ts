@@ -30,7 +30,6 @@ import { anthropicMessagesTransformer } from '../../transformers/anthropic/messa
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
 import {
   ProxyInputFileResolutionError,
-  hasNonImageFileInputInOpenAiBody,
   resolveOpenAiBodyInputFiles,
 } from '../../services/proxyInputFileResolver.js';
 import {
@@ -52,6 +51,7 @@ import {
 import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
 import { detectCliProfile } from '../cliProfiles/registry.js';
 import type { CliProfileId } from '../cliProfiles/types.js';
+import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 
 const MAX_RETRIES = 2;
 
@@ -122,7 +122,8 @@ export async function handleChatSurfaceRequest(
       throw error;
     }
   }
-  const hasNonImageFileInput = hasNonImageFileInputInOpenAiBody(resolvedOpenAiBody);
+  const conversationFileSummary = summarizeConversationFileInputsInOpenAiBody(resolvedOpenAiBody);
+  const hasNonImageFileInput = conversationFileSummary.hasDocument;
   const codexSessionCacheKey = deriveCodexSessionCacheKey({
     downstreamFormat,
     body: downstreamFormat === 'claude' ? claudeOriginalBody : request.body,
@@ -172,6 +173,7 @@ export async function handleChatSurfaceRequest(
         requestedModel,
         {
           hasNonImageFileInput,
+          conversationFileSummary,
         },
       ),
     ];

@@ -3,6 +3,7 @@ import {
   normalizeResponsesMessageItem,
 } from './compatibility.js';
 import { normalizeInputFileBlock, toOpenAiChatFileBlock } from '../../shared/inputFile.js';
+import { buildShortToolNameMap, getShortToolName } from '../../shared/toolNameShortener.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -247,7 +248,49 @@ function toResponsesInputMessageFromText(text: string): Record<string, unknown> 
   };
 }
 
-function convertOpenAiToolsToResponses(rawTools: unknown): unknown {
+function collectOpenAiToolNames(body: Record<string, unknown>): string[] {
+  const names: string[] = [];
+  const pushName = (value: unknown) => {
+    const name = asTrimmedString(value);
+    if (name) names.push(name);
+  };
+
+  const rawTools = Array.isArray(body.tools) ? body.tools : [];
+  for (const item of rawTools) {
+    if (!isRecord(item)) continue;
+    const type = asTrimmedString(item.type).toLowerCase();
+    if (type === 'function' && isRecord(item.function)) {
+      pushName(item.function.name);
+      continue;
+    }
+    if (type === 'function') {
+      pushName(item.name);
+    }
+  }
+
+  const toolChoice = isRecord(body.tool_choice) ? body.tool_choice : null;
+  if (toolChoice && asTrimmedString(toolChoice.type).toLowerCase() === 'function') {
+    pushName(isRecord(toolChoice.function) ? toolChoice.function.name : toolChoice.name);
+  }
+
+  const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+  for (const message of rawMessages) {
+    if (!isRecord(message) || asTrimmedString(message.role).toLowerCase() !== 'assistant') continue;
+    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+    for (const toolCall of toolCalls) {
+      if (!isRecord(toolCall)) continue;
+      const functionPart = isRecord(toolCall.function) ? toolCall.function : null;
+      pushName(functionPart?.name ?? toolCall.name);
+    }
+  }
+
+  return names;
+}
+
+function convertOpenAiToolsToResponses(
+  rawTools: unknown,
+  toolNameMap: Record<string, string>,
+): unknown {
   if (!Array.isArray(rawTools)) return rawTools;
 
   const converted = rawTools
@@ -262,7 +305,7 @@ function convertOpenAiToolsToResponses(rawTools: unknown): unknown {
 
         const mapped: Record<string, unknown> = {
           type: 'function',
-          name,
+          name: getShortToolName(name, toolNameMap),
         };
         const description = asTrimmedString(fn.description);
         if (description) mapped.description = description;
@@ -272,7 +315,10 @@ function convertOpenAiToolsToResponses(rawTools: unknown): unknown {
       }
 
       if (type === 'function' && asTrimmedString(item.name)) {
-        return item;
+        return {
+          ...item,
+          name: getShortToolName(asTrimmedString(item.name), toolNameMap),
+        };
       }
 
       if (type === 'image_generation') {
@@ -290,7 +336,10 @@ function convertOpenAiToolsToResponses(rawTools: unknown): unknown {
   return converted.length > 0 ? converted : rawTools;
 }
 
-function convertOpenAiToolChoiceToResponses(rawToolChoice: unknown): unknown {
+function convertOpenAiToolChoiceToResponses(
+  rawToolChoice: unknown,
+  toolNameMap: Record<string, string>,
+): unknown {
   if (rawToolChoice === undefined) return undefined;
   if (typeof rawToolChoice === 'string') return rawToolChoice;
   if (!isRecord(rawToolChoice)) return rawToolChoice;
@@ -299,7 +348,7 @@ function convertOpenAiToolChoiceToResponses(rawToolChoice: unknown): unknown {
   if (type === 'function' && isRecord(rawToolChoice.function)) {
     const name = asTrimmedString(rawToolChoice.function.name);
     if (!name) return 'required';
-    return { type: 'function', name };
+    return { type: 'function', name: getShortToolName(name, toolNameMap) };
   }
 
   return rawToolChoice;
@@ -330,38 +379,12 @@ export function normalizeResponsesMessageContent(role: string, content: unknown)
   return [];
 }
 
-const ALLOWED_RESPONSES_FIELDS = new Set([
-  'model',
-  'input',
-  'instructions',
-  'max_output_tokens',
+const RESPONSES_COMPATIBILITY_FILTER_FIELDS = new Set([
   'max_completion_tokens',
-  'temperature',
-  'top_p',
-  'truncation',
-  'tools',
-  'tool_choice',
-  'parallel_tool_calls',
-  'metadata',
-  'reasoning',
-  'store',
-  'safety_identifier',
-  'stream',
-  'stream_options',
-  'user',
-  'max_tool_calls',
-  'prompt_cache_key',
-  'prompt_cache_retention',
-  'background',
-  'previous_response_id',
-  'text',
-  'audio',
-  'include',
+  'messages',
+  'prompt',
   'response_format',
-  'service_tier',
-  'top_logprobs',
-  'stop',
-  'n',
+  'verbosity',
 ]);
 
 export function sanitizeResponsesBodyForProxy(
@@ -397,11 +420,9 @@ export function sanitizeResponsesBodyForProxy(
     defaultEncryptedReasoningInclude: options?.defaultEncryptedReasoningInclude,
   });
 
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(normalized)) {
-    if (!ALLOWED_RESPONSES_FIELDS.has(key)) continue;
-    if (key === 'max_completion_tokens') continue;
-    sanitized[key] = value;
+  const sanitized: Record<string, unknown> = { ...normalized };
+  for (const key of RESPONSES_COMPATIBILITY_FILTER_FIELDS) {
+    delete sanitized[key];
   }
 
   const maxOutputTokens = toFiniteNumber(normalized.max_output_tokens);
@@ -427,6 +448,7 @@ export function convertOpenAiBodyToResponsesBody(
   const rawMessages = Array.isArray(openaiBody.messages) ? openaiBody.messages : [];
   const systemContents: string[] = [];
   const inputItems: Array<Record<string, unknown>> = [];
+  const toolNameMap = buildShortToolNameMap(collectOpenAiToolNames(openaiBody));
 
   for (const item of rawMessages) {
     if (!isRecord(item)) continue;
@@ -466,7 +488,7 @@ export function convertOpenAiBodyToResponsesBody(
         inputItems.push({
           type: 'function_call',
           call_id: callId,
-          name,
+          name: getShortToolName(name, toolNameMap),
           arguments: argumentsValue,
         });
       }
@@ -520,7 +542,7 @@ export function convertOpenAiBodyToResponsesBody(
   if (openaiBody.metadata !== undefined) body.metadata = openaiBody.metadata;
   if (openaiBody.reasoning !== undefined) body.reasoning = openaiBody.reasoning;
   if (openaiBody.parallel_tool_calls !== undefined) body.parallel_tool_calls = openaiBody.parallel_tool_calls;
-  if (openaiBody.tools !== undefined) body.tools = convertOpenAiToolsToResponses(openaiBody.tools);
+  if (openaiBody.tools !== undefined) body.tools = convertOpenAiToolsToResponses(openaiBody.tools, toolNameMap);
   if (openaiBody.safety_identifier !== undefined) body.safety_identifier = openaiBody.safety_identifier;
   if (openaiBody.max_tool_calls !== undefined) body.max_tool_calls = openaiBody.max_tool_calls;
   if (openaiBody.prompt_cache_key !== undefined) body.prompt_cache_key = openaiBody.prompt_cache_key;
@@ -546,7 +568,7 @@ export function convertOpenAiBodyToResponsesBody(
     body.text = textConfig;
   }
 
-  const responsesToolChoice = convertOpenAiToolChoiceToResponses(openaiBody.tool_choice);
+  const responsesToolChoice = convertOpenAiToolChoiceToResponses(openaiBody.tool_choice, toolNameMap);
   if (responsesToolChoice !== undefined) body.tool_choice = responsesToolChoice;
 
   return normalizeResponsesBodyForCompatibility(

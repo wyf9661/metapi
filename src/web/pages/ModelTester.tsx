@@ -44,6 +44,7 @@ import {
   type TestTargetFormat,
   type TestChatPayload,
 } from './helpers/modelTesterSession.js';
+import { resolveConversationFileCapability } from './helpers/conversationFileCapabilities.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { tr } from '../i18n.js';
@@ -970,6 +971,14 @@ export default function ModelTester() {
     return uploaded;
   }, [conversationFiles, pushDebug]);
 
+  const inlineConversationFiles = useCallback((): ConversationUploadedFile[] =>
+    conversationFiles.map((item) => ({
+      fileId: item.fileId,
+      filename: item.name,
+      mimeType: item.mimeType,
+      data: item.dataUrl,
+    })), [conversationFiles]);
+
   const buildConversationMessagesWithSystem = useCallback((baseMessages: ChatMessage[]) => {
     if (!inputs.systemPrompt.trim()) return baseMessages;
     return [
@@ -1339,7 +1348,11 @@ export default function ModelTester() {
     () => filteredModels.map((item) => ({ value: item, label: item })),
     [filteredModels],
   );
-  const conversationFileSupported = inputs.protocol === 'openai' || inputs.protocol === 'responses';
+  const conversationFileCapability = useMemo(
+    () => resolveConversationFileCapability(inputs.protocol),
+    [inputs.protocol],
+  );
+  const conversationFileSupported = conversationFileCapability.supported;
   const canSend = useMemo(() => {
     if (sending || pendingJobId || !inputs.model) return false;
     if (inputs.mode !== 'conversation') {
@@ -1808,7 +1821,7 @@ export default function ModelTester() {
     }
 
     if (conversationFiles.length > 0 && !conversationFileSupported) {
-      const message = '当前协议的会话附件仅支持 OpenAI / Responses；请切换协议或移除附件。';
+      const message = conversationFileCapability.reason || '当前协议暂不支持会话附件。';
       setError(message);
       pushDebug('warn', message);
       return;
@@ -1817,7 +1830,9 @@ export default function ModelTester() {
     if (!customRequestMode && conversationFileSupported && conversationFiles.length > 0) {
       setSending(true);
       try {
-        const uploadedFiles = await uploadConversationFiles();
+        const uploadedFiles = conversationFileCapability.documentMode === 'inline_only'
+          ? inlineConversationFiles()
+          : await uploadConversationFiles();
         setInput('');
         setConversationFiles([]);
         await sendWithPrompt(trimmed, messages, uploadedFiles);
@@ -1855,7 +1870,7 @@ export default function ModelTester() {
         { stream: inputs.stream, jobMode: !inputs.stream },
       ),
     );
-  }, [canSend, conversationFileSupported, conversationFiles.length, customRequestBody, customRequestMode, dispatchPayload, input, inputs.mode, messages, pushDebug, sendModeRequest, sendWithPrompt, uploadConversationFiles]);
+  }, [canSend, conversationFileCapability, conversationFileSupported, conversationFiles.length, customRequestBody, customRequestMode, dispatchPayload, inlineConversationFiles, input, inputs.mode, messages, pushDebug, sendModeRequest, sendWithPrompt, uploadConversationFiles]);
 
   const retryPending = useCallback(async () => {
     if (sending || pendingJobId || !pendingPayload) return;
@@ -2812,8 +2827,10 @@ export default function ModelTester() {
                         {customRequestMode
                           ? '自定义请求模式不会自动上传这些附件；关闭自定义模式后可走标准 /v1/files 链路。'
                           : !conversationFileSupported
-                            ? '当前协议暂不支持会话附件注入；请切换到 OpenAI 或 Responses。'
-                            : '支持 PDF / TXT / Markdown / JSON / 图片 / 音频；发送前会先上传到 /v1/files。'}
+                            ? (conversationFileCapability.reason || '当前协议暂不支持会话附件注入。')
+                            : conversationFileCapability.documentMode === 'inline_only'
+                              ? '支持 PDF / TXT / Markdown / JSON / 图片 / 音频；发送时会以内联文档方式注入。'
+                              : '支持 PDF / TXT / Markdown / JSON / 图片 / 音频；发送前会先上传到 /v1/files。'}
                       </span>
                     </div>
                     {conversationFiles.length > 0 && (

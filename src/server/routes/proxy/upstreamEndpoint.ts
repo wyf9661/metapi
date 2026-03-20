@@ -1,6 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {
+  rankConversationFileEndpoints,
+  type ConversationFileInputSummary,
+} from '../../proxy-core/capabilities/conversationFileCapabilities.js';
 import { resolveProviderProfile } from '../../proxy-core/providers/registry.js';
+import { config } from '../../config.js';
 import { fetchModelPricingCatalog } from '../../services/modelPricingService.js';
+import { applyPayloadRules } from '../../services/payloadRules.js';
 import type { DownstreamFormat } from '../../transformers/shared/normalized.js';
 import {
   convertOpenAiBodyToResponsesBody as convertOpenAiBodyToResponsesBodyViaTransformer,
@@ -45,6 +51,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function resolveRequestedModelForPayloadRules(input: {
+  modelName: string;
+  openaiBody: Record<string, unknown>;
+  claudeOriginalBody?: Record<string, unknown>;
+  responsesOriginalBody?: Record<string, unknown>;
+}): string {
+  return (
+    asTrimmedString(input.responsesOriginalBody?.model)
+    || asTrimmedString(input.claudeOriginalBody?.model)
+    || asTrimmedString(input.openaiBody.model)
+    || asTrimmedString(input.modelName)
+  );
 }
 
 function normalizePlatformName(platform: unknown): string {
@@ -626,6 +646,7 @@ export async function resolveUpstreamEndpointCandidates(
   requestedModelHint?: string,
   requestCapabilities?: {
     hasNonImageFileInput?: boolean;
+    conversationFileSummary?: ConversationFileInputSummary;
     wantsNativeResponsesReasoning?: boolean;
   },
 ): Promise<UpstreamEndpoint[]> {
@@ -634,7 +655,13 @@ export async function resolveUpstreamEndpointCandidates(
     isClaudeFamilyModel(modelName)
     || isClaudeFamilyModel(asTrimmedString(requestedModelHint))
   );
-  const hasNonImageFileInput = requestCapabilities?.hasNonImageFileInput === true;
+  const conversationFileSummary = requestCapabilities?.conversationFileSummary ?? {
+    hasImage: false,
+    hasAudio: false,
+    hasDocument: requestCapabilities?.hasNonImageFileInput === true,
+    hasRemoteDocumentUrl: false,
+  };
+  const hasNonImageFileInput = conversationFileSummary.hasDocument;
   const wantsNativeResponsesReasoning = requestCapabilities?.wantsNativeResponsesReasoning === true;
   if (sitePlatform === 'anyrouter') {
     // anyrouter deployments are effectively anthropic-protocol first.
@@ -659,8 +686,14 @@ export async function resolveUpstreamEndpointCandidates(
       if (sitePlatform === 'claude') return ['messages'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini') return ['responses', 'chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini-cli' || sitePlatform === 'antigravity') return ['chat'] as UpstreamEndpoint[];
-      if (preferMessagesForClaudeModel) return ['messages', 'responses', 'chat'] as UpstreamEndpoint[];
-      return ['responses', 'messages', 'chat'] as UpstreamEndpoint[];
+      return rankConversationFileEndpoints({
+        sitePlatform,
+        requestedOrder: preferMessagesForClaudeModel
+          ? ['messages', 'responses', 'chat']
+          : ['responses', 'messages', 'chat'],
+        summary: conversationFileSummary,
+        preferMessagesForClaudeModel,
+      });
     })()
     : preferred;
   const prioritizedPreferredEndpoints: UpstreamEndpoint[] = (
@@ -885,6 +918,16 @@ export function buildUpstreamEndpointRequest(input: {
     stream: input.stream,
     oauthProjectId: asTrimmedString(input.oauthProjectId) || null,
   };
+  const requestedModelForPayloadRules = resolveRequestedModelForPayloadRules(input);
+  const applyConfiguredPayloadRules = <T extends Record<string, unknown>>(body: T): T => (
+    applyPayloadRules({
+      rules: config.payloadRules,
+      payload: body,
+      modelName: input.modelName,
+      requestedModel: requestedModelForPayloadRules,
+      protocol: sitePlatform,
+    }) as T
+  );
 
   if (isInternalGeminiUpstream) {
     const instructions = (
@@ -898,6 +941,7 @@ export function buildUpstreamEndpointRequest(input: {
       modelName: input.modelName,
       instructions,
     });
+    const configuredGeminiRequest = applyConfiguredPayloadRules(geminiRequest);
     if (!providerProfile) {
       throw new Error(`missing provider profile for platform: ${sitePlatform}`);
     }
@@ -911,7 +955,7 @@ export function buildUpstreamEndpointRequest(input: {
       sitePlatform,
       baseHeaders: commonHeaders,
       providerHeaders: input.providerHeaders,
-      body: geminiRequest,
+      body: configuredGeminiRequest,
       action: input.stream ? 'streamGenerateContent' : 'generateContent',
     });
   }
@@ -952,6 +996,7 @@ export function buildUpstreamEndpointRequest(input: {
       ?? sanitizeAnthropicMessagesBody(
         convertOpenAiBodyToAnthropicMessagesBody(openaiBody, input.modelName, input.stream),
       );
+    const configuredClaudeBody = applyConfiguredPayloadRules(sanitizedBody);
 
     if (providerProfile?.id === 'claude') {
       return providerProfile.prepareRequest({
@@ -964,7 +1009,7 @@ export function buildUpstreamEndpointRequest(input: {
         sitePlatform,
         baseHeaders: commonHeaders,
         claudeHeaders,
-        body: sanitizedBody,
+        body: configuredClaudeBody,
       });
     }
 
@@ -980,7 +1025,7 @@ export function buildUpstreamEndpointRequest(input: {
     return {
       path: resolveEndpointPath('messages'),
       headers,
-      body: sanitizedBody,
+      body: configuredClaudeBody,
       runtime,
     };
   }
@@ -1015,6 +1060,7 @@ export function buildUpstreamEndpointRequest(input: {
       ),
       sitePlatform,
     );
+    const configuredResponsesBody = applyConfiguredPayloadRules(body);
 
     if (providerProfile?.id === 'codex') {
       return providerProfile.prepareRequest({
@@ -1032,7 +1078,7 @@ export function buildUpstreamEndpointRequest(input: {
         providerHeaders: input.providerHeaders,
         codexSessionCacheKey: input.codexSessionCacheKey,
         codexExplicitSessionId: input.codexExplicitSessionId,
-        body,
+        body: configuredResponsesBody,
       });
     }
 
@@ -1055,15 +1101,15 @@ export function buildUpstreamEndpointRequest(input: {
       : null;
     const shouldInjectDerivedPromptCacheKey = sitePlatform === 'codex'
       && !!codexSessionId
-      && !asTrimmedString((body as Record<string, unknown>).prompt_cache_key)
+      && !asTrimmedString((configuredResponsesBody as Record<string, unknown>).prompt_cache_key)
       && !asTrimmedString(input.codexExplicitSessionId)
       && !!asTrimmedString(input.codexSessionCacheKey);
     const runtimeBody = shouldInjectDerivedPromptCacheKey
       ? {
-        ...body,
+        ...configuredResponsesBody,
         prompt_cache_key: codexSessionId,
       }
-      : body;
+      : configuredResponsesBody;
 
     return {
       path: resolveEndpointPath('responses'),
@@ -1077,11 +1123,11 @@ export function buildUpstreamEndpointRequest(input: {
   return {
     path: resolveEndpointPath('chat'),
     headers,
-    body: {
+    body: applyConfiguredPayloadRules({
       ...openaiBody,
       model: input.modelName,
       stream: input.stream,
-    },
+    }),
     runtime,
   };
 }

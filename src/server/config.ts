@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import type { FastifyServerOptions } from 'fastify';
+import { normalizePayloadRulesConfig } from './services/payloadRules.js';
 
 const DEFAULT_REQUEST_BODY_LIMIT = 20 * 1024 * 1024;
 const DEFAULT_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
@@ -30,6 +31,15 @@ function parseCsvList(value: string | undefined): string[] {
 
 function parseOptionalSecret(value: string | undefined): string {
   return (value || '').trim();
+}
+
+function parseJsonValue(value: string | undefined): unknown {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseDbType(value: string | undefined): 'sqlite' | 'mysql' | 'postgres' {
@@ -96,6 +106,11 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     proxyLogRetentionPruneIntervalMinutes: Math.max(1, Math.trunc(parseNumber(env.PROXY_LOG_RETENTION_PRUNE_INTERVAL_MINUTES, 30))),
     proxyErrorKeywords: parseCsvList(env.PROXY_ERROR_KEYWORDS),
     proxyEmptyContentFailEnabled: parseBoolean(env.PROXY_EMPTY_CONTENT_FAIL, false),
+    codexHeaderDefaults: {
+      userAgent: parseOptionalSecret(env.CODEX_HEADER_DEFAULTS_USER_AGENT),
+      betaFeatures: parseOptionalSecret(env.CODEX_HEADER_DEFAULTS_BETA_FEATURES),
+    },
+    payloadRules: normalizePayloadRulesConfig(parseJsonValue(env.PAYLOAD_RULES_JSON || env.PAYLOAD_RULES)),
     routingWeights: {
       baseWeightFactor: parseNumber(env.BASE_WEIGHT_FACTOR, 0.5),
       valueScoreFactor: parseNumber(env.VALUE_SCORE_FACTOR, 0.5),
