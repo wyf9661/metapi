@@ -17,12 +17,24 @@ vi.mock('undici', () => ({
   fetch: (...args: unknown[]) => fetchMock(...args),
 }));
 
+const withExplicitProxyRequestInitMock = vi.fn(
+  (_proxyUrl: unknown, options?: Record<string, unknown>) => {
+    if (_proxyUrl) return { ...(options || {}), dispatcher: 'mock-proxy-dispatcher' };
+    return options ?? {};
+  },
+);
+
+vi.mock('./siteProxy.js', () => ({
+  withExplicitProxyRequestInit: (...args: unknown[]) => withExplicitProxyRequestInitMock(...args),
+}));
+
 describe('notifyService', () => {
   beforeEach(async () => {
     vi.resetModules();
     sendMailMock.mockReset();
     createTransportMock.mockClear();
     fetchMock.mockReset();
+    withExplicitProxyRequestInitMock.mockClear();
 
     const { config } = await import('../config.js');
     config.notifyCooldownSec = 300;
@@ -35,6 +47,8 @@ describe('notifyService', () => {
     (config as any).telegramEnabled = false;
     (config as any).telegramBotToken = '';
     (config as any).telegramChatId = '';
+    (config as any).telegramUseSystemProxy = false;
+    config.systemProxyUrl = '';
     config.smtpEnabled = true;
     config.smtpHost = 'smtp.example.com';
     config.smtpPort = 465;
@@ -221,5 +235,51 @@ describe('notifyService', () => {
         method: 'POST',
       }),
     );
+  });
+
+  it('applies system proxy dispatcher when telegramUseSystemProxy is enabled', async () => {
+    const { config } = await import('../config.js');
+    (config as any).telegramEnabled = true;
+    (config as any).telegramBotToken = '123456:telegram-token';
+    (config as any).telegramChatId = '-1001234567890';
+    (config as any).telegramUseSystemProxy = true;
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+    config.smtpEnabled = false;
+
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('测试通知', 'proxy-test', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    expect(withExplicitProxyRequestInitMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7890',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/sendMessage'),
+      expect.objectContaining({ dispatcher: 'mock-proxy-dispatcher' }),
+    );
+  });
+
+  it('does not apply proxy dispatcher when telegramUseSystemProxy is disabled', async () => {
+    const { config } = await import('../config.js');
+    (config as any).telegramEnabled = true;
+    (config as any).telegramBotToken = '123456:telegram-token';
+    (config as any).telegramChatId = '-1001234567890';
+    (config as any).telegramUseSystemProxy = false;
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+    config.smtpEnabled = false;
+
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('测试通知', 'no-proxy-test', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    expect(withExplicitProxyRequestInitMock).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const fetchOptions = fetchMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(fetchOptions.dispatcher).toBeUndefined();
   });
 });

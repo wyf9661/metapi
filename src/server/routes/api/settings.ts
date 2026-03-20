@@ -1,4 +1,4 @@
-﻿import { FastifyInstance } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import cron from 'node-cron';
 import { config } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
@@ -43,6 +43,7 @@ interface RuntimeSettingsBody {
   telegramApiBaseUrl?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
+  telegramUseSystemProxy?: boolean;
   smtpEnabled?: boolean;
   smtpHost?: string;
   smtpPort?: number;
@@ -288,6 +289,10 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.telegramChatId = value.trim();
       return;
     }
+    case 'telegram_use_system_proxy': {
+      config.telegramUseSystemProxy = !!value;
+      return;
+    }
     case 'smtp_enabled': {
       config.smtpEnabled = !!value;
       return;
@@ -380,6 +385,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     telegramApiBaseUrl: config.telegramApiBaseUrl,
     telegramBotTokenMasked: maskSecret(config.telegramBotToken),
     telegramChatId: config.telegramChatId,
+    telegramUseSystemProxy: config.telegramUseSystemProxy,
     smtpEnabled: config.smtpEnabled,
     smtpHost: config.smtpHost,
     smtpPort: config.smtpPort,
@@ -512,7 +518,8 @@ export async function settingsRoutes(app: FastifyInstance) {
     const telegramTouched = body.telegramEnabled !== undefined
       || body.telegramApiBaseUrl !== undefined
       || body.telegramBotToken !== undefined
-      || body.telegramChatId !== undefined;
+      || body.telegramChatId !== undefined
+      || body.telegramUseSystemProxy !== undefined;
     const nextTelegramEnabled = body.telegramEnabled !== undefined
       ? !!body.telegramEnabled
       : config.telegramEnabled;
@@ -766,6 +773,14 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.telegramChatId = String(body.telegramChatId || '').trim();
       upsertSetting('telegram_chat_id', config.telegramChatId);
+    }
+
+    if (body.telegramUseSystemProxy !== undefined) {
+      if (!!body.telegramUseSystemProxy !== config.telegramUseSystemProxy) {
+        changedLabels.push('Telegram 使用系统代理');
+      }
+      config.telegramUseSystemProxy = !!body.telegramUseSystemProxy;
+      upsertSetting('telegram_use_system_proxy', config.telegramUseSystemProxy);
     }
 
     if (body.smtpEnabled !== undefined) {
