@@ -30,10 +30,12 @@ import {
   parseCustomRequestBody,
   parseModelTesterSession,
   processThinkTags,
+  resolveConversationReplayFiles,
   serializeModelTesterSession,
   syncCustomRequestBodyToMessages,
   syncMessagesToCustomRequestBody,
   type ChatMessage,
+  type ConversationDraftFile,
   type ConversationContentPart,
   type ConversationUploadedFile,
   type DebugTab,
@@ -74,12 +76,7 @@ type UploadState = {
   dataUrl: string;
 };
 
-type ConversationFileState = UploadState & {
-  localId: string;
-  fileId?: string | null;
-  status: 'pending' | 'uploading' | 'uploaded' | 'error';
-  errorMessage?: string | null;
-};
+type ConversationFileState = ConversationDraftFile;
 
 const POLL_INTERVAL_MS = 1200;
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -767,6 +764,7 @@ export default function ModelTester() {
     setAssetPrompt(restored.modeState.imagesPrompt || restored.modeState.videosPrompt);
     setVideoInspectId(restored.modeState.videosInspectId);
     setVideoInspectAction(restored.inputs.videoInspectAction === 'delete' ? 'DELETE' : 'GET');
+    setConversationFiles(restored.conversationFiles);
 
     if (restored.pendingJobId) {
       setSending(true);
@@ -827,6 +825,7 @@ export default function ModelTester() {
       inputs,
       parameterEnabled,
       messages,
+      conversationFiles,
       modeState: {
         embeddingsInput: embeddingInputText,
         searchQuery: searchQueryValue,
@@ -852,6 +851,7 @@ export default function ModelTester() {
     input,
     inputs,
     messages,
+    conversationFiles,
     assetPrompt,
     customRequestBody,
     embeddingInputText,
@@ -1013,6 +1013,19 @@ export default function ModelTester() {
     pushDebug('warn', message);
     return false;
   }, [conversationFileCapability, conversationFileHint, pushDebug]);
+
+  const loadLocalConversationFile = useCallback(async (fileId: string) => {
+    const resolved = await api.getProxyFileContentDataUrl(fileId) as {
+      filename?: string | null;
+      mimeType?: string | null;
+      data: string;
+    };
+    return {
+      filename: resolved.filename || null,
+      mimeType: resolved.mimeType || null,
+      data: resolved.data,
+    };
+  }, []);
 
   const buildConversationMessagesWithSystem = useCallback((baseMessages: ChatMessage[]) => {
     if (!inputs.systemPrompt.trim()) return baseMessages;
@@ -1805,10 +1818,19 @@ export default function ModelTester() {
     baseMessages: ChatMessage[],
     files: ConversationUploadedFile[] = [],
   ) => {
-    if (!ensureSupportedConversationFiles(files)) {
+    let resolvedFiles = files;
+    try {
+      resolvedFiles = await resolveConversationReplayFiles(files, inputs.protocol, loadLocalConversationFile);
+    } catch (resolveError: any) {
+      const message = resolveError?.message || '读取会话附件失败';
+      setError(message);
+      pushDebug('error', message);
       return;
     }
-    const userMessage = createConversationUserMessage(prompt, files);
+    if (!ensureSupportedConversationFiles(resolvedFiles)) {
+      return;
+    }
+    const userMessage = createConversationUserMessage(prompt, resolvedFiles);
     const loadingAssistant = createLoadingAssistantMessage();
     const nextMessages = [...baseMessages, userMessage, loadingAssistant];
     const useProxyTransport = inputs.protocol === 'gemini' || customRequestMode;
@@ -1826,7 +1848,7 @@ export default function ModelTester() {
     }
 
     await dispatchPayload(nextMessages, payload, { syncedCustomBody });
-  }, [buildConversationProxyEnvelope, buildPayloadWithMessages, createConversationUserMessage, customRequestMode, dispatchPayload, dispatchProxyEnvelope, ensureSupportedConversationFiles, inputs.protocol, pushDebug]);
+  }, [buildConversationProxyEnvelope, buildPayloadWithMessages, createConversationUserMessage, customRequestMode, dispatchPayload, dispatchProxyEnvelope, ensureSupportedConversationFiles, inputs.protocol, loadLocalConversationFile, pushDebug]);
 
   const sendModeRequest = useCallback(async () => {
     const envelope = buildModeProxyEnvelope();

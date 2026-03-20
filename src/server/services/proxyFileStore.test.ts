@@ -112,4 +112,45 @@ describe('proxyFileStore', () => {
     });
     expect(loaded).toBeNull();
   });
+
+  it('purges expired proxy files before a cutoff to control database growth', async () => {
+    await db.insert(schema.proxyFiles).values([
+      {
+        publicId: 'file-metapi-old',
+        ownerType: 'global_proxy_token',
+        ownerId: 'global',
+        filename: 'old.txt',
+        mimeType: 'text/plain',
+        purpose: 'assistants',
+        byteSize: 3,
+        sha256: 'old-hash',
+        contentBase64: Buffer.from('old').toString('base64'),
+        createdAt: '2026-03-01 00:00:00',
+        updatedAt: '2026-03-01 00:00:00',
+        deletedAt: null,
+      },
+      {
+        publicId: 'file-metapi-new',
+        ownerType: 'global_proxy_token',
+        ownerId: 'global',
+        filename: 'new.txt',
+        mimeType: 'text/plain',
+        purpose: 'assistants',
+        byteSize: 3,
+        sha256: 'new-hash',
+        contentBase64: Buffer.from('new').toString('base64'),
+        createdAt: '2026-03-19 00:00:00',
+        updatedAt: '2026-03-19 00:00:00',
+        deletedAt: null,
+      },
+    ]).run();
+
+    const purgeExpiredProxyFiles = (store as Record<string, any>).purgeExpiredProxyFiles;
+    const deleted = await purgeExpiredProxyFiles?.('2026-03-10 00:00:00');
+
+    expect(deleted).toBe(1);
+
+    const remainingRows = await db.select().from(schema.proxyFiles).all();
+    expect(remainingRows.map((row) => row.publicId)).toEqual(['file-metapi-new']);
+  });
 });
