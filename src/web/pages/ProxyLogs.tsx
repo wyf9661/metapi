@@ -823,7 +823,7 @@ export default function ProxyLogs() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <ModelBadge model={log.modelRequested} />
+                          <ModelBadge model={log.modelRequested} style={{ alignSelf: 'flex-start' }} />
                           {downstreamKeySummary ? (
                             <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)' }}>
                               {downstreamKeySummary}
