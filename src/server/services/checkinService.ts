@@ -115,7 +115,7 @@ async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
   return result.accessToken;
 }
 
-export async function checkinAccount(accountId: number, options?: { skipEvent?: boolean }) {
+export async function checkinAccount(accountId: number, options?: { skipEvent?: boolean; scheduleMode?: 'cron' | 'interval' }) {
   const rows = await db
     .select()
     .from(schema.accounts)
@@ -192,6 +192,7 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
   const effectiveSuccess = result.success || alreadyCheckedIn || unsupportedCheckin || manualVerificationRequired;
   const shouldRefreshBalance = result.success || alreadyCheckedIn;
   const directCheckinSuccess = result.success && !alreadyCheckedIn && !unsupportedCheckin;
+  const shouldAdvanceLastCheckinAt = directCheckinSuccess || (alreadyCheckedIn && options?.scheduleMode !== 'interval');
   const normalizedStatus: CheckinExecutionStatus = effectiveSuccess
     ? ((unsupportedCheckin || manualVerificationRequired) ? 'skipped' : 'success')
     : 'failed';
@@ -211,9 +212,10 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
       source: 'checkin',
     });
 
-    const updates: Record<string, unknown> = {
-      lastCheckinAt: new Date().toISOString(),
-    };
+    const updates: Record<string, unknown> = {};
+    if (shouldAdvanceLastCheckinAt) {
+      updates.lastCheckinAt = new Date().toISOString();
+    }
     if (!storedPlatformUserId && guessedPlatformUserId) {
       updates.extraConfig = mergeAccountExtraConfig(account.extraConfig, {
         platformUserId: guessedPlatformUserId,
@@ -308,7 +310,7 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
   };
 }
 
-export async function checkinAll() {
+export async function checkinAll(options?: { accountIds?: number[]; scheduleMode?: 'cron' | 'interval' }) {
   const rows = await db
     .select()
     .from(schema.accounts)
@@ -321,10 +323,12 @@ export async function checkinAll() {
     )
     .all();
 
+  const scopedAccountIds = options?.accountIds ? new Set(options.accountIds) : null;
   const results: Array<{ accountId: number; username: string | null; site: string; result: any }> = [];
 
   const grouped = new Map<number, typeof rows>();
   for (const row of rows) {
+    if (scopedAccountIds && !scopedAccountIds.has(row.accounts.id)) continue;
     const siteId = row.sites.id;
     if (!grouped.has(siteId)) grouped.set(siteId, []);
     grouped.get(siteId)!.push(row);
@@ -332,7 +336,10 @@ export async function checkinAll() {
 
   const promises = Array.from(grouped.entries()).map(async ([_, siteRows]) => {
     for (const row of siteRows) {
-      const r = await checkinAccount(row.accounts.id, { skipEvent: true });
+      const r = await checkinAccount(row.accounts.id, {
+        skipEvent: true,
+        scheduleMode: options?.scheduleMode,
+      });
       results.push({
         accountId: row.accounts.id,
         username: row.accounts.username,

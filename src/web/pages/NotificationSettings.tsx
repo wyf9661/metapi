@@ -13,6 +13,7 @@ type RuntimeSettings = {
     telegramApiBaseUrl: string;
     telegramChatId: string;
     telegramUseSystemProxy: boolean;
+    telegramMessageThreadId: string;
     smtpEnabled: boolean;
     smtpHost: string;
     smtpPort: number;
@@ -37,6 +38,7 @@ export default function NotificationSettings() {
         telegramApiBaseUrl: 'https://api.telegram.org',
         telegramChatId: '',
         telegramUseSystemProxy: false,
+        telegramMessageThreadId: '',
         smtpEnabled: false,
         smtpHost: '',
         smtpPort: 587,
@@ -81,6 +83,7 @@ export default function NotificationSettings() {
                 telegramApiBaseUrl: runtimeInfo.telegramApiBaseUrl || 'https://api.telegram.org',
                 telegramChatId: runtimeInfo.telegramChatId || '',
                 telegramUseSystemProxy: !!runtimeInfo.telegramUseSystemProxy,
+                telegramMessageThreadId: runtimeInfo.telegramMessageThreadId || '',
                 smtpEnabled: !!runtimeInfo.smtpEnabled,
                 smtpHost: runtimeInfo.smtpHost || '',
                 smtpPort: Number(runtimeInfo.smtpPort) || 587,
@@ -119,6 +122,7 @@ export default function NotificationSettings() {
                 telegramApiBaseUrl: runtime.telegramApiBaseUrl,
                 telegramChatId: runtime.telegramChatId,
                 telegramUseSystemProxy: runtime.telegramUseSystemProxy,
+                telegramMessageThreadId: runtime.telegramMessageThreadId,
                 smtpEnabled: runtime.smtpEnabled,
                 smtpHost: runtime.smtpHost,
                 smtpPort: runtime.smtpPort,
@@ -363,6 +367,16 @@ export default function NotificationSettings() {
                                 value={runtime.telegramChatId}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, telegramChatId: e.target.value }))}
                                 placeholder="例如: -1001234567890 或 @your_channel"
+                                style={inputStyle}
+                                disabled={!runtime.telegramEnabled}
+                            />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Telegram Topic ID</div>
+                            <input
+                                value={runtime.telegramMessageThreadId}
+                                onChange={(e) => setRuntime((prev) => ({ ...prev, telegramMessageThreadId: e.target.value }))}
+                                placeholder="例如: 77"
                                 style={inputStyle}
                                 disabled={!runtime.telegramEnabled}
                             />

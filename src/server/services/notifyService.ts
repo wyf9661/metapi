@@ -222,6 +222,7 @@ export async function sendNotification(
     const telegramApiBaseUrl = String(config.telegramApiBaseUrl || 'https://api.telegram.org').replace(/\/+$/, '');
     const telegramApiUrl = `${telegramApiBaseUrl}/bot${config.telegramBotToken}/sendMessage`;
     const text = buildTelegramText(title, resolvedMessage, level, timeFootnote);
+    const telegramMessageThreadId = Number.parseInt(String(config.telegramMessageThreadId || '').trim(), 10);
     tasks.push({
       channel: 'telegram',
       run: async () => {
@@ -232,6 +233,9 @@ export async function sendNotification(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: config.telegramChatId,
+              ...(Number.isFinite(telegramMessageThreadId) && telegramMessageThreadId > 0
+                ? { message_thread_id: telegramMessageThreadId }
+                : {}),
               text,
               disable_web_page_preview: true,
             }),

@@ -42,6 +42,7 @@ describe('NotificationSettings', () => {
       telegramEnabled: true,
       telegramApiBaseUrl: 'https://tg-proxy.example.com',
       telegramChatId: '-1001234567890',
+      telegramMessageThreadId: '77',
       telegramBotTokenMasked: '1234****token',
       telegramUseSystemProxy: false,
       smtpEnabled: false,
@@ -56,6 +57,7 @@ describe('NotificationSettings', () => {
     apiMock.updateRuntimeSettings.mockResolvedValue({
       success: true,
       telegramApiBaseUrl: 'https://proxy.example.com/custom',
+      telegramMessageThreadId: '88',
       telegramBotTokenMasked: '1234****token',
     });
     apiMock.testNotification.mockResolvedValue({ success: true });
@@ -65,7 +67,7 @@ describe('NotificationSettings', () => {
     vi.clearAllMocks();
   });
 
-  it('loads and saves telegram api base url', async () => {
+  it('loads and saves telegram api base url and topic id', async () => {
     let root: ReturnType<typeof create> | null = null;
     try {
       await act(async () => {
@@ -85,8 +87,15 @@ describe('NotificationSettings', () => {
       ));
       expect(proxyInput.props.value).toBe('https://tg-proxy.example.com');
 
+      const topicInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.placeholder === '例如: 77'
+      ));
+      expect(topicInput.props.value).toBe('77');
+
       await act(async () => {
         proxyInput.props.onChange({ target: { value: 'https://proxy.example.com/custom/' } });
+        topicInput.props.onChange({ target: { value: '88' } });
       });
 
       const saveButton = root.root.find((node) => (
@@ -101,6 +110,7 @@ describe('NotificationSettings', () => {
 
       expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith(expect.objectContaining({
         telegramApiBaseUrl: 'https://proxy.example.com/custom/',
+        telegramMessageThreadId: '88',
       }));
     } finally {
       root?.unmount();

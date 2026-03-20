@@ -248,6 +248,63 @@ describe('checkinService auto relogin', () => {
     expect(notifyMock).not.toHaveBeenCalled();
   });
 
+  it('does not advance lastCheckinAt for already checked in responses in interval mode', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 16,
+          username: 'interval-user',
+          accessToken: 'token',
+          status: 'active',
+          extraConfig: null,
+        },
+        sites: {
+          id: 16,
+          name: 'demo',
+          url: 'https://example.com',
+          platform: 'new-api',
+        },
+      },
+    ]);
+
+    adapterMock.checkin.mockResolvedValue({ success: false, message: '今天已经签到过啦' });
+
+    const { checkinAccount } = await import('./checkinService.js');
+    const result = await checkinAccount(16, { scheduleMode: 'interval' });
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('success');
+    expect(updateSetMock).not.toHaveBeenCalledWith(expect.objectContaining({ lastCheckinAt: expect.any(String) }));
+  });
+
+  it('advances lastCheckinAt when interval mode gets a direct success', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 17,
+          username: 'interval-success',
+          accessToken: 'token',
+          status: 'active',
+          extraConfig: null,
+        },
+        sites: {
+          id: 17,
+          name: 'demo',
+          url: 'https://example.com',
+          platform: 'new-api',
+        },
+      },
+    ]);
+
+    adapterMock.checkin.mockResolvedValue({ success: true, message: '签到成功' });
+
+    const { checkinAccount } = await import('./checkinService.js');
+    const result = await checkinAccount(17, { scheduleMode: 'interval' });
+
+    expect(result.success).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({ lastCheckinAt: expect.any(String) }));
+  });
+
   it('treats unsupported checkin endpoint responses as skipped', async () => {
     selectAllMock.mockReturnValue([
       {

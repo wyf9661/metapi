@@ -10,7 +10,7 @@ vi.mock('../../services/checkinService.js', () => ({
 }));
 
 vi.mock('../../services/checkinScheduler.js', () => ({
-  updateCheckinCron: vi.fn(),
+  updateCheckinSchedule: vi.fn(),
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -85,6 +85,27 @@ describe('POST /api/checkin/trigger background task dedupe', () => {
 
     resolveFirst([]);
     await new Promise((resolve) => setTimeout(resolve, 20));
+    await app.close();
+  });
+
+  it('accepts the legacy cron-only schedule payload', async () => {
+    const { checkinRoutes } = await import('./checkin.js');
+    const schedulerModule = await import('../../services/checkinScheduler.js');
+    const app = Fastify();
+    await app.register(checkinRoutes);
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/checkin/schedule',
+      payload: { cron: '0 8 * * *' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((schedulerModule as any).updateCheckinSchedule).toHaveBeenCalledWith({
+      mode: 'cron',
+      cronExpr: '0 8 * * *',
+      intervalHours: undefined,
+    });
     await app.close();
   });
 });
