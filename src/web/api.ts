@@ -71,7 +71,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function request(url: string, options: RequestOptions = {}) {
+async function fetchAuthenticatedResponse(url: string, options: RequestOptions = {}): Promise<Response> {
   const { timeoutMs = 30_000, signal: externalSignal, ...fetchOptions } = options;
   const controller = new AbortController();
   let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
@@ -107,13 +107,12 @@ async function request(url: string, options: RequestOptions = {}) {
     if (res.status === 401 || res.status === 403) {
       const hadToken = !!getAuthToken(localStorage);
       clearAuthSession(localStorage);
-      if (hadToken) window.location.reload();
+      if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+        window.location.reload();
+      }
       throw new Error('Session expired');
     }
-    if (!res.ok) {
-      throw new Error(await extractResponseErrorMessage(res));
-    }
-    return res.json();
+    return res;
   } catch (error: any) {
     if (error?.name === 'AbortError') {
       if (externalSignal?.aborted) throw error;
@@ -127,6 +126,14 @@ async function request(url: string, options: RequestOptions = {}) {
     }
     cleanupExternalSignal();
   }
+}
+
+async function request(url: string, options: RequestOptions = {}) {
+  const res = await fetchAuthenticatedResponse(url, options);
+  if (!res.ok) {
+    throw new Error(await extractResponseErrorMessage(res));
+  }
+  return res.json();
 }
 
 function buildQueryString(params?: Record<string, string | number | boolean | null | undefined>) {
@@ -664,22 +671,14 @@ export const api = {
     }),
   getProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`),
   deleteProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }),
-  getProxyFileContentDataUrl: async (fileId: string) => {
-    const token = requireAuthToken();
-    const response = await fetch(`/v1/files/${encodeURIComponent(fileId)}/content`, {
+  getProxyFileContentDataUrl: async (
+    fileId: string,
+    options: Pick<RequestOptions, 'signal' | 'timeoutMs'> = {},
+  ) => {
+    const response = await fetchAuthenticatedResponse(`/v1/files/${encodeURIComponent(fileId)}/content`, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      ...options,
     });
-    if (response.status === 401 || response.status === 403) {
-      const hadToken = !!getAuthToken(localStorage);
-      clearAuthSession(localStorage);
-      if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
-        window.location.reload();
-      }
-      throw new Error('Session expired');
-    }
     if (!response.ok) {
       throw new Error(await extractResponseErrorMessage(response));
     }
