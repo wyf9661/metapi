@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   hasProxyLogBillingDetailsColumnMock,
+  hasProxyLogClientColumnsMock,
   hasProxyLogDownstreamApiKeyIdColumnMock,
   dbInsertMock,
   dbInsertValuesMock,
@@ -9,6 +10,7 @@ const {
   proxyLogsSchema,
 } = vi.hoisted(() => ({
   hasProxyLogBillingDetailsColumnMock: vi.fn(),
+  hasProxyLogClientColumnsMock: vi.fn(),
   hasProxyLogDownstreamApiKeyIdColumnMock: vi.fn(),
   dbInsertMock: vi.fn(),
   dbInsertValuesMock: vi.fn(),
@@ -28,6 +30,10 @@ const {
     totalTokens: 'total_tokens',
     estimatedCost: 'estimated_cost',
     billingDetails: 'billing_details',
+    clientFamily: 'client_family',
+    clientAppId: 'client_app_id',
+    clientAppName: 'client_app_name',
+    clientConfidence: 'client_confidence',
     errorMessage: 'error_message',
     retryCount: 'retry_count',
     createdAt: 'created_at',
@@ -42,6 +48,7 @@ vi.mock('../db/index.js', () => ({
     proxyLogs: proxyLogsSchema,
   },
   hasProxyLogBillingDetailsColumn: (...args: unknown[]) => hasProxyLogBillingDetailsColumnMock(...args),
+  hasProxyLogClientColumns: (...args: unknown[]) => hasProxyLogClientColumnsMock(...args),
   hasProxyLogDownstreamApiKeyIdColumn: (...args: unknown[]) => hasProxyLogDownstreamApiKeyIdColumnMock(...args),
 }));
 
@@ -50,11 +57,13 @@ import { insertProxyLog, withProxyLogSelectFields } from './proxyLogStore.js';
 describe('proxyLogStore', () => {
   beforeEach(() => {
     hasProxyLogBillingDetailsColumnMock.mockReset();
+    hasProxyLogClientColumnsMock.mockReset();
     hasProxyLogDownstreamApiKeyIdColumnMock.mockReset();
     dbInsertMock.mockReset();
     dbInsertValuesMock.mockReset();
     dbInsertRunMock.mockReset();
     hasProxyLogBillingDetailsColumnMock.mockResolvedValue(false);
+    hasProxyLogClientColumnsMock.mockResolvedValue(false);
     hasProxyLogDownstreamApiKeyIdColumnMock.mockResolvedValue(false);
 
     dbInsertMock.mockReturnValue({
@@ -131,5 +140,57 @@ describe('proxyLogStore', () => {
     });
     expect(dbInsertValuesMock.mock.calls[2][0].billingDetails).toBeUndefined();
     expect(dbInsertValuesMock.mock.calls[2][0].downstreamApiKeyId).toBeUndefined();
+  });
+
+  it('writes structured client fields when the schema supports them', async () => {
+    hasProxyLogClientColumnsMock.mockResolvedValue(true);
+
+    await insertProxyLog({
+      modelRequested: 'gpt-5',
+      clientFamily: 'codex',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
+    });
+
+    expect(dbInsertValuesMock).toHaveBeenCalledTimes(1);
+    expect(dbInsertValuesMock.mock.calls[0][0]).toMatchObject({
+      modelRequested: 'gpt-5',
+      clientFamily: 'codex',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
+    });
+  });
+
+  it('retries proxy log inserts without structured client fields when those columns are missing', async () => {
+    hasProxyLogClientColumnsMock.mockResolvedValue(true);
+    dbInsertRunMock
+      .mockRejectedValueOnce(new Error('column proxy_logs.client_app_id does not exist'))
+      .mockResolvedValueOnce(undefined);
+
+    await insertProxyLog({
+      modelRequested: 'gpt-5',
+      clientFamily: 'codex',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
+    });
+
+    expect(dbInsertValuesMock).toHaveBeenCalledTimes(2);
+    expect(dbInsertValuesMock.mock.calls[0][0]).toMatchObject({
+      modelRequested: 'gpt-5',
+      clientFamily: 'codex',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
+    });
+    expect(dbInsertValuesMock.mock.calls[1][0]).toMatchObject({
+      modelRequested: 'gpt-5',
+    });
+    expect(dbInsertValuesMock.mock.calls[1][0].clientFamily).toBeUndefined();
+    expect(dbInsertValuesMock.mock.calls[1][0].clientAppId).toBeUndefined();
+    expect(dbInsertValuesMock.mock.calls[1][0].clientAppName).toBeUndefined();
+    expect(dbInsertValuesMock.mock.calls[1][0].clientConfidence).toBeUndefined();
   });
 });

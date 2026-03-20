@@ -44,6 +44,7 @@ let mysqlPool: mysql.Pool | null = null;
 let pgPool: pg.Pool | null = null;
 let proxyLogBillingDetailsColumnAvailable: boolean | null = null;
 let proxyLogDownstreamApiKeyIdColumnAvailable: boolean | null = null;
+let proxyLogClientColumnsAvailable: boolean | null = null;
 
 function resolveSqlitePath(): string {
   const raw = (config.dbUrl || '').trim();
@@ -118,6 +119,13 @@ function tableColumnExists(table: string, column: string): boolean {
   const sqlite = requireSqliteConnection();
   const rows = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: string }>;
   return rows.some((row) => row.name === column);
+}
+
+function tableIndexExists(indexName: string): boolean {
+  const sqlite = requireSqliteConnection();
+  const row = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ? LIMIT 1")
+    .get(indexName) as { name?: string } | undefined;
+  return !!row?.name;
 }
 
 function execSqliteStatement(sqlText: string): void {
@@ -588,6 +596,40 @@ function ensureProxyLogDownstreamApiKeyIdSchema() {
   proxyLogDownstreamApiKeyIdColumnAvailable = true;
 }
 
+function ensureProxyLogClientSchema() {
+  if (!tableExists('proxy_logs')) {
+    return;
+  }
+
+  if (!tableColumnExists('proxy_logs', 'client_family')) {
+    execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN client_family text;');
+  }
+  if (!tableColumnExists('proxy_logs', 'client_app_id')) {
+    execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN client_app_id text;');
+  }
+  if (!tableColumnExists('proxy_logs', 'client_app_name')) {
+    execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN client_app_name text;');
+  }
+  if (!tableColumnExists('proxy_logs', 'client_confidence')) {
+    execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN client_confidence text;');
+  }
+
+  if (!tableIndexExists('proxy_logs_client_app_id_created_at_idx')) {
+    execSqliteLegacyCompat(`
+      CREATE INDEX IF NOT EXISTS proxy_logs_client_app_id_created_at_idx
+      ON proxy_logs(client_app_id, created_at);
+    `);
+  }
+  if (!tableIndexExists('proxy_logs_client_family_created_at_idx')) {
+    execSqliteLegacyCompat(`
+      CREATE INDEX IF NOT EXISTS proxy_logs_client_family_created_at_idx
+      ON proxy_logs(client_family, created_at);
+    `);
+  }
+
+  proxyLogClientColumnsAvailable = true;
+}
+
 function normalizeSchemaErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error && 'message' in error) {
     return String((error as { message?: unknown }).message || '');
@@ -598,6 +640,14 @@ function normalizeSchemaErrorMessage(error: unknown): string {
 function isDuplicateColumnError(error: unknown): boolean {
   const lowered = normalizeSchemaErrorMessage(error).toLowerCase();
   return lowered.includes('duplicate column') || lowered.includes('already exists');
+}
+
+function isDuplicateIndexError(error: unknown): boolean {
+  const lowered = normalizeSchemaErrorMessage(error).toLowerCase();
+  return lowered.includes('duplicate key name')
+    || lowered.includes('already exists')
+    || lowered.includes('relation')
+    || lowered.includes('duplicate index');
 }
 
 export async function hasProxyLogBillingDetailsColumn(): Promise<boolean> {
@@ -732,9 +782,183 @@ export async function ensureProxyLogDownstreamApiKeyIdColumn(): Promise<boolean>
   }
 }
 
+async function hasMysqlIndex(indexName: string): Promise<boolean> {
+  if (!mysqlPool) return false;
+  const [rows] = await mysqlPool.query(
+    'SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? LIMIT 1',
+    ['proxy_logs', indexName],
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+async function hasPostgresIndex(indexName: string): Promise<boolean> {
+  if (!pgPool) return false;
+  const result = await pgPool.query(
+    'SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1 AND indexname = $2 LIMIT 1',
+    ['proxy_logs', indexName],
+  );
+  return Number(result.rowCount || 0) > 0;
+}
+
+export async function hasProxyLogClientColumns(): Promise<boolean> {
+  if (proxyLogClientColumnsAvailable !== null) {
+    return proxyLogClientColumnsAvailable;
+  }
+
+  const requiredColumns = [
+    'client_family',
+    'client_app_id',
+    'client_app_name',
+    'client_confidence',
+  ];
+
+  if (runtimeDbDialect === 'sqlite') {
+    proxyLogClientColumnsAvailable = tableExists('proxy_logs')
+      && requiredColumns.every((columnName) => tableColumnExists('proxy_logs', columnName));
+    return proxyLogClientColumnsAvailable;
+  }
+
+  if (runtimeDbDialect === 'mysql') {
+    if (!mysqlPool) return false;
+    const [rows] = await mysqlPool.query(
+      'SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name IN (?, ?, ?, ?)',
+      ['proxy_logs', ...requiredColumns],
+    ) as [Array<{ column_name?: string }>, unknown];
+    const available = new Set(
+      Array.isArray(rows)
+        ? rows.map((row) => String(row?.column_name || '').trim().toLowerCase()).filter(Boolean)
+        : [],
+    );
+    proxyLogClientColumnsAvailable = requiredColumns.every((columnName) => available.has(columnName));
+    return proxyLogClientColumnsAvailable;
+  }
+
+  if (!pgPool) return false;
+  const result = await pgPool.query(
+    'SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = ANY($2::text[])',
+    ['proxy_logs', requiredColumns],
+  );
+  const available = new Set(
+    result.rows.map((row) => String((row as { column_name?: string }).column_name || '').trim().toLowerCase()).filter(Boolean),
+  );
+  proxyLogClientColumnsAvailable = requiredColumns.every((columnName) => available.has(columnName));
+  return proxyLogClientColumnsAvailable;
+}
+
+export async function ensureProxyLogClientColumns(): Promise<boolean> {
+  const requiredColumns = [
+    { name: 'client_family', sqliteType: 'text', mysqlType: 'TEXT NULL', postgresType: 'TEXT' },
+    { name: 'client_app_id', sqliteType: 'text', mysqlType: 'TEXT NULL', postgresType: 'TEXT' },
+    { name: 'client_app_name', sqliteType: 'text', mysqlType: 'TEXT NULL', postgresType: 'TEXT' },
+    { name: 'client_confidence', sqliteType: 'text', mysqlType: 'TEXT NULL', postgresType: 'TEXT' },
+  ];
+  const requiredIndexes = [
+    {
+      name: 'proxy_logs_client_app_id_created_at_idx',
+      sqliteSql: 'CREATE INDEX IF NOT EXISTS proxy_logs_client_app_id_created_at_idx ON proxy_logs(client_app_id, created_at);',
+      mysqlSql: 'CREATE INDEX `proxy_logs_client_app_id_created_at_idx` ON `proxy_logs` (`client_app_id`(191), `created_at`(191))',
+      postgresSql: 'CREATE INDEX "proxy_logs_client_app_id_created_at_idx" ON "proxy_logs" ("client_app_id", "created_at")',
+    },
+    {
+      name: 'proxy_logs_client_family_created_at_idx',
+      sqliteSql: 'CREATE INDEX IF NOT EXISTS proxy_logs_client_family_created_at_idx ON proxy_logs(client_family, created_at);',
+      mysqlSql: 'CREATE INDEX `proxy_logs_client_family_created_at_idx` ON `proxy_logs` (`client_family`(191), `created_at`(191))',
+      postgresSql: 'CREATE INDEX "proxy_logs_client_family_created_at_idx" ON "proxy_logs" ("client_family", "created_at")',
+    },
+  ];
+
+  if (runtimeDbDialect === 'sqlite') {
+    ensureProxyLogClientSchema();
+    proxyLogClientColumnsAvailable = tableExists('proxy_logs')
+      && requiredColumns.every((column) => tableColumnExists('proxy_logs', column.name));
+    return proxyLogClientColumnsAvailable;
+  }
+
+  if (await hasProxyLogClientColumns()) {
+    for (const requiredIndex of requiredIndexes) {
+      const indexExists = runtimeDbDialect === 'mysql'
+        ? await hasMysqlIndex(requiredIndex.name)
+        : await hasPostgresIndex(requiredIndex.name);
+      if (indexExists) continue;
+      try {
+        if (runtimeDbDialect === 'mysql') {
+          if (!mysqlPool) return false;
+          await executeLegacyCompat(
+            (statement) => mysqlPool!.query(statement).then(() => undefined),
+            requiredIndex.mysqlSql,
+          );
+        } else {
+          if (!pgPool) return false;
+          await executeLegacyCompat(
+            (statement) => pgPool!.query(statement).then(() => undefined),
+            requiredIndex.postgresSql,
+          );
+        }
+      } catch (error) {
+        if (!isDuplicateIndexError(error)) {
+          console.warn(`[db] failed to ensure ${requiredIndex.name}`, error);
+        }
+      }
+    }
+    return true;
+  }
+
+  try {
+    if (runtimeDbDialect === 'mysql') {
+      if (!mysqlPool) return false;
+      for (const column of requiredColumns) {
+        const [rows] = await mysqlPool.query('SHOW COLUMNS FROM `proxy_logs` LIKE ?', [column.name]);
+        if (Array.isArray(rows) && rows.length > 0) continue;
+        await executeLegacyCompat(
+          (statement) => mysqlPool!.query(statement).then(() => undefined),
+          `ALTER TABLE \`proxy_logs\` ADD COLUMN \`${column.name}\` ${column.mysqlType}`,
+        );
+      }
+      for (const requiredIndex of requiredIndexes) {
+        if (await hasMysqlIndex(requiredIndex.name)) continue;
+        await executeLegacyCompat(
+          (statement) => mysqlPool!.query(statement).then(() => undefined),
+          requiredIndex.mysqlSql,
+        );
+      }
+    } else {
+      if (!pgPool) return false;
+      for (const column of requiredColumns) {
+        const result = await pgPool.query(
+          'SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2 LIMIT 1',
+          ['proxy_logs', column.name],
+        );
+        if (Number(result.rowCount || 0) > 0) continue;
+        await executeLegacyCompat(
+          (statement) => pgPool!.query(statement).then(() => undefined),
+          `ALTER TABLE "proxy_logs" ADD COLUMN "${column.name}" ${column.postgresType}`,
+        );
+      }
+      for (const requiredIndex of requiredIndexes) {
+        if (await hasPostgresIndex(requiredIndex.name)) continue;
+        await executeLegacyCompat(
+          (statement) => pgPool!.query(statement).then(() => undefined),
+          requiredIndex.postgresSql,
+        );
+      }
+    }
+    proxyLogClientColumnsAvailable = true;
+    return true;
+  } catch (error) {
+    if (isDuplicateColumnError(error) || isDuplicateIndexError(error)) {
+      proxyLogClientColumnsAvailable = await hasProxyLogClientColumns();
+      return proxyLogClientColumnsAvailable;
+    }
+    proxyLogClientColumnsAvailable = false;
+    console.warn('[db] failed to ensure proxy_logs client columns', error);
+    return false;
+  }
+}
+
 function resetSchemaCapabilityCache() {
   proxyLogBillingDetailsColumnAvailable = null;
   proxyLogDownstreamApiKeyIdColumnAvailable = null;
+  proxyLogClientColumnsAvailable = null;
 }
 
 async function sqliteProxyQuery(sqlText: string, params: unknown[], method: SqlMethod) {
@@ -995,6 +1219,7 @@ function initSqliteDb() {
   ensureRouteGroupingSchema();
   ensureDownstreamApiKeySchema();
   ensureProxyLogBillingDetailsSchema();
+  ensureProxyLogClientSchema();
   ensureProxyVideoTaskSchema();
   ensureProxyFileSchema();
 

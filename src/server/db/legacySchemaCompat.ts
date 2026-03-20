@@ -66,6 +66,10 @@ const LEGACY_COMPAT_COLUMNS = new Set([
   'downstream_api_keys.group_name',
   'downstream_api_keys.tags',
   'proxy_logs.billing_details',
+  'proxy_logs.client_family',
+  'proxy_logs.client_app_id',
+  'proxy_logs.client_app_name',
+  'proxy_logs.client_confidence',
   'proxy_logs.downstream_api_key_id',
 ]);
 
@@ -81,6 +85,8 @@ const LEGACY_COMPAT_INDEXES = new Set([
   'downstream_api_keys_name_idx',
   'downstream_api_keys_enabled_idx',
   'downstream_api_keys_expires_at_idx',
+  'proxy_logs_client_app_id_created_at_idx',
+  'proxy_logs_client_family_created_at_idx',
   'proxy_logs_downstream_api_key_created_at_idx',
   'route_group_sources_group_source_unique',
   'route_group_sources_source_route_id_idx',

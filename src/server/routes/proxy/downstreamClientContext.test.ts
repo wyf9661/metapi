@@ -130,4 +130,49 @@ describe('detectDownstreamClientContext', () => {
       clientKind: 'gemini_cli',
     });
   });
+
+  it('recognizes app fingerprints alongside a generic protocol family', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/chat/completions',
+      headers: {
+        'x-title': 'Cherry Studio',
+        'http-referer': 'https://cherry-ai.com',
+      },
+    })).toEqual({
+      clientKind: 'generic',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
+    });
+  });
+
+  it('keeps protocol family detection when an app fingerprint also matches', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/responses',
+      headers: {
+        originator: 'codex_cli_rs',
+        'x-title': 'Cherry Studio',
+        'http-referer': 'https://cherry-ai.com',
+      },
+    })).toEqual({
+      clientKind: 'codex',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
+    });
+  });
+
+  it('marks weak app-only matches as heuristic instead of upgrading protocol behavior', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/chat/completions',
+      headers: {
+        'user-agent': 'CherryStudio/1.2.3',
+      },
+    })).toEqual({
+      clientKind: 'generic',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'heuristic',
+    });
+  });
 });

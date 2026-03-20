@@ -157,6 +157,7 @@ export type ProxyTestJobResponse = {
 };
 
 export type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
+export type ProxyLogClientConfidence = 'exact' | 'heuristic' | 'unknown' | null;
 
 export type ProxyLogBillingDetails = {
   quotaType: number;
@@ -208,6 +209,10 @@ export type ProxyLogListItem = {
   downstreamKeyName?: string | null;
   downstreamKeyGroupName?: string | null;
   downstreamKeyTags?: string[];
+  clientFamily?: string | null;
+  clientAppId?: string | null;
+  clientAppName?: string | null;
+  clientConfidence?: ProxyLogClientConfidence;
   promptTokens?: number | null;
   completionTokens?: number | null;
   estimatedCost?: number | null;
@@ -233,9 +238,15 @@ export type ProxyLogsQuery = {
   offset?: number;
   status?: ProxyLogStatusFilter;
   search?: string;
+  client?: string;
   siteId?: number;
   from?: string;
   to?: string;
+};
+
+export type ProxyLogClientOption = {
+  value: string;
+  label: string;
 };
 
 export type ProxyLogsResponse = {
@@ -243,6 +254,7 @@ export type ProxyLogsResponse = {
   total: number;
   page: number;
   pageSize: number;
+  clientOptions: ProxyLogClientOption[];
   summary: ProxyLogsSummary;
 };
 
