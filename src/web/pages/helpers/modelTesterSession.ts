@@ -355,11 +355,22 @@ const toClaudeContentPart = (part: ConversationContentPart): Record<string, unkn
   if (part.type !== 'input_file' || typeof part.data !== 'string' || !part.data.trim()) return null;
   const parsed = parseDataUrl(part.data);
   if (!parsed) return null;
+  const mimeType = part.mimeType || parsed.mimeType || 'application/octet-stream';
+  if (mimeType.toLowerCase().startsWith('image/')) {
+    return {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: mimeType,
+        data: parsed.data,
+      },
+    };
+  }
   return {
     type: 'document',
     source: {
       type: 'base64',
-      media_type: part.mimeType || parsed.mimeType || 'application/octet-stream',
+      media_type: mimeType,
       data: parsed.data,
     },
     ...(typeof part.filename === 'string' && part.filename.trim()

@@ -34,7 +34,7 @@ describe('anthropicMessagesTransformer protocol contract', () => {
     });
   });
 
-  it('parses native document blocks into canonical file parts', () => {
+  it('preserves native image and document blocks when parsing into canonical envelopes', () => {
     const result = anthropicMessagesTransformer.parseRequest({
       model: 'claude-sonnet-4-5',
       max_tokens: 256,
@@ -42,15 +42,23 @@ describe('anthropicMessagesTransformer protocol contract', () => {
         {
           role: 'user',
           content: [
-            { type: 'text', text: 'summarize this pdf' },
+            { type: 'text', text: 'inspect both attachments' },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'QUFBQQ==',
+              },
+            },
             {
               type: 'document',
-              title: 'brief.pdf',
               source: {
                 type: 'base64',
                 media_type: 'application/pdf',
-                data: 'JVBERi0xLjQK',
+                data: 'JVBERi0x',
               },
+              title: 'brief.pdf',
             },
           ],
         },
@@ -58,20 +66,23 @@ describe('anthropicMessagesTransformer protocol contract', () => {
     });
 
     expect(result.error).toBeUndefined();
-    expect(result.value?.messages).toEqual([
-      {
-        role: 'user',
-        parts: [
-          { type: 'text', text: 'summarize this pdf' },
-          {
-            type: 'file',
-            filename: 'brief.pdf',
-            mimeType: 'application/pdf',
-            fileData: 'JVBERi0xLjQK',
-          },
-        ],
-      },
-    ]);
+    expect(result.value).toMatchObject({
+      messages: [
+        {
+          role: 'user',
+          parts: [
+            { type: 'text', text: 'inspect both attachments' },
+            { type: 'image', url: 'data:image/png;base64,QUFBQQ==' },
+            {
+              type: 'file',
+              fileData: 'JVBERi0x',
+              filename: 'brief.pdf',
+              mimeType: 'application/pdf',
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('builds native messages requests from canonical envelopes', () => {

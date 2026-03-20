@@ -535,6 +535,54 @@ describe('modelTesterSession', () => {
     });
   });
 
+  it('builds Claude conversation payloads with image blocks for inline image attachments', () => {
+    const payload = buildApiPayload(
+      [{
+        id: 'u1',
+        role: 'user',
+        content: 'describe this image',
+        createAt: 1,
+        parts: [
+          {
+            type: 'input_file',
+            filename: 'chart.png',
+            mimeType: 'image/png',
+            data: 'data:image/png;base64,QUFBQQ==',
+          },
+        ],
+      } as ChatMessage],
+      {
+        ...DEFAULT_INPUTS,
+        model: 'claude-opus-4-6',
+        protocol: 'claude',
+      },
+      DEFAULT_PARAMETER_ENABLED,
+    );
+
+    expect(payload.jsonBody).toEqual({
+      model: 'claude-opus-4-6',
+      stream: false,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'describe this image' },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'QUFBQQ==',
+              },
+            },
+          ],
+        },
+      ],
+      temperature: 0.7,
+    });
+  });
+
   it('builds Gemini conversation payloads with inlineData document parts for conversation files', () => {
     const payload = buildApiPayload(
       [{

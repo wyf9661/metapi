@@ -1,6 +1,7 @@
 import {
   decodeAnthropicReasoningSignature,
 } from './reasoningTransport.js';
+import { toOpenAiChatFileBlock } from './inputFile.js';
 import {
   consumeThinkTaggedText,
   createThinkTagParserState,
@@ -84,6 +85,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function asTrimmedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function pickFiniteNumber(value: unknown): number | undefined {
@@ -548,6 +553,111 @@ function collectToolCallsFromResponsesPayload(payload: Record<string, unknown>):
   return toolCalls;
 }
 
+function formatAnthropicBase64DataUrl(mimeType: string, data: string): string {
+  return `data:${mimeType};base64,${data}`;
+}
+
+function parseAnthropicBase64Source(
+  source: unknown,
+): { mimeType: string; data: string } | null {
+  if (!isRecord(source)) return null;
+  const sourceType = asTrimmedString(source.type).toLowerCase();
+  if (sourceType !== 'base64') return null;
+  const mimeType = (
+    asTrimmedString(source.media_type)
+    || asTrimmedString(source.mime_type)
+    || asTrimmedString(source.mediaType)
+    || asTrimmedString(source.mimeType)
+    || 'application/octet-stream'
+  );
+  const data = asTrimmedString(source.data);
+  if (!data) return null;
+  return { mimeType, data };
+}
+
+function parseAnthropicUrlSource(
+  source: unknown,
+): { url: string; mimeType: string | null } | null {
+  if (!isRecord(source)) return null;
+  const sourceType = asTrimmedString(source.type).toLowerCase();
+  if (sourceType !== 'url') return null;
+  const url = asTrimmedString(source.url);
+  if (!url) return null;
+  const mimeType = (
+    asTrimmedString(source.media_type)
+    || asTrimmedString(source.mime_type)
+    || asTrimmedString(source.mediaType)
+    || asTrimmedString(source.mimeType)
+    || null
+  );
+  return { url, mimeType };
+}
+
+function toOpenAiContentBlockFromClaudeBlock(
+  block: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const blockType = asTrimmedString(block.type).toLowerCase();
+
+  if (blockType === 'text') {
+    const text = asTrimmedString(block.text);
+    return text ? { type: 'text', text } : null;
+  }
+
+  if (blockType !== 'image' && blockType !== 'document') {
+    return null;
+  }
+
+  const title = asTrimmedString(block.title);
+  const base64Source = parseAnthropicBase64Source(block.source);
+  const urlSource = parseAnthropicUrlSource(block.source);
+  const mimeType = (base64Source?.mimeType || urlSource?.mimeType || '').toLowerCase();
+  const treatAsImage = blockType === 'image' || mimeType.startsWith('image/');
+
+  if (treatAsImage) {
+    const imageUrl = base64Source
+      ? formatAnthropicBase64DataUrl(base64Source.mimeType, base64Source.data)
+      : (urlSource?.url || '');
+    return imageUrl
+      ? {
+        type: 'image_url',
+        image_url: { url: imageUrl },
+      }
+      : null;
+  }
+
+  if (base64Source) {
+    return toOpenAiChatFileBlock({
+      fileData: base64Source.data,
+      filename: title || undefined,
+      mimeType: base64Source.mimeType,
+    });
+  }
+
+  if (urlSource) {
+    return toOpenAiChatFileBlock({
+      fileUrl: urlSource.url,
+      filename: title || undefined,
+      mimeType: urlSource.mimeType,
+    });
+  }
+
+  return null;
+}
+
+function collapseOpenAiContentBlocks(
+  blocks: Array<Record<string, unknown>>,
+): string | Array<Record<string, unknown>> | null {
+  if (blocks.length <= 0) return null;
+  const textOnly = blocks.every((block) => block.type === 'text' && typeof block.text === 'string');
+  if (!textOnly) return blocks;
+
+  const text = blocks
+    .map((block) => (typeof block.text === 'string' ? block.text : ''))
+    .join('\n\n')
+    .trim();
+  return text || null;
+}
+
 function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>): {
   model: string;
   stream: boolean;
@@ -609,10 +719,10 @@ function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>): {
     const toolCalls: Array<Record<string, unknown>> = [];
 
     const flushContentAsMessage = () => {
-      const contentValue = buildOpenAiMessageContent(contentBlocks);
+      const contentPayload = collapseOpenAiContentBlocks(contentBlocks);
       contentBlocks.length = 0;
-      if (contentValue === undefined || contentValue === '') return;
-      messages.push({ role: mappedRole, content: contentValue });
+      if (contentPayload === null) return;
+      messages.push({ role: mappedRole, content: contentPayload });
     };
 
     for (const block of content) {
@@ -648,22 +758,33 @@ function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>): {
         continue;
       }
 
-      const contentBlock = convertClaudeContentBlockToOpenAi(block);
-      if (contentBlock) contentBlocks.push(contentBlock);
+      const contentBlock = toOpenAiContentBlockFromClaudeBlock(block);
+      if (contentBlock) {
+        contentBlocks.push(contentBlock);
+        continue;
+      }
+
+      const text = parseClaudeMessageContent(block);
+      if (text) {
+        contentBlocks.push({
+          type: 'text',
+          text,
+        });
+      }
     }
 
-    const contentValue = buildOpenAiMessageContent(contentBlocks);
+    const merged = collapseOpenAiContentBlocks(contentBlocks);
     if (toolCalls.length > 0) {
       const assistantMessage: Record<string, unknown> = {
         role: 'assistant',
         tool_calls: toolCalls,
       };
-      assistantMessage.content = contentValue ?? '';
+      assistantMessage.content = merged || '';
       messages.push(assistantMessage);
-    } else if (contentValue !== undefined && contentValue !== '') {
+    } else if (merged !== null) {
       messages.push({
         role: mappedRole,
-        content: contentValue,
+        content: merged,
       });
     }
   }
