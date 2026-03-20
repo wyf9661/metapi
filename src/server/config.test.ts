@@ -36,6 +36,15 @@ describe('buildConfig', () => {
     const config = buildConfig({});
 
     expect(config.telegramApiBaseUrl).toBe('https://api.telegram.org');
+    expect(config.telegramMessageThreadId).toBe('');
+  });
+
+  it('accepts telegram message thread id from environment', () => {
+    const config = buildConfig({
+      TELEGRAM_MESSAGE_THREAD_ID: '77',
+    });
+
+    expect(config.telegramMessageThreadId).toBe('77');
   });
 
   it('ships CLI-aligned OAuth defaults', () => {

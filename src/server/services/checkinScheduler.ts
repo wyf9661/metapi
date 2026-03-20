@@ -9,13 +9,18 @@ import { sendNotification } from './notifyService.js';
 import { buildDailySummaryNotification, collectDailySummaryMetrics } from './dailySummaryService.js';
 import { cleanupConfiguredLogs, normalizeLogCleanupRetentionDays } from './logCleanupService.js';
 
+export type CheckinScheduleMode = 'cron' | 'interval';
+
 let checkinTask: cron.ScheduledTask | null = null;
+let checkinIntervalTimer: ReturnType<typeof setInterval> | null = null;
 let balanceTask: cron.ScheduledTask | null = null;
 let dailySummaryTask: cron.ScheduledTask | null = null;
 let logCleanupTask: cron.ScheduledTask | null = null;
+const intervalAttemptByAccount = new Map<number, number>();
 
 const DAILY_SUMMARY_DEFAULT_CRON = '58 23 * * *';
 const LOG_CLEANUP_DEFAULT_CRON = '0 6 * * *';
+const CHECKIN_INTERVAL_POLL_MS = 60_000;
 
 async function resolveJsonSetting<T>(
   settingKey: string,
@@ -54,7 +59,7 @@ function createCheckinTask(cronExpr: string) {
   return cron.schedule(cronExpr, async () => {
     console.log(`[Scheduler] Running check-in at ${new Date().toISOString()}`);
     try {
-      const results = await checkinAll();
+      const results = await checkinAll({ scheduleMode: 'cron' });
       const success = results.filter((r) => r.result.success).length;
       const failed = results.length - success;
       console.log(`[Scheduler] Check-in complete: ${success} success, ${failed} failed`);
@@ -62,6 +67,94 @@ function createCheckinTask(cronExpr: string) {
       console.error('[Scheduler] Check-in error:', err);
     }
   });
+}
+
+type IntervalCheckinCandidate = {
+  id: number;
+  lastCheckinAt?: string | null;
+};
+
+export function selectDueIntervalCheckinAccountIds(
+  rows: IntervalCheckinCandidate[],
+  intervalHours: number,
+  now = new Date(),
+  attemptState = intervalAttemptByAccount,
+) {
+  const nowMs = now.getTime();
+  const intervalMs = Math.max(1, intervalHours) * 60 * 60 * 1000;
+
+  return rows
+    .filter((row) => {
+      const lastCheckinMs = row.lastCheckinAt ? Date.parse(row.lastCheckinAt) : Number.NaN;
+      const lastAttemptMs = attemptState.get(row.id);
+      if (Number.isFinite(lastCheckinMs)) {
+        if (nowMs - lastCheckinMs < intervalMs) return false;
+        if (typeof lastAttemptMs === 'number' && lastAttemptMs >= lastCheckinMs && nowMs - lastAttemptMs < intervalMs) {
+          return false;
+        }
+        return true;
+      }
+      if (typeof lastAttemptMs === 'number' && nowMs - lastAttemptMs < intervalMs) return false;
+      return true;
+    })
+    .map((row) => row.id);
+}
+
+async function runIntervalCheckinPass(now = new Date()) {
+  const rows = await db
+    .select()
+    .from(schema.accounts)
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .all();
+
+  const dueAccountIds = selectDueIntervalCheckinAccountIds(
+    rows
+      .filter((row: any) => row.accounts?.checkinEnabled === true && row.accounts?.status === 'active' && row.sites?.status !== 'disabled')
+      .map((row: any) => ({
+        id: row.accounts.id,
+        lastCheckinAt: row.accounts.lastCheckinAt,
+      })),
+    config.checkinIntervalHours,
+    now,
+  );
+
+  if (dueAccountIds.length === 0) return;
+
+  try {
+    const results = await checkinAll({
+      accountIds: dueAccountIds,
+      scheduleMode: 'interval',
+    });
+    const nowMs = now.getTime();
+    for (const item of results) {
+      intervalAttemptByAccount.set(item.accountId, nowMs);
+    }
+    const success = results.filter((r) => r.result.success).length;
+    const failed = results.length - success;
+    console.log(`[Scheduler] Interval check-in complete: ${success} success, ${failed} failed`);
+  } catch (err) {
+    console.error('[Scheduler] Interval check-in error:', err);
+  }
+}
+
+function stopCheckinSchedule() {
+  checkinTask?.stop();
+  checkinTask = null;
+  if (checkinIntervalTimer) {
+    clearInterval(checkinIntervalTimer);
+    checkinIntervalTimer = null;
+  }
+}
+
+function startCheckinSchedule() {
+  stopCheckinSchedule();
+  if (config.checkinScheduleMode === 'interval') {
+    checkinIntervalTimer = setInterval(() => {
+      void runIntervalCheckinPass();
+    }, CHECKIN_INTERVAL_POLL_MS);
+    return;
+  }
+  checkinTask = createCheckinTask(config.checkinCron);
 }
 
 function createBalanceTask(cronExpr: string) {
@@ -119,6 +212,15 @@ function createLogCleanupTask(cronExpr: string) {
 
 export async function startScheduler() {
   const activeCheckinCron = await resolveCronSetting('checkin_cron', config.checkinCron);
+  const activeCheckinScheduleMode = await resolveJsonSetting<CheckinScheduleMode>(
+    'checkin_schedule_mode',
+    (value): value is CheckinScheduleMode => value === 'cron' || value === 'interval',
+    config.checkinScheduleMode as CheckinScheduleMode,
+  );
+  const activeCheckinIntervalHours = await resolvePositiveIntegerSetting(
+    'checkin_interval_hours',
+    config.checkinIntervalHours,
+  );
   const activeBalanceCron = await resolveCronSetting('balance_refresh_cron', config.balanceRefreshCron);
   const activeDailySummaryCron = await resolveCronSetting('daily_summary_cron', DAILY_SUMMARY_DEFAULT_CRON);
   const activeLogCleanupCron = await resolveCronSetting('log_cleanup_cron', config.logCleanupCron || LOG_CLEANUP_DEFAULT_CRON);
@@ -135,22 +237,24 @@ export async function startScheduler() {
     normalizeLogCleanupRetentionDays(config.logCleanupRetentionDays),
   );
   config.checkinCron = activeCheckinCron;
+  config.checkinScheduleMode = activeCheckinScheduleMode;
+  config.checkinIntervalHours = Math.min(24, Math.max(1, activeCheckinIntervalHours));
   config.balanceRefreshCron = activeBalanceCron;
   config.logCleanupCron = activeLogCleanupCron;
   config.logCleanupUsageLogsEnabled = activeLogCleanupUsageLogsEnabled;
   config.logCleanupProgramLogsEnabled = activeLogCleanupProgramLogsEnabled;
   config.logCleanupRetentionDays = activeLogCleanupRetentionDays;
 
-  checkinTask?.stop();
+  stopCheckinSchedule();
   balanceTask?.stop();
   dailySummaryTask?.stop();
   logCleanupTask?.stop();
-  checkinTask = createCheckinTask(activeCheckinCron);
+  startCheckinSchedule();
   balanceTask = createBalanceTask(activeBalanceCron);
   dailySummaryTask = createDailySummaryTask(activeDailySummaryCron);
   logCleanupTask = createLogCleanupTask(activeLogCleanupCron);
 
-  console.log(`[Scheduler] Check-in cron: ${activeCheckinCron}`);
+  console.log(`[Scheduler] Check-in schedule: ${config.checkinScheduleMode} (${config.checkinScheduleMode === 'cron' ? activeCheckinCron : `${config.checkinIntervalHours}h`})`);
   console.log(`[Scheduler] Balance refresh cron: ${activeBalanceCron}`);
   console.log(`[Scheduler] Daily summary cron: ${activeDailySummaryCron}`);
   console.log(
@@ -159,10 +263,35 @@ export async function startScheduler() {
 }
 
 export function updateCheckinCron(cronExpr: string) {
-  if (!cron.validate(cronExpr)) throw new Error(`Invalid cron: ${cronExpr}`);
-  config.checkinCron = cronExpr;
-  checkinTask?.stop();
-  checkinTask = createCheckinTask(cronExpr);
+  updateCheckinSchedule({
+    mode: 'cron',
+    cronExpr,
+    intervalHours: config.checkinIntervalHours,
+  });
+}
+
+export function updateCheckinSchedule(input: {
+  mode: CheckinScheduleMode;
+  cronExpr?: string;
+  intervalHours?: number;
+}) {
+  const nextMode = input.mode;
+  if (nextMode !== 'cron' && nextMode !== 'interval') {
+    throw new Error(`Invalid checkin schedule mode: ${String(nextMode)}`);
+  }
+
+  const nextCronExpr = input.cronExpr ?? config.checkinCron;
+  if (!cron.validate(nextCronExpr)) throw new Error(`Invalid cron: ${nextCronExpr}`);
+
+  const nextIntervalHours = input.intervalHours ?? config.checkinIntervalHours;
+  if (!Number.isFinite(nextIntervalHours) || nextIntervalHours < 1 || nextIntervalHours > 24) {
+    throw new Error(`Invalid interval hours: ${String(nextIntervalHours)}`);
+  }
+
+  config.checkinScheduleMode = nextMode;
+  config.checkinCron = nextCronExpr;
+  config.checkinIntervalHours = Math.trunc(nextIntervalHours);
+  startCheckinSchedule();
 }
 
 export function updateBalanceRefreshCron(cronExpr: string) {
@@ -190,4 +319,15 @@ export function updateLogCleanupSettings(input: {
 
   logCleanupTask?.stop();
   logCleanupTask = createLogCleanupTask(cronExpr);
+}
+
+export function __resetCheckinSchedulerForTests() {
+  stopCheckinSchedule();
+  balanceTask?.stop();
+  dailySummaryTask?.stop();
+  logCleanupTask?.stop();
+  balanceTask = null;
+  dailySummaryTask = null;
+  logCleanupTask = null;
+  intervalAttemptByAccount.clear();
 }

@@ -49,6 +49,7 @@ describe('notifyService', () => {
     (config as any).telegramChatId = '';
     (config as any).telegramUseSystemProxy = false;
     config.systemProxyUrl = '';
+    (config as any).telegramMessageThreadId = '';
     config.smtpEnabled = true;
     config.smtpHost = 'smtp.example.com';
     config.smtpPort = 465;
@@ -181,11 +182,12 @@ describe('notifyService', () => {
     expect(payload?.text || '').toContain('UTC Time:');
   });
 
-  it('sends telegram message when telegram channel is enabled', async () => {
+  it('sends telegram message without topic when telegram thread id is empty', async () => {
     const { config } = await import('../config.js');
     (config as any).telegramEnabled = true;
     (config as any).telegramBotToken = '123456:telegram-token';
     (config as any).telegramChatId = '-1001234567890';
+    (config as any).telegramMessageThreadId = '';
     config.smtpEnabled = false;
 
     fetchMock.mockResolvedValue({
@@ -206,11 +208,33 @@ describe('notifyService', () => {
     );
 
     const rawBody = fetchMock.mock.calls[0]?.[1] as { body?: string };
-    const payload = JSON.parse(rawBody?.body || '{}') as { chat_id?: string; text?: string };
+    const payload = JSON.parse(rawBody?.body || '{}') as { chat_id?: string; text?: string; message_thread_id?: number };
     expect(payload.chat_id).toBe('-1001234567890');
+    expect(payload.message_thread_id).toBeUndefined();
     expect(payload.text || '').toContain('Level: warning');
     expect(payload.text || '').toContain('Local Time:');
     expect(payload.text || '').toContain('UTC Time:');
+  });
+
+  it('sends telegram topic id when telegram thread id is configured', async () => {
+    const { config } = await import('../config.js');
+    (config as any).telegramEnabled = true;
+    (config as any).telegramBotToken = '123456:telegram-token';
+    (config as any).telegramChatId = '-1001234567890';
+    (config as any).telegramMessageThreadId = '77';
+    config.smtpEnabled = false;
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('测试通知', 'message', 'warning', { bypassThrottle: true, throwOnFailure: true });
+
+    const rawBody = fetchMock.mock.calls[0]?.[1] as { body?: string };
+    const payload = JSON.parse(rawBody?.body || '{}') as { message_thread_id?: number };
+    expect(payload.message_thread_id).toBe(77);
   });
 
   it('uses TELEGRAM_API_BASE_URL when configured', async () => {

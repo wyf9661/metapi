@@ -162,6 +162,16 @@ function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const checkinCron = parseSettingFromMap<string>(settingsMap, 'checkin_cron');
   if (typeof checkinCron === 'string' && checkinCron) config.checkinCron = checkinCron;
 
+  const checkinScheduleMode = parseSettingFromMap<string>(settingsMap, 'checkin_schedule_mode');
+  if (checkinScheduleMode === 'cron' || checkinScheduleMode === 'interval') {
+    config.checkinScheduleMode = checkinScheduleMode;
+  }
+
+  const checkinIntervalHours = parseSettingFromMap<number>(settingsMap, 'checkin_interval_hours');
+  if (typeof checkinIntervalHours === 'number' && Number.isFinite(checkinIntervalHours) && checkinIntervalHours >= 1 && checkinIntervalHours <= 24) {
+    config.checkinIntervalHours = Math.trunc(checkinIntervalHours);
+  }
+
   const balanceRefreshCron = parseSettingFromMap<string>(settingsMap, 'balance_refresh_cron');
   if (typeof balanceRefreshCron === 'string' && balanceRefreshCron) config.balanceRefreshCron = balanceRefreshCron;
 
@@ -218,6 +228,12 @@ function applyRuntimeSettings(settingsMap: Map<string, string>) {
 
   const telegramChatId = parseSettingFromMap<string>(settingsMap, 'telegram_chat_id');
   if (typeof telegramChatId === 'string') config.telegramChatId = telegramChatId;
+
+  const telegramUseSystemProxy = parseSettingFromMap<boolean>(settingsMap, 'telegram_use_system_proxy');
+  if (typeof telegramUseSystemProxy === 'boolean') config.telegramUseSystemProxy = telegramUseSystemProxy;
+
+  const telegramMessageThreadId = parseSettingFromMap<string>(settingsMap, 'telegram_message_thread_id');
+  if (typeof telegramMessageThreadId === 'string') config.telegramMessageThreadId = telegramMessageThreadId;
 
   const smtpEnabled = parseSettingFromMap<boolean>(settingsMap, 'smtp_enabled');
   if (typeof smtpEnabled === 'boolean') config.smtpEnabled = smtpEnabled;

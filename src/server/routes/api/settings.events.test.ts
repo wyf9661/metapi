@@ -44,6 +44,8 @@ describe('settings and auth events', () => {
     config.proxyToken = 'sk-old-proxy-token-123';
     config.systemProxyUrl = '';
     config.checkinCron = '0 8 * * *';
+    (config as any).checkinScheduleMode = 'cron';
+    (config as any).checkinIntervalHours = 6;
     config.balanceRefreshCron = '0 * * * *';
     config.logCleanupConfigured = false;
     config.logCleanupCron = '0 6 * * *';
@@ -56,6 +58,7 @@ describe('settings and auth events', () => {
     (config as any).telegramBotToken = '';
     (config as any).telegramChatId = '';
     (config as any).telegramUseSystemProxy = false;
+    (config as any).telegramMessageThreadId = '';
   });
 
   afterAll(async () => {
@@ -84,6 +87,28 @@ describe('settings and auth events', () => {
     });
     expect(events[0].message || '').toContain('代理访问 Token');
     expect(events[0].message || '').toContain('签到 Cron');
+  });
+
+  it('persists and returns checkin interval mode from runtime settings', async () => {
+    const updateResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/runtime',
+      payload: {
+        checkinScheduleMode: 'interval',
+        checkinIntervalHours: 8,
+        checkinCron: '0 8 * * *',
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    const updated = updateResponse.json() as { checkinScheduleMode?: string; checkinIntervalHours?: number };
+    expect(updated.checkinScheduleMode).toBe('interval');
+    expect(updated.checkinIntervalHours).toBe(8);
+
+    const savedMode = await db.select().from(schema.settings).where(eq(schema.settings.key, 'checkin_schedule_mode')).get();
+    const savedInterval = await db.select().from(schema.settings).where(eq(schema.settings.key, 'checkin_interval_hours')).get();
+    expect(savedMode?.value).toBe(JSON.stringify('interval'));
+    expect(savedInterval?.value).toBe(JSON.stringify(8));
   });
 
   it('returns current recognized admin IP in runtime settings response', async () => {
@@ -201,6 +226,32 @@ describe('settings and auth events', () => {
     expect(getResponse.statusCode).toBe(200);
     const runtime = getResponse.json() as { telegramApiBaseUrl?: string };
     expect(runtime.telegramApiBaseUrl).toBe('https://tg-proxy.example.com/custom');
+  });
+
+  it('persists and returns telegram message thread id from runtime settings', async () => {
+    const updateResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/runtime',
+      payload: {
+        telegramMessageThreadId: '77',
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    const updated = updateResponse.json() as { telegramMessageThreadId?: string };
+    expect(updated.telegramMessageThreadId).toBe('77');
+    expect((config as any).telegramMessageThreadId).toBe('77');
+
+    const saved = await db.select().from(schema.settings).where(eq(schema.settings.key, 'telegram_message_thread_id')).get();
+    expect(saved?.value).toBe(JSON.stringify('77'));
+
+    const getResponse = await app.inject({
+      method: 'GET',
+      url: '/api/settings/runtime',
+    });
+    expect(getResponse.statusCode).toBe(200);
+    const runtime = getResponse.json() as { telegramMessageThreadId?: string };
+    expect(runtime.telegramMessageThreadId).toBe('77');
   });
 
   it('rejects invalid telegram api base url when telegram is enabled', async () => {

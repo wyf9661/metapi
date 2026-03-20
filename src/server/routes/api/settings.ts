@@ -4,7 +4,7 @@ import { config } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
-import { updateBalanceRefreshCron, updateCheckinCron, updateLogCleanupSettings } from '../../services/checkinScheduler.js';
+import { updateBalanceRefreshCron, updateCheckinSchedule, updateLogCleanupSettings } from '../../services/checkinScheduler.js';
 import { sendNotification } from '../../services/notifyService.js';
 import { exportBackup, importBackup, type BackupExportType } from '../../services/backupService.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
@@ -28,6 +28,8 @@ interface RuntimeSettingsBody {
   proxyToken?: string;
   systemProxyUrl?: string;
   checkinCron?: string;
+  checkinScheduleMode?: 'cron' | 'interval';
+  checkinIntervalHours?: number;
   balanceRefreshCron?: string;
   logCleanupCron?: string;
   logCleanupUsageLogsEnabled?: boolean;
@@ -44,6 +46,7 @@ interface RuntimeSettingsBody {
   telegramBotToken?: string;
   telegramChatId?: string;
   telegramUseSystemProxy?: boolean;
+  telegramMessageThreadId?: string;
   smtpEnabled?: boolean;
   smtpHost?: string;
   smtpPort?: number;
@@ -172,12 +175,46 @@ function normalizeTelegramApiBaseUrl(raw: string): string {
   return String(raw || '').trim().replace(/\/+$/, '');
 }
 
+function normalizeTelegramMessageThreadId(raw: unknown): string {
+  return String(raw || '').trim();
+}
+
+function isValidTelegramMessageThreadId(raw: string): boolean {
+  return /^[1-9]\d*$/.test(raw);
+}
+
 function applyImportedSettingToRuntime(key: string, value: unknown) {
   switch (key) {
     case 'checkin_cron': {
       if (typeof value !== 'string' || !value || !cron.validate(value)) return;
       config.checkinCron = value;
-      updateCheckinCron(value);
+      updateCheckinSchedule({
+        mode: config.checkinScheduleMode,
+        cronExpr: config.checkinCron,
+        intervalHours: config.checkinIntervalHours,
+      });
+      return;
+    }
+    case 'checkin_schedule_mode': {
+      if (value !== 'cron' && value !== 'interval') return;
+      const nextMode: 'cron' | 'interval' = value;
+      config.checkinScheduleMode = nextMode;
+      updateCheckinSchedule({
+        mode: config.checkinScheduleMode,
+        cronExpr: config.checkinCron,
+        intervalHours: config.checkinIntervalHours,
+      });
+      return;
+    }
+    case 'checkin_interval_hours': {
+      const intervalHours = Number(value);
+      if (!Number.isFinite(intervalHours) || intervalHours < 1 || intervalHours > 24) return;
+      config.checkinIntervalHours = Math.trunc(intervalHours);
+      updateCheckinSchedule({
+        mode: config.checkinScheduleMode,
+        cronExpr: config.checkinCron,
+        intervalHours: config.checkinIntervalHours,
+      });
       return;
     }
     case 'balance_refresh_cron': {
@@ -293,6 +330,11 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.telegramUseSystemProxy = !!value;
       return;
     }
+    case 'telegram_message_thread_id': {
+      if (typeof value !== 'string') return;
+      config.telegramMessageThreadId = value.trim();
+      return;
+    }
     case 'smtp_enabled': {
       config.smtpEnabled = !!value;
       return;
@@ -368,6 +410,8 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
 function getRuntimeSettingsResponse(currentAdminIp = '') {
   return {
     checkinCron: config.checkinCron,
+    checkinScheduleMode: config.checkinScheduleMode,
+    checkinIntervalHours: config.checkinIntervalHours,
     balanceRefreshCron: config.balanceRefreshCron,
     logCleanupCron: config.logCleanupCron,
     logCleanupUsageLogsEnabled: config.logCleanupUsageLogsEnabled,
@@ -386,6 +430,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     telegramBotTokenMasked: maskSecret(config.telegramBotToken),
     telegramChatId: config.telegramChatId,
     telegramUseSystemProxy: config.telegramUseSystemProxy,
+    telegramMessageThreadId: config.telegramMessageThreadId,
     smtpEnabled: config.smtpEnabled,
     smtpHost: config.smtpHost,
     smtpPort: config.smtpPort,
@@ -519,7 +564,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       || body.telegramApiBaseUrl !== undefined
       || body.telegramBotToken !== undefined
       || body.telegramChatId !== undefined
-      || body.telegramUseSystemProxy !== undefined;
+      || body.telegramUseSystemProxy !== undefined
+      || body.telegramMessageThreadId !== undefined;
     const nextTelegramEnabled = body.telegramEnabled !== undefined
       ? !!body.telegramEnabled
       : config.telegramEnabled;
@@ -532,6 +578,9 @@ export async function settingsRoutes(app: FastifyInstance) {
     const nextTelegramChatId = body.telegramChatId !== undefined
       ? String(body.telegramChatId || '').trim()
       : config.telegramChatId;
+    const nextTelegramMessageThreadId = body.telegramMessageThreadId !== undefined
+      ? normalizeTelegramMessageThreadId(body.telegramMessageThreadId)
+      : config.telegramMessageThreadId;
     if (telegramTouched && nextTelegramEnabled) {
       if (!nextTelegramBotToken) {
         return reply.code(400).send({ success: false, message: 'Telegram Bot Token 不能为空（启用 Telegram 时）' });
@@ -542,12 +591,21 @@ export async function settingsRoutes(app: FastifyInstance) {
       if (!nextTelegramChatId) {
         return reply.code(400).send({ success: false, message: 'Telegram Chat ID 不能为空（启用 Telegram 时）' });
       }
+      if (nextTelegramMessageThreadId && !isValidTelegramMessageThreadId(nextTelegramMessageThreadId)) {
+        return reply.code(400).send({ success: false, message: 'Telegram Topic ID 格式无效，需要正整数' });
+      }
       if (nextTelegramApiBaseUrl && !isValidHttpUrl(nextTelegramApiBaseUrl)) {
         return reply.code(400).send({ success: false, message: 'Telegram API Base URL 无效，请填写 http/https 地址' });
       }
     } else if (body.telegramApiBaseUrl !== undefined && nextTelegramApiBaseUrl && !isValidHttpUrl(nextTelegramApiBaseUrl)) {
       return reply.code(400).send({ success: false, message: 'Telegram API Base URL 无效，请填写 http/https 地址' });
+    } else if (body.telegramMessageThreadId !== undefined && nextTelegramMessageThreadId && !isValidTelegramMessageThreadId(nextTelegramMessageThreadId)) {
+      return reply.code(400).send({ success: false, message: 'Telegram Topic ID 格式无效，需要正整数' });
     }
+
+    const checkinScheduleTouched = body.checkinCron !== undefined
+      || body.checkinScheduleMode !== undefined
+      || body.checkinIntervalHours !== undefined;
 
     if (body.checkinCron !== undefined) {
       if (!cron.validate(body.checkinCron)) {
@@ -556,8 +614,50 @@ export async function settingsRoutes(app: FastifyInstance) {
       if (body.checkinCron !== config.checkinCron) {
         changedLabels.push(`签到 Cron（${config.checkinCron} -> ${body.checkinCron}）`);
       }
-      updateCheckinCron(body.checkinCron);
-      upsertSetting('checkin_cron', body.checkinCron);
+    }
+
+    if (body.checkinScheduleMode !== undefined) {
+      if (body.checkinScheduleMode !== 'cron' && body.checkinScheduleMode !== 'interval') {
+        return reply.code(400).send({ success: false, message: '签到方式无效：仅支持 cron 或 interval' });
+      }
+      if (body.checkinScheduleMode !== config.checkinScheduleMode) {
+        changedLabels.push('签到方式');
+      }
+      config.checkinScheduleMode = body.checkinScheduleMode;
+    }
+
+    if (body.checkinIntervalHours !== undefined) {
+      const intervalHours = Number(body.checkinIntervalHours);
+      if (!Number.isFinite(intervalHours) || intervalHours < 1 || intervalHours > 24) {
+        return reply.code(400).send({ success: false, message: '签到间隔必须是 1 到 24 的整数小时' });
+      }
+      const nextIntervalHours = Math.trunc(intervalHours);
+      if (nextIntervalHours !== config.checkinIntervalHours) {
+        changedLabels.push(`签到间隔（${config.checkinIntervalHours}h -> ${nextIntervalHours}h）`);
+      }
+      config.checkinIntervalHours = nextIntervalHours;
+    }
+
+    if (checkinScheduleTouched) {
+      const nextCheckinCron = body.checkinCron !== undefined ? body.checkinCron : config.checkinCron;
+      const nextCheckinScheduleMode: 'cron' | 'interval' = body.checkinScheduleMode !== undefined
+        ? body.checkinScheduleMode
+        : config.checkinScheduleMode;
+      const nextCheckinIntervalHours = body.checkinIntervalHours !== undefined
+        ? Math.trunc(Number(body.checkinIntervalHours))
+        : config.checkinIntervalHours;
+
+      updateCheckinSchedule({
+        mode: nextCheckinScheduleMode,
+        cronExpr: nextCheckinCron,
+        intervalHours: nextCheckinIntervalHours,
+      });
+      config.checkinCron = nextCheckinCron;
+      config.checkinScheduleMode = nextCheckinScheduleMode;
+      config.checkinIntervalHours = nextCheckinIntervalHours;
+      upsertSetting('checkin_cron', config.checkinCron);
+      upsertSetting('checkin_schedule_mode', config.checkinScheduleMode);
+      upsertSetting('checkin_interval_hours', config.checkinIntervalHours);
     }
 
     if (body.balanceRefreshCron !== undefined) {
@@ -781,6 +881,15 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.telegramUseSystemProxy = !!body.telegramUseSystemProxy;
       upsertSetting('telegram_use_system_proxy', config.telegramUseSystemProxy);
+    }
+
+    if (body.telegramMessageThreadId !== undefined) {
+      const nextTelegramMessageThreadId = normalizeTelegramMessageThreadId(body.telegramMessageThreadId);
+      if (nextTelegramMessageThreadId !== config.telegramMessageThreadId) {
+        changedLabels.push('Telegram Topic ID');
+      }
+      config.telegramMessageThreadId = nextTelegramMessageThreadId;
+      upsertSetting('telegram_message_thread_id', config.telegramMessageThreadId);
     }
 
     if (body.smtpEnabled !== undefined) {

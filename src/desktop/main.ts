@@ -21,7 +21,7 @@ import {
   resolveDesktopServerWorkingDir,
   waitForServerReady,
 } from './runtime.js';
-import { getDesktopRuntimeIconPath } from './iconAssets.js';
+import { getDesktopRuntimeIconPath, getDesktopTrayIconPath } from './iconAssets.js';
 
 const { autoUpdater } = electronUpdater;
 
@@ -52,7 +52,7 @@ function getServerEntryPath() {
 }
 
 function getTrayIconPath() {
-  return getDesktopRuntimeIconPath(app.getAppPath());
+  return getDesktopTrayIconPath(app.getAppPath(), process.platform);
 }
 
 function getWindowIconPath() {
@@ -121,7 +121,15 @@ function buildTrayMenu() {
 
 function setupTray() {
   if (tray) return;
-  const trayImage = nativeImage.createFromPath(getTrayIconPath());
+  let trayImage = nativeImage.createFromPath(getTrayIconPath());
+  if (process.platform === 'darwin' && !trayImage.isEmpty()) {
+    trayImage = trayImage.resize({
+      width: 18,
+      height: 18,
+      quality: 'best',
+    });
+    trayImage.setTemplateImage(true);
+  }
   tray = new Tray(trayImage);
   tray.setToolTip('Metapi');
   tray.setContextMenu(buildTrayMenu());
