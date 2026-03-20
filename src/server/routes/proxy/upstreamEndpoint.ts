@@ -714,13 +714,35 @@ function inferSuggestedEndpointFromError(errorText?: string | null): UpstreamEnd
 
 function shouldBlockEndpointByError(status: number, errorText?: string | null): boolean {
   if (isEndpointDispatchDeniedError(status, errorText)) return true;
-  if (isEndpointDowngradeError(status, errorText)) return true;
+  if (status === 404 || status === 405 || status === 415 || status === 501) return true;
+  if (isUnsupportedMediaTypeError(status, errorText)) return true;
+
   const text = (errorText || '').toLowerCase();
   return (
-    text.includes('unsupported legacy protocol')
+    text.includes('convert_request_failed')
+    || text.includes('endpoint_not_found')
+    || text.includes('unknown_endpoint')
+    || text.includes('unsupported_endpoint')
+    || text.includes('unsupported_path')
+    || text.includes('not_found_error')
+    || text.includes('unsupported legacy protocol')
     || text.includes('please use /v1/')
     || text.includes('does not allow /v1/')
+    || text.includes('unknown endpoint')
+    || text.includes('unsupported endpoint')
+    || text.includes('unsupported path')
+    || text.includes('unrecognized request url')
+    || text.includes('no route matched')
+    || text.includes('does not exist')
   );
+}
+
+function shouldRememberSuccessfulEndpoint(input: {
+  endpoint: UpstreamEndpoint;
+  downstreamFormat: EndpointPreference;
+}): boolean {
+  if (input.downstreamFormat !== 'responses') return true;
+  return input.endpoint === 'responses';
 }
 
 export function resetUpstreamEndpointRuntimeState(): void {
@@ -739,6 +761,8 @@ export function recordUpstreamEndpointSuccess(input: {
     wantsNativeResponsesReasoning?: boolean;
   };
 }): void {
+  if (!shouldRememberSuccessfulEndpoint(input)) return;
+
   const nowMs = Date.now();
   const key = buildEndpointRuntimeStateKey({
     siteId: input.siteId,

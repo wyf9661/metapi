@@ -2032,6 +2032,87 @@ describe('chat proxy stream behavior', () => {
     expect(targetUrl).toContain('/v1/messages');
   });
 
+  it('does not stick generic /v1/responses traffic to /v1/messages after a fallback success', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'generic-site', url: 'https://upstream.example.com', platform: 'new-api' },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'upstream-gpt',
+    });
+
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'Gateway time-out', type: 'upstream_error' },
+      }), {
+        status: 504,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'Bad gateway', type: 'upstream_error' },
+      }), {
+        status: 502,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'msg_fallback_1',
+        type: 'message',
+        model: 'upstream-gpt',
+        content: [{ type: 'text', text: 'ok via messages fallback' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_recovered_1',
+        object: 'response',
+        model: 'upstream-gpt',
+        status: 'completed',
+        output_text: 'ok via recovered responses',
+        usage: { input_tokens: 6, output_tokens: 2, total_tokens: 8 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const firstResponse = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.4',
+        input: 'hello',
+      },
+    });
+
+    expect(firstResponse.statusCode).toBe(200);
+    expect(firstResponse.json().output_text).toContain('ok via messages fallback');
+
+    const secondResponse = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.4',
+        input: 'hello again',
+      },
+    });
+
+    expect(secondResponse.statusCode).toBe(200);
+    expect(secondResponse.json().output_text).toContain('ok via recovered responses');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+
+    const [firstUrl] = fetchMock.mock.calls[0] as [string, any];
+    const [secondUrl] = fetchMock.mock.calls[1] as [string, any];
+    const [thirdUrl] = fetchMock.mock.calls[2] as [string, any];
+    const [fourthUrl] = fetchMock.mock.calls[3] as [string, any];
+    expect(firstUrl).toContain('/v1/responses');
+    expect(secondUrl).toContain('/v1/chat/completions');
+    expect(thirdUrl).toContain('/v1/messages');
+    expect(fourthUrl).toContain('/v1/responses');
+  });
+
   it('prefers native /v1/responses for claude-family /v1/responses requests that explicitly ask for encrypted reasoning', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
