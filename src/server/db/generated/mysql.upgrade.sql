@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS `route_group_sources` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `group_route_id` INT NOT NULL, `source_route_id` INT NOT NULL, FOREIGN KEY (`group_route_id`) REFERENCES `token_routes`(`id`) ON DELETE CASCADE, FOREIGN KEY (`source_route_id`) REFERENCES `token_routes`(`id`) ON DELETE CASCADE);
-ALTER TABLE `token_routes` ADD COLUMN `route_mode` VARCHAR(191) DEFAULT 'pattern';
-CREATE UNIQUE INDEX `route_group_sources_group_source_unique` ON `route_group_sources` (`group_route_id`, `source_route_id`);
-CREATE INDEX `route_group_sources_source_route_id_idx` ON `route_group_sources` (`source_route_id`);
+CREATE TABLE IF NOT EXISTS `site_announcements` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `site_id` INT NOT NULL, `platform` TEXT NOT NULL, `source_key` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `level` VARCHAR(191) NOT NULL DEFAULT 'info', `source_url` TEXT, `starts_at` DATETIME, `ends_at` DATETIME, `upstream_created_at` DATETIME, `upstream_updated_at` DATETIME, `first_seen_at` DATETIME DEFAULT CURRENT_TIMESTAMP, `last_seen_at` DATETIME DEFAULT CURRENT_TIMESTAMP, `read_at` DATETIME, `dismissed_at` DATETIME, `raw_payload` TEXT, FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON DELETE CASCADE);
+CREATE UNIQUE INDEX `site_announcements_site_source_key_unique` ON `site_announcements` (`site_id`, `source_key`(191));
+CREATE INDEX `site_announcements_read_at_idx` ON `site_announcements` (`read_at`);
+CREATE INDEX `site_announcements_site_id_first_seen_at_idx` ON `site_announcements` (`site_id`, `first_seen_at`);

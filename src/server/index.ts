@@ -19,6 +19,7 @@ import { testRoutes } from './routes/api/test.js';
 import { monitorRoutes } from './routes/api/monitor.js';
 import { downstreamApiKeysRoutes } from './routes/api/downstreamApiKeys.js';
 import { oauthRoutes } from './routes/api/oauth.js';
+import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { proxyRoutes } from './routes/proxy/router.js';
 import { startScheduler } from './services/checkinScheduler.js';
 import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService } from './services/proxyLogRetentionService.js';
@@ -27,6 +28,7 @@ import { repairStoredCreatedAtValues } from './services/storedTimestampRepairSer
 import { migrateSiteApiKeysToAccounts } from './services/siteApiKeyMigrationService.js';
 import { ensureDefaultSitesSeeded } from './services/defaultSiteSeedService.js';
 import { startOAuthLoopbackCallbackServers, stopOAuthLoopbackCallbackServers } from './services/oauth/localCallbackServer.js';
+import { startSiteAnnouncementPolling } from './services/siteAnnouncementPollingService.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
 import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
 import { existsSync } from 'fs';
@@ -337,8 +339,9 @@ await app.register(authRoutes);
 await app.register(settingsRoutes);
 await app.register(accountTokensRoutes);
 await app.register(searchRoutes);
-await app.register(eventsRoutes);
-await app.register(taskRoutes);
+  await app.register(eventsRoutes);
+  await app.register(siteAnnouncementsRoutes);
+  await app.register(taskRoutes);
 await app.register(testRoutes);
 await app.register(monitorRoutes);
 await app.register(downstreamApiKeysRoutes);
@@ -376,6 +379,7 @@ if (existsSync(webDir)) {
 
 // Start scheduler
 await startScheduler();
+startSiteAnnouncementPolling();
 try {
   await startOAuthLoopbackCallbackServers();
 } catch (error) {

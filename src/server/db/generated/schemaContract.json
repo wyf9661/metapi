@@ -906,6 +906,112 @@
         }
       }
     },
+    "site_announcements": {
+      "columns": {
+        "id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true
+        },
+        "site_id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "platform": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "source_key": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "title": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "content": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "level": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": "'info'",
+          "primaryKey": false
+        },
+        "source_url": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "starts_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "ends_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "upstream_created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "upstream_updated_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "first_seen_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "last_seen_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "read_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "dismissed_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "raw_payload": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        }
+      }
+    },
     "site_disabled_models": {
       "columns": {
         "id": {
@@ -1469,6 +1575,32 @@
       "unique": false
     },
     {
+      "name": "site_announcements_read_at_idx",
+      "table": "site_announcements",
+      "columns": [
+        "read_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "site_announcements_site_id_first_seen_at_idx",
+      "table": "site_announcements",
+      "columns": [
+        "site_id",
+        "first_seen_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "site_announcements_site_source_key_unique",
+      "table": "site_announcements",
+      "columns": [
+        "site_id",
+        "source_key"
+      ],
+      "unique": true
+    },
+    {
       "name": "site_disabled_models_site_id_idx",
       "table": "site_disabled_models",
       "columns": [
@@ -1592,6 +1724,14 @@
       ]
     },
     {
+      "name": "site_announcements_site_source_key_unique",
+      "table": "site_announcements",
+      "columns": [
+        "site_id",
+        "source_key"
+      ]
+    },
+    {
       "name": "site_disabled_models_site_model_unique",
       "table": "site_disabled_models",
       "columns": [
@@ -1711,6 +1851,17 @@
         "source_route_id"
       ],
       "referencedTable": "token_routes",
+      "referencedColumns": [
+        "id"
+      ],
+      "onDelete": "CASCADE"
+    },
+    {
+      "table": "site_announcements",
+      "columns": [
+        "site_id"
+      ],
+      "referencedTable": "sites",
       "referencedColumns": [
         "id"
       ],

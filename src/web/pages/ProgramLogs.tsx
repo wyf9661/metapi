@@ -26,6 +26,7 @@ const TYPE_OPTIONS = [
   { value: 'token', label: '令牌' },
   { value: 'proxy', label: '代理' },
   { value: 'status', label: '状态' },
+  { value: 'site_notice', label: '站点公告' },
 ];
 
 function levelLabel(level: string) {

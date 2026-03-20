@@ -1,5 +1,5 @@
 import { OneHubAdapter } from './oneHub.js';
-import type { BalanceInfo, CheckinResult } from './base.js';
+import type { BalanceInfo, CheckinResult, SiteAnnouncement } from './base.js';
 
 export class DoneHubAdapter extends OneHubAdapter {
   readonly platformName: string = 'done-hub';
@@ -30,6 +30,26 @@ export class DoneHubAdapter extends OneHubAdapter {
       ? (data.today_quota_consumption / 500000)
       : undefined;
     return { balance: quotaRemaining, used, quota: total, todayIncome, todayQuotaConsumption };
+  }
+
+  override async getSiteAnnouncements(baseUrl: string, _accessToken: string): Promise<SiteAnnouncement[]> {
+    try {
+      const payload = await this.fetchJson<any>(`${baseUrl}/api/notice`);
+      const content = typeof payload?.data === 'string'
+        ? payload.data.trim()
+        : (typeof payload === 'string' ? payload.trim() : '');
+      if (!content) return [];
+      return [{
+        sourceKey: this.buildNoticeSourceKey(content),
+        title: 'Site notice',
+        content,
+        level: 'info',
+        sourceUrl: '/api/notice',
+        rawPayload: payload,
+      }];
+    } catch {
+      return [];
+    }
   }
 
   // getModels is inherited from OneHubAdapter which already has /api/available_model fallback.
