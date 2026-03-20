@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildStoredSub2ApiSubscriptionSummary,
   getCredentialModeFromExtraConfig,
   getPlatformUserIdFromExtraConfig,
   getSub2ApiAuthFromExtraConfig,
+  getSub2ApiSubscriptionFromExtraConfig,
   guessPlatformUserIdFromUsername,
   mergeAccountExtraConfig,
   normalizeCredentialMode,
@@ -104,5 +106,38 @@ describe('accountExtraConfig', () => {
       apiToken: 'sk-default',
       extraConfig: JSON.stringify({ credentialMode: 'session' }),
     })).toBe(true);
+  });
+
+  it('parses stored sub2api subscription summary from extra config', () => {
+    const extraConfig = mergeAccountExtraConfig(null, {
+      sub2apiSubscription: buildStoredSub2ApiSubscriptionSummary({
+        activeCount: 1,
+        totalUsedUsd: 3.5,
+        subscriptions: [
+          {
+            id: 7,
+            groupName: 'Pro',
+            expiresAt: '2026-04-01T00:00:00.000Z',
+            monthlyUsedUsd: 3.5,
+            monthlyLimitUsd: 20,
+          },
+        ],
+      }, 1760000000000),
+    });
+
+    expect(getSub2ApiSubscriptionFromExtraConfig(extraConfig)).toEqual({
+      activeCount: 1,
+      totalUsedUsd: 3.5,
+      subscriptions: [
+        {
+          id: 7,
+          groupName: 'Pro',
+          expiresAt: '2026-04-01T00:00:00.000Z',
+          monthlyUsedUsd: 3.5,
+          monthlyLimitUsd: 20,
+        },
+      ],
+      updatedAt: 1760000000000,
+    });
   });
 });

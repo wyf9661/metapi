@@ -20,10 +20,19 @@ describe('proxyRetryPolicy', () => {
     ).toBe(true);
   });
 
-  it('retries on generic client request errors for cross-channel fallback', () => {
+  it('does not retry obvious request-shape errors that will fail on every channel', () => {
     expect(
       shouldRetryProxyRequest(400, '{"error":{"message":"invalid request body"}}'),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      shouldRetryProxyRequest(422, '{"error":{"message":"unprocessable"}}'),
+    ).toBe(false);
+    expect(
+      shouldRetryProxyRequest(404, '{"error":{"message":"not found"}}'),
+    ).toBe(false);
+  });
+
+  it('keeps retrying channel-local compatibility and auth failures', () => {
     expect(
       shouldRetryProxyRequest(401, '{"error":{"message":"invalid access token"}}'),
     ).toBe(true);
@@ -31,10 +40,7 @@ describe('proxyRetryPolicy', () => {
       shouldRetryProxyRequest(403, '{"error":{"message":"forbidden"}}'),
     ).toBe(true);
     expect(
-      shouldRetryProxyRequest(404, '{"error":{"message":"not found"}}'),
-    ).toBe(true);
-    expect(
-      shouldRetryProxyRequest(422, '{"error":{"message":"unprocessable"}}'),
+      shouldRetryProxyRequest(400, 'Unsupported legacy protocol: /v1/chat/completions is not supported. Please use /v1/responses.'),
     ).toBe(true);
   });
 });

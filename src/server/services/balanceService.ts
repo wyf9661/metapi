@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { appendSessionTokenRebindHint, isTokenExpiredError } from './alertRules.js';
 import { reportTokenExpired } from './alertService.js';
 import {
+  buildStoredSub2ApiSubscriptionSummary,
   getAutoReloginConfig,
   getCredentialModeFromExtraConfig,
   getSub2ApiAuthFromExtraConfig,
@@ -476,6 +477,11 @@ export async function refreshBalance(accountId: number) {
   let nextExtraConfig = activeExtraConfig;
   if (typeof balanceInfo.todayIncome === 'number' && Number.isFinite(balanceInfo.todayIncome)) {
     nextExtraConfig = updateTodayIncomeSnapshot(nextExtraConfig, balanceInfo.todayIncome);
+  }
+  if (balanceInfo.subscriptionSummary && isSub2ApiPlatform(site.platform)) {
+    nextExtraConfig = mergeAccountExtraConfig(nextExtraConfig, {
+      sub2apiSubscription: buildStoredSub2ApiSubscriptionSummary(balanceInfo.subscriptionSummary),
+    });
   }
 
   const existingRuntimeHealth = extractRuntimeHealth(nextExtraConfig);

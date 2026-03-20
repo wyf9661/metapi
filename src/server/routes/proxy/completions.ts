@@ -79,8 +79,28 @@ export async function completionsProxyRoute(app: FastifyInstance) {
 
         if (!upstream.ok) {
           const errText = await upstream.text().catch(() => 'unknown error');
-          tokenRouter.recordFailure(selected.channel.id);
-          logProxy(selected, requestedModel, 'failed', upstream.status, Date.now() - startTime, errText, retryCount, downstreamApiKeyId, 0, 0, 0, 0, null, clientContext, downstreamPath);
+          tokenRouter.recordFailure(selected.channel.id, {
+            status: upstream.status,
+            errorText: errText,
+            modelName: selected.actualModel,
+          });
+          logProxy(
+            selected,
+            requestedModel,
+            'failed',
+            upstream.status,
+            Date.now() - startTime,
+            errText,
+            retryCount,
+            downstreamApiKeyId,
+            0,
+            0,
+            0,
+            0,
+            null,
+            clientContext,
+            downstreamPath,
+          );
 
           if (isTokenExpiredError({ status: upstream.status, message: errText })) {
             await reportTokenExpired({
@@ -178,11 +198,24 @@ export async function completionsProxyRoute(app: FastifyInstance) {
             parsedUsage,
             resolvedUsage,
           });
-          tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
+          tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, selected.actualModel);
           recordDownstreamCostUsage(request, estimatedCost);
           logProxy(
-            selected, requestedModel, 'success', 200, latency, null, retryCount, downstreamApiKeyId,
-            resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails, clientContext, downstreamPath,
+            selected,
+            requestedModel,
+            'success',
+            200,
+            latency,
+            null,
+            retryCount,
+            downstreamApiKeyId,
+            resolvedUsage.promptTokens,
+            resolvedUsage.completionTokens,
+            resolvedUsage.totalTokens,
+            estimatedCost,
+            billingDetails,
+            clientContext,
+            downstreamPath,
           );
           return;
         }
@@ -199,7 +232,11 @@ export async function completionsProxyRoute(app: FastifyInstance) {
         const failure = detectProxyFailure({ rawText, usage: parsedUsage });
         if (failure) {
           const errText = failure.reason;
-          tokenRouter.recordFailure(selected.channel.id);
+          tokenRouter.recordFailure(selected.channel.id, {
+            status: failure.status,
+            errorText: errText,
+            modelName: selected.actualModel,
+          });
           logProxy(
             selected,
             requestedModel,
@@ -256,16 +293,49 @@ export async function completionsProxyRoute(app: FastifyInstance) {
           resolvedUsage,
         });
 
-        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
+        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, selected.actualModel);
         recordDownstreamCostUsage(request, estimatedCost);
         logProxy(
-          selected, requestedModel, 'success', 200, latency, null, retryCount, downstreamApiKeyId,
-          resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails, clientContext, downstreamPath,
+          selected,
+          requestedModel,
+          'success',
+          200,
+          latency,
+          null,
+          retryCount,
+          downstreamApiKeyId,
+          resolvedUsage.promptTokens,
+          resolvedUsage.completionTokens,
+          resolvedUsage.totalTokens,
+          estimatedCost,
+          billingDetails,
+          clientContext,
+          downstreamPath,
         );
         return reply.send(data);
       } catch (err: any) {
-        tokenRouter.recordFailure(selected.channel.id);
-        logProxy(selected, requestedModel, 'failed', 0, Date.now() - startTime, err.message, retryCount, downstreamApiKeyId, 0, 0, 0, 0, null, clientContext, downstreamPath);
+        tokenRouter.recordFailure(selected.channel.id, {
+          status: 0,
+          errorText: err.message,
+          modelName: selected.actualModel,
+        });
+        logProxy(
+          selected,
+          requestedModel,
+          'failed',
+          0,
+          Date.now() - startTime,
+          err.message,
+          retryCount,
+          downstreamApiKeyId,
+          0,
+          0,
+          0,
+          0,
+          null,
+          clientContext,
+          downstreamPath,
+        );
         if (retryCount < MAX_RETRIES) {
           retryCount++;
           continue;

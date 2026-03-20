@@ -27,6 +27,14 @@ export type EndpointAttemptContext = {
   rawErrText: string;
 };
 
+export type EndpointAttemptSuccessContext = {
+  endpointIndex: number;
+  endpointCount: number;
+  request: BuiltEndpointRequest;
+  targetUrl: string;
+  response: Awaited<ReturnType<typeof fetch>>;
+};
+
 export type EndpointRecoverResult = {
   upstream: Awaited<ReturnType<typeof fetch>>;
   upstreamPath: string;
@@ -61,6 +69,8 @@ type ExecuteEndpointFlowInput = {
   tryRecover?: (ctx: EndpointAttemptContext) => Promise<EndpointRecoverResult>;
   shouldDowngrade?: (ctx: EndpointAttemptContext) => boolean;
   onDowngrade?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
+  onAttemptFailure?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
+  onAttemptSuccess?: (ctx: EndpointAttemptSuccessContext) => void | Promise<void>;
 };
 
 function buildAbsoluteUrl(base: string, path: string): string {
@@ -100,6 +110,13 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       }));
 
     if (response.ok) {
+      await input.onAttemptSuccess?.({
+        endpointIndex,
+        endpointCount,
+        request,
+        targetUrl,
+        response,
+      });
       return {
         ok: true,
         upstream: response,
@@ -120,6 +137,13 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     if (input.tryRecover) {
       const recovered = await input.tryRecover(baseContext);
       if (recovered?.upstream?.ok) {
+        await input.onAttemptSuccess?.({
+          endpointIndex,
+          endpointCount,
+          request: baseContext.request,
+          targetUrl: baseContext.targetUrl,
+          response: recovered.upstream,
+        });
         return {
           ok: true,
           upstream: recovered.upstream,
@@ -135,6 +159,10 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       baseContext.request.path,
       summarizeUpstreamError(response.status, rawErrText),
     );
+    await input.onAttemptFailure?.({
+      ...baseContext,
+      errText,
+    });
 
     const isLastEndpoint = endpointIndex >= endpointCount - 1;
     const shouldDowngrade = !isLastEndpoint && !!input.shouldDowngrade?.(baseContext);

@@ -105,8 +105,23 @@ export async function searchProxyRoute(app: FastifyInstance) {
 
         const text = await upstream.text();
         if (!upstream.ok) {
-          tokenRouter.recordFailure(selected.channel.id);
-          logProxy(selected, requestedModel, 'failed', upstream.status, Date.now() - startTime, text, retryCount, downstreamApiKeyId, clientContext, downstreamPath);
+          tokenRouter.recordFailure(selected.channel.id, {
+            status: upstream.status,
+            errorText: text,
+            modelName: selected.actualModel,
+          });
+          logProxy(
+            selected,
+            requestedModel,
+            'failed',
+            upstream.status,
+            Date.now() - startTime,
+            text,
+            retryCount,
+            downstreamApiKeyId,
+            clientContext,
+            downstreamPath,
+          );
           if (isTokenExpiredError({ status: upstream.status, message: text })) {
             await reportTokenExpired({
               accountId: selected.account.id,
@@ -130,13 +145,28 @@ export async function searchProxyRoute(app: FastifyInstance) {
         try { data = JSON.parse(text); } catch { data = { data: [] }; }
 
         const latency = Date.now() - startTime;
-        tokenRouter.recordSuccess(selected.channel.id, latency, 0);
+        tokenRouter.recordSuccess(selected.channel.id, latency, 0, selected.actualModel);
         recordDownstreamCostUsage(request, 0);
         logProxy(selected, requestedModel, 'success', upstream.status, latency, null, retryCount, downstreamApiKeyId, clientContext, downstreamPath);
         return reply.code(upstream.status).send(data);
       } catch (error: any) {
-        tokenRouter.recordFailure(selected.channel.id);
-        logProxy(selected, requestedModel, 'failed', 0, Date.now() - startTime, error?.message || 'network error', retryCount, downstreamApiKeyId, clientContext, downstreamPath);
+        tokenRouter.recordFailure(selected.channel.id, {
+          status: 0,
+          errorText: error?.message || 'network error',
+          modelName: selected.actualModel,
+        });
+        logProxy(
+          selected,
+          requestedModel,
+          'failed',
+          0,
+          Date.now() - startTime,
+          error?.message || 'network error',
+          retryCount,
+          downstreamApiKeyId,
+          clientContext,
+          downstreamPath,
+        );
         if (retryCount < MAX_RETRIES) {
           retryCount += 1;
           continue;

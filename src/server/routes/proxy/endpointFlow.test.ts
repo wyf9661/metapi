@@ -155,6 +155,40 @@ describe('executeEndpointFlow', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('emits attempt callbacks for failed and successful endpoint probes', async () => {
+    fetchMock
+      .mockResolvedValueOnce(toUndiciResponse(new Response(JSON.stringify({
+        error: { message: 'unsupported endpoint', type: 'invalid_request_error' },
+      }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      })))
+      .mockResolvedValueOnce(toUndiciResponse(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })));
+
+    const onAttemptFailure = vi.fn();
+    const onAttemptSuccess = vi.fn();
+
+    const result = await executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: ['responses', 'chat'],
+      buildRequest: (endpoint) => endpoint === 'responses'
+        ? requestFor('/v1/responses')
+        : { ...requestFor('/v1/chat/completions'), endpoint },
+      shouldDowngrade: () => true,
+      onAttemptFailure,
+      onAttemptSuccess,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(onAttemptFailure).toHaveBeenCalledTimes(1);
+    expect(onAttemptFailure.mock.calls[0]?.[0]?.request?.path).toBe('/v1/responses');
+    expect(onAttemptSuccess).toHaveBeenCalledTimes(1);
+    expect(onAttemptSuccess.mock.calls[0]?.[0]?.request?.path).toBe('/v1/chat/completions');
+  });
+
   it('accepts recovered response from tryRecover hook', async () => {
     fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response(JSON.stringify({
       error: { message: 'upstream_error', type: 'upstream_error' },

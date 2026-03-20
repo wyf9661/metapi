@@ -88,6 +88,24 @@ const EMPTY_ROUTE_FORM: RouteEditorForm = {
   advancedOpen: false,
 };
 
+function normalizeRouteRoutingStrategyValue(value?: RouteRoutingStrategy | null): RouteRoutingStrategy {
+  if (value === 'round_robin' || value === 'stable_first') return value;
+  return 'weighted';
+}
+
+function getRouteRoutingStrategyLabel(value?: RouteRoutingStrategy | null): string {
+  const strategy = normalizeRouteRoutingStrategyValue(value);
+  if (strategy === 'round_robin') return tr('轮询');
+  if (strategy === 'stable_first') return tr('稳定优先');
+  return tr('权重随机');
+}
+
+function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): string {
+  if (value === 'round_robin') return '已切换为轮询策略';
+  if (value === 'stable_first') return '已切换为稳定优先策略';
+  return '已切换为权重随机策略';
+}
+
 export default function TokenRoutes() {
   const navigate = useNavigate();
   const [routeSummaries, setRouteSummaries] = useState<RouteSummaryRow[]>([]);
@@ -421,7 +439,7 @@ export default function TokenRoutes() {
   };
 
   const handleRoutingStrategyChange = async (route: RouteSummaryRow, routingStrategy: RouteRoutingStrategy) => {
-    const currentStrategy = route.routingStrategy === 'round_robin' ? 'round_robin' : 'weighted';
+    const currentStrategy = normalizeRouteRoutingStrategyValue(route.routingStrategy);
     if (routingStrategy === currentStrategy) return;
 
     setUpdatingRoutingStrategyByRoute((prev) => ({ ...prev, [route.id]: true }));
@@ -432,7 +450,7 @@ export default function TokenRoutes() {
     )));
     try {
       await api.updateRoute(route.id, { routingStrategy });
-      toast.success(routingStrategy === 'round_robin' ? '已切换为轮询策略' : '已切换为权重随机策略');
+      toast.success(getRouteRoutingStrategySuccessMessage(routingStrategy));
     } catch (e: any) {
       setRouteSummaries((prev) => prev.map((item) => (
         item.id === route.id
@@ -1186,7 +1204,7 @@ export default function TokenRoutes() {
               >
                 <MobileField label="模型" value={route.modelPattern} />
                 <MobileField label="通道" value={route.channelCount} />
-                <MobileField label="策略" value={isReadOnlyRoute ? tr('未生成') : (route.routingStrategy === 'round_robin' ? tr('轮询') : tr('权重随机'))} />
+                <MobileField label="策略" value={isReadOnlyRoute ? tr('未生成') : getRouteRoutingStrategyLabel(route.routingStrategy)} />
                 <MobileField label="状态" value={isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))} />
                 <div className="mobile-card-actions">
                   <button

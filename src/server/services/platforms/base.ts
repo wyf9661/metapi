@@ -8,12 +8,33 @@ export interface CheckinResult {
   reward?: string;
 }
 
+export interface SubscriptionPlanSummary {
+  id?: number;
+  groupId?: number;
+  groupName?: string;
+  status?: string;
+  expiresAt?: string;
+  dailyUsedUsd?: number;
+  dailyLimitUsd?: number;
+  weeklyUsedUsd?: number;
+  weeklyLimitUsd?: number;
+  monthlyUsedUsd?: number;
+  monthlyLimitUsd?: number;
+}
+
+export interface SubscriptionSummary {
+  activeCount: number;
+  totalUsedUsd: number;
+  subscriptions: SubscriptionPlanSummary[];
+}
+
 export interface BalanceInfo {
   balance: number;
   used: number;
   quota: number;
   todayIncome?: number;
   todayQuotaConsumption?: number;
+  subscriptionSummary?: SubscriptionSummary;
 }
 
 interface LoginResult {

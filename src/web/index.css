@@ -1917,6 +1917,52 @@ body {
   white-space: normal !important;
 }
 
+.site-balance-cell {
+  white-space: normal !important;
+}
+
+.site-balance-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  line-height: 1.35;
+}
+
+.site-balance-inline.align-end {
+  justify-content: flex-end;
+}
+
+.site-balance-primary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.site-balance-divider {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.site-balance-subscription {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  text-wrap: pretty;
+  cursor: help;
+  transition: color 0.15s ease;
+}
+
+.site-balance-subscription:hover,
+.site-balance-subscription:focus-visible {
+  color: var(--color-text-secondary);
+}
+
 .sites-row-actions {
   display: flex;
   flex-wrap: wrap;

@@ -101,6 +101,111 @@ describe('Sub2ApiAdapter', () => {
     expect(balance.used).toBe(0);
   });
 
+  it('includes subscription summary from /api/v1/subscriptions/summary when available', async () => {
+    await startServer((req, res) => {
+      if (req.url === '/api/v1/auth/me') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          code: 0,
+          message: 'success',
+          data: { id: 1, username: 'testuser', email: 'test@example.com', balance: 12.5 },
+        }));
+        return;
+      }
+      if (req.url === '/api/v1/subscriptions/summary') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          code: 0,
+          message: 'success',
+          data: {
+            active_count: 1,
+            total_used_usd: 3.75,
+            subscriptions: [
+              {
+                id: 3,
+                group_name: 'Pro',
+                status: 'active',
+                expires_at: '2026-04-01T00:00:00Z',
+                monthly_used_usd: 3.75,
+                monthly_limit_usd: 20,
+              },
+            ],
+          },
+        }));
+        return;
+      }
+      res.writeHead(404).end();
+    });
+
+    const balance = await adapter.getBalance(baseUrl, 'jwt-token');
+    expect(balance.subscriptionSummary).toEqual({
+      activeCount: 1,
+      totalUsedUsd: 3.75,
+      subscriptions: [
+        {
+          id: 3,
+          groupName: 'Pro',
+          status: 'active',
+          expiresAt: '2026-04-01T00:00:00.000Z',
+          monthlyUsedUsd: 3.75,
+          monthlyLimitUsd: 20,
+        },
+      ],
+    });
+  });
+
+  it('falls back to active subscriptions when summary endpoint is unavailable', async () => {
+    await startServer((req, res) => {
+      if (req.url === '/api/v1/auth/me') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          code: 0,
+          message: 'success',
+          data: { id: 1, username: 'testuser', email: 'test@example.com', balance: 12.5 },
+        }));
+        return;
+      }
+      if (req.url === '/api/v1/subscriptions/summary') {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ code: 404, message: 'not found' }));
+        return;
+      }
+      if (req.url === '/api/v1/subscriptions/active') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          code: 0,
+          message: 'success',
+          data: [
+            {
+              id: 9,
+              group_name: 'Fallback',
+              expires_at: '2026-05-01T00:00:00Z',
+              monthly_used_usd: 2.5,
+              monthly_limit_usd: 15,
+            },
+          ],
+        }));
+        return;
+      }
+      res.writeHead(404).end();
+    });
+
+    const balance = await adapter.getBalance(baseUrl, 'jwt-token');
+    expect(balance.subscriptionSummary).toEqual({
+      activeCount: 1,
+      totalUsedUsd: 2.5,
+      subscriptions: [
+        {
+          id: 9,
+          groupName: 'Fallback',
+          expiresAt: '2026-05-01T00:00:00.000Z',
+          monthlyUsedUsd: 2.5,
+          monthlyLimitUsd: 15,
+        },
+      ],
+    });
+  });
+
   it('fetches user info from /api/v1/auth/me', async () => {
     await startServer((req, res) => {
       if (req.url === '/api/v1/auth/me') {

@@ -4,7 +4,7 @@ import type { BrandInfo } from '../../components/BrandIcon.js';
 export type RouteSortBy = 'modelPattern' | 'channelCount';
 export type RouteSortDir = 'asc' | 'desc';
 export type GroupFilter = null | '__all__' | number;
-export type RouteRoutingStrategy = 'weighted' | 'round_robin';
+export type RouteRoutingStrategy = 'weighted' | 'round_robin' | 'stable_first';
 export type RouteRowKind = 'persisted' | 'zero_channel';
 export type RouteMode = 'pattern' | 'explicit_group';
 

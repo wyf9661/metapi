@@ -4,6 +4,8 @@ import {
   CheckinResult,
   BalanceInfo,
   CreateApiTokenOptions,
+  SubscriptionPlanSummary,
+  SubscriptionSummary,
   type SiteAnnouncement,
   UserInfo,
 } from './base.js';
@@ -21,6 +23,193 @@ function normalizeBaseUrl(baseUrl: string): string {
  */
 export class Sub2ApiAdapter extends BasePlatformAdapter {
   readonly platformName = 'sub2api';
+
+  private roundCurrency(value: number): number {
+    return Math.round(value * 1_000_000) / 1_000_000;
+  }
+
+  private parsePositiveInteger(raw: unknown): number | undefined {
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return Math.trunc(raw);
+    if (typeof raw === 'string') {
+      const parsed = Number.parseInt(raw.trim(), 10);
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return undefined;
+  }
+
+  private parseNonNegativeNumber(raw: unknown): number | undefined {
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) {
+      return this.roundCurrency(raw);
+    }
+    if (typeof raw === 'string') {
+      const parsed = Number(raw.trim());
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        return this.roundCurrency(parsed);
+      }
+    }
+    return undefined;
+  }
+
+  private parseDateTime(raw: unknown): string | undefined {
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      const ms = raw > 10_000_000_000 ? raw : raw * 1000;
+      return new Date(ms).toISOString();
+    }
+    if (typeof raw !== 'string') return undefined;
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      const ms = numeric > 10_000_000_000 ? numeric : numeric * 1000;
+      return new Date(ms).toISOString();
+    }
+
+    const parsed = Date.parse(trimmed);
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+    return undefined;
+  }
+
+  private parseSubscriptionItem(raw: unknown): SubscriptionPlanSummary | null {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+    const item = raw as Record<string, unknown>;
+    const group = item.group && typeof item.group === 'object' && !Array.isArray(item.group)
+      ? item.group as Record<string, unknown>
+      : null;
+
+    const normalized: SubscriptionPlanSummary = {};
+
+    const id = this.parsePositiveInteger(item.id);
+    if (id) normalized.id = id;
+
+    const groupId = this.parsePositiveInteger(item.group_id ?? item.groupId ?? group?.id);
+    if (groupId) normalized.groupId = groupId;
+
+    const groupNameCandidates = [
+      item.group_name,
+      item.groupName,
+      item.name,
+      item.title,
+      group?.name,
+      group?.title,
+    ];
+    for (const candidate of groupNameCandidates) {
+      if (typeof candidate !== 'string') continue;
+      const trimmed = candidate.trim();
+      if (!trimmed) continue;
+      normalized.groupName = trimmed;
+      break;
+    }
+
+    if (typeof item.status === 'string' && item.status.trim()) {
+      normalized.status = item.status.trim();
+    }
+
+    const expiresAt = this.parseDateTime(
+      item.expires_at
+      ?? item.expiresAt
+      ?? item.expired_at
+      ?? item.expiredAt
+      ?? item.end_at
+      ?? item.endAt
+      ?? item.end_time
+      ?? item.endTime
+      ?? item.current_period_end
+      ?? item.currentPeriodEnd,
+    );
+    if (expiresAt) normalized.expiresAt = expiresAt;
+
+    const dailyUsedUsd = this.parseNonNegativeNumber(item.daily_used_usd ?? item.dailyUsedUsd);
+    if (dailyUsedUsd !== undefined) normalized.dailyUsedUsd = dailyUsedUsd;
+
+    const dailyLimitUsd = this.parseNonNegativeNumber(item.daily_limit_usd ?? item.dailyLimitUsd);
+    if (dailyLimitUsd !== undefined) normalized.dailyLimitUsd = dailyLimitUsd;
+
+    const weeklyUsedUsd = this.parseNonNegativeNumber(item.weekly_used_usd ?? item.weeklyUsedUsd);
+    if (weeklyUsedUsd !== undefined) normalized.weeklyUsedUsd = weeklyUsedUsd;
+
+    const weeklyLimitUsd = this.parseNonNegativeNumber(item.weekly_limit_usd ?? item.weeklyLimitUsd);
+    if (weeklyLimitUsd !== undefined) normalized.weeklyLimitUsd = weeklyLimitUsd;
+
+    const monthlyUsedUsd = this.parseNonNegativeNumber(
+      item.monthly_used_usd
+      ?? item.monthlyUsedUsd
+      ?? item.used_usd
+      ?? item.usedUsd
+      ?? item.total_used_usd
+      ?? item.totalUsedUsd,
+    );
+    if (monthlyUsedUsd !== undefined) normalized.monthlyUsedUsd = monthlyUsedUsd;
+
+    const monthlyLimitUsd = this.parseNonNegativeNumber(
+      item.monthly_limit_usd
+      ?? item.monthlyLimitUsd
+      ?? item.limit_usd
+      ?? item.limitUsd
+      ?? item.total_limit_usd
+      ?? item.totalLimitUsd,
+    );
+    if (monthlyLimitUsd !== undefined) normalized.monthlyLimitUsd = monthlyLimitUsd;
+
+    return Object.keys(normalized).length > 0 ? normalized : null;
+  }
+
+  private parseSubscriptionItems(raw: unknown): SubscriptionPlanSummary[] {
+    const rawItems = (() => {
+      if (Array.isArray(raw)) return raw;
+      if (raw && typeof raw === 'object') {
+        const body = raw as Record<string, unknown>;
+        if (Array.isArray(body.subscriptions)) return body.subscriptions;
+        if (Array.isArray(body.items)) return body.items;
+        if (Array.isArray(body.list)) return body.list;
+        if (Array.isArray(body.data)) return body.data;
+      }
+      return [];
+    })();
+
+    return rawItems
+      .map((item) => this.parseSubscriptionItem(item))
+      .filter((item): item is SubscriptionPlanSummary => !!item);
+  }
+
+  private buildSubscriptionSummary(payload: unknown): SubscriptionSummary {
+    const body = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : {};
+    const subscriptions = this.parseSubscriptionItems(payload);
+    const activeCount = this.parsePositiveInteger(body.active_count ?? body.activeCount);
+    const totalUsedUsd = this.parseNonNegativeNumber(body.total_used_usd ?? body.totalUsedUsd);
+    const inferredUsedUsd = subscriptions.reduce((sum, item) => sum + (item.monthlyUsedUsd || 0), 0);
+
+    return {
+      activeCount: activeCount ?? subscriptions.length,
+      totalUsedUsd: totalUsedUsd ?? this.roundCurrency(inferredUsedUsd),
+      subscriptions,
+    };
+  }
+
+  private async fetchSubscriptionSummary(baseUrl: string, accessToken: string): Promise<SubscriptionSummary | undefined> {
+    const headers = this.buildAuthHeader(accessToken);
+    const summaryEndpoint = '/api/v1/subscriptions/summary';
+
+    try {
+      const res = await this.fetchJson<any>(`${baseUrl}${summaryEndpoint}`, { headers });
+      const data = this.parseSub2ApiEnvelope<any>(res, summaryEndpoint);
+      return this.buildSubscriptionSummary(data);
+    } catch {}
+
+    const fallbackEndpoints = ['/api/v1/subscriptions/active'];
+    for (const endpoint of fallbackEndpoints) {
+      try {
+        const res = await this.fetchJson<any>(`${baseUrl}${endpoint}`, { headers });
+        const data = this.parseSub2ApiEnvelope<any>(res, endpoint);
+        return this.buildSubscriptionSummary(data);
+      } catch {}
+    }
+
+    return undefined;
+  }
 
   private stripBearerPrefix(value?: string | null): string {
     const trimmed = (value || '').trim();
@@ -462,13 +651,18 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
 
   // --- Balance ---
   async getBalance(baseUrl: string, accessToken: string): Promise<BalanceInfo> {
-    const user = await this.fetchAuthMe(baseUrl, accessToken);
+    const normalizedBase = normalizeBaseUrl(baseUrl);
+    const [user, subscriptionSummary] = await Promise.all([
+      this.fetchAuthMe(normalizedBase, accessToken),
+      this.fetchSubscriptionSummary(normalizedBase, accessToken),
+    ]);
     const quotaValue = this.usdToQuota(user.balance);
     // Sub2API only provides current balance, no usage breakdown
     return {
       balance: quotaValue / 500000,
       used: 0,
       quota: quotaValue / 500000,
+      subscriptionSummary,
     };
   }
 

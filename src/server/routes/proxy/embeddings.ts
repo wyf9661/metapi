@@ -75,8 +75,28 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
 
         const text = await upstream.text();
         if (!upstream.ok) {
-          tokenRouter.recordFailure(selected.channel.id);
-          logProxy(selected, requestedModel, 'failed', upstream.status, Date.now() - startTime, text, retryCount, downstreamApiKeyId, 0, 0, 0, 0, null, clientContext, downstreamPath);
+          tokenRouter.recordFailure(selected.channel.id, {
+            status: upstream.status,
+            errorText: text,
+            modelName: selected.actualModel,
+          });
+          logProxy(
+            selected,
+            requestedModel,
+            'failed',
+            upstream.status,
+            Date.now() - startTime,
+            text,
+            retryCount,
+            downstreamApiKeyId,
+            0,
+            0,
+            0,
+            0,
+            null,
+            clientContext,
+            downstreamPath,
+          );
 
           if (isTokenExpiredError({ status: upstream.status, message: text })) {
             await reportTokenExpired({
@@ -126,7 +146,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
           resolvedUsage,
         });
 
-        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
+        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, selected.actualModel);
         recordDownstreamCostUsage(request, estimatedCost);
         logProxy(
           selected, requestedModel, 'success', upstream.status, latency, null, retryCount, downstreamApiKeyId,
@@ -134,8 +154,28 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
         );
         return reply.code(upstream.status).send(data);
       } catch (err: any) {
-        tokenRouter.recordFailure(selected.channel.id);
-        logProxy(selected, requestedModel, 'failed', 0, Date.now() - startTime, err.message, retryCount, downstreamApiKeyId, 0, 0, 0, 0, null, clientContext, downstreamPath);
+        tokenRouter.recordFailure(selected.channel.id, {
+          status: 0,
+          errorText: err.message,
+          modelName: selected.actualModel,
+        });
+        logProxy(
+          selected,
+          requestedModel,
+          'failed',
+          0,
+          Date.now() - startTime,
+          err.message,
+          retryCount,
+          downstreamApiKeyId,
+          0,
+          0,
+          0,
+          0,
+          null,
+          clientContext,
+          downstreamPath,
+        );
         if (retryCount < MAX_RETRIES) {
           retryCount++;
           continue;

@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../config.js';
+import { resetUpstreamEndpointRuntimeState } from './upstreamEndpoint.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
@@ -102,6 +103,7 @@ describe('chat proxy stream behavior', () => {
     fetchModelPricingCatalogMock.mockReset();
     resolveProxyUsageWithSelfLogFallbackMock.mockClear();
     dbInsertMock.mockClear();
+    resetUpstreamEndpointRuntimeState();
 
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
@@ -113,6 +115,17 @@ describe('chat proxy stream behavior', () => {
     });
     selectNextChannelMock.mockReturnValue(null);
     fetchModelPricingCatalogMock.mockResolvedValue(null);
+    (config as any).codexHeaderDefaults = {
+      userAgent: '',
+      betaFeatures: '',
+    };
+    (config as any).payloadRules = {
+      default: [],
+      defaultRaw: [],
+      override: [],
+      overrideRaw: [],
+      filter: [],
+    };
     config.proxyEmptyContentFailEnabled = false;
     config.proxyErrorKeywords = [];
   });

@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetUpstreamEndpointRuntimeState } from './upstreamEndpoint.js';
 
 const fetchMock = vi.fn();
 const fetchModelPricingCatalogMock = vi.fn();
@@ -188,6 +189,7 @@ describe('gemini native proxy routes', () => {
     selectNextChannelMock.mockReturnValue(null);
     recordSuccessMock.mockResolvedValue(undefined);
     recordFailureMock.mockResolvedValue(undefined);
+    resetUpstreamEndpointRuntimeState();
     explainSelectionMock.mockResolvedValue({ selectedChannelId: 11 });
     isModelAllowedByPolicyOrAllowedRoutesMock.mockResolvedValue(true);
   });
@@ -261,7 +263,10 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(recordFailureMock).toHaveBeenCalledWith(11);
+    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({
+      status: 500,
+      errorText: JSON.stringify({ error: { message: 'first channel failed' } }),
+    }));
     const [firstUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
     const [secondUrl] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(firstUrl).toContain('key=gemini-key');
@@ -1417,7 +1422,10 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(recordFailureMock).toHaveBeenCalledWith(11);
+    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({
+      status: 400,
+      errorText: JSON.stringify({ error: { message: 'bad request on first channel' } }),
+    }));
     const [firstUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
     const [secondUrl] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(firstUrl).toContain('key=gemini-key');
@@ -1467,7 +1475,10 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(recordFailureMock).toHaveBeenCalledWith(11);
+    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({
+      status: 403,
+      errorText: JSON.stringify({ error: { message: 'forbidden on first channel' } }),
+    }));
   });
 
   it('falls back to the next channel when first Gemini channel returns 500 before any bytes are written', async () => {
@@ -1510,7 +1521,10 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(recordFailureMock).toHaveBeenCalledWith(11);
+    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({
+      status: 500,
+      errorText: 'upstream crash',
+    }));
   });
 
   it('falls back to the next channel when first Gemini channel throws before any bytes are written', async () => {
@@ -1550,7 +1564,9 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(recordFailureMock).toHaveBeenCalledWith(11);
+    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({
+      errorText: 'socket hang up',
+    }));
   });
 
   it('falls back to the next channel for SSE requests before any bytes are written', async () => {
@@ -1596,7 +1612,10 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(recordFailureMock).toHaveBeenCalledWith(11);
+    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({
+      status: 500,
+      errorText: JSON.stringify({ error: { message: 'upstream unavailable' } }),
+    }));
     expect(response.body).toContain('hello from fallback sse');
   });
 

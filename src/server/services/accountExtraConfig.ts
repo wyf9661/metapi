@@ -1,3 +1,5 @@
+import type { SubscriptionPlanSummary, SubscriptionSummary } from './platforms/base.js';
+
 type AutoReloginConfig = {
   username?: unknown;
   passwordCipher?: unknown;
@@ -7,6 +9,13 @@ type AutoReloginConfig = {
 type Sub2ApiAuthConfig = {
   refreshToken?: unknown;
   tokenExpiresAt?: unknown;
+};
+
+type Sub2ApiSubscriptionConfig = {
+  updatedAt?: unknown;
+  activeCount?: unknown;
+  totalUsedUsd?: unknown;
+  subscriptions?: unknown;
 };
 
 export type AccountCredentialMode = 'auto' | 'session' | 'apikey';
@@ -26,6 +35,7 @@ type AccountExtraConfig = {
   };
   autoRelogin?: AutoReloginConfig;
   sub2apiAuth?: Sub2ApiAuthConfig;
+  sub2apiSubscription?: Sub2ApiSubscriptionConfig;
   [key: string]: unknown;
 };
 
@@ -61,6 +71,39 @@ function normalizeTimestampMs(raw: unknown): number | undefined {
     const parsed = Number.parseInt(raw.trim(), 10);
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
+  return undefined;
+}
+
+function normalizeNonNegativeNumber(raw: unknown): number | undefined {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) {
+    return Math.round(raw * 1_000_000) / 1_000_000;
+  }
+  if (typeof raw === 'string') {
+    const parsed = Number(raw.trim());
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return Math.round(parsed * 1_000_000) / 1_000_000;
+    }
+  }
+  return undefined;
+}
+
+function normalizeIsoDateTime(raw: unknown): string | undefined {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    const ms = raw > 10_000_000_000 ? raw : raw * 1000;
+    return new Date(ms).toISOString();
+  }
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    const ms = numeric > 10_000_000_000 ? numeric : numeric * 1000;
+    return new Date(ms).toISOString();
+  }
+
+  const parsed = Date.parse(trimmed);
+  if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
   return undefined;
 }
 
@@ -129,6 +172,10 @@ export type ManagedSub2ApiAuth = {
   tokenExpiresAt?: number;
 };
 
+export type StoredSub2ApiSubscriptionSummary = SubscriptionSummary & {
+  updatedAt: number;
+};
+
 export function getSub2ApiAuthFromExtraConfig(extraConfig?: string | null): ManagedSub2ApiAuth | null {
   const parsed = parseExtraConfig(extraConfig);
   const raw = parsed.sub2apiAuth;
@@ -139,6 +186,103 @@ export function getSub2ApiAuthFromExtraConfig(extraConfig?: string | null): Mana
   return tokenExpiresAt
     ? { refreshToken, tokenExpiresAt }
     : { refreshToken };
+}
+
+function normalizeSubscriptionItem(raw: unknown): SubscriptionPlanSummary | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const item = raw as Record<string, unknown>;
+  const normalized: SubscriptionPlanSummary = {};
+
+  const id = normalizeUserId(item.id);
+  if (id) normalized.id = id;
+
+  const groupId = normalizeUserId(item.groupId ?? item.group_id);
+  if (groupId) normalized.groupId = groupId;
+
+  const groupName = normalizeNonEmptyString(item.groupName ?? item.group_name);
+  if (groupName) normalized.groupName = groupName;
+
+  const status = normalizeNonEmptyString(item.status);
+  if (status) normalized.status = status;
+
+  const expiresAt = normalizeIsoDateTime(
+    item.expiresAt
+    ?? item.expires_at
+    ?? item.expiredAt
+    ?? item.expired_at
+    ?? item.endAt
+    ?? item.end_at,
+  );
+  if (expiresAt) normalized.expiresAt = expiresAt;
+
+  const dailyUsedUsd = normalizeNonNegativeNumber(item.dailyUsedUsd ?? item.daily_used_usd);
+  if (dailyUsedUsd !== undefined) normalized.dailyUsedUsd = dailyUsedUsd;
+
+  const dailyLimitUsd = normalizeNonNegativeNumber(item.dailyLimitUsd ?? item.daily_limit_usd);
+  if (dailyLimitUsd !== undefined) normalized.dailyLimitUsd = dailyLimitUsd;
+
+  const weeklyUsedUsd = normalizeNonNegativeNumber(item.weeklyUsedUsd ?? item.weekly_used_usd);
+  if (weeklyUsedUsd !== undefined) normalized.weeklyUsedUsd = weeklyUsedUsd;
+
+  const weeklyLimitUsd = normalizeNonNegativeNumber(item.weeklyLimitUsd ?? item.weekly_limit_usd);
+  if (weeklyLimitUsd !== undefined) normalized.weeklyLimitUsd = weeklyLimitUsd;
+
+  const monthlyUsedUsd = normalizeNonNegativeNumber(item.monthlyUsedUsd ?? item.monthly_used_usd);
+  if (monthlyUsedUsd !== undefined) normalized.monthlyUsedUsd = monthlyUsedUsd;
+
+  const monthlyLimitUsd = normalizeNonNegativeNumber(item.monthlyLimitUsd ?? item.monthly_limit_usd);
+  if (monthlyLimitUsd !== undefined) normalized.monthlyLimitUsd = monthlyLimitUsd;
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeSubscriptionItems(raw: unknown): SubscriptionPlanSummary[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => normalizeSubscriptionItem(item))
+    .filter((item): item is SubscriptionPlanSummary => !!item);
+}
+
+export function normalizeSub2ApiSubscriptionSummary(
+  raw: unknown,
+): StoredSub2ApiSubscriptionSummary | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const body = raw as Record<string, unknown>;
+  const subscriptions = normalizeSubscriptionItems(body.subscriptions);
+  const activeCount = normalizeNonNegativeNumber(body.activeCount ?? body.active_count);
+  const totalUsedUsd = normalizeNonNegativeNumber(body.totalUsedUsd ?? body.total_used_usd);
+  const updatedAt = normalizeTimestampMs(body.updatedAt ?? body.updated_at);
+
+  return {
+    activeCount: Math.trunc(activeCount ?? subscriptions.length),
+    totalUsedUsd: totalUsedUsd ?? 0,
+    subscriptions,
+    updatedAt: updatedAt ?? Date.now(),
+  };
+}
+
+export function buildStoredSub2ApiSubscriptionSummary(
+  summary: SubscriptionSummary,
+  updatedAt = Date.now(),
+): StoredSub2ApiSubscriptionSummary {
+  return normalizeSub2ApiSubscriptionSummary({
+    ...summary,
+    updatedAt,
+  }) || {
+    activeCount: Math.max(0, Math.trunc(summary.activeCount || 0)),
+    totalUsedUsd: normalizeNonNegativeNumber(summary.totalUsedUsd) ?? 0,
+    subscriptions: normalizeSubscriptionItems(summary.subscriptions),
+    updatedAt,
+  };
+}
+
+export function getSub2ApiSubscriptionFromExtraConfig(
+  extraConfig?: string | null,
+): StoredSub2ApiSubscriptionSummary | null {
+  const parsed = parseExtraConfig(extraConfig);
+  return normalizeSub2ApiSubscriptionSummary(parsed.sub2apiSubscription);
 }
 
 export function guessPlatformUserIdFromUsername(username?: string | null): number | undefined {
