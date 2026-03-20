@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '../../config.js';
 
 const fetchModelPricingCatalogMock = vi.fn(async (_arg?: unknown): Promise<any> => null);
 
@@ -32,6 +33,17 @@ describe('resolveUpstreamEndpointCandidates', () => {
   beforeEach(() => {
     fetchModelPricingCatalogMock.mockReset();
     fetchModelPricingCatalogMock.mockResolvedValue(null);
+    (config as any).codexHeaderDefaults = {
+      userAgent: '',
+      betaFeatures: '',
+    };
+    (config as any).payloadRules = {
+      default: [],
+      defaultRaw: [],
+      override: [],
+      overrideRaw: [],
+      filter: [],
+    };
   });
 
   it('uses downstream-aligned endpoint priority for unknown platforms', async () => {
@@ -468,6 +480,136 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.body.prompt_cache_key).toBe('codex-cache-123');
   });
 
+  it('applies configured codex header defaults with CLIProxyAPI-compatible precedence', () => {
+    (config as any).codexHeaderDefaults = {
+      userAgent: 'codex-config-ua/1.0',
+      betaFeatures: 'multi_agent',
+    };
+
+    const websocketRequest = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'gpt-5.4',
+      stream: true,
+      tokenValue: 'oauth-access-token',
+      oauthProvider: 'codex',
+      sitePlatform: 'codex',
+      siteUrl: 'https://chatgpt.com/backend-api/codex',
+      openaiBody: {
+        model: 'gpt-5.4',
+        messages: [{ role: 'user', content: 'hello codex' }],
+      },
+      downstreamFormat: 'openai',
+      downstreamHeaders: {
+        'x-metapi-responses-websocket-transport': '1',
+      },
+      providerHeaders: {
+        Originator: 'codex_cli_rs',
+      },
+    } as any);
+
+    expect(websocketRequest.headers['User-Agent']).toBe('codex-config-ua/1.0');
+    expect(websocketRequest.headers['x-codex-beta-features']).toBe('multi_agent');
+
+    const clientHeaderRequest = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'gpt-5.4',
+      stream: true,
+      tokenValue: 'oauth-access-token',
+      oauthProvider: 'codex',
+      sitePlatform: 'codex',
+      siteUrl: 'https://chatgpt.com/backend-api/codex',
+      openaiBody: {
+        model: 'gpt-5.4',
+        messages: [{ role: 'user', content: 'hello again codex' }],
+      },
+      downstreamFormat: 'openai',
+      downstreamHeaders: {
+        'x-metapi-responses-websocket-transport': '1',
+        'user-agent': 'client-ua/2.0',
+        'x-codex-beta-features': 'client-beta',
+      },
+      providerHeaders: {
+        Originator: 'codex_cli_rs',
+      },
+    } as any);
+
+    expect(clientHeaderRequest.headers['User-Agent']).toBe('codex-config-ua/1.0');
+    expect(clientHeaderRequest.headers['x-codex-beta-features']).toBe('client-beta');
+
+    const httpRequest = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'gpt-5.4',
+      stream: false,
+      tokenValue: 'oauth-access-token',
+      oauthProvider: 'codex',
+      sitePlatform: 'codex',
+      siteUrl: 'https://chatgpt.com/backend-api/codex',
+      openaiBody: {
+        model: 'gpt-5.4',
+        messages: [{ role: 'user', content: 'plain http codex' }],
+      },
+      downstreamFormat: 'openai',
+      providerHeaders: {
+        Originator: 'codex_cli_rs',
+      },
+    } as any);
+
+    expect(httpRequest.headers['x-codex-beta-features']).toBeUndefined();
+  });
+
+  it('applies configured payload rules before preparing codex responses requests', () => {
+    (config as any).payloadRules = {
+      default: [
+        {
+          models: [{ name: 'gpt-*', protocol: 'codex' }],
+          params: {
+            'reasoning.effort': 'high',
+          },
+        },
+      ],
+      defaultRaw: [],
+      override: [
+        {
+          models: [{ name: 'gpt-5.4', protocol: 'codex' }],
+          params: {
+            'text.verbosity': 'low',
+          },
+        },
+      ],
+      overrideRaw: [],
+      filter: [
+        {
+          models: [{ name: 'gpt-5.4', protocol: 'codex' }],
+          params: ['safety_identifier'],
+        },
+      ],
+    };
+
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'gpt-5.4',
+      stream: false,
+      tokenValue: 'oauth-access-token',
+      oauthProvider: 'codex',
+      sitePlatform: 'codex',
+      siteUrl: 'https://chatgpt.com/backend-api/codex',
+      openaiBody: {
+        model: 'gpt-5.4',
+        messages: [{ role: 'user', content: 'hello codex' }],
+        verbosity: 'high',
+        safety_identifier: 'drop-me',
+      },
+      downstreamFormat: 'openai',
+      providerHeaders: {
+        Originator: 'codex_cli_rs',
+      },
+    } as any);
+
+    expect(request.body.reasoning).toEqual({ effort: 'high' });
+    expect(request.body.text).toEqual({ verbosity: 'low' });
+    expect(request.body.safety_identifier).toBeUndefined();
+  });
+
   it('builds gemini-cli native requests with project envelope and bearer headers', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'responses',
@@ -850,7 +992,7 @@ describe('buildUpstreamEndpointRequest', () => {
     ]);
   });
 
-  it('applies global responses standardization and drops non-standard fields', () => {
+  it('preserves unknown native responses fields while still normalizing known compatibility fields', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'responses',
       modelName: 'upstream-gpt',
@@ -865,13 +1007,13 @@ describe('buildUpstreamEndpointRequest', () => {
         input: 'hello',
         metadata: { trace: 'abc123' },
         max_completion_tokens: 512,
-        custom_vendor_flag: 'drop-me',
+        custom_vendor_flag: 'keep-me',
       },
     });
 
     expect(request.path).toBe('/v1/responses');
     expect(request.body.metadata).toEqual({ trace: 'abc123' });
-    expect(request.body.custom_vendor_flag).toBeUndefined();
+    expect(request.body.custom_vendor_flag).toBe('keep-me');
     expect(request.body.max_completion_tokens).toBeUndefined();
     expect(request.body.max_output_tokens).toBe(512);
     expect(request.body.input).toEqual([

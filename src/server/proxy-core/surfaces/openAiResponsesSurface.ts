@@ -25,7 +25,6 @@ import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
 import { normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
 import {
   ProxyInputFileResolutionError,
-  hasNonImageFileInputInOpenAiBody,
   resolveResponsesBodyInputFiles,
 } from '../../services/proxyInputFileResolver.js';
 import {
@@ -47,6 +46,10 @@ import {
 import { isCodexResponsesSurface } from '../cliProfiles/codexProfile.js';
 import { detectCliProfile } from '../cliProfiles/registry.js';
 import type { CliProfileId } from '../cliProfiles/types.js';
+import {
+  summarizeConversationFileInputsInOpenAiBody,
+  summarizeConversationFileInputsInResponsesBody,
+} from '../capabilities/conversationFileCapabilities.js';
 
 const MAX_RETRIES = 2;
 
@@ -248,9 +251,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
         isStream,
         { defaultEncryptedReasoningInclude },
       );
-      const hasNonImageFileInput = hasNonImageFileInputInOpenAiBody(openAiBody);
+      const conversationFileSummary = summarizeConversationFileInputsInOpenAiBody(openAiBody);
+      const hasNonImageFileInput = conversationFileSummary.hasDocument;
       const prefersNativeResponsesReasoning = wantsNativeResponsesReasoning(normalizedResponsesBody);
-      const requiresNativeResponsesFileUrl = carriesResponsesFileUrlInput(normalizedResponsesBody.input);
+      const responsesConversationFileSummary = summarizeConversationFileInputsInResponsesBody(normalizedResponsesBody);
+      const requiresNativeResponsesFileUrl = responsesConversationFileSummary.hasRemoteDocumentUrl
+        || carriesResponsesFileUrlInput(normalizedResponsesBody.input);
       if (requiresNativeResponsesFileUrl && String(selected.site.platform || '').trim().toLowerCase() === 'claude') {
         return reply.code(400).send({
           error: {
@@ -269,6 +275,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         requestedModel,
         {
           hasNonImageFileInput,
+          conversationFileSummary,
           wantsNativeResponsesReasoning: prefersNativeResponsesReasoning,
         },
       );

@@ -2,13 +2,19 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
+import { createCodexWebsocketRuntime, CodexWebsocketRuntimeError } from '../../proxy-core/runtime/codexWebsocketRuntime.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
+import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
+import { buildUpstreamEndpointRequest } from './upstreamEndpoint.js';
 
 const installedApps = new WeakSet<FastifyInstance>();
 const WS_TURN_STATE_HEADER = 'x-codex-turn-state';
 const RESPONSES_WEBSOCKET_MODE_HEADER = 'x-metapi-responses-websocket-mode';
 const RESPONSES_WEBSOCKET_TRANSPORT_HEADER = 'x-metapi-responses-websocket-transport';
+const codexWebsocketRuntime = createCodexWebsocketRuntime();
+
+type SelectedChannel = NonNullable<Awaited<ReturnType<typeof tokenRouter.selectChannel>>>;
 
 type NormalizedResponsesWebsocketRequest =
   | {
@@ -40,6 +46,93 @@ function headerValueToTrimmedString(value: unknown): string {
     }
   }
   return '';
+}
+
+function toBooleanLike(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') return true;
+    if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false;
+  }
+  return null;
+}
+
+function parseExtraConfigRecord(extraConfig: unknown): Record<string, unknown> | null {
+  if (typeof extraConfig !== 'string') return null;
+  try {
+    const parsed = JSON.parse(extraConfig);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readNestedRecord(value: unknown, key: string): Record<string, unknown> | null {
+  if (!isRecord(value)) return null;
+  const nested = value[key];
+  return isRecord(nested) ? nested : null;
+}
+
+function selectedChannelModelMatches(
+  selectedChannel: SelectedChannel | null,
+  requestModel: string,
+): boolean {
+  if (!selectedChannel) return false;
+  const selectedModel = asTrimmedString(selectedChannel.actualModel).toLowerCase();
+  const normalizedRequestModel = asTrimmedString(requestModel).toLowerCase();
+  if (!selectedModel || !normalizedRequestModel) return true;
+  return selectedModel === normalizedRequestModel;
+}
+
+function selectedChannelSupportsCodexWebsocketTransport(
+  selectedChannel: SelectedChannel | null,
+  requestModel: string,
+): boolean {
+  if (!selectedChannel) return false;
+  const platform = asTrimmedString(selectedChannel.site?.platform).toLowerCase();
+  if (platform !== 'codex') return false;
+  if (!selectedChannelModelMatches(selectedChannel, requestModel)) return false;
+
+  const extraConfig = parseExtraConfigRecord(selectedChannel.account.extraConfig);
+  const oauth = readNestedRecord(extraConfig, 'oauth');
+  const providerData = readNestedRecord(oauth, 'providerData');
+  const candidateFlags = [
+    extraConfig?.websockets,
+    readNestedRecord(extraConfig, 'attributes')?.websockets,
+    readNestedRecord(extraConfig, 'metadata')?.websockets,
+    providerData?.websockets,
+    readNestedRecord(providerData, 'attributes')?.websockets,
+    readNestedRecord(providerData, 'metadata')?.websockets,
+  ];
+  for (const candidate of candidateFlags) {
+    const parsed = toBooleanLike(candidate);
+    if (parsed !== null) return parsed;
+  }
+  return true;
+}
+
+function selectedChannelSupportsIncrementalInput(
+  selectedChannel: SelectedChannel | null,
+  requestModel: string,
+): boolean {
+  return selectedChannelSupportsCodexWebsocketTransport(selectedChannel, requestModel);
+}
+
+function shouldReuseSelectedChannel(
+  selectedChannel: SelectedChannel | null,
+  requestModel: string,
+): boolean {
+  if (!selectedChannel) return false;
+  const selectedModel = asTrimmedString(selectedChannel.actualModel).toLowerCase();
+  const normalizedRequestModel = asTrimmedString(requestModel).toLowerCase();
+  if (!selectedModel || !normalizedRequestModel) return true;
+  return selectedModel === normalizedRequestModel;
+}
+
+function deriveCodexExplicitSessionId(body: Record<string, unknown>, sessionId: string): string {
+  const promptCacheKey = asTrimmedString(body.prompt_cache_key);
+  return promptCacheKey || sessionId;
 }
 
 function parseJsonObject(raw: RawData): Record<string, unknown> | null {
@@ -232,6 +325,77 @@ function collectResponsesOutput(payloads: unknown[]): unknown[] {
     .map(([, value]) => value);
 }
 
+async function forwardResponsesRequestViaHttp(input: {
+  app: FastifyInstance;
+  socket: WebSocket;
+  request: IncomingMessage;
+  payload: Record<string, unknown>;
+  preserveIncrementalMode: boolean;
+}): Promise<unknown[] | null> {
+  const response = await input.app.inject({
+    method: 'POST',
+    url: '/v1/responses',
+    headers: {
+      ...buildInjectHeaders(input.request),
+      [RESPONSES_WEBSOCKET_TRANSPORT_HEADER]: '1',
+      ...(input.preserveIncrementalMode ? { [RESPONSES_WEBSOCKET_MODE_HEADER]: 'incremental' } : {}),
+    },
+    payload: input.payload,
+  });
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    let payload: unknown = null;
+    try {
+      payload = JSON.parse(response.body);
+    } catch {
+      payload = null;
+    }
+    writeResponsesWebsocketError(
+      input.socket,
+      response.statusCode,
+      response.statusMessage || 'Upstream error',
+      payload,
+    );
+    return null;
+  }
+
+  const contentType = String(response.headers['content-type'] || '').toLowerCase();
+  if (!contentType.includes('text/event-stream')) {
+    try {
+      const payload = JSON.parse(response.body);
+      input.socket.send(JSON.stringify(payload));
+      return isRecord(payload?.response) && Array.isArray(payload.response.output)
+        ? cloneJsonObject(payload.response.output)
+        : [];
+    } catch {
+      writeResponsesWebsocketError(input.socket, 502, 'Unexpected non-JSON websocket proxy response');
+      return null;
+    }
+  }
+
+  const pulled = openAiResponsesTransformer.pullSseEvents(response.body);
+  const forwardedPayloads: unknown[] = [];
+  let sawTerminalPayload = false;
+  for (const event of pulled.events) {
+    if (event.data === '[DONE]') continue;
+    try {
+      const payload = JSON.parse(event.data);
+      forwardedPayloads.push(payload);
+      const type = isRecord(payload) ? asTrimmedString(payload.type) : '';
+      if (type === 'response.completed' || type === 'response.failed') {
+        sawTerminalPayload = true;
+      }
+      input.socket.send(JSON.stringify(payload));
+    } catch {
+      // Ignore malformed SSE frames; the HTTP route already normalizes them.
+    }
+  }
+  if (!sawTerminalPayload) {
+    writeResponsesWebsocketError(input.socket, 408, 'stream closed before response.completed');
+  }
+  return collectResponsesOutput(forwardedPayloads);
+}
+
 function buildInjectHeaders(request: IncomingMessage): Record<string, string | string[]> {
   const headers: Record<string, string | string[]> = {};
   for (const [rawKey, rawValue] of Object.entries(request.headers)) {
@@ -262,7 +426,7 @@ async function supportsResponsesWebsocketIncrementalInput(
 
   try {
     const selected = await tokenRouter.previewSelectedChannel(requestModel);
-    return asTrimmedString(selected?.site?.platform).toLowerCase() === 'codex';
+    return selectedChannelSupportsIncrementalInput(selected, requestModel);
   } catch {
     return false;
   }
@@ -273,8 +437,16 @@ async function handleResponsesWebsocketConnection(
   socket: WebSocket,
   request: IncomingMessage,
 ) {
+  const websocketSessionId = headerValueToTrimmedString(request.headers['session_id'])
+    || headerValueToTrimmedString(request.headers['session-id'])
+    || randomUUID();
   let lastRequest: Record<string, unknown> | null = null;
   let lastResponseOutput: unknown[] = [];
+  let selectedChannel: SelectedChannel | null = null;
+
+  socket.once('close', () => {
+    void codexWebsocketRuntime.closeSession(websocketSessionId);
+  });
 
   socket.on('message', async (raw) => {
     const parsed = parseJsonObject(raw);
@@ -283,7 +455,9 @@ async function handleResponsesWebsocketConnection(
       return;
     }
 
-    const supportsIncrementalInput = await supportsResponsesWebsocketIncrementalInput(parsed, lastRequest);
+    const requestModel = asTrimmedString(parsed.model) || asTrimmedString(lastRequest?.model);
+    const supportsIncrementalInput = selectedChannelSupportsIncrementalInput(selectedChannel, requestModel)
+      || await supportsResponsesWebsocketIncrementalInput(parsed, lastRequest);
     const shouldHandleLocalPrewarm = shouldHandleResponsesWebsocketPrewarmLocally(
       parsed,
       lastRequest,
@@ -309,67 +483,95 @@ async function handleResponsesWebsocketConnection(
       return;
     }
 
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/responses',
-      headers: {
-        ...buildInjectHeaders(request),
+    if (!shouldReuseSelectedChannel(selectedChannel, requestModel)) {
+      selectedChannel = requestModel
+        ? await tokenRouter.selectChannel(requestModel)
+        : null;
+    }
+
+    const codexWebsocketChannel = selectedChannelSupportsCodexWebsocketTransport(selectedChannel, requestModel)
+      ? selectedChannel
+      : null;
+
+    if (codexWebsocketChannel) {
+      const downstreamHeaders: Record<string, unknown> = {
+        ...(request.headers as Record<string, unknown>),
         [RESPONSES_WEBSOCKET_TRANSPORT_HEADER]: '1',
         ...(supportsIncrementalInput ? { [RESPONSES_WEBSOCKET_MODE_HEADER]: 'incremental' } : {}),
-      },
-      payload: normalized.request,
-    });
+      };
+      const providerHeaders = buildOauthProviderHeaders({
+        extraConfig: typeof codexWebsocketChannel.account.extraConfig === 'string'
+          ? codexWebsocketChannel.account.extraConfig
+          : null,
+        downstreamHeaders,
+      });
+      const prepared = buildUpstreamEndpointRequest({
+        endpoint: 'responses',
+        modelName: asTrimmedString(codexWebsocketChannel.actualModel) || requestModel,
+        stream: true,
+        tokenValue: codexWebsocketChannel.tokenValue,
+        sitePlatform: codexWebsocketChannel.site.platform,
+        siteUrl: codexWebsocketChannel.site.url,
+        openaiBody: normalized.request,
+        downstreamFormat: 'responses',
+        responsesOriginalBody: normalized.request,
+        downstreamHeaders,
+        providerHeaders,
+        codexExplicitSessionId: deriveCodexExplicitSessionId(normalized.request, websocketSessionId),
+      });
+      const requestUrl = `${codexWebsocketChannel.site.url.replace(/\/+$/, '')}${prepared.path}`;
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      let payload: unknown = null;
       try {
-        payload = JSON.parse(response.body);
-      } catch {
-        payload = null;
-      }
-      writeResponsesWebsocketError(
-        socket,
-        response.statusCode,
-        response.statusMessage || 'Upstream error',
-        payload,
-      );
-      return;
-    }
-
-    const contentType = String(response.headers['content-type'] || '').toLowerCase();
-    if (!contentType.includes('text/event-stream')) {
-      try {
-        const payload = JSON.parse(response.body);
-        socket.send(JSON.stringify(payload));
-        lastResponseOutput = isRecord(payload?.response) && Array.isArray(payload.response.output)
-          ? cloneJsonObject(payload.response.output)
-          : [];
-      } catch {
-        writeResponsesWebsocketError(socket, 502, 'Unexpected non-JSON websocket proxy response');
-      }
-      return;
-    }
-
-    const pulled = openAiResponsesTransformer.pullSseEvents(response.body);
-    const forwardedPayloads: unknown[] = [];
-    let sawTerminalPayload = false;
-    for (const event of pulled.events) {
-      if (event.data === '[DONE]') continue;
-      try {
-        const payload = JSON.parse(event.data);
-        forwardedPayloads.push(payload);
-        const type = isRecord(payload) ? asTrimmedString(payload.type) : '';
-        if (type === 'response.completed' || type === 'response.failed') {
-          sawTerminalPayload = true;
+        const runtimeResult = await codexWebsocketRuntime.sendRequest({
+          sessionId: websocketSessionId,
+          requestUrl,
+          headers: prepared.headers,
+          body: prepared.body,
+        });
+        lastResponseOutput = collectResponsesOutput(runtimeResult.events);
+        for (const payload of runtimeResult.events) {
+          socket.send(JSON.stringify(payload));
         }
-        socket.send(JSON.stringify(payload));
-      } catch {
-        // Ignore malformed SSE frames; the HTTP route already normalizes them.
+      } catch (error) {
+        const runtimeError = error instanceof CodexWebsocketRuntimeError
+          ? error
+          : new CodexWebsocketRuntimeError('upstream websocket request failed');
+        if (runtimeError.status === 426) {
+          const fallbackOutput = await forwardResponsesRequestViaHttp({
+            app,
+            socket,
+            request,
+            payload: normalized.request,
+            preserveIncrementalMode: false,
+          });
+          if (fallbackOutput) {
+            lastResponseOutput = fallbackOutput;
+          }
+          return;
+        }
+        lastResponseOutput = collectResponsesOutput(runtimeError.events);
+        for (const payload of runtimeError.events) {
+          socket.send(JSON.stringify(payload));
+        }
+        writeResponsesWebsocketError(
+          socket,
+          runtimeError.status || 408,
+          runtimeError.message,
+          runtimeError.payload,
+        );
       }
+      return;
     }
-    lastResponseOutput = collectResponsesOutput(forwardedPayloads);
-    if (!sawTerminalPayload) {
-      writeResponsesWebsocketError(socket, 408, 'stream closed before response.completed');
+
+    const forwardedOutput = await forwardResponsesRequestViaHttp({
+      app,
+      socket,
+      request,
+      payload: normalized.request,
+      preserveIncrementalMode: supportsIncrementalInput,
+    });
+    if (forwardedOutput) {
+      lastResponseOutput = forwardedOutput;
     }
   });
 }
@@ -394,6 +596,7 @@ export function ensureResponsesWebsocketTransport(app: FastifyInstance) {
   });
 
   app.addHook('onClose', async () => {
+    await codexWebsocketRuntime.closeAllSessions();
     await new Promise<void>((resolve) => {
       websocketServer.close(() => resolve());
     });
