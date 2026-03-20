@@ -31,6 +31,7 @@ const DEFAULT_PROXY_KEEPALIVE_INITIAL_DELAY_MS = 60_000;
 
 type SiteProxyRow = {
   siteUrl: string;
+  proxyUrl: string | null;
   useSystemProxy: boolean;
   customHeaders: string | null;
 };
@@ -42,6 +43,7 @@ type ParsedSiteProxyInput = {
 };
 
 type SiteProxyConfigLike = {
+  proxyUrl?: string | null;
   useSystemProxy?: boolean | null;
   customHeaders?: string | null;
 };
@@ -103,6 +105,7 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
       db
         .select({
           siteUrl: schema.sites.url,
+          proxyUrl: schema.sites.proxyUrl,
           useSystemProxy: schema.sites.useSystemProxy,
           customHeaders: schema.sites.customHeaders,
         })
@@ -129,6 +132,7 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
       loadedAt: nowMs,
       rows: rows.map((row) => ({
         siteUrl: normalizeSiteUrl(row.siteUrl),
+        proxyUrl: normalizeSiteProxyUrl(row.proxyUrl),
         useSystemProxy: !!row.useSystemProxy,
         customHeaders: typeof row.customHeaders === 'string' ? row.customHeaders : null,
       })),
@@ -368,7 +372,8 @@ async function resolveSiteRequestConfigByRequestUrl(requestUrl: string): Promise
 
   const rows = await getCachedSiteProxyRows();
   const matchedRow = findBestMatchingSiteRow(rows, normalizedRequestUrl);
-  const proxyUrl = matchedRow?.useSystemProxy ? siteProxyCache.systemProxyUrl : null;
+  const proxyUrl = matchedRow?.proxyUrl
+    || (matchedRow?.useSystemProxy ? siteProxyCache.systemProxyUrl : null);
   return {
     proxyUrl: proxyUrl || null,
     customHeaders: matchedRow?.customHeaders ?? null,
@@ -425,6 +430,8 @@ export function withExplicitProxyRequestInit(
 }
 
 export function resolveProxyUrlForSite(site: SiteProxyConfigLike | null | undefined): string | null {
+  const explicitProxyUrl = normalizeSiteProxyUrl(site?.proxyUrl);
+  if (explicitProxyUrl) return explicitProxyUrl;
   if (!site?.useSystemProxy) return null;
   return normalizeSiteProxyUrl(config.systemProxyUrl);
 }

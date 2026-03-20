@@ -40,6 +40,7 @@ type SiteRow = {
   externalCheckinUrl?: string | null;
   platform?: string;
   status?: string;
+  proxyUrl?: string | null;
   useSystemProxy?: boolean;
   customHeaders?: string | null;
   globalWeight?: number;
@@ -382,6 +383,7 @@ export default function Sites() {
       url: form.url.trim(),
       externalCheckinUrl: form.externalCheckinUrl.trim(),
       platform: form.platform.trim(),
+      proxyUrl: form.proxyUrl.trim(),
       useSystemProxy: !!form.useSystemProxy,
       customHeaders: serializedCustomHeaders.customHeaders,
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
@@ -917,6 +919,15 @@ export default function Sites() {
                 )}
               </div>
             )}
+          </div>
+          <input
+            placeholder="站点代理 URL（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）"
+            value={form.proxyUrl}
+            onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+            style={formInputStyle}
+          />
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            留空则直连；填写后优先于系统代理。
           </div>
           <label style={{
             display: 'flex',

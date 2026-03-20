@@ -6,7 +6,7 @@ import { mkdtempSync } from 'node:fs';
 
 type DbModule = typeof import('../../db/index.js');
 
-describe('sites system proxy settings', () => {
+describe('sites proxy settings', () => {
   let app: FastifyInstance;
   let db: DbModule['db'];
   let schema: DbModule['schema'];
@@ -36,7 +36,7 @@ describe('sites system proxy settings', () => {
     delete process.env.DATA_DIR;
   });
 
-  it('stores useSystemProxy, external checkin url, and custom headers when creating a site', async () => {
+  it('stores proxy settings, external checkin url, and custom headers when creating a site', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/sites',
@@ -44,6 +44,7 @@ describe('sites system proxy settings', () => {
         name: 'proxy-site',
         url: 'https://proxy-site.example.com',
         platform: 'new-api',
+        proxyUrl: 'socks5://127.0.0.1:1080',
         useSystemProxy: true,
         customHeaders: JSON.stringify({
           'cf-access-client-id': 'site-client-id',
@@ -56,11 +57,13 @@ describe('sites system proxy settings', () => {
 
     expect(response.statusCode).toBe(200);
     const payload = response.json() as {
+      proxyUrl?: string | null;
       useSystemProxy?: boolean;
       customHeaders?: string | null;
       externalCheckinUrl?: string | null;
       globalWeight?: number;
     };
+    expect(payload.proxyUrl).toBe('socks5://127.0.0.1:1080');
     expect(payload.useSystemProxy).toBe(true);
     expect(payload.customHeaders).toBe('{"cf-access-client-id":"site-client-id","x-site-scope":"internal"}');
     expect(payload.externalCheckinUrl).toBe('https://checkin.example.com/welfare');
@@ -81,6 +84,22 @@ describe('sites system proxy settings', () => {
 
     expect(response.statusCode).toBe(400);
     expect((response.json() as { error?: string }).error).toContain('Invalid useSystemProxy');
+  });
+
+  it('rejects invalid proxy url', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sites',
+      payload: {
+        name: 'proxy-site',
+        url: 'https://proxy-site.example.com',
+        platform: 'new-api',
+        proxyUrl: 'not-a-proxy',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect((response.json() as { error?: string }).error).toContain('Invalid proxyUrl');
   });
 
   it('rejects invalid site global weight', async () => {
@@ -115,7 +134,7 @@ describe('sites system proxy settings', () => {
     expect((response.json() as { error?: string }).error).toContain('Invalid externalCheckinUrl');
   });
 
-  it('updates useSystemProxy for an existing site', async () => {
+  it('updates per-site proxy settings for an existing site', async () => {
     const created = await app.inject({
       method: 'POST',
       url: '/api/sites',
@@ -133,12 +152,15 @@ describe('sites system proxy settings', () => {
       method: 'PUT',
       url: `/api/sites/${site.id}`,
       payload: {
+        proxyUrl: 'http://127.0.0.1:8080',
         useSystemProxy: true,
       },
     });
 
     expect(response.statusCode).toBe(200);
-    expect((response.json() as { useSystemProxy?: boolean }).useSystemProxy).toBe(true);
+    const payload = response.json() as { proxyUrl?: string | null; useSystemProxy?: boolean };
+    expect(payload.proxyUrl).toBe('http://127.0.0.1:8080');
+    expect(payload.useSystemProxy).toBe(true);
   });
 
   it('rejects invalid custom headers json', async () => {
