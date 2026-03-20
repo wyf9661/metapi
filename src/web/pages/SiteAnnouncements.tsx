@@ -39,10 +39,12 @@ export default function SiteAnnouncements() {
   const [refreshing, setRefreshing] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [serverTimeZone, setServerTimeZone] = useState<string | undefined>(undefined);
   const [highlightAnnouncementId, setHighlightAnnouncementId] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const highlightTimerRef = useRef<number | null>(null);
   const viewerTimeZone = useMemo(() => readClientTimeZone(), []);
+  const displayTimeZone = serverTimeZone || viewerTimeZone;
 
   const siteNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -56,12 +58,17 @@ export default function SiteAnnouncements() {
     if (silent) setRefreshing(true);
     else setLoading(true);
     try {
-      const [announcementRows, siteRows] = await Promise.all([
+      const [announcementRows, siteRows, runtimeInfo] = await Promise.all([
         api.getSiteAnnouncements(),
         api.getSites(),
+        api.getRuntimeSettings().catch(() => null),
       ]);
       setRows(Array.isArray(announcementRows) ? announcementRows : []);
       setSites(Array.isArray(siteRows) ? siteRows : []);
+      const nextServerTimeZone = typeof runtimeInfo?.serverTimeZone === 'string'
+        ? runtimeInfo.serverTimeZone.trim()
+        : '';
+      setServerTimeZone(nextServerTimeZone || undefined);
     } catch (error: any) {
       toast.error(error?.message || '加载站点公告失败');
     } finally {
@@ -219,9 +226,9 @@ export default function SiteAnnouncements() {
               <SiteAnnouncementContent content={row.content} />
               <div
                 style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}
-                title={viewerTimeZone ? `本地时区：${viewerTimeZone}` : undefined}
+                title={displayTimeZone ? `本地时区：${displayTimeZone}` : undefined}
               >
-                首次发现：{formatSiteAnnouncementSeenAt(row.firstSeenAt || row.lastSeenAt || '', viewerTimeZone)}
+                首次发现：{formatSiteAnnouncementSeenAt(row.firstSeenAt || row.lastSeenAt || '', displayTimeZone)}
               </div>
             </div>
           ))

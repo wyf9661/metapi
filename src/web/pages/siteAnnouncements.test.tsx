@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getSiteAnnouncements: vi.fn(),
     getSites: vi.fn(),
+    getRuntimeSettings: vi.fn(),
     markSiteAnnouncementRead: vi.fn(),
     markAllSiteAnnouncementsRead: vi.fn(),
     clearSiteAnnouncements: vi.fn(),
@@ -41,6 +42,9 @@ describe('SiteAnnouncements page', () => {
     apiMock.getSites.mockResolvedValue([
       { id: 9, name: 'Sub Site', platform: 'sub2api' },
     ]);
+    apiMock.getRuntimeSettings.mockResolvedValue({
+      serverTimeZone: 'UTC',
+    });
     apiMock.getSiteAnnouncements.mockResolvedValue([
       {
         id: 12,
@@ -50,8 +54,8 @@ describe('SiteAnnouncements page', () => {
         title: 'Maintenance',
         content: 'Window starts at 10:00',
         level: 'info',
-        firstSeenAt: '2026-03-20 10:00:00',
-        lastSeenAt: '2026-03-20 10:00:00',
+        firstSeenAt: '2026-03-20 04:23:27',
+        lastSeenAt: '2026-03-20 04:23:27',
         readAt: null,
       },
     ]);
@@ -100,8 +104,10 @@ describe('SiteAnnouncements page', () => {
 
       expect(apiMock.getSiteAnnouncements).toHaveBeenCalled();
       expect(apiMock.getSites).toHaveBeenCalled();
+      expect(apiMock.getRuntimeSettings).toHaveBeenCalled();
       expect(JSON.stringify(root!.toJSON())).toContain('站点公告');
       expect(JSON.stringify(root!.toJSON())).toContain('Maintenance');
+      expect(JSON.stringify(root!.toJSON())).toContain('2026/03/20 04:23:27');
 
       const highlightedRows = root!.root.findAll((node) => {
         const className = typeof node.props.className === 'string' ? node.props.className : '';
