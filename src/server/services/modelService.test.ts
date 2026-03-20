@@ -85,6 +85,67 @@ describe('rebuildTokenRoutesFromAvailability', () => {
     expect(channels[0]?.manualOverride).toBe(false);
   });
 
+  it('ignores hidden account_tokens for direct apikey connections when rebuilding routes', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'apikey-legacy-site',
+      url: 'https://apikey-legacy.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'apikey-legacy-user',
+      accessToken: '',
+      apiToken: 'sk-direct-credential',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+
+    const hiddenToken = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'legacy-hidden',
+      token: 'sk-hidden-legacy-token',
+      source: 'legacy',
+      enabled: true,
+      isDefault: true,
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values({
+      accountId: account.id,
+      modelName: 'gpt-4.1',
+      available: true,
+      latencyMs: 200,
+      checkedAt: '2026-03-20T08:00:00.000Z',
+    }).run();
+
+    await db.insert(schema.tokenModelAvailability).values({
+      tokenId: hiddenToken.id,
+      modelName: 'gpt-4.1',
+      available: true,
+      latencyMs: 180,
+      checkedAt: '2026-03-20T08:00:00.000Z',
+    }).run();
+
+    const rebuild = await rebuildTokenRoutesFromAvailability();
+
+    expect(rebuild.models).toBe(1);
+
+    const route = await db.select().from(schema.tokenRoutes)
+      .where(eq(schema.tokenRoutes.modelPattern, 'gpt-4.1'))
+      .get();
+    expect(route).toBeDefined();
+
+    const channels = await db.select().from(schema.routeChannels)
+      .where(and(
+        eq(schema.routeChannels.routeId, route!.id),
+        eq(schema.routeChannels.accountId, account.id),
+      ))
+      .all();
+
+    expect(channels).toHaveLength(1);
+    expect(channels[0]?.tokenId ?? null).toBeNull();
+  });
+
   it('creates an exact route with an account-direct channel for oauth model availability', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'codex-site',

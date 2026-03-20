@@ -216,6 +216,87 @@ describe('resolveUpstreamEndpointCandidates', () => {
     expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
+  it('keeps remote-document-url requests on a separate runtime preference bucket from inline document requests', async () => {
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'chat',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+      requestCapabilities: {
+        hasNonImageFileInput: true,
+        conversationFileSummary: {
+          hasImage: false,
+          hasAudio: false,
+          hasDocument: true,
+          hasRemoteDocumentUrl: false,
+        },
+      },
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'openai',
+      undefined,
+      {
+        hasNonImageFileInput: true,
+        conversationFileSummary: {
+          hasImage: false,
+          hasAudio: false,
+          hasDocument: true,
+          hasRemoteDocumentUrl: true,
+        },
+      },
+    );
+
+    expect(order).toEqual(['responses', 'messages', 'chat']);
+  });
+
+  it('does not remember messages fallback success for generic /v1/responses requests', async () => {
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'messages',
+      downstreamFormat: 'responses',
+      modelName: 'gpt-5.3',
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'responses',
+    );
+
+    expect(order).toEqual(['responses', 'chat', 'messages']);
+  });
+
+  it('does not block generic /v1/responses endpoints on transient upstream errors', async () => {
+    recordUpstreamEndpointFailure({
+      siteId: baseContext.site.id,
+      endpoint: 'responses',
+      downstreamFormat: 'responses',
+      modelName: 'gpt-5.3',
+      status: 504,
+      errorText: '{"error":{"message":"Gateway time-out","type":"upstream_error"}}',
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'responses',
+    );
+
+    expect(order).toEqual(['responses', 'chat', 'messages']);
+  });
+
   it('learns a better endpoint from explicit upstream protocol errors', async () => {
     recordUpstreamEndpointFailure({
       siteId: baseContext.site.id,

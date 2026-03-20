@@ -689,6 +689,92 @@ describe('gemini native proxy routes', () => {
     });
   });
 
+  it('routes Gemini native document requests to responses endpoints on openai-compatible upstreams', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 42, routeId: 22 },
+      site: { id: 78, name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      account: { id: 38, username: 'openai-user@example.com' },
+      tokenName: 'default',
+      tokenValue: 'openai-access-token',
+      actualModel: 'gpt-4.1',
+    });
+    fetchMock.mockImplementation(async (target: unknown) => {
+      const url = String(target);
+      if (url === 'https://api.openai.com/v1/responses') {
+        return new Response(JSON.stringify({
+          id: 'resp-openai-file-1',
+          object: 'response',
+          model: 'gpt-4.1',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'output_text', text: 'document summary from responses' }],
+            },
+          ],
+          usage: {
+            input_tokens: 9,
+            output_tokens: 4,
+            total_tokens: 13,
+          },
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url === 'https://api.openai.com/v1/chat/completions') {
+        return new Response(JSON.stringify({
+          id: 'chatcmpl-openai-file-1',
+          object: 'chat.completion',
+          created: 1_742_160_002,
+          model: 'gpt-4.1',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: 'document summary from chat',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected target url: ${url}`);
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1beta/models/gemini-2.5-flash:generateContent',
+      headers: {
+        authorization: 'Bearer sk-managed-gemini',
+      },
+      payload: {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: 'summarize this pdf' },
+              {
+                fileData: {
+                  fileUri: 'https://example.com/brief.pdf',
+                  mimeType: 'application/pdf',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const [targetUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(targetUrl).toBe('https://api.openai.com/v1/responses');
+  });
+
   it('routes Gemini native generateContent requests to antigravity upstreams through the internal content endpoint', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 43, routeId: 22 },

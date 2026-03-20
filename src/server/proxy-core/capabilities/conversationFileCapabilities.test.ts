@@ -40,15 +40,15 @@ describe('conversationFileCapabilities', () => {
     });
   });
 
-  it('describes inline-only document support for claude messages and gemini chat paths', () => {
+  it('describes native remote-document support for claude messages and inline-only support for gemini chat paths', () => {
     expect(resolveConversationFileEndpointCapability({
       sitePlatform: 'claude',
       endpoint: 'messages',
     })).toMatchObject({
       image: 'native',
       audio: 'unsupported',
-      document: 'inline_only',
-      preservesRemoteDocumentUrl: false,
+      document: 'native',
+      preservesRemoteDocumentUrl: true,
     });
 
     expect(resolveConversationFileEndpointCapability({

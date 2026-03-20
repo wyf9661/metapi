@@ -182,6 +182,8 @@ function ensureTokenManagementSchema() {
     WHERE
       a.api_token IS NOT NULL
       AND trim(a.api_token) <> ''
+      AND a.access_token IS NOT NULL
+      AND trim(a.access_token) <> ''
       AND NOT EXISTS (
         SELECT 1 FROM account_tokens AS t
         WHERE t.account_id = a.id

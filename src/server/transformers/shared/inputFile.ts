@@ -159,6 +159,16 @@ export function toOpenAiChatFileBlock(file: NormalizedInputFile): Record<string,
 }
 
 export function toAnthropicDocumentBlock(file: NormalizedInputFile): Record<string, unknown> | null {
+  if (file.fileUrl) {
+    return {
+      type: 'document',
+      source: {
+        type: 'url',
+        url: file.fileUrl,
+      },
+      ...(file.filename ? { title: file.filename } : {}),
+    };
+  }
   if (!file.fileData) return null;
   const parsedDataUrl = splitBase64DataUrl(file.fileData);
   const mimeType = parsedDataUrl?.mimeType || inferInputFileMimeType(file);

@@ -12,6 +12,10 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function isImageMimeType(mimeType: string): boolean {
+  return mimeType.toLowerCase().startsWith('image/');
+}
+
 function parseJsonIfPossible(value: string): unknown {
   const trimmed = value.trim();
   if (!trimmed) return {};

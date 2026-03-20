@@ -248,6 +248,55 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(parsed.runtimeHealth?.checkedAt).toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
 
+  it('does not scan hidden managed tokens for direct apikey connections', async () => {
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockImplementation(async (_baseUrl: string, token: string) => (
+      token === 'sk-direct-credential' ? ['gpt-4.1'] : ['legacy-should-not-be-used']
+    ));
+
+    const site = await db.insert(schema.sites).values({
+      name: 'apikey-direct-site',
+      url: 'https://apikey-direct.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'apikey-direct-user',
+      accessToken: '',
+      apiToken: 'sk-direct-credential',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+
+    const hiddenToken = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'legacy-hidden',
+      token: 'sk-legacy-hidden',
+      source: 'legacy',
+      enabled: true,
+      isDefault: true,
+    }).returning().get();
+
+    const result = await refreshModelsForAccount(account.id);
+
+    expect(result).toMatchObject({
+      accountId: account.id,
+      refreshed: true,
+      status: 'success',
+      modelCount: 1,
+      modelsPreview: ['gpt-4.1'],
+      tokenScanned: 0,
+      discoveredByCredential: true,
+    });
+
+    const tokenRows = await db.select().from(schema.tokenModelAvailability)
+      .where(eq(schema.tokenModelAvailability.tokenId, hiddenToken.id))
+      .all();
+    expect(tokenRows).toHaveLength(0);
+  });
+
   it('returns structured result when account missing', async () => {
     const result = await refreshModelsForAccount(9999);
 

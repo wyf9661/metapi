@@ -223,30 +223,52 @@ describe('modelTesterSession', () => {
     ]);
   });
 
-  it('extracts both uploaded references and inline attachments from user messages', () => {
-    const message = createConversationUserMessage('请重新发送附件', [
+  it('extracts inline conversation file data for retry flows', () => {
+    const files = extractConversationUploadedFilesFromMessage({
+      id: 'u1',
+      role: 'user',
+      content: '请总结附件',
+      createAt: 1,
+      parts: [
+        {
+          type: 'input_file',
+          filename: 'brief.pdf',
+          mimeType: 'application/pdf',
+          data: 'data:application/pdf;base64,JVBERi0xLjQK',
+        },
+      ],
+    });
+
+    expect(files).toEqual([
       {
-        fileId: 'file-metapi-123',
-        filename: 'paper.pdf',
+        filename: 'brief.pdf',
         mimeType: 'application/pdf',
-      },
-      {
-        filename: 'voice.mp3',
-        mimeType: 'audio/mpeg',
-        data: 'data:audio/mpeg;base64,QUFBQQ==',
+        data: 'data:application/pdf;base64,JVBERi0xLjQK',
       },
     ]);
+  });
 
-    expect(extractConversationUploadedFilesFromMessage(message)).toEqual([
+  it('extracts uploaded file references for retry flows', () => {
+    const files = extractConversationUploadedFilesFromMessage({
+      id: 'u2',
+      role: 'user',
+      content: '请继续分析',
+      createAt: 2,
+      parts: [
+        {
+          type: 'input_file',
+          fileId: 'file-metapi-456',
+          filename: 'appendix.txt',
+          mimeType: 'text/plain',
+        },
+      ],
+    });
+
+    expect(files).toEqual([
       {
-        fileId: 'file-metapi-123',
-        filename: 'paper.pdf',
-        mimeType: 'application/pdf',
-      },
-      {
-        filename: 'voice.mp3',
-        mimeType: 'audio/mpeg',
-        data: 'data:audio/mpeg;base64,QUFBQQ==',
+        fileId: 'file-metapi-456',
+        filename: 'appendix.txt',
+        mimeType: 'text/plain',
       },
     ]);
   });

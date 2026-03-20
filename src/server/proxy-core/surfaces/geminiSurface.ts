@@ -33,6 +33,7 @@ import {
 import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
 import { detectDownstreamClientContext, type DownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';
+import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 
 const MAX_RETRIES = 2;
 const GEMINI_MODEL_PROBES = [
@@ -685,6 +686,8 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           modelName: actualModel,
           stream: isStreamAction,
         });
+        const conversationFileSummary = summarizeConversationFileInputsInOpenAiBody(openAiBody);
+        const hasNonImageFileInput = conversationFileSummary.hasDocument;
         const endpointCandidates = await resolveUpstreamEndpointCandidates(
           {
             site: selected.site,
@@ -693,12 +696,20 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           actualModel,
           'openai',
           requestedModel,
+          {
+            hasNonImageFileInput,
+            conversationFileSummary,
+          },
         );
         const endpointRuntimeContext = {
           siteId: selected.site.id,
           modelName: actualModel,
           downstreamFormat: 'openai' as const,
           requestedModelHint: requestedModel,
+          requestCapabilities: {
+            hasNonImageFileInput,
+            conversationFileSummary,
+          },
         };
         const buildEndpointRequest = (
           endpoint: 'chat' | 'messages' | 'responses',

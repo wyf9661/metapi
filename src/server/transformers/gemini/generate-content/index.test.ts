@@ -50,6 +50,41 @@ describe('geminiGenerateContentTransformer.inbound', () => {
     });
   });
 
+  it('parses non-image inlineData parts into canonical file parts', () => {
+    const result = geminiGenerateContentTransformer.parseRequest({
+      model: 'gemini-2.5-pro',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: 'summarize this pdf' },
+            {
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: 'JVBERi0xLjQK',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.value?.messages).toEqual([
+      {
+        role: 'user',
+        parts: [
+          { type: 'text', text: 'summarize this pdf' },
+          {
+            type: 'file',
+            fileData: 'JVBERi0xLjQK',
+            mimeType: 'application/pdf',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('builds native Gemini requests from canonical envelopes', () => {
     const body = geminiGenerateContentTransformer.buildProtocolRequest({
       operation: 'generate',

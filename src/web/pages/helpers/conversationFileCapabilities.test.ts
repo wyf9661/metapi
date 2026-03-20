@@ -31,14 +31,14 @@ describe('resolveConversationFileCapability', () => {
       imageMode: 'native',
       audioMode: 'unsupported',
       documentMode: 'inline_only',
-      reason: '',
+      reason: '当前界面的会话附件会以内联文档方式发送。',
     });
     expect(resolveConversationFileCapability('gemini')).toEqual({
       supported: true,
       imageMode: 'native',
       audioMode: 'native',
       documentMode: 'inline_only',
-      reason: '',
+      reason: '当前界面的会话附件会以内联文档方式发送。',
     });
   });
 

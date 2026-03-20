@@ -918,17 +918,26 @@ export const extractConversationUploadedFilesFromMessage = (
   const parts = Array.isArray(message.parts) ? message.parts : [];
   return parts.flatMap((part) => {
     if (part.type !== 'input_file') return [];
-    const fileId = typeof part.fileId === 'string' ? part.fileId.trim() : '';
-    const data = typeof part.data === 'string' ? part.data.trim() : '';
+
+    const fileId = typeof part.fileId === 'string' && part.fileId.trim()
+      ? part.fileId.trim()
+      : null;
+    const filename = typeof part.filename === 'string' && part.filename.trim()
+      ? part.filename.trim()
+      : null;
+    const mimeType = typeof part.mimeType === 'string' && part.mimeType.trim()
+      ? part.mimeType.trim()
+      : null;
+    const data = typeof part.data === 'string' && part.data.trim()
+      ? part.data.trim()
+      : null;
+
     if (!fileId && !data) return [];
+
     return [{
       ...(fileId ? { fileId } : {}),
-      ...(typeof part.filename === 'string' && part.filename.trim()
-        ? { filename: part.filename.trim() }
-        : {}),
-      ...(typeof part.mimeType === 'string' && part.mimeType.trim()
-        ? { mimeType: part.mimeType.trim() }
-        : {}),
+      ...(filename ? { filename } : {}),
+      ...(mimeType ? { mimeType } : {}),
       ...(data ? { data } : {}),
     }];
   });

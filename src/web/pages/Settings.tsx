@@ -55,6 +55,11 @@ type RuntimeSettings = {
   currentAdminIp?: string;
 };
 
+type SystemProxyTestState =
+  | { kind: 'success'; text: string }
+  | { kind: 'error'; text: string }
+  | null;
+
 type DownstreamApiKeyItem = {
   id: number;
   name: string;
@@ -222,6 +227,8 @@ export default function Settings() {
   const [testingCheckin, setTestingCheckin] = useState(false);
   const [savingToken, setSavingToken] = useState(false);
   const [savingSystemProxy, setSavingSystemProxy] = useState(false);
+  const [testingSystemProxy, setTestingSystemProxy] = useState(false);
+  const [systemProxyTestState, setSystemProxyTestState] = useState<SystemProxyTestState>(null);
   const [savingProxyFailureRules, setSavingProxyFailureRules] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [showAdvancedRouting, setShowAdvancedRouting] = useState(false);
@@ -573,6 +580,31 @@ export default function Settings() {
       toast.error(err?.message || '保存失败');
     } finally {
       setSavingSystemProxy(false);
+    }
+  };
+
+  const testSystemProxy = async () => {
+    const proxyUrl = runtime.systemProxyUrl.trim();
+    if (!proxyUrl) {
+      const message = '请先填写系统代理地址';
+      setSystemProxyTestState({ kind: 'error', text: message });
+      toast.info(message);
+      return;
+    }
+
+    setTestingSystemProxy(true);
+    setSystemProxyTestState(null);
+    try {
+      const res = await api.testSystemProxy({ proxyUrl });
+      const summary = `连通成功，延迟 ${res.latencyMs} ms`;
+      setSystemProxyTestState({ kind: 'success', text: summary });
+      toast.success(`系统代理测试成功（${res.latencyMs} ms）`);
+    } catch (err: any) {
+      const message = err?.message || '系统代理测试失败';
+      setSystemProxyTestState({ kind: 'error', text: message });
+      toast.error(message);
+    } finally {
+      setTestingSystemProxy(false);
     }
   };
 
@@ -1114,13 +1146,39 @@ export default function Settings() {
           </div>
           <input
             value={runtime.systemProxyUrl}
-            onChange={(e) => setRuntime((prev) => ({ ...prev, systemProxyUrl: e.target.value }))}
+            onChange={(e) => {
+              setRuntime((prev) => ({ ...prev, systemProxyUrl: e.target.value }));
+              setSystemProxyTestState(null);
+            }}
             placeholder="系统代理 URL（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）"
             style={{ ...inputStyle, fontFamily: 'var(--font-mono)', marginBottom: 10 }}
           />
-          <button onClick={saveSystemProxy} disabled={savingSystemProxy} className="btn btn-primary">
-            {savingSystemProxy ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存系统代理'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button onClick={saveSystemProxy} disabled={savingSystemProxy} className="btn btn-primary">
+              {savingSystemProxy ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存系统代理'}
+            </button>
+            <button
+              onClick={testSystemProxy}
+              disabled={testingSystemProxy}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              {testingSystemProxy ? <><span className="spinner spinner-sm" /> 测试中...</> : '测试系统代理'}
+            </button>
+          </div>
+          {systemProxyTestState && (
+            <div
+              style={{
+                fontSize: 12,
+                marginTop: 10,
+                color: systemProxyTestState.kind === 'success'
+                  ? 'var(--color-success)'
+                  : 'var(--color-danger)',
+              }}
+            >
+              {systemProxyTestState.text}
+            </div>
+          )}
         </div>
 
         <div className="card animate-slide-up stagger-4" style={{ padding: 20 }}>

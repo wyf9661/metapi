@@ -57,6 +57,22 @@ describe('siteProxy', () => {
       .toBeNull();
   });
 
+  it('prefers site-specific proxy url over the shared system proxy', async () => {
+    await db.insert(schema.settings).values({
+      key: 'system_proxy_url',
+      value: JSON.stringify('http://127.0.0.1:7890'),
+    }).run();
+
+    await db.run(sql`
+      INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy)
+      VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 'socks5://127.0.0.1:1080', 1)
+    `);
+
+    const { resolveSiteProxyUrlByRequestUrl } = await import('./siteProxy.js');
+    expect(await resolveSiteProxyUrlByRequestUrl('https://proxy-site.example.com/v1/models'))
+      .toBe('socks5://127.0.0.1:1080');
+  });
+
   it('injects dispatcher when a site opts into the configured system proxy', async () => {
     await db.insert(schema.settings).values({
       key: 'system_proxy_url',
@@ -65,6 +81,20 @@ describe('siteProxy', () => {
     await db.run(sql`
       INSERT INTO sites (name, url, platform, use_system_proxy)
       VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 1)
+    `);
+
+    const { withSiteProxyRequestInit } = await import('./siteProxy.js');
+    const requestInit = await withSiteProxyRequestInit('https://proxy-site.example.com/v1/chat/completions', {
+      method: 'POST',
+    });
+
+    expect('dispatcher' in requestInit).toBe(true);
+  });
+
+  it('injects dispatcher when a site defines its own proxy url', async () => {
+    await db.run(sql`
+      INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy)
+      VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 'http://127.0.0.1:7890', 0)
     `);
 
     const { withSiteProxyRequestInit } = await import('./siteProxy.js');
@@ -170,6 +200,7 @@ describe('siteProxy', () => {
   it('merges site custom headers from site records even without cache lookup', async () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
+      proxyUrl: 'http://127.0.0.1:7890',
       useSystemProxy: false,
       customHeaders: JSON.stringify({
         'x-site-scope': 'site-level',
@@ -184,5 +215,6 @@ describe('siteProxy', () => {
 
     expect(headers.get('x-site-scope')).toBe('site-level');
     expect(headers.get('x-request-id')).toBe('req-1');
+    expect('dispatcher' in requestInit).toBe(true);
   });
 });
