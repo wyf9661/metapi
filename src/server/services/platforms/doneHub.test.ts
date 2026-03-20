@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { AddressInfo } from 'node:net';
+import { createHash } from 'node:crypto';
 import { DoneHubAdapter } from './doneHub.js';
 
 describe('DoneHubAdapter', () => {
@@ -44,6 +45,15 @@ describe('DoneHubAdapter', () => {
             quota: 20_000_000,
             used_quota: 30_000_000,
           },
+        }));
+        return;
+      }
+
+      if (req.url === '/api/notice') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          data: 'Scheduled maintenance tonight',
         }));
         return;
       }
@@ -92,5 +102,21 @@ describe('DoneHubAdapter', () => {
     expect(balance.balance).toBe(40);
     expect(balance.used).toBe(60);
     expect(balance.quota).toBe(100);
+  });
+
+  it('normalizes the global site notice from /api/notice', async () => {
+    const adapter = new DoneHubAdapter();
+    const rows = await adapter.getSiteAnnouncements(baseUrl, 'token');
+
+    expect(rows).toEqual([
+      {
+        sourceKey: `notice:${createHash('sha1').update('Scheduled maintenance tonight').digest('hex')}`,
+        title: 'Site notice',
+        content: 'Scheduled maintenance tonight',
+        level: 'info',
+        sourceUrl: '/api/notice',
+        rawPayload: { success: true, data: 'Scheduled maintenance tonight' },
+      },
+    ]);
   });
 });

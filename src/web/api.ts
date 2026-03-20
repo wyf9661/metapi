@@ -478,6 +478,14 @@ export const api = {
   markEventRead: (id: number) => request(`/api/events/${id}/read`, { method: 'POST' }),
   markAllEventsRead: () => request('/api/events/read-all', { method: 'POST' }),
   clearEvents: () => request('/api/events', { method: 'DELETE' }),
+  getSiteAnnouncements: (params?: string) => request(`/api/site-announcements${params ? '?' + params : ''}`),
+  markSiteAnnouncementRead: (id: number) => request(`/api/site-announcements/${id}/read`, { method: 'POST' }),
+  markAllSiteAnnouncementsRead: () => request('/api/site-announcements/read-all', { method: 'POST' }),
+  clearSiteAnnouncements: () => request('/api/site-announcements', { method: 'DELETE' }),
+  syncSiteAnnouncements: (payload?: { siteId?: number }) => request('/api/site-announcements/sync', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  }),
   getTasks: (limit = 50) => request(`/api/tasks?limit=${Math.max(1, Math.min(200, Math.trunc(limit)))}`),
   getTask: (id: string) => request(`/api/tasks/${encodeURIComponent(id)}`),
 

@@ -276,6 +276,30 @@ export const downstreamApiKeys = sqliteTable('downstream_api_keys', {
   expiresAtIdx: index('downstream_api_keys_expires_at_idx').on(table.expiresAt),
 }));
 
+export const siteAnnouncements = sqliteTable('site_announcements', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  siteId: integer('site_id').notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  platform: text('platform').notNull(),
+  sourceKey: text('source_key').notNull(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  level: text('level').notNull().default('info'),
+  sourceUrl: text('source_url'),
+  startsAt: text('starts_at'),
+  endsAt: text('ends_at'),
+  upstreamCreatedAt: text('upstream_created_at'),
+  upstreamUpdatedAt: text('upstream_updated_at'),
+  firstSeenAt: text('first_seen_at').default(sql`(datetime('now'))`),
+  lastSeenAt: text('last_seen_at').default(sql`(datetime('now'))`),
+  readAt: text('read_at'),
+  dismissedAt: text('dismissed_at'),
+  rawPayload: text('raw_payload'),
+}, (table) => ({
+  siteSourceKeyUnique: uniqueIndex('site_announcements_site_source_key_unique').on(table.siteId, table.sourceKey),
+  siteIdFirstSeenAtIdx: index('site_announcements_site_id_first_seen_at_idx').on(table.siteId, table.firstSeenAt),
+  readAtIdx: index('site_announcements_read_at_idx').on(table.readAt),
+}));
+
 export const events = sqliteTable('events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   type: text('type').notNull(), // 'checkin' | 'balance' | 'token' | 'proxy' | 'status'

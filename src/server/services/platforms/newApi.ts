@@ -1,4 +1,4 @@
-import { ApiTokenInfo, BasePlatformAdapter, CheckinResult, BalanceInfo, UserInfo, TokenVerifyResult, CreateApiTokenOptions } from './base.js';
+import { ApiTokenInfo, BasePlatformAdapter, CheckinResult, BalanceInfo, UserInfo, TokenVerifyResult, CreateApiTokenOptions, type SiteAnnouncement } from './base.js';
 import type { RequestInit as UndiciRequestInit } from 'undici';
 import { createContext, runInContext } from 'node:vm';
 import { withSiteProxyRequestInit } from '../siteProxy.js';
@@ -12,6 +12,26 @@ export class NewApiAdapter extends BasePlatformAdapter {
       return res?.success === true && typeof res?.data?.system_name === 'string';
     } catch {
       return false;
+    }
+  }
+
+  override async getSiteAnnouncements(baseUrl: string, _accessToken: string): Promise<SiteAnnouncement[]> {
+    try {
+      const payload = await this.fetchJson<any>(`${baseUrl}/api/notice`);
+      const content = typeof payload?.data === 'string'
+        ? payload.data.trim()
+        : (typeof payload === 'string' ? payload.trim() : '');
+      if (!content) return [];
+      return [{
+        sourceKey: this.buildNoticeSourceKey(content),
+        title: 'Site notice',
+        content,
+        level: 'info',
+        sourceUrl: '/api/notice',
+        rawPayload: payload,
+      }];
+    } catch {
+      return [];
     }
   }
 

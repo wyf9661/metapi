@@ -5,6 +5,7 @@ import {
   buildSiteFocusPath,
   clearFocusParams,
   readFocusAccountIntent,
+  readFocusAnnouncementId,
   readFocusSiteId,
 } from './navigationFocus.js';
 
@@ -20,6 +21,8 @@ describe('navigationFocus helpers', () => {
   it('parses focus params from query string', () => {
     expect(readFocusSiteId('?focusSiteId=15')).toBe(15);
     expect(readFocusSiteId('?focusSiteId=abc')).toBeNull();
+    expect(readFocusAnnouncementId('?focusAnnouncementId=21')).toBe(21);
+    expect(readFocusAnnouncementId('?focusAnnouncementId=abc')).toBeNull();
 
     expect(readFocusAccountIntent('?focusAccountId=22&openRebind=1')).toEqual({
       accountId: 22,
@@ -37,6 +40,7 @@ describe('navigationFocus helpers', () => {
 
   it('clears focus params but keeps other params', () => {
     expect(clearFocusParams('?focusSiteId=12&q=abc')).toBe('?q=abc');
+    expect(clearFocusParams('?focusAnnouncementId=44&type=site_notice')).toBe('?type=site_notice');
     expect(clearFocusParams('?focusAccountId=2&openRebind=1&type=token')).toBe('?type=token');
     expect(clearFocusParams('?focusAccountId=2')).toBe('');
   });
@@ -61,6 +65,12 @@ describe('navigationFocus helpers', () => {
     })).toBe('/sites?focusSiteId=9');
 
     expect(buildEventNavigationPath({
+      relatedType: 'site_announcement',
+      relatedId: 12,
+      type: 'site_notice',
+    })).toBe('/site-announcements?focusAnnouncementId=12');
+
+    expect(buildEventNavigationPath({
       relatedType: 'route',
       relatedId: null,
       type: 'proxy',
@@ -68,6 +78,7 @@ describe('navigationFocus helpers', () => {
 
     expect(buildEventNavigationPath({ type: 'proxy' })).toBe('/logs');
     expect(buildEventNavigationPath({ type: 'checkin' })).toBe('/checkin');
+    expect(buildEventNavigationPath({ type: 'site_notice' })).toBe('/site-announcements');
     expect(buildEventNavigationPath({})).toBe('/events');
   });
 });

@@ -213,6 +213,15 @@ Metapi 的路由引擎按多因子加权选择最优通道。
 
 > `TOKEN_ROUTER_CACHE_TTL_MS`、`PROXY_LOG_RETENTION_DAYS`、`PROXY_LOG_RETENTION_PRUNE_INTERVAL_MINUTES` 当前仍属于部署级环境变量，不在后台运行时设置里单独维护。
 
+## 站点公告
+
+管理后台新增了「站点公告」页面，用于保存和浏览 Metapi 已同步到本地的上游公告记录。
+
+- 首次发现的上游公告会写入站内通知，并按现有通知渠道外发一次
+- 后续重复同步只更新本地公告记录，不会重复外发同一条公告
+- 当前支持的上游公告来源包括 `new-api`、`done-hub` 与 `sub2api`
+- 「清空公告」只删除 Metapi 本地保存的公告记录，不会修改上游站点数据
+
 ## 下一步
 
 - [部署指南](./deployment.md) — Docker Compose 与反向代理

@@ -99,6 +99,13 @@
       "when": 1773855000000,
       "tag": "0014_explicit_group_routes",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1773900000000,
+      "tag": "0015_site_announcements",
+      "breakpoints": true
     }
   ]
 }

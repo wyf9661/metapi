@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS `token_routes` (`id` INT AUTO_INCREMENT NOT NULL PRIM
 CREATE TABLE IF NOT EXISTS `route_channels` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `route_id` INT NOT NULL, `account_id` INT NOT NULL, `token_id` INT, `source_model` TEXT, `priority` INT DEFAULT 0, `weight` INT DEFAULT 10, `enabled` BOOLEAN DEFAULT true, `manual_override` BOOLEAN DEFAULT false, `success_count` INT DEFAULT 0, `fail_count` INT DEFAULT 0, `total_latency_ms` INT DEFAULT 0, `total_cost` DOUBLE DEFAULT 0, `last_used_at` DATETIME, `last_selected_at` DATETIME, `last_fail_at` DATETIME, `consecutive_fail_count` INT NOT NULL DEFAULT 0, `cooldown_level` INT NOT NULL DEFAULT 0, `cooldown_until` DATETIME, FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON DELETE CASCADE, FOREIGN KEY (`route_id`) REFERENCES `token_routes`(`id`) ON DELETE CASCADE, FOREIGN KEY (`token_id`) REFERENCES `account_tokens`(`id`) ON DELETE SET NULL);
 CREATE TABLE IF NOT EXISTS `route_group_sources` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `group_route_id` INT NOT NULL, `source_route_id` INT NOT NULL, FOREIGN KEY (`group_route_id`) REFERENCES `token_routes`(`id`) ON DELETE CASCADE, FOREIGN KEY (`source_route_id`) REFERENCES `token_routes`(`id`) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS `settings` (`key` VARCHAR(191) NOT NULL PRIMARY KEY, `value` TEXT);
+CREATE TABLE IF NOT EXISTS `site_announcements` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `site_id` INT NOT NULL, `platform` TEXT NOT NULL, `source_key` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `level` VARCHAR(191) NOT NULL DEFAULT 'info', `source_url` TEXT, `starts_at` DATETIME, `ends_at` DATETIME, `upstream_created_at` DATETIME, `upstream_updated_at` DATETIME, `first_seen_at` DATETIME DEFAULT CURRENT_TIMESTAMP, `last_seen_at` DATETIME DEFAULT CURRENT_TIMESTAMP, `read_at` DATETIME, `dismissed_at` DATETIME, `raw_payload` TEXT, FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS `site_disabled_models` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `site_id` INT NOT NULL, `model_name` TEXT NOT NULL, `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS `token_model_availability` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `token_id` INT NOT NULL, `model_name` TEXT NOT NULL, `available` BOOLEAN, `latency_ms` INT, `checked_at` DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (`token_id`) REFERENCES `account_tokens`(`id`) ON DELETE CASCADE);
 CREATE UNIQUE INDEX `downstream_api_keys_key_unique` ON `downstream_api_keys` (`key`(191));
@@ -19,6 +20,7 @@ CREATE UNIQUE INDEX `model_availability_account_model_unique` ON `model_availabi
 CREATE UNIQUE INDEX `proxy_files_public_id_unique` ON `proxy_files` (`public_id`(191));
 CREATE UNIQUE INDEX `proxy_video_tasks_public_id_unique` ON `proxy_video_tasks` (`public_id`(191));
 CREATE UNIQUE INDEX `route_group_sources_group_source_unique` ON `route_group_sources` (`group_route_id`, `source_route_id`);
+CREATE UNIQUE INDEX `site_announcements_site_source_key_unique` ON `site_announcements` (`site_id`, `source_key`(191));
 CREATE UNIQUE INDEX `site_disabled_models_site_model_unique` ON `site_disabled_models` (`site_id`, `model_name`(191));
 CREATE UNIQUE INDEX `sites_platform_url_unique` ON `sites` (`platform`(191), `url`(191));
 CREATE UNIQUE INDEX `token_model_availability_token_model_unique` ON `token_model_availability` (`token_id`, `model_name`(191));
@@ -55,6 +57,8 @@ CREATE INDEX `route_channels_route_id_idx` ON `route_channels` (`route_id`);
 CREATE INDEX `route_channels_route_token_idx` ON `route_channels` (`route_id`, `token_id`);
 CREATE INDEX `route_channels_token_id_idx` ON `route_channels` (`token_id`);
 CREATE INDEX `route_group_sources_source_route_id_idx` ON `route_group_sources` (`source_route_id`);
+CREATE INDEX `site_announcements_read_at_idx` ON `site_announcements` (`read_at`);
+CREATE INDEX `site_announcements_site_id_first_seen_at_idx` ON `site_announcements` (`site_id`, `first_seen_at`);
 CREATE INDEX `site_disabled_models_site_id_idx` ON `site_disabled_models` (`site_id`);
 CREATE INDEX `sites_status_idx` ON `sites` (`status`(191));
 CREATE INDEX `token_model_availability_available_idx` ON `token_model_availability` (`available`);

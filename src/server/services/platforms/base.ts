@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { RequestInit as UndiciRequestInit } from 'undici';
 import { withSiteProxyRequestInit } from '../siteProxy.js';
 
@@ -44,6 +45,19 @@ export interface ApiTokenInfo {
   tokenGroup?: string | null;
 }
 
+export interface SiteAnnouncement {
+  sourceKey: string;
+  title: string;
+  content: string;
+  level: 'info' | 'warning' | 'error';
+  sourceUrl?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  upstreamCreatedAt?: string | null;
+  upstreamUpdatedAt?: string | null;
+  rawPayload?: unknown;
+}
+
 export interface CreateApiTokenOptions {
   name?: string;
   group?: string;
@@ -66,6 +80,7 @@ export interface PlatformAdapter {
   getModels(baseUrl: string, token: string, platformUserId?: number): Promise<string[]>;
   getApiToken(baseUrl: string, accessToken: string, platformUserId?: number): Promise<string | null>;
   getApiTokens(baseUrl: string, accessToken: string, platformUserId?: number): Promise<ApiTokenInfo[]>;
+  getSiteAnnouncements(baseUrl: string, accessToken: string, platformUserId?: number): Promise<SiteAnnouncement[]>;
   getUserGroups(baseUrl: string, accessToken: string, platformUserId?: number): Promise<string[]>;
   createApiToken(baseUrl: string, accessToken: string, platformUserId?: number, options?: CreateApiTokenOptions): Promise<boolean>;
   deleteApiToken(baseUrl: string, accessToken: string, tokenKey: string, platformUserId?: number): Promise<boolean>;
@@ -149,6 +164,14 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
     return [{ name: 'default', key: token, enabled: true, tokenGroup: 'default' }];
   }
 
+  async getSiteAnnouncements(
+    _baseUrl: string,
+    _accessToken: string,
+    _platformUserId?: number,
+  ): Promise<SiteAnnouncement[]> {
+    return [];
+  }
+
   async createApiToken(
     _baseUrl: string,
     _accessToken: string,
@@ -191,5 +214,10 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
       throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     }
     return res.json() as Promise<T>;
+  }
+
+  protected buildNoticeSourceKey(content: string): string {
+    const normalized = (content || '').trim();
+    return `notice:${createHash('sha1').update(normalized).digest('hex')}`;
   }
 }

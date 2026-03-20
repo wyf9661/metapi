@@ -4,6 +4,7 @@ import {
   CheckinResult,
   BalanceInfo,
   CreateApiTokenOptions,
+  type SiteAnnouncement,
   UserInfo,
 } from './base.js';
 
@@ -484,6 +485,41 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       return [];
     }
     return this.fetchModelsByToken(normalizedBase, discoveredApiToken);
+  }
+
+  override async getSiteAnnouncements(baseUrl: string, accessToken: string): Promise<SiteAnnouncement[]> {
+    try {
+      const endpoint = '/api/v1/announcements?page=1&page_size=100';
+      const res = await this.fetchJson<any>(`${normalizeBaseUrl(baseUrl)}${endpoint}`, {
+        headers: this.buildAuthHeader(accessToken),
+      });
+      const data = this.parseSub2ApiEnvelope<any>(res, endpoint);
+      const rawItems = Array.isArray(data)
+        ? data
+        : (Array.isArray(data?.items) ? data.items : []);
+      const rows: SiteAnnouncement[] = [];
+      for (const item of rawItems) {
+        const id = Number.parseInt(String(item?.id), 10);
+        if (!Number.isFinite(id) || id <= 0) continue;
+        const title = typeof item?.title === 'string' ? item.title.trim() : '';
+        const content = typeof item?.content === 'string' ? item.content.trim() : '';
+        if (!title && !content) continue;
+        rows.push({
+          sourceKey: `announcement:${id}`,
+          title: title || `Announcement ${id}`,
+          content: content || title,
+          level: 'info',
+          startsAt: typeof item?.starts_at === 'string' ? item.starts_at : undefined,
+          endsAt: typeof item?.ends_at === 'string' ? item.ends_at : undefined,
+          upstreamCreatedAt: typeof item?.created_at === 'string' ? item.created_at : undefined,
+          upstreamUpdatedAt: typeof item?.updated_at === 'string' ? item.updated_at : undefined,
+          rawPayload: item,
+        });
+      }
+      return rows;
+    } catch {
+      return [];
+    }
   }
 
   override async getApiTokens(baseUrl: string, accessToken: string): Promise<ApiTokenInfo[]> {

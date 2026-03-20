@@ -438,4 +438,79 @@ describe('Sub2ApiAdapter', () => {
     const deleted = await adapter.deleteApiToken(baseUrl, 'jwt-token', 'sk-delete-me');
     expect(deleted).toBe(true);
   });
+
+  it('normalizes announcements from /api/v1/announcements', async () => {
+    await startServer((req, res) => {
+      if (req.url === '/api/v1/announcements?page=1&page_size=100') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          code: 0,
+          message: 'success',
+          data: {
+            items: [
+              {
+                id: 11,
+                title: 'Maintenance',
+                content: 'Window starts at 10:00',
+                starts_at: '2026-03-20T10:00:00Z',
+                ends_at: '2026-03-20T12:00:00Z',
+                created_at: '2026-03-20T09:00:00Z',
+                updated_at: '2026-03-20T09:30:00Z',
+              },
+              {
+                id: 12,
+                title: 'New model online',
+                content: 'gpt-4.1 is available',
+                read_at: '2026-03-20T12:05:00Z',
+                created_at: '2026-03-20T12:00:00Z',
+                updated_at: '2026-03-20T12:01:00Z',
+              },
+            ],
+          },
+        }));
+        return;
+      }
+      res.writeHead(404).end();
+    });
+
+    const rows = await adapter.getSiteAnnouncements(baseUrl, 'jwt-token');
+
+    expect(rows).toEqual([
+      {
+        sourceKey: 'announcement:11',
+        title: 'Maintenance',
+        content: 'Window starts at 10:00',
+        level: 'info',
+        startsAt: '2026-03-20T10:00:00Z',
+        endsAt: '2026-03-20T12:00:00Z',
+        upstreamCreatedAt: '2026-03-20T09:00:00Z',
+        upstreamUpdatedAt: '2026-03-20T09:30:00Z',
+        rawPayload: {
+          id: 11,
+          title: 'Maintenance',
+          content: 'Window starts at 10:00',
+          starts_at: '2026-03-20T10:00:00Z',
+          ends_at: '2026-03-20T12:00:00Z',
+          created_at: '2026-03-20T09:00:00Z',
+          updated_at: '2026-03-20T09:30:00Z',
+        },
+      },
+      {
+        sourceKey: 'announcement:12',
+        title: 'New model online',
+        content: 'gpt-4.1 is available',
+        level: 'info',
+        upstreamCreatedAt: '2026-03-20T12:00:00Z',
+        upstreamUpdatedAt: '2026-03-20T12:01:00Z',
+        rawPayload: {
+          id: 12,
+          title: 'New model online',
+          content: 'gpt-4.1 is available',
+          read_at: '2026-03-20T12:05:00Z',
+          created_at: '2026-03-20T12:00:00Z',
+          updated_at: '2026-03-20T12:01:00Z',
+        },
+      },
+    ]);
+  });
 });
