@@ -1,5 +1,5 @@
 import currentContract from '../db/generated/schemaContract.json' with { type: 'json' };
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   __databaseMigrationServiceTestUtils,
   maskConnectionString,
@@ -8,6 +8,42 @@ import {
 
 function cloneContract<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function createDbSchemaMock() {
+  return {
+    settings: { __table: 'settings' },
+    sites: { __table: 'sites' },
+    siteAnnouncements: { __table: 'siteAnnouncements' },
+    siteDisabledModels: { __table: 'siteDisabledModels' },
+    accounts: { __table: 'accounts' },
+    accountTokens: { __table: 'accountTokens' },
+    checkinLogs: { __table: 'checkinLogs' },
+    modelAvailability: { __table: 'modelAvailability' },
+    tokenModelAvailability: { __table: 'tokenModelAvailability' },
+    tokenRoutes: { __table: 'tokenRoutes' },
+    routeChannels: { __table: 'routeChannels' },
+    routeGroupSources: { __table: 'routeGroupSources' },
+    proxyLogs: { __table: 'proxyLogs' },
+    proxyVideoTasks: { __table: 'proxyVideoTasks' },
+    proxyFiles: { __table: 'proxyFiles' },
+    downstreamApiKeys: { __table: 'downstreamApiKeys' },
+    events: { __table: 'events' },
+  };
+}
+
+function createDbMock(rowsByTable: Record<string, unknown[]>) {
+  return {
+    select() {
+      return {
+        from(table: { __table: string }) {
+          return {
+            all: async () => rowsByTable[table.__table] ?? [],
+          };
+        },
+      };
+    },
+  };
 }
 
 describe('databaseMigrationService', () => {
@@ -179,6 +215,7 @@ describe('databaseMigrationService', () => {
           customHeaders: '{"x-site-scope":"internal"}',
           status: 'active',
         }],
+        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [],
         accountTokens: [],
@@ -214,6 +251,7 @@ describe('databaseMigrationService', () => {
       timestamp: Date.now(),
       accounts: {
         sites: [],
+        siteAnnouncements: [],
         siteDisabledModels: [{
           id: 3,
           siteId: 12,
@@ -294,5 +332,137 @@ describe('databaseMigrationService', () => {
     const routeModeIndex = tokenRouteStatement?.columns.indexOf('route_mode') ?? -1;
     expect(routeModeIndex).toBeGreaterThanOrEqual(0);
     expect(tokenRouteStatement?.values[routeModeIndex]).toBe('explicit_group');
+  });
+
+  it('includes site announcements in migration statements', () => {
+    const statements = __databaseMigrationServiceTestUtils.buildStatements({
+      version: 'test',
+      timestamp: Date.now(),
+      accounts: {
+        sites: [],
+        siteDisabledModels: [],
+        accounts: [],
+        accountTokens: [],
+        checkinLogs: [],
+        modelAvailability: [],
+        tokenModelAvailability: [],
+        tokenRoutes: [],
+        routeChannels: [],
+        routeGroupSources: [],
+        proxyLogs: [],
+        proxyVideoTasks: [],
+        proxyFiles: [],
+        downstreamApiKeys: [],
+        events: [],
+        siteAnnouncements: [{
+          id: 11,
+          siteId: 3,
+          platform: 'openai',
+          sourceKey: 'notice-1',
+          title: '????',
+          content: '????',
+          level: 'warning',
+          sourceUrl: 'https://example.com/notice',
+          startsAt: '2026-03-20T00:00:00.000Z',
+          endsAt: '2026-03-21T00:00:00.000Z',
+          upstreamCreatedAt: '2026-03-19T00:00:00.000Z',
+          upstreamUpdatedAt: '2026-03-20T00:00:00.000Z',
+          firstSeenAt: '2026-03-20T00:00:00.000Z',
+          lastSeenAt: '2026-03-20T01:00:00.000Z',
+          readAt: null,
+          dismissedAt: null,
+          rawPayload: '{"id":"notice-1"}',
+        }],
+      },
+      preferences: {
+        settings: [],
+      },
+    } as any);
+
+    const statement = statements.find((item) => item.table === 'site_announcements');
+    expect(statement).toBeDefined();
+    expect(statement?.columns).toContain('source_key');
+    expect(statement?.values[statement?.columns.indexOf('title') ?? -1]).toBe('????');
+  });
+
+  it('includes site announcements in migration summary', async () => {
+    vi.resetModules();
+
+    const rowsByTable = {
+      settings: [],
+      sites: [],
+      siteAnnouncements: [{
+        id: 11,
+        siteId: 3,
+        platform: 'openai',
+        sourceKey: 'notice-1',
+        title: '????',
+        content: '????',
+        level: 'warning',
+        sourceUrl: 'https://example.com/notice',
+        startsAt: '2026-03-20T00:00:00.000Z',
+        endsAt: '2026-03-21T00:00:00.000Z',
+        upstreamCreatedAt: '2026-03-19T00:00:00.000Z',
+        upstreamUpdatedAt: '2026-03-20T00:00:00.000Z',
+        firstSeenAt: '2026-03-20T00:00:00.000Z',
+        lastSeenAt: '2026-03-20T01:00:00.000Z',
+        readAt: null,
+        dismissedAt: null,
+        rawPayload: '{"id":"notice-1"}',
+      }],
+      siteDisabledModels: [],
+      accounts: [],
+      accountTokens: [],
+      checkinLogs: [],
+      modelAvailability: [],
+      tokenModelAvailability: [],
+      tokenRoutes: [],
+      routeChannels: [],
+      routeGroupSources: [],
+      proxyLogs: [],
+      proxyVideoTasks: [],
+      proxyFiles: [],
+      downstreamApiKeys: [],
+      events: [],
+    };
+
+    const client = {
+      dialect: 'sqlite',
+      connectionString: ':memory:',
+      ssl: false,
+      begin: vi.fn(async () => {}),
+      commit: vi.fn(async () => {}),
+      rollback: vi.fn(async () => {}),
+      execute: vi.fn(async () => []),
+      queryScalar: vi.fn(async () => 0),
+      close: vi.fn(async () => {}),
+    };
+
+    vi.doMock('../db/index.js', () => ({
+      db: createDbMock(rowsByTable),
+      schema: createDbSchemaMock(),
+    }));
+    vi.doMock('../db/runtimeSchemaBootstrap.js', () => ({
+      createRuntimeSchemaClient: async () => client,
+      ensureRuntimeDatabaseSchema: async () => {},
+    }));
+
+    try {
+      const { migrateCurrentDatabase } = await import('./databaseMigrationService.js');
+      const summary = await migrateCurrentDatabase({
+        dialect: 'sqlite',
+        connectionString: ':memory:',
+        overwrite: true,
+      });
+
+      expect(summary.rows.siteAnnouncements).toBe(1);
+      expect(client.begin).toHaveBeenCalledTimes(1);
+      expect(client.commit).toHaveBeenCalledTimes(1);
+      expect(client.close).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.doUnmock('../db/index.js');
+      vi.doUnmock('../db/runtimeSchemaBootstrap.js');
+      vi.resetModules();
+    }
   });
 });
