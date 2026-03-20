@@ -90,13 +90,25 @@ function normalizePositiveIntegerOrNull(value: unknown): number | null {
   return normalized;
 }
 
-function parseJson(value: string | null | undefined): unknown {
-  if (!value) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
+function parseJson(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+
+  // PostgreSQL JSONB columns are returned as parsed objects/arrays by the pg driver
+  if (typeof value === 'object') {
+    return value;
   }
+
+  // SQLite TEXT columns store JSON as strings that need parsing
+  if (typeof value === 'string') {
+    if (value === '') return null;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export function normalizeGroupNameInput(input: unknown): string | null {
