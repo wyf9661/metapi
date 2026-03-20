@@ -117,6 +117,63 @@ describe('site announcements routes', () => {
     ]);
   });
 
+  it('normalizes postgres Date values for managed timestamps before filtering unread rows', async () => {
+    const routesModule = await import('./siteAnnouncements.js');
+
+    const rows = routesModule.buildSiteAnnouncementsResponseRows([
+      {
+        id: 1,
+        siteId: 7,
+        platform: 'sub2api',
+        sourceKey: 'announcement:read',
+        title: 'Read row',
+        content: 'Already read',
+        level: 'info',
+        sourceUrl: null,
+        startsAt: null,
+        endsAt: null,
+        upstreamCreatedAt: '2026-03-10T04:30:08.200Z',
+        upstreamUpdatedAt: '2026-03-10T04:30:08.200Z',
+        firstSeenAt: new Date('2026-03-19T22:41:26.000Z') as never,
+        lastSeenAt: new Date('2026-03-19T22:41:26.000Z') as never,
+        readAt: new Date('2026-03-19T22:45:00.000Z') as never,
+        dismissedAt: null,
+        rawPayload: null,
+      },
+      {
+        id: 2,
+        siteId: 8,
+        platform: 'new-api',
+        sourceKey: 'announcement:unread',
+        title: 'Unread row',
+        content: 'Still unread',
+        level: 'info',
+        sourceUrl: null,
+        startsAt: null,
+        endsAt: null,
+        upstreamCreatedAt: null,
+        upstreamUpdatedAt: null,
+        firstSeenAt: new Date('2026-03-19T22:55:27.000Z') as never,
+        lastSeenAt: new Date('2026-03-19T22:55:27.000Z') as never,
+        readAt: null,
+        dismissedAt: null,
+        rawPayload: null,
+      },
+    ] as Array<typeof schema.siteAnnouncements.$inferSelect>, {
+      read: 'false',
+      timeZone: 'Asia/Shanghai',
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: 2,
+        firstSeenAt: '2026-03-20 06:55:27',
+        lastSeenAt: '2026-03-20 06:55:27',
+        readAt: null,
+      }),
+    ]);
+  });
+
   it('marks one announcement as read and then marks all as read', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'Sub Site',
