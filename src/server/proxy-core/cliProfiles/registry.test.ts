@@ -39,6 +39,34 @@ describe('detectCliProfile', () => {
     });
   });
 
+  it('detects broader Codex official-client headers from user-agent and originator prefixes', () => {
+    expect(detectCliProfile({
+      downstreamPath: '/v1/responses',
+      headers: {
+        'user-agent': 'Mozilla/5.0 codex_chatgpt_desktop/1.2.3',
+      },
+    })).toMatchObject({
+      id: 'codex',
+      capabilities: {
+        supportsResponsesWebsocketIncremental: true,
+        echoesTurnState: true,
+      },
+    });
+
+    expect(detectCliProfile({
+      downstreamPath: '/v1/responses',
+      headers: {
+        originator: 'codex_exec',
+      },
+    })).toMatchObject({
+      id: 'codex',
+      capabilities: {
+        supportsResponsesWebsocketIncremental: true,
+        echoesTurnState: true,
+      },
+    });
+  });
+
   it('detects Claude Code requests on the count_tokens surface and exposes token counting support', () => {
     expect(detectCliProfile({
       downstreamPath: '/v1/messages/count_tokens',

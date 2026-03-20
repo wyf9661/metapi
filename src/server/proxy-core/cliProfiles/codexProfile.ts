@@ -1,5 +1,21 @@
 import type { CliProfileDefinition, DetectCliProfileInput } from './types.js';
 
+const CODEX_OFFICIAL_CLIENT_USER_AGENT_PREFIXES = [
+  'codex_cli_rs/',
+  'codex_vscode/',
+  'codex_app/',
+  'codex_chatgpt_desktop/',
+  'codex_atlas/',
+  'codex_exec/',
+  'codex_sdk_ts/',
+  'codex ',
+];
+
+const CODEX_OFFICIAL_CLIENT_ORIGINATOR_PREFIXES = [
+  'codex_',
+  'codex ',
+];
+
 function headerValueToString(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -38,6 +54,18 @@ function hasHeaderPrefix(headers: Record<string, unknown> | undefined, prefix: s
   });
 }
 
+function matchesHeaderPrefixes(value: string | null, prefixes: string[]): boolean {
+  const normalizedValue = value?.trim().toLowerCase() || '';
+  if (!normalizedValue) return false;
+
+  return prefixes.some((prefix) => {
+    const normalizedPrefix = prefix.trim().toLowerCase();
+    if (!normalizedPrefix) return false;
+    return normalizedValue.startsWith(normalizedPrefix)
+      || normalizedValue.includes(normalizedPrefix);
+  });
+}
+
 function isCodexPath(path: string): boolean {
   const normalizedPath = path.trim().toLowerCase();
   return normalizedPath.startsWith('/v1/responses')
@@ -62,7 +90,8 @@ export function isCodexRequest(input: DetectCliProfileInput): boolean {
   if (!headers) return false;
 
   const originator = getHeaderValue(headers, 'originator');
-  if (originator?.toLowerCase() === 'codex_cli_rs') return true;
+  if (matchesHeaderPrefixes(originator, CODEX_OFFICIAL_CLIENT_ORIGINATOR_PREFIXES)) return true;
+  if (matchesHeaderPrefixes(getHeaderValue(headers, 'user-agent'), CODEX_OFFICIAL_CLIENT_USER_AGENT_PREFIXES)) return true;
   if (getHeaderValue(headers, 'openai-beta')) return true;
   if (hasHeaderPrefix(headers, 'x-stainless-')) return true;
   if (getCodexSessionId(headers)) return true;
