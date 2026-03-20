@@ -6,6 +6,7 @@ import { clearFocusParams, readFocusAnnouncementId } from './helpers/navigationF
 import {
   formatSiteAnnouncementSeenAt,
   readClientTimeZone,
+  resolveSiteAnnouncementTimeZone,
   SiteAnnouncementContent,
 } from './helpers/siteAnnouncementPresentation.js';
 import { tr } from '../i18n.js';
@@ -44,7 +45,7 @@ export default function SiteAnnouncements() {
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const highlightTimerRef = useRef<number | null>(null);
   const viewerTimeZone = useMemo(() => readClientTimeZone(), []);
-  const displayTimeZone = serverTimeZone || viewerTimeZone;
+  const displayTimeZone = resolveSiteAnnouncementTimeZone(viewerTimeZone, serverTimeZone);
 
   const siteNameById = useMemo(() => {
     const map = new Map<number, string>();

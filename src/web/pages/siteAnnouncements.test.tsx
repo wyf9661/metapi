@@ -21,6 +21,14 @@ vi.mock('../api.js', () => ({
   api: apiMock,
 }));
 
+vi.mock('./helpers/siteAnnouncementPresentation.js', async () => {
+  const actual = await vi.importActual<typeof import('./helpers/siteAnnouncementPresentation.js')>('./helpers/siteAnnouncementPresentation.js');
+  return {
+    ...actual,
+    readClientTimeZone: () => 'Asia/Shanghai',
+  };
+});
+
 async function flushMicrotasks() {
   await act(async () => {
     await Promise.resolve();
@@ -107,7 +115,7 @@ describe('SiteAnnouncements page', () => {
       expect(apiMock.getRuntimeSettings).toHaveBeenCalled();
       expect(JSON.stringify(root!.toJSON())).toContain('站点公告');
       expect(JSON.stringify(root!.toJSON())).toContain('Maintenance');
-      expect(JSON.stringify(root!.toJSON())).toContain('2026/03/20 04:23:27');
+      expect(JSON.stringify(root!.toJSON())).toContain('2026/03/20 12:23:27');
 
       const highlightedRows = root!.root.findAll((node) => {
         const className = typeof node.props.className === 'string' ? node.props.className : '';

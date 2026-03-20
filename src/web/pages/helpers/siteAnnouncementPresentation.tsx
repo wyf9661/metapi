@@ -340,6 +340,17 @@ export function readClientTimeZone(): string | undefined {
   }
 }
 
+export function resolveSiteAnnouncementTimeZone(
+  clientTimeZone?: string | null,
+  serverTimeZone?: string | null,
+): string | undefined {
+  const client = String(clientTimeZone || '').trim();
+  if (client) return client;
+
+  const server = String(serverTimeZone || '').trim();
+  return server || undefined;
+}
+
 export function formatSiteAnnouncementSeenAt(
   value: string | null | undefined,
   timeZone = readClientTimeZone(),
