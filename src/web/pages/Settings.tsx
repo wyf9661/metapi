@@ -22,6 +22,17 @@ const PROXY_TOKEN_PREFIX = 'sk-';
 const ROUTE_BRAND_ICON_PREFIX = 'brand:';
 const FACTORY_RESET_ADMIN_TOKEN = 'change-me-admin-token';
 const FACTORY_RESET_CONFIRM_SECONDS = 3;
+const CHECKIN_SCHEDULE_MODE_OPTIONS = [
+  { value: 'cron', label: 'Cron' },
+  { value: 'interval', label: '间隔签到' },
+] as const;
+const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) => {
+  const hour = index + 1;
+  return {
+    value: String(hour),
+    label: `${hour} 小时`,
+  };
+});
 type DbDialect = 'sqlite' | 'mysql' | 'postgres';
 
 type RuntimeSettings = {
@@ -979,36 +990,33 @@ export default function Settings() {
           <div style={{ display: 'grid', gridTemplateColumns: '180px 180px auto', gap: 12, alignItems: 'end', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到方式</div>
-              <select
+              <ModernSelect
                 value={runtime.checkinScheduleMode}
-                onChange={(e) => setRuntime((prev) => ({
+                onChange={(value) => setRuntime((prev) => ({
                   ...prev,
-                  checkinScheduleMode: e.target.value === 'interval' ? 'interval' : 'cron',
+                  checkinScheduleMode: value === 'interval' ? 'interval' : 'cron',
                 }))}
-                style={inputStyle}
-              >
-                <option value="cron">Cron</option>
-                <option value="interval">间隔签到</option>
-              </select>
+                options={CHECKIN_SCHEDULE_MODE_OPTIONS.map((item) => ({ ...item }))}
+              />
             </div>
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到间隔</div>
-              <select
+              <ModernSelect
                 value={String(runtime.checkinIntervalHours)}
-                onChange={(e) => setRuntime((prev) => ({
+                onChange={(value) => setRuntime((prev) => ({
                   ...prev,
-                  checkinIntervalHours: Math.min(24, Math.max(1, Math.trunc(Number(e.target.value) || 1))),
+                  checkinIntervalHours: Math.min(24, Math.max(1, Math.trunc(Number(value) || 1))),
                 }))}
-                style={inputStyle}
                 disabled={runtime.checkinScheduleMode !== 'interval'}
-              >
-                {Array.from({ length: 24 }, (_, index) => {
-                  const hour = index + 1;
-                  return <option key={hour} value={hour}>{hour} 小时</option>;
-                })}
-              </select>
+                options={CHECKIN_INTERVAL_OPTIONS}
+              />
             </div>
-            <button onClick={triggerScheduleCheckin} disabled={testingCheckin} className="btn btn-secondary">
+            <button
+              onClick={triggerScheduleCheckin}
+              disabled={testingCheckin}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}
+            >
               {testingCheckin ? '触发中...' : '测试一次签到'}
             </button>
           </div>

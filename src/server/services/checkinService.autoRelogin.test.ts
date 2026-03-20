@@ -340,6 +340,40 @@ describe('checkinService auto relogin', () => {
     expect(notifyMock).not.toHaveBeenCalled();
   });
 
+  it('skips account updates when unsupported checkin responses do not change account state', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 18,
+          username: 'plain-user',
+          accessToken: 'token',
+          status: 'active',
+          extraConfig: null,
+        },
+        sites: {
+          id: 18,
+          name: 'done-hub',
+          url: 'https://done.example.com',
+          platform: 'donehub',
+        },
+      },
+    ]);
+
+    adapterMock.checkin.mockResolvedValue({
+      success: false,
+      message: 'checkin endpoint not found',
+    });
+
+    const { checkinAccount } = await import('./checkinService.js');
+    const result = await checkinAccount(18);
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('skipped');
+    expect(updateSetMock).not.toHaveBeenCalled();
+    const firstInsertPayload = insertValuesMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(firstInsertPayload?.status).toBe('skipped');
+  });
+
   it('treats sub2api checkin unsupported message as skipped', async () => {
     selectAllMock.mockReturnValue([
       {
