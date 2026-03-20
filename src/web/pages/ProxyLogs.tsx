@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   api,
   type ProxyLogBillingDetails,
+  type ProxyLogClientOption,
   type ProxyLogDetail,
   type ProxyLogListItem,
   type ProxyLogsSummary,
@@ -35,6 +36,12 @@ type ProxyLogDetailState = {
 
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
+const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
+  codex: 'Codex',
+  claude_code: 'Claude Code',
+  gemini_cli: 'Gemini CLI',
+  generic: '通用',
+};
 const EMPTY_SUMMARY: ProxyLogsSummary = {
   totalCount: 0,
   successCount: 0,
@@ -153,6 +160,12 @@ function normalizeRouteSearch(raw: string | null): string {
   return (raw || '').trim();
 }
 
+function normalizeRouteClient(raw: string | null): string {
+  const text = (raw || '').trim();
+  if (!text) return '';
+  return /^((app|family):)/i.test(text) ? text : '';
+}
+
 function normalizeRouteSiteId(raw: string | null): number | null {
   const parsed = Number.parseInt(raw || '', 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -174,6 +187,7 @@ function readProxyLogsRouteState(search: string) {
     pageSize: normalizeRoutePageSize(params.get('pageSize')),
     status: normalizeRouteStatus(params.get('status')),
     search: normalizeRouteSearch(params.get('q')),
+    client: normalizeRouteClient(params.get('client')),
     siteId: normalizeRouteSiteId(params.get('siteId')),
     from: normalizeRouteDateTimeInput(params.get('from')),
     to: normalizeRouteDateTimeInput(params.get('to')),
@@ -185,6 +199,7 @@ function buildProxyLogsRouteSearch(input: {
   pageSize: number;
   status: ProxyLogStatusFilter;
   search: string;
+  client: string;
   siteId: number | null;
   from: string;
   to: string;
@@ -194,11 +209,72 @@ function buildProxyLogsRouteSearch(input: {
   if (input.pageSize !== DEFAULT_PAGE_SIZE) params.set('pageSize', String(input.pageSize));
   if (input.status !== 'all') params.set('status', input.status);
   if (input.search.trim()) params.set('q', input.search.trim());
+  if (input.client.trim()) params.set('client', input.client.trim());
   if (input.siteId) params.set('siteId', String(input.siteId));
   if (input.from.trim()) params.set('from', input.from.trim());
   if (input.to.trim()) params.set('to', input.to.trim());
   const next = params.toString();
   return next ? `?${next}` : '';
+}
+
+function formatProxyLogClientFamilyLabel(clientFamily?: string | null, options?: { includeGeneric?: boolean }) {
+  const normalized = typeof clientFamily === 'string' ? clientFamily.trim().toLowerCase() : '';
+  if (!normalized) return null;
+  if (!options?.includeGeneric && normalized === 'generic') return null;
+  return PROXY_LOG_CLIENT_FAMILY_LABELS[normalized] || clientFamily || null;
+}
+
+function resolveProxyLogClientDisplay(
+  log: Pick<ProxyLogRenderItem, 'clientFamily' | 'clientAppName' | 'clientConfidence'>,
+  options?: { includeGeneric?: boolean },
+) {
+  const familyLabel = formatProxyLogClientFamilyLabel(log.clientFamily, options);
+  const appName = typeof log.clientAppName === 'string' ? log.clientAppName.trim() : '';
+  if (appName) {
+    return {
+      primary: appName,
+      secondary: familyLabel,
+      heuristic: log.clientConfidence === 'heuristic',
+    };
+  }
+  return {
+    primary: familyLabel,
+    secondary: null,
+    heuristic: false,
+  };
+}
+
+function renderProxyLogClientCell(
+  log: Pick<ProxyLogRenderItem, 'clientFamily' | 'clientAppName' | 'clientConfidence'>,
+  options?: { includeGeneric?: boolean },
+) {
+  const display = resolveProxyLogClientDisplay(log, options);
+  if (!display.primary) {
+    return <span style={{ color: 'var(--color-text-muted)' }}>-</span>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span>{display.primary}</span>
+        {display.heuristic ? (
+          <span
+            className="badge"
+            style={{
+              fontSize: 10,
+              color: 'var(--color-text-muted)',
+              borderColor: 'var(--color-border)',
+            }}
+          >
+            推测
+          </span>
+        ) : null}
+      </div>
+      {display.secondary ? (
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{display.secondary}</span>
+      ) : null}
+    </div>
+  );
 }
 
 function toApiTimeBoundary(value: string): string | undefined {
@@ -220,6 +296,7 @@ export default function ProxyLogs() {
   const [statusFilter, setStatusFilter] = useState<ProxyLogStatusFilter>(initialRouteState.status);
   const [searchInput, setSearchInput] = useState(initialRouteState.search);
   const deferredSearchInput = useDeferredValue(searchInput.trim());
+  const [clientFilter, setClientFilter] = useState(initialRouteState.client);
   const [siteFilter, setSiteFilter] = useState<number | null>(initialRouteState.siteId);
   const [fromInput, setFromInput] = useState(initialRouteState.from);
   const [toInput, setToInput] = useState(initialRouteState.to);
@@ -229,6 +306,7 @@ export default function ProxyLogs() {
   const [detailById, setDetailById] = useState<Record<number, ProxyLogDetailState>>({});
   const [showFilters, setShowFilters] = useState(false);
   const [sites, setSites] = useState<Array<{ id: number; name: string; status?: string | null }>>([]);
+  const [clientOptions, setClientOptions] = useState<ProxyLogClientOption[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const isMobile = useIsMobile(768);
   const toast = useToast();
@@ -245,6 +323,7 @@ export default function ProxyLogs() {
     const next = readProxyLogsRouteState(location.search);
     setStatusFilter((current) => (current === next.status ? current : next.status));
     setSearchInput((current) => (current === next.search ? current : next.search));
+    setClientFilter((current) => (current === next.client ? current : next.client));
     setSiteFilter((current) => (current === next.siteId ? current : next.siteId));
     setFromInput((current) => (current === next.from ? current : next.from));
     setToInput((current) => (current === next.to ? current : next.to));
@@ -258,13 +337,14 @@ export default function ProxyLogs() {
       pageSize,
       status: statusFilter,
       search: searchInput,
+      client: clientFilter,
       siteId: siteFilter,
       from: fromInput,
       to: toInput,
     });
     if (nextSearch === location.search) return;
     navigate({ pathname: location.pathname, search: nextSearch }, { replace: true });
-  }, [fromInput, location.pathname, location.search, navigate, page, pageSize, searchInput, siteFilter, statusFilter, toInput]);
+  }, [clientFilter, fromInput, location.pathname, location.search, navigate, page, pageSize, searchInput, siteFilter, statusFilter, toInput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -326,6 +406,20 @@ export default function ProxyLogs() {
     ];
   }, [siteFilter, sites]);
 
+  const resolvedClientOptions = useMemo(() => {
+    const options = [...clientOptions];
+    if (clientFilter && !options.some((option) => option.value === clientFilter)) {
+      options.unshift({
+        value: clientFilter,
+        label: clientFilter,
+      });
+    }
+    return [
+      { value: '', label: '全部客户端' },
+      ...options,
+    ];
+  }, [clientFilter, clientOptions]);
+
   const activeSiteLabel = useMemo(() => {
     if (!siteFilter) return '全部站点';
     return siteOptions.find((option) => option.value === String(siteFilter))?.label || `站点 #${siteFilter}`;
@@ -357,6 +451,7 @@ export default function ProxyLogs() {
         offset: currentOffset,
         status: statusFilter,
         search: deferredSearchInput,
+        ...(clientFilter ? { client: clientFilter } : {}),
         ...(siteFilter ? { siteId: siteFilter } : {}),
         ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
         ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
@@ -366,13 +461,14 @@ export default function ProxyLogs() {
       setLogs(Array.isArray(data.items) ? data.items : []);
       setTotal(Number(data.total || 0));
       setSummary(data.summary || EMPTY_SUMMARY);
+      setClientOptions(Array.isArray(data.clientOptions) ? data.clientOptions : []);
     } catch (e: any) {
       if (seq !== loadSeq.current) return;
       if (!silent) toast.error(e.message || '加载日志失败');
     } finally {
       if (seq === loadSeq.current) setLoading(false);
     }
-  }, [currentOffset, deferredSearchInput, fromApiBoundary, hasInvalidTimeRange, pageSize, siteFilter, statusFilter, toApiBoundaryValue, toast]);
+  }, [clientFilter, currentOffset, deferredSearchInput, fromApiBoundary, hasInvalidTimeRange, pageSize, siteFilter, statusFilter, toApiBoundaryValue, toast]);
 
   useEffect(() => {
     void load();
@@ -453,6 +549,18 @@ export default function ProxyLogs() {
       <div className="proxy-logs-filter-select">
         <ModernSelect
           size="sm"
+          value={clientFilter}
+          onChange={(nextValue) => {
+            setClientFilter(nextValue);
+            setPage(1);
+          }}
+          options={resolvedClientOptions}
+          placeholder="全部客户端"
+        />
+      </div>
+      <div className="proxy-logs-filter-select">
+        <ModernSelect
+          size="sm"
           value={siteFilter ? String(siteFilter) : ''}
           onChange={(nextValue) => {
             setSiteFilter(nextValue ? Number(nextValue) : null);
@@ -504,6 +612,7 @@ export default function ProxyLogs() {
         className="btn btn-ghost proxy-logs-filter-reset"
         onClick={() => {
           setStatusFilter('all');
+          setClientFilter('');
           setSiteFilter(null);
           setFromInput('');
           setToInput('');
@@ -620,6 +729,7 @@ export default function ProxyLogs() {
                 >
                   <MobileField label="时间" value={formatDateTimeLocal(log.createdAt)} />
                   <MobileField label="站点" value={<SiteBadgeLink siteId={siteIdByName.get(String(log.siteName || '').trim())} siteName={log.siteName} badgeStyle={{ fontSize: 11 }} />} />
+                  <MobileField label="客户端" value={renderProxyLogClientCell(detailLog)} />
                   {downstreamKeySummary ? <MobileField label="下游 Key" value={downstreamKeySummary} /> : null}
                   <MobileField label="用时" value={formatLatency(log.latencyMs)} />
                   <MobileField label="输入" value={log.promptTokens?.toLocaleString() || '-'} />
@@ -634,6 +744,7 @@ export default function ProxyLogs() {
                       {detailState?.loading && <div style={{ color: 'var(--color-text-muted)' }}>加载详情中...</div>}
                       {detailState?.error && <div style={{ color: 'var(--color-danger)' }}>{detailState.error}</div>}
                       {billingDetailSummary && <div style={{ color: 'var(--color-text-muted)' }}>{billingDetailSummary}</div>}
+                      <MobileField label="客户端详情" value={renderProxyLogClientCell(detailLog, { includeGeneric: true })} />
                       {downstreamKeySummary && <div style={{ color: 'var(--color-text-muted)' }}>{downstreamKeySummary}</div>}
                       {billingProcessLines.length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -668,6 +779,7 @@ export default function ProxyLogs() {
                 <th>时间</th>
                 <th>模型</th>
                 <th>站点</th>
+                <th>客户端</th>
                 <th>{tr('状态')}</th>
                 <th style={{ textAlign: 'center' }}>用时</th>
                 <th style={{ textAlign: 'right' }}>输入</th>
@@ -722,6 +834,9 @@ export default function ProxyLogs() {
                       <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
                         <SiteBadgeLink siteId={siteIdByName.get(String(log.siteName || '').trim())} siteName={log.siteName} badgeStyle={{ fontSize: 11 }} />
                       </td>
+                      <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                        {renderProxyLogClientCell(detailLog)}
+                      </td>
                       <td>
                         <span className={`badge ${log.status === 'success' ? 'badge-success' : 'badge-error'}`} style={{ fontSize: 11, fontWeight: 600 }}>
                           <span style={{
@@ -763,7 +878,7 @@ export default function ProxyLogs() {
                     </tr>
                     {expanded === log.id && (
                       <tr style={{ background: 'var(--color-bg)' }}>
-                        <td colSpan={10} style={{ padding: 0 }}>
+                        <td colSpan={11} style={{ padding: 0 }}>
                           <div className="anim-collapse is-open">
                             <div className="anim-collapse-inner">
                               <div className="animate-fade-in" style={{
@@ -796,6 +911,12 @@ export default function ProxyLogs() {
                                     {billingDetailSummary && (
                                       <div style={{ color: 'var(--color-text-muted)' }}>{billingDetailSummary}</div>
                                     )}
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                                      <span style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>客户端</span>
+                                      <div style={{ minWidth: 0 }}>
+                                        {renderProxyLogClientCell(detailLog, { includeGeneric: true })}
+                                      </div>
+                                    </div>
                                     {downstreamKeySummary && (
                                       <div style={{ color: 'var(--color-text-muted)' }}>{downstreamKeySummary}</div>
                                     )}

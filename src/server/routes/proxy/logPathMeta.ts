@@ -7,7 +7,7 @@ type ComposeProxyLogMessageArgs = {
   errorMessage?: string | null;
 };
 
-type ParsedPathMeta = {
+export type ParsedProxyLogMessageMeta = {
   clientKind: string | null;
   sessionId: string | null;
   downstreamPath: string | null;
@@ -15,7 +15,7 @@ type ParsedPathMeta = {
   messageText: string;
 };
 
-function parseExistingPathMeta(rawMessage: string): ParsedPathMeta {
+export function parseProxyLogMessageMeta(rawMessage: string): ParsedProxyLogMessageMeta {
   const clientMatch = rawMessage.match(/\[client:([^\]]+)\]/i);
   const sessionMatch = rawMessage.match(/\[session:([^\]]+)\]/i);
   const downstreamMatch = rawMessage.match(/\[downstream:([^\]]+)\]/i);
@@ -42,7 +42,7 @@ export function composeProxyLogMessage({
   errorMessage,
 }: ComposeProxyLogMessageArgs): string | null {
   const rawMessage = typeof errorMessage === 'string' ? errorMessage.trim() : '';
-  const parsed = parseExistingPathMeta(rawMessage);
+  const parsed = parseProxyLogMessageMeta(rawMessage);
   const finalClientKind = (clientKind || parsed.clientKind || '').trim();
   const finalSessionId = (sessionId || traceHint || parsed.sessionId || '').trim();
   const finalDownstreamPath = (downstreamPath || parsed.downstreamPath || '').trim();

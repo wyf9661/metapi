@@ -653,6 +653,30 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "client_family": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "client_app_id": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "client_app_name": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "client_confidence": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },
@@ -1452,6 +1476,24 @@
       "table": "proxy_logs",
       "columns": [
         "account_id",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "proxy_logs_client_app_id_created_at_idx",
+      "table": "proxy_logs",
+      "columns": [
+        "client_app_id",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "proxy_logs_client_family_created_at_idx",
+      "table": "proxy_logs",
+      "columns": [
+        "client_family",
         "created_at"
       ],
       "unique": false

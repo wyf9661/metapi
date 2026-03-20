@@ -1,6 +1,5 @@
 ﻿import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { fetch } from 'undici';
-import { db, hasProxyLogDownstreamApiKeyIdColumn, schema } from '../../db/index.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
 import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
@@ -16,6 +15,8 @@ import { detectProxyFailure } from './proxyFailureJudge.js';
 import { resolveProxyLogBilling } from './proxyBilling.js';
 import { getProxyAuthContext } from '../../middleware/auth.js';
 import { buildUpstreamUrl } from './upstreamUrl.js';
+import { detectDownstreamClientContext, type DownstreamClientContext } from './downstreamClientContext.js';
+import { insertProxyLog } from '../../services/proxyLogStore.js';
 
 const MAX_RETRIES = 2;
 
@@ -29,8 +30,12 @@ export async function completionsProxyRoute(app: FastifyInstance) {
     if (!await ensureModelAllowedForDownstreamKey(request, reply, requestedModel)) return;
     const downstreamPolicy = getDownstreamRoutingPolicy(request);
     const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
-    const logDownstreamApiKeyId = downstreamApiKeyId !== null
-      && await hasProxyLogDownstreamApiKeyIdColumn();
+    const downstreamPath = '/v1/completions';
+    const clientContext = detectDownstreamClientContext({
+      downstreamPath,
+      headers: request.headers as Record<string, unknown>,
+      body,
+    });
 
     const isStream = body.stream === true;
     const excludeChannelIds: number[] = [];
@@ -75,7 +80,7 @@ export async function completionsProxyRoute(app: FastifyInstance) {
         if (!upstream.ok) {
           const errText = await upstream.text().catch(() => 'unknown error');
           tokenRouter.recordFailure(selected.channel.id);
-          logProxy(selected, requestedModel, 'failed', upstream.status, Date.now() - startTime, errText, retryCount, logDownstreamApiKeyId ? downstreamApiKeyId : null);
+          logProxy(selected, requestedModel, 'failed', upstream.status, Date.now() - startTime, errText, retryCount, downstreamApiKeyId, 0, 0, 0, 0, null, clientContext, downstreamPath);
 
           if (isTokenExpiredError({ status: upstream.status, message: errText })) {
             await reportTokenExpired({
@@ -176,8 +181,8 @@ export async function completionsProxyRoute(app: FastifyInstance) {
           tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
           recordDownstreamCostUsage(request, estimatedCost);
           logProxy(
-            selected, requestedModel, 'success', 200, latency, null, retryCount, logDownstreamApiKeyId ? downstreamApiKeyId : null,
-            resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails,
+            selected, requestedModel, 'success', 200, latency, null, retryCount, downstreamApiKeyId,
+            resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails, clientContext, downstreamPath,
           );
           return;
         }
@@ -203,7 +208,14 @@ export async function completionsProxyRoute(app: FastifyInstance) {
             latency,
             errText,
             retryCount,
-            logDownstreamApiKeyId ? downstreamApiKeyId : null,
+            downstreamApiKeyId,
+            0,
+            0,
+            0,
+            0,
+            null,
+            clientContext,
+            downstreamPath,
           );
 
           if (shouldRetryProxyRequest(failure.status, errText) && retryCount < MAX_RETRIES) {
@@ -247,13 +259,13 @@ export async function completionsProxyRoute(app: FastifyInstance) {
         tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
         recordDownstreamCostUsage(request, estimatedCost);
         logProxy(
-          selected, requestedModel, 'success', 200, latency, null, retryCount, logDownstreamApiKeyId ? downstreamApiKeyId : null,
-          resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails,
+          selected, requestedModel, 'success', 200, latency, null, retryCount, downstreamApiKeyId,
+          resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails, clientContext, downstreamPath,
         );
         return reply.send(data);
       } catch (err: any) {
         tokenRouter.recordFailure(selected.channel.id);
-        logProxy(selected, requestedModel, 'failed', 0, Date.now() - startTime, err.message, retryCount, logDownstreamApiKeyId ? downstreamApiKeyId : null);
+        logProxy(selected, requestedModel, 'failed', 0, Date.now() - startTime, err.message, retryCount, downstreamApiKeyId, 0, 0, 0, 0, null, clientContext, downstreamPath);
         if (retryCount < MAX_RETRIES) {
           retryCount++;
           continue;
@@ -284,18 +296,25 @@ async function logProxy(
   totalTokens = 0,
   estimatedCost = 0,
   billingDetails: unknown = null,
+  clientContext: DownstreamClientContext | null = null,
+  downstreamPath = '/v1/completions',
 ) {
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
     const normalizedErrorMessage = composeProxyLogMessage({
-      downstreamPath: '/v1/completions',
+      clientKind: clientContext?.clientKind && clientContext.clientKind !== 'generic'
+        ? clientContext.clientKind
+        : null,
+      sessionId: clientContext?.sessionId || null,
+      traceHint: clientContext?.traceHint || null,
+      downstreamPath,
       errorMessage,
     });
-    await db.insert(schema.proxyLogs).values({
+    await insertProxyLog({
       routeId: selected.channel.routeId,
       channelId: selected.channel.id,
       accountId: selected.account.id,
-      ...(downstreamApiKeyId !== null ? { downstreamApiKeyId } : {}),
+      downstreamApiKeyId,
       modelRequested,
       modelActual: selected.actualModel,
       status,
@@ -305,11 +324,15 @@ async function logProxy(
       completionTokens,
       totalTokens,
       estimatedCost,
-      billingDetails: billingDetails ? JSON.stringify(billingDetails) : null,
+      billingDetails,
+      clientFamily: clientContext?.clientKind || null,
+      clientAppId: clientContext?.clientAppId || null,
+      clientAppName: clientContext?.clientAppName || null,
+      clientConfidence: clientContext?.clientConfidence || null,
       errorMessage: normalizedErrorMessage,
       retryCount,
       createdAt,
-    }).run();
+    });
   } catch (error) {
     console.warn('[proxy/completions] failed to write proxy log', error);
   }
