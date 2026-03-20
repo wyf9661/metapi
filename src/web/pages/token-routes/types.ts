@@ -28,6 +28,9 @@ export type RouteChannel = {
   cooldownUntil?: string | null;
   account?: {
     username: string | null;
+    accessToken?: string | null;
+    extraConfig?: string | null;
+    credentialMode?: string | null;
   };
   site?: {
     id: number;

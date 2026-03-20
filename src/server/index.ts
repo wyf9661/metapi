@@ -22,6 +22,7 @@ import { oauthRoutes } from './routes/api/oauth.js';
 import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { proxyRoutes } from './routes/proxy/router.js';
 import { startScheduler } from './services/checkinScheduler.js';
+import { rebuildTokenRoutesFromAvailability } from './services/modelService.js';
 import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService } from './services/proxyLogRetentionService.js';
 import { buildStartupSummaryLines } from './services/startupInfo.js';
 import { repairStoredCreatedAtValues } from './services/storedTimestampRepairService.js';
@@ -329,6 +330,7 @@ try {
   await repairStoredCreatedAtValues();
   await migrateSiteApiKeysToAccounts();
   await ensureDefaultSitesSeeded();
+  await rebuildTokenRoutesFromAvailability();
 
   console.log('Loaded runtime settings overrides');
 } catch (error) {
