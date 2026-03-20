@@ -748,21 +748,26 @@ async function loadRouteMatch(route: RouteRow, nowMs = Date.now()): Promise<Rout
     return cached.match;
   }
 
+  const enabledRoutes = await loadEnabledRoutes(nowMs);
   const routeIds = (() => {
     if (!isExplicitGroupRoute(route)) {
       return [route.id];
     }
     return Array.from(new Set(route.sourceRouteIds.filter((routeId) => Number.isFinite(routeId) && routeId > 0)));
   })();
-  const enabledSourceRouteIds = isExplicitGroupRoute(route)
-    ? (await loadEnabledRoutes(nowMs))
-      .filter((item) => (
-        routeIds.includes(item.id)
-        && !isExplicitGroupRoute(item)
-        && isExactRouteModelPattern(item.modelPattern)
-      ))
-      .map((item) => item.id)
-    : routeIds;
+  const enabledSourceRoutes = isExplicitGroupRoute(route)
+    ? enabledRoutes.filter((item) => (
+      routeIds.includes(item.id)
+      && !isExplicitGroupRoute(item)
+      && isExactRouteModelPattern(item.modelPattern)
+    ))
+    : enabledRoutes.filter((item) => routeIds.includes(item.id));
+  const enabledSourceRouteIds = enabledSourceRoutes.map((item) => item.id);
+  const fallbackSourceModelByRouteId = new Map<number, string>(
+    enabledSourceRoutes
+      .filter((item) => isExactRouteModelPattern(item.modelPattern))
+      .map((item) => [item.id, (item.modelPattern || '').trim()]),
+  );
   const channels = enabledSourceRouteIds.length > 0
     ? await db
       .select()
@@ -775,7 +780,12 @@ async function loadRouteMatch(route: RouteRow, nowMs = Date.now()): Promise<Rout
     : [];
 
   const mapped = channels.map((row) => ({
-    channel: row.route_channels,
+    channel: {
+      ...row.route_channels,
+      sourceModel: normalizeChannelSourceModel(row.route_channels.sourceModel)
+        || fallbackSourceModelByRouteId.get(row.route_channels.routeId)
+        || null,
+    },
     account: row.accounts,
     site: row.sites,
     token: row.account_tokens,
