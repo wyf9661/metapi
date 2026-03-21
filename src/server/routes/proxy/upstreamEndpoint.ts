@@ -443,7 +443,7 @@ function buildClaudeRuntimeHeaders(input: {
     'User-Agent': getInputHeader(input.claudeHeaders, 'user-agent') || CLAUDE_DEFAULT_USER_AGENT,
     Connection: 'keep-alive',
     Accept: input.stream ? 'text/event-stream' : 'application/json',
-    'Accept-Encoding': input.stream ? 'identity' : 'gzip, deflate, br, zstd',
+    'Accept-Encoding': 'identity',
   };
   if (input.isClaudeOauthUpstream) {
     headers.Authorization = `Bearer ${input.tokenValue}`;
