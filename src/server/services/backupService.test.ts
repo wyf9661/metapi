@@ -181,6 +181,167 @@ describe('backupService', () => {
     expect(restoredChannel?.sourceModel).toBe('gpt-4o');
   });
 
+  it('preserves local logs and runtime stats when importing account backups', async () => {
+    const exportedAt = '2026-03-20T09:00:00.000Z';
+    const localRuntimeAt = '2026-03-21T10:30:00.000Z';
+    const site = await db.insert(schema.sites).values({
+      name: 'backup-site',
+      url: 'https://preserve.example.com',
+      platform: 'new-api',
+      status: 'active',
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'preserve-user',
+      accessToken: 'session-token',
+      apiToken: 'api-token',
+      balance: 20,
+      balanceUsed: 3,
+      quota: 100,
+      status: 'active',
+      checkinEnabled: true,
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    const accountToken = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'default',
+      token: 'sk-preserve-token',
+      source: 'manual',
+      enabled: true,
+      isDefault: true,
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'gpt-preserve-*',
+      displayName: 'backup-route',
+      modelMapping: JSON.stringify({ to: 'gpt-4o-mini' }),
+      routeMode: 'pattern',
+      routingStrategy: 'weighted',
+      enabled: true,
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      tokenId: accountToken.id,
+      sourceModel: 'gpt-4o',
+      priority: 1,
+      weight: 10,
+      enabled: true,
+      manualOverride: false,
+      successCount: 1,
+      failCount: 0,
+      totalLatencyMs: 200,
+      totalCost: 0.5,
+      lastUsedAt: exportedAt,
+      lastSelectedAt: exportedAt,
+      lastFailAt: null,
+      consecutiveFailCount: 0,
+      cooldownLevel: 0,
+      cooldownUntil: null,
+    }).run();
+
+    const insertedChannel = await db.select()
+      .from(schema.routeChannels)
+      .where(eq(schema.routeChannels.routeId, route.id))
+      .get();
+
+    expect(insertedChannel).toBeTruthy();
+
+    const exported = await backupService.exportBackup('all');
+
+    await db.update(schema.sites).set({
+      name: 'mutated-local-site',
+      updatedAt: localRuntimeAt,
+    }).where(eq(schema.sites.id, site.id)).run();
+
+    await db.update(schema.tokenRoutes).set({
+      displayName: 'mutated-local-route',
+      updatedAt: localRuntimeAt,
+    }).where(eq(schema.tokenRoutes.id, route.id)).run();
+
+    await db.update(schema.accounts).set({
+      balanceUsed: 88,
+      updatedAt: localRuntimeAt,
+    }).where(eq(schema.accounts.id, account.id)).run();
+
+    await db.update(schema.routeChannels).set({
+      successCount: 77,
+      failCount: 9,
+      totalLatencyMs: 4321,
+      totalCost: 7.89,
+      lastUsedAt: localRuntimeAt,
+      lastSelectedAt: localRuntimeAt,
+      lastFailAt: localRuntimeAt,
+      consecutiveFailCount: 4,
+      cooldownLevel: 2,
+      cooldownUntil: localRuntimeAt,
+    }).where(eq(schema.routeChannels.id, insertedChannel!.id)).run();
+
+    await db.insert(schema.checkinLogs).values({
+      accountId: account.id,
+      status: 'success',
+      message: 'local-checkin',
+      reward: '1.5',
+      createdAt: localRuntimeAt,
+    }).run();
+
+    await db.insert(schema.proxyLogs).values({
+      routeId: route.id,
+      channelId: insertedChannel!.id,
+      accountId: account.id,
+      modelRequested: 'gpt-4o',
+      modelActual: 'gpt-4o',
+      status: 'success',
+      totalTokens: 321,
+      estimatedCost: 0.123,
+      createdAt: localRuntimeAt,
+    }).run();
+
+    const result = await backupService.importBackup(exported as unknown as Record<string, unknown>);
+
+    expect(result.allImported).toBe(true);
+    expect(result.sections.accounts).toBe(true);
+
+    const restoredSite = await db.select().from(schema.sites).where(eq(schema.sites.id, site.id)).get();
+    const restoredAccount = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    const restoredRoute = await db.select().from(schema.tokenRoutes).where(eq(schema.tokenRoutes.id, route.id)).get();
+    const restoredChannel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, insertedChannel!.id)).get();
+    const restoredProxyLogs = await db.select().from(schema.proxyLogs).all();
+    const restoredCheckinLogs = await db.select().from(schema.checkinLogs).all();
+
+    expect(restoredSite?.name).toBe('backup-site');
+    expect(restoredRoute?.displayName).toBe('backup-route');
+    expect(restoredAccount?.balanceUsed).toBe(88);
+    expect(restoredChannel?.successCount).toBe(77);
+    expect(restoredChannel?.failCount).toBe(9);
+    expect(restoredChannel?.totalLatencyMs).toBe(4321);
+    expect(restoredChannel?.totalCost).toBe(7.89);
+    expect(restoredChannel?.lastUsedAt).toBe(localRuntimeAt);
+    expect(restoredChannel?.lastSelectedAt).toBe(localRuntimeAt);
+    expect(restoredChannel?.lastFailAt).toBe(localRuntimeAt);
+    expect(restoredChannel?.consecutiveFailCount).toBe(4);
+    expect(restoredChannel?.cooldownLevel).toBe(2);
+    expect(restoredChannel?.cooldownUntil).toBe(localRuntimeAt);
+    expect(restoredProxyLogs).toHaveLength(1);
+    expect(restoredProxyLogs[0]?.accountId).toBe(account.id);
+    expect(restoredProxyLogs[0]?.routeId).toBe(route.id);
+    expect(restoredProxyLogs[0]?.channelId).toBe(insertedChannel!.id);
+    expect(restoredProxyLogs[0]?.totalTokens).toBe(321);
+    expect(restoredCheckinLogs).toHaveLength(1);
+    expect(restoredCheckinLogs[0]?.accountId).toBe(account.id);
+    expect(restoredCheckinLogs[0]?.message).toBe('local-checkin');
+  });
+
   it('imports ALL-API-Hub style payload with accounts and preferences', async () => {
     const payload = {
       timestamp: Date.now(),

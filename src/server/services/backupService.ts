@@ -41,6 +41,8 @@ type AccountTokenRow = typeof schema.accountTokens.$inferSelect;
 type TokenRouteRow = typeof schema.tokenRoutes.$inferSelect;
 type RouteChannelRow = typeof schema.routeChannels.$inferSelect;
 type RouteGroupSourceRow = typeof schema.routeGroupSources.$inferSelect;
+type ProxyLogRow = typeof schema.proxyLogs.$inferSelect;
+type CheckinLogRow = typeof schema.checkinLogs.$inferSelect;
 
 interface AccountsBackupSection {
   sites: SiteRow[];
@@ -79,6 +81,53 @@ interface BackupPreferencesPartialV2 {
 type BackupV2 = BackupFullV2 | BackupAccountsPartialV2 | BackupPreferencesPartialV2;
 
 type RawBackupData = Record<string, unknown>;
+
+type AccountRuntimeSnapshot = {
+  balanceUsed: number | null;
+  lastCheckinAt: string | null;
+  lastBalanceRefresh: string | null;
+};
+
+type RouteChannelRuntimeSnapshot = Pick<RouteChannelRow,
+  'successCount'
+  | 'failCount'
+  | 'totalLatencyMs'
+  | 'totalCost'
+  | 'lastUsedAt'
+  | 'lastSelectedAt'
+  | 'lastFailAt'
+  | 'consecutiveFailCount'
+  | 'cooldownLevel'
+  | 'cooldownUntil'
+>;
+
+type ProxyLogSnapshot = ProxyLogRow & {
+  accountKey: string | null;
+  routeKey: string | null;
+  channelKey: string | null;
+};
+
+type CheckinLogSnapshot = CheckinLogRow & {
+  accountKey: string | null;
+};
+
+interface RuntimeIdentityIndexes {
+  accountKeyById: Map<number, string>;
+  accountIdByKey: Map<string, number>;
+  tokenKeyById: Map<number, string>;
+  tokenIdByKey: Map<string, number>;
+  routeKeyById: Map<number, string>;
+  routeIdByKey: Map<string, number>;
+  channelKeyById: Map<number, string>;
+  channelIdByKey: Map<string, number>;
+}
+
+interface RuntimeStateSnapshot {
+  accountRuntimeByKey: Map<string, AccountRuntimeSnapshot>;
+  routeChannelRuntimeByKey: Map<string, RouteChannelRuntimeSnapshot>;
+  proxyLogs: ProxyLogSnapshot[];
+  checkinLogs: CheckinLogSnapshot[];
+}
 
 interface BackupImportResult {
   allImported: boolean;
@@ -199,6 +248,234 @@ function resolveImportedOauthColumns(row: Pick<AccountRow, 'oauthProvider' | 'oa
     oauthProvider,
     oauthAccountKey,
     oauthProjectId,
+  };
+}
+
+function buildSiteIdentityKey(row: Pick<SiteRow, 'platform' | 'url'>): string {
+  return `${asString(row.platform).toLowerCase()}::${normalizeOriginUrl(asString(row.url))}`;
+}
+
+function buildAccountIdentityKey(input: {
+  siteKey: string;
+  username?: string | null;
+  accessToken?: string | null;
+  apiToken?: string | null;
+  oauthProvider?: string | null;
+  oauthAccountKey?: string | null;
+  oauthProjectId?: string | null;
+}): string {
+  const oauthProvider = asString(input.oauthProvider).toLowerCase();
+  const oauthAccountKey = asString(input.oauthAccountKey);
+  const oauthProjectId = asString(input.oauthProjectId);
+  if (oauthProvider || oauthAccountKey || oauthProjectId) {
+    return `oauth::${input.siteKey}::${oauthProvider}::${oauthAccountKey}::${oauthProjectId}`;
+  }
+
+  const apiToken = asString(input.apiToken);
+  if (apiToken) {
+    return `api::${input.siteKey}::${apiToken}`;
+  }
+
+  const accessToken = asString(input.accessToken);
+  if (accessToken) {
+    return `session::${input.siteKey}::${accessToken}`;
+  }
+
+  return `user::${input.siteKey}::${asString(input.username)}`;
+}
+
+function buildTokenIdentityKey(row: Pick<AccountTokenRow, 'name' | 'token' | 'tokenGroup' | 'source' | 'isDefault'>, accountKey: string): string {
+  const token = asString(row.token);
+  if (token) {
+    return `token::${accountKey}::${token}`;
+  }
+
+  return [
+    'token-meta',
+    accountKey,
+    asString(row.name),
+    asString(row.tokenGroup),
+    asString(row.source),
+    row.isDefault ? '1' : '0',
+  ].join('::');
+}
+
+function buildRouteIdentityKey(row: Pick<TokenRouteRow, 'modelPattern' | 'routeMode'>): string {
+  return [
+    asString(row.modelPattern),
+    asString(row.routeMode),
+  ].join('::');
+}
+
+function buildRouteChannelIdentityKey(
+  row: Pick<RouteChannelRow, 'routeId' | 'accountId' | 'tokenId' | 'sourceModel'>,
+  indexes: Pick<RuntimeIdentityIndexes, 'accountKeyById' | 'tokenKeyById' | 'routeKeyById'>,
+): string | null {
+  const routeKey = indexes.routeKeyById.get(row.routeId);
+  const accountKey = indexes.accountKeyById.get(row.accountId);
+  if (!routeKey || !accountKey) return null;
+
+  const tokenKey = row.tokenId ? (indexes.tokenKeyById.get(row.tokenId) || '') : '';
+  return [routeKey, accountKey, tokenKey, asString(row.sourceModel)].join('::');
+}
+
+function buildRuntimeIdentityIndexesFromSection(section: AccountsBackupSection): RuntimeIdentityIndexes {
+  const siteKeyById = new Map<number, string>();
+  const accountKeyById = new Map<number, string>();
+  const accountIdByKey = new Map<string, number>();
+  const tokenKeyById = new Map<number, string>();
+  const tokenIdByKey = new Map<string, number>();
+  const routeKeyById = new Map<number, string>();
+  const routeIdByKey = new Map<string, number>();
+  const channelKeyById = new Map<number, string>();
+  const channelIdByKey = new Map<string, number>();
+
+  for (const row of section.sites) {
+    siteKeyById.set(row.id, buildSiteIdentityKey(row));
+  }
+
+  for (const row of section.accounts) {
+    const siteKey = siteKeyById.get(row.siteId);
+    if (!siteKey) continue;
+    const oauthColumns = resolveImportedOauthColumns(row);
+    const accountKey = buildAccountIdentityKey({
+      siteKey,
+      username: row.username,
+      accessToken: row.accessToken,
+      apiToken: row.apiToken,
+      oauthProvider: oauthColumns.oauthProvider,
+      oauthAccountKey: oauthColumns.oauthAccountKey,
+      oauthProjectId: oauthColumns.oauthProjectId,
+    });
+    accountKeyById.set(row.id, accountKey);
+    accountIdByKey.set(accountKey, row.id);
+  }
+
+  for (const row of section.accountTokens) {
+    const accountKey = accountKeyById.get(row.accountId);
+    if (!accountKey) continue;
+    const tokenKey = buildTokenIdentityKey(row, accountKey);
+    tokenKeyById.set(row.id, tokenKey);
+    tokenIdByKey.set(tokenKey, row.id);
+  }
+
+  for (const row of section.tokenRoutes) {
+    const routeKey = buildRouteIdentityKey(row);
+    routeKeyById.set(row.id, routeKey);
+    routeIdByKey.set(routeKey, row.id);
+  }
+
+  for (const row of section.routeChannels) {
+    const channelKey = buildRouteChannelIdentityKey(row, {
+      accountKeyById,
+      tokenKeyById,
+      routeKeyById,
+    });
+    if (!channelKey) continue;
+    channelKeyById.set(row.id, channelKey);
+    channelIdByKey.set(channelKey, row.id);
+  }
+
+  return {
+    accountKeyById,
+    accountIdByKey,
+    tokenKeyById,
+    tokenIdByKey,
+    routeKeyById,
+    routeIdByKey,
+    channelKeyById,
+    channelIdByKey,
+  };
+}
+
+async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapshot> {
+  const [sites, accounts, accountTokens, tokenRoutes, routeChannels, proxyLogs, checkinLogs] = await Promise.all([
+    db.select().from(schema.sites).all(),
+    db.select().from(schema.accounts).all(),
+    db.select().from(schema.accountTokens).all(),
+    db.select().from(schema.tokenRoutes).all(),
+    db.select().from(schema.routeChannels).all(),
+    db.select().from(schema.proxyLogs).all(),
+    db.select().from(schema.checkinLogs).all(),
+  ]);
+
+  const siteKeyById = new Map<number, string>();
+  for (const row of sites) {
+    siteKeyById.set(row.id, buildSiteIdentityKey(row));
+  }
+
+  const accountKeyById = new Map<number, string>();
+  const accountRuntimeByKey = new Map<string, AccountRuntimeSnapshot>();
+  for (const row of accounts) {
+    const siteKey = siteKeyById.get(row.siteId);
+    if (!siteKey) continue;
+    const oauthColumns = resolveImportedOauthColumns(row);
+    const accountKey = buildAccountIdentityKey({
+      siteKey,
+      username: row.username,
+      accessToken: row.accessToken,
+      apiToken: row.apiToken,
+      oauthProvider: oauthColumns.oauthProvider,
+      oauthAccountKey: oauthColumns.oauthAccountKey,
+      oauthProjectId: oauthColumns.oauthProjectId,
+    });
+    accountKeyById.set(row.id, accountKey);
+    accountRuntimeByKey.set(accountKey, {
+      balanceUsed: row.balanceUsed ?? 0,
+      lastCheckinAt: row.lastCheckinAt ?? null,
+      lastBalanceRefresh: row.lastBalanceRefresh ?? null,
+    });
+  }
+
+  const tokenKeyById = new Map<number, string>();
+  for (const row of accountTokens) {
+    const accountKey = accountKeyById.get(row.accountId);
+    if (!accountKey) continue;
+    tokenKeyById.set(row.id, buildTokenIdentityKey(row, accountKey));
+  }
+
+  const routeKeyById = new Map<number, string>();
+  for (const row of tokenRoutes) {
+    routeKeyById.set(row.id, buildRouteIdentityKey(row));
+  }
+
+  const channelKeyById = new Map<number, string>();
+  const routeChannelRuntimeByKey = new Map<string, RouteChannelRuntimeSnapshot>();
+  for (const row of routeChannels) {
+    const channelKey = buildRouteChannelIdentityKey(row, {
+      accountKeyById,
+      tokenKeyById,
+      routeKeyById,
+    });
+    if (!channelKey) continue;
+    channelKeyById.set(row.id, channelKey);
+    routeChannelRuntimeByKey.set(channelKey, {
+      successCount: row.successCount,
+      failCount: row.failCount,
+      totalLatencyMs: row.totalLatencyMs,
+      totalCost: row.totalCost,
+      lastUsedAt: row.lastUsedAt ?? null,
+      lastSelectedAt: row.lastSelectedAt ?? null,
+      lastFailAt: row.lastFailAt ?? null,
+      consecutiveFailCount: row.consecutiveFailCount ?? 0,
+      cooldownLevel: row.cooldownLevel ?? 0,
+      cooldownUntil: row.cooldownUntil ?? null,
+    });
+  }
+
+  return {
+    accountRuntimeByKey,
+    routeChannelRuntimeByKey,
+    proxyLogs: proxyLogs.map((row) => ({
+      ...row,
+      accountKey: row.accountId ? (accountKeyById.get(row.accountId) || null) : null,
+      routeKey: row.routeId ? (routeKeyById.get(row.routeId) || null) : null,
+      channelKey: row.channelId ? (channelKeyById.get(row.channelId) || null) : null,
+    })),
+    checkinLogs: checkinLogs.map((row) => ({
+      ...row,
+      accountKey: accountKeyById.get(row.accountId) || null,
+    })),
   };
 }
 
@@ -1068,14 +1345,16 @@ function detectImportMetadata(data: RawBackupData): {
 }
 
 async function importAccountsSection(section: AccountsBackupSection): Promise<void> {
+  const runtimeState = await collectCurrentRuntimeStateSnapshot();
+  const importedIndexes = buildRuntimeIdentityIndexesFromSection(section);
+
   await db.transaction(async (tx) => {
+    await tx.delete(schema.proxyLogs).run();
     await tx.delete(schema.routeChannels).run();
     await tx.delete(schema.routeGroupSources).run();
     await tx.delete(schema.tokenRoutes).run();
     await tx.delete(schema.tokenModelAvailability).run();
     await tx.delete(schema.modelAvailability).run();
-    await tx.delete(schema.proxyLogs).run();
-    await tx.delete(schema.checkinLogs).run();
     await tx.delete(schema.accountTokens).run();
     await tx.delete(schema.accounts).run();
     await tx.delete(schema.sites).run();
@@ -1102,6 +1381,8 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
 
     for (const row of section.accounts) {
       const oauthColumns = resolveImportedOauthColumns(row);
+      const accountKey = importedIndexes.accountKeyById.get(row.id);
+      const runtimeAccount = accountKey ? runtimeState.accountRuntimeByKey.get(accountKey) : undefined;
       await tx.insert(schema.accounts).values({
         id: row.id,
         siteId: row.siteId,
@@ -1112,7 +1393,7 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         oauthAccountKey: oauthColumns.oauthAccountKey,
         oauthProjectId: oauthColumns.oauthProjectId,
         balance: row.balance,
-        balanceUsed: row.balanceUsed,
+        balanceUsed: runtimeAccount?.balanceUsed ?? row.balanceUsed,
         quota: row.quota,
         unitCost: row.unitCost,
         valueScore: row.valueScore,
@@ -1120,8 +1401,8 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         isPinned: row.isPinned ?? false,
         sortOrder: row.sortOrder ?? 0,
         checkinEnabled: row.checkinEnabled,
-        lastCheckinAt: row.lastCheckinAt,
-        lastBalanceRefresh: row.lastBalanceRefresh,
+        lastCheckinAt: runtimeAccount?.lastCheckinAt ?? row.lastCheckinAt,
+        lastBalanceRefresh: runtimeAccount?.lastBalanceRefresh ?? row.lastBalanceRefresh,
         extraConfig: row.extraConfig,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -1170,6 +1451,8 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
     }
 
     for (const row of section.routeChannels) {
+      const channelKey = importedIndexes.channelKeyById.get(row.id);
+      const runtimeChannel = channelKey ? runtimeState.routeChannelRuntimeByKey.get(channelKey) : undefined;
       await tx.insert(schema.routeChannels).values({
         id: row.id,
         routeId: row.routeId,
@@ -1180,13 +1463,61 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         weight: row.weight,
         enabled: row.enabled,
         manualOverride: row.manualOverride,
-        successCount: row.successCount,
-        failCount: row.failCount,
-        totalLatencyMs: row.totalLatencyMs,
-        totalCost: row.totalCost,
-        lastUsedAt: row.lastUsedAt,
-        lastFailAt: row.lastFailAt,
-        cooldownUntil: row.cooldownUntil,
+        successCount: runtimeChannel?.successCount ?? row.successCount,
+        failCount: runtimeChannel?.failCount ?? row.failCount,
+        totalLatencyMs: runtimeChannel?.totalLatencyMs ?? row.totalLatencyMs,
+        totalCost: runtimeChannel?.totalCost ?? row.totalCost,
+        lastUsedAt: runtimeChannel?.lastUsedAt ?? row.lastUsedAt,
+        lastSelectedAt: runtimeChannel?.lastSelectedAt ?? row.lastSelectedAt ?? null,
+        lastFailAt: runtimeChannel?.lastFailAt ?? row.lastFailAt,
+        consecutiveFailCount: runtimeChannel?.consecutiveFailCount ?? row.consecutiveFailCount ?? 0,
+        cooldownLevel: runtimeChannel?.cooldownLevel ?? row.cooldownLevel ?? 0,
+        cooldownUntil: runtimeChannel?.cooldownUntil ?? row.cooldownUntil,
+      }).run();
+    }
+
+    for (const row of runtimeState.proxyLogs) {
+      const accountId = row.accountKey ? (importedIndexes.accountIdByKey.get(row.accountKey) ?? null) : null;
+      const routeId = row.routeKey ? (importedIndexes.routeIdByKey.get(row.routeKey) ?? null) : null;
+      const channelId = row.channelKey ? (importedIndexes.channelIdByKey.get(row.channelKey) ?? null) : null;
+
+      await tx.insert(schema.proxyLogs).values({
+        id: row.id,
+        routeId,
+        channelId,
+        accountId,
+        downstreamApiKeyId: row.downstreamApiKeyId ?? null,
+        modelRequested: row.modelRequested ?? null,
+        modelActual: row.modelActual ?? null,
+        status: row.status ?? null,
+        httpStatus: row.httpStatus ?? null,
+        latencyMs: row.latencyMs ?? null,
+        promptTokens: row.promptTokens ?? null,
+        completionTokens: row.completionTokens ?? null,
+        totalTokens: row.totalTokens ?? null,
+        estimatedCost: row.estimatedCost ?? null,
+        billingDetails: row.billingDetails ?? null,
+        clientFamily: row.clientFamily ?? null,
+        clientAppId: row.clientAppId ?? null,
+        clientAppName: row.clientAppName ?? null,
+        clientConfidence: row.clientConfidence ?? null,
+        errorMessage: row.errorMessage ?? null,
+        retryCount: row.retryCount ?? 0,
+        createdAt: row.createdAt,
+      }).run();
+    }
+
+    for (const row of runtimeState.checkinLogs) {
+      const accountId = row.accountKey ? importedIndexes.accountIdByKey.get(row.accountKey) : undefined;
+      if (!accountId) continue;
+
+      await tx.insert(schema.checkinLogs).values({
+        id: row.id,
+        accountId,
+        status: row.status,
+        message: row.message ?? null,
+        reward: row.reward ?? null,
+        createdAt: row.createdAt,
       }).run();
     }
   });
