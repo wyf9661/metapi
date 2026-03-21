@@ -137,13 +137,6 @@ function carriesResponsesFileUrlInput(value: unknown): boolean {
 
 type UsageSummary = ReturnType<typeof parseProxyUsage>;
 
-function deriveCodexExplicitSessionId(body: Record<string, unknown>): string | null {
-  const promptCacheKey = typeof body.prompt_cache_key === 'string'
-    ? body.prompt_cache_key.trim()
-    : '';
-  return promptCacheKey || null;
-}
-
 export async function handleOpenAiResponsesSurfaceRequest(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -274,7 +267,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
       );
       const buildEndpointRequest = (endpoint: 'chat' | 'messages' | 'responses') => {
         const upstreamStream = isStream || (isCodexSite && endpoint === 'responses');
-        const codexExplicitSessionId = deriveCodexExplicitSessionId(normalizedResponsesBody);
         const endpointRequest = buildUpstreamEndpointRequest({
           endpoint,
           modelName,
@@ -289,7 +281,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
           responsesOriginalBody: normalizedResponsesBody,
           downstreamHeaders: request.headers as Record<string, unknown>,
           providerHeaders: buildProviderHeaders(),
-          codexExplicitSessionId,
         });
         const upstreamPath = (
           isCompactRequest && endpoint === 'responses'
@@ -323,7 +314,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         dispatchRequest,
       });
       const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
-        if (ctx.response.status === 401 && oauth) {
+        if ((ctx.response.status === 401 || ctx.response.status === 403) && oauth) {
           try {
             const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
             selected.tokenValue = refreshed.accessToken;

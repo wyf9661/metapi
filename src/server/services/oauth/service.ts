@@ -178,7 +178,7 @@ async function findExistingOauthAccount(input: {
     if (byKey) return byKey;
   }
 
-  if (!accountKey && email) {
+  if (!accountKey && email && input.provider !== 'codex') {
     const byEmail = await db.select().from(schema.accounts).where(and(
       eq(schema.accounts.oauthProvider, input.provider),
       eq(schema.accounts.username, email),
@@ -253,6 +253,7 @@ async function upsertOauthAccount(input: {
       account: await db.select().from(schema.accounts).where(eq(schema.accounts.id, existing.id)).get(),
       site,
       created: false,
+      previousAccount: existing,
     };
   }
 
@@ -270,7 +271,7 @@ async function upsertOauthAccount(input: {
     isPinned: false,
     sortOrder: await getNextAccountSortOrder(),
   }).returning().get();
-  return { account: created, site, created: true };
+  return { account: created, site, created: true, previousAccount: null };
 }
 
 export function listOauthProviders() {
@@ -365,7 +366,7 @@ export async function handleOauthCallback(input: {
       codeVerifier: session.codeVerifier,
       projectId: session.projectId,
     });
-    const { account, site, created } = await upsertOauthAccount({
+    const { account, site, created, previousAccount } = await upsertOauthAccount({
       definition,
       exchange,
       rebindAccountId: session.rebindAccountId,
@@ -379,6 +380,20 @@ export async function handleOauthCallback(input: {
     if (refreshResult.status !== 'success') {
       if (created) {
         await db.delete(schema.accounts).where(eq(schema.accounts.id, account.id)).run();
+      } else if (previousAccount) {
+        await db.update(schema.accounts).set({
+          siteId: previousAccount.siteId,
+          username: previousAccount.username,
+          accessToken: previousAccount.accessToken,
+          apiToken: previousAccount.apiToken,
+          checkinEnabled: previousAccount.checkinEnabled,
+          status: previousAccount.status,
+          oauthProvider: previousAccount.oauthProvider,
+          oauthAccountKey: previousAccount.oauthAccountKey,
+          oauthProjectId: previousAccount.oauthProjectId,
+          extraConfig: previousAccount.extraConfig,
+          updatedAt: previousAccount.updatedAt,
+        }).where(eq(schema.accounts.id, previousAccount.id)).run();
       }
       await rebuildTokenRoutesFromAvailability();
       const errorMessage = refreshResult.errorMessage || `${input.provider} model discovery failed`;

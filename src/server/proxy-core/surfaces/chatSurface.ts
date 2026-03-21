@@ -234,7 +234,7 @@ export async function handleChatSurfaceRequest(
       dispatchRequest,
     });
     const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
-      if (ctx.response.status === 401 && oauth) {
+      if ((ctx.response.status === 401 || ctx.response.status === 403) && oauth) {
         try {
           const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
           selected.tokenValue = refreshed.accessToken;
@@ -916,7 +916,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         }, resolveChannelProxyUrl(selected.site, selected.account.extraConfig)),
       });
 
-      if (upstream.status === 401 && oauth) {
+      if ((upstream.status === 401 || upstream.status === 403) && oauth) {
         try {
           const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
           selected.tokenValue = refreshed.accessToken;

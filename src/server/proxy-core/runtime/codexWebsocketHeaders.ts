@@ -1,4 +1,4 @@
-const CODEX_RESPONSES_WEBSOCKET_BETA = 'responses_websockets=2026-02-06';
+import { config } from '../../config.js';
 
 function getHeaderValue(headers: Record<string, string>, key: string): string {
   const expected = key.trim().toLowerCase();
@@ -11,13 +11,14 @@ function getHeaderValue(headers: Record<string, string>, key: string): string {
 
 export function buildCodexWebsocketHandshakeHeaders(headers: Record<string, string>): Record<string, string> {
   const next = { ...headers };
+  const websocketBeta = (config.codexResponsesWebsocketBeta || '').trim() || 'responses_websockets=2026-02-06';
   const openAiBeta = getHeaderValue(next, 'openai-beta').trim();
   if (!openAiBeta) {
-    next['OpenAI-Beta'] = CODEX_RESPONSES_WEBSOCKET_BETA;
+    next['OpenAI-Beta'] = websocketBeta;
     return next;
   }
   if (!openAiBeta.includes('responses_websockets=')) {
-    next['OpenAI-Beta'] = `${openAiBeta},${CODEX_RESPONSES_WEBSOCKET_BETA}`;
+    next['OpenAI-Beta'] = `${openAiBeta},${websocketBeta}`;
   }
   return next;
 }

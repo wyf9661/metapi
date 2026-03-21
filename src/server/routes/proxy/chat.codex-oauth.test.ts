@@ -361,4 +361,47 @@ describe('chat proxy codex oauth compatibility', () => {
     expect(secondOptions.headers.Authorization).toBe('Bearer fresh-access-token');
     expect(response.json()?.choices?.[0]?.message?.content).toBe('ok after refresh');
   });
+
+  it('retries oauth chat requests after a 403 auth failure', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'forbidden account mismatch', type: 'invalid_request_error' },
+      }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'chatcmpl_refreshed_403',
+        object: 'chat.completion',
+        created: 1706000000,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant', content: 'ok after forbidden refresh' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: 'hello oauth' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(33);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(secondOptions.headers.Authorization).toBe('Bearer fresh-access-token');
+    expect(response.json()?.choices?.[0]?.message?.content).toBe('ok after forbidden refresh');
+  });
 });

@@ -1,8 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { createCodexWebsocketRuntime, CodexWebsocketRuntimeError } from '../../proxy-core/runtime/codexWebsocketRuntime.js';
+import {
+  authorizeDownstreamToken,
+  consumeManagedKeyRequest,
+  isModelAllowedByPolicyOrAllowedRoutes,
+  type DownstreamTokenAuthSuccess,
+} from '../../services/downstreamApiKeyService.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
@@ -15,6 +22,7 @@ const RESPONSES_WEBSOCKET_TRANSPORT_HEADER = 'x-metapi-responses-websocket-trans
 const codexWebsocketRuntime = createCodexWebsocketRuntime();
 
 type SelectedChannel = NonNullable<Awaited<ReturnType<typeof tokenRouter.selectChannel>>>;
+type ResponsesWebsocketAuthContext = DownstreamTokenAuthSuccess;
 
 type NormalizedResponsesWebsocketRequest =
   | {
@@ -131,8 +139,8 @@ function shouldReuseSelectedChannel(
 }
 
 function deriveCodexExplicitSessionId(body: Record<string, unknown>, sessionId: string): string {
-  const promptCacheKey = asTrimmedString(body.prompt_cache_key);
-  return promptCacheKey || sessionId;
+  void body;
+  return sessionId;
 }
 
 function parseJsonObject(raw: RawData): Record<string, unknown> | null {
@@ -417,15 +425,46 @@ function buildInjectHeaders(request: IncomingMessage): Record<string, string | s
   return headers;
 }
 
+function extractWebsocketAuthToken(request: IncomingMessage, url: URL): string {
+  const auth = headerValueToTrimmedString(request.headers.authorization);
+  if (auth) return auth.replace(/^Bearer\s+/i, '').trim();
+  const apiKey = headerValueToTrimmedString(request.headers['x-api-key']);
+  if (apiKey) return apiKey;
+  const googApiKey = headerValueToTrimmedString(request.headers['x-goog-api-key']);
+  if (googApiKey) return googApiKey;
+  return asTrimmedString(url.searchParams.get('key'));
+}
+
+function writeUpgradeHttpError(socket: Duplex, status: number, message: string): void {
+  const statusText = status === 401
+    ? 'Unauthorized'
+    : status === 403
+      ? 'Forbidden'
+      : status === 400
+        ? 'Bad Request'
+        : 'Error';
+  const body = JSON.stringify({ error: message });
+  socket.write(
+    `HTTP/1.1 ${status} ${statusText}\r\n`
+    + 'Content-Type: application/json\r\n'
+    + `Content-Length: ${Buffer.byteLength(body)}\r\n`
+    + 'Connection: close\r\n'
+    + '\r\n'
+    + body,
+  );
+  socket.destroy();
+}
+
 async function supportsResponsesWebsocketIncrementalInput(
   parsed: Record<string, unknown>,
   lastRequest: Record<string, unknown> | null,
+  authContext: ResponsesWebsocketAuthContext,
 ): Promise<boolean> {
   const requestModel = asTrimmedString(parsed.model) || asTrimmedString(lastRequest?.model);
   if (!requestModel) return false;
 
   try {
-    const selected = await tokenRouter.previewSelectedChannel(requestModel);
+    const selected = await tokenRouter.previewSelectedChannel(requestModel, authContext.policy);
     return selectedChannelSupportsIncrementalInput(selected, requestModel);
   } catch {
     return false;
@@ -436,6 +475,7 @@ async function handleResponsesWebsocketConnection(
   app: FastifyInstance,
   socket: WebSocket,
   request: IncomingMessage,
+  authContext: ResponsesWebsocketAuthContext,
 ) {
   const websocketSessionId = headerValueToTrimmedString(request.headers['session_id'])
     || headerValueToTrimmedString(request.headers['session-id'])
@@ -449,129 +489,141 @@ async function handleResponsesWebsocketConnection(
   });
 
   socket.on('message', async (raw) => {
-    const parsed = parseJsonObject(raw);
-    if (!parsed) {
-      writeResponsesWebsocketError(socket, 400, 'Invalid websocket JSON payload');
-      return;
-    }
-
-    const requestModel = asTrimmedString(parsed.model) || asTrimmedString(lastRequest?.model);
-    const supportsIncrementalInput = selectedChannelSupportsIncrementalInput(selectedChannel, requestModel)
-      || await supportsResponsesWebsocketIncrementalInput(parsed, lastRequest);
-    const shouldHandleLocalPrewarm = shouldHandleResponsesWebsocketPrewarmLocally(
-      parsed,
-      lastRequest,
-      supportsIncrementalInput,
-    );
-    const normalized = normalizeResponsesWebsocketRequest(
-      parsed,
-      lastRequest,
-      lastResponseOutput,
-      supportsIncrementalInput,
-    );
-    if (!normalized.ok) {
-      writeResponsesWebsocketError(socket, normalized.status, normalized.message);
-      return;
-    }
-
-    lastRequest = normalized.nextRequestSnapshot;
-    if (shouldHandleLocalPrewarm) {
-      lastResponseOutput = [];
-      for (const payload of synthesizePrewarmResponsePayloads(normalized.request)) {
-        socket.send(JSON.stringify(payload));
+    try {
+      const parsed = parseJsonObject(raw);
+      if (!parsed) {
+        writeResponsesWebsocketError(socket, 400, 'Invalid websocket JSON payload');
+        return;
       }
-      return;
-    }
 
-    if (!shouldReuseSelectedChannel(selectedChannel, requestModel)) {
-      selectedChannel = requestModel
-        ? await tokenRouter.selectChannel(requestModel)
+      const requestModel = asTrimmedString(parsed.model) || asTrimmedString(lastRequest?.model);
+      if (requestModel && !await isModelAllowedByPolicyOrAllowedRoutes(requestModel, authContext.policy)) {
+        writeResponsesWebsocketError(socket, 403, 'model is not allowed for this downstream key');
+        return;
+      }
+      const supportsIncrementalInput = selectedChannelSupportsIncrementalInput(selectedChannel, requestModel)
+        || await supportsResponsesWebsocketIncrementalInput(parsed, lastRequest, authContext);
+      const shouldHandleLocalPrewarm = shouldHandleResponsesWebsocketPrewarmLocally(
+        parsed,
+        lastRequest,
+        supportsIncrementalInput,
+      );
+      const normalized = normalizeResponsesWebsocketRequest(
+        parsed,
+        lastRequest,
+        lastResponseOutput,
+        supportsIncrementalInput,
+      );
+      if (!normalized.ok) {
+        writeResponsesWebsocketError(socket, normalized.status, normalized.message);
+        return;
+      }
+
+      if (authContext.source === 'managed' && authContext.key?.id) {
+        await consumeManagedKeyRequest(authContext.key.id);
+      }
+
+      lastRequest = normalized.nextRequestSnapshot;
+      if (shouldHandleLocalPrewarm) {
+        lastResponseOutput = [];
+        for (const payload of synthesizePrewarmResponsePayloads(normalized.request)) {
+          socket.send(JSON.stringify(payload));
+        }
+        return;
+      }
+
+      if (!shouldReuseSelectedChannel(selectedChannel, requestModel)) {
+        selectedChannel = requestModel
+          ? await tokenRouter.selectChannel(requestModel, authContext.policy)
+          : null;
+      }
+
+      const codexWebsocketChannel = selectedChannelSupportsCodexWebsocketTransport(selectedChannel, requestModel)
+        ? selectedChannel
         : null;
-    }
 
-    const codexWebsocketChannel = selectedChannelSupportsCodexWebsocketTransport(selectedChannel, requestModel)
-      ? selectedChannel
-      : null;
-
-    if (codexWebsocketChannel) {
-      const downstreamHeaders: Record<string, unknown> = {
-        ...(request.headers as Record<string, unknown>),
-        [RESPONSES_WEBSOCKET_TRANSPORT_HEADER]: '1',
-        ...(supportsIncrementalInput ? { [RESPONSES_WEBSOCKET_MODE_HEADER]: 'incremental' } : {}),
-      };
-      const providerHeaders = buildOauthProviderHeaders({
-        extraConfig: typeof codexWebsocketChannel.account.extraConfig === 'string'
-          ? codexWebsocketChannel.account.extraConfig
-          : null,
-        downstreamHeaders,
-      });
-      const prepared = buildUpstreamEndpointRequest({
-        endpoint: 'responses',
-        modelName: asTrimmedString(codexWebsocketChannel.actualModel) || requestModel,
-        stream: true,
-        tokenValue: codexWebsocketChannel.tokenValue,
-        sitePlatform: codexWebsocketChannel.site.platform,
-        siteUrl: codexWebsocketChannel.site.url,
-        openaiBody: normalized.request,
-        downstreamFormat: 'responses',
-        responsesOriginalBody: normalized.request,
-        downstreamHeaders,
-        providerHeaders,
-        codexExplicitSessionId: deriveCodexExplicitSessionId(normalized.request, websocketSessionId),
-      });
-      const requestUrl = `${codexWebsocketChannel.site.url.replace(/\/+$/, '')}${prepared.path}`;
-
-      try {
-        const runtimeResult = await codexWebsocketRuntime.sendRequest({
-          sessionId: websocketSessionId,
-          requestUrl,
-          headers: prepared.headers,
-          body: prepared.body,
+      if (codexWebsocketChannel) {
+        const downstreamHeaders: Record<string, unknown> = {
+          ...(request.headers as Record<string, unknown>),
+          [RESPONSES_WEBSOCKET_TRANSPORT_HEADER]: '1',
+          ...(supportsIncrementalInput ? { [RESPONSES_WEBSOCKET_MODE_HEADER]: 'incremental' } : {}),
+        };
+        const providerHeaders = buildOauthProviderHeaders({
+          extraConfig: typeof codexWebsocketChannel.account.extraConfig === 'string'
+            ? codexWebsocketChannel.account.extraConfig
+            : null,
+          downstreamHeaders,
         });
-        lastResponseOutput = collectResponsesOutput(runtimeResult.events);
-        for (const payload of runtimeResult.events) {
-          socket.send(JSON.stringify(payload));
-        }
-      } catch (error) {
-        const runtimeError = error instanceof CodexWebsocketRuntimeError
-          ? error
-          : new CodexWebsocketRuntimeError('upstream websocket request failed');
-        if (runtimeError.status === 426) {
-          const fallbackOutput = await forwardResponsesRequestViaHttp({
-            app,
-            socket,
-            request,
-            payload: normalized.request,
-            preserveIncrementalMode: false,
-          });
-          if (fallbackOutput) {
-            lastResponseOutput = fallbackOutput;
-          }
-          return;
-        }
-        lastResponseOutput = collectResponsesOutput(runtimeError.events);
-        for (const payload of runtimeError.events) {
-          socket.send(JSON.stringify(payload));
-        }
-        writeResponsesWebsocketError(
-          socket,
-          runtimeError.status || 408,
-          runtimeError.message,
-          runtimeError.payload,
-        );
-      }
-      return;
-    }
+        const prepared = buildUpstreamEndpointRequest({
+          endpoint: 'responses',
+          modelName: asTrimmedString(codexWebsocketChannel.actualModel) || requestModel,
+          stream: true,
+          tokenValue: codexWebsocketChannel.tokenValue,
+          sitePlatform: codexWebsocketChannel.site.platform,
+          siteUrl: codexWebsocketChannel.site.url,
+          openaiBody: normalized.request,
+          downstreamFormat: 'responses',
+          responsesOriginalBody: normalized.request,
+          downstreamHeaders,
+          providerHeaders,
+          codexExplicitSessionId: deriveCodexExplicitSessionId(normalized.request, websocketSessionId),
+        });
+        const requestUrl = `${codexWebsocketChannel.site.url.replace(/\/+$/, '')}${prepared.path}`;
 
-    const forwardedOutput = await forwardResponsesRequestViaHttp({
-      app,
-      socket,
-      request,
-      payload: normalized.request,
-      preserveIncrementalMode: supportsIncrementalInput,
-    });
-    if (forwardedOutput) {
-      lastResponseOutput = forwardedOutput;
+        try {
+          const runtimeResult = await codexWebsocketRuntime.sendRequest({
+            sessionId: websocketSessionId,
+            requestUrl,
+            headers: prepared.headers,
+            body: prepared.body,
+          });
+          lastResponseOutput = collectResponsesOutput(runtimeResult.events);
+          for (const payload of runtimeResult.events) {
+            socket.send(JSON.stringify(payload));
+          }
+        } catch (error) {
+          const runtimeError = error instanceof CodexWebsocketRuntimeError
+            ? error
+            : new CodexWebsocketRuntimeError('upstream websocket request failed');
+          if (runtimeError.status && runtimeError.events.length === 0) {
+            const fallbackOutput = await forwardResponsesRequestViaHttp({
+              app,
+              socket,
+              request,
+              payload: normalized.request,
+              preserveIncrementalMode: false,
+            });
+            if (fallbackOutput) {
+              lastResponseOutput = fallbackOutput;
+            }
+            return;
+          }
+          lastResponseOutput = collectResponsesOutput(runtimeError.events);
+          for (const payload of runtimeError.events) {
+            socket.send(JSON.stringify(payload));
+          }
+          writeResponsesWebsocketError(
+            socket,
+            runtimeError.status || 408,
+            runtimeError.message,
+            runtimeError.payload,
+          );
+        }
+        return;
+      }
+
+      const forwardedOutput = await forwardResponsesRequestViaHttp({
+        app,
+        socket,
+        request,
+        payload: normalized.request,
+        preserveIncrementalMode: supportsIncrementalInput,
+      });
+      if (forwardedOutput) {
+        lastResponseOutput = forwardedOutput;
+      }
+    } catch {
+      writeResponsesWebsocketError(socket, 500, 'internal websocket proxy error');
     }
   });
 }
@@ -588,10 +640,24 @@ export function ensureResponsesWebsocketTransport(app: FastifyInstance) {
   });
 
   app.server.on('upgrade', (request, socket, head) => {
-    const url = new URL(request.url || '/', 'http://localhost');
-    if (url.pathname !== '/v1/responses') return;
-    websocketServer.handleUpgrade(request, socket, head, (client) => {
-      void handleResponsesWebsocketConnection(app, client, request);
+    void (async () => {
+      const url = new URL(request.url || '/', 'http://localhost');
+      if (url.pathname !== '/v1/responses') return;
+      const token = extractWebsocketAuthToken(request, url);
+      if (!token) {
+        writeUpgradeHttpError(socket, 401, 'Missing Authorization, x-api-key, x-goog-api-key, or key query parameter');
+        return;
+      }
+      const authResult = await authorizeDownstreamToken(token);
+      if (!authResult.ok) {
+        writeUpgradeHttpError(socket, authResult.statusCode, authResult.error);
+        return;
+      }
+      websocketServer.handleUpgrade(request, socket, head, (client) => {
+        void handleResponsesWebsocketConnection(app, client, request, authResult);
+      });
+    })().catch(() => {
+      writeUpgradeHttpError(socket, 500, 'internal websocket proxy error');
     });
   });
 

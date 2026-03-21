@@ -23,7 +23,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isTerminalEvent(payload: Record<string, unknown>): boolean {
   const type = asTrimmedString(payload.type);
-  return type === 'response.completed' || type === 'response.failed';
+  return type === 'response.completed'
+    || type === 'response.failed'
+    || type === 'response.incomplete'
+    || type === 'error';
+}
+
+function isFailureTerminalEvent(payload: Record<string, unknown>): boolean {
+  const type = asTrimmedString(payload.type);
+  return type === 'response.failed' || type === 'response.incomplete' || type === 'error';
+}
+
+function extractTerminalErrorMessage(payload: Record<string, unknown>): string {
+  const type = asTrimmedString(payload.type);
+  if (type === 'error' && isRecord(payload.error)) {
+    return asTrimmedString(payload.error.message) || 'upstream websocket error';
+  }
+  if ((type === 'response.failed' || type === 'response.incomplete') && isRecord(payload.response)) {
+    if (isRecord(payload.response.error)) {
+      return asTrimmedString(payload.response.error.message) || `upstream ${type}`;
+    }
+    if (isRecord(payload.response.incomplete_details)) {
+      return asTrimmedString(payload.response.incomplete_details.reason) || `upstream ${type}`;
+    }
+  }
+  return `upstream ${type || 'websocket error'}`;
 }
 
 export class CodexWebsocketRuntimeError extends Error {
@@ -212,6 +236,18 @@ async function sendSessionRequest(
         events.push(parsed);
         if (!isTerminalEvent(parsed)) return;
         if (settled) return;
+        if (isFailureTerminalEvent(parsed)) {
+          settled = true;
+          cleanup();
+          clearSessionSocket(session, socket);
+          void closeSocket(socket);
+          reject(new CodexWebsocketRuntimeError(extractTerminalErrorMessage(parsed), {
+            events: [...events],
+            status: typeof parsed.status === 'number' && Number.isFinite(parsed.status) ? parsed.status : undefined,
+            payload: parsed,
+          }));
+          return;
+        }
         settled = true;
         cleanup();
         resolve({

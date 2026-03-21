@@ -500,6 +500,153 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
   });
 
+  it('keeps the existing codex connection intact when a rebind callback fails model discovery', async () => {
+    const originalJwt = buildJwt({
+      email: 'codex-existing@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'chatgpt-account-existing',
+        chatgpt_plan_type: 'team',
+      },
+    });
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+    const existing = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'codex-existing@example.com',
+      accessToken: 'stable-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'chatgpt-account-existing',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'chatgpt-account-existing',
+          accountKey: 'chatgpt-account-existing',
+          email: 'codex-existing@example.com',
+          planType: 'team',
+          refreshToken: 'stable-refresh-token',
+          idToken: originalJwt,
+        },
+      }),
+    }).returning().get();
+
+    const reboundJwt = buildJwt({
+      email: 'codex-existing@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'chatgpt-account-rebound',
+        chatgpt_plan_type: 'plus',
+      },
+    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'rebound-access-token',
+          refresh_token: 'rebound-refresh-token',
+          id_token: reboundJwt,
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: 'forbidden' }),
+        text: async () => 'forbidden',
+      });
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/providers/codex/start',
+      headers: {
+        host: 'metapi.example',
+        'x-forwarded-proto': 'https',
+      },
+      payload: {
+        accountId: existing.id,
+      },
+    });
+    const startBody = startResponse.json() as { state: string };
+
+    const callbackResponse = await app.inject({
+      method: 'POST',
+      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
+      payload: {
+        callbackUrl: `http://localhost:1455/auth/callback?state=${encodeURIComponent(startBody.state)}&code=oauth-code-rebind-fail`,
+      },
+    });
+    expect(callbackResponse.statusCode).toBe(500);
+
+    const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, existing.id)).get();
+    expect(stored).toMatchObject({
+      id: existing.id,
+      username: 'codex-existing@example.com',
+      accessToken: 'stable-access-token',
+      oauthAccountKey: 'chatgpt-account-existing',
+    });
+    expect(JSON.parse(stored?.extraConfig || '{}')).toMatchObject({
+      oauth: {
+        accountId: 'chatgpt-account-existing',
+        refreshToken: 'stable-refresh-token',
+        idToken: originalJwt,
+      },
+    });
+  });
+
+  it('fails codex oauth onboarding when token exchange does not expose chatgpt_account_id', async () => {
+    const jwt = buildJwt({
+      email: 'codex-no-account@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_plan_type: 'plus',
+      },
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: 'oauth-access-token',
+        refresh_token: 'oauth-refresh-token',
+        id_token: jwt,
+        expires_in: 3600,
+        token_type: 'Bearer',
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/providers/codex/start',
+      headers: {
+        host: 'metapi.example',
+        'x-forwarded-proto': 'https',
+      },
+    });
+    const startBody = startResponse.json() as { state: string };
+
+    const callbackResponse = await app.inject({
+      method: 'POST',
+      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
+      payload: {
+        callbackUrl: `http://localhost:1455/auth/callback?state=${encodeURIComponent(startBody.state)}&code=oauth-code-no-account-id`,
+      },
+    });
+    expect(callbackResponse.statusCode).toBe(500);
+    expect(callbackResponse.json()).toMatchObject({
+      message: expect.stringContaining('chatgpt_account_id'),
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toEqual([]);
+  });
+
   it('marks gemini oauth session as error when token exchange fails before account persistence', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,

@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import WebSocket, { WebSocketServer } from 'ws';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '../../config.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
@@ -10,6 +11,8 @@ const selectNextChannelMock = vi.fn();
 const previewSelectedChannelMock = vi.fn();
 const recordSuccessMock = vi.fn();
 const recordFailureMock = vi.fn();
+const authorizeDownstreamTokenMock = vi.fn();
+const consumeManagedKeyRequestMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const reportProxyAllFailedMock = vi.fn();
 const reportTokenExpiredMock = vi.fn();
@@ -45,6 +48,22 @@ vi.mock('../../services/modelService.js', () => ({
 vi.mock('../../services/alertService.js', () => ({
   reportProxyAllFailed: (...args: unknown[]) => reportProxyAllFailedMock(...args),
   reportTokenExpired: (...args: unknown[]) => reportTokenExpiredMock(...args),
+}));
+
+vi.mock('../../services/downstreamApiKeyService.js', () => ({
+  authorizeDownstreamToken: (...args: unknown[]) => authorizeDownstreamTokenMock(...args),
+  consumeManagedKeyRequest: (...args: unknown[]) => consumeManagedKeyRequestMock(...args),
+  isModelAllowedByPolicyOrAllowedRoutes: async (
+    model: string,
+    policy: { supportedModels?: string[]; allowedRouteIds?: number[]; denyAllWhenEmpty?: boolean },
+  ) => {
+    const supportedModels = Array.isArray(policy?.supportedModels) ? policy.supportedModels : [];
+    const allowedRouteIds = Array.isArray(policy?.allowedRouteIds) ? policy.allowedRouteIds : [];
+    if (supportedModels.length === 0 && allowedRouteIds.length === 0) {
+      return policy?.denyAllWhenEmpty === true ? false : true;
+    }
+    return supportedModels.includes(model);
+  },
 }));
 
 vi.mock('../../services/alertRules.js', () => ({
@@ -175,7 +194,17 @@ function waitForSocketMessages(socket: WebSocket, count: number, timeoutMs = 100
   });
 }
 
+function createClientSocket(baseUrl: string, headers: Record<string, string> = {}) {
+  return new WebSocket(`${baseUrl}/v1/responses`, {
+    headers: {
+      Authorization: 'Bearer sk-global-proxy-token',
+      ...headers,
+    },
+  });
+}
+
 describe('responses websocket transport', () => {
+  const originalCodexResponsesWebsocketBeta = config.codexResponsesWebsocketBeta;
   let app: FastifyInstance;
   let baseUrl: string;
   let upstreamServer: WebSocketServer;
@@ -186,6 +215,9 @@ describe('responses websocket transport', () => {
   let upstreamMessageHandler: (socket: WebSocket, parsed: Record<string, unknown>, requestIndex: number) => void;
   let rejectedUpgradeServer: Server;
   let rejectedUpgradeSiteUrl: string;
+  let rejectedUpgradeStatus: number;
+  let rejectedUpgradeStatusText: string;
+  let rejectedUpgradeBody: string;
 
   beforeAll(async () => {
     const { responsesProxyRoute } = await import('./responses.js');
@@ -214,13 +246,14 @@ describe('responses websocket transport', () => {
 
     rejectedUpgradeServer = createServer();
     rejectedUpgradeServer.on('upgrade', (_request, socket) => {
+      const body = rejectedUpgradeBody;
       socket.write(
-        'HTTP/1.1 426 Upgrade Required\r\n'
+        `HTTP/1.1 ${rejectedUpgradeStatus} ${rejectedUpgradeStatusText}\r\n`
         + 'Content-Type: text/plain\r\n'
-        + 'Content-Length: 16\r\n'
+        + `Content-Length: ${Buffer.byteLength(body)}\r\n`
         + 'Connection: close\r\n'
         + '\r\n'
-        + 'Upgrade Required',
+        + body,
       );
       socket.destroy();
     });
@@ -236,6 +269,8 @@ describe('responses websocket transport', () => {
     previewSelectedChannelMock.mockReset();
     recordSuccessMock.mockReset();
     recordFailureMock.mockReset();
+    authorizeDownstreamTokenMock.mockReset();
+    consumeManagedKeyRequestMock.mockReset();
     refreshModelsAndRebuildRoutesMock.mockReset();
     reportProxyAllFailedMock.mockReset();
     reportTokenExpiredMock.mockReset();
@@ -249,6 +284,21 @@ describe('responses websocket transport', () => {
     upstreamConnectionCount = 0;
     upstreamUpgradeHeaders = {};
     upstreamRequests = [];
+    (config as any).codexResponsesWebsocketBeta = originalCodexResponsesWebsocketBeta;
+    rejectedUpgradeStatus = 426;
+    rejectedUpgradeStatusText = 'Upgrade Required';
+    rejectedUpgradeBody = 'Upgrade Required';
+    authorizeDownstreamTokenMock.mockResolvedValue({
+      ok: true,
+      source: 'global',
+      token: 'sk-global-proxy-token',
+      key: null,
+      policy: {
+        supportedModels: [],
+        allowedRouteIds: [],
+        siteWeightMultipliers: {},
+      },
+    });
     upstreamMessageHandler = (socket, parsed, requestIndex) => {
       const responseId = `resp_upstream_${requestIndex}`;
       socket.send(JSON.stringify({
@@ -331,7 +381,7 @@ describe('responses websocket transport', () => {
       }));
     };
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
     const messagesPromise = waitForSocketMessages(socket, 4);
 
@@ -362,10 +412,8 @@ describe('responses websocket transport', () => {
   });
 
   it('echoes x-codex-turn-state on websocket upgrade responses', async () => {
-    const socket = new WebSocket(`${baseUrl}/v1/responses`, {
-      headers: {
-        'x-codex-turn-state': 'turn-state-123',
-      },
+    const socket = createClientSocket(baseUrl, {
+      'x-codex-turn-state': 'turn-state-123',
     });
 
     const [upgrade] = await Promise.all([
@@ -378,17 +426,16 @@ describe('responses websocket transport', () => {
   });
 
   it('reuses one upstream codex websocket session across sequential websocket turns', async () => {
+    (config as any).codexResponsesWebsocketBeta = 'responses_websockets=2099-01-01';
     const selectedChannel = createSelectedChannel({
       siteUrl: upstreamSiteUrl,
     });
     selectChannelMock.mockReturnValue(selectedChannel);
     previewSelectedChannelMock.mockResolvedValue(selectedChannel);
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`, {
-      headers: {
-        'x-codex-turn-state': 'turn-state-123',
-        'x-codex-beta-features': 'feature-a,feature-b',
-      },
+    const socket = createClientSocket(baseUrl, {
+      'x-codex-turn-state': 'turn-state-123',
+      'x-codex-beta-features': 'feature-a,feature-b',
     });
     await waitForSocketOpen(socket);
     const firstMessagesPromise = waitForSocketMessages(socket, 1);
@@ -427,7 +474,7 @@ describe('responses websocket transport', () => {
     });
     expect(upstreamUpgradeHeaders['x-codex-turn-state']).toBe('turn-state-123');
     expect(upstreamUpgradeHeaders['x-codex-beta-features']).toBe('feature-a,feature-b');
-    expect(upstreamUpgradeHeaders['openai-beta']).toContain('responses_websockets=');
+    expect(upstreamUpgradeHeaders['openai-beta']).toContain('responses_websockets=2099-01-01');
   });
 
   it('falls back to the HTTP responses executor when the upstream codex websocket upgrade returns 426', async () => {
@@ -442,7 +489,7 @@ describe('responses websocket transport', () => {
       'data: [DONE]\n\n',
     ]));
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
     const messagesPromise = waitForSocketMessages(socket, 1);
 
@@ -458,6 +505,80 @@ describe('responses websocket transport', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(messages.map((message) => message.type)).toEqual(['response.completed']);
     expect(messages[0]?.response?.id).toBe('resp_http_fallback');
+  });
+
+  it('falls back to the HTTP responses executor when the upstream codex websocket upgrade returns 401', async () => {
+    rejectedUpgradeStatus = 401;
+    rejectedUpgradeStatusText = 'Unauthorized';
+    rejectedUpgradeBody = JSON.stringify({
+      error: {
+        message: 'expired token',
+        type: 'invalid_request_error',
+      },
+    });
+    const selectedChannel = createSelectedChannel({
+      siteUrl: rejectedUpgradeSiteUrl,
+    });
+    selectChannelMock.mockReturnValue(selectedChannel);
+    previewSelectedChannelMock.mockResolvedValue(selectedChannel);
+    fetchMock.mockResolvedValueOnce(createSseResponse([
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_http_fallback_401","model":"gpt-5.4","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+
+    const socket = createClientSocket(baseUrl);
+    await waitForSocketOpen(socket);
+    const messagesPromise = waitForSocketMessages(socket, 1);
+
+    socket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-5.4',
+      input: [],
+    }));
+
+    const messages = await messagesPromise;
+    socket.close();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(messages.map((message) => message.type)).toEqual(['response.completed']);
+    expect(messages[0]?.response?.id).toBe('resp_http_fallback_401');
+  });
+
+  it('rejects websocket turns whose model is blocked by the downstream key policy before channel selection', async () => {
+    authorizeDownstreamTokenMock.mockResolvedValueOnce({
+      ok: true,
+      source: 'managed',
+      token: 'sk-managed-denied',
+      key: {
+        id: 99,
+        name: 'limited-key',
+      },
+      policy: {
+        supportedModels: ['gpt-4.1'],
+        allowedRouteIds: [],
+        siteWeightMultipliers: {},
+      },
+    });
+
+    const socket = createClientSocket(baseUrl);
+    await waitForSocketOpen(socket);
+    const messagesPromise = waitForSocketMessages(socket, 1);
+
+    socket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-5.4',
+      input: [],
+    }));
+
+    const messages = await messagesPromise;
+    socket.close();
+
+    expect(messages[0]).toMatchObject({
+      type: 'error',
+      status: 403,
+    });
+    expect(selectChannelMock).not.toHaveBeenCalled();
   });
 
   it('merges follow-up response.create payloads when the selected upstream does not support incremental mode', async () => {
@@ -483,7 +604,7 @@ describe('responses websocket transport', () => {
         'data: [DONE]\n\n',
       ]));
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
 
     const firstResponsePromise = waitForSocketMessages(socket, 1);
@@ -609,7 +730,7 @@ describe('responses websocket transport', () => {
       }));
     };
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
 
     const firstResponsePromise = waitForSocketMessages(socket, 1);
@@ -694,7 +815,7 @@ describe('responses websocket transport', () => {
         'data: [DONE]\n\n',
       ]));
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
     const firstResponsePromise = waitForSocketMessages(socket, 1);
 
@@ -753,7 +874,7 @@ describe('responses websocket transport', () => {
       'data: [DONE]\n\n',
     ]));
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
 
     const prewarmMessagesPromise = waitForSocketMessages(socket, 2);
@@ -805,7 +926,7 @@ describe('responses websocket transport', () => {
     selectChannelMock.mockReturnValue(selectedChannel);
     previewSelectedChannelMock.mockResolvedValue(selectedChannel);
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
     const messagesPromise = waitForSocketMessages(socket, 1);
 
@@ -852,7 +973,7 @@ describe('responses websocket transport', () => {
       socket.close();
     };
 
-    const socket = new WebSocket(`${baseUrl}/v1/responses`);
+    const socket = createClientSocket(baseUrl);
     await waitForSocketOpen(socket);
     const messagesPromise = waitForSocketMessages(socket, 3, 400);
 

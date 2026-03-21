@@ -581,7 +581,7 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.body.prompt_cache_key).toBeUndefined();
   });
 
-  it('preserves explicit prompt_cache_key for native codex responses requests', () => {
+  it('preserves explicit prompt_cache_key for native codex responses requests without mapping it into codex session headers', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'responses',
       modelName: 'gpt-5.4',
@@ -599,11 +599,10 @@ describe('buildUpstreamEndpointRequest', () => {
       providerHeaders: {
         Originator: 'codex_cli_rs',
       },
-      codexExplicitSessionId: 'codex-cache-123',
     } as any);
 
-    expect(request.headers.Session_id).toBe('codex-cache-123');
-    expect(request.headers.Conversation_id).toBe('codex-cache-123');
+    expect(request.headers.Session_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(request.headers.Conversation_id).toBeUndefined();
     expect(request.body.prompt_cache_key).toBe('codex-cache-123');
   });
 
