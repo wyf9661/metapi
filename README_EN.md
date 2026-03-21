@@ -287,7 +287,7 @@ Alert scenarios: low balance warning, site/account anomalies, check-in failures,
 ### Lightweight Deployment
 
 - **Single Docker container** with a default local data directory, plus optional external MySQL / PostgreSQL runtime DB
-- Alpine base image, minimal footprint
+- Docker images support `amd64`, `arm64`, and `armv7l` (`linux/arm/v7`) server deployments
 - Full data import/export for worry-free migration
 
 ---
@@ -344,6 +344,11 @@ docker run -d --name metapi \
 
 After starting, visit `http://localhost:4000` and log in with your `AUTH_TOKEN`!
 
+> [!NOTE]
+> Docker images support `amd64`, `arm64`, and `armv7l` (`linux/arm/v7`) server deployments.
+> Current `armv7l` support is limited to server / Docker usage and does not include Electron desktop packaging support.
+
+<!-- markdownlint-disable-next-line MD028 -->
 > [!IMPORTANT]
 > Make sure to change `AUTH_TOKEN` and `PROXY_TOKEN` — do not use default values. Data is stored in the `./data` directory and persists across upgrades.
 
@@ -477,7 +482,7 @@ For detailed per-client setup, examples, and troubleshooting, see [docs/client-i
 | **Database** | SQLite / MySQL / PostgreSQL + [Drizzle ORM](https://orm.drizzle.team) |
 | **Charts** | [VChart](https://visactor.io/vchart) (@visactor/react-vchart) |
 | **Scheduling** | [node-cron](https://github.com/node-cron/node-cron) |
-| **Containerization** | Docker (Alpine) + Docker Compose |
+| **Containerization** | Docker (Debian slim) + Docker Compose |
 | **Testing** | [Vitest](https://vitest.dev) |
 
 ---

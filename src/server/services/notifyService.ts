@@ -1,5 +1,6 @@
 import { fetch } from 'undici';
 import { config } from '../config.js';
+import { withExplicitProxyRequestInit } from './siteProxy.js';
 import nodemailer, { type Transporter } from 'nodemailer';
 import {
   createNotificationSignature,
@@ -221,18 +222,26 @@ export async function sendNotification(
     const telegramApiBaseUrl = String(config.telegramApiBaseUrl || 'https://api.telegram.org').replace(/\/+$/, '');
     const telegramApiUrl = `${telegramApiBaseUrl}/bot${config.telegramBotToken}/sendMessage`;
     const text = buildTelegramText(title, resolvedMessage, level, timeFootnote);
+    const telegramMessageThreadId = Number.parseInt(String(config.telegramMessageThreadId || '').trim(), 10);
     tasks.push({
       channel: 'telegram',
       run: async () => {
-        const response = await fetch(telegramApiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: config.telegramChatId,
-            text,
-            disable_web_page_preview: true,
-          }),
-        });
+        const telegramRequestInit = withExplicitProxyRequestInit(
+          config.telegramUseSystemProxy ? config.systemProxyUrl : null,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: config.telegramChatId,
+              ...(Number.isFinite(telegramMessageThreadId) && telegramMessageThreadId > 0
+                ? { message_thread_id: telegramMessageThreadId }
+                : {}),
+              text,
+              disable_web_page_preview: true,
+            }),
+          },
+        );
+        const response = await fetch(telegramApiUrl, telegramRequestInit);
         if (!response.ok) {
           throw new Error(`Telegram 响应状态 ${response.status}`);
         }

@@ -248,6 +248,63 @@ describe('checkinService auto relogin', () => {
     expect(notifyMock).not.toHaveBeenCalled();
   });
 
+  it('does not advance lastCheckinAt for already checked in responses in interval mode', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 16,
+          username: 'interval-user',
+          accessToken: 'token',
+          status: 'active',
+          extraConfig: null,
+        },
+        sites: {
+          id: 16,
+          name: 'demo',
+          url: 'https://example.com',
+          platform: 'new-api',
+        },
+      },
+    ]);
+
+    adapterMock.checkin.mockResolvedValue({ success: false, message: '今天已经签到过啦' });
+
+    const { checkinAccount } = await import('./checkinService.js');
+    const result = await checkinAccount(16, { scheduleMode: 'interval' });
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('success');
+    expect(updateSetMock).not.toHaveBeenCalledWith(expect.objectContaining({ lastCheckinAt: expect.any(String) }));
+  });
+
+  it('advances lastCheckinAt when interval mode gets a direct success', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 17,
+          username: 'interval-success',
+          accessToken: 'token',
+          status: 'active',
+          extraConfig: null,
+        },
+        sites: {
+          id: 17,
+          name: 'demo',
+          url: 'https://example.com',
+          platform: 'new-api',
+        },
+      },
+    ]);
+
+    adapterMock.checkin.mockResolvedValue({ success: true, message: '签到成功' });
+
+    const { checkinAccount } = await import('./checkinService.js');
+    const result = await checkinAccount(17, { scheduleMode: 'interval' });
+
+    expect(result.success).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({ lastCheckinAt: expect.any(String) }));
+  });
+
   it('treats unsupported checkin endpoint responses as skipped', async () => {
     selectAllMock.mockReturnValue([
       {
@@ -281,6 +338,40 @@ describe('checkinService auto relogin', () => {
     expect(firstInsertPayload?.status).toBe('skipped');
     expect(refreshBalanceMock).not.toHaveBeenCalled();
     expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it('skips account updates when unsupported checkin responses do not change account state', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 18,
+          username: 'plain-user',
+          accessToken: 'token',
+          status: 'active',
+          extraConfig: null,
+        },
+        sites: {
+          id: 18,
+          name: 'done-hub',
+          url: 'https://done.example.com',
+          platform: 'donehub',
+        },
+      },
+    ]);
+
+    adapterMock.checkin.mockResolvedValue({
+      success: false,
+      message: 'checkin endpoint not found',
+    });
+
+    const { checkinAccount } = await import('./checkinService.js');
+    const result = await checkinAccount(18);
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('skipped');
+    expect(updateSetMock).not.toHaveBeenCalled();
+    const firstInsertPayload = insertValuesMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(firstInsertPayload?.status).toBe('skipped');
   });
 
   it('treats sub2api checkin unsupported message as skipped', async () => {

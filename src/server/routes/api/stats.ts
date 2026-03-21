@@ -17,6 +17,7 @@ import {
   parseProxyLogBillingDetails,
   withProxyLogSelectFields,
 } from '../../services/proxyLogStore.js';
+import { parseProxyLogMessageMeta } from '../proxy/logPathMeta.js';
 import { requiresManagedAccountTokens } from '../../services/accountExtraConfig.js';
 import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from '../../services/accountTokenService.js';
 import {
@@ -85,6 +86,22 @@ function proxyCostSqlExpression() {
 }
 
 type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
+type ProxyLogClientFilter = {
+  kind: 'app' | 'family';
+  value: string;
+} | null;
+
+type ProxyLogClientOption = {
+  value: string;
+  label: string;
+};
+
+const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
+  codex: 'Codex',
+  claude_code: 'Claude Code',
+  gemini_cli: 'Gemini CLI',
+  generic: '通用',
+};
 
 function normalizeProxyLogPageSize(raw?: string): number {
   const parsed = Number.parseInt(raw || '50', 10);
@@ -113,6 +130,20 @@ function normalizeProxyLogSiteId(raw?: string): number | null {
   const parsed = Number.parseInt(raw || '', 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+function normalizeProxyLogClientFilter(raw?: string): ProxyLogClientFilter {
+  const text = (raw || '').trim();
+  if (!text) return null;
+  const separatorIndex = text.indexOf(':');
+  if (separatorIndex <= 0) return null;
+  const kind = text.slice(0, separatorIndex).trim().toLowerCase();
+  const value = text.slice(separatorIndex + 1).trim().toLowerCase();
+  if (!value) return null;
+  if (kind === 'app' || kind === 'family') {
+    return { kind, value };
+  }
+  return null;
 }
 
 function normalizeProxyLogTimeBoundary(raw?: string): string | null {
@@ -166,9 +197,18 @@ function buildProxyLogStatusCondition(status: ProxyLogStatusFilter) {
   return null;
 }
 
+function buildProxyLogClientCondition(client: ProxyLogClientFilter) {
+  if (!client) return null;
+  if (client.kind === 'app') {
+    return eq(schema.proxyLogs.clientAppId, client.value);
+  }
+  return eq(schema.proxyLogs.clientFamily, client.value);
+}
+
 function buildProxyLogWhereClause(params: {
   status?: ProxyLogStatusFilter;
   search?: string;
+  client?: ProxyLogClientFilter;
   siteId?: number | null;
   fromUtc?: string | null;
   toUtc?: string | null;
@@ -176,6 +216,7 @@ function buildProxyLogWhereClause(params: {
   const conditions = [
     params.status ? buildProxyLogStatusCondition(params.status) : null,
     params.search ? buildProxyLogSearchCondition(params.search) : null,
+    params.client ? buildProxyLogClientCondition(params.client) : null,
     params.siteId ? eq(schema.sites.id, params.siteId) : null,
     params.fromUtc ? gte(schema.proxyLogs.createdAt, params.fromUtc) : null,
     params.toUtc ? lt(schema.proxyLogs.createdAt, params.toUtc) : null,
@@ -187,6 +228,83 @@ function buildProxyLogWhereClause(params: {
 
 function toRoundedMicroNumber(value: number | null | undefined): number {
   return Math.round(Number(value || 0) * 1_000_000) / 1_000_000;
+}
+
+function normalizeNullableText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeClientConfidence(value: unknown): string | null {
+  const normalized = normalizeNullableText(value)?.toLowerCase() || null;
+  if (normalized === 'exact' || normalized === 'heuristic' || normalized === 'unknown') {
+    return normalized;
+  }
+  return null;
+}
+
+function displayProxyLogClientFamily(value: string | null): string | null {
+  if (!value) return null;
+  return PROXY_LOG_CLIENT_FAMILY_LABELS[value] || value;
+}
+
+function resolveProxyLogClientMeta(proxyLog: Record<string, unknown>) {
+  const clientFamily = normalizeNullableText(proxyLog.clientFamily)?.toLowerCase() || null;
+  const clientAppId = normalizeNullableText(proxyLog.clientAppId)?.toLowerCase() || null;
+  const clientAppName = normalizeNullableText(proxyLog.clientAppName) || null;
+  const clientConfidence = normalizeClientConfidence(proxyLog.clientConfidence);
+
+  if (clientFamily || clientAppId || clientAppName || clientConfidence) {
+    return {
+      clientFamily,
+      clientAppId,
+      clientAppName,
+      clientConfidence,
+    };
+  }
+
+  const legacyMeta = parseProxyLogMessageMeta(typeof proxyLog.errorMessage === 'string' ? proxyLog.errorMessage : '');
+  return {
+    clientFamily: normalizeNullableText(legacyMeta.clientKind)?.toLowerCase() || null,
+    clientAppId: null,
+    clientAppName: null,
+    clientConfidence: null,
+  };
+}
+
+function buildProxyLogClientOptions(rows: Array<{
+  clientFamily?: string | null;
+  clientAppId?: string | null;
+  clientAppName?: string | null;
+}>): ProxyLogClientOption[] {
+  const appOptions = new Map<string, ProxyLogClientOption>();
+  const familyOptions = new Map<string, ProxyLogClientOption>();
+
+  for (const row of rows) {
+    const clientAppId = normalizeNullableText(row.clientAppId)?.toLowerCase() || null;
+    const clientAppName = normalizeNullableText(row.clientAppName) || null;
+    const clientFamily = normalizeNullableText(row.clientFamily)?.toLowerCase() || null;
+
+    if (clientAppId && clientAppName && !appOptions.has(clientAppId)) {
+      appOptions.set(clientAppId, {
+        value: `app:${clientAppId}`,
+        label: `应用 · ${clientAppName}`,
+      });
+    }
+
+    if (clientFamily && clientFamily !== 'generic' && !familyOptions.has(clientFamily)) {
+      familyOptions.set(clientFamily, {
+        value: `family:${clientFamily}`,
+        label: `协议 · ${displayProxyLogClientFamily(clientFamily) || clientFamily}`,
+      });
+    }
+  }
+
+  return [
+    ...Array.from(appOptions.values()).sort((left, right) => left.label.localeCompare(right.label, 'zh-CN')),
+    ...Array.from(familyOptions.values()).sort((left, right) => left.label.localeCompare(right.label, 'zh-CN')),
+  ];
 }
 
 const SITE_AVAILABILITY_BUCKET_COUNT = 24;
@@ -351,11 +469,16 @@ function mapProxyLogRow(
   },
   options?: { includeBillingDetails?: boolean },
 ) {
+  const clientMeta = resolveProxyLogClientMeta(row.proxy_logs);
   return {
     ...row.proxy_logs,
     ...(options?.includeBillingDetails
       ? { billingDetails: parseProxyLogBillingDetails(row.proxy_logs.billingDetails) }
       : {}),
+    clientFamily: clientMeta.clientFamily,
+    clientAppId: clientMeta.clientAppId,
+    clientAppName: clientMeta.clientAppName,
+    clientConfidence: clientMeta.clientConfidence,
     username: row.accounts?.username || null,
     siteId: row.sites?.id || null,
     siteName: row.sites?.name || null,
@@ -547,6 +670,7 @@ export async function statsRoutes(app: FastifyInstance) {
     offset?: string;
     status?: string;
     search?: string;
+    client?: string;
     siteId?: string;
     from?: string;
     to?: string;
@@ -555,11 +679,13 @@ export async function statsRoutes(app: FastifyInstance) {
     const offset = normalizeProxyLogOffset(request.query.offset);
     const status = normalizeProxyLogStatusFilter(request.query.status);
     const search = normalizeProxyLogSearch(request.query.search);
+    const client = normalizeProxyLogClientFilter(request.query.client);
     const siteId = normalizeProxyLogSiteId(request.query.siteId);
     const fromUtc = normalizeProxyLogTimeBoundary(request.query.from);
     const toUtc = normalizeProxyLogTimeBoundary(request.query.to);
-    const listWhere = buildProxyLogWhereClause({ status, search, siteId, fromUtc, toUtc });
-    const summaryWhere = buildProxyLogWhereClause({ search, siteId, fromUtc, toUtc });
+    const listWhere = buildProxyLogWhereClause({ status, search, client, siteId, fromUtc, toUtc });
+    const summaryWhere = buildProxyLogWhereClause({ search, client, siteId, fromUtc, toUtc });
+    const clientOptionsWhere = buildProxyLogWhereClause({ status, search, siteId, fromUtc, toUtc });
 
     const listRows = await withProxyLogSelectFields(({ fields }) => {
       let query = db.select({
@@ -604,6 +730,31 @@ export async function statsRoutes(app: FastifyInstance) {
     }
     const totalRow = await totalQuery.get();
 
+    const clientOptionRows = await withProxyLogSelectFields(({ fields, includeClientFields }) => {
+      if (!includeClientFields) {
+        return Promise.resolve([]);
+      }
+
+      let query = db.select({
+        clientFamily: fields.clientFamily!,
+        clientAppId: fields.clientAppId!,
+        clientAppName: fields.clientAppName!,
+      }).from(schema.proxyLogs)
+        .leftJoin(schema.accounts, eq(schema.proxyLogs.accountId, schema.accounts.id))
+        .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+        .leftJoin(schema.downstreamApiKeys, eq(schema.proxyLogs.downstreamApiKeyId, schema.downstreamApiKeys.id));
+
+      if (clientOptionsWhere) {
+        query = query.where(clientOptionsWhere) as typeof query;
+      }
+
+      return query.all();
+    }, { includeBillingDetails: false, includeClientFields: true }) as Array<{
+      clientFamily?: string | null;
+      clientAppId?: string | null;
+      clientAppName?: string | null;
+    }>;
+
     let summaryQuery = db.select({
       totalCount: sql<number>`count(*)`,
       successCount: sql<number>`coalesce(sum(case when ${schema.proxyLogs.status} = 'success' then 1 else 0 end), 0)`,
@@ -624,6 +775,7 @@ export async function statsRoutes(app: FastifyInstance) {
       total: Number(totalRow?.total || 0),
       page: Math.floor(offset / limit) + 1,
       pageSize: limit,
+      clientOptions: buildProxyLogClientOptions(clientOptionRows),
       summary: {
         totalCount: Number(summaryRow?.totalCount || 0),
         successCount: Number(summaryRow?.successCount || 0),

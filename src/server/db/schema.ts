@@ -193,6 +193,10 @@ export const proxyLogs = sqliteTable('proxy_logs', {
   totalTokens: integer('total_tokens'),
   estimatedCost: real('estimated_cost'),
   billingDetails: text('billing_details'),
+  clientFamily: text('client_family'),
+  clientAppId: text('client_app_id'),
+  clientAppName: text('client_app_name'),
+  clientConfidence: text('client_confidence'),
   errorMessage: text('error_message'),
   retryCount: integer('retry_count').default(0),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
@@ -202,6 +206,8 @@ export const proxyLogs = sqliteTable('proxy_logs', {
   statusCreatedIdx: index('proxy_logs_status_created_at_idx').on(table.status, table.createdAt),
   modelActualCreatedIdx: index('proxy_logs_model_actual_created_at_idx').on(table.modelActual, table.createdAt),
   downstreamKeyCreatedIdx: index('proxy_logs_downstream_api_key_created_at_idx').on(table.downstreamApiKeyId, table.createdAt),
+  clientAppCreatedIdx: index('proxy_logs_client_app_id_created_at_idx').on(table.clientAppId, table.createdAt),
+  clientFamilyCreatedIdx: index('proxy_logs_client_family_created_at_idx').on(table.clientFamily, table.createdAt),
 }));
 
 export const proxyVideoTasks = sqliteTable('proxy_video_tasks', {
@@ -274,6 +280,30 @@ export const downstreamApiKeys = sqliteTable('downstream_api_keys', {
   nameIdx: index('downstream_api_keys_name_idx').on(table.name),
   enabledIdx: index('downstream_api_keys_enabled_idx').on(table.enabled),
   expiresAtIdx: index('downstream_api_keys_expires_at_idx').on(table.expiresAt),
+}));
+
+export const siteAnnouncements = sqliteTable('site_announcements', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  siteId: integer('site_id').notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  platform: text('platform').notNull(),
+  sourceKey: text('source_key').notNull(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  level: text('level').notNull().default('info'),
+  sourceUrl: text('source_url'),
+  startsAt: text('starts_at'),
+  endsAt: text('ends_at'),
+  upstreamCreatedAt: text('upstream_created_at'),
+  upstreamUpdatedAt: text('upstream_updated_at'),
+  firstSeenAt: text('first_seen_at').default(sql`(datetime('now'))`),
+  lastSeenAt: text('last_seen_at').default(sql`(datetime('now'))`),
+  readAt: text('read_at'),
+  dismissedAt: text('dismissed_at'),
+  rawPayload: text('raw_payload'),
+}, (table) => ({
+  siteSourceKeyUnique: uniqueIndex('site_announcements_site_source_key_unique').on(table.siteId, table.sourceKey),
+  siteIdFirstSeenAtIdx: index('site_announcements_site_id_first_seen_at_idx').on(table.siteId, table.firstSeenAt),
+  readAtIdx: index('site_announcements_read_at_idx').on(table.readAt),
 }));
 
 export const events = sqliteTable('events', {

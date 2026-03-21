@@ -13,6 +13,7 @@ import {
   getCredentialModeFromExtraConfig,
   getProxyUrlFromExtraConfig,
   mergeAccountExtraConfig,
+  requiresManagedAccountTokens,
   resolvePlatformUserId,
   supportsDirectAccountRoutingConnection,
 } from './accountExtraConfig.js';
@@ -140,12 +141,6 @@ function buildModelFailureMessage(code: ModelRefreshErrorCode, fallback?: string
 
 function isSiteDisabled(status?: string | null): boolean {
   return (status || 'active') === 'disabled';
-}
-
-function isApiKeyConnection(account: typeof schema.accounts.$inferSelect): boolean {
-  const explicit = getCredentialModeFromExtraConfig(account.extraConfig);
-  if (explicit && explicit !== 'auto') return explicit === 'apikey';
-  return !(account.accessToken || '').trim();
 }
 
 function normalizeModels(models: string[]): string[] {
@@ -828,18 +823,21 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     } catch { }
   }
 
-  let enabledTokens = await db.select()
-    .from(schema.accountTokens)
-    .where(and(
-      eq(schema.accountTokens.accountId, account.id),
-      eq(schema.accountTokens.enabled, true),
-      eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
-    ))
-    .all();
+  const usesManagedTokens = requiresManagedAccountTokens(account);
+  let enabledTokens = usesManagedTokens
+    ? await db.select()
+      .from(schema.accountTokens)
+      .where(and(
+        eq(schema.accountTokens.accountId, account.id),
+        eq(schema.accountTokens.enabled, true),
+        eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
+      ))
+      .all()
+    : [];
   enabledTokens = enabledTokens.filter(isUsableAccountToken);
 
   // Last fallback: if still no managed token but account has a legacy apiToken, mirror it into token table.
-  if (!isApiKeyConnection(account) && enabledTokens.length === 0) {
+  if (usesManagedTokens && enabledTokens.length === 0) {
     const fallback = discoveredApiToken || account.apiToken || null;
     if (fallback) {
       ensureDefaultTokenForAccount(account.id, fallback, { name: 'default', source: 'legacy' });
@@ -1027,7 +1025,10 @@ export async function rebuildTokenRoutesFromAvailability() {
       ),
     )
     .all();
-  const usableTokenRows = tokenRows.filter((row) => isUsableAccountToken(row.account_tokens));
+  const usableTokenRows = tokenRows.filter((row) => (
+    isUsableAccountToken(row.account_tokens)
+    && requiresManagedAccountTokens(row.accounts)
+  ));
 
   const accountRows = await db.select().from(schema.modelAvailability)
     .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))

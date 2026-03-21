@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import type { FastifyServerOptions } from 'fastify';
+import { normalizePayloadRulesConfig } from './services/payloadRules.js';
 
 const DEFAULT_REQUEST_BODY_LIMIT = 20 * 1024 * 1024;
 const DEFAULT_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
@@ -32,6 +33,15 @@ function parseOptionalSecret(value: string | undefined): string {
   return (value || '').trim();
 }
 
+function parseJsonValue(value: string | undefined): unknown {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
 function parseDbType(value: string | undefined): 'sqlite' | 'mysql' | 'postgres' {
   const normalized = (value || 'sqlite').trim().toLowerCase();
   if (normalized === 'mysql') return 'mysql';
@@ -57,6 +67,10 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     systemProxyUrl: env.SYSTEM_PROXY_URL || '',
     accountCredentialSecret: env.ACCOUNT_CREDENTIAL_SECRET || env.AUTH_TOKEN || 'change-me-admin-token',
     checkinCron: env.CHECKIN_CRON || '0 8 * * *',
+    checkinScheduleMode: (env.CHECKIN_SCHEDULE_MODE || 'cron').trim().toLowerCase() === 'interval'
+      ? 'interval' as const
+      : 'cron' as const,
+    checkinIntervalHours: Math.min(24, Math.max(1, Math.trunc(parseNumber(env.CHECKIN_INTERVAL_HOURS, 6)))),
     balanceRefreshCron: env.BALANCE_REFRESH_CRON || '0 * * * *',
     logCleanupCron: env.LOG_CLEANUP_CRON || '0 6 * * *',
     logCleanupConfigured: false,
@@ -73,6 +87,8 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     telegramApiBaseUrl: 'https://api.telegram.org',
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || '',
     telegramChatId: env.TELEGRAM_CHAT_ID || '',
+    telegramUseSystemProxy: parseBoolean(env.TELEGRAM_USE_SYSTEM_PROXY, false),
+    telegramMessageThreadId: (env.TELEGRAM_MESSAGE_THREAD_ID || '').trim(),
     smtpEnabled: parseBoolean(env.SMTP_ENABLED, false),
     smtpHost: env.SMTP_HOST || '',
     smtpPort: parseInt(env.SMTP_PORT || '587'),
@@ -94,8 +110,15 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     tokenRouterCacheTtlMs: Math.max(100, Math.trunc(parseNumber(env.TOKEN_ROUTER_CACHE_TTL_MS, 1_500))),
     proxyLogRetentionDays: Math.max(0, Math.trunc(parseNumber(env.PROXY_LOG_RETENTION_DAYS, 30))),
     proxyLogRetentionPruneIntervalMinutes: Math.max(1, Math.trunc(parseNumber(env.PROXY_LOG_RETENTION_PRUNE_INTERVAL_MINUTES, 30))),
+    proxyFileRetentionDays: Math.max(0, Math.trunc(parseNumber(env.PROXY_FILE_RETENTION_DAYS, 30))),
+    proxyFileRetentionPruneIntervalMinutes: Math.max(1, Math.trunc(parseNumber(env.PROXY_FILE_RETENTION_PRUNE_INTERVAL_MINUTES, 60))),
     proxyErrorKeywords: parseCsvList(env.PROXY_ERROR_KEYWORDS),
     proxyEmptyContentFailEnabled: parseBoolean(env.PROXY_EMPTY_CONTENT_FAIL, false),
+    codexHeaderDefaults: {
+      userAgent: parseOptionalSecret(env.CODEX_HEADER_DEFAULTS_USER_AGENT),
+      betaFeatures: parseOptionalSecret(env.CODEX_HEADER_DEFAULTS_BETA_FEATURES),
+    },
+    payloadRules: normalizePayloadRulesConfig(parseJsonValue(env.PAYLOAD_RULES_JSON || env.PAYLOAD_RULES)),
     routingWeights: {
       baseWeightFactor: parseNumber(env.BASE_WEIGHT_FACTOR, 0.5),
       valueScoreFactor: parseNumber(env.VALUE_SCORE_FACTOR, 0.5),

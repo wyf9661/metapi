@@ -14,6 +14,7 @@ const resolveProxyUsageWithSelfLogFallbackMock = vi.fn(async ({ usage }: any) =>
   estimatedCostFromQuota: 0,
   recoveredFromSelfLog: false,
 }));
+const refreshOauthAccessTokenSingleflightMock = vi.fn();
 const dbInsertMock = vi.fn((_arg?: any) => ({
   values: () => ({
     run: () => undefined,
@@ -60,10 +61,16 @@ vi.mock('../../services/proxyUsageFallbackService.js', () => ({
   resolveProxyUsageWithSelfLogFallback: (arg: any) => resolveProxyUsageWithSelfLogFallbackMock(arg),
 }));
 
+vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
+  refreshOauthAccessTokenSingleflight: (...args: unknown[]) => refreshOauthAccessTokenSingleflightMock(...args),
+}));
+
 vi.mock('../../db/index.js', () => ({
   db: {
     insert: (arg: any) => dbInsertMock(arg),
   },
+  hasProxyLogBillingDetailsColumn: async () => false,
+  hasProxyLogClientColumns: async () => false,
   hasProxyLogDownstreamApiKeyIdColumn: async () => false,
   schema: {
     proxyLogs: {},
@@ -105,6 +112,7 @@ describe('chat proxy codex oauth compatibility', () => {
     reportProxyAllFailedMock.mockReset();
     reportTokenExpiredMock.mockReset();
     resolveProxyUsageWithSelfLogFallbackMock.mockClear();
+    refreshOauthAccessTokenSingleflightMock.mockReset();
     dbInsertMock.mockClear();
 
     selectChannelMock.mockReturnValue({
@@ -128,6 +136,11 @@ describe('chat proxy codex oauth compatibility', () => {
       actualModel: 'gpt-5.4',
     });
     selectNextChannelMock.mockReturnValue(null);
+    refreshOauthAccessTokenSingleflightMock.mockResolvedValue({
+      accessToken: 'fresh-access-token',
+      accountId: 33,
+      accountKey: 'chatgpt-account-123',
+    });
   });
 
   afterAll(async () => {
@@ -244,5 +257,108 @@ describe('chat proxy codex oauth compatibility', () => {
     expect(response.body).toContain('pong from codex');
     expect(response.body).not.toContain('event: response.created');
     expect(response.body).not.toContain('"type":"response.output_text.delta"');
+  });
+
+  it('still translates raw codex SSE into OpenAI chat completion chunks when upstream mislabels the content-type', async () => {
+    fetchMock.mockResolvedValue(new Response([
+      'event: response.created\n',
+      'data: {"type":"response.created","response":{"id":"resp_codex_openai_stream_header_miss","model":"gpt-5.4","created_at":1706000000,"status":"in_progress","output":[]}}\n\n',
+      'event: response.output_item.added\n',
+      'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_codex_openai_stream_header_miss","type":"message","role":"assistant","status":"in_progress","content":[]}}\n\n',
+      'event: response.output_text.delta\n',
+      'data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_codex_openai_stream_header_miss","delta":"pong from codex"}\n\n',
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_codex_openai_stream_header_miss","model":"gpt-5.4","status":"completed","usage":{"input_tokens":9,"output_tokens":3,"total_tokens":12}}}\n\n',
+      'data: [DONE]\n\n',
+    ].join(''), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-5.4',
+        stream: true,
+        messages: [{ role: 'user', content: 'hello codex' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.body).toContain('"object":"chat.completion.chunk"');
+    expect(response.body).toContain('pong from codex');
+    expect(response.body).not.toContain('event: response.created');
+    expect(response.body).not.toContain('"type":"response.output_text.delta"');
+  });
+
+  it('retries oauth chat requests with a normalized upstream URL after refresh', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'openai-site', url: 'https://gateway.example.com/v1/', platform: 'openai' },
+      account: {
+        id: 33,
+        username: 'oauth-user@example.com',
+        extraConfig: JSON.stringify({
+          credentialMode: 'session',
+          oauth: {
+            provider: 'codex',
+            accountId: 'chatgpt-account-123',
+            email: 'oauth-user@example.com',
+            planType: 'plus',
+          },
+        }),
+      },
+      tokenName: 'default',
+      tokenValue: 'expired-access-token',
+      actualModel: 'gpt-4o-mini',
+    });
+
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'expired token', type: 'invalid_request_error' },
+      }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'chatcmpl_refreshed',
+        object: 'chat.completion',
+        created: 1706000000,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant', content: 'ok after refresh' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: 'hello oauth' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(33);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const [firstUrl, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [secondUrl, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(firstUrl).toBe('https://gateway.example.com/v1/responses');
+    expect(secondUrl).toBe('https://gateway.example.com/v1/responses');
+    expect(firstOptions.headers.Authorization).toBe('Bearer expired-access-token');
+    expect(secondOptions.headers.Authorization).toBe('Bearer fresh-access-token');
+    expect(response.json()?.choices?.[0]?.message?.content).toBe('ok after refresh');
   });
 });

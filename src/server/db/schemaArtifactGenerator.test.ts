@@ -103,8 +103,8 @@ describe('schema artifact generator', () => {
     ).toBeLessThan(
       artifacts.postgresBootstrap.indexOf('CREATE TABLE IF NOT EXISTS "account_tokens"'),
     );
-    expect(artifacts.mysqlBootstrap).toContain('`created_at` DATETIME DEFAULT CURRENT_TIMESTAMP');
-    expect(artifacts.postgresBootstrap).toContain('"created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    expect(artifacts.mysqlBootstrap).toContain("`created_at` VARCHAR(191) DEFAULT (DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'))");
+    expect(artifacts.postgresBootstrap).toContain(`"created_at" TEXT DEFAULT to_char(timezone('UTC', CURRENT_TIMESTAMP), 'YYYY-MM-DD HH24:MI:SS')`);
   });
 
   it('uses varchar for mysql text primary keys so bootstrap ddl stays executable', () => {

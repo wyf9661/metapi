@@ -76,6 +76,21 @@ describe('shared input file helpers', () => {
     });
   });
 
+  it('creates anthropic document blocks from remote file urls', () => {
+    expect(toAnthropicDocumentBlock({
+      fileUrl: 'https://example.com/remote.pdf',
+      filename: 'remote.pdf',
+      mimeType: 'application/pdf',
+    })).toEqual({
+      type: 'document',
+      source: {
+        type: 'url',
+        url: 'https://example.com/remote.pdf',
+      },
+      title: 'remote.pdf',
+    });
+  });
+
   it('infers common mime types from filenames', () => {
     expect(inferInputFileMimeType({ filename: 'notes.md', mimeType: null })).toBe('text/markdown');
     expect(inferInputFileMimeType({ filename: 'photo.jpeg', mimeType: null })).toBe('image/jpeg');

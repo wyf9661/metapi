@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PreparedProviderRequest, PrepareProviderRequestInput, ProviderProfile } from './types.js';
+import { config } from '../../config.js';
 
 const CODEX_CLIENT_VERSION = '0.101.0';
 const CODEX_DEFAULT_USER_AGENT = 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
+const CODEX_RESPONSES_WEBSOCKET_BETA = 'responses_websockets=2026-02-06';
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -53,6 +55,7 @@ function uuidFromSeed(seed: string): string {
 function buildCodexRuntimeHeaders(input: {
   baseHeaders: Record<string, string>;
   providerHeaders?: Record<string, string>;
+  oauthProvider?: string;
   explicitSessionId?: string | null;
   continuityKey?: string | null;
 }): Record<string, string> {
@@ -64,7 +67,21 @@ function buildCodexRuntimeHeaders(input: {
   const originator = getInputHeader(input.providerHeaders, 'originator') || 'codex_cli_rs';
   const accountId = getInputHeader(input.providerHeaders, 'chatgpt-account-id');
   const version = getInputHeader(input.baseHeaders, 'version') || CODEX_CLIENT_VERSION;
-  const userAgent = getInputHeader(input.baseHeaders, 'user-agent') || CODEX_DEFAULT_USER_AGENT;
+  const isCodexOauth = asTrimmedString(input.oauthProvider).toLowerCase() === 'codex';
+  const configuredUserAgent = isCodexOauth ? asTrimmedString(config.codexHeaderDefaults.userAgent) : '';
+  const websocketTransport = getInputHeader(input.baseHeaders, 'x-metapi-responses-websocket-transport') === '1';
+  const configuredBetaFeatures = (
+    isCodexOauth && websocketTransport
+      ? asTrimmedString(config.codexHeaderDefaults.betaFeatures)
+      : ''
+  );
+  const userAgent = configuredUserAgent || getInputHeader(input.baseHeaders, 'user-agent') || CODEX_DEFAULT_USER_AGENT;
+  const codexBetaFeatures = getInputHeader(input.baseHeaders, 'x-codex-beta-features') || configuredBetaFeatures;
+  const codexTurnState = getInputHeader(input.baseHeaders, 'x-codex-turn-state');
+  const codexTurnMetadata = getInputHeader(input.baseHeaders, 'x-codex-turn-metadata');
+  const timingMetrics = getInputHeader(input.baseHeaders, 'x-responsesapi-include-timing-metrics');
+  const openAiBeta = getInputHeader(input.baseHeaders, 'openai-beta')
+    || (websocketTransport ? CODEX_RESPONSES_WEBSOCKET_BETA : null);
   const explicitSessionId = asTrimmedString(input.explicitSessionId);
   const continuityKey = asTrimmedString(input.continuityKey);
   const sessionId = (
@@ -87,6 +104,11 @@ function buildCodexRuntimeHeaders(input: {
     ...(accountId ? { 'Chatgpt-Account-Id': accountId } : {}),
     Originator: originator,
     Version: version,
+    ...(codexBetaFeatures ? { 'x-codex-beta-features': codexBetaFeatures } : {}),
+    ...(codexTurnState ? { 'x-codex-turn-state': codexTurnState } : {}),
+    ...(codexTurnMetadata ? { 'x-codex-turn-metadata': codexTurnMetadata } : {}),
+    ...(timingMetrics ? { 'x-responsesapi-include-timing-metrics': timingMetrics } : {}),
+    ...(openAiBeta ? { 'OpenAI-Beta': openAiBeta } : {}),
     Session_id: sessionId,
     ...(conversationId ? { Conversation_id: conversationId } : {}),
     'User-Agent': userAgent,
@@ -101,6 +123,7 @@ export const codexProviderProfile: ProviderProfile = {
     const headers = buildCodexRuntimeHeaders({
       baseHeaders: input.baseHeaders,
       providerHeaders: input.providerHeaders,
+      oauthProvider: input.oauthProvider,
       explicitSessionId: asTrimmedString(input.codexExplicitSessionId) || null,
       continuityKey: asTrimmedString(input.codexSessionCacheKey) || null,
     });

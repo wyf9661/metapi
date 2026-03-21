@@ -1,9 +1,10 @@
 import { FastifyInstance } from 'fastify';
+import { config } from '../../config.js';
 import { db, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
 import { eq, desc } from 'drizzle-orm';
 import { checkinAccount, checkinAll } from '../../services/checkinService.js';
-import { updateCheckinCron } from '../../services/checkinScheduler.js';
+import { updateCheckinSchedule } from '../../services/checkinScheduler.js';
 import { startBackgroundTask, summarizeCheckinResults } from '../../services/backgroundTaskService.js';
 import { classifyFailureReason } from '../../services/failureReasonService.js';
 
@@ -84,7 +85,7 @@ export async function checkinRoutes(app: FastifyInstance) {
         failureMessage: (currentTask) => `全部账号签到任务失败：${currentTask.error || 'unknown error'}`,
       },
       async () => {
-        const results = await checkinAll();
+        const results = await checkinAll({ scheduleMode: config.checkinScheduleMode });
         return {
           summary: summarizeCheckinResults(results),
           total: results.length,
@@ -108,7 +109,7 @@ export async function checkinRoutes(app: FastifyInstance) {
   // Trigger check-in for a specific account
   app.post<{ Params: { id: string } }>('/api/checkin/trigger/:id', async (request) => {
     const id = parseInt(request.params.id, 10);
-    const result = await checkinAccount(id);
+    const result = await checkinAccount(id, { scheduleMode: config.checkinScheduleMode });
     return result;
   });
 
@@ -142,11 +143,33 @@ export async function checkinRoutes(app: FastifyInstance) {
   });
 
   // Update check-in schedule
-  app.put<{ Body: { cron: string } }>('/api/checkin/schedule', async (request) => {
+  app.put<{ Body: { mode?: 'cron' | 'interval'; cron?: string; intervalHours?: number } }>('/api/checkin/schedule', async (request) => {
     try {
-      updateCheckinCron(request.body.cron);
-      await upsertSetting('checkin_cron', request.body.cron);
-      return { success: true, cron: request.body.cron };
+      const body = request.body || {};
+      const nextMode: 'cron' | 'interval' = body.mode === 'interval' ? 'interval' : 'cron';
+      const nextCron = typeof body.cron === 'string' ? body.cron : undefined;
+      const nextIntervalHours = body.intervalHours !== undefined ? Number(body.intervalHours) : undefined;
+      const normalizedIntervalHours = typeof nextIntervalHours === 'number' && Number.isFinite(nextIntervalHours)
+        ? Math.trunc(nextIntervalHours)
+        : undefined;
+
+      updateCheckinSchedule({
+        mode: nextMode,
+        cronExpr: nextCron,
+        intervalHours: normalizedIntervalHours,
+      });
+
+      await upsertSetting('checkin_schedule_mode', nextMode);
+      if (nextCron !== undefined) await upsertSetting('checkin_cron', nextCron);
+      if (normalizedIntervalHours !== undefined) {
+        await upsertSetting('checkin_interval_hours', normalizedIntervalHours);
+      }
+      return {
+        success: true,
+        mode: nextMode,
+        cron: nextCron,
+        intervalHours: normalizedIntervalHours,
+      };
     } catch (err: any) {
       return { error: err.message };
     }

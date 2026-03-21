@@ -81,7 +81,7 @@ function mapColumnType(dialect: SqlDialect, columnName: string, column: SchemaCo
       case 'real':
         return 'DOUBLE';
       case 'datetime':
-        return 'DATETIME';
+        return 'VARCHAR(191)';
       case 'json':
         return 'JSON';
       case 'text':
@@ -99,7 +99,7 @@ function mapColumnType(dialect: SqlDialect, columnName: string, column: SchemaCo
     case 'real':
       return 'DOUBLE PRECISION';
     case 'datetime':
-      return 'TIMESTAMP';
+      return 'TEXT';
     case 'json':
       return 'JSONB';
     case 'text':
@@ -117,7 +117,10 @@ function formatDefaultValue(dialect: SqlDialect, column: SchemaContractColumn): 
     if (dialect === 'sqlite') {
       return " DEFAULT (datetime('now'))";
     }
-    return ' DEFAULT CURRENT_TIMESTAMP';
+    if (dialect === 'mysql') {
+      return " DEFAULT (DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'))";
+    }
+    return " DEFAULT to_char(timezone('UTC', CURRENT_TIMESTAMP), 'YYYY-MM-DD HH24:MI:SS')";
   }
 
   if (column.logicalType === 'boolean') {

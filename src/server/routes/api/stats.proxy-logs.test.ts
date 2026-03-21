@@ -75,6 +75,10 @@ describe('stats proxy logs routes', () => {
         modelRequested: 'gpt-4o',
         modelActual: 'gpt-4o',
         status: 'success',
+        clientFamily: 'generic',
+        clientAppId: 'cherry_studio',
+        clientAppName: 'Cherry Studio',
+        clientConfidence: 'exact',
         promptTokens: 10,
         completionTokens: 5,
         totalTokens: 15,
@@ -88,6 +92,7 @@ describe('stats proxy logs routes', () => {
         modelRequested: 'gpt-4o-mini',
         modelActual: 'gpt-4o-mini',
         status: 'failed',
+        clientFamily: 'codex',
         promptTokens: 8,
         completionTokens: 2,
         totalTokens: 10,
@@ -139,6 +144,10 @@ describe('stats proxy logs routes', () => {
         totalCost: number;
         totalTokensAll: number;
       };
+      clientOptions: Array<{
+        value: string;
+        label: string;
+      }>;
     };
 
     expect(body.page).toBe(2);
@@ -150,7 +159,14 @@ describe('stats proxy logs routes', () => {
     expect(body.items[0]?.downstreamKeyName).toBe('项目A-Key');
     expect(body.items[0]?.downstreamKeyGroupName).toBe('项目A');
     expect(body.items[0]?.downstreamKeyTags).toEqual(['VIP', '灰度']);
+    expect(body.items[0]?.clientFamily).toBe('codex');
+    expect(body.items[0]?.clientAppId).toBe(null);
+    expect(body.items[0]?.clientAppName).toBe(null);
+    expect(body.items[0]?.clientConfidence).toBe(null);
     expect(body.items[0]).not.toHaveProperty('billingDetails');
+    expect(body.clientOptions).toEqual([
+      { value: 'family:codex', label: '协议 · Codex' },
+    ]);
     expect(body.summary).toEqual({
       totalCount: 3,
       successCount: 1,
@@ -188,6 +204,10 @@ describe('stats proxy logs routes', () => {
       modelRequested: 'gpt-5',
       modelActual: 'gpt-5',
       status: 'success',
+      clientFamily: 'codex',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
       promptTokens: 100,
       completionTokens: 20,
       totalTokens: 120,
@@ -214,6 +234,10 @@ describe('stats proxy logs routes', () => {
       downstreamKeyName: string | null;
       downstreamKeyGroupName: string | null;
       downstreamKeyTags: string[];
+      clientFamily: string | null;
+      clientAppId: string | null;
+      clientAppName: string | null;
+      clientConfidence: string | null;
       billingDetails: Record<string, unknown> | null;
     };
 
@@ -223,6 +247,10 @@ describe('stats proxy logs routes', () => {
     expect(body.downstreamKeyName).toBe('detail-key');
     expect(body.downstreamKeyGroupName).toBe('测试项目');
     expect(body.downstreamKeyTags).toEqual(['回归', '日志']);
+    expect(body.clientFamily).toBe('codex');
+    expect(body.clientAppId).toBe('cherry_studio');
+    expect(body.clientAppName).toBe('Cherry Studio');
+    expect(body.clientConfidence).toBe('exact');
     expect(body.billingDetails).toMatchObject({
       breakdown: { totalCost: 0.12 },
       usage: { promptTokens: 100, completionTokens: 20 },
@@ -391,5 +419,119 @@ describe('stats proxy logs routes', () => {
       totalCost: 0.33,
       totalTokensAll: 30,
     });
+  });
+
+  it('filters proxy logs by app id while keeping client options scoped only by the other filters', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'client-filter-site',
+      url: 'https://client-filter.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'client-filter-user',
+      accessToken: 'client-filter-token',
+      status: 'active',
+    }).returning().get();
+
+    await db.insert(schema.proxyLogs).values([
+      {
+        accountId: account.id,
+        modelRequested: 'gpt-4o',
+        modelActual: 'gpt-4o',
+        status: 'success',
+        clientFamily: 'generic',
+        clientAppId: 'cherry_studio',
+        clientAppName: 'Cherry Studio',
+        clientConfidence: 'exact',
+        totalTokens: 12,
+        estimatedCost: 0.12,
+        createdAt: formatUtcSqlDateTime(new Date('2026-03-09T11:00:00.000Z')),
+      },
+      {
+        accountId: account.id,
+        modelRequested: 'gpt-4.1',
+        modelActual: 'gpt-4.1',
+        status: 'failed',
+        clientFamily: 'codex',
+        totalTokens: 22,
+        estimatedCost: 0.22,
+        createdAt: formatUtcSqlDateTime(new Date('2026-03-09T11:05:00.000Z')),
+      },
+    ]).run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/stats/proxy-logs?client=app%3Acherry_studio',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      total: number;
+      items: Array<Record<string, unknown>>;
+      clientOptions: Array<{
+        value: string;
+        label: string;
+      }>;
+    };
+
+    expect(body.total).toBe(1);
+    expect(body.items[0]?.clientAppId).toBe('cherry_studio');
+    expect(body.clientOptions).toEqual([
+      { value: 'app:cherry_studio', label: '应用 · Cherry Studio' },
+      { value: 'family:codex', label: '协议 · Codex' },
+    ]);
+  });
+
+  it('falls back to legacy client prefixes for old logs without inferring an app fingerprint', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'legacy-site',
+      url: 'https://legacy.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'legacy-user',
+      accessToken: 'legacy-token',
+      status: 'active',
+    }).returning().get();
+
+    const inserted = await db.insert(schema.proxyLogs).values({
+      accountId: account.id,
+      modelRequested: 'gpt-4o',
+      modelActual: 'gpt-4o',
+      status: 'failed',
+      errorMessage: '[client:codex] [session:turn-123] [downstream:/v1/responses] upstream error',
+      totalTokens: 9,
+      estimatedCost: 0.09,
+      createdAt: formatUtcSqlDateTime(new Date('2026-03-09T12:00:00.000Z')),
+    }).run();
+
+    const logId = Number(inserted.lastInsertRowid || 0);
+    const listResponse = await app.inject({
+      method: 'GET',
+      url: '/api/stats/proxy-logs',
+    });
+    const detailResponse = await app.inject({
+      method: 'GET',
+      url: `/api/stats/proxy-logs/${logId}`,
+    });
+
+    expect(listResponse.statusCode).toBe(200);
+    expect(detailResponse.statusCode).toBe(200);
+
+    const listBody = listResponse.json() as {
+      items: Array<Record<string, unknown>>;
+    };
+    const detailBody = detailResponse.json() as Record<string, unknown>;
+
+    expect(listBody.items[0]?.clientFamily).toBe('codex');
+    expect(listBody.items[0]?.clientAppId).toBe(null);
+    expect(listBody.items[0]?.clientAppName).toBe(null);
+    expect(detailBody.clientFamily).toBe('codex');
+    expect(detailBody.clientAppId).toBe(null);
+    expect(detailBody.clientAppName).toBe(null);
   });
 });

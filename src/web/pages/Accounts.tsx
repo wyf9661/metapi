@@ -1171,12 +1171,17 @@ export default function Accounts() {
                     </div>
                     {isSub2ApiSelected && (
                       <>
-                        <input
-                          placeholder="Sub2API refresh_token（可选，用于托管自动续期）"
-                          value={tokenForm.refreshToken}
-                          onChange={(e) => setTokenForm((f) => ({ ...f, refreshToken: e.target.value.trim() }))}
-                          style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
-                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <input
+                            placeholder="Sub2API refresh_token（可选，用于托管自动续期）"
+                            value={tokenForm.refreshToken}
+                            onChange={(e) => setTokenForm((f) => ({ ...f, refreshToken: e.target.value.trim() }))}
+                            style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                          />
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                            可在浏览器控制台执行 <code style={{ fontFamily: 'var(--font-mono)' }}>localStorage.getItem('refresh_token')</code> 获取。
+                          </div>
+                        </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           <input
                             placeholder="token_expires_at（可选，毫秒时间戳）"

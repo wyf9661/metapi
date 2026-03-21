@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
+import ModernSelect from '../components/ModernSelect.js';
 import Settings from './Settings.js';
 
 const { apiMock } = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     getRoutesLite: vi.fn(),
     getRuntimeDatabaseConfig: vi.fn(),
     updateRuntimeSettings: vi.fn(),
+    triggerCheckinAll: vi.fn(),
   },
 }));
 
@@ -46,6 +48,8 @@ describe('Settings log cleanup schedule', () => {
     apiMock.getAuthInfo.mockResolvedValue({ masked: 'sk-****' });
     apiMock.getRuntimeSettings.mockResolvedValue({
       checkinCron: '0 8 * * *',
+      checkinScheduleMode: 'interval',
+      checkinIntervalHours: 6,
       balanceRefreshCron: '0 * * * *',
       logCleanupCron: '15 4 * * *',
       logCleanupUsageLogsEnabled: true,
@@ -70,7 +74,7 @@ describe('Settings log cleanup schedule', () => {
     vi.clearAllMocks();
   });
 
-  it('saves log cleanup fields together with other schedule settings', async () => {
+  it('saves schedule mode and interval fields together with other schedule settings', async () => {
     let root: ReturnType<typeof create> | null = null;
     try {
       await act(async () => {
@@ -97,12 +101,75 @@ describe('Settings log cleanup schedule', () => {
 
       expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith({
         checkinCron: '0 8 * * *',
+        checkinScheduleMode: 'interval',
+        checkinIntervalHours: 6,
         balanceRefreshCron: '0 * * * *',
         logCleanupCron: '15 4 * * *',
         logCleanupUsageLogsEnabled: true,
         logCleanupProgramLogsEnabled: true,
         logCleanupRetentionDays: 14,
       });
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('triggers a one-off checkin from the schedule card', async () => {
+    apiMock.triggerCheckinAll.mockResolvedValue({ success: true });
+
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <Settings />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const triggerButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '测试一次签到'
+      ));
+
+      await act(async () => {
+        await triggerButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.triggerCheckinAll).toHaveBeenCalledTimes(1);
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('renders schedule mode controls with modern selects and ghost action styling', async () => {
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <Settings />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const triggerButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '测试一次签到'
+      ));
+
+      expect(root.root.findAllByType('select')).toHaveLength(0);
+      expect(root.root.findAllByType(ModernSelect).length).toBeGreaterThanOrEqual(3);
+      expect(String(triggerButton.props.className || '')).toContain('btn-ghost');
     } finally {
       root?.unmount();
     }

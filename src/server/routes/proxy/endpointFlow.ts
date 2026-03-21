@@ -27,6 +27,14 @@ export type EndpointAttemptContext = {
   rawErrText: string;
 };
 
+export type EndpointAttemptSuccessContext = {
+  endpointIndex: number;
+  endpointCount: number;
+  request: BuiltEndpointRequest;
+  targetUrl: string;
+  response: Awaited<ReturnType<typeof fetch>>;
+};
+
 export type EndpointRecoverResult = {
   upstream: Awaited<ReturnType<typeof fetch>>;
   upstreamPath: string;
@@ -51,7 +59,6 @@ export function withUpstreamPath(path: string, message: string): string {
 
 type ExecuteEndpointFlowInput = {
   siteUrl: string;
-  proxyUrl?: string | null;
   endpointCandidates: UpstreamEndpoint[];
   buildRequest: (endpoint: UpstreamEndpoint, endpointIndex: number) => BuiltEndpointRequest;
   dispatchRequest?: (
@@ -61,13 +68,9 @@ type ExecuteEndpointFlowInput = {
   tryRecover?: (ctx: EndpointAttemptContext) => Promise<EndpointRecoverResult>;
   shouldDowngrade?: (ctx: EndpointAttemptContext) => boolean;
   onDowngrade?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
+  onAttemptFailure?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
+  onAttemptSuccess?: (ctx: EndpointAttemptSuccessContext) => void | Promise<void>;
 };
-
-function buildAbsoluteUrl(base: string, path: string): string {
-  const normalizedBase = base.replace(/\/+$/, '');
-  const normalizedPath = path.replace(/^\/+/, '');
-  return normalizedPath ? `${normalizedBase}/${normalizedPath}` : normalizedBase;
-}
 
 export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Promise<EndpointFlowResult> {
   const endpointCount = input.endpointCandidates.length;
@@ -86,10 +89,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
   for (let endpointIndex = 0; endpointIndex < endpointCount; endpointIndex += 1) {
     const endpoint = input.endpointCandidates[endpointIndex] as UpstreamEndpoint;
     const request = input.buildRequest(endpoint, endpointIndex);
-    const defaultTarget = buildUpstreamUrl(input.siteUrl, request.path);
-    const targetUrl = input.proxyUrl
-      ? buildAbsoluteUrl(input.proxyUrl, request.path)
-      : defaultTarget;
+    const targetUrl = buildUpstreamUrl(input.siteUrl, request.path);
 
     let response = input.dispatchRequest
       ? await input.dispatchRequest(request, targetUrl)
@@ -100,6 +100,13 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       }));
 
     if (response.ok) {
+      await input.onAttemptSuccess?.({
+        endpointIndex,
+        endpointCount,
+        request,
+        targetUrl,
+        response,
+      });
       return {
         ok: true,
         upstream: response,
@@ -120,6 +127,13 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     if (input.tryRecover) {
       const recovered = await input.tryRecover(baseContext);
       if (recovered?.upstream?.ok) {
+        await input.onAttemptSuccess?.({
+          endpointIndex,
+          endpointCount,
+          request: baseContext.request,
+          targetUrl: baseContext.targetUrl,
+          response: recovered.upstream,
+        });
         return {
           ok: true,
           upstream: recovered.upstream,
@@ -135,6 +149,10 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       baseContext.request.path,
       summarizeUpstreamError(response.status, rawErrText),
     );
+    await input.onAttemptFailure?.({
+      ...baseContext,
+      errText,
+    });
 
     const isLastEndpoint = endpointIndex >= endpointCount - 1;
     const shouldDowngrade = !isLastEndpoint && !!input.shouldDowngrade?.(baseContext);

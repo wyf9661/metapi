@@ -116,6 +116,12 @@ describe('downstreamApiKeyService', () => {
     expect(service.isModelAllowedByPolicy('gemini-2.0-flash', result.policy)).toBe(false);
   });
 
+  it('keeps all explicitly selected supported models when list exceeds 200 items', () => {
+    const selectedModels = Array.from({ length: 260 }, (_, index) => `model-${String(index + 1).padStart(3, '0')}`);
+
+    expect(service.normalizeSupportedModelsInput(selectedModels)).toEqual(selectedModels);
+  });
+
   it('treats selected groups as additional allowed exposed route scope (union semantics)', async () => {
     const claudeGroup = await db.insert(schema.tokenRoutes).values({
       modelPattern: 're:^claude-(opus|sonnet)-4-6$',
@@ -134,6 +140,18 @@ describe('downstreamApiKeyService', () => {
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('claude-opus-4-6', policy)).toBe(false);
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gpt-4o-mini', policy)).toBe(true);
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gemini-2.0-flash', policy)).toBe(false);
+  });
+
+  it('denies all models when both supportedModels and allowedRouteIds are empty', async () => {
+    const policy = {
+      supportedModels: [],
+      allowedRouteIds: [],
+      siteWeightMultipliers: {},
+      denyAllWhenEmpty: true,
+    };
+
+    expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gpt-4o-mini', policy)).toBe(false);
+    expect(await service.isModelAllowedByPolicyOrAllowedRoutes('claude-opus-4-6', policy)).toBe(false);
   });
 
   it('authorizes by selected group model pattern only, not arbitrary internal models', async () => {

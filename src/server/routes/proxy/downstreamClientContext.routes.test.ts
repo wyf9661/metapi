@@ -71,6 +71,9 @@ vi.mock('../../db/index.js', () => ({
   schema: {
     proxyLogs: {},
   },
+  hasProxyLogBillingDetailsColumn: async () => false,
+  hasProxyLogClientColumns: async () => false,
+  hasProxyLogDownstreamApiKeyIdColumn: async () => false,
 }));
 
 describe('downstream client context route logging', () => {

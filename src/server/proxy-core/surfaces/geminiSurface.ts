@@ -16,6 +16,8 @@ import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/pro
 import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
 import {
   buildUpstreamEndpointRequest,
+  recordUpstreamEndpointFailure,
+  recordUpstreamEndpointSuccess,
   resolveUpstreamEndpointCandidates,
 } from '../../routes/proxy/upstreamEndpoint.js';
 import {
@@ -29,6 +31,9 @@ import {
   wrapGeminiCliRequest,
 } from '../../routes/proxy/geminiCliCompat.js';
 import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
+import { detectDownstreamClientContext, type DownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
+import { insertProxyLog } from '../../services/proxyLogStore.js';
+import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 
 const MAX_RETRIES = 2;
 const GEMINI_MODEL_PROBES = [
@@ -114,10 +119,10 @@ function resolveUpstreamPath(apiVersion: string, modelActionPath: string): strin
   return `/${normalizedVersion}/${normalizedAction}`;
 }
 
-function hasDownstreamModelRestrictions(policy: { supportedModels?: unknown; allowedRouteIds?: unknown }): boolean {
+function hasDownstreamModelRestrictions(policy: { supportedModels?: unknown; allowedRouteIds?: unknown; denyAllWhenEmpty?: unknown }): boolean {
   const supportedModels = Array.isArray(policy.supportedModels) ? policy.supportedModels : [];
   const allowedRouteIds = Array.isArray(policy.allowedRouteIds) ? policy.allowedRouteIds : [];
-  return supportedModels.length > 0 || allowedRouteIds.length > 0;
+  return supportedModels.length > 0 || allowedRouteIds.length > 0 || policy.denyAllWhenEmpty === true;
 }
 
 function extractGeminiListedModelName(item: unknown): string {
@@ -203,6 +208,7 @@ async function logProxy(
   retryCount: number,
   downstreamPath: string,
   upstreamPath: string | null,
+  clientContext: DownstreamClientContext | null = null,
   promptTokens = 0,
   completionTokens = 0,
   totalTokens = 0,
@@ -210,11 +216,16 @@ async function logProxy(
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
     const normalizedErrorMessage = composeProxyLogMessage({
+      clientKind: clientContext?.clientKind && clientContext.clientKind !== 'generic'
+        ? clientContext.clientKind
+        : null,
+      sessionId: clientContext?.sessionId || null,
+      traceHint: clientContext?.traceHint || null,
       downstreamPath,
       upstreamPath,
       errorMessage,
     });
-    await db.insert(schema.proxyLogs).values({
+    await insertProxyLog({
       routeId: selected.channel.routeId,
       channelId: selected.channel.id,
       accountId: selected.account.id,
@@ -227,11 +238,14 @@ async function logProxy(
       completionTokens,
       totalTokens,
       estimatedCost: 0,
-      billingDetails: null,
+      clientFamily: clientContext?.clientKind || null,
+      clientAppId: clientContext?.clientAppId || null,
+      clientAppName: clientContext?.clientAppName || null,
+      clientConfidence: clientContext?.clientConfidence || null,
       errorMessage: normalizedErrorMessage,
       retryCount,
       createdAt,
-    }).run();
+    });
   } catch (error) {
     console.warn('[proxy/gemini] failed to write proxy log', error);
   }
@@ -285,7 +299,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           lastStatus = upstream.status;
           lastText = text;
           lastContentType = upstream.headers.get('content-type') || 'application/json';
-          await tokenRouter.recordFailure?.(selected.channel.id);
+          await tokenRouter.recordFailure?.(selected.channel.id, {
+            status: upstream.status,
+            errorText: text,
+          });
           if (retryCount < MAX_RETRIES) {
             retryCount += 1;
             continue;
@@ -300,7 +317,9 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           return reply.code(upstream.status).type(upstream.headers.get('content-type') || 'application/json').send(text);
         }
       } catch (error) {
-        await tokenRouter.recordFailure?.(selected.channel.id);
+        await tokenRouter.recordFailure?.(selected.channel.id, {
+          errorText: error instanceof Error ? error.message : 'Gemini upstream request failed',
+        });
         lastStatus = 502;
         lastContentType = 'application/json';
         lastText = JSON.stringify({
@@ -355,6 +374,11 @@ export async function geminiProxyRoute(app: FastifyInstance) {
 
     const policy = getDownstreamRoutingPolicy(request);
     const downstreamPath = resolveDownstreamPath(request);
+    const clientContext = detectDownstreamClientContext({
+      downstreamPath,
+      headers: request.headers as Record<string, unknown>,
+      body: request.body,
+    });
     const excludeChannelIds: number[] = [];
     let retryCount = 0;
     let lastStatus = 503;
@@ -394,7 +418,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 type: 'server_error',
               },
             });
-            await tokenRouter.recordFailure?.(selected.channel.id);
+            await tokenRouter.recordFailure?.(selected.channel.id, {
+              status: 500,
+              errorText: 'Gemini CLI OAuth project is missing',
+            });
             if (retryCount < MAX_RETRIES) {
               retryCount += 1;
               continue;
@@ -478,7 +505,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             lastStatus = upstream.status;
             lastContentType = contentType;
             lastText = await upstream.text();
-            await tokenRouter.recordFailure?.(selected.channel.id);
+            await tokenRouter.recordFailure?.(selected.channel.id, {
+              status: upstream.status,
+              errorText: lastText,
+            });
             await logProxy(
               selected,
               requestedModel,
@@ -489,6 +519,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               retryCount,
               downstreamPath,
               upstreamPath,
+              clientContext,
             );
             if (retryCount < MAX_RETRIES) {
               retryCount += 1;
@@ -523,6 +554,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 retryCount,
                 downstreamPath,
                 upstreamPath,
+                clientContext,
               );
               reply.raw.end();
               return;
@@ -572,6 +604,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               retryCount,
               downstreamPath,
               upstreamPath,
+              clientContext,
               parsedUsage.promptTokens,
               parsedUsage.completionTokens,
               parsedUsage.totalTokens,
@@ -607,6 +640,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               retryCount,
               downstreamPath,
               upstreamPath,
+              clientContext,
               parsedUsage.promptTokens,
               parsedUsage.completionTokens,
               parsedUsage.totalTokens,
@@ -629,6 +663,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               retryCount,
               downstreamPath,
               upstreamPath,
+              clientContext,
             );
             return reply.code(upstream.status).type(contentType || 'application/json').send(text);
           }
@@ -651,6 +686,8 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           modelName: actualModel,
           stream: isStreamAction,
         });
+        const conversationFileSummary = summarizeConversationFileInputsInOpenAiBody(openAiBody);
+        const hasNonImageFileInput = conversationFileSummary.hasDocument;
         const endpointCandidates = await resolveUpstreamEndpointCandidates(
           {
             site: selected.site,
@@ -659,7 +696,21 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           actualModel,
           'openai',
           requestedModel,
+          {
+            hasNonImageFileInput,
+            conversationFileSummary,
+          },
         );
+        const endpointRuntimeContext = {
+          siteId: selected.site.id,
+          modelName: actualModel,
+          downstreamFormat: 'openai' as const,
+          requestedModelHint: requestedModel,
+          requestCapabilities: {
+            hasNonImageFileInput,
+            conversationFileSummary,
+          },
+        };
         const buildEndpointRequest = (
           endpoint: 'chat' | 'messages' | 'responses',
           requestOptions: { forceNormalizeClaudeBody?: boolean } = {},
@@ -721,6 +772,20 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),
           dispatchRequest,
           tryRecover: endpointStrategy.tryRecover,
+          onAttemptFailure: (ctx) => {
+            recordUpstreamEndpointFailure({
+              ...endpointRuntimeContext,
+              endpoint: ctx.request.endpoint,
+              status: ctx.response.status,
+              errorText: ctx.rawErrText,
+            });
+          },
+          onAttemptSuccess: (ctx) => {
+            recordUpstreamEndpointSuccess({
+              ...endpointRuntimeContext,
+              endpoint: ctx.request.endpoint,
+            });
+          },
           shouldDowngrade: endpointStrategy.shouldDowngrade,
         });
         if (!endpointResult.ok) {
@@ -732,7 +797,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               type: 'upstream_error',
             },
           });
-          await tokenRouter.recordFailure?.(selected.channel.id);
+          await tokenRouter.recordFailure?.(selected.channel.id, {
+            status: endpointResult.status,
+            errorText: endpointResult.rawErrText || endpointResult.errText,
+          });
           await logProxy(
             selected,
             requestedModel,
@@ -743,6 +811,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             retryCount,
             downstreamPath,
             null,
+            clientContext,
           );
           if (retryCount < MAX_RETRIES) {
             retryCount += 1;
@@ -780,6 +849,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           retryCount,
           downstreamPath,
           upstreamPath,
+          clientContext,
           parsedUsage.promptTokens,
           parsedUsage.completionTokens,
           parsedUsage.totalTokens,
@@ -798,7 +868,9 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             type: 'upstream_error',
           },
         });
-        await tokenRouter.recordFailure?.(selected.channel.id);
+        await tokenRouter.recordFailure?.(selected.channel.id, {
+          errorText: error instanceof Error ? error.message : 'Gemini upstream request failed',
+        });
         await logProxy(
           selected,
           requestedModel,
@@ -809,6 +881,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           retryCount,
           downstreamPath,
           upstreamPath || null,
+          clientContext,
         );
         if (retryCount < MAX_RETRIES) {
           retryCount += 1;

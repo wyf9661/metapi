@@ -1,6 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {
+  rankConversationFileEndpoints,
+  type ConversationFileInputSummary,
+} from '../../proxy-core/capabilities/conversationFileCapabilities.js';
 import { resolveProviderProfile } from '../../proxy-core/providers/registry.js';
+import { config } from '../../config.js';
 import { fetchModelPricingCatalog } from '../../services/modelPricingService.js';
+import { applyPayloadRules } from '../../services/payloadRules.js';
 import type { DownstreamFormat } from '../../transformers/shared/normalized.js';
 import {
   convertOpenAiBodyToResponsesBody as convertOpenAiBodyToResponsesBodyViaTransformer,
@@ -13,7 +19,7 @@ import {
 import {
   buildGeminiGenerateContentRequestFromOpenAi,
 } from './geminiCliCompat.js';
-export {
+import {
   buildMinimalJsonHeadersForCompatibility,
   isEndpointDispatchDeniedError,
   isEndpointDowngradeError,
@@ -21,9 +27,30 @@ export {
   promoteResponsesCandidateAfterLegacyChatError,
   shouldPreferResponsesAfterLegacyChatError,
 } from '../../transformers/shared/endpointCompatibility.js';
+export {
+  buildMinimalJsonHeadersForCompatibility,
+  isEndpointDispatchDeniedError,
+  isEndpointDowngradeError,
+  isUnsupportedMediaTypeError,
+  promoteResponsesCandidateAfterLegacyChatError,
+  shouldPreferResponsesAfterLegacyChatError,
+};
 
 export type UpstreamEndpoint = 'chat' | 'messages' | 'responses';
 export type EndpointPreference = DownstreamFormat | 'responses';
+
+type EndpointCapabilityProfile = {
+  preferMessagesForClaudeModel: boolean;
+  hasNonImageFileInput: boolean;
+  hasRemoteDocumentUrl: boolean;
+  wantsNativeResponsesReasoning: boolean;
+};
+
+type EndpointRuntimeState = {
+  preferredEndpoint: UpstreamEndpoint | null;
+  preferredUpdatedAtMs: number;
+  blockedUntilMsByEndpoint: Partial<Record<UpstreamEndpoint, number>>;
+};
 
 type ChannelContext = {
   site: {
@@ -39,12 +66,30 @@ type ChannelContext = {
   };
 };
 
+const ENDPOINT_RUNTIME_PREFERRED_TTL_MS = 24 * 60 * 60 * 1000;
+const ENDPOINT_RUNTIME_BLOCK_TTL_MS = 6 * 60 * 60 * 1000;
+const endpointRuntimeStates = new Map<string, EndpointRuntimeState>();
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
 }
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function resolveRequestedModelForPayloadRules(input: {
+  modelName: string;
+  openaiBody: Record<string, unknown>;
+  claudeOriginalBody?: Record<string, unknown>;
+  responsesOriginalBody?: Record<string, unknown>;
+}): string {
+  return (
+    asTrimmedString(input.responsesOriginalBody?.model)
+    || asTrimmedString(input.claudeOriginalBody?.model)
+    || asTrimmedString(input.openaiBody.model)
+    || asTrimmedString(input.modelName)
+  );
 }
 
 function normalizePlatformName(platform: unknown): string {
@@ -557,6 +602,225 @@ function normalizeEndpointTypes(value: unknown): UpstreamEndpoint[] {
   return Array.from(normalized);
 }
 
+function buildEndpointCapabilityProfile(input?: {
+  modelName?: string;
+  requestedModelHint?: string;
+  requestCapabilities?: {
+    hasNonImageFileInput?: boolean;
+    conversationFileSummary?: ConversationFileInputSummary;
+    wantsNativeResponsesReasoning?: boolean;
+  };
+}): EndpointCapabilityProfile {
+  return {
+    preferMessagesForClaudeModel: (
+      isClaudeFamilyModel(asTrimmedString(input?.modelName))
+      || isClaudeFamilyModel(asTrimmedString(input?.requestedModelHint))
+    ),
+    hasNonImageFileInput: (
+      input?.requestCapabilities?.conversationFileSummary?.hasDocument === true
+      || input?.requestCapabilities?.hasNonImageFileInput === true
+    ),
+    hasRemoteDocumentUrl: (
+      input?.requestCapabilities?.conversationFileSummary?.hasRemoteDocumentUrl === true
+    ),
+    wantsNativeResponsesReasoning: input?.requestCapabilities?.wantsNativeResponsesReasoning === true,
+  };
+}
+
+function buildEndpointRuntimeStateKey(input: {
+  siteId: number;
+  downstreamFormat: EndpointPreference;
+  capabilityProfile: EndpointCapabilityProfile;
+}): string {
+  const capabilityProfile = input.capabilityProfile;
+  return [
+    String(input.siteId),
+    input.downstreamFormat,
+    capabilityProfile.preferMessagesForClaudeModel ? 'claude' : 'generic',
+    capabilityProfile.hasNonImageFileInput ? 'files' : 'nofiles',
+    capabilityProfile.hasRemoteDocumentUrl ? 'remoteurl' : 'noremoteurl',
+    capabilityProfile.wantsNativeResponsesReasoning ? 'reasoning' : 'noreasoning',
+  ].join(':');
+}
+
+function getOrCreateEndpointRuntimeState(key: string, nowMs = Date.now()): EndpointRuntimeState {
+  const existing = endpointRuntimeStates.get(key);
+  if (existing) return existing;
+
+  const initial: EndpointRuntimeState = {
+    preferredEndpoint: null,
+    preferredUpdatedAtMs: nowMs,
+    blockedUntilMsByEndpoint: {},
+  };
+  endpointRuntimeStates.set(key, initial);
+  return initial;
+}
+
+function maybeDeleteEndpointRuntimeState(key: string, nowMs = Date.now()): void {
+  const state = endpointRuntimeStates.get(key);
+  if (!state) return;
+
+  const hasActiveBlock = Object.values(state.blockedUntilMsByEndpoint).some((untilMs) => (
+    typeof untilMs === 'number' && untilMs > nowMs
+  ));
+  const preferredFresh = (
+    !!state.preferredEndpoint
+    && (state.preferredUpdatedAtMs + ENDPOINT_RUNTIME_PREFERRED_TTL_MS) > nowMs
+  );
+  if (!hasActiveBlock && !preferredFresh) {
+    endpointRuntimeStates.delete(key);
+  }
+}
+
+function applyEndpointRuntimePreference(
+  candidates: UpstreamEndpoint[],
+  key: string,
+  nowMs = Date.now(),
+): UpstreamEndpoint[] {
+  const state = endpointRuntimeStates.get(key);
+  if (!state || candidates.length <= 1) return candidates;
+
+  const blocked = new Set<UpstreamEndpoint>();
+  for (const endpoint of candidates) {
+    const untilMs = state.blockedUntilMsByEndpoint[endpoint];
+    if (typeof untilMs === 'number' && untilMs > nowMs) {
+      blocked.add(endpoint);
+    }
+  }
+
+  let next = candidates.filter((endpoint) => !blocked.has(endpoint));
+  if (next.length === 0) {
+    next = [...candidates];
+  }
+
+  const preferredFresh = (
+    !!state.preferredEndpoint
+    && (state.preferredUpdatedAtMs + ENDPOINT_RUNTIME_PREFERRED_TTL_MS) > nowMs
+  );
+  if (preferredFresh && state.preferredEndpoint && next.includes(state.preferredEndpoint)) {
+    next = [
+      state.preferredEndpoint,
+      ...next.filter((endpoint) => endpoint !== state.preferredEndpoint),
+    ];
+  }
+
+  maybeDeleteEndpointRuntimeState(key, nowMs);
+  return next;
+}
+
+function inferSuggestedEndpointFromError(errorText?: string | null): UpstreamEndpoint | null {
+  const text = (errorText || '').toLowerCase();
+  if (!text) return null;
+  if (text.includes('/v1/responses')) return 'responses';
+  if (text.includes('/v1/messages')) return 'messages';
+  if (text.includes('/v1/chat/completions')) return 'chat';
+  return null;
+}
+
+function shouldBlockEndpointByError(status: number, errorText?: string | null): boolean {
+  if (isEndpointDispatchDeniedError(status, errorText)) return true;
+  if (status === 404 || status === 405 || status === 415 || status === 501) return true;
+  if (isUnsupportedMediaTypeError(status, errorText)) return true;
+
+  const text = (errorText || '').toLowerCase();
+  return (
+    text.includes('convert_request_failed')
+    || text.includes('endpoint_not_found')
+    || text.includes('unknown_endpoint')
+    || text.includes('unsupported_endpoint')
+    || text.includes('unsupported_path')
+    || text.includes('not_found_error')
+    || text.includes('unsupported legacy protocol')
+    || text.includes('please use /v1/')
+    || text.includes('does not allow /v1/')
+    || text.includes('unknown endpoint')
+    || text.includes('unsupported endpoint')
+    || text.includes('unsupported path')
+    || text.includes('unrecognized request url')
+    || text.includes('no route matched')
+    || text.includes('does not exist')
+  );
+}
+
+function shouldRememberSuccessfulEndpoint(input: {
+  endpoint: UpstreamEndpoint;
+  downstreamFormat: EndpointPreference;
+}): boolean {
+  if (input.downstreamFormat !== 'responses') return true;
+  return input.endpoint === 'responses';
+}
+
+export function resetUpstreamEndpointRuntimeState(): void {
+  endpointRuntimeStates.clear();
+}
+
+export function recordUpstreamEndpointSuccess(input: {
+  siteId: number;
+  endpoint: UpstreamEndpoint;
+  downstreamFormat: EndpointPreference;
+  modelName?: string;
+  requestedModelHint?: string;
+  requestCapabilities?: {
+    hasNonImageFileInput?: boolean;
+    conversationFileSummary?: ConversationFileInputSummary;
+    wantsNativeResponsesReasoning?: boolean;
+  };
+}): void {
+  if (!shouldRememberSuccessfulEndpoint(input)) return;
+
+  const nowMs = Date.now();
+  const key = buildEndpointRuntimeStateKey({
+    siteId: input.siteId,
+    downstreamFormat: input.downstreamFormat,
+    capabilityProfile: buildEndpointCapabilityProfile({
+      modelName: input.modelName,
+      requestedModelHint: input.requestedModelHint,
+      requestCapabilities: input.requestCapabilities,
+    }),
+  });
+  const state = getOrCreateEndpointRuntimeState(key, nowMs);
+  state.preferredEndpoint = input.endpoint;
+  state.preferredUpdatedAtMs = nowMs;
+  delete state.blockedUntilMsByEndpoint[input.endpoint];
+}
+
+export function recordUpstreamEndpointFailure(input: {
+  siteId: number;
+  endpoint: UpstreamEndpoint;
+  downstreamFormat: EndpointPreference;
+  status: number;
+  errorText?: string | null;
+  modelName?: string;
+  requestedModelHint?: string;
+  requestCapabilities?: {
+    hasNonImageFileInput?: boolean;
+    conversationFileSummary?: ConversationFileInputSummary;
+    wantsNativeResponsesReasoning?: boolean;
+  };
+}): void {
+  if (!shouldBlockEndpointByError(input.status, input.errorText)) return;
+
+  const nowMs = Date.now();
+  const key = buildEndpointRuntimeStateKey({
+    siteId: input.siteId,
+    downstreamFormat: input.downstreamFormat,
+    capabilityProfile: buildEndpointCapabilityProfile({
+      modelName: input.modelName,
+      requestedModelHint: input.requestedModelHint,
+      requestCapabilities: input.requestCapabilities,
+    }),
+  });
+  const state = getOrCreateEndpointRuntimeState(key, nowMs);
+  state.blockedUntilMsByEndpoint[input.endpoint] = nowMs + ENDPOINT_RUNTIME_BLOCK_TTL_MS;
+
+  const suggestedEndpoint = inferSuggestedEndpointFromError(input.errorText);
+  if (suggestedEndpoint && suggestedEndpoint !== input.endpoint) {
+    state.preferredEndpoint = suggestedEndpoint;
+    state.preferredUpdatedAtMs = nowMs;
+    delete state.blockedUntilMsByEndpoint[suggestedEndpoint];
+  }
+}
+
 function preferredEndpointOrder(
   downstreamFormat: EndpointPreference,
   sitePlatform?: string,
@@ -626,27 +890,44 @@ export async function resolveUpstreamEndpointCandidates(
   requestedModelHint?: string,
   requestCapabilities?: {
     hasNonImageFileInput?: boolean;
+    conversationFileSummary?: ConversationFileInputSummary;
     wantsNativeResponsesReasoning?: boolean;
   },
 ): Promise<UpstreamEndpoint[]> {
   const sitePlatform = normalizePlatformName(context.site.platform);
-  const preferMessagesForClaudeModel = (
-    isClaudeFamilyModel(modelName)
-    || isClaudeFamilyModel(asTrimmedString(requestedModelHint))
+  const capabilityProfile = buildEndpointCapabilityProfile({
+    modelName,
+    requestedModelHint,
+    requestCapabilities,
+  });
+  const preferMessagesForClaudeModel = capabilityProfile.preferMessagesForClaudeModel;
+  const hasNonImageFileInput = capabilityProfile.hasNonImageFileInput;
+  const wantsNativeResponsesReasoning = capabilityProfile.wantsNativeResponsesReasoning;
+  const runtimeStateKey = buildEndpointRuntimeStateKey({
+    siteId: context.site.id,
+    downstreamFormat,
+    capabilityProfile,
+  });
+  const applyRuntimePreference = (candidates: UpstreamEndpoint[]) => (
+    applyEndpointRuntimePreference(candidates, runtimeStateKey)
   );
-  const hasNonImageFileInput = requestCapabilities?.hasNonImageFileInput === true;
-  const wantsNativeResponsesReasoning = requestCapabilities?.wantsNativeResponsesReasoning === true;
+  const conversationFileSummary = requestCapabilities?.conversationFileSummary ?? {
+    hasImage: false,
+    hasAudio: false,
+    hasDocument: hasNonImageFileInput,
+    hasRemoteDocumentUrl: false,
+  };
   if (sitePlatform === 'anyrouter') {
     // anyrouter deployments are effectively anthropic-protocol first.
     if (hasNonImageFileInput) {
-      return downstreamFormat === 'responses'
+      return applyRuntimePreference(downstreamFormat === 'responses'
         ? ['responses', 'messages', 'chat']
-        : ['messages', 'responses', 'chat'];
+        : ['messages', 'responses', 'chat']);
     }
     if (downstreamFormat === 'responses') {
-      return ['responses', 'messages', 'chat'];
+      return applyRuntimePreference(['responses', 'messages', 'chat']);
     }
-    return ['messages', 'chat', 'responses'];
+    return applyRuntimePreference(['messages', 'chat', 'responses']);
   }
 
   const preferred = preferredEndpointOrder(
@@ -659,8 +940,14 @@ export async function resolveUpstreamEndpointCandidates(
       if (sitePlatform === 'claude') return ['messages'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini') return ['responses', 'chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini-cli' || sitePlatform === 'antigravity') return ['chat'] as UpstreamEndpoint[];
-      if (preferMessagesForClaudeModel) return ['messages', 'responses', 'chat'] as UpstreamEndpoint[];
-      return ['responses', 'messages', 'chat'] as UpstreamEndpoint[];
+      return rankConversationFileEndpoints({
+        sitePlatform,
+        requestedOrder: preferMessagesForClaudeModel
+          ? ['messages', 'responses', 'chat']
+          : ['responses', 'messages', 'chat'],
+        summary: conversationFileSummary,
+        preferMessagesForClaudeModel,
+      });
     })()
     : preferred;
   const prioritizedPreferredEndpoints: UpstreamEndpoint[] = (
@@ -699,20 +986,20 @@ export async function resolveUpstreamEndpointCandidates(
     });
 
     if (!catalog || !Array.isArray(catalog.models) || catalog.models.length === 0) {
-      return prioritizedPreferredEndpoints;
+      return applyRuntimePreference(prioritizedPreferredEndpoints);
     }
 
     const matched = catalog.models.find((item) =>
       asTrimmedString(item?.modelName).toLowerCase() === modelName.toLowerCase(),
     );
-    if (!matched) return prioritizedPreferredEndpoints;
+    if (!matched) return applyRuntimePreference(prioritizedPreferredEndpoints);
 
     const shouldIgnoreCatalogOrderingForClaudeMessages = (
       preferMessagesForClaudeModel
       && (downstreamFormat !== 'responses' || sitePlatform !== 'openai')
     );
     if (shouldIgnoreCatalogOrderingForClaudeMessages) {
-      return prioritizedPreferredEndpoints;
+      return applyRuntimePreference(prioritizedPreferredEndpoints);
     }
 
     const supportedRaw = Array.isArray(matched.supportedEndpointTypes) ? matched.supportedEndpointTypes : [];
@@ -732,7 +1019,7 @@ export async function resolveUpstreamEndpointCandidates(
     if (forceMessagesFirstForClaudeModel && !hasConcreteEndpointHint) {
       // Generic labels like openai/anthropic are too coarse for Claude models;
       // keep messages-first order in this case.
-      return prioritizedPreferredEndpoints;
+      return applyRuntimePreference(prioritizedPreferredEndpoints);
     }
 
     const supported = new Set<UpstreamEndpoint>();
@@ -743,19 +1030,19 @@ export async function resolveUpstreamEndpointCandidates(
       }
     }
 
-    if (supported.size === 0) return prioritizedPreferredEndpoints;
+    if (supported.size === 0) return applyRuntimePreference(prioritizedPreferredEndpoints);
 
     const firstSupported = prioritizedPreferredEndpoints.find((endpoint) => supported.has(endpoint));
-    if (!firstSupported) return prioritizedPreferredEndpoints;
+    if (!firstSupported) return applyRuntimePreference(prioritizedPreferredEndpoints);
 
     // Catalog metadata can be incomplete/inaccurate, so only use it to pick
     // the first attempt. Keep downstream-driven fallback order unchanged.
-    return [
+    return applyRuntimePreference([
       firstSupported,
       ...prioritizedPreferredEndpoints.filter((endpoint) => endpoint !== firstSupported),
-    ];
+    ]);
   } catch {
-    return prioritizedPreferredEndpoints;
+    return applyRuntimePreference(prioritizedPreferredEndpoints);
   }
 }
 
@@ -885,6 +1172,16 @@ export function buildUpstreamEndpointRequest(input: {
     stream: input.stream,
     oauthProjectId: asTrimmedString(input.oauthProjectId) || null,
   };
+  const requestedModelForPayloadRules = resolveRequestedModelForPayloadRules(input);
+  const applyConfiguredPayloadRules = <T extends Record<string, unknown>>(body: T): T => (
+    applyPayloadRules({
+      rules: config.payloadRules,
+      payload: body,
+      modelName: input.modelName,
+      requestedModel: requestedModelForPayloadRules,
+      protocol: sitePlatform,
+    }) as T
+  );
 
   if (isInternalGeminiUpstream) {
     const instructions = (
@@ -898,6 +1195,7 @@ export function buildUpstreamEndpointRequest(input: {
       modelName: input.modelName,
       instructions,
     });
+    const configuredGeminiRequest = applyConfiguredPayloadRules(geminiRequest);
     if (!providerProfile) {
       throw new Error(`missing provider profile for platform: ${sitePlatform}`);
     }
@@ -911,7 +1209,7 @@ export function buildUpstreamEndpointRequest(input: {
       sitePlatform,
       baseHeaders: commonHeaders,
       providerHeaders: input.providerHeaders,
-      body: geminiRequest,
+      body: configuredGeminiRequest,
       action: input.stream ? 'streamGenerateContent' : 'generateContent',
     });
   }
@@ -952,6 +1250,7 @@ export function buildUpstreamEndpointRequest(input: {
       ?? sanitizeAnthropicMessagesBody(
         convertOpenAiBodyToAnthropicMessagesBody(openaiBody, input.modelName, input.stream),
       );
+    const configuredClaudeBody = applyConfiguredPayloadRules(sanitizedBody);
 
     if (providerProfile?.id === 'claude') {
       return providerProfile.prepareRequest({
@@ -964,7 +1263,7 @@ export function buildUpstreamEndpointRequest(input: {
         sitePlatform,
         baseHeaders: commonHeaders,
         claudeHeaders,
-        body: sanitizedBody,
+        body: configuredClaudeBody,
       });
     }
 
@@ -980,7 +1279,7 @@ export function buildUpstreamEndpointRequest(input: {
     return {
       path: resolveEndpointPath('messages'),
       headers,
-      body: sanitizedBody,
+      body: configuredClaudeBody,
       runtime,
     };
   }
@@ -1015,6 +1314,7 @@ export function buildUpstreamEndpointRequest(input: {
       ),
       sitePlatform,
     );
+    const configuredResponsesBody = applyConfiguredPayloadRules(body);
 
     if (providerProfile?.id === 'codex') {
       return providerProfile.prepareRequest({
@@ -1032,7 +1332,7 @@ export function buildUpstreamEndpointRequest(input: {
         providerHeaders: input.providerHeaders,
         codexSessionCacheKey: input.codexSessionCacheKey,
         codexExplicitSessionId: input.codexExplicitSessionId,
-        body,
+        body: configuredResponsesBody,
       });
     }
 
@@ -1055,15 +1355,15 @@ export function buildUpstreamEndpointRequest(input: {
       : null;
     const shouldInjectDerivedPromptCacheKey = sitePlatform === 'codex'
       && !!codexSessionId
-      && !asTrimmedString((body as Record<string, unknown>).prompt_cache_key)
+      && !asTrimmedString((configuredResponsesBody as Record<string, unknown>).prompt_cache_key)
       && !asTrimmedString(input.codexExplicitSessionId)
       && !!asTrimmedString(input.codexSessionCacheKey);
     const runtimeBody = shouldInjectDerivedPromptCacheKey
       ? {
-        ...body,
+        ...configuredResponsesBody,
         prompt_cache_key: codexSessionId,
       }
-      : body;
+      : configuredResponsesBody;
 
     return {
       path: resolveEndpointPath('responses'),
@@ -1077,11 +1377,11 @@ export function buildUpstreamEndpointRequest(input: {
   return {
     path: resolveEndpointPath('chat'),
     headers,
-    body: {
+    body: applyConfiguredPayloadRules({
       ...openaiBody,
       model: input.modelName,
       stream: input.stream,
-    },
+    }),
     runtime,
   };
 }
@@ -1149,5 +1449,3 @@ export function buildClaudeCountTokensUpstreamRequest(input: {
     },
   };
 }
-
-

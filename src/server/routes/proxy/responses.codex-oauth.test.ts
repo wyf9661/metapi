@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '../../config.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
@@ -17,6 +18,7 @@ const resolveProxyUsageWithSelfLogFallbackMock = vi.fn(async ({ usage }: any) =>
 const refreshOauthAccessTokenSingleflightMock = vi.fn();
 const recordOauthQuotaResetHintMock = vi.fn();
 const insertedProxyLogs: Record<string, unknown>[] = [];
+const originalProxyEmptyContentFailEnabled = config.proxyEmptyContentFailEnabled;
 const dbInsertMock = vi.fn((_arg?: any) => ({
   values: (values: Record<string, unknown>) => {
     insertedProxyLogs.push(values);
@@ -78,6 +80,8 @@ vi.mock('../../db/index.js', () => ({
   db: {
     insert: (arg: any) => dbInsertMock(arg),
   },
+  hasProxyLogBillingDetailsColumn: async () => false,
+  hasProxyLogClientColumns: async () => false,
   hasProxyLogDownstreamApiKeyIdColumn: async () => false,
   schema: {
     proxyLogs: {},
@@ -109,6 +113,7 @@ describe('responses proxy codex oauth refresh', () => {
   });
 
   beforeEach(() => {
+    config.proxyEmptyContentFailEnabled = false;
     fetchMock.mockReset();
     selectChannelMock.mockReset();
     selectNextChannelMock.mockReset();
@@ -152,6 +157,7 @@ describe('responses proxy codex oauth refresh', () => {
   });
 
   afterAll(async () => {
+    config.proxyEmptyContentFailEnabled = originalProxyEmptyContentFailEnabled;
     await app.close();
   });
 
@@ -206,6 +212,69 @@ describe('responses proxy codex oauth refresh', () => {
     expect(secondOptions.headers.Accept || secondOptions.headers.accept).toBe('text/event-stream');
     expect(secondOptions.headers.Connection || secondOptions.headers.connection).toBe('Keep-Alive');
     expect(response.json()?.output_text).toContain('ok after codex token refresh');
+  });
+
+  it('retries oauth responses requests with a normalized upstream URL after refresh', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'openai-site', url: 'https://gateway.example.com/v1/', platform: 'openai' },
+      account: {
+        id: 33,
+        username: 'oauth-user@example.com',
+        extraConfig: JSON.stringify({
+          credentialMode: 'session',
+          oauth: {
+            provider: 'codex',
+            accountId: 'chatgpt-account-123',
+            email: 'oauth-user@example.com',
+            planType: 'plus',
+          },
+        }),
+      },
+      tokenName: 'default',
+      tokenValue: 'expired-access-token',
+      actualModel: 'gpt-4.1-mini',
+    });
+
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'expired token', type: 'invalid_request_error' },
+      }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_openai_refreshed',
+        object: 'response',
+        model: 'gpt-4.1-mini',
+        status: 'completed',
+        output_text: 'ok after refresh',
+        usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-4.1-mini',
+        input: 'hello oauth',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(33);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const [firstUrl, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [secondUrl, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(firstUrl).toBe('https://gateway.example.com/v1/responses');
+    expect(secondUrl).toBe('https://gateway.example.com/v1/responses');
+    expect(firstOptions.headers.Authorization).toBe('Bearer expired-access-token');
+    expect(secondOptions.headers.Authorization).toBe('Bearer fresh-access-token');
+    expect(response.json()?.output_text).toBe('ok after refresh');
   });
 
   it('sends an explicit empty instructions field to codex responses when downstream body has no system prompt', async () => {
@@ -501,6 +570,39 @@ describe('responses proxy codex oauth refresh', () => {
     expect(String(insertedProxyLogs.at(-1)?.errorMessage || '')).toContain('stream closed before response.completed');
   });
 
+  it('does not record success when a native responses stream completes with empty content and empty usage while empty-content failure is enabled', async () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    fetchMock.mockResolvedValue(createSseResponse([
+      'event: response.created\n',
+      'data: {"type":"response.created","response":{"id":"resp_codex_empty","model":"gpt-5.4","created_at":1706000000,"status":"in_progress","output":[]}}\n\n',
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_codex_empty","model":"gpt-5.4","status":"completed","output":[],"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.4',
+        input: 'hello codex',
+        stream: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('event: response.failed');
+    expect(response.body).not.toContain('event: response.completed');
+    expect(recordSuccessMock).not.toHaveBeenCalled();
+    expect(recordFailureMock).toHaveBeenCalledTimes(1);
+    expect(insertedProxyLogs.at(-1)).toMatchObject({
+      status: 'failed',
+      httpStatus: 200,
+    });
+    expect(String(insertedProxyLogs.at(-1)?.errorMessage || '')).toContain('empty content');
+  });
+
   it('does not retry or mark failure after converting a non-stream upstream payload into SSE when post-stream usage accounting fails', async () => {
     resolveProxyUsageWithSelfLogFallbackMock.mockRejectedValueOnce(new Error('usage accounting failed'));
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
@@ -574,6 +676,41 @@ describe('responses proxy codex oauth refresh', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('event: response.completed');
     expect(response.body).toContain('"id":"resp_codex_stream_ok"');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(recordFailureMock).not.toHaveBeenCalled();
+    expect(recordSuccessMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays raw codex SSE when upstream mislabels a streaming responses body as application/json', async () => {
+    fetchMock.mockResolvedValue(new Response([
+      'event: response.created\n',
+      'data: {"type":"response.created","response":{"id":"resp_codex_stream_header_miss","model":"gpt-5.4","created_at":1706000000,"status":"in_progress","output":[]}}\n\n',
+      'event: response.output_item.added\n',
+      'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_codex_stream_header_miss","type":"message","role":"assistant","status":"in_progress","content":[]}}\n\n',
+      'event: response.output_text.delta\n',
+      'data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_codex_stream_header_miss","delta":"pong"}\n\n',
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_codex_stream_header_miss","model":"gpt-5.4","status":"completed","usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4}}}\n\n',
+      'data: [DONE]\n\n',
+    ].join(''), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.4',
+        input: 'hello codex',
+        stream: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('event: response.output_text.delta');
+    expect(response.body).toContain('"delta":"pong"');
+    expect(response.body).not.toContain('"output_text":"event: response.created');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(recordFailureMock).not.toHaveBeenCalled();
     expect(recordSuccessMock).toHaveBeenCalledTimes(1);

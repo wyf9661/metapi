@@ -22,6 +22,10 @@ function validateKeyShape(key: string): boolean {
 
 function looksLikeUniqueViolation(error: unknown): boolean {
   const message = (error as Error | undefined)?.message || '';
+  if (runtimeDbDialect === 'postgres') {
+    return message.includes('duplicate key value violates unique constraint') &&
+           message.includes('downstream_api_keys_key_unique');
+  }
   return message.includes('UNIQUE constraint failed') && message.includes('downstream_api_keys.key');
 }
 

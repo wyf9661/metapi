@@ -7,6 +7,7 @@ import {
   buildFixedTokenOptionDescription,
   buildFixedTokenOptionLabel,
   describeTokenBinding,
+  resolveTokenBindingConnectionMode,
 } from './tokenBindingPresentation.js';
 import { getChannelDecisionState, getPriorityTagStyle, getProbabilityColor } from './utils.js';
 
@@ -54,7 +55,15 @@ export function SortableChannelRow({
   };
 
   const decisionState = getChannelDecisionState(decisionCandidate, channel, isExactRoute, loadingDecision);
-  const tokenBinding = describeTokenBinding(tokenOptions, activeTokenId, channel.token?.name ?? null);
+  const tokenBinding = describeTokenBinding(
+    tokenOptions,
+    activeTokenId,
+    channel.token?.name ?? null,
+    {
+      connectionMode: resolveTokenBindingConnectionMode(channel.account),
+      accountName: channel.account?.username || `account-${channel.accountId}`,
+    },
+  );
 
   return (
     <div ref={setNodeRef} style={rowStyle}>
@@ -113,10 +122,10 @@ export function SortableChannelRow({
           className="badge"
           style={{
             fontSize: 10,
-            background: tokenBinding.isFollowingAccountDefault
+            background: tokenBinding.badgeTone === 'info'
               ? 'color-mix(in srgb, var(--color-info) 15%, transparent)'
               : 'color-mix(in srgb, var(--color-warning) 15%, transparent)',
-            color: tokenBinding.isFollowingAccountDefault ? 'var(--color-info)' : 'var(--color-warning)',
+            color: tokenBinding.badgeTone === 'info' ? 'var(--color-info)' : 'var(--color-warning)',
           }}
         >
           {tokenBinding.bindingModeLabel}
@@ -211,7 +220,7 @@ export function SortableChannelRow({
                 options={[
                   {
                     value: '0',
-                    label: '跟随账号默认',
+                    label: tokenBinding.followOptionLabel,
                     description: tokenBinding.followOptionDescription,
                   },
                   ...tokenOptions.map((token) => ({

@@ -1,6 +1,7 @@
 import type { ProxyResourceOwner } from '../middleware/auth.js';
 import { getProxyFileByPublicIdForOwner, LOCAL_PROXY_FILE_ID_PREFIX } from './proxyFileStore.js';
 import { ensureBase64DataUrl } from '../transformers/shared/inputFile.js';
+import { summarizeConversationFileInputsInOpenAiBody } from '../proxy-core/capabilities/conversationFileCapabilities.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -306,15 +307,5 @@ export async function resolveResponsesBodyInputFiles(
 }
 
 export function hasNonImageFileInputInOpenAiBody(body: Record<string, unknown>): boolean {
-  const messages = Array.isArray(body.messages) ? body.messages : [];
-  return messages.some((message) => {
-    if (!isRecord(message)) return false;
-    const content = message.content;
-    if (isRecord(content)) {
-      const type = asTrimmedString(content.type).toLowerCase();
-      return type === 'file' || type === 'input_file';
-    }
-    if (!Array.isArray(content)) return false;
-    return content.some((item) => isRecord(item) && ['file', 'input_file'].includes(asTrimmedString(item.type).toLowerCase()));
-  });
+  return summarizeConversationFileInputsInOpenAiBody(body).hasDocument;
 }

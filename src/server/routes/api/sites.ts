@@ -1,11 +1,12 @@
 import { FastifyInstance } from 'fastify';
 import { db, schema } from '../../db/index.js';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { detectSite } from '../../services/siteDetector.js';
-import { invalidateSiteProxyCache } from '../../services/siteProxy.js';
+import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services/siteProxy.js';
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
+import { getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
 
 function normalizeSiteStatus(input: unknown): 'active' | 'disabled' | null {
   if (input === undefined || input === null) return null;
@@ -75,6 +76,65 @@ function normalizeOptionalExternalCheckinUrl(input: unknown): {
   return { valid: true, present: true, url: parsed.toString().replace(/\/+$/, '') };
 }
 
+type SiteSubscriptionAggregate = {
+  activeCount: number;
+  totalUsedUsd: number;
+  totalMonthlyLimitUsd: number | null;
+  totalRemainingUsd: number | null;
+  nextExpiresAt: string | null;
+  planNames: string[];
+  updatedAt: number | null;
+};
+
+function roundMetric(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function pickEarlierIsoDate(current?: string | null, next?: string | null): string | null {
+  if (!current) return next || null;
+  if (!next) return current;
+  const currentMs = Date.parse(current);
+  const nextMs = Date.parse(next);
+  if (!Number.isFinite(currentMs)) return next;
+  if (!Number.isFinite(nextMs)) return current;
+  return nextMs < currentMs ? next : current;
+}
+
+function aggregateSiteSubscription(
+  current: SiteSubscriptionAggregate | undefined,
+  extraConfig?: string | null,
+): SiteSubscriptionAggregate | undefined {
+  const stored = getSub2ApiSubscriptionFromExtraConfig(extraConfig);
+  if (!stored) return current;
+
+  const planNames = new Set(current?.planNames || []);
+  let totalMonthlyLimitUsd = current?.totalMonthlyLimitUsd ?? null;
+  let nextExpiresAt = current?.nextExpiresAt ?? null;
+
+  for (const item of stored.subscriptions) {
+    if (item.groupName) planNames.add(item.groupName);
+    if (typeof item.monthlyLimitUsd === 'number' && Number.isFinite(item.monthlyLimitUsd)) {
+      totalMonthlyLimitUsd = roundMetric((totalMonthlyLimitUsd ?? 0) + item.monthlyLimitUsd);
+    }
+    nextExpiresAt = pickEarlierIsoDate(nextExpiresAt, item.expiresAt);
+  }
+
+  const totalUsedUsd = roundMetric((current?.totalUsedUsd || 0) + stored.totalUsedUsd);
+  const totalRemainingUsd = totalMonthlyLimitUsd == null
+    ? null
+    : roundMetric(Math.max(0, totalMonthlyLimitUsd - totalUsedUsd));
+
+  return {
+    activeCount: (current?.activeCount || 0) + stored.activeCount,
+    totalUsedUsd,
+    totalMonthlyLimitUsd,
+    totalRemainingUsd,
+    nextExpiresAt,
+    planNames: Array.from(planNames),
+    updatedAt: Math.max(current?.updatedAt || 0, stored.updatedAt || 0) || null,
+  };
+}
+
 export async function sitesRoutes(app: FastifyInstance) {
   function invalidateSiteCaches() {
     invalidateSiteProxyCache();
@@ -137,21 +197,23 @@ export async function sitesRoutes(app: FastifyInstance) {
   // List all sites
   app.get('/api/sites', async () => {
     const siteRows = await db.select().from(schema.sites).all();
-    const accountBalanceRows = await db.select({
+    const accountRows = await db.select({
       siteId: schema.accounts.siteId,
-      totalBalance: sql<number>`coalesce(sum(${schema.accounts.balance}), 0)`,
-    }).from(schema.accounts)
-      .groupBy(schema.accounts.siteId)
-      .all();
+      balance: schema.accounts.balance,
+      extraConfig: schema.accounts.extraConfig,
+    }).from(schema.accounts).all();
 
     const totalBalanceBySiteId: Record<number, number> = {};
-    for (const row of accountBalanceRows) {
-      totalBalanceBySiteId[row.siteId] = Number(row.totalBalance || 0);
+    const subscriptionBySiteId: Record<number, SiteSubscriptionAggregate | undefined> = {};
+    for (const row of accountRows) {
+      totalBalanceBySiteId[row.siteId] = roundMetric((totalBalanceBySiteId[row.siteId] || 0) + Number(row.balance || 0));
+      subscriptionBySiteId[row.siteId] = aggregateSiteSubscription(subscriptionBySiteId[row.siteId], row.extraConfig);
     }
 
     return siteRows.map((site) => ({
       ...site,
       totalBalance: Math.round((totalBalanceBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
+      subscriptionSummary: subscriptionBySiteId[site.id] || null,
     }));
   });
 
@@ -160,6 +222,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     name: string;
     url: string;
     platform?: string;
+    proxyUrl?: string | null;
     useSystemProxy?: boolean;
     customHeaders?: string | null;
     externalCheckinUrl?: string | null;
@@ -168,7 +231,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     sortOrder?: number;
     globalWeight?: number;
   } }>('/api/sites', async (request, reply) => {
-    const { name, url, platform, useSystemProxy, customHeaders, externalCheckinUrl, status, isPinned, sortOrder, globalWeight } = request.body;
+    const { name, url, platform, proxyUrl, useSystemProxy, customHeaders, externalCheckinUrl, status, isPinned, sortOrder, globalWeight } = request.body;
     const normalizedStatus = normalizeSiteStatus(status);
     if (status !== undefined && !normalizedStatus) {
       return reply.code(400).send({ error: 'Invalid site status. Expected active or disabled.' });
@@ -176,6 +239,10 @@ export async function sitesRoutes(app: FastifyInstance) {
     const normalizedUseSystemProxy = normalizeUseSystemProxyFlag(useSystemProxy);
     if (useSystemProxy !== undefined && normalizedUseSystemProxy === null) {
       return reply.code(400).send({ error: 'Invalid useSystemProxy value. Expected boolean.' });
+    }
+    const normalizedProxyUrl = parseSiteProxyUrlInput(proxyUrl);
+    if (!normalizedProxyUrl.valid) {
+      return reply.code(400).send({ error: 'Invalid proxyUrl. Expected a valid http(s)/socks proxy URL.' });
     }
     const normalizedExternalCheckinUrl = normalizeOptionalExternalCheckinUrl(externalCheckinUrl);
     if (!normalizedExternalCheckinUrl.valid) {
@@ -213,6 +280,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       name,
       url: url.replace(/\/+$/, ''),
       platform: detectedPlatform,
+      proxyUrl: normalizedProxyUrl.proxyUrl,
       useSystemProxy: normalizedUseSystemProxy ?? false,
       customHeaders: normalizedCustomHeaders.customHeaders,
       externalCheckinUrl: normalizedExternalCheckinUrl.url,
@@ -238,6 +306,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     name?: string;
     url?: string;
     platform?: string;
+    proxyUrl?: string | null;
     useSystemProxy?: boolean;
     customHeaders?: string | null;
     externalCheckinUrl?: string | null;
@@ -266,6 +335,10 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (body.useSystemProxy !== undefined && normalizedUseSystemProxy === null) {
       return reply.code(400).send({ error: 'Invalid useSystemProxy value. Expected boolean.' });
     }
+    const normalizedProxyUrl = parseSiteProxyUrlInput(body.proxyUrl);
+    if (!normalizedProxyUrl.valid) {
+      return reply.code(400).send({ error: 'Invalid proxyUrl. Expected a valid http(s)/socks proxy URL.' });
+    }
     const normalizedExternalCheckinUrl = normalizeOptionalExternalCheckinUrl(body.externalCheckinUrl);
     if (!normalizedExternalCheckinUrl.valid) {
       return reply.code(400).send({ error: 'Invalid externalCheckinUrl. Expected a valid http(s) URL.' });
@@ -290,6 +363,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (body.name !== undefined) updates.name = body.name;
     if (body.url !== undefined) updates.url = body.url.replace(/\/+$/, '');
     if (body.platform !== undefined) updates.platform = body.platform;
+    if (normalizedProxyUrl.present) updates.proxyUrl = normalizedProxyUrl.proxyUrl;
     if (body.useSystemProxy !== undefined) updates.useSystemProxy = normalizedUseSystemProxy;
     if (normalizedCustomHeaders.present) updates.customHeaders = normalizedCustomHeaders.customHeaders;
     if (normalizedExternalCheckinUrl.present) updates.externalCheckinUrl = normalizedExternalCheckinUrl.url;

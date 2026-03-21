@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { buildFastifyOptions, config } from './config.js';
+import { normalizePayloadRulesConfig } from './services/payloadRules.js';
 import { authMiddleware } from './middleware/auth.js';
 import { sitesRoutes } from './routes/api/sites.js';
 import { accountsRoutes } from './routes/api/accounts.js';
@@ -18,14 +19,19 @@ import { testRoutes } from './routes/api/test.js';
 import { monitorRoutes } from './routes/api/monitor.js';
 import { downstreamApiKeysRoutes } from './routes/api/downstreamApiKeys.js';
 import { oauthRoutes } from './routes/api/oauth.js';
+import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { proxyRoutes } from './routes/proxy/router.js';
 import { startScheduler } from './services/checkinScheduler.js';
+import { rebuildTokenRoutesFromAvailability } from './services/modelService.js';
+import { startProxyFileRetentionService, stopProxyFileRetentionService } from './services/proxyFileRetentionService.js';
 import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService } from './services/proxyLogRetentionService.js';
 import { buildStartupSummaryLines } from './services/startupInfo.js';
 import { repairStoredCreatedAtValues } from './services/storedTimestampRepairService.js';
 import { migrateSiteApiKeysToAccounts } from './services/siteApiKeyMigrationService.js';
 import { ensureDefaultSitesSeeded } from './services/defaultSiteSeedService.js';
 import { startOAuthLoopbackCallbackServers, stopOAuthLoopbackCallbackServers } from './services/oauth/localCallbackServer.js';
+import { startSiteAnnouncementPolling } from './services/siteAnnouncementPollingService.js';
+import { reloadBackupWebdavScheduler } from './services/backupService.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
 import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
 import { existsSync } from 'fs';
@@ -35,6 +41,7 @@ import { normalizeLogCleanupRetentionDays } from './services/logCleanupService.j
 import {
   db,
   ensureProxyFileCompatibilityColumns,
+  ensureProxyLogClientColumns,
   ensureProxyLogDownstreamApiKeyIdColumn,
   ensureProxyLogBillingDetailsColumn,
   ensureRouteGroupingCompatibilityColumns,
@@ -139,8 +146,35 @@ function applyRuntimeSettings(settingsMap: Map<string, string>) {
     config.proxyEmptyContentFailEnabled = proxyEmptyContentFailEnabled;
   }
 
+  const codexHeaderDefaults = parseSettingFromMap<unknown>(settingsMap, 'codex_header_defaults');
+  if (codexHeaderDefaults && typeof codexHeaderDefaults === 'object') {
+    const next = codexHeaderDefaults as Record<string, unknown>;
+    config.codexHeaderDefaults = {
+      userAgent: typeof next.userAgent === 'string'
+        ? next.userAgent.trim()
+        : (typeof next['user-agent'] === 'string' ? next['user-agent'].trim() : config.codexHeaderDefaults.userAgent),
+      betaFeatures: typeof next.betaFeatures === 'string'
+        ? next.betaFeatures.trim()
+        : (typeof next['beta-features'] === 'string' ? next['beta-features'].trim() : config.codexHeaderDefaults.betaFeatures),
+    };
+  }
+
+  if (settingsMap.has('payload_rules')) {
+    config.payloadRules = normalizePayloadRulesConfig(parseSettingFromMap<unknown>(settingsMap, 'payload_rules'));
+  }
+
   const checkinCron = parseSettingFromMap<string>(settingsMap, 'checkin_cron');
   if (typeof checkinCron === 'string' && checkinCron) config.checkinCron = checkinCron;
+
+  const checkinScheduleMode = parseSettingFromMap<string>(settingsMap, 'checkin_schedule_mode');
+  if (checkinScheduleMode === 'cron' || checkinScheduleMode === 'interval') {
+    config.checkinScheduleMode = checkinScheduleMode;
+  }
+
+  const checkinIntervalHours = parseSettingFromMap<number>(settingsMap, 'checkin_interval_hours');
+  if (typeof checkinIntervalHours === 'number' && Number.isFinite(checkinIntervalHours) && checkinIntervalHours >= 1 && checkinIntervalHours <= 24) {
+    config.checkinIntervalHours = Math.trunc(checkinIntervalHours);
+  }
 
   const balanceRefreshCron = parseSettingFromMap<string>(settingsMap, 'balance_refresh_cron');
   if (typeof balanceRefreshCron === 'string' && balanceRefreshCron) config.balanceRefreshCron = balanceRefreshCron;
@@ -198,6 +232,12 @@ function applyRuntimeSettings(settingsMap: Map<string, string>) {
 
   const telegramChatId = parseSettingFromMap<string>(settingsMap, 'telegram_chat_id');
   if (typeof telegramChatId === 'string') config.telegramChatId = telegramChatId;
+
+  const telegramUseSystemProxy = parseSettingFromMap<boolean>(settingsMap, 'telegram_use_system_proxy');
+  if (typeof telegramUseSystemProxy === 'boolean') config.telegramUseSystemProxy = telegramUseSystemProxy;
+
+  const telegramMessageThreadId = parseSettingFromMap<string>(settingsMap, 'telegram_message_thread_id');
+  if (typeof telegramMessageThreadId === 'string') config.telegramMessageThreadId = telegramMessageThreadId;
 
   const smtpEnabled = parseSettingFromMap<boolean>(settingsMap, 'smtp_enabled');
   if (typeof smtpEnabled === 'boolean') config.smtpEnabled = smtpEnabled;
@@ -277,6 +317,7 @@ try {
   await ensureSiteCompatibilityColumns();
   await ensureRouteGroupingCompatibilityColumns();
   await ensureProxyFileCompatibilityColumns();
+  await ensureProxyLogClientColumns();
   await ensureProxyLogDownstreamApiKeyIdColumn();
   const finalRows = await db.select().from(schema.settings).all();
   const finalMap = toSettingsMap(finalRows);
@@ -291,6 +332,7 @@ try {
   await repairStoredCreatedAtValues();
   await migrateSiteApiKeysToAccounts();
   await ensureDefaultSitesSeeded();
+  await rebuildTokenRoutesFromAvailability();
 
   console.log('Loaded runtime settings overrides');
 } catch (error) {
@@ -319,8 +361,9 @@ await app.register(authRoutes);
 await app.register(settingsRoutes);
 await app.register(accountTokensRoutes);
 await app.register(searchRoutes);
-await app.register(eventsRoutes);
-await app.register(taskRoutes);
+  await app.register(eventsRoutes);
+  await app.register(siteAnnouncementsRoutes);
+  await app.register(taskRoutes);
 await app.register(testRoutes);
 await app.register(monitorRoutes);
 await app.register(downstreamApiKeysRoutes);
@@ -358,13 +401,17 @@ if (existsSync(webDir)) {
 
 // Start scheduler
 await startScheduler();
+await reloadBackupWebdavScheduler();
+startSiteAnnouncementPolling();
 try {
   await startOAuthLoopbackCallbackServers();
 } catch (error) {
   console.warn(`Failed to start OAuth callback listeners: ${(error as Error)?.message || 'unknown error'}`);
 }
 setLegacyProxyLogRetentionFallbackEnabled(!config.logCleanupConfigured);
+startProxyFileRetentionService();
 app.addHook('onClose', async () => {
+  stopProxyFileRetentionService();
   stopProxyLogRetentionService();
   await stopOAuthLoopbackCallbackServers();
 });

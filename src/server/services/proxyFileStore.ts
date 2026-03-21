@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { db, schema } from '../db/index.js';
 import type { ProxyResourceOwner } from '../middleware/auth.js';
@@ -203,4 +203,18 @@ export async function softDeleteProxyFile(publicId: string): Promise<boolean> {
     ))
     .run();
   return Number(result?.changes || 0) > 0;
+}
+
+export async function purgeExpiredProxyFiles(cutoffUtc: string): Promise<number> {
+  const normalizedCutoff = cutoffUtc.trim();
+  if (!normalizedCutoff) return 0;
+
+  const result = await db.delete(schema.proxyFiles)
+    .where(or(
+      lt(schema.proxyFiles.createdAt, normalizedCutoff),
+      and(isNull(schema.proxyFiles.createdAt), lt(schema.proxyFiles.updatedAt, normalizedCutoff)),
+    ))
+    .run();
+
+  return Number(result?.changes || 0);
 }

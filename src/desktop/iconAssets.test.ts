@@ -7,12 +7,17 @@ describe('desktop icon assets', () => {
     const {
       DESKTOP_BUILD_ICON_RELATIVE_PATH,
       DESKTOP_RUNTIME_ICON_RELATIVE_PATH,
+      DESKTOP_TRAY_TEMPLATE_ICON_RELATIVE_PATH,
       getDesktopRuntimeIconPath,
+      getDesktopTrayIconPath,
     } = await import('./iconAssets.js');
 
     expect(DESKTOP_RUNTIME_ICON_RELATIVE_PATH).toBe(join('dist', 'web', 'desktop-icon.png'));
     expect(DESKTOP_BUILD_ICON_RELATIVE_PATH).toBe(join('build', 'desktop-icon.png'));
+    expect(DESKTOP_TRAY_TEMPLATE_ICON_RELATIVE_PATH).toBe(join('dist', 'web', 'desktop-tray-template.png'));
     expect(getDesktopRuntimeIconPath('/app')).toBe(join('/app', 'dist', 'web', 'desktop-icon.png'));
+    expect(getDesktopTrayIconPath('/app', 'darwin')).toBe(join('/app', 'dist', 'web', 'desktop-tray-template.png'));
+    expect(getDesktopTrayIconPath('/app', 'win32')).toBe(join('/app', 'dist', 'web', 'desktop-icon.png'));
   });
 
   it('points electron-builder at the generated desktop package icon', async () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { AddressInfo } from 'node:net';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { NewApiAdapter } from './newApi.js';
 
@@ -139,6 +140,15 @@ describe('NewApiAdapter', () => {
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ data: ['gpt-4o', 'gpt-4.1'] }));
+        return;
+      }
+
+      if (req.url === '/api/notice') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          data: 'Welcome to the site',
+        }));
         return;
       }
 
@@ -615,5 +625,21 @@ describe('NewApiAdapter', () => {
     expect(receivedHeaders['user-id']).toBe('42');
     expect(receivedHeaders['rix-api-user']).toBe('42');
     expect(receivedHeaders['neo-api-user']).toBe('42');
+  });
+
+  it('normalizes the global site notice from /api/notice', async () => {
+    const adapter = new NewApiAdapter();
+    const rows = await adapter.getSiteAnnouncements(baseUrl, 'session-token');
+
+    expect(rows).toEqual([
+      {
+        sourceKey: `notice:${createHash('sha1').update('Welcome to the site').digest('hex')}`,
+        title: 'Site notice',
+        content: 'Welcome to the site',
+        level: 'info',
+        sourceUrl: '/api/notice',
+        rawPayload: { success: true, data: 'Welcome to the site' },
+      },
+    ]);
   });
 });

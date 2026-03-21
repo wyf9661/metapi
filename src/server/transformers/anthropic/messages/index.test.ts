@@ -34,6 +34,57 @@ describe('anthropicMessagesTransformer protocol contract', () => {
     });
   });
 
+  it('preserves native image and document blocks when parsing into canonical envelopes', () => {
+    const result = anthropicMessagesTransformer.parseRequest({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 256,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'inspect both attachments' },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'QUFBQQ==',
+              },
+            },
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: 'JVBERi0x',
+              },
+              title: 'brief.pdf',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.value).toMatchObject({
+      messages: [
+        {
+          role: 'user',
+          parts: [
+            { type: 'text', text: 'inspect both attachments' },
+            { type: 'image', url: 'data:image/png;base64,QUFBQQ==' },
+            {
+              type: 'file',
+              fileData: 'JVBERi0x',
+              filename: 'brief.pdf',
+              mimeType: 'application/pdf',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('builds native messages requests from canonical envelopes', () => {
     const body = anthropicMessagesTransformer.buildProtocolRequest({
       operation: 'count_tokens',

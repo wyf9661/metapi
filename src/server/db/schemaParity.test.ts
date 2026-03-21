@@ -85,10 +85,18 @@ describe('database schema parity', () => {
     const postgresBootstrap = readFileSync(resolve(generatedDir, 'postgres.bootstrap.sql'), 'utf8');
 
     expect(contract.tables.proxy_logs?.columns.downstream_api_key_id?.logicalType).toBe('integer');
+    expect(contract.tables.proxy_logs?.columns.client_app_id?.logicalType).toBe('text');
+    expect(contract.tables.proxy_logs?.columns.client_family?.logicalType).toBe('text');
     expect(contract.indexes.some((index) => index.name === 'proxy_logs_downstream_api_key_created_at_idx')).toBe(true);
+    expect(contract.indexes.some((index) => index.name === 'proxy_logs_client_app_id_created_at_idx')).toBe(true);
+    expect(contract.indexes.some((index) => index.name === 'proxy_logs_client_family_created_at_idx')).toBe(true);
     expect(mysqlBootstrap).toContain('`downstream_api_key_id`');
     expect(mysqlBootstrap).toContain('`proxy_logs_downstream_api_key_created_at_idx`');
+    expect(mysqlBootstrap).toContain('`client_app_id`');
+    expect(mysqlBootstrap).toContain('`proxy_logs_client_app_id_created_at_idx`');
     expect(postgresBootstrap).toContain('"downstream_api_key_id"');
     expect(postgresBootstrap).toContain('"proxy_logs_downstream_api_key_created_at_idx"');
+    expect(postgresBootstrap).toContain('"client_app_id"');
+    expect(postgresBootstrap).toContain('"proxy_logs_client_app_id_created_at_idx"');
   });
 });

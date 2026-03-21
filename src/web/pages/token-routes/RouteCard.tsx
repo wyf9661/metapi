@@ -72,6 +72,18 @@ type RouteCardProps = {
   onToggleSourceGroup: (groupKey: string) => void;
 };
 
+function normalizeRoutingStrategy(value?: RouteRoutingStrategy | null): RouteRoutingStrategy {
+  if (value === 'round_robin' || value === 'stable_first') return value;
+  return 'weighted';
+}
+
+function getRoutingStrategyLabel(value?: RouteRoutingStrategy | null): string {
+  const strategy = normalizeRoutingStrategy(value);
+  if (strategy === 'round_robin') return tr('轮询');
+  if (strategy === 'stable_first') return tr('稳定优先');
+  return tr('权重随机');
+}
+
 function AnimatedCollapseSection({ open, children }: { open: boolean; children: ReactNode }) {
   const presence = useAnimatedVisibility(open, 220);
   if (!presence.shouldRender) return null;
@@ -120,7 +132,7 @@ function RouteCardInner({
   const readOnlyRoute = route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true;
   const channelManagementDisabled = explicitGroupRoute;
   const title = resolveRouteTitle(route);
-  const routingStrategy = route.routingStrategy === 'round_robin' ? 'round_robin' : 'weighted';
+  const routingStrategy = normalizeRoutingStrategy(route.routingStrategy);
   const routingStrategyOptions = [
     {
       value: 'weighted',
@@ -131,6 +143,11 @@ function RouteCardInner({
       value: 'round_robin',
       label: tr('轮询'),
       description: tr('按全局顺序轮流调用，忽略优先级，连续失败 3 次后进入分级冷却'),
+    },
+    {
+      value: 'stable_first',
+      label: tr('稳定优先'),
+      description: tr('按优先级优先选择当前最稳、最快、成功率更高的通道，不做随机分流'),
     },
   ] as const;
 
@@ -228,7 +245,7 @@ function RouteCardInner({
             </span>
           ) : (
             <span className="badge badge-muted" style={{ fontSize: 10, flexShrink: 0 }}>
-              {routingStrategy === 'round_robin' ? tr('轮询') : tr('权重随机')}
+              {getRoutingStrategyLabel(routingStrategy)}
             </span>
           )}
 

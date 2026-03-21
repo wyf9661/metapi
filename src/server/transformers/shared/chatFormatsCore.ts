@@ -1,6 +1,7 @@
 import {
   decodeAnthropicReasoningSignature,
 } from './reasoningTransport.js';
+import { toOpenAiChatFileBlock } from './inputFile.js';
 import {
   consumeThinkTaggedText,
   createThinkTagParserState,
@@ -84,6 +85,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function asTrimmedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function pickFiniteNumber(value: unknown): number | undefined {
@@ -333,6 +338,90 @@ function parseClaudeMessageContent(content: unknown): string {
   return extractTextAndReasoning(content).content;
 }
 
+function buildOpenAiImageUrlBlock(url: string): Record<string, unknown> {
+  return {
+    type: 'image_url',
+    image_url: { url },
+  };
+}
+
+function buildOpenAiFileBlock(input: {
+  fileData?: string;
+  fileUrl?: string;
+  filename?: string;
+  mimeType?: string;
+}): Record<string, unknown> | null {
+  const fileData = typeof input.fileData === 'string' ? input.fileData.trim() : '';
+  const fileUrl = typeof input.fileUrl === 'string' ? input.fileUrl.trim() : '';
+  const filename = typeof input.filename === 'string' ? input.filename.trim() : '';
+  const mimeType = typeof input.mimeType === 'string' ? input.mimeType.trim() : '';
+  if (!fileData && !fileUrl) return null;
+
+  const file: Record<string, unknown> = {};
+  if (fileData) file.file_data = fileData;
+  if (fileUrl && !fileData) file.file_url = fileUrl;
+  if (filename) file.filename = filename;
+  if (mimeType) file.mime_type = mimeType;
+  return {
+    type: 'file',
+    file,
+  };
+}
+
+function convertClaudeContentBlockToOpenAi(block: Record<string, unknown>): Record<string, unknown> | null {
+  const blockType = typeof block.type === 'string' ? block.type : '';
+
+  if (blockType === 'text') {
+    const text = parseClaudeMessageContent(block);
+    return text ? { type: 'text', text } : null;
+  }
+
+  if (blockType === 'image') {
+    const source = isRecord(block.source) ? block.source : null;
+    const sourceType = typeof source?.type === 'string' ? source.type : '';
+    if (sourceType === 'url' && typeof source?.url === 'string' && source.url.trim()) {
+      return buildOpenAiImageUrlBlock(source.url.trim());
+    }
+    if (
+      sourceType === 'base64'
+      && typeof source?.media_type === 'string'
+      && source.media_type.trim()
+      && typeof source?.data === 'string'
+      && source.data.trim()
+    ) {
+      return buildOpenAiImageUrlBlock(`data:${source.media_type.trim()};base64,${source.data.trim()}`);
+    }
+    return null;
+  }
+
+  if (blockType === 'document') {
+    const source = isRecord(block.source) ? block.source : null;
+    const sourceType = typeof source?.type === 'string' ? source.type : '';
+    return buildOpenAiFileBlock({
+      fileData: sourceType === 'base64' && typeof source?.data === 'string' ? source.data : undefined,
+      fileUrl: sourceType === 'url' && typeof source?.url === 'string' ? source.url : undefined,
+      filename: typeof block.title === 'string' ? block.title : undefined,
+      mimeType: typeof source?.media_type === 'string' ? source.media_type : undefined,
+    });
+  }
+
+  const text = parseClaudeMessageContent(block);
+  return text ? { type: 'text', text } : null;
+}
+
+function buildOpenAiMessageContent(
+  contentBlocks: Array<Record<string, unknown>>,
+): string | Array<Record<string, unknown>> | undefined {
+  if (contentBlocks.length <= 0) return undefined;
+  if (contentBlocks.every((block) => block.type === 'text' && typeof block.text === 'string')) {
+    return contentBlocks
+      .map((block) => String(block.text).trim())
+      .filter(Boolean)
+      .join('\n\n');
+  }
+  return contentBlocks;
+}
+
 function parseResponsesOutputText(payload: Record<string, unknown>): string {
   const direct = typeof payload.output_text === 'string' ? payload.output_text : '';
   if (direct) return direct;
@@ -464,6 +553,111 @@ function collectToolCallsFromResponsesPayload(payload: Record<string, unknown>):
   return toolCalls;
 }
 
+function formatAnthropicBase64DataUrl(mimeType: string, data: string): string {
+  return `data:${mimeType};base64,${data}`;
+}
+
+function parseAnthropicBase64Source(
+  source: unknown,
+): { mimeType: string; data: string } | null {
+  if (!isRecord(source)) return null;
+  const sourceType = asTrimmedString(source.type).toLowerCase();
+  if (sourceType !== 'base64') return null;
+  const mimeType = (
+    asTrimmedString(source.media_type)
+    || asTrimmedString(source.mime_type)
+    || asTrimmedString(source.mediaType)
+    || asTrimmedString(source.mimeType)
+    || 'application/octet-stream'
+  );
+  const data = asTrimmedString(source.data);
+  if (!data) return null;
+  return { mimeType, data };
+}
+
+function parseAnthropicUrlSource(
+  source: unknown,
+): { url: string; mimeType: string | null } | null {
+  if (!isRecord(source)) return null;
+  const sourceType = asTrimmedString(source.type).toLowerCase();
+  if (sourceType !== 'url') return null;
+  const url = asTrimmedString(source.url);
+  if (!url) return null;
+  const mimeType = (
+    asTrimmedString(source.media_type)
+    || asTrimmedString(source.mime_type)
+    || asTrimmedString(source.mediaType)
+    || asTrimmedString(source.mimeType)
+    || null
+  );
+  return { url, mimeType };
+}
+
+function toOpenAiContentBlockFromClaudeBlock(
+  block: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const blockType = asTrimmedString(block.type).toLowerCase();
+
+  if (blockType === 'text') {
+    const text = asTrimmedString(block.text);
+    return text ? { type: 'text', text } : null;
+  }
+
+  if (blockType !== 'image' && blockType !== 'document') {
+    return null;
+  }
+
+  const title = asTrimmedString(block.title);
+  const base64Source = parseAnthropicBase64Source(block.source);
+  const urlSource = parseAnthropicUrlSource(block.source);
+  const mimeType = (base64Source?.mimeType || urlSource?.mimeType || '').toLowerCase();
+  const treatAsImage = blockType === 'image' || mimeType.startsWith('image/');
+
+  if (treatAsImage) {
+    const imageUrl = base64Source
+      ? formatAnthropicBase64DataUrl(base64Source.mimeType, base64Source.data)
+      : (urlSource?.url || '');
+    return imageUrl
+      ? {
+        type: 'image_url',
+        image_url: { url: imageUrl },
+      }
+      : null;
+  }
+
+  if (base64Source) {
+    return toOpenAiChatFileBlock({
+      fileData: base64Source.data,
+      filename: title || undefined,
+      mimeType: base64Source.mimeType,
+    });
+  }
+
+  if (urlSource) {
+    return toOpenAiChatFileBlock({
+      fileUrl: urlSource.url,
+      filename: title || undefined,
+      mimeType: urlSource.mimeType,
+    });
+  }
+
+  return null;
+}
+
+function collapseOpenAiContentBlocks(
+  blocks: Array<Record<string, unknown>>,
+): string | Array<Record<string, unknown>> | null {
+  if (blocks.length <= 0) return null;
+  const textOnly = blocks.every((block) => block.type === 'text' && typeof block.text === 'string');
+  if (!textOnly) return blocks;
+
+  const text = blocks
+    .map((block) => (typeof block.text === 'string' ? block.text : ''))
+    .join('\n\n')
+    .trim();
+  return text || null;
+}
+
 function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>): {
   model: string;
   stream: boolean;
@@ -521,14 +715,14 @@ function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>): {
     // Claude tool blocks need explicit OpenAI mapping:
     // - assistant.tool_use  -> assistant.tool_calls
     // - user.tool_result    -> tool messages with tool_call_id
-    const textParts: string[] = [];
+    const contentBlocks: Array<Record<string, unknown>> = [];
     const toolCalls: Array<Record<string, unknown>> = [];
 
-    const flushTextAsMessage = () => {
-      const merged = textParts.map((item) => item.trim()).filter(Boolean).join('\n\n');
-      textParts.length = 0;
-      if (!merged) return;
-      messages.push({ role: mappedRole, content: merged });
+    const flushContentAsMessage = () => {
+      const contentPayload = collapseOpenAiContentBlocks(contentBlocks);
+      contentBlocks.length = 0;
+      if (contentPayload === null) return;
+      messages.push({ role: mappedRole, content: contentPayload });
     };
 
     for (const block of content) {
@@ -536,7 +730,7 @@ function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>): {
       const blockType = typeof block.type === 'string' ? block.type : '';
 
       if (blockType === 'tool_result') {
-        flushTextAsMessage();
+        flushContentAsMessage();
         appendToolResultMessage(block.tool_use_id, block.content);
         continue;
       }
@@ -564,20 +758,30 @@ function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>): {
         continue;
       }
 
+      const contentBlock = toOpenAiContentBlockFromClaudeBlock(block);
+      if (contentBlock) {
+        contentBlocks.push(contentBlock);
+        continue;
+      }
+
       const text = parseClaudeMessageContent(block);
-      if (text) textParts.push(text);
+      if (text) {
+        contentBlocks.push({
+          type: 'text',
+          text,
+        });
+      }
     }
 
-    const merged = textParts.map((item) => item.trim()).filter(Boolean).join('\n\n');
+    const merged = collapseOpenAiContentBlocks(contentBlocks);
     if (toolCalls.length > 0) {
       const assistantMessage: Record<string, unknown> = {
         role: 'assistant',
         tool_calls: toolCalls,
       };
-      // Keep textual assistant preface when present.
       assistantMessage.content = merged || '';
       messages.push(assistantMessage);
-    } else if (merged) {
+    } else if (merged !== null) {
       messages.push({
         role: mappedRole,
         content: merged,

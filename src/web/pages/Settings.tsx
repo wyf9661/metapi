@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
@@ -17,15 +17,29 @@ import { clearAuthSession } from '../authSession.js';
 import { clearAppInstallationState } from '../appLocalState.js';
 import { tr } from '../i18n.js';
 import { ROUTE_ICON_NONE_VALUE } from './token-routes/utils.js';
+import { generateDownstreamSkKey } from './helpers/generateDownstreamSkKey.js';
 
 const PROXY_TOKEN_PREFIX = 'sk-';
 const ROUTE_BRAND_ICON_PREFIX = 'brand:';
 const FACTORY_RESET_ADMIN_TOKEN = 'change-me-admin-token';
 const FACTORY_RESET_CONFIRM_SECONDS = 3;
+const CHECKIN_SCHEDULE_MODE_OPTIONS = [
+  { value: 'cron', label: 'Cron' },
+  { value: 'interval', label: '间隔签到' },
+] as const;
+const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) => {
+  const hour = index + 1;
+  return {
+    value: String(hour),
+    label: `${hour} 小时`,
+  };
+});
 type DbDialect = 'sqlite' | 'mysql' | 'postgres';
 
 type RuntimeSettings = {
   checkinCron: string;
+  checkinScheduleMode: 'cron' | 'interval';
+  checkinIntervalHours: number;
   balanceRefreshCron: string;
   logCleanupCron: string;
   logCleanupUsageLogsEnabled: boolean;
@@ -40,6 +54,11 @@ type RuntimeSettings = {
   adminIpAllowlist?: string[];
   currentAdminIp?: string;
 };
+
+type SystemProxyTestState =
+  | { kind: 'success'; text: string }
+  | { kind: 'error'; text: string }
+  | null;
 
 type DownstreamApiKeyItem = {
   id: number;
@@ -187,6 +206,8 @@ export default function Settings() {
   const navigate = useNavigate();
   const [runtime, setRuntime] = useState<RuntimeSettings>({
     checkinCron: '0 8 * * *',
+    checkinScheduleMode: 'cron',
+    checkinIntervalHours: 6,
     balanceRefreshCron: '0 * * * *',
     logCleanupCron: '0 6 * * *',
     logCleanupUsageLogsEnabled: false,
@@ -203,8 +224,11 @@ export default function Settings() {
   const [maskedToken, setMaskedToken] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [testingCheckin, setTestingCheckin] = useState(false);
   const [savingToken, setSavingToken] = useState(false);
   const [savingSystemProxy, setSavingSystemProxy] = useState(false);
+  const [testingSystemProxy, setTestingSystemProxy] = useState(false);
+  const [systemProxyTestState, setSystemProxyTestState] = useState<SystemProxyTestState>(null);
   const [savingProxyFailureRules, setSavingProxyFailureRules] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [showAdvancedRouting, setShowAdvancedRouting] = useState(false);
@@ -397,6 +421,10 @@ export default function Settings() {
       setMaskedToken(authInfo.masked || '****');
       setRuntime({
         checkinCron: runtimeInfo.checkinCron || '0 8 * * *',
+        checkinScheduleMode: runtimeInfo.checkinScheduleMode === 'interval' ? 'interval' : 'cron',
+        checkinIntervalHours: Number(runtimeInfo.checkinIntervalHours) >= 1
+          ? Math.min(24, Math.trunc(Number(runtimeInfo.checkinIntervalHours)))
+          : 6,
         balanceRefreshCron: runtimeInfo.balanceRefreshCron || '0 * * * *',
         logCleanupCron: runtimeInfo.logCleanupCron || '0 6 * * *',
         logCleanupUsageLogsEnabled: !!runtimeInfo.logCleanupUsageLogsEnabled,
@@ -488,6 +516,8 @@ export default function Settings() {
     try {
       await api.updateRuntimeSettings({
         checkinCron: runtime.checkinCron,
+        checkinScheduleMode: runtime.checkinScheduleMode,
+        checkinIntervalHours: runtime.checkinIntervalHours,
         balanceRefreshCron: runtime.balanceRefreshCron,
         logCleanupCron: runtime.logCleanupCron,
         logCleanupUsageLogsEnabled: runtime.logCleanupUsageLogsEnabled,
@@ -499,6 +529,18 @@ export default function Settings() {
       toast.error(err?.message || '保存失败');
     } finally {
       setSavingSchedule(false);
+    }
+  };
+
+  const triggerScheduleCheckin = async () => {
+    setTestingCheckin(true);
+    try {
+      await api.triggerCheckinAll();
+      toast.success('已开始全部签到，请稍后查看签到日志');
+    } catch (err: any) {
+      toast.error(err?.message || '触发签到失败');
+    } finally {
+      setTestingCheckin(false);
     }
   };
 
@@ -538,6 +580,31 @@ export default function Settings() {
       toast.error(err?.message || '保存失败');
     } finally {
       setSavingSystemProxy(false);
+    }
+  };
+
+  const testSystemProxy = async () => {
+    const proxyUrl = runtime.systemProxyUrl.trim();
+    if (!proxyUrl) {
+      const message = '请先填写系统代理地址';
+      setSystemProxyTestState({ kind: 'error', text: message });
+      toast.info(message);
+      return;
+    }
+
+    setTestingSystemProxy(true);
+    setSystemProxyTestState(null);
+    try {
+      const res = await api.testSystemProxy({ proxyUrl });
+      const summary = `连通成功，延迟 ${res.latencyMs} ms`;
+      setSystemProxyTestState({ kind: 'success', text: summary });
+      toast.success(`系统代理测试成功（${res.latencyMs} ms）`);
+    } catch (err: any) {
+      const message = err?.message || '系统代理测试失败';
+      setSystemProxyTestState({ kind: 'error', text: message });
+      toast.error(message);
+    } finally {
+      setTestingSystemProxy(false);
     }
   };
 
@@ -953,6 +1020,39 @@ export default function Settings() {
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>定时任务</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '180px 180px auto', gap: 12, alignItems: 'end', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到方式</div>
+              <ModernSelect
+                value={runtime.checkinScheduleMode}
+                onChange={(value) => setRuntime((prev) => ({
+                  ...prev,
+                  checkinScheduleMode: value === 'interval' ? 'interval' : 'cron',
+                }))}
+                options={CHECKIN_SCHEDULE_MODE_OPTIONS.map((item) => ({ ...item }))}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到间隔</div>
+              <ModernSelect
+                value={String(runtime.checkinIntervalHours)}
+                onChange={(value) => setRuntime((prev) => ({
+                  ...prev,
+                  checkinIntervalHours: Math.min(24, Math.max(1, Math.trunc(Number(value) || 1))),
+                }))}
+                disabled={runtime.checkinScheduleMode !== 'interval'}
+                options={CHECKIN_INTERVAL_OPTIONS}
+              />
+            </div>
+            <button
+              onClick={triggerScheduleCheckin}
+              disabled={testingCheckin}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}
+            >
+              {testingCheckin ? '触发中...' : '测试一次签到'}
+            </button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到 Cron</div>
@@ -960,6 +1060,7 @@ export default function Settings() {
                 value={runtime.checkinCron}
                 onChange={(e) => setRuntime((prev) => ({ ...prev, checkinCron: e.target.value }))}
                 style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                disabled={runtime.checkinScheduleMode !== 'cron'}
               />
             </div>
             <div>
@@ -1045,13 +1146,39 @@ export default function Settings() {
           </div>
           <input
             value={runtime.systemProxyUrl}
-            onChange={(e) => setRuntime((prev) => ({ ...prev, systemProxyUrl: e.target.value }))}
+            onChange={(e) => {
+              setRuntime((prev) => ({ ...prev, systemProxyUrl: e.target.value }));
+              setSystemProxyTestState(null);
+            }}
             placeholder="系统代理 URL（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）"
             style={{ ...inputStyle, fontFamily: 'var(--font-mono)', marginBottom: 10 }}
           />
-          <button onClick={saveSystemProxy} disabled={savingSystemProxy} className="btn btn-primary">
-            {savingSystemProxy ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存系统代理'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button onClick={saveSystemProxy} disabled={savingSystemProxy} className="btn btn-primary">
+              {savingSystemProxy ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存系统代理'}
+            </button>
+            <button
+              onClick={testSystemProxy}
+              disabled={testingSystemProxy}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              {testingSystemProxy ? <><span className="spinner spinner-sm" /> 测试中...</> : '测试系统代理'}
+            </button>
+          </div>
+          {systemProxyTestState && (
+            <div
+              style={{
+                fontSize: 12,
+                marginTop: 10,
+                color: systemProxyTestState.kind === 'success'
+                  ? 'var(--color-success)'
+                  : 'var(--color-danger)',
+              }}
+            >
+              {systemProxyTestState.text}
+            </div>
+          )}
         </div>
 
         <div className="card animate-slide-up stagger-4" style={{ padding: 20 }}>
@@ -1096,42 +1223,83 @@ export default function Settings() {
           </code>
           <div
             style={{
-              ...inputStyle,
-              marginBottom: 10,
-              padding: 0,
               display: 'flex',
-              alignItems: 'center',
-              overflow: 'hidden',
+              gap: 10,
+              alignItems: 'stretch',
+              marginBottom: 10,
+              minWidth: 0,
+              flexWrap: 'wrap',
             }}
           >
-            <span
+            <div
               style={{
-                padding: '10px 12px',
-                borderRight: '1px solid var(--color-border-light)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                color: 'var(--color-text-secondary)',
-                userSelect: 'none',
+                ...inputStyle,
+                flex: 1,
+                minWidth: 200,
+                marginBottom: 0,
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                overflow: 'hidden',
               }}
             >
-              {PROXY_TOKEN_PREFIX}
-            </span>
-            <input
-              type="password"
-              value={proxyTokenSuffix}
-              onChange={(e) => setProxyTokenSuffix(normalizeProxyTokenSuffix(e.target.value))}
-              placeholder="请输入 sk- 后的令牌内容"
+              <span
+                style={{
+                  padding: '10px 12px',
+                  borderRight: '1px solid var(--color-border-light)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 13,
+                  color: 'var(--color-text-secondary)',
+                  userSelect: 'none',
+                  background: 'color-mix(in srgb, var(--color-text-muted) 6%, transparent)',
+                }}
+              >
+                {PROXY_TOKEN_PREFIX}
+              </span>
+              <input
+                type="text"
+                value={proxyTokenSuffix}
+                onChange={(e) => setProxyTokenSuffix(normalizeProxyTokenSuffix(e.target.value))}
+                placeholder="请输入 sk- 后的令牌内容"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  color: 'var(--color-text-primary)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 13,
+                  padding: '10px 12px',
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-soft-primary"
+              aria-label="随机生成访问令牌后缀"
+              title="生成高熵随机后缀（不会自动保存）"
               style={{
-                flex: 1,
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                color: 'var(--color-text-primary)',
-                fontFamily: 'var(--font-mono)',
+                flexShrink: 0,
+                padding: '10px 18px',
                 fontSize: 13,
-                padding: '10px 12px',
+                gap: 8,
+                alignSelf: 'stretch',
               }}
-            />
+              onClick={() => {
+                const full = generateDownstreamSkKey(PROXY_TOKEN_PREFIX);
+                setProxyTokenSuffix(full.slice(PROXY_TOKEN_PREFIX.length));
+              }}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
+                />
+              </svg>
+              随机生成
+            </button>
           </div>
           <button onClick={saveProxyToken} disabled={savingToken} className="btn btn-primary">
             {savingToken ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '更新下游访问令牌'}

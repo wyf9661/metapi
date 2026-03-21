@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     getRoutesLite: vi.fn(),
     getRuntimeDatabaseConfig: vi.fn(),
     updateRuntimeSettings: vi.fn(),
+    testSystemProxy: vi.fn(),
   },
 }));
 
@@ -67,6 +68,16 @@ describe('Settings system proxy', () => {
       success: true,
       systemProxyUrl: 'http://127.0.0.1:7890',
     });
+    apiMock.testSystemProxy.mockResolvedValue({
+      success: true,
+      proxyUrl: 'http://127.0.0.1:7890',
+      probeUrl: 'https://www.gstatic.com/generate_204',
+      finalUrl: 'https://www.gstatic.com/generate_204',
+      reachable: true,
+      ok: true,
+      statusCode: 204,
+      latencyMs: 321,
+    });
   });
 
   afterEach(() => {
@@ -108,6 +119,47 @@ describe('Settings system proxy', () => {
       expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith({
         systemProxyUrl: 'http://127.0.0.1:7890',
       });
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('tests system proxy from settings', async () => {
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <Settings />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const proxyInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.placeholder === '系统代理 URL（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）'
+      ));
+      await act(async () => {
+        proxyInput.props.onChange({ target: { value: 'http://127.0.0.1:7890' } });
+      });
+
+      const testButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '测试系统代理'
+      ));
+      await act(async () => {
+        testButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.testSystemProxy).toHaveBeenCalledWith({
+        proxyUrl: 'http://127.0.0.1:7890',
+      });
+      expect(collectText(root.root)).toContain('连通成功，延迟 321 ms');
     } finally {
       root?.unmount();
     }

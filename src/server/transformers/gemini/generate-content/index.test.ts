@@ -50,6 +50,41 @@ describe('geminiGenerateContentTransformer.inbound', () => {
     });
   });
 
+  it('parses non-image inlineData parts into canonical file parts', () => {
+    const result = geminiGenerateContentTransformer.parseRequest({
+      model: 'gemini-2.5-pro',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: 'summarize this pdf' },
+            {
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: 'JVBERi0xLjQK',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.value?.messages).toEqual([
+      {
+        role: 'user',
+        parts: [
+          { type: 'text', text: 'summarize this pdf' },
+          {
+            type: 'file',
+            fileData: 'JVBERi0xLjQK',
+            mimeType: 'application/pdf',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('builds native Gemini requests from canonical envelopes', () => {
     const body = geminiGenerateContentTransformer.buildProtocolRequest({
       operation: 'generate',
@@ -92,6 +127,49 @@ describe('geminiGenerateContentTransformer.inbound', () => {
           thinkingBudget: 512,
         },
       },
+    });
+  });
+
+  it('compatibility preserves inline document parts as OpenAI file blocks', () => {
+    const body = geminiGenerateContentTransformer.compatibility.buildOpenAiBodyFromGeminiRequest({
+      modelName: 'gpt-5.4',
+      stream: false,
+      body: {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: 'summarize this file' },
+              {
+                inlineData: {
+                  mimeType: 'application/pdf',
+                  data: 'JVBERi0x',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(body).toEqual({
+      model: 'gpt-5.4',
+      stream: false,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'summarize this file' },
+            {
+              type: 'file',
+              file: {
+                file_data: 'JVBERi0x',
+                mime_type: 'application/pdf',
+              },
+            },
+          ],
+        },
+      ],
     });
   });
 

@@ -13,6 +13,7 @@ describe('TokenRouter runtime cache', () => {
   let schema: DbModule['schema'];
   let TokenRouter: TokenRouterModule['TokenRouter'];
   let invalidateTokenRouterCache: TokenRouterModule['invalidateTokenRouterCache'];
+  let resetSiteRuntimeHealthState: TokenRouterModule['resetSiteRuntimeHealthState'];
   let config: ConfigModule['config'];
   let dataDir = '';
   let originalCacheTtlMs = 0;
@@ -29,6 +30,7 @@ describe('TokenRouter runtime cache', () => {
     schema = dbModule.schema;
     TokenRouter = tokenRouterModule.TokenRouter;
     invalidateTokenRouterCache = tokenRouterModule.invalidateTokenRouterCache;
+    resetSiteRuntimeHealthState = tokenRouterModule.resetSiteRuntimeHealthState;
     config = configModule.config;
     originalCacheTtlMs = config.tokenRouterCacheTtlMs;
   });
@@ -36,16 +38,19 @@ describe('TokenRouter runtime cache', () => {
   beforeEach(async () => {
     await db.delete(schema.routeChannels).run();
     await db.delete(schema.tokenRoutes).run();
+    await db.delete(schema.settings).run();
     await db.delete(schema.accountTokens).run();
     await db.delete(schema.accounts).run();
     await db.delete(schema.sites).run();
     config.tokenRouterCacheTtlMs = 60_000;
     invalidateTokenRouterCache();
+    resetSiteRuntimeHealthState();
   });
 
   afterAll(() => {
     config.tokenRouterCacheTtlMs = originalCacheTtlMs;
     invalidateTokenRouterCache();
+    resetSiteRuntimeHealthState();
     delete process.env.DATA_DIR;
   });
 

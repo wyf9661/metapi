@@ -24,6 +24,36 @@ function getResponsesFailureMessage(payload: Record<string, unknown>): string {
   return 'upstream stream failed';
 }
 
+function hasMeaningfulMessageContent(content: unknown): boolean {
+  if (!Array.isArray(content)) return false;
+  return content.some((part) => {
+    if (!isRecord(part)) return false;
+    const partType = typeof part.type === 'string' ? part.type.trim().toLowerCase() : '';
+    if (partType === 'output_text' || partType === 'text') {
+      return typeof part.text === 'string' && part.text.length > 0;
+    }
+    return true;
+  });
+}
+
+function hasMeaningfulResponsesOutput(output: unknown): boolean {
+  if (!Array.isArray(output)) return false;
+  return output.some((item) => {
+    if (!isRecord(item)) return false;
+    const itemType = typeof item.type === 'string' ? item.type.trim().toLowerCase() : '';
+    if (itemType === 'message') {
+      return hasMeaningfulMessageContent(item.content);
+    }
+    if (itemType === 'reasoning') {
+      return (
+        (Array.isArray(item.summary) && item.summary.length > 0)
+        || (typeof item.encrypted_content === 'string' && item.encrypted_content.trim().length > 0)
+      );
+    }
+    return itemType.length > 0;
+  });
+}
+
 function hasCompleteFinalResponsesPayload(payload: Record<string, unknown>): boolean {
   return (
     payload.object === 'response.compaction'
@@ -32,11 +62,101 @@ function hasCompleteFinalResponsesPayload(payload: Record<string, unknown>): boo
   );
 }
 
-export async function collectResponsesFinalPayloadFromSse(
-  upstream: { text(): Promise<string> },
+function hasMeaningfulFinalResponsesPayload(payload: Record<string, unknown>): boolean {
+  if (payload.object === 'response.compaction') {
+    return Array.isArray(payload.output) && payload.output.length > 0;
+  }
+  if (typeof payload.output_text === 'string' && payload.output_text.length > 0) {
+    return true;
+  }
+  return hasMeaningfulResponsesOutput(payload.output);
+}
+
+function rememberStreamResponseEnvelope(
+  streamContext: ReturnType<typeof openAiResponsesTransformer.createStreamContext>,
+  payload: Record<string, unknown>,
+): void {
+  const responsePayload = isRecord(payload.response) ? payload.response : payload;
+  if (typeof responsePayload.id === 'string' && responsePayload.id.trim().length > 0) {
+    streamContext.id = responsePayload.id;
+  }
+  if (typeof responsePayload.model === 'string' && responsePayload.model.trim().length > 0) {
+    streamContext.model = responsePayload.model;
+  }
+  const createdAt = (
+    typeof responsePayload.created_at === 'number' && Number.isFinite(responsePayload.created_at)
+      ? responsePayload.created_at
+      : (typeof responsePayload.created === 'number' && Number.isFinite(responsePayload.created)
+        ? responsePayload.created
+        : null)
+  );
+  if (createdAt !== null) {
+    streamContext.created = createdAt;
+  }
+}
+
+function materializeCompletedPayloadFromAggregate(
+  aggregateState: ReturnType<typeof openAiResponsesTransformer.aggregator.createState>,
+  streamContext: ReturnType<typeof openAiResponsesTransformer.createStreamContext>,
+  usage: ReturnType<typeof parseProxyUsage>,
+): Record<string, unknown> | null {
+  const lines = openAiResponsesTransformer.aggregator.complete(
+    aggregateState,
+    streamContext,
+    usage,
+  );
+  const { events } = openAiResponsesTransformer.pullSseEvents(lines.join(''));
+  for (const event of events) {
+    if (event.data === '[DONE]') continue;
+    const payload = parseResponsesSsePayload(event.data);
+    if (!payload) continue;
+    if (event.event === 'response.completed' && isRecord(payload.response)) {
+      return payload.response;
+    }
+    if (payload.type === 'response.completed' && hasCompleteFinalResponsesPayload(payload)) {
+      return payload;
+    }
+  }
+  return null;
+}
+
+export function looksLikeResponsesSseText(rawText: string): boolean {
+  const { events, rest } = openAiResponsesTransformer.pullSseEvents(rawText);
+  if (events.length === 0 || rest.trim().length > 0) return false;
+  return events.some((event) => {
+    if (event.data === '[DONE]') return true;
+    if (event.event === 'error' || event.event.startsWith('response.')) return true;
+    const payload = parseResponsesSsePayload(event.data);
+    const payloadType = typeof payload?.type === 'string' ? payload.type : '';
+    return payloadType === 'error' || payloadType.startsWith('response.');
+  });
+}
+
+export function createSingleChunkStreamReader(rawText: string): {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+  cancel(reason?: unknown): Promise<unknown>;
+  releaseLock(): void;
+} {
+  const chunk = Buffer.from(rawText, 'utf8');
+  let done = false;
+  return {
+    async read() {
+      if (done) return { done: true };
+      done = true;
+      return { done: false, value: chunk };
+    },
+    async cancel() {
+      done = true;
+      return undefined;
+    },
+    releaseLock() {},
+  };
+}
+
+export function collectResponsesFinalPayloadFromSseText(
+  rawText: string,
   modelName: string,
-): Promise<{ payload: Record<string, unknown>; rawText: string }> {
-  const rawText = await upstream.text();
+): { payload: Record<string, unknown>; rawText: string } {
   const { events } = openAiResponsesTransformer.pullSseEvents(rawText);
   const streamContext = openAiResponsesTransformer.createStreamContext(modelName);
   const aggregateState = openAiResponsesTransformer.aggregator.createState(modelName);
@@ -92,12 +212,17 @@ export async function collectResponsesFinalPayloadFromSse(
 
     const payloadType = typeof payload.type === 'string' ? payload.type : '';
     const eventType = payloadType || event.event;
+    rememberStreamResponseEnvelope(streamContext, payload);
     usage = mergeProxyUsage(usage, parseProxyUsage(payload));
     captureCompletedPayloadFromEvent(eventType, payload);
     if (completedPayload) {
       continue;
     }
-    const normalizedEvent = openAiResponsesTransformer.transformStreamEvent(payload, streamContext, modelName);
+    const normalizedEvent = openAiResponsesTransformer.transformStreamEvent(
+      payload,
+      streamContext,
+      modelName,
+    );
     captureCompletedPayloadFromLines(openAiResponsesTransformer.aggregator.serialize({
       state: aggregateState,
       streamContext,
@@ -106,12 +231,19 @@ export async function collectResponsesFinalPayloadFromSse(
     }));
   }
 
+  if (
+    completedPayload
+    && !hasMeaningfulFinalResponsesPayload(completedPayload)
+    && hasMeaningfulResponsesOutput(aggregateState.outputItems)
+  ) {
+    completedPayload = materializeCompletedPayloadFromAggregate(aggregateState, streamContext, usage);
+  }
+
   if (!completedPayload) {
-    captureCompletedPayloadFromLines(openAiResponsesTransformer.aggregator.complete(
-      aggregateState,
-      streamContext,
-      usage,
-    ));
+    const materialized = materializeCompletedPayloadFromAggregate(aggregateState, streamContext, usage);
+    if (materialized) {
+      completedPayload = materialized;
+    }
   }
 
   if (completedPayload) {
@@ -122,4 +254,11 @@ export async function collectResponsesFinalPayloadFromSse(
   }
 
   throw new Error('stream disconnected before response.completed');
+}
+
+export async function collectResponsesFinalPayloadFromSse(
+  upstream: { text(): Promise<string> },
+  modelName: string,
+): Promise<{ payload: Record<string, unknown>; rawText: string }> {
+  return collectResponsesFinalPayloadFromSseText(await upstream.text(), modelName);
 }

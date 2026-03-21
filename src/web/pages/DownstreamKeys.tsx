@@ -7,9 +7,12 @@ import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { tr } from '../i18n.js';
+import { generateDownstreamSkKey } from './helpers/generateDownstreamSkKey.js';
 
 const DownstreamKeyTrendChart = lazy(() => import('../components/charts/DownstreamKeyTrendChart.js'));
 type DownstreamKeyTrendBucket = import('../components/charts/DownstreamKeyTrendChart.js').DownstreamKeyTrendBucket;
+
+const PROXY_TOKEN_PREFIX = 'sk-';
 
 type Range = '24h' | '7d' | 'all';
 type Status = 'all' | 'enabled' | 'disabled';
@@ -259,6 +262,86 @@ function tagChipStyle(kind: 'normal' | 'accent' = 'normal'): React.CSSProperties
   };
 }
 
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
+function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined }) {
+  const toast = useToast();
+  const [pressed, setPressed] = useState(false);
+
+  const disabled = !fullKey?.trim();
+  const release = () => setPressed(false);
+
+  return (
+    <button
+      type="button"
+      title="复制完整密钥"
+      aria-label="复制完整密钥"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 2,
+        lineHeight: 0,
+        flexShrink: 0,
+        border: 'none',
+        background: 'transparent',
+        color: disabled
+          ? 'var(--color-text-muted)'
+          : pressed
+            ? 'var(--color-text-primary)'
+            : 'var(--color-text-muted)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        borderRadius: 'var(--radius-sm)',
+      }}
+      disabled={disabled}
+      onMouseDown={() => {
+        if (!disabled) setPressed(true);
+      }}
+      onMouseUp={release}
+      onMouseLeave={release}
+      onTouchStart={() => {
+        if (!disabled) setPressed(true);
+      }}
+      onTouchEnd={release}
+      onTouchCancel={release}
+      onClick={async (e) => {
+        e.stopPropagation();
+        const full = fullKey?.trim();
+        if (!full) {
+          toast.info('完整密钥暂不可用，请刷新页面后重试');
+          return;
+        }
+        try {
+          await copyToClipboard(full);
+          toast.success('已复制到剪贴板');
+        } catch {
+          toast.error('复制失败');
+        }
+      }}
+    >
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+    </button>
+  );
+}
+
 function buildEditorForm(item?: ManagedItem | DownstreamApiKeyItem | null): EditorForm {
   return {
     name: item?.name || '',
@@ -277,13 +360,13 @@ function buildEditorForm(item?: ManagedItem | DownstreamApiKeyItem | null): Edit
 }
 
 function summarizeModelLimit(models: string[]): string {
-  if (!Array.isArray(models) || models.length === 0) return '全部模型';
+  if (!Array.isArray(models) || models.length === 0) return '未授权模型';
   if (models.length === 1) return models[0];
   return `${models[0]} +${models.length - 1}`;
 }
 
 function summarizeRouteLimit(routeIds: number[], routeMap: Map<number, RouteSelectorItem>): string {
-  if (!Array.isArray(routeIds) || routeIds.length === 0) return '全部群组';
+  if (!Array.isArray(routeIds) || routeIds.length === 0) return '未授权群组';
   const names = routeIds
     .map((id) => routeMap.get(id))
     .filter(Boolean)
@@ -877,7 +960,22 @@ function EditorModal({
         </div>
         <div className="downstream-key-modal-field">
           <div className="downstream-key-modal-label">下游密钥</div>
-          <input value={form.key} onChange={(e) => onChange((prev) => ({ ...prev, key: e.target.value }))} placeholder="sk-..." style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', minWidth: 0 }}>
+            <input
+              value={form.key}
+              onChange={(e) => onChange((prev) => ({ ...prev, key: e.target.value }))}
+              placeholder="sk-..."
+              style={{ ...inputStyle, flex: 1, minWidth: 0, fontFamily: 'var(--font-mono)' }}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ flexShrink: 0, whiteSpace: 'nowrap', alignSelf: 'stretch' }}
+              onClick={() => onChange((prev) => ({ ...prev, key: generateDownstreamSkKey(PROXY_TOKEN_PREFIX) }))}
+            >
+              随机
+            </button>
+          </div>
         </div>
         <div className="downstream-key-modal-field">
           <div className="downstream-key-modal-label">主分组</div>
@@ -956,11 +1054,26 @@ function EditorModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div>
                     <div className="downstream-key-modal-section-title">模型白名单</div>
-                    <div className="downstream-key-modal-help">只展示精确模型，未勾选则视为全部模型可用</div>
+                    <div className="downstream-key-modal-help">只展示精确模型；未勾选时默认不允许任何精确模型，可点“全选”一次性放开。</div>
                   </div>
-                  <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedModels: [] }))}>
-                    清空
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedModels: exactModels }))}
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedModels: [] }))}
+                    >
+                      清空
+                    </button>
+                  </div>
                 </div>
                 <div className="downstream-key-modal-meta">已选 {selectedModelCount} 个模型</div>
                 <div className="toolbar-search" style={{ maxWidth: '100%' }}>
@@ -995,11 +1108,26 @@ function EditorModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div>
                     <div className="downstream-key-modal-section-title">群组范围</div>
-                    <div className="downstream-key-modal-help">限制可访问的群组路由，未勾选则视为全部群组可用</div>
+                    <div className="downstream-key-modal-help">限制可访问的群组路由；未勾选时默认不允许任何群组，可点“全选”一次性放开。</div>
                   </div>
-                  <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: [] }))}>
-                    清空
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: groupRouteOptions.map((route) => route.id) }))}
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                      onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: [] }))}
+                    >
+                      清空
+                    </button>
+                  </div>
                 </div>
                 <div className="downstream-key-modal-meta">已选 {selectedGroupCount} 个群组</div>
                 <div className="toolbar-search" style={{ maxWidth: '100%' }}>
@@ -1607,7 +1735,10 @@ export default function DownstreamKeys() {
                           <strong style={{ color: 'var(--color-text-primary)' }}>{row.name}</strong>
                           <StatusBadge enabled={row.enabled} />
                         </div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>{row.keyMasked}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-text-muted)' }}>{row.keyMasked}</span>
+                          <DownstreamKeyCopyIconButton fullKey={row.key} />
+                        </div>
                         {row.description ? <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', maxWidth: 320 }}>{row.description}</div> : null}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                           <span className={`badge ${row.groupName ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11 }}>

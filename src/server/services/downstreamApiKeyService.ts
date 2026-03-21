@@ -90,13 +90,25 @@ function normalizePositiveIntegerOrNull(value: unknown): number | null {
   return normalized;
 }
 
-function parseJson(value: string | null | undefined): unknown {
-  if (!value) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
+function parseJson(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+
+  // PostgreSQL JSONB columns are returned as parsed objects/arrays by the pg driver
+  if (typeof value === 'object') {
+    return value;
   }
+
+  // SQLite TEXT columns store JSON as strings that need parsing
+  if (typeof value === 'string') {
+    if (value === '') return null;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export function normalizeGroupNameInput(input: unknown): string | null {
@@ -131,16 +143,14 @@ export function normalizeSupportedModelsInput(input: unknown): string[] {
   if (Array.isArray(input)) {
     return input
       .map((item) => (typeof item === 'string' ? item.trim() : ''))
-      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index)
-      .slice(0, 200);
+      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index);
   }
 
   if (typeof input === 'string') {
     return input
       .split(/\r?\n|,/g)
       .map((item) => item.trim())
-      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index)
-      .slice(0, 200);
+      .filter((item, index, arr) => item.length > 0 && arr.indexOf(item) === index);
   }
 
   return [];
@@ -234,7 +244,7 @@ export async function isModelAllowedByPolicyOrAllowedRoutes(model: string, polic
   const hasPatternRules = patterns.length > 0;
   const hasRouteRules = allowedRouteIds.length > 0;
 
-  if (!hasPatternRules && !hasRouteRules) return true;
+  if (!hasPatternRules && !hasRouteRules) return policy.denyAllWhenEmpty === true ? false : true;
 
   if (hasPatternRules && patterns.some((pattern) => matchesDownstreamModelPattern(model, pattern))) {
     return true;
@@ -278,6 +288,7 @@ export function toPolicyFromView(view: Pick<DownstreamApiKeyPolicyView, 'support
     supportedModels: normalizeSupportedModelsInput(view.supportedModels),
     allowedRouteIds: normalizeAllowedRouteIdsInput(view.allowedRouteIds),
     siteWeightMultipliers: normalizeSiteWeightMultipliersInput(view.siteWeightMultipliers),
+    denyAllWhenEmpty: true,
   };
 }
 

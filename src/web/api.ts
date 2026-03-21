@@ -4,7 +4,74 @@ type RequestOptions = RequestInit & {
   timeoutMs?: number;
 };
 
-async function request(url: string, options: RequestOptions = {}) {
+function requireAuthToken(): string {
+  const token = getAuthToken(localStorage);
+  if (!token) {
+    const hadToken = !!localStorage.getItem('auth_token');
+    clearAuthSession(localStorage);
+    if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+      window.location.reload();
+    }
+    throw new Error('Session expired');
+  }
+  return token;
+}
+
+async function extractResponseErrorMessage(res: Response): Promise<string> {
+  let message = `HTTP ${res.status}`;
+  try {
+    const text = await res.text();
+    if (text) {
+      try {
+        const json = JSON.parse(text);
+        if (json?.message && typeof json.message === 'string') {
+          message = json.message;
+        } else if (json?.error && typeof json.error === 'string') {
+          message = json.error;
+        } else if (json?.error?.message && typeof json.error.message === 'string') {
+          message = json.error.message;
+        } else {
+          message = `${message}: ${text.slice(0, 120)}`;
+        }
+      } catch {
+        message = `${message}: ${text.slice(0, 120)}`;
+      }
+    }
+  } catch { }
+  return message;
+}
+
+function parseContentDispositionFilename(headerValue: string | null): string | null {
+  if (!headerValue) return null;
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(headerValue);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const quotedMatch = /filename="([^"]+)"/i.exec(headerValue);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  const bareMatch = /filename=([^;]+)/i.exec(headerValue);
+  return bareMatch?.[1]?.trim() || null;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(buffer).toString('base64');
+  }
+
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function fetchAuthenticatedResponse(url: string, options: RequestOptions = {}): Promise<Response> {
   const { timeoutMs = 30_000, signal: externalSignal, ...fetchOptions } = options;
   const controller = new AbortController();
   let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
@@ -22,15 +89,7 @@ async function request(url: string, options: RequestOptions = {}) {
     }
   }
 
-  const token = getAuthToken(localStorage);
-  if (!token) {
-    const hadToken = !!localStorage.getItem('auth_token');
-    clearAuthSession(localStorage);
-    if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
-      window.location.reload();
-    }
-    throw new Error('Session expired');
-  }
+  const token = requireAuthToken();
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${token}`,
   };
@@ -48,31 +107,12 @@ async function request(url: string, options: RequestOptions = {}) {
     if (res.status === 401 || res.status === 403) {
       const hadToken = !!getAuthToken(localStorage);
       clearAuthSession(localStorage);
-      if (hadToken) window.location.reload();
+      if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+        window.location.reload();
+      }
       throw new Error('Session expired');
     }
-    if (!res.ok) {
-      let message = `HTTP ${res.status}`;
-      try {
-        const text = await res.text();
-        if (text) {
-          try {
-            const json = JSON.parse(text);
-            if (json?.message && typeof json.message === 'string') {
-              message = json.message;
-            } else if (json?.error && typeof json.error === 'string') {
-              message = json.error;
-            } else {
-              message = `${message}: ${text.slice(0, 120)}`;
-            }
-          } catch {
-            message = `${message}: ${text.slice(0, 120)}`;
-          }
-        }
-      } catch { }
-      throw new Error(message);
-    }
-    return res.json();
+    return res;
   } catch (error: any) {
     if (error?.name === 'AbortError') {
       if (externalSignal?.aborted) throw error;
@@ -86,6 +126,14 @@ async function request(url: string, options: RequestOptions = {}) {
     }
     cleanupExternalSignal();
   }
+}
+
+async function request(url: string, options: RequestOptions = {}) {
+  const res = await fetchAuthenticatedResponse(url, options);
+  if (!res.ok) {
+    throw new Error(await extractResponseErrorMessage(res));
+  }
+  return res.json();
 }
 
 function buildQueryString(params?: Record<string, string | number | boolean | null | undefined>) {
@@ -156,7 +204,23 @@ export type ProxyTestJobResponse = {
   expiresAt?: string;
 };
 
+export type SystemProxyTestRequest = {
+  proxyUrl?: string;
+};
+
+export type SystemProxyTestResponse = {
+  success: true;
+  proxyUrl: string;
+  probeUrl: string;
+  finalUrl: string;
+  reachable: true;
+  ok: boolean;
+  statusCode: number;
+  latencyMs: number;
+};
+
 export type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
+export type ProxyLogClientConfidence = 'exact' | 'heuristic' | 'unknown' | null;
 
 export type ProxyLogBillingDetails = {
   quotaType: number;
@@ -208,6 +272,10 @@ export type ProxyLogListItem = {
   downstreamKeyName?: string | null;
   downstreamKeyGroupName?: string | null;
   downstreamKeyTags?: string[];
+  clientFamily?: string | null;
+  clientAppId?: string | null;
+  clientAppName?: string | null;
+  clientConfidence?: ProxyLogClientConfidence;
   promptTokens?: number | null;
   completionTokens?: number | null;
   estimatedCost?: number | null;
@@ -233,9 +301,15 @@ export type ProxyLogsQuery = {
   offset?: number;
   status?: ProxyLogStatusFilter;
   search?: string;
+  client?: string;
   siteId?: number;
   from?: string;
   to?: string;
+};
+
+export type ProxyLogClientOption = {
+  value: string;
+  label: string;
 };
 
 export type ProxyLogsResponse = {
@@ -243,6 +317,7 @@ export type ProxyLogsResponse = {
   total: number;
   page: number;
   pageSize: number;
+  clientOptions: ProxyLogClientOption[];
   summary: ProxyLogsSummary;
 };
 
@@ -478,6 +553,14 @@ export const api = {
   markEventRead: (id: number) => request(`/api/events/${id}/read`, { method: 'POST' }),
   markAllEventsRead: () => request('/api/events/read-all', { method: 'POST' }),
   clearEvents: () => request('/api/events', { method: 'DELETE' }),
+  getSiteAnnouncements: (params?: string) => request(`/api/site-announcements${params ? '?' + params : ''}`),
+  markSiteAnnouncementRead: (id: number) => request(`/api/site-announcements/${id}/read`, { method: 'POST' }),
+  markAllSiteAnnouncementsRead: () => request('/api/site-announcements/read-all', { method: 'POST' }),
+  clearSiteAnnouncements: () => request('/api/site-announcements', { method: 'DELETE' }),
+  syncSiteAnnouncements: (payload?: { siteId?: number }) => request('/api/site-announcements/sync', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  }),
   getTasks: (limit = 50) => request(`/api/tasks?limit=${Math.max(1, Math.min(200, Math.trunc(limit)))}`),
   getTask: (id: string) => request(`/api/tasks/${encodeURIComponent(id)}`),
 
@@ -490,6 +573,11 @@ export const api = {
   updateRuntimeSettings: (data: any) => request('/api/settings/runtime', {
     method: 'PUT',
     body: JSON.stringify(data),
+  }),
+  testSystemProxy: (data: SystemProxyTestRequest) => request('/api/settings/system-proxy/test', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    timeoutMs: 20_000,
   }),
   getRuntimeDatabaseConfig: () => request('/api/settings/database/runtime'),
   updateRuntimeDatabaseConfig: (data: { dialect: 'sqlite' | 'mysql' | 'postgres'; connectionString: string; ssl?: boolean }) =>
@@ -547,6 +635,33 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ data }),
     }),
+  getBackupWebdavConfig: () => request('/api/settings/backup/webdav'),
+  saveBackupWebdavConfig: (data: {
+    enabled: boolean;
+    fileUrl: string;
+    username: string;
+    password?: string;
+    clearPassword?: boolean;
+    exportType: 'all' | 'accounts' | 'preferences';
+    autoSyncEnabled: boolean;
+    autoSyncCron: string;
+  }) =>
+    request('/api/settings/backup/webdav', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  exportBackupToWebdav: (type?: 'all' | 'accounts' | 'preferences') =>
+    request('/api/settings/backup/webdav/export', {
+      method: 'POST',
+      body: JSON.stringify(type ? { type } : {}),
+      timeoutMs: 60_000,
+    }),
+  importBackupFromWebdav: () =>
+    request('/api/settings/backup/webdav/import', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      timeoutMs: 60_000,
+    }),
   clearRuntimeCache: () => request('/api/settings/maintenance/clear-cache', { method: 'POST' }),
   clearUsageData: () => request('/api/settings/maintenance/clear-usage', { method: 'POST' }),
   factoryReset: () => request('/api/settings/maintenance/factory-reset', { method: 'POST' }),
@@ -583,6 +698,29 @@ export const api = {
     }),
   getProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`),
   deleteProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }),
+  getProxyFileContentDataUrl: async (
+    fileId: string,
+    options: Pick<RequestOptions, 'signal' | 'timeoutMs'> = {},
+  ) => {
+    const response = await fetchAuthenticatedResponse(`/v1/files/${encodeURIComponent(fileId)}/content`, {
+      method: 'GET',
+      ...options,
+    });
+    if (!response.ok) {
+      throw new Error(await extractResponseErrorMessage(response));
+    }
+
+    const mimeType = (response.headers.get('content-type') || 'application/octet-stream')
+      .split(';')[0]
+      .trim() || 'application/octet-stream';
+    const filename = parseContentDispositionFilename(response.headers.get('content-disposition'));
+    const base64 = arrayBufferToBase64(await response.arrayBuffer());
+    return {
+      filename,
+      mimeType,
+      data: `data:${mimeType};base64,${base64}`,
+    };
+  },
   testProxy: (data: ProxyTestRequestEnvelope) =>
     request('/api/test/proxy', {
       method: 'POST',

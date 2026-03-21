@@ -16,6 +16,14 @@ describe('parseProxyLogPathMeta', () => {
     expect(parsed.errorMessage).toBe('messages is required');
   });
 
+  it('strips legacy client and session prefixes while keeping them available for display', () => {
+    const parsed = parseProxyLogPathMeta('[client:codex] [session:turn-123] [downstream:/v1/responses] boom');
+    expect(parsed.clientFamily).toBe('codex');
+    expect(parsed.sessionId).toBe('turn-123');
+    expect(parsed.downstreamPath).toBe('/v1/responses');
+    expect(parsed.errorMessage).toBe('boom');
+  });
+
   it('keeps plain message when no metadata exists', () => {
     const parsed = parseProxyLogPathMeta('network timeout');
     expect(parsed.downstreamPath).toBe(null);

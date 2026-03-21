@@ -23,6 +23,16 @@ import {
   type SiteForm,
 } from './helpers/sitesEditor.js';
 
+type SiteSubscriptionSummary = {
+  activeCount: number;
+  totalUsedUsd: number;
+  totalMonthlyLimitUsd?: number | null;
+  totalRemainingUsd?: number | null;
+  nextExpiresAt?: string | null;
+  planNames?: string[];
+  updatedAt?: number | null;
+};
+
 type SiteRow = {
   id: number;
   name: string;
@@ -30,17 +40,118 @@ type SiteRow = {
   externalCheckinUrl?: string | null;
   platform?: string;
   status?: string;
+  proxyUrl?: string | null;
   useSystemProxy?: boolean;
   customHeaders?: string | null;
   globalWeight?: number;
   isPinned?: boolean;
   sortOrder?: number;
   totalBalance?: number;
+  subscriptionSummary?: SiteSubscriptionSummary | null;
   createdAt?: string;
 };
 
 function hasConfiguredCustomHeaders(customHeaders?: string | null): boolean {
   return typeof customHeaders === 'string' && customHeaders.trim().length > 0;
+}
+
+function formatUsd(value?: number | null): string {
+  return `$${(value || 0).toFixed(2)}`;
+}
+
+function formatSubscriptionDate(value?: string | null): string {
+  if (!value) return '';
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function formatRemainingDuration(value?: string | null): string | null {
+  if (!value) return null;
+  const targetMs = Date.parse(value);
+  if (!Number.isFinite(targetMs)) return null;
+  const deltaMs = targetMs - Date.now();
+  if (deltaMs <= 0) return '已到期';
+
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+  if (deltaMs >= dayMs) return `剩余${Math.ceil(deltaMs / dayMs)}天`;
+  if (deltaMs >= hourMs) return `剩余${Math.ceil(deltaMs / hourMs)}小时`;
+  if (deltaMs >= minuteMs) return `剩余${Math.ceil(deltaMs / minuteMs)}分钟`;
+  return `剩余${Math.max(1, Math.ceil(deltaMs / 1000))}秒`;
+}
+
+function buildSubscriptionInlineValue(summary?: SiteSubscriptionSummary | null): string | null {
+  if (!summary) return null;
+  const remainingValue = typeof summary.totalRemainingUsd === 'number' && Number.isFinite(summary.totalRemainingUsd)
+    ? formatUsd(summary.totalRemainingUsd)
+    : '--';
+  const usedValue = formatUsd(summary.totalUsedUsd);
+  const remainingDuration = formatRemainingDuration(summary.nextExpiresAt);
+  const remainingSuffix = remainingDuration ? `（${remainingDuration}）` : '';
+  if (usedValue === '$0.00' && remainingValue === '--' && !remainingSuffix) return null;
+  return `${remainingValue}${remainingSuffix}`;
+}
+
+function buildSubscriptionTooltip(summary?: SiteSubscriptionSummary | null): string | null {
+  if (!summary) return null;
+  const parts: string[] = [];
+  if (summary.activeCount > 0) parts.push(`生效订阅 ${summary.activeCount} 个`);
+
+  const planNames = Array.isArray(summary.planNames)
+    ? summary.planNames.filter((item) => typeof item === 'string' && item.trim())
+    : [];
+  if (planNames.length > 0) parts.push(`套餐 ${planNames.join(' / ')}`);
+
+  if (typeof summary.totalRemainingUsd === 'number' && Number.isFinite(summary.totalRemainingUsd)) {
+    parts.push(`订阅余额 ${formatUsd(summary.totalRemainingUsd)}`);
+  }
+  parts.push(`已用 ${formatUsd(summary.totalUsedUsd)}`);
+
+  if (typeof summary.totalMonthlyLimitUsd === 'number' && Number.isFinite(summary.totalMonthlyLimitUsd)) {
+    parts.push(`总额度 ${formatUsd(summary.totalMonthlyLimitUsd)}`);
+  }
+
+  const remainingDuration = formatRemainingDuration(summary.nextExpiresAt);
+  if (remainingDuration) parts.push(remainingDuration);
+
+  if (summary.nextExpiresAt) parts.push(`到期 ${formatSubscriptionDate(summary.nextExpiresAt)}`);
+
+  return parts.join(' | ');
+}
+
+function SiteBalanceDisplay(props: {
+  balance?: number | null;
+  summary?: SiteSubscriptionSummary | null;
+  align?: 'start' | 'end';
+}) {
+  const { balance, summary, align = 'start' } = props;
+  const walletBalanceText = formatUsd(balance);
+  const subscriptionValue = buildSubscriptionInlineValue(summary);
+  const tooltip = buildSubscriptionTooltip(summary);
+
+  return (
+    <div
+      className={`site-balance-inline ${align === 'end' ? 'align-end' : ''}`.trim()}
+    >
+      <span className="site-balance-primary">{walletBalanceText}</span>
+      {subscriptionValue ? (
+        <>
+          <span className="site-balance-divider">/</span>
+          <span
+            className="site-balance-subscription"
+            data-tooltip={tooltip || undefined}
+            data-tooltip-align={align === 'end' ? 'end' : 'start'}
+            data-tooltip-side="top"
+            tabIndex={tooltip ? 0 : undefined}
+          >
+            {subscriptionValue}
+          </span>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 const platformColors: Record<string, string> = {
@@ -272,6 +383,7 @@ export default function Sites() {
       url: form.url.trim(),
       externalCheckinUrl: form.externalCheckinUrl.trim(),
       platform: form.platform.trim(),
+      proxyUrl: form.proxyUrl.trim(),
       useSystemProxy: !!form.useSystemProxy,
       customHeaders: serializedCustomHeaders.customHeaders,
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
@@ -808,6 +920,15 @@ export default function Sites() {
               </div>
             )}
           </div>
+          <input
+            placeholder="站点代理（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）"
+            value={form.proxyUrl}
+            onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+            style={formInputStyle}
+          />
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            填写后优先使用站点代理；留空则使用系统代理或直连(取决于设置开关状态)。
+          </div>
           <label style={{
             display: 'flex',
             alignItems: 'center',
@@ -873,7 +994,16 @@ export default function Sites() {
                         </span>
                       )}
                     />
-                    <MobileField label="余额" value={`$${(site.totalBalance || 0).toFixed(2)}`} />
+                    <MobileField
+                      label="余额"
+                      value={(
+                        <SiteBalanceDisplay
+                          balance={site.totalBalance}
+                          summary={site.subscriptionSummary}
+                          align="end"
+                        />
+                      )}
+                    />
                     <MobileField label="权重" value={(site.globalWeight || 1).toFixed(2)} />
                     {isExpanded ? (
                       <div className="mobile-card-extra">
@@ -1017,17 +1147,24 @@ export default function Sites() {
                       />
                     </td>
                     <td style={{ fontWeight: 600 }}>
-                      <a
-                        href={site.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: 'var(--color-text-primary)',
-                          textDecoration: 'underline',
-                        }}
-                      >
-                        {site.name}
-                      </a>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                        <a
+                          href={site.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: 'var(--color-text-primary)',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          {site.name}
+                        </a>
+                        {hasConfiguredCustomHeaders(site.customHeaders) ? (
+                          <span className="badge badge-info" style={{ fontSize: 11 }}>
+                            自定义头
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="sites-url-cell" style={{ maxWidth: 300 }}>
                       {site.externalCheckinUrl ? (
@@ -1048,8 +1185,11 @@ export default function Sites() {
                         </a>
                       ) : null}
                     </td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                      ${(site.totalBalance || 0).toFixed(2)}
+                    <td className="site-balance-cell">
+                      <SiteBalanceDisplay
+                        balance={site.totalBalance}
+                        summary={site.subscriptionSummary}
+                      />
                     </td>
                     <td>
                       <span className={`badge ${site.status === 'disabled' ? 'badge-muted' : 'badge-success'}`} style={{ fontSize: 11 }}>

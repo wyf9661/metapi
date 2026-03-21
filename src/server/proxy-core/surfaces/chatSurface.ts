@@ -1,7 +1,6 @@
 import { TextDecoder } from 'node:util';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { db, hasProxyLogDownstreamApiKeyIdColumn, schema } from '../../db/index.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
 import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
@@ -13,6 +12,8 @@ import { type DownstreamFormat } from '../../transformers/shared/normalized.js';
 import {
   buildClaudeCountTokensUpstreamRequest,
   buildUpstreamEndpointRequest,
+  recordUpstreamEndpointFailure,
+  recordUpstreamEndpointSuccess,
   resolveUpstreamEndpointCandidates,
 } from '../../routes/proxy/upstreamEndpoint.js';
 import {
@@ -23,6 +24,7 @@ import {
 import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
+import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
@@ -30,7 +32,6 @@ import { anthropicMessagesTransformer } from '../../transformers/anthropic/messa
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
 import {
   ProxyInputFileResolutionError,
-  hasNonImageFileInputInOpenAiBody,
   resolveOpenAiBodyInputFiles,
 } from '../../services/proxyInputFileResolver.js';
 import {
@@ -39,14 +40,20 @@ import {
 import { getOauthInfoFromExtraConfig } from '../../services/oauth/oauthAccount.js';
 import { recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
-import { collectResponsesFinalPayloadFromSse } from '../../routes/proxy/responsesSseFinal.js';
+import {
+  collectResponsesFinalPayloadFromSse,
+  collectResponsesFinalPayloadFromSseText,
+  createSingleChunkStreamReader,
+  looksLikeResponsesSseText,
+} from '../../routes/proxy/responsesSseFinal.js';
 import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
 } from '../../routes/proxy/geminiCliCompat.js';
 import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
-import { detectCliProfile } from '../cliProfiles/registry.js';
-import type { CliProfileId } from '../cliProfiles/types.js';
+import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
+import { detectDownstreamClientContext, type DownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
+import { insertProxyLog } from '../../services/proxyLogStore.js';
 
 const MAX_RETRIES = 2;
 
@@ -56,25 +63,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-type DownstreamClientContext = {
-  clientKind: CliProfileId;
-  sessionId?: string;
-  traceHint?: string;
-};
-
-function detectDownstreamClientContext(input: {
-  downstreamPath: string;
-  headers?: Record<string, unknown>;
-  body?: unknown;
-}): DownstreamClientContext {
-  const detected = detectCliProfile(input);
-  return {
-    clientKind: detected.id,
-    ...(detected.sessionId ? { sessionId: detected.sessionId } : {}),
-    ...(detected.traceHint ? { traceHint: detected.traceHint } : {}),
-  };
 }
 
 export async function handleChatSurfaceRequest(
@@ -117,7 +105,8 @@ export async function handleChatSurfaceRequest(
       throw error;
     }
   }
-  const hasNonImageFileInput = hasNonImageFileInputInOpenAiBody(resolvedOpenAiBody);
+  const conversationFileSummary = summarizeConversationFileInputsInOpenAiBody(resolvedOpenAiBody);
+  const hasNonImageFileInput = conversationFileSummary.hasDocument;
   const codexSessionCacheKey = deriveCodexSessionCacheKey({
     downstreamFormat,
     body: downstreamFormat === 'claude' ? claudeOriginalBody : request.body,
@@ -125,8 +114,6 @@ export async function handleChatSurfaceRequest(
     proxyToken: getProxyAuthContext(request)?.token || null,
   });
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
-  const logDownstreamApiKeyId = downstreamApiKeyId !== null
-    && await hasProxyLogDownstreamApiKeyIdColumn();
 
   const excludeChannelIds: number[] = [];
   let retryCount = 0;
@@ -167,9 +154,20 @@ export async function handleChatSurfaceRequest(
         requestedModel,
         {
           hasNonImageFileInput,
+          conversationFileSummary,
         },
       ),
     ];
+    const endpointRuntimeContext = {
+      siteId: selected.site.id,
+      modelName,
+      downstreamFormat,
+      requestedModelHint: requestedModel,
+      requestCapabilities: {
+        hasNonImageFileInput,
+        conversationFileSummary,
+      },
+    };
     const buildProviderHeaders = () => (
       buildOauthProviderHeaders({
         extraConfig: typeof selected.account.extraConfig === 'string' ? selected.account.extraConfig : null,
@@ -245,7 +243,7 @@ export async function handleChatSurfaceRequest(
             extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
           };
           const refreshedRequest = buildEndpointRequest(ctx.request.endpoint);
-          const refreshedTargetUrl = `${selected.site.url}${refreshedRequest.path}`;
+          const refreshedTargetUrl = buildUpstreamUrl(selected.site.url, refreshedRequest.path);
           const refreshedResponse = await dispatchRequest(refreshedRequest, refreshedTargetUrl);
           if (refreshedResponse.ok) {
             return {
@@ -272,6 +270,20 @@ export async function handleChatSurfaceRequest(
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),
           dispatchRequest,
           tryRecover,
+          onAttemptFailure: (ctx) => {
+            recordUpstreamEndpointFailure({
+              ...endpointRuntimeContext,
+              endpoint: ctx.request.endpoint,
+              status: ctx.response.status,
+              errorText: ctx.rawErrText,
+            });
+          },
+          onAttemptSuccess: (ctx) => {
+            recordUpstreamEndpointSuccess({
+              ...endpointRuntimeContext,
+              endpoint: ctx.request.endpoint,
+            });
+          },
           shouldDowngrade: endpointStrategy.shouldDowngrade,
           onDowngrade: (ctx) => {
           logProxy(
@@ -290,7 +302,7 @@ export async function handleChatSurfaceRequest(
           null,
           null,
           clientContext,
-          logDownstreamApiKeyId ? downstreamApiKeyId : null,
+          downstreamApiKeyId,
         );
       },
       });
@@ -299,7 +311,11 @@ export async function handleChatSurfaceRequest(
         const status = endpointResult.status || 502;
         const errText = endpointResult.errText || 'unknown error';
         const rawErrText = endpointResult.rawErrText || errText;
-        tokenRouter.recordFailure(selected.channel.id);
+        tokenRouter.recordFailure(selected.channel.id, {
+          status,
+          errorText: rawErrText,
+          modelName,
+        });
         logProxy(
           selected,
           requestedModel,
@@ -316,7 +332,7 @@ export async function handleChatSurfaceRequest(
           null,
           null,
           clientContext,
-          logDownstreamApiKeyId ? downstreamApiKeyId : null,
+          downstreamApiKeyId,
         );
         await recordOauthQuotaResetHint({
           accountId: selected.account.id,
@@ -394,6 +410,37 @@ export async function handleChatSurfaceRequest(
         if (!upstreamContentType.includes('text/event-stream')) {
           const fallbackText = await upstream.text();
           rawText = fallbackText;
+          if (looksLikeResponsesSseText(fallbackText)) {
+            startSseResponse();
+            const streamResult = await streamSession.run(
+              createSingleChunkStreamReader(fallbackText),
+              reply.raw,
+            );
+            const latency = Date.now() - startTime;
+            if (streamResult.status === 'failed') {
+              tokenRouter.recordFailure(selected.channel.id, modelName);
+              logProxy(
+                selected,
+                requestedModel,
+                'failed',
+                200,
+                latency,
+                streamResult.errorMessage,
+                retryCount,
+                downstreamPath,
+                parsedUsage.promptTokens,
+                parsedUsage.completionTokens,
+                parsedUsage.totalTokens,
+                0,
+                null,
+                successfulUpstreamPath,
+                clientContext,
+                downstreamApiKeyId,
+              );
+              return;
+            }
+            return;
+          }
           let fallbackData: unknown = null;
           try {
             fallbackData = JSON.parse(fallbackText);
@@ -407,7 +454,11 @@ export async function handleChatSurfaceRequest(
           const latency = Date.now() - startTime;
           const failure = detectProxyFailure({ rawText, usage: parsedUsage });
           if (failure) {
-            tokenRouter.recordFailure(selected.channel.id);
+            tokenRouter.recordFailure(selected.channel.id, {
+              status: failure.status,
+              errorText: failure.reason,
+              modelName,
+            });
             logProxy(
               selected,
               requestedModel,
@@ -424,7 +475,7 @@ export async function handleChatSurfaceRequest(
               null,
               successfulUpstreamPath,
               clientContext,
-              logDownstreamApiKeyId ? downstreamApiKeyId : null,
+              downstreamApiKeyId,
             );
 
             if (shouldRetryProxyRequest(failure.status, failure.reason) && retryCount < MAX_RETRIES) {
@@ -445,7 +496,11 @@ export async function handleChatSurfaceRequest(
           startSseResponse();
           const streamResult = streamSession.consumeUpstreamFinalPayload(fallbackData, fallbackText, reply.raw);
           if (streamResult.status === 'failed') {
-            tokenRouter.recordFailure(selected.channel.id);
+            tokenRouter.recordFailure(selected.channel.id, {
+              status: 502,
+              errorText: streamResult.errorMessage,
+              modelName,
+            });
             logProxy(
               selected,
               requestedModel,
@@ -462,7 +517,7 @@ export async function handleChatSurfaceRequest(
               null,
               successfulUpstreamPath,
               clientContext,
-              logDownstreamApiKeyId ? downstreamApiKeyId : null,
+              downstreamApiKeyId,
             );
             return;
           }
@@ -495,7 +550,11 @@ export async function handleChatSurfaceRequest(
 
           const latency = Date.now() - startTime;
           if (streamResult.status === 'failed') {
-            tokenRouter.recordFailure(selected.channel.id);
+            tokenRouter.recordFailure(selected.channel.id, {
+              status: 502,
+              errorText: streamResult.errorMessage,
+              modelName,
+            });
             logProxy(
               selected,
               requestedModel,
@@ -512,7 +571,7 @@ export async function handleChatSurfaceRequest(
               null,
               successfulUpstreamPath,
               clientContext,
-              logDownstreamApiKeyId ? downstreamApiKeyId : null,
+              downstreamApiKeyId,
             );
             return;
           }
@@ -548,7 +607,7 @@ export async function handleChatSurfaceRequest(
           resolvedUsage,
         });
 
-        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
+        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
         recordDownstreamCostUsage(request, estimatedCost);
         logProxy(
           selected,
@@ -566,7 +625,7 @@ export async function handleChatSurfaceRequest(
           billingDetails,
           successfulUpstreamPath,
           clientContext,
-          logDownstreamApiKeyId ? downstreamApiKeyId : null,
+          downstreamApiKeyId,
         );
         return;
       }
@@ -580,11 +639,15 @@ export async function handleChatSurfaceRequest(
         upstreamData = collected.payload;
       } else {
         rawText = await upstream.text();
-        upstreamData = rawText;
-        try {
-          upstreamData = JSON.parse(rawText);
-        } catch {
+        if (looksLikeResponsesSseText(rawText)) {
+          upstreamData = collectResponsesFinalPayloadFromSseText(rawText, modelName).payload;
+        } else {
           upstreamData = rawText;
+          try {
+            upstreamData = JSON.parse(rawText);
+          } catch {
+            upstreamData = rawText;
+          }
         }
       }
       if (String(selected.site.platform || '').trim().toLowerCase() === 'gemini-cli') {
@@ -595,7 +658,11 @@ export async function handleChatSurfaceRequest(
       const parsedUsage = parseProxyUsage(upstreamData);
       const failure = detectProxyFailure({ rawText, usage: parsedUsage });
       if (failure) {
-        tokenRouter.recordFailure(selected.channel.id);
+        tokenRouter.recordFailure(selected.channel.id, {
+          status: failure.status,
+          errorText: failure.reason,
+          modelName,
+        });
         logProxy(
           selected,
           requestedModel,
@@ -612,7 +679,7 @@ export async function handleChatSurfaceRequest(
           null,
           successfulUpstreamPath,
           clientContext,
-          logDownstreamApiKeyId ? downstreamApiKeyId : null,
+          downstreamApiKeyId,
         );
 
         if (shouldRetryProxyRequest(failure.status, failure.reason) && retryCount < MAX_RETRIES) {
@@ -656,7 +723,7 @@ export async function handleChatSurfaceRequest(
         resolvedUsage,
       });
 
-      tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost);
+      tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
       recordDownstreamCostUsage(request, estimatedCost);
       logProxy(
         selected,
@@ -674,12 +741,15 @@ export async function handleChatSurfaceRequest(
         billingDetails,
         successfulUpstreamPath,
         clientContext,
-        logDownstreamApiKeyId ? downstreamApiKeyId : null,
+        downstreamApiKeyId,
       );
 
       return reply.send(downstreamResponse);
     } catch (err: any) {
-      tokenRouter.recordFailure(selected.channel.id);
+      tokenRouter.recordFailure(selected.channel.id, {
+        errorText: err?.message,
+        modelName,
+      });
       logProxy(
         selected,
         requestedModel,
@@ -696,7 +766,7 @@ export async function handleChatSurfaceRequest(
         null,
         null,
         clientContext,
-        logDownstreamApiKeyId ? downstreamApiKeyId : null,
+        downstreamApiKeyId,
       );
 
       if (retryCount < MAX_RETRIES) {
@@ -775,8 +845,6 @@ export async function handleClaudeCountTokensSurfaceRequest(
   });
   const downstreamPolicy = getDownstreamRoutingPolicy(request);
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
-  const logDownstreamApiKeyId = downstreamApiKeyId !== null
-    && await hasProxyLogDownstreamApiKeyIdColumn();
   const excludeChannelIds: number[] = [];
   let retryCount = 0;
 
@@ -883,7 +951,11 @@ export async function handleClaudeCountTokensSurfaceRequest(
       }
 
       if (!upstream.ok) {
-        tokenRouter.recordFailure(selected.channel.id);
+        tokenRouter.recordFailure(selected.channel.id, {
+          status: upstream.status,
+          errorText: typeof payload === 'string' ? payload : text,
+          modelName,
+        });
         logProxy(
           selected,
           requestedModel,
@@ -900,7 +972,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
           null,
           upstreamRequest.path,
           clientContext,
-          logDownstreamApiKeyId ? downstreamApiKeyId : null,
+          downstreamApiKeyId,
         );
         if (shouldRetryProxyRequest(upstream.status, typeof payload === 'string' ? payload : text) && retryCount < MAX_RETRIES) {
           retryCount += 1;
@@ -909,7 +981,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         return reply.code(upstream.status).type(contentType).send(payload);
       }
 
-      tokenRouter.recordSuccess(selected.channel.id, latency, 0);
+      tokenRouter.recordSuccess(selected.channel.id, latency, 0, modelName);
       recordDownstreamCostUsage(request, 0);
       logProxy(
         selected,
@@ -927,11 +999,14 @@ export async function handleClaudeCountTokensSurfaceRequest(
         null,
         upstreamRequest.path,
         clientContext,
-        logDownstreamApiKeyId ? downstreamApiKeyId : null,
+        downstreamApiKeyId,
       );
       return reply.code(upstream.status).type(contentType).send(payload);
     } catch (error: any) {
-      tokenRouter.recordFailure(selected.channel.id);
+      tokenRouter.recordFailure(selected.channel.id, {
+        errorText: error?.message,
+        modelName,
+      });
       logProxy(
         selected,
         requestedModel,
@@ -948,7 +1023,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         null,
         null,
         clientContext,
-        logDownstreamApiKeyId ? downstreamApiKeyId : null,
+        downstreamApiKeyId,
       );
       if (retryCount < MAX_RETRIES) {
         retryCount += 1;
@@ -994,11 +1069,11 @@ async function logProxy(
       upstreamPath,
       errorMessage,
     });
-    await db.insert(schema.proxyLogs).values({
+    await insertProxyLog({
       routeId: selected.channel.routeId,
       channelId: selected.channel.id,
       accountId: selected.account.id,
-      ...(downstreamApiKeyId !== null ? { downstreamApiKeyId } : {}),
+      downstreamApiKeyId,
       modelRequested,
       modelActual: selected.actualModel,
       status,
@@ -1008,11 +1083,15 @@ async function logProxy(
       completionTokens,
       totalTokens,
       estimatedCost,
-      billingDetails: billingDetails ? JSON.stringify(billingDetails) : null,
+      billingDetails,
+      clientFamily: clientContext?.clientKind || null,
+      clientAppId: clientContext?.clientAppId || null,
+      clientAppName: clientContext?.clientAppName || null,
+      clientConfidence: clientContext?.clientConfidence || null,
       errorMessage: normalizedErrorMessage,
       retryCount,
       createdAt,
-    }).run();
+    });
   } catch (error) {
     console.warn('[proxy/chat] failed to write proxy log', error);
   }
