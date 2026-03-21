@@ -220,6 +220,62 @@ describe('ProxyLogs server-driven page', () => {
     }
   });
 
+  it('renders explicit client self-reports before protocol-family fallback labels', async () => {
+    apiMock.getProxyLogs.mockResolvedValue(buildListResponse({
+      items: [
+        {
+          id: 101,
+          createdAt: '2026-03-09 16:00:00',
+          modelRequested: 'gpt-4o',
+          modelActual: 'gpt-4o',
+          status: 'success',
+          latencyMs: 120,
+          promptTokens: 10,
+          completionTokens: 5,
+          totalTokens: 15,
+          retryCount: 0,
+          estimatedCost: 1.23,
+          errorMessage: 'downstream: /v1/responses upstream: /v1/responses',
+          username: 'tester',
+          siteName: 'main-site',
+          siteUrl: 'https://main-site.example.com',
+          clientFamily: 'codex',
+          clientAppId: 'openclaw',
+          clientAppName: 'openclaw',
+          clientConfidence: 'exact',
+          downstreamKeyName: '移动端灰度',
+          downstreamKeyGroupName: '项目A',
+          downstreamKeyTags: ['VIP', '灰度'],
+        },
+      ],
+    }));
+
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/logs']}>
+            <ToastProvider>
+              <ProxyLogs />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const row = root!.root.find((node) => (
+        node.type === 'tr' && node.props['data-testid'] === 'proxy-log-row-101'
+      ));
+      const rowText = collectText(row);
+      expect(rowText).toContain('openclaw');
+      expect(rowText).toContain('Codex');
+      expect(rowText).not.toContain('推测');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('re-queries the server for status, client, and search changes instead of filtering locally', async () => {
     let root: ReturnType<typeof create> | null = null;
 
