@@ -469,7 +469,7 @@ export function withSiteRecordProxyRequestInit(
   if (mergedHeaders) {
     nextOptions.headers = mergedHeaders;
   }
-  const accountNormalized = normalizeSiteProxyUrl(accountProxyUrl);
+  const accountNormalized = normalizeSiteProxyUrl(accountProxyUrl) ?? accountProxyOverride.getStore();
   const siteProxyUrl = resolveProxyUrlForSite(site);
   const proxyUrl = accountNormalized || siteProxyUrl;
   const isAccountOverride = !!accountNormalized && accountNormalized !== siteProxyUrl;

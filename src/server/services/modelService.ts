@@ -20,7 +20,7 @@ import {
 import { invalidateTokenRouterCache } from './tokenRouter.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { clearAllRouteDecisionSnapshots } from './routeDecisionSnapshotStore.js';
-import { withAccountProxyOverride, withSiteRecordProxyRequestInit } from './siteProxy.js';
+import { withAccountProxyOverride, withExplicitProxyRequestInit, withSiteRecordProxyRequestInit } from './siteProxy.js';
 import { getCodexOauthInfoFromExtraConfig, isCodexPlatform } from './oauth/codexAccount.js';
 import { buildOauthInfo, getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
 import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from './oauth/claudeProvider.js';
@@ -323,7 +323,7 @@ async function validateGeminiCliOauthConnection(input: {
   }
   const response = await fetch(
     `https://serviceusage.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/services/${encodeURIComponent(GEMINI_CLI_REQUIRED_SERVICE)}`,
-    {
+    withExplicitProxyRequestInit(getProxyUrlFromExtraConfig(input.account.extraConfig), {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -331,7 +331,7 @@ async function validateGeminiCliOauthConnection(input: {
         'User-Agent': GEMINI_CLI_USER_AGENT,
         'X-Goog-Api-Client': GEMINI_CLI_GOOGLE_API_CLIENT,
       },
-    },
+    }, true),
   );
   if (!response.ok) {
     const text = await response.text().catch(() => '');

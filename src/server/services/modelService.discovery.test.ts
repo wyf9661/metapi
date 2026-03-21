@@ -7,6 +7,18 @@ import { eq } from 'drizzle-orm';
 const getApiTokenMock = vi.fn();
 const getModelsMock = vi.fn();
 const undiciFetchMock = vi.fn();
+const proxyAgentCtorMock = vi.fn();
+
+class MockProxyAgent {
+  readonly proxyUrl: string;
+
+  constructor(proxyUrl: string) {
+    this.proxyUrl = proxyUrl;
+    proxyAgentCtorMock(proxyUrl);
+  }
+}
+
+class MockAgent {}
 
 vi.mock('./platforms/index.js', () => ({
   getAdapter: () => ({
@@ -17,6 +29,8 @@ vi.mock('./platforms/index.js', () => ({
 
 vi.mock('undici', () => ({
   fetch: (...args: unknown[]) => undiciFetchMock(...args),
+  ProxyAgent: MockProxyAgent,
+  Agent: MockAgent,
 }));
 
 type DbModule = typeof import('../db/index.js');
@@ -47,6 +61,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     getApiTokenMock.mockReset();
     getModelsMock.mockReset();
     undiciFetchMock.mockReset();
+    proxyAgentCtorMock.mockReset();
 
     await db.delete(schema.routeChannels).run();
     await db.delete(schema.tokenRoutes).run();
@@ -593,6 +608,115 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(parsed.oauth.lastModelSyncError).toContain('HTTP 403');
     expect(parsed.oauth.lastModelSyncAt).toMatch(/\d{4}-\d{2}-\d{2}T/);
     expect(parsed.runtimeHealth?.state).toBe('unhealthy');
+  });
+
+  it('applies account proxy override to codex oauth cloud discovery requests', async () => {
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockRejectedValue(new Error('codex oauth discovery should not call adapter.getModels'));
+    undiciFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [
+          { id: 'gpt-5.4' },
+        ],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'codex-account-proxy-site',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'codex-proxy-user@example.com',
+      accessToken: 'oauth-access-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        proxyUrl: 'http://127.0.0.1:7890',
+        oauth: {
+          provider: 'codex',
+          accountId: 'chatgpt-account-proxy',
+          email: 'codex-proxy-user@example.com',
+          planType: 'plus',
+        },
+      }),
+    }).returning().get();
+
+    const result = await refreshModelsForAccount(account.id);
+
+    expect(result).toMatchObject({
+      accountId: account.id,
+      refreshed: true,
+      status: 'success',
+      modelCount: 1,
+      modelsPreview: ['gpt-5.4'],
+    });
+    expect(undiciFetchMock).toHaveBeenCalledTimes(1);
+    expect(proxyAgentCtorMock).toHaveBeenCalledWith('http://127.0.0.1:7890');
+    expect(undiciFetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: 'GET',
+      dispatcher: expect.any(MockProxyAgent),
+    });
+  });
+
+  it('applies account proxy override to gemini oauth validation requests', async () => {
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockRejectedValue(new Error('gemini oauth validation should not call adapter.getModels'));
+    undiciFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        state: 'ENABLED',
+      }),
+      text: async () => JSON.stringify({ state: 'ENABLED' }),
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'gemini-account-proxy-site',
+      url: 'https://gemini.example.com',
+      platform: 'gemini',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'gemini-proxy-user@example.com',
+      accessToken: 'gemini-access-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        proxyUrl: 'http://127.0.0.1:1080',
+        oauth: {
+          provider: 'gemini-cli',
+          projectId: 'project-proxy-demo',
+          email: 'gemini-proxy-user@example.com',
+        },
+      }),
+    }).returning().get();
+
+    const result = await refreshModelsForAccount(account.id);
+
+    expect(result).toMatchObject({
+      accountId: account.id,
+      refreshed: true,
+      status: 'success',
+      modelCount: expect.any(Number),
+    });
+    expect(undiciFetchMock).toHaveBeenCalledTimes(1);
+    expect(proxyAgentCtorMock).toHaveBeenCalledWith('http://127.0.0.1:1080');
+    expect(String(undiciFetchMock.mock.calls[0]?.[0] || '')).toContain('/projects/project-proxy-demo/services/');
+    expect(undiciFetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: 'GET',
+      dispatcher: expect.any(MockProxyAgent),
+    });
   });
 
   it('discovers antigravity oauth models via fetchAvailableModels fallback using the oauth project id', async () => {
