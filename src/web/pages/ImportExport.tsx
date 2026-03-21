@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
+import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
 import { tr } from '../i18n.js';
 
@@ -71,6 +72,40 @@ const DEFAULT_WEBDAV_SNAPSHOT: WebdavConfigSnapshot = {
   autoSyncEnabled: false,
   autoSyncCron: '0 */6 * * *',
   hasPassword: false,
+};
+
+const WEBDAV_EXPORT_TYPE_OPTIONS = [
+  { value: 'all', label: '全部' },
+  { value: 'accounts', label: '账号与路由' },
+  { value: 'preferences', label: '系统设置' },
+] as const;
+
+const formFieldLabelStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 500,
+  marginBottom: 8,
+  color: 'var(--color-text-secondary)',
+};
+
+const settingsInputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 13,
+  outline: 'none',
+  background: 'var(--color-bg)',
+  color: 'var(--color-text-primary)',
+  boxSizing: 'border-box',
+  transition: 'border-color 0.2s',
+};
+
+const webdavToggleStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  fontSize: 13,
+  cursor: 'pointer',
 };
 
 function downloadJsonFile(data: unknown, filename: string) {
@@ -672,27 +707,27 @@ export default function ImportExport() {
           支持手动推送、手动拉取，以及定时自动导出到 WebDAV。
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 10 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>文件 URL</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px 20px' }}>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={formFieldLabelStyle}>文件 URL</div>
             <input
               value={webdavConfig.fileUrl}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, fileUrl: e.target.value }))}
               placeholder="https://dav.example.com/backups/metapi.json"
-              style={{ width: '100%' }}
+              style={settingsInputStyle}
             />
-          </label>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>用户名</span>
+          </div>
+          <div>
+            <div style={formFieldLabelStyle}>用户名</div>
             <input
               value={webdavConfig.username}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, username: e.target.value }))}
               placeholder="可留空"
-              style={{ width: '100%' }}
+              style={settingsInputStyle}
             />
-          </label>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>密码</span>
+          </div>
+          <div>
+            <div style={formFieldLabelStyle}>密码</div>
             <input
               type="password"
               value={webdavConfig.password}
@@ -707,10 +742,10 @@ export default function ImportExport() {
                 ? '保存后将清空已存密码'
                 : (webdavConfig.hasPassword ? `已保存 ${webdavConfig.passwordMasked}，留空则保持不变` : '请输入密码')}
               disabled={clearWebdavPassword}
-              style={{ width: '100%' }}
+              style={settingsInputStyle}
             />
             {webdavConfig.hasPassword ? (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              <label style={{ ...webdavToggleStyle, marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
                 <input
                   type="checkbox"
                   checked={clearWebdavPassword}
@@ -721,49 +756,60 @@ export default function ImportExport() {
                       setWebdavConfig((prev) => ({ ...prev, password: '' }));
                     }
                   }}
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
                 />
                 清空已保存密码
               </label>
             ) : null}
-          </label>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>导出分区</span>
-            <select
+          </div>
+          <div>
+            <div style={formFieldLabelStyle}>导出分区</div>
+            <ModernSelect
               value={webdavConfig.exportType}
-              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, exportType: e.target.value as BackupType }))}
-            >
-              <option value="all">全部</option>
-              <option value="accounts">账号与路由</option>
-              <option value="preferences">系统设置</option>
-            </select>
-          </label>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>自动同步 Cron</span>
+              onChange={(value) => setWebdavConfig((prev) => ({ ...prev, exportType: value as BackupType }))}
+              options={[...WEBDAV_EXPORT_TYPE_OPTIONS]}
+            />
+          </div>
+          <div>
+            <div style={formFieldLabelStyle}>自动同步 Cron</div>
             <input
               value={webdavConfig.autoSyncCron}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, autoSyncCron: e.target.value }))}
               placeholder="0 */6 * * *"
-              style={{ width: '100%' }}
+              style={{ ...settingsInputStyle, fontFamily: 'var(--font-mono)' }}
             />
-          </label>
-          <div style={{ display: 'grid', gap: 8, alignContent: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              <input
-                type="checkbox"
-                checked={webdavConfig.enabled}
-                onChange={(e) => setWebdavConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
-              />
-              启用 WebDAV
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              <input
-                type="checkbox"
-                checked={webdavConfig.autoSyncEnabled}
-                onChange={(e) => setWebdavConfig((prev) => ({ ...prev, autoSyncEnabled: e.target.checked }))}
-              />
-              自动同步
-            </label>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16 }}>
+          <label
+            style={{
+              ...webdavToggleStyle,
+              color: webdavConfig.enabled ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={webdavConfig.enabled}
+              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+            />
+            启用 WebDAV
+          </label>
+          <label
+            style={{
+              ...webdavToggleStyle,
+              color: webdavConfig.autoSyncEnabled ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={webdavConfig.autoSyncEnabled}
+              onChange={(e) => setWebdavConfig((prev) => ({ ...prev, autoSyncEnabled: e.target.checked }))}
+              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+            />
+            自动同步
+          </label>
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
