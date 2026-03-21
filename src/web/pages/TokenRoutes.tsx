@@ -641,16 +641,6 @@ export default function TokenRoutes() {
     return listVisibleRoutes.find((route) => route.id === activeGroupFilter) || null;
   }, [activeGroupFilter, listVisibleRoutes]);
 
-  const enabledCounts = useMemo(() => {
-    let enabled = 0;
-    let disabled = 0;
-    for (const route of listVisibleRoutes) {
-      if (route.enabled) enabled++;
-      else disabled++;
-    }
-    return { enabled, disabled };
-  }, [listVisibleRoutes]);
-
   const sortedRoutes = useMemo(() => (
     [...listVisibleRoutes].sort((a, b) => {
       if (sortBy === 'channelCount') {
@@ -662,6 +652,47 @@ export default function TokenRoutes() {
       return sortDir === 'asc' ? nameCmp : -nameCmp;
     })
   ), [listVisibleRoutes, sortBy, sortDir]);
+
+  const enabledCounts = useMemo(() => {
+    // Count enabled/disabled within the currently filtered scope (excluding the enabled filter itself)
+    let base = sortedRoutes;
+
+    if (activeGroupFilter === '__all__') {
+      base = base.filter((route) => !isRouteExactModel(route));
+    } else if (typeof activeGroupFilter === 'number') {
+      base = base.filter((route) => route.id === activeGroupFilter);
+    }
+    if (activeBrand) {
+      if (activeBrand === '__other__') {
+        base = base.filter((route) => !(routeBrandById.get(route.id) || null));
+      } else {
+        base = base.filter((route) => (routeBrandById.get(route.id)?.name || '') === activeBrand);
+      }
+    }
+    if (activeSite) {
+      base = base.filter((route) => route.siteNames?.includes(activeSite));
+    }
+    if (activeEndpointType) {
+      base = base.filter((route) => (routeEndpointTypesByRouteId[route.id] || new Set<string>()).has(activeEndpointType));
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      base = base.filter((route) => {
+        const modelPattern = route.modelPattern.toLowerCase();
+        const displayName = (route.displayName || '').toLowerCase();
+        const title = resolveRouteTitle(route).toLowerCase();
+        return modelPattern.includes(q) || displayName.includes(q) || title.includes(q);
+      });
+    }
+
+    let enabled = 0;
+    let disabled = 0;
+    for (const route of base) {
+      if (route.enabled) enabled++;
+      else disabled++;
+    }
+    return { enabled, disabled };
+  }, [sortedRoutes, activeGroupFilter, activeBrand, activeSite, activeEndpointType, search, routeBrandById, routeEndpointTypesByRouteId]);
 
   const filteredRoutes = useMemo(() => {
     let list = sortedRoutes;
@@ -918,15 +949,33 @@ export default function TokenRoutes() {
       return;
     }
     const route = routeSummaries.find((r) => r.id === routeId);
-    const modelName = channel.sourceModel || route?.modelPattern || '';
+    const modelName = channel.sourceModel || (route && isExactModelPattern(route.modelPattern) ? route.modelPattern : '') || '';
     if (!modelName) {
-      toast.error('找不到要屏蔽的模型名');
+      toast.error('该通道没有精确模型名，无法使用站点屏蔽（通配符路由请在站点编辑中手动禁用）');
       return;
     }
     const siteName = channel.site.name || '未知站点';
-    const confirmed = window.confirm(
-      `确定将模型「${modelName}」加入站点「${siteName}」的禁用列表吗？\n\n执行后将自动触发路由重建，该站点下此模型的通道将不再生成。`,
-    );
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+      const dialog = document.createElement('div');
+      dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
+      dialog.innerHTML = `
+        <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认站点屏蔽</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
+          将模型「<b>${modelName}</b>」加入站点「<b>${siteName}</b>」的禁用列表。<br/>执行后将自动触发路由重建，该站点下此模型的通道将不再生成。
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <button id="__sb_cancel" class="btn btn-ghost" style="padding:6px 16px">取消</button>
+          <button id="__sb_confirm" class="btn btn-warning" style="padding:6px 16px">确认屏蔽</button>
+        </div>
+      `;
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+      dialog.querySelector('#__sb_cancel')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(false); });
+      dialog.querySelector('#__sb_confirm')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(true); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } });
+    });
     if (!confirmed) return;
 
     try {

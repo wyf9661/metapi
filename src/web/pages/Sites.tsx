@@ -226,6 +226,31 @@ export default function Sites() {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [disabledModelSearch, setDisabledModelSearch] = useState('');
 
+  const disabledModelSet = useMemo(() => new Set(disabledModels), [disabledModels]);
+
+  const brandGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const model of availableModels) {
+      const brand = getBrand(model);
+      const brandName = brand?.name || '其他';
+      if (!groups.has(brandName)) groups.set(brandName, []);
+      groups.get(brandName)!.push(model);
+    }
+    return [...groups.entries()].sort((a, b) => {
+      if (a[0] === '其他') return 1;
+      if (b[0] === '其他') return -1;
+      return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
+    });
+  }, [availableModels]);
+
+  const filteredBrandGroups = useMemo(() => {
+    const q = disabledModelSearch.trim().toLowerCase();
+    if (!q) return brandGroups;
+    return brandGroups
+      .map(([brandName, models]) => [brandName, models.filter((m) => m.toLowerCase().includes(q))] as [string, string[]])
+      .filter(([, models]) => models.length > 0);
+  }, [brandGroups, disabledModelSearch]);
+
   if (editor) lastEditorRef.current = editor;
   const activeEditor = editor || lastEditorRef.current;
   const isEditing = activeEditor?.mode === 'edit';
@@ -350,7 +375,7 @@ export default function Sites() {
   const handleAddDisabledModel = () => {
     const model = disabledModelInput.trim();
     if (!model) return;
-    if (disabledModels.includes(model)) {
+    if (disabledModelSet.has(model)) {
       toast.info(`模型 "${model}" 已在禁用列表中`);
       setDisabledModelInput('');
       return;
@@ -946,84 +971,54 @@ export default function Sites() {
                           }}
                         />
                         {/* Brand group quick actions */}
-                        {(() => {
-                          const brandGroups = new Map<string, string[]>();
-                          for (const model of availableModels) {
-                            const brand = getBrand(model);
-                            const brandName = brand?.name || '其他';
-                            if (!brandGroups.has(brandName)) brandGroups.set(brandName, []);
-                            brandGroups.get(brandName)!.push(model);
-                          }
-                          const sortedBrands = [...brandGroups.entries()].sort((a, b) => {
-                            if (a[0] === '其他') return 1;
-                            if (b[0] === '其他') return -1;
-                            return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
-                          });
-                          return (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: '24px' }}>按品牌全选：</span>
-                              {sortedBrands.map(([brandName, models]) => {
-                                const allDisabled = models.every((m) => disabledModels.includes(m));
-                                return (
-                                  <button
-                                    key={brandName}
-                                    type="button"
-                                    onClick={() => {
-                                      if (allDisabled) {
-                                        setDisabledModels((prev) => prev.filter((m) => !models.includes(m)));
-                                      } else {
-                                        setDisabledModels((prev) => Array.from(new Set([...prev, ...models])));
-                                      }
-                                    }}
-                                    className={`badge ${allDisabled ? 'badge-warning' : 'badge-muted'}`}
-                                    style={{ fontSize: 10, cursor: 'pointer', border: 'none', padding: '3px 8px' }}
-                                    data-tooltip={allDisabled ? `取消禁用全部 ${brandName} 模型 (${models.length})` : `禁用全部 ${brandName} 模型 (${models.length})`}
-                                  >
-                                    {brandName} ({models.length})
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: '24px' }}>按品牌全选：</span>
+                          {brandGroups.map(([brandName, models]) => {
+                            const allDisabled = models.every((m) => disabledModelSet.has(m));
+                            return (
+                              <button
+                                key={brandName}
+                                type="button"
+                                onClick={() => {
+                                  if (allDisabled) {
+                                    const removeSet = new Set(models);
+                                    setDisabledModels((prev) => prev.filter((m) => !removeSet.has(m)));
+                                  } else {
+                                    setDisabledModels((prev) => Array.from(new Set([...prev, ...models])));
+                                  }
+                                }}
+                                className={`badge ${allDisabled ? 'badge-warning' : 'badge-muted'}`}
+                                style={{ fontSize: 10, cursor: 'pointer', border: 'none', padding: '3px 8px' }}
+                                data-tooltip={allDisabled ? `取消禁用全部 ${brandName} 模型 (${models.length})` : `禁用全部 ${brandName} 模型 (${models.length})`}
+                              >
+                                {brandName} ({models.length})
+                              </button>
+                            );
+                          })}
+                        </div>
                         {/* Checkbox list */}
                         <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px 0' }}>
-                          {(() => {
-                            const q = disabledModelSearch.trim().toLowerCase();
-                            const filtered = q ? availableModels.filter((m) => m.toLowerCase().includes(q)) : availableModels;
-                            if (filtered.length === 0) {
-                              return <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>无匹配模型</div>;
-                            }
-                            // Group by brand
-                            const brandGroups = new Map<string, string[]>();
-                            for (const model of filtered) {
-                              const brand = getBrand(model);
-                              const brandName = brand?.name || '其他';
-                              if (!brandGroups.has(brandName)) brandGroups.set(brandName, []);
-                              brandGroups.get(brandName)!.push(model);
-                            }
-                            const sortedBrands = [...brandGroups.entries()].sort((a, b) => {
-                              if (a[0] === '其他') return 1;
-                              if (b[0] === '其他') return -1;
-                              return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
-                            });
-                            return sortedBrands.map(([brandName, models]) => (
-                              <div key={brandName}>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 12px', background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border-light)' }}>
-                                  {brandName} ({models.length})
-                                </div>
-                                {models.map((model) => (
+                          {filteredBrandGroups.length === 0 ? (
+                            <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>无匹配模型</div>
+                          ) : filteredBrandGroups.map(([brandName, models]) => (
+                            <div key={brandName}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 12px', background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border-light)' }}>
+                                {brandName} ({models.length})
+                              </div>
+                              {models.map((model) => {
+                                const isDisabled = disabledModelSet.has(model);
+                                return (
                                   <label
                                     key={model}
                                     style={{
                                       display: 'flex', alignItems: 'center', gap: 8, padding: '3px 12px',
                                       fontSize: 12, cursor: 'pointer', lineHeight: 1.6,
-                                      background: disabledModels.includes(model) ? 'color-mix(in srgb, var(--color-warning) 8%, transparent)' : 'transparent',
+                                      background: isDisabled ? 'color-mix(in srgb, var(--color-warning) 8%, transparent)' : 'transparent',
                                     }}
                                   >
                                     <input
                                       type="checkbox"
-                                      checked={disabledModels.includes(model)}
+                                      checked={isDisabled}
                                       onChange={(e) => {
                                         if (e.target.checked) {
                                           setDisabledModels((prev) => [...prev, model]);
@@ -1032,21 +1027,22 @@ export default function Sites() {
                                         }
                                       }}
                                     />
-                                    <span style={{ color: disabledModels.includes(model) ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>
+                                    <span style={{ color: isDisabled ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>
                                       {model}
                                     </span>
                                   </label>
-                                ))}
-                              </div>
-                            ));
-                          })()}
+                                );
+                              })}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
 
                     {/* Manually disabled models not in available list */}
                     {(() => {
-                      const manualOnly = disabledModels.filter((m) => !availableModels.includes(m));
+                      const availableSet = new Set(availableModels);
+                      const manualOnly = disabledModels.filter((m) => !availableSet.has(m));
                       if (manualOnly.length === 0) return null;
                       return (
                         <div style={{ marginBottom: 10 }}>

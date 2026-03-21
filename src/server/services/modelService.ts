@@ -18,7 +18,7 @@ import {
   supportsDirectAccountRoutingConnection,
 } from './accountExtraConfig.js';
 import { invalidateTokenRouterCache } from './tokenRouter.js';
-import { getBlockedModelKeywords, isModelBlockedByBrand } from './brandMatcher.js';
+import { getBlockedBrandRules, isModelBlockedByBrand } from './brandMatcher.js';
 import { config } from '../config.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { clearAllRouteDecisionSnapshots } from './routeDecisionSnapshotStore.js';
@@ -1142,14 +1142,14 @@ export async function rebuildTokenRoutesFromAvailability() {
   }
 
   // Load global brand filter
-  const blockedBrandKeywords = getBlockedModelKeywords(config.globalBlockedBrands);
+  const blockedBrandRules = getBlockedBrandRules(config.globalBlockedBrands);
 
   const modelCandidates = new Map<string, Map<string, { accountId: number; tokenId: number | null }>>();
   const addModelCandidate = (modelNameRaw: string | null | undefined, accountId: number, tokenId: number | null, siteId: number) => {
     const modelName = (modelNameRaw || '').trim();
     if (!modelName) return;
     if (isModelDisabledForSite(siteId, modelName)) return;
-    if (blockedBrandKeywords.length > 0 && isModelBlockedByBrand(modelName, blockedBrandKeywords)) return;
+    if (blockedBrandRules.length > 0 && isModelBlockedByBrand(modelName, blockedBrandRules)) return;
     if (!modelCandidates.has(modelName)) modelCandidates.set(modelName, new Map());
     const candidateKey = `${accountId}:${tokenId ?? 'account'}`;
     modelCandidates.get(modelName)!.set(candidateKey, { accountId, tokenId });
