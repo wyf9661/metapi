@@ -24,6 +24,7 @@ import { withAccountProxyOverride, withExplicitProxyRequestInit, withSiteRecordP
 import { getCodexOauthInfoFromExtraConfig, isCodexPlatform } from './oauth/codexAccount.js';
 import { buildOauthInfo, getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
 import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from './oauth/claudeProvider.js';
+import { refreshOauthAccessTokenSingleflight } from './oauth/refreshSingleflight.js';
 import {
   ANTIGRAVITY_DAILY_UPSTREAM_BASE_URL,
   ANTIGRAVITY_MODELS_USER_AGENT,
@@ -40,18 +41,6 @@ const API_TOKEN_DISCOVERY_TIMEOUT_MS = 8_000;
 const MODEL_DISCOVERY_TIMEOUT_MS = 12_000;
 const MODEL_REFRESH_BATCH_SIZE = 3;
 const CODEX_MODELS_CLIENT_VERSION = '1.0.0';
-const CLAUDE_STATIC_MODELS = [
-  'claude-haiku-4-5-20251001',
-  'claude-sonnet-4-5-20250929',
-  'claude-sonnet-4-6',
-  'claude-opus-4-6',
-  'claude-opus-4-5-20251101',
-  'claude-opus-4-1-20250805',
-  'claude-opus-4-20250514',
-  'claude-sonnet-4-20250514',
-  'claude-3-7-sonnet-20250219',
-  'claude-3-5-haiku-20241022',
-];
 const GEMINI_CLI_STATIC_MODELS = [
   'gemini-2.5-pro',
   'gemini-2.5-flash',
@@ -190,6 +179,21 @@ function extractCodexModelIds(payload: unknown): string[] {
   });
 }
 
+function extractClaudeModelIds(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+  const record = payload as { data?: unknown };
+  if (!Array.isArray(record.data)) return [];
+
+  return record.data.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const value = item as { id?: unknown; name?: unknown };
+    const id = typeof value.id === 'string'
+      ? value.id.trim()
+      : (typeof value.name === 'string' ? value.name.trim() : '');
+    return id ? [id] : [];
+  });
+}
+
 function normalizeBaseUrl(baseUrl: string): string {
   return (baseUrl || '').replace(/\/+$/, '');
 }
@@ -284,10 +288,10 @@ async function discoverCodexModelsFromCloud(input: {
   return normalizeModels(extractCodexModelIds(await response.json()));
 }
 
-async function validateClaudeOauthConnection(input: {
+async function discoverClaudeModelsFromCloud(input: {
   site: typeof schema.sites.$inferSelect;
   account: typeof schema.accounts.$inferSelect;
-}): Promise<void> {
+}): Promise<string[]> {
   const accessToken = (input.account.accessToken || '').trim();
   if (!accessToken) {
     throw new Error('claude oauth access token missing');
@@ -305,8 +309,9 @@ async function validateClaudeOauthConnection(input: {
   );
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`HTTP ${response.status}: ${text || 'claude oauth validation failed'}`);
+    throw new Error(`HTTP ${response.status}: ${text || 'claude oauth model discovery failed'}`);
   }
+  return normalizeModels(extractClaudeModelIds(await response.json()));
 }
 
 async function validateGeminiCliOauthConnection(input: {
@@ -481,6 +486,13 @@ function buildSuccessfulRefreshResult(input: {
   };
 }
 
+function shouldRetryModelDiscoveryWithOauthRefresh(error: unknown): boolean {
+  const message = ((error as { message?: string })?.message || '').toLowerCase();
+  return message.includes('http 401')
+    || message.includes('unauthorized')
+    || message.includes('unauthenticated');
+}
+
 export async function refreshModelsForAccount(
   accountId: number,
   options?: { allowInactive?: boolean },
@@ -499,6 +511,7 @@ export async function refreshModelsForAccount(
   const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
   const adapter = getAdapter(site.platform);
   const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
+
   const restoreAvailabilityOnFailure = options?.allowInactive === true;
   const previousAccountTokens = restoreAvailabilityOnFailure
     ? await db.select()
@@ -637,14 +650,17 @@ export async function refreshModelsForAccount(
     const checkedAt = new Date().toISOString();
     const startedAt = Date.now();
     try {
-      await withTimeout(
+      const claudeModels = await withTimeout(
         () => withAccountProxyOverride(accountProxyUrl,
-          () => validateClaudeOauthConnection({ site, account })),
+          () => discoverClaudeModelsFromCloud({ site, account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
-        `claude oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
+        `claude oauth model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
+      if (claudeModels.length === 0) {
+        throw new Error('未获取到可用模型');
+      }
       await db.insert(schema.modelAvailability).values(
-        CLAUDE_STATIC_MODELS.map((modelName) => ({
+        claudeModels.map((modelName) => ({
           accountId,
           modelName,
           available: true,
@@ -656,26 +672,26 @@ export async function refreshModelsForAccount(
         account,
         checkedAt,
         status: 'healthy',
-        lastDiscoveredModels: CLAUDE_STATIC_MODELS,
+        lastDiscoveredModels: claudeModels,
       });
       await setAccountRuntimeHealth(accountId, {
         state: 'healthy',
-        reason: 'Claude OAuth 健康探测成功',
+        reason: 'Claude OAuth 模型探测成功',
         source: 'model-discovery',
         checkedAt,
       });
       return buildSuccessfulRefreshResult({
         accountId,
-        modelCount: CLAUDE_STATIC_MODELS.length,
-        modelsPreview: CLAUDE_STATIC_MODELS.slice(0, 10),
+        modelCount: claudeModels.length,
+        modelsPreview: claudeModels.slice(0, 10),
         tokenScanned: 0,
         discoveredByCredential: true,
         discoveredApiToken: false,
       });
     } catch (err) {
-      const rawMessage = (err as { message?: string })?.message || 'claude oauth validation failed';
+      const rawMessage = (err as { message?: string })?.message || 'claude oauth model discovery failed';
       const errorCode = classifyModelDiscoveryError(rawMessage);
-      const errorMessage = `Claude 模型获取失败（${rawMessage}）`;
+      const errorMessage = `Claude OAuth 模型获取失败（${rawMessage}）`;
       await updateOauthModelDiscoveryState({
         account,
         checkedAt,
@@ -704,13 +720,35 @@ export async function refreshModelsForAccount(
   if (oauth?.provider === 'gemini-cli') {
     const checkedAt = new Date().toISOString();
     const startedAt = Date.now();
+    let discoveryAccount = account;
     try {
-      await withTimeout(
-        () => withAccountProxyOverride(accountProxyUrl,
-          () => validateGeminiCliOauthConnection({ account })),
-        MODEL_DISCOVERY_TIMEOUT_MS,
-        `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
-      );
+      try {
+        await withTimeout(
+          () => withAccountProxyOverride(accountProxyUrl,
+            () => validateGeminiCliOauthConnection({ account: discoveryAccount })),
+          MODEL_DISCOVERY_TIMEOUT_MS,
+          `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
+        );
+      } catch (error) {
+        if (!shouldRetryModelDiscoveryWithOauthRefresh(error)) {
+          throw error;
+        }
+        const refreshed = await refreshOauthAccessTokenSingleflight(discoveryAccount.id);
+        if (!refreshed?.extraConfig) {
+          throw error;
+        }
+        discoveryAccount = {
+          ...discoveryAccount,
+          accessToken: refreshed.accessToken,
+          extraConfig: refreshed.extraConfig,
+        };
+        await withTimeout(
+          () => withAccountProxyOverride(accountProxyUrl,
+            () => validateGeminiCliOauthConnection({ account: discoveryAccount })),
+          MODEL_DISCOVERY_TIMEOUT_MS,
+          `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
+        );
+      }
       await db.insert(schema.modelAvailability).values(
         GEMINI_CLI_STATIC_MODELS.map((modelName) => ({
           accountId,
@@ -721,7 +759,7 @@ export async function refreshModelsForAccount(
         })),
       ).run();
       await updateOauthModelDiscoveryState({
-        account,
+        account: discoveryAccount,
         checkedAt,
         status: 'healthy',
         lastDiscoveredModels: GEMINI_CLI_STATIC_MODELS,
@@ -745,7 +783,7 @@ export async function refreshModelsForAccount(
       const errorCode = classifyModelDiscoveryError(rawMessage);
       const errorMessage = `Gemini CLI 模型获取失败（${rawMessage}）`;
       await updateOauthModelDiscoveryState({
-        account,
+        account: discoveryAccount,
         checkedAt,
         status: 'abnormal',
         lastModelSyncError: errorMessage,
