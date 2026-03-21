@@ -218,7 +218,7 @@ export function resolveConversationFileEndpointCapability(input: {
     return {
       image: 'native',
       audio: 'unsupported',
-      document: 'unsupported',
+      document: 'inline_only',
       preservesRemoteDocumentUrl: false,
     };
   }
@@ -261,7 +261,7 @@ export function rankConversationFileEndpoints(input: {
   }) as ConversationFileEndpoint[];
 
   if (supportedDocumentEndpoints.length <= 0) {
-    return [];
+    return [...input.requestedOrder];
   }
 
   return [

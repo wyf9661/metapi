@@ -193,7 +193,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
-    expect(order).toEqual(['responses', 'chat']);
+    expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 
   it('remembers the last successful endpoint per site capability profile', async () => {

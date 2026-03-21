@@ -67,7 +67,7 @@ describe('conversationFileCapabilities', () => {
     })).toMatchObject({
       image: 'native',
       audio: 'unsupported',
-      document: 'unsupported',
+      document: 'inline_only',
       preservesRemoteDocumentUrl: false,
     });
   });
@@ -84,6 +84,6 @@ describe('conversationFileCapabilities', () => {
       },
     });
 
-    expect(ranked).toEqual(['responses', 'chat']);
+    expect(ranked).toEqual(['responses', 'messages', 'chat']);
   });
 });
