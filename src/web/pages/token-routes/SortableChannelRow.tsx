@@ -25,6 +25,8 @@ export function SortableChannelRow({
   onTokenDraftChange,
   onSaveToken,
   onDeleteChannel,
+  onToggleEnabled,
+  onSiteBlockModel,
 }: SortableChannelRowProps) {
   const {
     attributes,
@@ -42,7 +44,7 @@ export function SortableChannelRow({
   const rowStyle: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.72 : 1,
+    opacity: isDragging ? 0.72 : channel.enabled === false ? 0.5 : 1,
     zIndex: isDragging ? 10 : 1,
     display: 'grid',
     gridTemplateColumns: readOnly || mobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) auto auto',
@@ -376,6 +378,10 @@ export function SortableChannelRow({
           </span>
         ) : null}
 
+        {channel.enabled === false ? (
+          <span className="badge badge-muted" style={{ fontSize: 10 }}>已禁用</span>
+        ) : null}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginTop: mobile ? 0 : 4, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>选中概率</span>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 120 }}>
@@ -502,11 +508,31 @@ export function SortableChannelRow({
             </div>
 
             <button
-              onClick={onDeleteChannel}
-              className="btn btn-link btn-link-danger"
+              onClick={() => onToggleEnabled(channel.enabled === false)}
+              className={`btn btn-link ${channel.enabled === false ? 'btn-link-info' : 'btn-link-warning'}`}
+              data-tooltip={channel.enabled === false ? '启用此通道' : '禁用此通道'}
             >
-              移除
+              {channel.enabled === false ? '启用' : '禁用'}
             </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {onSiteBlockModel && channel.site?.id ? (
+                <button
+                  onClick={onSiteBlockModel}
+                  className="btn btn-link btn-link-warning"
+                  data-tooltip={`将此模型加入站点「${channel.site?.name || '未知'}」的禁用列表，rebuild 后该站点的此模型通道将不再生成`}
+                >
+                  站点屏蔽
+                </button>
+              ) : null}
+
+              <button
+                onClick={onDeleteChannel}
+                className="btn btn-link btn-link-danger"
+              >
+                移除
+              </button>
+            </div>
           </>
         )
       ) : null}

@@ -54,7 +54,7 @@ import {
   getModelPatternError,
 } from './token-routes/utils.js';
 import { useRouteChannels } from './token-routes/useRouteChannels.js';
-import RouteFilterBar from './token-routes/RouteFilterBar.js';
+import RouteFilterBar, { type EnabledFilter } from './token-routes/RouteFilterBar.js';
 import ManualRoutePanel from './token-routes/ManualRoutePanel.js';
 import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
@@ -119,6 +119,7 @@ export default function TokenRoutes() {
   const [activeSite, setActiveSite] = useState<string | null>(null);
   const [activeEndpointType, setActiveEndpointType] = useState<string | null>(null);
   const [activeGroupFilter, setActiveGroupFilter] = useState<GroupFilter>(null);
+  const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>('all');
   const [filterCollapsed, setFilterCollapsed] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showZeroChannelRoutes, setShowZeroChannelRoutes] = useState(false);
@@ -640,6 +641,16 @@ export default function TokenRoutes() {
     return listVisibleRoutes.find((route) => route.id === activeGroupFilter) || null;
   }, [activeGroupFilter, listVisibleRoutes]);
 
+  const enabledCounts = useMemo(() => {
+    let enabled = 0;
+    let disabled = 0;
+    for (const route of listVisibleRoutes) {
+      if (route.enabled) enabled++;
+      else disabled++;
+    }
+    return { enabled, disabled };
+  }, [listVisibleRoutes]);
+
   const sortedRoutes = useMemo(() => (
     [...listVisibleRoutes].sort((a, b) => {
       if (sortBy === 'channelCount') {
@@ -654,6 +665,12 @@ export default function TokenRoutes() {
 
   const filteredRoutes = useMemo(() => {
     let list = sortedRoutes;
+
+    if (enabledFilter === 'enabled') {
+      list = list.filter((route) => route.enabled);
+    } else if (enabledFilter === 'disabled') {
+      list = list.filter((route) => !route.enabled);
+    }
 
     if (activeGroupFilter === '__all__') {
       list = list.filter((route) => !isRouteExactModel(route));
@@ -694,6 +711,7 @@ export default function TokenRoutes() {
     return list;
   }, [
     sortedRoutes,
+    enabledFilter,
     activeGroupFilter,
     activeBrand,
     activeSite,
@@ -713,6 +731,8 @@ export default function TokenRoutes() {
 
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
+  const shouldShowLoadMore = filteredRoutes.length > 0 && visibleRouteCount < filteredRoutes.length;
+
   useEffect(() => {
     const el = loadMoreSentinelRef.current;
     if (!el) return;
@@ -722,7 +742,7 @@ export default function TokenRoutes() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [handleLoadMoreRoutes]);
+  }, [handleLoadMoreRoutes, shouldShowLoadMore]);
 
   const visibleRoutes = useMemo(
     () => filteredRoutes.slice(0, visibleRouteCount),
@@ -763,17 +783,60 @@ export default function TokenRoutes() {
   };
 
   const handleDeleteChannel = async (channelId: number, routeId: number) => {
+    const dismissedKey = 'metapi:channel-delete-warning-dismissed';
+    const dismissed = localStorage.getItem(dismissedKey) === 'true';
+    if (!dismissed) {
+      const dontAskAgain = { checked: false };
+      const confirmed = await new Promise<boolean>((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
+        dialog.innerHTML = `
+          <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认移除通道</div>
+          <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
+            移除的通道会在定时模型刷新时被自动重建恢复。<br/>如果只是想临时停用通道，建议使用<b>禁用开关</b>。
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-muted);margin-bottom:16px;cursor:pointer">
+            <input type="checkbox" id="__ch_del_dismiss" /> 以后不再提示
+          </label>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button id="__ch_del_cancel" class="btn btn-ghost" style="padding:6px 16px">取消</button>
+            <button id="__ch_del_confirm" class="btn btn-danger" style="padding:6px 16px">确认移除</button>
+          </div>
+        `;
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        dialog.querySelector('#__ch_del_cancel')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(false); });
+        dialog.querySelector('#__ch_del_confirm')!.addEventListener('click', () => {
+          dontAskAgain.checked = (dialog.querySelector('#__ch_del_dismiss') as HTMLInputElement).checked;
+          document.body.removeChild(overlay);
+          resolve(true);
+        });
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } });
+      });
+      if (!confirmed) return;
+      if (dontAskAgain.checked) localStorage.setItem(dismissedKey, 'true');
+    }
     try {
       await api.deleteChannel(channelId);
       toast.success('通道已移除');
-      // Reload channels for this route
       await loadChannels(routeId, true);
-      // Update channel count in summary
       setRouteSummaries((prev) =>
         prev.map((r) => r.id === routeId ? { ...r, channelCount: Math.max(0, r.channelCount - 1) } : r),
       );
     } catch (e: any) {
       toast.error(e.message || '移除通道失败');
+    }
+  };
+
+  const handleToggleChannelEnabled = async (channelId: number, routeId: number, enabled: boolean) => {
+    try {
+      await api.updateChannel(channelId, { enabled });
+      toast.success(enabled ? '通道已启用' : '通道已禁用');
+      await loadChannels(routeId, true);
+    } catch (e: any) {
+      toast.error(e.message || '更新通道状态失败');
     }
   };
 
@@ -844,6 +907,42 @@ export default function TokenRoutes() {
       toast.error(e.message || '保存通道优先级失败，已回滚');
     } finally {
       setSavingPriorityByRoute((prev) => ({ ...prev, [routeId]: false }));
+    }
+  };
+
+  const handleSiteBlockModel = async (channelId: number, routeId: number) => {
+    const channels = channelsByRouteId[routeId] || [];
+    const channel = channels.find((c) => c.id === channelId);
+    if (!channel?.site?.id) {
+      toast.error('找不到通道对应的站点信息');
+      return;
+    }
+    const route = routeSummaries.find((r) => r.id === routeId);
+    const modelName = channel.sourceModel || route?.modelPattern || '';
+    if (!modelName) {
+      toast.error('找不到要屏蔽的模型名');
+      return;
+    }
+    const siteName = channel.site.name || '未知站点';
+    const confirmed = window.confirm(
+      `确定将模型「${modelName}」加入站点「${siteName}」的禁用列表吗？\n\n执行后将自动触发路由重建，该站点下此模型的通道将不再生成。`,
+    );
+    if (!confirmed) return;
+
+    try {
+      const siteId = channel.site.id;
+      const existing = await api.getSiteDisabledModels(siteId);
+      const currentModels: string[] = existing?.models || [];
+      if (currentModels.includes(modelName)) {
+        toast.info(`模型「${modelName}」已在站点「${siteName}」的禁用列表中`);
+        return;
+      }
+      await api.updateSiteDisabledModels(siteId, [...currentModels, modelName]);
+      toast.success(`已将「${modelName}」加入站点「${siteName}」的禁用列表，正在重建路由...`);
+      await api.rebuildRoutes(false);
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || '站点屏蔽模型失败');
     }
   };
 
@@ -985,6 +1084,12 @@ export default function TokenRoutes() {
     (channelId: number, routeId: number) => handleDeleteChannelRef.current(channelId, routeId),
     [],
   );
+  const handleToggleChannelEnabledRef = useRef(handleToggleChannelEnabled);
+  handleToggleChannelEnabledRef.current = handleToggleChannelEnabled;
+  const stableToggleChannelEnabled = useCallback(
+    (channelId: number, routeId: number, enabled: boolean) => handleToggleChannelEnabledRef.current(channelId, routeId, enabled),
+    [],
+  );
   const handleChannelDragEndRef = useRef(handleChannelDragEnd);
   handleChannelDragEndRef.current = handleChannelDragEnd;
   const stableChannelDragEnd = useCallback(
@@ -995,6 +1100,12 @@ export default function TokenRoutes() {
   handleCreateTokenRef.current = handleCreateTokenForMissingAccount;
   const stableCreateTokenForMissing = useCallback(
     (accountId: number, modelName: string) => handleCreateTokenRef.current(accountId, modelName),
+    [],
+  );
+  const handleSiteBlockModelRef = useRef(handleSiteBlockModel);
+  handleSiteBlockModelRef.current = handleSiteBlockModel;
+  const stableSiteBlockModel = useCallback(
+    (channelId: number, routeId: number) => handleSiteBlockModelRef.current(channelId, routeId),
     [],
   );
 
@@ -1133,6 +1244,9 @@ export default function TokenRoutes() {
               setActiveEndpointType={setActiveEndpointType}
               activeGroupFilter={activeGroupFilter}
               setActiveGroupFilter={setActiveGroupFilter}
+              enabledFilter={enabledFilter}
+              setEnabledFilter={setEnabledFilter}
+              enabledCounts={enabledCounts}
               brandList={brandList}
               siteList={siteList}
               endpointTypeList={endpointTypeList}
@@ -1153,6 +1267,9 @@ export default function TokenRoutes() {
           setActiveEndpointType={setActiveEndpointType}
           activeGroupFilter={activeGroupFilter}
           setActiveGroupFilter={setActiveGroupFilter}
+          enabledFilter={enabledFilter}
+          setEnabledFilter={setEnabledFilter}
+          enabledCounts={enabledCounts}
           brandList={brandList}
           siteList={siteList}
           endpointTypeList={endpointTypeList}
@@ -1311,11 +1428,13 @@ export default function TokenRoutes() {
               onTokenDraftChange={stableTokenDraftChange}
               onSaveToken={stableChannelTokenSave}
               onDeleteChannel={stableDeleteChannel}
+              onToggleChannelEnabled={stableToggleChannelEnabled}
               onChannelDragEnd={stableChannelDragEnd}
               missingTokenSiteItems={missingTokenSiteItemsByRouteId[route.id] || EMPTY_MISSING_ITEMS}
               missingTokenGroupItems={missingTokenGroupItemsByRouteId[route.id] || EMPTY_MISSING_GROUP_ITEMS}
               onCreateTokenForMissing={stableCreateTokenForMissing}
               onAddChannel={stableAddChannel}
+              onSiteBlockModel={stableSiteBlockModel}
               expandedSourceGroupMap={expandedSourceGroupMap}
               onToggleSourceGroup={stableToggleSourceGroup}
             />
@@ -1323,7 +1442,7 @@ export default function TokenRoutes() {
         })}
       </div>
 
-      {filteredRoutes.length > 0 && visibleRouteCount < filteredRoutes.length && (
+      {shouldShowLoadMore && (
         <div
           ref={loadMoreSentinelRef}
           style={{ textAlign: 'center', padding: '12px 0', fontSize: 12, color: 'var(--color-text-muted)' }}

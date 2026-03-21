@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { getBrand } from '../components/BrandIcon.js';
 import CenteredModal from '../components/CenteredModal.js';
 import MobileBatchBar from '../components/MobileBatchBar.js';
 import MobileFilterSheet from '../components/MobileFilterSheet.js';
@@ -222,6 +223,8 @@ export default function Sites() {
   const [disabledModelInput, setDisabledModelInput] = useState('');
   const [disabledModelsLoading, setDisabledModelsLoading] = useState(false);
   const [disabledModelsSaving, setDisabledModelsSaving] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [disabledModelSearch, setDisabledModelSearch] = useState('');
 
   if (editor) lastEditorRef.current = editor;
   const activeEditor = editor || lastEditorRef.current;
@@ -326,12 +329,20 @@ export default function Sites() {
     setEditor({ mode: 'edit', editingSiteId: site.id });
     setForm(siteFormFromSite(site));
     scrollToEditorTop();
-    // Load disabled models for this site
+    // Load disabled models and available models for this site
     setDisabledModelsLoading(true);
     setDisabledModels([]);
     setDisabledModelInput('');
-    api.getSiteDisabledModels(site.id)
-      .then((res: any) => setDisabledModels(Array.isArray(res?.models) ? res.models : []))
+    setAvailableModels([]);
+    setDisabledModelSearch('');
+    Promise.all([
+      api.getSiteDisabledModels(site.id),
+      api.getSiteAvailableModels(site.id),
+    ])
+      .then(([disabledRes, availableRes]: any[]) => {
+        setDisabledModels(Array.isArray(disabledRes?.models) ? disabledRes.models : []);
+        setAvailableModels(Array.isArray(availableRes?.models) ? availableRes.models : []);
+      })
       .catch(() => { })
       .finally(() => setDisabledModelsLoading(false));
   };
@@ -913,7 +924,7 @@ export default function Sites() {
               <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>禁用模型管理</div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                  在此站点禁用指定模型后，路由重建时将不为该站点的这些模型创建通道。
+                  在此站点禁用指定模型后，路由重建时将不为该站点的这些模型创建通道。勾选表示禁用该模型。
                 </div>
                 {disabledModelsLoading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>
@@ -921,34 +932,155 @@ export default function Sites() {
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10, minHeight: 24 }}>
-                      {disabledModels.length === 0 && (
-                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无禁用模型</span>
-                      )}
-                      {disabledModels.map((model) => (
-                        <span
-                          key={model}
-                          className="badge badge-muted"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px' }}
-                        >
-                          {model}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveDisabledModel(model)}
-                            style={{
-                              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                              fontSize: 13, lineHeight: 1, color: 'var(--color-text-muted)',
-                            }}
-                            title={`移除 ${model}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
+                    {/* Search and brand group controls */}
+                    {availableModels.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <input
+                          placeholder="搜索模型名称..."
+                          value={disabledModelSearch}
+                          onChange={(e) => setDisabledModelSearch(e.target.value)}
+                          style={{
+                            width: '100%', padding: '6px 10px', border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
+                            background: 'var(--color-bg)', color: 'var(--color-text-primary)', marginBottom: 8,
+                          }}
+                        />
+                        {/* Brand group quick actions */}
+                        {(() => {
+                          const brandGroups = new Map<string, string[]>();
+                          for (const model of availableModels) {
+                            const brand = getBrand(model);
+                            const brandName = brand?.name || '其他';
+                            if (!brandGroups.has(brandName)) brandGroups.set(brandName, []);
+                            brandGroups.get(brandName)!.push(model);
+                          }
+                          const sortedBrands = [...brandGroups.entries()].sort((a, b) => {
+                            if (a[0] === '其他') return 1;
+                            if (b[0] === '其他') return -1;
+                            return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
+                          });
+                          return (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: '24px' }}>按品牌全选：</span>
+                              {sortedBrands.map(([brandName, models]) => {
+                                const allDisabled = models.every((m) => disabledModels.includes(m));
+                                return (
+                                  <button
+                                    key={brandName}
+                                    type="button"
+                                    onClick={() => {
+                                      if (allDisabled) {
+                                        setDisabledModels((prev) => prev.filter((m) => !models.includes(m)));
+                                      } else {
+                                        setDisabledModels((prev) => Array.from(new Set([...prev, ...models])));
+                                      }
+                                    }}
+                                    className={`badge ${allDisabled ? 'badge-warning' : 'badge-muted'}`}
+                                    style={{ fontSize: 10, cursor: 'pointer', border: 'none', padding: '3px 8px' }}
+                                    data-tooltip={allDisabled ? `取消禁用全部 ${brandName} 模型 (${models.length})` : `禁用全部 ${brandName} 模型 (${models.length})`}
+                                  >
+                                    {brandName} ({models.length})
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                        {/* Checkbox list */}
+                        <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px 0' }}>
+                          {(() => {
+                            const q = disabledModelSearch.trim().toLowerCase();
+                            const filtered = q ? availableModels.filter((m) => m.toLowerCase().includes(q)) : availableModels;
+                            if (filtered.length === 0) {
+                              return <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>无匹配模型</div>;
+                            }
+                            // Group by brand
+                            const brandGroups = new Map<string, string[]>();
+                            for (const model of filtered) {
+                              const brand = getBrand(model);
+                              const brandName = brand?.name || '其他';
+                              if (!brandGroups.has(brandName)) brandGroups.set(brandName, []);
+                              brandGroups.get(brandName)!.push(model);
+                            }
+                            const sortedBrands = [...brandGroups.entries()].sort((a, b) => {
+                              if (a[0] === '其他') return 1;
+                              if (b[0] === '其他') return -1;
+                              return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
+                            });
+                            return sortedBrands.map(([brandName, models]) => (
+                              <div key={brandName}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 12px', background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border-light)' }}>
+                                  {brandName} ({models.length})
+                                </div>
+                                {models.map((model) => (
+                                  <label
+                                    key={model}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 8, padding: '3px 12px',
+                                      fontSize: 12, cursor: 'pointer', lineHeight: 1.6,
+                                      background: disabledModels.includes(model) ? 'color-mix(in srgb, var(--color-warning) 8%, transparent)' : 'transparent',
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={disabledModels.includes(model)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setDisabledModels((prev) => [...prev, model]);
+                                        } else {
+                                          setDisabledModels((prev) => prev.filter((m) => m !== model));
+                                        }
+                                      }}
+                                    />
+                                    <span style={{ color: disabledModels.includes(model) ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>
+                                      {model}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Manually disabled models not in available list */}
+                    {(() => {
+                      const manualOnly = disabledModels.filter((m) => !availableModels.includes(m));
+                      if (manualOnly.length === 0) return null;
+                      return (
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>手动添加的禁用模型（不在站点已发现列表中）：</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {manualOnly.map((model) => (
+                              <span
+                                key={model}
+                                className="badge badge-muted"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px' }}
+                              >
+                                {model}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDisabledModel(model)}
+                                  style={{
+                                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                                    fontSize: 13, lineHeight: 1, color: 'var(--color-text-muted)',
+                                  }}
+                                  title={`移除 ${model}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Manual input for models not in the list */}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input
-                        placeholder="输入模型名称，如 gpt-4o"
+                        placeholder="手动输入模型名称，如 gpt-4o"
                         value={disabledModelInput}
                         onChange={(e) => setDisabledModelInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDisabledModel(); } }}
@@ -962,14 +1094,19 @@ export default function Sites() {
                         添加
                       </button>
                     </div>
-                    <button
-                      onClick={handleSaveDisabledModels}
-                      disabled={disabledModelsSaving}
-                      className="btn btn-primary"
-                      style={{ marginTop: 10, fontSize: 12, padding: '6px 16px' }}
-                    >
-                      {disabledModelsSaving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存禁用列表'}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                      <button
+                        onClick={handleSaveDisabledModels}
+                        disabled={disabledModelsSaving}
+                        className="btn btn-primary"
+                        style={{ fontSize: 12, padding: '6px 16px' }}
+                      >
+                        {disabledModelsSaving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存禁用列表'}
+                      </button>
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                        已禁用 {disabledModels.length} 个模型
+                      </span>
+                    </div>
                   </>
                 )}
               </div>

@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     getDownstreamApiKeys: vi.fn(),
     getRoutesLite: vi.fn(),
     getRuntimeDatabaseConfig: vi.fn(),
+    getBrandList: vi.fn(),
     updateRuntimeSettings: vi.fn(),
     triggerCheckinAll: vi.fn(),
   },
@@ -62,6 +63,7 @@ describe('Settings log cleanup schedule', () => {
     });
     apiMock.getDownstreamApiKeys.mockResolvedValue({ items: [] });
     apiMock.getRoutesLite.mockResolvedValue([]);
+    apiMock.getBrandList.mockResolvedValue({ brands: [] });
     apiMock.getRuntimeDatabaseConfig.mockResolvedValue({
       active: { dialect: 'sqlite', connection: '(default sqlite path)', ssl: false },
       saved: null,
