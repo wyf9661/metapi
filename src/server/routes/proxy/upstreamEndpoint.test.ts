@@ -193,7 +193,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
-    expect(order).toEqual(['responses', 'messages', 'chat']);
+    expect(order).toEqual(['responses', 'chat']);
   });
 
   it('remembers the last successful endpoint per site capability profile', async () => {
@@ -252,7 +252,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
-    expect(order).toEqual(['responses', 'messages', 'chat']);
+    expect(order).toEqual(['responses']);
   });
 
   it('does not remember messages fallback success for generic /v1/responses requests', async () => {
