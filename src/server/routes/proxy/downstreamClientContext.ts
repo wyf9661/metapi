@@ -263,6 +263,16 @@ function detectExplicitClientSelfReport(headers: NormalizedClientHeaders): Downs
     };
   }
 
+  for (const value of headers['user-agent'] || []) {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized.startsWith('openclaw/')) continue;
+    return {
+      clientAppId: 'openclaw',
+      clientAppName: 'OpenClaw',
+      clientConfidence: 'exact',
+    };
+  }
+
   return null;
 }
 
