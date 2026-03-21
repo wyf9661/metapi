@@ -60,6 +60,16 @@ describe('conversationFileCapabilities', () => {
       document: 'inline_only',
       preservesRemoteDocumentUrl: false,
     });
+
+    expect(resolveConversationFileEndpointCapability({
+      sitePlatform: 'new-api',
+      endpoint: 'messages',
+    })).toMatchObject({
+      image: 'native',
+      audio: 'unsupported',
+      document: 'inline_only',
+      preservesRemoteDocumentUrl: false,
+    });
   });
 
   it('ranks document-capable endpoints ahead of lossy fallbacks', () => {

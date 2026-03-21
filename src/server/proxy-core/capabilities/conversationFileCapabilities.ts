@@ -241,19 +241,23 @@ export function rankConversationFileEndpoints(input: {
     return [...input.requestedOrder];
   }
 
+  const isDocumentCompatible = (endpoint: ConversationFileEndpoint) => {
+    const capability = resolveConversationFileEndpointCapability({
+      sitePlatform: input.sitePlatform,
+      endpoint,
+    });
+    if (capability.document === 'unsupported') return false;
+    if (input.summary.hasRemoteDocumentUrl && !capability.preservesRemoteDocumentUrl) return false;
+    return true;
+  };
+
   const preferredDocumentOrder = input.preferMessagesForClaudeModel === true
     ? ['messages', 'responses', 'chat']
     : ['responses', 'messages', 'chat'];
 
   const supportedDocumentEndpoints = preferredDocumentOrder.filter((endpoint) => {
     if (!input.requestedOrder.includes(endpoint as ConversationFileEndpoint)) return false;
-    const capability = resolveConversationFileEndpointCapability({
-      sitePlatform: input.sitePlatform,
-      endpoint: endpoint as ConversationFileEndpoint,
-    });
-    if (capability.document === 'unsupported') return false;
-    if (input.summary.hasRemoteDocumentUrl && !capability.preservesRemoteDocumentUrl) return false;
-    return true;
+    return isDocumentCompatible(endpoint as ConversationFileEndpoint);
   }) as ConversationFileEndpoint[];
 
   if (supportedDocumentEndpoints.length <= 0) {
@@ -262,6 +266,9 @@ export function rankConversationFileEndpoints(input: {
 
   return [
     ...supportedDocumentEndpoints,
-    ...input.requestedOrder.filter((endpoint) => !supportedDocumentEndpoints.includes(endpoint)),
+    ...input.requestedOrder.filter((endpoint) => (
+      !supportedDocumentEndpoints.includes(endpoint)
+      && isDocumentCompatible(endpoint)
+    )),
   ];
 }
