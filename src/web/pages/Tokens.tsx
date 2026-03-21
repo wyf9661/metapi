@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
+import MobileBatchBar from '../components/MobileBatchBar.js';
+import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import { useToast } from '../components/Toast.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
@@ -117,7 +120,7 @@ function isTruthyFlag(input: string | null): boolean {
 export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: TokensPanelProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isMobile = useIsMobile(768);
+  const isMobile = useIsMobile();
   const initialCreateForm = {
     accountId: 0,
     name: '',
@@ -145,6 +148,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
   const [pendingAutoOpenTokenId, setPendingAutoOpenTokenId] = useState<number | null>(null);
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
   const [selectedTokenIds, setSelectedTokenIds] = useState<number[]>([]);
+  const [expandedTokenIds, setExpandedTokenIds] = useState<number[]>([]);
+  const [showMobileTools, setShowMobileTools] = useState(false);
   const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
     mode: 'single' | 'batch';
@@ -303,6 +308,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       return Number(left?.id || 0) - Number(right?.id || 0);
     });
   }, [tokens]);
+  const allVisibleTokensSelected = accountClusteredTokens.length > 0
+    && accountClusteredTokens.every((token) => selectedTokenIds.includes(token.id));
 
   const activeAccounts = useMemo(() => accounts.filter(isAccountSyncable), [accounts]);
 
@@ -396,10 +403,18 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
 
   const toggleSelectAllTokens = (checked: boolean) => {
     if (!checked) {
-      setSelectedTokenIds([]);
+      setSelectedTokenIds((current) => current.filter((id) => !accountClusteredTokens.some((token) => token.id === id)));
       return;
     }
-    setSelectedTokenIds(accountClusteredTokens.map((token) => token.id));
+    setSelectedTokenIds((current) => Array.from(new Set([...current, ...accountClusteredTokens.map((token) => token.id)])));
+  };
+
+  const toggleTokenDetails = (tokenId: number) => {
+    setExpandedTokenIds((current) => (
+      current.includes(tokenId)
+        ? current.filter((id) => id !== tokenId)
+        : [...current, tokenId]
+    ));
   };
 
   const runBatchTokenAction = async (action: 'enable' | 'disable' | 'delete', skipDeleteConfirm = false) => {
@@ -748,37 +763,61 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
 
   const headerActions = useMemo(() => (
     <div className={`page-actions ${embedded ? 'accounts-page-actions' : ''}`.trim()}>
-      <div style={{ minWidth: 220, position: 'relative', zIndex: 20 }}>
-        <ModernSelect
-          size="sm"
-          value={String(syncingAccountId || 0)}
-          onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
-          options={[
-            { value: '0', label: '选择账号后同步站点令牌' },
-            ...activeAccounts.map((account) => ({
-              value: String(account.id),
-              label: `${account.username || `account-${account.id}`} @ ${account.site?.name || '-'}`,
-            })),
-          ]}
-          placeholder="选择账号后同步站点令牌"
-        />
-      </div>
-      <button
-        onClick={handleSync}
-        disabled={syncing || syncingAll || !syncingAccountId}
-        className="btn btn-ghost"
-        style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
-      >
-        {syncing ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
-      </button>
-      <button
-        onClick={handleSyncAll}
-        disabled={syncing || syncingAll || activeAccounts.length === 0}
-        className="btn btn-ghost"
-        style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
-      >
-        {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步全部账号'}
-      </button>
+      {isMobile ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowMobileTools(true)}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            同步与筛选
+          </button>
+          <button
+            type="button"
+            data-testid="tokens-mobile-select-all"
+            onClick={() => toggleSelectAllTokens(!allVisibleTokensSelected)}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {allVisibleTokensSelected ? '取消全选' : '全选可见项'}
+          </button>
+        </>
+      ) : (
+        <>
+          <div style={{ minWidth: 220, position: 'relative', zIndex: 20 }}>
+            <ModernSelect
+              size="sm"
+              value={String(syncingAccountId || 0)}
+              onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
+              options={[
+                { value: '0', label: '选择账号后同步站点令牌' },
+                ...activeAccounts.map((account) => ({
+                  value: String(account.id),
+                  label: `${account.username || `account-${account.id}`} @ ${account.site?.name || '-'}`,
+                })),
+              ]}
+              placeholder="选择账号后同步站点令牌"
+            />
+          </div>
+          <button
+            onClick={handleSync}
+            disabled={syncing || syncingAll || !syncingAccountId}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+          >
+            {syncing ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
+          </button>
+          <button
+            onClick={handleSyncAll}
+            disabled={syncing || syncingAll || activeAccounts.length === 0}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+          >
+            {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步全部账号'}
+          </button>
+        </>
+      )}
       <button
         onClick={handleToggleAdd}
         className="btn btn-primary"
@@ -786,7 +825,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         {showAdd ? '取消' : '+ 新增令牌'}
       </button>
     </div>
-  ), [activeAccounts, embedded, handleSync, handleSyncAll, handleToggleAdd, showAdd, syncing, syncingAccountId, syncingAll]);
+  ), [activeAccounts, allVisibleTokensSelected, embedded, handleSync, handleSyncAll, handleToggleAdd, isMobile, showAdd, syncing, syncingAccountId, syncingAll]);
 
   useEffect(() => {
     if (!embedded || !onEmbeddedActionsChange) return;
@@ -804,6 +843,42 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
           {headerActions}
         </div>
       )}
+
+      <MobileFilterSheet open={showMobileTools} onClose={() => setShowMobileTools(false)} title="令牌同步与筛选">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>同步账号</div>
+            <ModernSelect
+              value={String(syncingAccountId || 0)}
+              onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
+              options={[
+                { value: '0', label: '选择账号后同步站点令牌' },
+                ...activeAccounts.map((account) => ({
+                  value: String(account.id),
+                  label: `${account.username || `account-${account.id}`} @ ${account.site?.name || '-'}`,
+                })),
+              ]}
+              placeholder="选择账号后同步站点令牌"
+            />
+          </div>
+          <button
+            onClick={handleSync}
+            disabled={syncing || syncingAll || !syncingAccountId}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {syncing ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
+          </button>
+          <button
+            onClick={handleSyncAll}
+            disabled={syncing || syncingAll || activeAccounts.length === 0}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步全部账号'}
+          </button>
+        </div>
+      </MobileFilterSheet>
 
       <div className="info-tip" style={{ marginBottom: 12 }}>
         新增令牌会调用站点 API 创建新密钥，再自动同步到本地。支持设置分组、额度、过期时间和 IP 白名单；已存在密钥可直接用“同步站点令牌”读取。
@@ -866,48 +941,50 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
             ) : null}
             <div style={sectionCardStyle}>
               <div style={sectionLabelStyle}>基本信息</div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>令牌名称</div>
-                <input
-                  placeholder="令牌名称"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>令牌值</div>
-                <textarea
-                  placeholder={editingTokenValueLoading ? '令牌加载中...' : '令牌值'}
-                  value={editForm.token}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, token: e.target.value }))}
-                  style={{
-                    ...inputStyle,
-                    minHeight: 96,
-                    resize: 'vertical',
-                    fontFamily: 'var(--font-mono)',
-                    lineHeight: 1.5,
-                  }}
-                  disabled={editingTokenValueLoading}
-                />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>分组</div>
-                <ModernSelect
-                  value={editForm.group || 'default'}
-                  onChange={(nextValue) => setEditForm((prev) => ({ ...prev, group: nextValue || 'default' }))}
-                  options={(editGroupOptions.length > 0 ? editGroupOptions : ['default']).map((group) => ({
-                    value: group,
-                    label: group,
-                  }))}
-                  placeholder={editGroupLoading ? '分组加载中...' : '选择分组'}
-                  disabled={editGroupLoading}
-                />
-              </div>
+              <ResponsiveFormGrid>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>令牌名称</div>
+                  <input
+                    placeholder="令牌名称"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>分组</div>
+                  <ModernSelect
+                    value={editForm.group || 'default'}
+                    onChange={(nextValue) => setEditForm((prev) => ({ ...prev, group: nextValue || 'default' }))}
+                    options={(editGroupOptions.length > 0 ? editGroupOptions : ['default']).map((group) => ({
+                      value: group,
+                      label: group,
+                    }))}
+                    placeholder={editGroupLoading ? '分组加载中...' : '选择分组'}
+                    disabled={editGroupLoading}
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>令牌值</div>
+                  <textarea
+                    placeholder={editingTokenValueLoading ? '令牌加载中...' : '令牌值'}
+                    value={editForm.token}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, token: e.target.value }))}
+                    style={{
+                      ...inputStyle,
+                      minHeight: 96,
+                      resize: 'vertical',
+                      fontFamily: 'var(--font-mono)',
+                      lineHeight: 1.5,
+                    }}
+                    disabled={editingTokenValueLoading}
+                  />
+                </div>
+              </ResponsiveFormGrid>
             </div>
             <div style={sectionCardStyle}>
               <div style={sectionLabelStyle}>状态设置</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              <ResponsiveFormGrid>
                 <label style={toggleCardStyle}>
                   <input
                     type="checkbox"
@@ -932,7 +1009,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                     <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>优先作为该账号的默认转发令牌</span>
                   </div>
                 </label>
-              </div>
+              </ResponsiveFormGrid>
             </div>
           </>
         ) : null}
@@ -954,9 +1031,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       )}
 
       {isMobile && selectedTokenIds.length > 0 && (
-        <div className="mobile-actions-bar">
-          <span className="mobile-actions-info">已选 {selectedTokenIds.length} 项</span>
-          <div className="mobile-actions-row">
+        <MobileBatchBar info={`已选 ${selectedTokenIds.length} 项`}>
             <button onClick={() => runBatchTokenAction('enable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
               批量启用
             </button>
@@ -966,8 +1041,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
             <button data-testid="tokens-batch-delete" onClick={() => runBatchTokenAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
               批量删除
             </button>
-          </div>
-        </div>
+        </MobileBatchBar>
       )}
 
       <CenteredModal
@@ -977,8 +1051,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         maxWidth={820}
         bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div style={{ gridColumn: '1 / span 2' }}>
+        <ResponsiveFormGrid>
+          <div style={{ gridColumn: '1 / -1' }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>所属账号</div>
             <ModernSelect
               value={String(form.accountId || 0)}
@@ -1002,7 +1076,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
           {createHintModelName ? (
             <div
               style={{
-                gridColumn: '1 / span 2',
+                gridColumn: '1 / -1',
                 fontSize: 12,
                 color: 'var(--color-text-secondary)',
                 background: 'color-mix(in srgb, var(--color-info) 10%, var(--color-bg))',
@@ -1036,7 +1110,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
               disabled={!form.accountId || groupLoading}
             />
           </div>
-          <div style={{ gridColumn: '1 / span 2', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
               <input
                 type="checkbox"
@@ -1072,10 +1146,10 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
               style={inputStyle}
             />
           </div>
-          <div style={{ gridColumn: '1 / span 2', display: 'flex', alignItems: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
             将在选中账号所属站点直接创建新密钥
           </div>
-        </div>
+        </ResponsiveFormGrid>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
           <button onClick={handleToggleAdd} className="btn btn-ghost">取消</button>
@@ -1102,11 +1176,12 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
               {accountClusteredTokens.map((token: any) => {
                 const loadingPrefix = `token-${token.id}`;
                 const isPending = isMaskedPendingToken(token);
+                const isExpanded = expandedTokenIds.includes(token.id);
                 return (
                   <MobileCard
                     key={token.id}
                     title={token.name || '-'}
-                    actions={(
+                    headerActions={(
                       <input
                         type="checkbox"
                         aria-label={`选择令牌 ${token.name || token.id}`}
@@ -1114,30 +1189,34 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                         onChange={(event) => toggleTokenSelection(token.id, event.target.checked)}
                       />
                     )}
-                  >
-                    <MobileField
-                      label="令牌值"
-                      value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{token.tokenMasked || '***'}</span>}
-                    />
-                    <MobileField
-                      label="来源站点"
-                      value={token.site?.url ? (
-                        <a
-                          href={token.site.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="badge-link"
+                    footerActions={(
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleTokenDetails(token.id)}
+                          className="btn btn-link"
                         >
-                          <span className="badge badge-muted" style={{ fontSize: 11 }}>
-                            {token.site?.name || 'unknown'}
-                          </span>
-                        </a>
-                      ) : (
-                        <span className="badge badge-muted" style={{ fontSize: 11 }}>
-                          {token.site?.name || 'unknown'}
-                        </span>
-                      )}
-                    />
+                          {isExpanded ? '收起' : '详情'}
+                        </button>
+                        {!isPending ? (
+                          <button
+                            onClick={() => handleCopyToken(token.id, token.name || '')}
+                            disabled={!!rowLoading[`${loadingPrefix}-copy`]}
+                            className="btn btn-link btn-link-primary"
+                            data-testid={`token-copy-${token.id}`}
+                          >
+                            {rowLoading[`${loadingPrefix}-copy`] ? <span className="spinner spinner-sm" /> : '复制'}
+                          </button>
+                        ) : null}
+                        <button
+                          onClick={() => openEditPanel(token)}
+                          className="btn btn-link btn-link-info"
+                        >
+                          {isPending ? '编辑补全' : '编辑'}
+                        </button>
+                      </>
+                    )}
+                  >
                     <MobileField label="账号" value={token.account?.username || `account-${token.accountId}`} />
                     <MobileField label="分组" value={token.tokenGroup || 'default'} />
                     <MobileField
@@ -1148,62 +1227,74 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                         </span>
                       )}
                     />
-                    <MobileField
-                      label="默认"
-                      value={token.isDefault ? <span className="badge badge-warning" style={{ fontSize: 11 }}>默认</span> : '-'}
-                    />
-                    <MobileField label="更新时间" value={formatDateTimeLocal(token.updatedAt)} />
-                    <div className="mobile-card-actions">
-                      {!isPending && !token.isDefault && (
-                        <button
-                          onClick={() => withRowLoading(`${loadingPrefix}-default`, async () => {
-                            await api.setDefaultAccountToken(token.id);
-                            toast.success('默认令牌已更新');
-                            await load();
-                          })}
-                          disabled={!!rowLoading[`${loadingPrefix}-default`]}
-                          className="btn btn-link btn-link-info"
-                        >
-                          {rowLoading[`${loadingPrefix}-default`] ? <span className="spinner spinner-sm" /> : '设默认'}
-                        </button>
-                      )}
-                      {!isPending ? (
-                        <button
-                          onClick={() => handleCopyToken(token.id, token.name || '')}
-                          disabled={!!rowLoading[`${loadingPrefix}-copy`]}
-                          className="btn btn-link btn-link-primary"
-                          data-testid={`token-copy-${token.id}`}
-                        >
-                          {rowLoading[`${loadingPrefix}-copy`] ? <span className="spinner spinner-sm" /> : '复制'}
-                        </button>
-                      ) : null}
-                      <button
-                        onClick={() => openEditPanel(token)}
-                        className="btn btn-link btn-link-info"
-                      >
-                        {isPending ? '编辑补全' : '编辑'}
-                      </button>
-                      {!isPending ? (
-                        <button
-                          onClick={() => withRowLoading(`${loadingPrefix}-toggle`, async () => {
-                            await api.updateAccountToken(token.id, { enabled: !token.enabled });
-                            toast.success(token.enabled ? '令牌已禁用' : '令牌已启用');
-                            await load();
-                          })}
-                          disabled={!!rowLoading[`${loadingPrefix}-toggle`]}
-                          className={`btn btn-link ${token.enabled ? 'btn-link-warning' : 'btn-link-primary'}`}
-                        >
-                          {rowLoading[`${loadingPrefix}-toggle`] ? <span className="spinner spinner-sm" /> : (token.enabled ? '禁用' : '启用')}
-                        </button>
-                      ) : null}
-                      <button
-                        onClick={() => setDeleteConfirm({ mode: 'single', tokenId: token.id, tokenName: token.name || '' })}
-                        disabled={!!rowLoading[`${loadingPrefix}-delete`]}
-                        className="btn btn-link btn-link-danger"
-                      >
-                        {rowLoading[`${loadingPrefix}-delete`] ? <span className="spinner spinner-sm" /> : '删除'}
-                      </button>
-                    </div>
+                    {isExpanded ? (
+                      <div className="mobile-card-extra">
+                        <MobileField
+                          label="令牌值"
+                          stacked
+                          value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, wordBreak: 'break-all' }}>{token.tokenMasked || '***'}</span>}
+                        />
+                        <MobileField
+                          label="来源站点"
+                          value={token.site?.url ? (
+                            <a
+                              href={token.site.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="badge-link"
+                            >
+                              <span className="badge badge-muted" style={{ fontSize: 11 }}>
+                                {token.site?.name || 'unknown'}
+                              </span>
+                            </a>
+                          ) : (
+                            <span className="badge badge-muted" style={{ fontSize: 11 }}>
+                              {token.site?.name || 'unknown'}
+                            </span>
+                          )}
+                        />
+                        <MobileField
+                          label="默认"
+                          value={token.isDefault ? <span className="badge badge-warning" style={{ fontSize: 11 }}>默认</span> : '-'}
+                        />
+                        <MobileField label="更新时间" value={formatDateTimeLocal(token.updatedAt)} />
+                        <div className="mobile-card-actions">
+                          {!isPending && !token.isDefault && (
+                            <button
+                              onClick={() => withRowLoading(`${loadingPrefix}-default`, async () => {
+                                await api.setDefaultAccountToken(token.id);
+                                toast.success('默认令牌已更新');
+                                await load();
+                              })}
+                              disabled={!!rowLoading[`${loadingPrefix}-default`]}
+                              className="btn btn-link btn-link-info"
+                            >
+                              {rowLoading[`${loadingPrefix}-default`] ? <span className="spinner spinner-sm" /> : '设默认'}
+                            </button>
+                          )}
+                          {!isPending ? (
+                            <button
+                              onClick={() => withRowLoading(`${loadingPrefix}-toggle`, async () => {
+                                await api.updateAccountToken(token.id, { enabled: !token.enabled });
+                                toast.success(token.enabled ? '令牌已禁用' : '令牌已启用');
+                                await load();
+                              })}
+                              disabled={!!rowLoading[`${loadingPrefix}-toggle`]}
+                              className={`btn btn-link ${token.enabled ? 'btn-link-warning' : 'btn-link-primary'}`}
+                            >
+                              {rowLoading[`${loadingPrefix}-toggle`] ? <span className="spinner spinner-sm" /> : (token.enabled ? '禁用' : '启用')}
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={() => setDeleteConfirm({ mode: 'single', tokenId: token.id, tokenName: token.name || '' })}
+                            disabled={!!rowLoading[`${loadingPrefix}-delete`]}
+                            className="btn btn-link btn-link-danger"
+                          >
+                            {rowLoading[`${loadingPrefix}-delete`] ? <span className="spinner spinner-sm" /> : '删除'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </MobileCard>
                 );
               })}
@@ -1215,7 +1306,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                 <th style={{ width: 44 }}>
                   <input
                     type="checkbox"
-                    checked={accountClusteredTokens.length > 0 && selectedTokenIds.length === accountClusteredTokens.length}
+                    checked={allVisibleTokensSelected}
                     onChange={(e) => toggleSelectAllTokens(e.target.checked)}
                   />
                 </th>

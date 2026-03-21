@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
+import { MobileCard, MobileField } from '../components/MobileCard.js';
+import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import { useToast } from '../components/Toast.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { tr } from '../i18n.js';
@@ -94,6 +97,8 @@ export default function ProgramLogs() {
   const [markingAll, setMarkingAll] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [rowLoading, setRowLoading] = useState<Record<number, boolean>>({});
+  const [showFilters, setShowFilters] = useState(false);
+  const isMobile = useIsMobile();
   const toast = useToast();
 
   const load = async (silent = false, append = false) => {
@@ -208,37 +213,85 @@ export default function ProgramLogs() {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 14, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
-        <div style={{ minWidth: 170 }}>
-          <ModernSelect
-            size="sm"
-            value={filterType}
-            onChange={(nextValue) => setFilterType(nextValue)}
-            options={TYPE_OPTIONS.map((item) => ({
-              value: item.value,
-              label: item.label,
-            }))}
-            placeholder="全部类型"
-          />
-        </div>
+      {isMobile ? (
+        <>
+          <div className="mobile-filter-row">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
+              onClick={() => setShowFilters(true)}
+            >
+              筛选
+            </button>
+          </div>
+          <MobileFilterSheet
+            open={showFilters}
+            onClose={() => setShowFilters(false)}
+            title="筛选程序日志"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <ModernSelect
+                size="sm"
+                value={filterType}
+                onChange={(nextValue) => setFilterType(nextValue)}
+                options={TYPE_OPTIONS.map((item) => ({
+                  value: item.value,
+                  label: item.label,
+                }))}
+                placeholder="全部类型"
+              />
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={onlyUnread}
+                  onChange={(e) => {
+                    setOffset(0);
+                    setHasMore(true);
+                    setOnlyUnread(e.target.checked);
+                  }}
+                />
+                仅看未读
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                共 {visibleRows.length} 条
+              </div>
+            </div>
+          </MobileFilterSheet>
+        </>
+      ) : (
+        <div className="card" style={{ padding: 14, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ minWidth: 170 }}>
+            <ModernSelect
+              size="sm"
+              value={filterType}
+              onChange={(nextValue) => setFilterType(nextValue)}
+              options={TYPE_OPTIONS.map((item) => ({
+                value: item.value,
+                label: item.label,
+              }))}
+              placeholder="全部类型"
+            />
+          </div>
 
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          <input
-            type="checkbox"
-            checked={onlyUnread}
-            onChange={(e) => {
-              setOffset(0);
-              setHasMore(true);
-              setOnlyUnread(e.target.checked);
-            }}
-          />
-          仅看未读
-        </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            <input
+              type="checkbox"
+              checked={onlyUnread}
+              onChange={(e) => {
+                setOffset(0);
+                setHasMore(true);
+                setOnlyUnread(e.target.checked);
+              }}
+            />
+            仅看未读
+          </label>
 
-        <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
-          共 {visibleRows.length} 条
+          <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
+            共 {visibleRows.length} 条
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="card" style={{ overflowX: 'auto' }}>
         {loading ? (
@@ -246,6 +299,52 @@ export default function ProgramLogs() {
             <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
             <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
             <div className="skeleton" style={{ width: '100%', height: 34 }} />
+          </div>
+        ) : isMobile ? (
+          <div className="mobile-card-list">
+            {visibleRows.length > 0 ? visibleRows.map((row) => {
+              const level = levelLabel(row.level || 'info');
+              const eventStatus = eventStatusLabel(row);
+              return (
+                <MobileCard
+                  key={row.id}
+                  title={row.title || '-'}
+                  headerActions={(
+                    <span className={`badge ${eventStatus.cls}`} style={{ fontSize: 10 }}>
+                      {eventStatus.label}
+                    </span>
+                  )}
+                  footerActions={(
+                    row.read ? (
+                      <span className="badge badge-muted" style={{ fontSize: 11 }}>已读</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => markOneRead(row.id)}
+                        disabled={!!rowLoading[row.id]}
+                        className="btn btn-link btn-link-primary"
+                      >
+                        {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : '标记已读'}
+                      </button>
+                    )
+                  )}
+                >
+                  <MobileField label="时间" value={formatDateTimeLocal(row.createdAt)} />
+                  <MobileField label="类型" value={<span className="badge badge-muted" style={{ fontSize: 11 }}>{row.type || '-'}</span>} />
+                  <MobileField label="级别" value={<span className={`badge ${level.cls}`} style={{ fontSize: 11 }}>{level.label}</span>} />
+                  <MobileField label="状态" value={<span className={`badge ${eventStatus.cls}`} style={{ fontSize: 11 }}>{eventStatus.label}</span>} />
+                  <MobileField label="内容" value={row.message || '-'} stacked />
+                </MobileCard>
+              );
+            }) : (
+              <div className="empty-state">
+                <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <div className="empty-state-title">暂无日志</div>
+                <div className="empty-state-desc">当前筛选条件下没有程序日志。</div>
+              </div>
+            )}
           </div>
         ) : visibleRows.length > 0 ? (
           <table className="data-table program-logs-table">

@@ -18,6 +18,7 @@ import { SITE_DOCS_URL, SITE_GITHUB_URL } from './docsLink.js';
 import { useAnimatedVisibility } from './components/useAnimatedVisibility.js';
 import { useIsMobile } from './components/useIsMobile.js';
 import { MobileDrawer } from './components/MobileDrawer.js';
+import CenteredModal from './components/CenteredModal.js';
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const Sites = lazy(() => import('./pages/Sites.js'));
 const Accounts = lazy(() => import('./pages/Accounts.js'));
@@ -293,7 +294,6 @@ function UserProfileModal({
   onSave: (nextProfile: UserProfile) => void;
   t: (text: string) => string;
 }) {
-  const presence = useAnimatedVisibility(open, 200);
   const [name, setName] = useState(profile.name);
   const [avatarSeed, setAvatarSeed] = useState(profile.avatarSeed);
   const [avatarStyle, setAvatarStyle] = useState(profile.avatarStyle);
@@ -306,8 +306,6 @@ function UserProfileModal({
     setAvatarStyle(profile.avatarStyle);
     setError('');
   }, [open, profile]);
-
-  if (!presence.shouldRender) return null;
 
   const avatarUrl = buildDicebearAvatarUrl(avatarStyle, avatarSeed);
 
@@ -348,55 +346,60 @@ function UserProfileModal({
   };
 
   return (
-    <div className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={onClose}>
-      <div className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
-        <div className="modal-header">{t('个人信息')}</div>
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-            <div className="topbar-avatar" style={{ width: 40, height: 40, fontSize: 14 }}>
-              <img
-                src={avatarUrl}
-                alt={name.trim() || 'avatar'}
-                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-              />
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('右上角头像实时预览')}</div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{t('用户名')}</div>
-            <input
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setError('');
-              }}
-              placeholder={t('例如：小王')}
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              {t('头像（Dicebear 随机） · 风格：')}{avatarStyle}
-            </div>
-            <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={handleRandomAvatar}>
-              {t('换一个随机头像')}
-            </button>
-          </div>
-
-          {error && (
-            <div className="alert alert-error">
-              {error}
-            </div>
-          )}
-        </div>
-        <div className="modal-footer">
+    <CenteredModal
+      open={open}
+      onClose={onClose}
+      title={t('个人信息')}
+      maxWidth={440}
+      closeOnBackdrop
+      closeOnEscape
+      bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+      footer={(
+        <>
           <button onClick={onClose} className="btn btn-ghost">{t('取消')}</button>
           <button onClick={handleSubmit} className="btn btn-primary">{t('保存')}</button>
+        </>
+      )}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
+        <div className="topbar-avatar" style={{ width: 40, height: 40, fontSize: 14 }}>
+          <img
+            src={avatarUrl}
+            alt={name.trim() || 'avatar'}
+            style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+          />
         </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('右上角头像实时预览')}</div>
       </div>
-    </div>
+
+      <div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{t('用户名')}</div>
+        <input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError('');
+          }}
+          placeholder={t('例如：小王')}
+          style={inputStyle}
+        />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+          {t('头像（Dicebear 随机） · 风格：')}{avatarStyle}
+        </div>
+        <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={handleRandomAvatar}>
+          {t('换一个随机头像')}
+        </button>
+      </div>
+
+      {error && (
+        <div className="alert alert-error">
+          {error}
+        </div>
+      )}
+    </CenteredModal>
   );
 }
 
@@ -469,7 +472,7 @@ function AppShell() {
   const notifBtnRef = useRef<HTMLButtonElement>(null);
   const latestTaskEventIdRef = useRef(0);
   const toast = useToast();
-  const isMobile = useIsMobile(768);
+  const isMobile = useIsMobile();
   const resolvedTheme: 'light' | 'dark' = themeMode === 'system'
     ? (systemPrefersDark ? 'dark' : 'light')
     : themeMode;
@@ -505,6 +508,12 @@ function AppShell() {
   useEffect(() => {
     document.documentElement.setAttribute('data-layout', isMobile ? 'mobile' : 'desktop');
   }, [isMobile]);
+
+  useEffect(() => {
+    if (!isMobile && drawerOpen) {
+      setDrawerOpen(false);
+    }
+  }, [drawerOpen, isMobile]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -639,8 +648,9 @@ function AppShell() {
         {isMobile && (
           <button
             className="topbar-icon-btn"
-            aria-label="Open navigation"
+            aria-label={t('打开导航')}
             onClick={() => setDrawerOpen(true)}
+            type="button"
           >
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -729,9 +739,12 @@ function AppShell() {
             )}
           </div>
           <div ref={userMenuRef} style={{ position: 'relative' }}>
-            <div
+            <button
+              type="button"
               className="topbar-avatar"
               aria-label={displayName}
+              aria-haspopup="menu"
+              aria-expanded={showUserMenu}
               onClick={() => {
                 setShowUserMenu(!showUserMenu);
                 setShowThemeMenu(false);
@@ -742,7 +755,7 @@ function AppShell() {
                 alt={displayName}
                 style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
               />
-            </div>
+            </button>
             {userMenuPresence.shouldRender && (
               <div className={`user-dropdown ${userMenuPresence.isVisible ? '' : 'is-closing'}`.trim()}>
                 <button
@@ -770,7 +783,12 @@ function AppShell() {
 
       <div className="app-layout">
         {isMobile ? (
-          <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+          <MobileDrawer
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            title={t('导航菜单')}
+            closeLabel={t('关闭导航')}
+          >
             <div className="mobile-drawer-header">
               <img src="/logo.png" alt="Metapi" />
               <span>Metapi</span>
@@ -795,7 +813,7 @@ function AppShell() {
               ))}
               <div className="mobile-nav-group">
                 <div className="mobile-nav-label">{t('更多')}</div>
-                {topNavItems.filter(n => n.to !== '/').map((item) => (
+                {topNavItems.filter((n) => n.to !== '/').map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}

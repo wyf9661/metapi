@@ -13,6 +13,7 @@ describe('oauth loopback callback server', () => {
     const callbackHandler = vi.fn(async () => ({ accountId: 12, siteId: 34 }));
     const started = await startOAuthLoopbackCallbackServer('codex', {
       callbackHandler,
+      port: 0,
     });
 
     const response = await fetch(`${started.origin}/auth/callback?state=test-state&code=test-code`);
@@ -34,6 +35,7 @@ describe('oauth loopback callback server', () => {
     });
     const started = await startOAuthLoopbackCallbackServer('claude', {
       callbackHandler,
+      port: 0,
     });
 
     const response = await fetch(`${started.origin}/callback?state=test-state&code=test-code`);

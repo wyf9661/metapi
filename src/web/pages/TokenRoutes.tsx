@@ -7,7 +7,7 @@ import { BrandGlyph, getBrand, InlineBrandIcon, type BrandInfo } from '../compon
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
-import { MobileDrawer } from '../components/MobileDrawer.js';
+import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { tr } from '../i18n.js';
 import {
@@ -143,7 +143,7 @@ export default function TokenRoutes() {
   const [expandedSourceGroupMap, setExpandedSourceGroupMap] = useState<Record<string, boolean>>({});
   const [expandedRouteIds, setExpandedRouteIds] = useState<number[]>([]);
   const [addChannelModalRouteId, setAddChannelModalRouteId] = useState<number | null>(null);
-  const isMobile = useIsMobile(768);
+  const isMobile = useIsMobile();
 
   const {
     channelsByRouteId,
@@ -1122,27 +1122,25 @@ export default function TokenRoutes() {
           >
             {tr('筛选')}
           </button>
-          <MobileDrawer open={showFilters} onClose={() => setShowFilters(false)}>
-            <div className="mobile-filter-panel">
-              <RouteFilterBar
-                totalRouteCount={listVisibleRoutes.length}
-                activeBrand={activeBrand}
-                setActiveBrand={setActiveBrand}
-                activeSite={activeSite}
-                setActiveSite={setActiveSite}
-                activeEndpointType={activeEndpointType}
-                setActiveEndpointType={setActiveEndpointType}
-                activeGroupFilter={activeGroupFilter}
-                setActiveGroupFilter={setActiveGroupFilter}
-                brandList={brandList}
-                siteList={siteList}
-                endpointTypeList={endpointTypeList}
-                groupRouteList={groupRouteList}
-                collapsed={false}
-                onToggle={() => setShowFilters(false)}
-              />
-            </div>
-          </MobileDrawer>
+          <MobileFilterSheet open={showFilters} onClose={() => setShowFilters(false)} title={tr('筛选路由')}>
+            <RouteFilterBar
+              totalRouteCount={listVisibleRoutes.length}
+              activeBrand={activeBrand}
+              setActiveBrand={setActiveBrand}
+              activeSite={activeSite}
+              setActiveSite={setActiveSite}
+              activeEndpointType={activeEndpointType}
+              setActiveEndpointType={setActiveEndpointType}
+              activeGroupFilter={activeGroupFilter}
+              setActiveGroupFilter={setActiveGroupFilter}
+              brandList={brandList}
+              siteList={siteList}
+              endpointTypeList={endpointTypeList}
+              groupRouteList={groupRouteList}
+              collapsed={false}
+              onToggle={() => setShowFilters(false)}
+            />
+          </MobileFilterSheet>
         </>
       ) : (
         <RouteFilterBar
@@ -1190,32 +1188,103 @@ export default function TokenRoutes() {
         {visibleRoutes.map((route) => {
           const isExpanded = expandedRouteIds.includes(route.id);
           const isReadOnlyRoute = route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true;
+          const exactRoute = isRouteExactModel(route);
+          const explicitGroupRoute = isExplicitGroupRoute(route);
+          const channelManagementDisabled = explicitGroupRoute;
 
           if (isMobile) {
             return (
-              <MobileCard
-                key={route.id}
-                title={resolveRouteTitle(route)}
-                actions={(
-                  <span className={`badge ${isReadOnlyRoute ? 'badge-muted' : (route.enabled ? 'badge-success' : 'badge-muted')}`} style={{ fontSize: 10 }}>
-                    {isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))}
-                  </span>
+              <div key={route.id} style={{ display: 'grid', gap: 8 }}>
+                <MobileCard
+                  title={resolveRouteTitle(route)}
+                  headerActions={(
+                    <span className={`badge ${isReadOnlyRoute ? 'badge-muted' : (route.enabled ? 'badge-success' : 'badge-muted')}`} style={{ fontSize: 10 }}>
+                      {isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))}
+                    </span>
+                  )}
+                  footerActions={(
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-link"
+                        onClick={() => toggleExpand(route.id)}
+                      >
+                        {isExpanded ? tr('收起') : tr('详情')}
+                      </button>
+                      {!isReadOnlyRoute && (
+                        <button
+                          type="button"
+                          className="btn btn-link"
+                          onClick={() => handleEditRoute(route)}
+                        >
+                          {tr('编辑')}
+                        </button>
+                      )}
+                      {!isReadOnlyRoute && (
+                        <button
+                          type="button"
+                          className="btn btn-link"
+                          onClick={() => handleToggleRouteEnabled(route)}
+                        >
+                          {route.enabled ? tr('禁用') : tr('启用')}
+                        </button>
+                      )}
+                      {!isReadOnlyRoute && !channelManagementDisabled && (
+                        <button
+                          type="button"
+                          className="btn btn-link"
+                          onClick={() => setAddChannelModalRouteId(route.id)}
+                        >
+                          {tr('添加通道')}
+                        </button>
+                      )}
+                    </>
+                  )}
+                >
+                  <MobileField label="模型" value={route.modelPattern} stacked />
+                  <MobileField label="通道" value={route.channelCount} />
+                  <MobileField label="策略" value={isReadOnlyRoute ? tr('未生成') : getRouteRoutingStrategyLabel(route.routingStrategy)} />
+                  <MobileField label="状态" value={isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))} />
+                  {explicitGroupRoute && (
+                    <MobileField label="模式" value={tr('群组聚合')} />
+                  )}
+                  {!exactRoute && !explicitGroupRoute && (
+                    <MobileField label="模式" value={tr('通配符路由')} />
+                  )}
+                </MobileCard>
+                {isExpanded && (
+                  <RouteCard
+                    route={route}
+                    brand={routeBrandById.get(route.id) || null}
+                    expanded
+                    compact
+                    onToggleExpand={stableToggleExpand}
+                    onEdit={stableEditRoute}
+                    onDelete={stableDeleteRoute}
+                    onToggleEnabled={stableToggleEnabled}
+                    onRoutingStrategyChange={stableRoutingStrategyChange}
+                    updatingRoutingStrategy={!!updatingRoutingStrategyByRoute[route.id]}
+                    channels={channelsByRouteId[route.id]}
+                    loadingChannels={!!loadingChannelsByRouteId[route.id]}
+                    routeDecision={decisionByRoute[route.id] || null}
+                    loadingDecision={loadingDecision}
+                    candidateView={getRouteCandidateView(route.id)}
+                    channelTokenDraft={channelTokenDraft}
+                    updatingChannel={updatingChannel}
+                    savingPriority={!!savingPriorityByRoute[route.id]}
+                    onTokenDraftChange={stableTokenDraftChange}
+                    onSaveToken={stableChannelTokenSave}
+                    onDeleteChannel={stableDeleteChannel}
+                    onChannelDragEnd={stableChannelDragEnd}
+                    missingTokenSiteItems={missingTokenSiteItemsByRouteId[route.id] || EMPTY_MISSING_ITEMS}
+                    missingTokenGroupItems={missingTokenGroupItemsByRouteId[route.id] || EMPTY_MISSING_GROUP_ITEMS}
+                    onCreateTokenForMissing={stableCreateTokenForMissing}
+                    onAddChannel={stableAddChannel}
+                    expandedSourceGroupMap={expandedSourceGroupMap}
+                    onToggleSourceGroup={stableToggleSourceGroup}
+                  />
                 )}
-              >
-                <MobileField label="模型" value={route.modelPattern} />
-                <MobileField label="通道" value={route.channelCount} />
-                <MobileField label="策略" value={isReadOnlyRoute ? tr('未生成') : getRouteRoutingStrategyLabel(route.routingStrategy)} />
-                <MobileField label="状态" value={isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))} />
-                <div className="mobile-card-actions">
-                  <button
-                    type="button"
-                    className="btn btn-link"
-                    onClick={() => toggleExpand(route.id)}
-                  >
-                    {isExpanded ? '收起' : '详情'}
-                  </button>
-                </div>
-              </MobileCard>
+              </div>
             );
           }
 

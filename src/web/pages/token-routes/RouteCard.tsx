@@ -40,6 +40,7 @@ type RouteCardProps = {
   route: RouteSummaryRow;
   brand: BrandInfo | null;
   expanded: boolean;
+  compact?: boolean;
   onToggleExpand: (routeId: number) => void;
   onEdit: (route: RouteSummaryRow) => void;
   onDelete: (routeId: number) => void;
@@ -100,6 +101,7 @@ function RouteCardInner({
   route,
   brand,
   expanded,
+  compact = false,
   onToggleExpand,
   onEdit,
   onDelete,
@@ -263,86 +265,127 @@ function RouteCardInner({
 
   // Expanded card
   return (
-    <div className="card route-card-expanded" style={{ padding: 16 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <code style={{ fontWeight: 600, fontSize: 13, background: 'var(--color-bg)', padding: '4px 10px', borderRadius: 6, color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            {routeIcon.kind === 'brand' ? (
-              <BrandGlyph icon={routeIcon.value} alt={title} size={20} fallbackText={title} />
-            ) : routeIcon.kind === 'text' ? (
-              <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--color-bg-card)', fontSize: 14, lineHeight: 1 }}>
-                {routeIcon.value}
-              </span>
-            ) : routeIcon.kind === 'auto' && brand ? (
-              <BrandGlyph brand={brand} alt={title} size={20} fallbackText={title} />
-            ) : routeIcon.kind === 'auto' ? (
-              <InlineBrandIcon model={route.modelPattern} size={20} />
+    <div className={`card route-card-expanded ${compact ? 'route-card-expanded-compact' : ''}`.trim()} style={{ padding: compact ? 14 : 16 }}>
+      {!compact ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <code style={{ fontWeight: 600, fontSize: 13, background: 'var(--color-bg)', padding: '4px 10px', borderRadius: 6, color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              {routeIcon.kind === 'brand' ? (
+                <BrandGlyph icon={routeIcon.value} alt={title} size={20} fallbackText={title} />
+              ) : routeIcon.kind === 'text' ? (
+                <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--color-bg-card)', fontSize: 14, lineHeight: 1 }}>
+                  {routeIcon.value}
+                </span>
+              ) : routeIcon.kind === 'auto' && brand ? (
+                <BrandGlyph brand={brand} alt={title} size={20} fallbackText={title} />
+              ) : routeIcon.kind === 'auto' ? (
+                <InlineBrandIcon model={route.modelPattern} size={20} />
+              ) : null}
+              {title}
+            </code>
+            {route.displayName && route.displayName.trim() !== route.modelPattern ? (
+              <span className="badge badge-muted" style={{ fontSize: 10 }}>{route.modelPattern}</span>
             ) : null}
-            {title}
-          </code>
-          {route.displayName && route.displayName.trim() !== route.modelPattern ? (
-            <span className="badge badge-muted" style={{ fontSize: 10 }}>{route.modelPattern}</span>
-          ) : null}
-          {readOnlyRoute ? (
-            <span className="badge badge-muted" style={{ fontSize: 10 }}>
-              {tr('未生成')}
-            </span>
-          ) : (
-            <button
-              className={`badge route-enable-toggle ${route.enabled ? 'is-enabled' : 'is-disabled'}`}
-              style={{ fontSize: 11, cursor: 'pointer', border: 'none' }}
-              onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
-              data-tooltip={route.enabled ? '点击禁用此路由' : '点击启用此路由'}
-            >
-              {route.enabled ? tr('启用') : tr('禁用')}
-            </button>
-          )}
-          {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
-            <>
-              <span className="badge badge-info" style={{ fontSize: 10 }}>
-                {explicitGroupSourceCount} {tr('来源模型')}
-              </span>
+            {readOnlyRoute ? (
               <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                {tr('未生成')}
+              </span>
+            ) : (
+              <button
+                className={`badge route-enable-toggle ${route.enabled ? 'is-enabled' : 'is-disabled'}`}
+                style={{ fontSize: 11, cursor: 'pointer', border: 'none' }}
+                onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
+                data-tooltip={route.enabled ? '点击禁用此路由' : '点击启用此路由'}
+              >
+                {route.enabled ? tr('启用') : tr('禁用')}
+              </button>
+            )}
+            {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
+              <>
+                <span className="badge badge-info" style={{ fontSize: 10 }}>
+                  {explicitGroupSourceCount} {tr('来源模型')}
+                </span>
+                <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                  {route.channelCount} {tr('通道')}
+                </span>
+              </>
+            ) : (
+              <span className="badge badge-info" style={{ fontSize: 10 }}>
                 {route.channelCount} {tr('通道')}
               </span>
-            </>
-          ) : (
+            )}
+            {readOnlyRoute && (
+              <span className="badge badge-warning" style={{ fontSize: 10 }}>
+                {tr('0 通道')}
+              </span>
+            )}
+            {savingPriority && (
+              <span className="badge badge-warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {!readOnlyRoute && (explicitGroupRoute || !exactRoute) && (
+              <button onClick={() => onEdit(route)} className="btn btn-link">{tr('编辑群组')}</button>
+            )}
+            {!readOnlyRoute && <button onClick={() => onDelete(route.id)} className="btn btn-link btn-link-danger">{tr('删除路由')}</button>}
+            <button
+              onClick={() => onToggleExpand(route.id)}
+              className="btn btn-ghost"
+              style={{ padding: '4px 8px', border: '1px solid var(--color-border)' }}
+              data-tooltip={tr('收起')}
+            >
+              <svg
+                width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"
+                style={{ transform: 'rotate(180deg)' }}
+                aria-hidden
+              >
+                <path d="m5 7 5 6 5-6" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                {tr('路由详情与通道管理')}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                {title}
+              </div>
+            </div>
+            {!readOnlyRoute && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {!exactRoute && (
+                  <button onClick={() => onEdit(route)} className="btn btn-link">{explicitGroupRoute ? tr('编辑群组') : tr('编辑路由')}</button>
+                )}
+                <button onClick={() => onDelete(route.id)} className="btn btn-link btn-link-danger">{tr('删除路由')}</button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {readOnlyRoute ? (
+              <span className="badge badge-muted" style={{ fontSize: 10 }}>{tr('未生成')}</span>
+            ) : (
+              <span className={`badge ${route.enabled ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 10 }}>
+                {route.enabled ? tr('启用') : tr('禁用')}
+              </span>
+            )}
             <span className="badge badge-info" style={{ fontSize: 10 }}>
               {route.channelCount} {tr('通道')}
             </span>
-          )}
-          {readOnlyRoute && (
-            <span className="badge badge-warning" style={{ fontSize: 10 }}>
-              {tr('0 通道')}
-            </span>
-          )}
-          {savingPriority && (
-            <span className="badge badge-warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</span>
-          )}
+            {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
+              <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                {explicitGroupSourceCount} {tr('来源模型')}
+              </span>
+            ) : null}
+            {savingPriority ? <span className="badge badge-warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</span> : null}
+          </div>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {!readOnlyRoute && (explicitGroupRoute || !exactRoute) && (
-            <button onClick={() => onEdit(route)} className="btn btn-link">{tr('编辑群组')}</button>
-          )}
-          {!readOnlyRoute && <button onClick={() => onDelete(route.id)} className="btn btn-link btn-link-danger">{tr('删除路由')}</button>}
-          <button
-            onClick={() => onToggleExpand(route.id)}
-            className="btn btn-ghost"
-            style={{ padding: '4px 8px', border: '1px solid var(--color-border)' }}
-            data-tooltip={tr('收起')}
-          >
-            <svg
-              width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{ transform: 'rotate(180deg)' }}
-              aria-hidden
-            >
-              <path d="m5 7 5 6 5-6" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      )}
 
       {explicitGroupRoute ? (
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
@@ -355,11 +398,11 @@ function RouteCardInner({
       ) : null}
 
       {!readOnlyRoute && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <div style={{ display: 'flex', alignItems: compact ? 'stretch' : 'center', flexDirection: compact ? 'column' : 'row', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', minWidth: compact ? '100%' : undefined }}>
             {tr('路由策略')}
           </div>
-          <div style={{ minWidth: 220, maxWidth: 320, flex: '1 1 220px' }}>
+          <div style={{ minWidth: compact ? '100%' : 220, maxWidth: compact ? '100%' : 320, flex: compact ? '1 1 100%' : '1 1 220px', width: compact ? '100%' : undefined }}>
             <ModernSelect
               size="sm"
               value={routingStrategy}
@@ -374,7 +417,7 @@ function RouteCardInner({
       )}
 
       {/* Missing token hints + Add channel button */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: compact ? 'stretch' : 'flex-start', flexDirection: compact ? 'column' : 'row', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {!channelManagementDisabled && (missingTokenSiteItems.length > 0 || missingTokenGroupItems.length > 0) ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
             {missingTokenSiteItems.length > 0 && (
@@ -417,7 +460,7 @@ function RouteCardInner({
           <button
             onClick={() => onAddChannel(route.id)}
             className="btn btn-ghost"
-            style={{ fontSize: 12, padding: '6px 10px', color: 'var(--color-primary)', border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}
+            style={{ fontSize: 12, padding: '6px 10px', color: 'var(--color-primary)', border: '1px solid var(--color-border)', whiteSpace: compact ? 'normal' : 'nowrap', width: compact ? '100%' : 'auto' }}
           >
             + {tr('添加通道')}
           </button>
@@ -498,6 +541,7 @@ function RouteCardInner({
                                 loadingDecision={loadingDecision}
                                 isSavingPriority={!!savingPriority}
                                 readOnly
+                                mobile={compact}
                                 tokenOptions={tokenOptions}
                                 activeTokenId={activeTokenId}
                                 isUpdatingToken={!!updatingChannel[channel.id]}
@@ -521,6 +565,7 @@ function RouteCardInner({
                                 isExactRoute={exactRoute}
                                 loadingDecision={loadingDecision}
                                 isSavingPriority={savingPriority}
+                                mobile={compact}
                                 tokenOptions={tokenOptions}
                                 activeTokenId={activeTokenId}
                                 isUpdatingToken={!!updatingChannel[channel.id]}

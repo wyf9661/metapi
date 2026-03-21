@@ -3,9 +3,13 @@ import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
+import MobileBatchBar from '../components/MobileBatchBar.js';
+import { MobileCard, MobileField } from '../components/MobileCard.js';
+import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import { tr } from '../i18n.js';
 import { generateDownstreamSkKey } from './helpers/generateDownstreamSkKey.js';
 
@@ -1199,6 +1203,7 @@ export default function DownstreamKeys() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const [batchMetadataOpen, setBatchMetadataOpen] = useState(false);
   const [batchMetadataForm, setBatchMetadataForm] = useState<BatchMetadataForm>({
@@ -1207,6 +1212,7 @@ export default function DownstreamKeys() {
     tagOperation: 'keep',
     tags: [],
   });
+  const isMobile = useIsMobile();
 
   const load = async () => {
     setLoading(true);
@@ -1571,6 +1577,69 @@ export default function DownstreamKeys() {
     await batchRun('批量归类', selectedIds);
   };
 
+  const filterControls = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="toolbar" style={{ marginBottom: 0, alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 420px', minWidth: 280, flexWrap: 'wrap' }}>
+          <div className="toolbar-search" style={{ maxWidth: 'unset', flex: '1 1 320px' }}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="搜索名称、备注、模型、主分组或标签"
+            />
+          </div>
+          <InlineToggle value={tagMatchMode} onChange={setTagMatchMode} />
+        </div>
+        <div style={{ minWidth: 170 }}>
+          <ModernSelect value={status} onChange={(value) => setStatus((value as Status) || 'all')} options={statusOptions} />
+        </div>
+        <div style={{ minWidth: 170 }}>
+          <ModernSelect value={groupFilter} onChange={(value) => setGroupFilter(String(value || '__all__'))} options={groupFilterOptions} />
+        </div>
+        <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => { setSearchInput(''); setStatus('all'); setGroupFilter('__all__'); setSelectedTags([]); setTagMatchMode('any'); }}>
+          重置筛选
+        </button>
+      </div>
+
+      {(activeTagFilters.length > 0 || tagSuggestions.length > 0) ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {activeTagFilters.map((tag) => {
+            const fromPinnedTags = selectedTags.some((item) => item.toLowerCase() === tag.toLowerCase());
+            return (
+              <button
+                key={tag}
+                className="btn btn-ghost"
+                style={{ ...tagChipStyle('accent'), cursor: 'pointer', opacity: fromPinnedTags ? 1 : 0.82 }}
+                onClick={() => {
+                  if (fromPinnedTags) {
+                    setSelectedTags((current) => current.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
+                    return;
+                  }
+                  setSearchInput((current) => current
+                    .split(/[\r\n,，]+/g)
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                    .filter((item) => item.toLowerCase() !== tag.toLowerCase())
+                    .join(', '));
+                }}
+              >
+                {tag} ×
+              </button>
+            );
+          })}
+          {tagSuggestions.filter((tag) => !activeTagFilters.some((current) => current.toLowerCase() === tag.toLowerCase())).slice(0, 8).map((tag) => (
+            <button key={tag} className="btn btn-ghost" style={tagChipStyle()} onClick={() => addTagFilter(tag)}>
+              {tag}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+
   const empty = !loading && visibleItems.length === 0;
 
   return (
@@ -1618,14 +1687,24 @@ export default function DownstreamKeys() {
       </div>
 
       {selectedIds.length > 0 ? (
-        <div className="card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>已选 {selectedIds.length} 个密钥</span>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>批量归类/标签</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量启用', selectedIds)} disabled={batchActionLoading}>批量启用</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量禁用', selectedIds)} disabled={batchActionLoading}>批量禁用</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量清零用量', selectedIds)} disabled={batchActionLoading}>批量清零用量</button>
-          <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>批量删除</button>
-        </div>
+        isMobile ? (
+          <MobileBatchBar info={`已选 ${selectedIds.length} 个密钥`}>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>归类/标签</button>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量启用', selectedIds)} disabled={batchActionLoading}>启用</button>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量禁用', selectedIds)} disabled={batchActionLoading}>禁用</button>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量清零用量', selectedIds)} disabled={batchActionLoading}>清零</button>
+            <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>删除</button>
+          </MobileBatchBar>
+        ) : (
+          <div className="card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>已选 {selectedIds.length} 个密钥</span>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>批量归类/标签</button>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量启用', selectedIds)} disabled={batchActionLoading}>批量启用</button>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量禁用', selectedIds)} disabled={batchActionLoading}>批量禁用</button>
+            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量清零用量', selectedIds)} disabled={batchActionLoading}>批量清零用量</button>
+            <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>批量删除</button>
+          </div>
+        )
       ) : null}
 
       <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1635,65 +1714,28 @@ export default function DownstreamKeys() {
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>筛选与列表</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>按名称、状态、主分组和标签快速定位下游密钥。</div>
             </div>
-          </div>
-          <div className="toolbar" style={{ marginBottom: 0, alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 420px', minWidth: 280, flexWrap: 'wrap' }}>
-              <div className="toolbar-search" style={{ maxWidth: 'unset', flex: '1 1 320px' }}>
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="搜索名称、备注、模型、主分组或标签"
-                />
-              </div>
-              <InlineToggle value={tagMatchMode} onChange={setTagMatchMode} />
-            </div>
-            <div style={{ minWidth: 170 }}>
-              <ModernSelect value={status} onChange={(value) => setStatus((value as Status) || 'all')} options={statusOptions} />
-            </div>
-            <div style={{ minWidth: 170 }}>
-              <ModernSelect value={groupFilter} onChange={(value) => setGroupFilter(String(value || '__all__'))} options={groupFilterOptions} />
-            </div>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => { setSearchInput(''); setStatus('all'); setGroupFilter('__all__'); setSelectedTags([]); setTagMatchMode('any'); }}>
-              重置筛选
-            </button>
-          </div>
-
-          {(activeTagFilters.length > 0 || tagSuggestions.length > 0) ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {activeTagFilters.map((tag) => {
-                const fromPinnedTags = selectedTags.some((item) => item.toLowerCase() === tag.toLowerCase());
-                return (
-                  <button
-                    key={tag}
-                    className="btn btn-ghost"
-                    style={{ ...tagChipStyle('accent'), cursor: 'pointer', opacity: fromPinnedTags ? 1 : 0.82 }}
-                    onClick={() => {
-                      if (fromPinnedTags) {
-                        setSelectedTags((current) => current.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
-                        return;
-                      }
-                      setSearchInput((current) => current
-                        .split(/[\r\n,，]+/g)
-                        .map((item) => item.trim())
-                        .filter(Boolean)
-                        .filter((item) => item.toLowerCase() !== tag.toLowerCase())
-                        .join(', '));
-                    }}
-                  >
-                    {tag} ×
-                  </button>
-                );
-              })}
-              {tagSuggestions.filter((tag) => !activeTagFilters.some((current) => current.toLowerCase() === tag.toLowerCase())).slice(0, 8).map((tag) => (
-                <button key={tag} className="btn btn-ghost" style={tagChipStyle()} onClick={() => addTagFilter(tag)}>
-                  {tag}
+            {isMobile && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => setShowFilters(true)}>
+                  筛选
                 </button>
-              ))}
-            </div>
-          ) : null}
+                <button
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                  onClick={() => toggleSelectAllVisible(!allVisibleSelected)}
+                >
+                  {allVisibleSelected ? '取消全选' : '全选可见'}
+                </button>
+              </div>
+            )}
+          </div>
+          {isMobile ? (
+            <MobileFilterSheet open={showFilters} onClose={() => setShowFilters(false)} title="筛选下游密钥">
+              {filterControls}
+            </MobileFilterSheet>
+          ) : (
+            filterControls
+          )}
         </div>
 
         {loading ? (
@@ -1702,6 +1744,61 @@ export default function DownstreamKeys() {
           <div className="empty-state" style={{ padding: 40 }}>
             <div className="empty-state-title">暂无下游密钥</div>
             <div className="empty-state-desc">可以先新增一条密钥，或调整筛选条件查看已有数据。</div>
+          </div>
+        ) : isMobile ? (
+          <div className="mobile-card-list">
+            {visibleItems.map((row) => {
+              const loadingToggle = !!rowLoading[`toggle-${row.id}`];
+              const loadingReset = !!rowLoading[`reset-${row.id}`];
+              const loadingDelete = !!rowLoading[`delete-${row.id}`];
+              const checked = selectedIds.includes(row.id);
+              return (
+                <MobileCard
+                  key={row.id}
+                  title={row.name}
+                  headerActions={(
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <StatusBadge enabled={row.enabled} />
+                      <input
+                        type="checkbox"
+                        aria-label={`选择 ${row.name}`}
+                        checked={checked}
+                        onChange={(e) => toggleSelection(row.id, e.target.checked)}
+                      />
+                    </div>
+                  )}
+                  footerActions={(
+                    <>
+                      <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>查看</button>
+                      <button className="btn btn-link" onClick={() => openEdit(row)}>编辑</button>
+                      <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? '处理中...' : (row.enabled ? '禁用' : '启用')}</button>
+                      <button className="btn btn-link" onClick={() => void resetUsage(row)} disabled={loadingReset}>{loadingReset ? '处理中...' : '清零用量'}</button>
+                      <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'single', item: row })} disabled={loadingDelete}>{loadingDelete ? '处理中...' : '删除'}</button>
+                    </>
+                  )}
+                >
+                  <MobileField
+                    label="密钥"
+                    value={(
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-text-muted)' }}>{row.keyMasked}</span>
+                        <DownstreamKeyCopyIconButton fullKey={row.key} />
+                      </span>
+                    )}
+                    stacked
+                  />
+                  {row.description ? <MobileField label="备注" value={row.description} stacked /> : null}
+                  <MobileField label="主分组" value={row.groupName || '未分组'} />
+                  <MobileField label="标签" value={summarizeTags(row.tags || [])} stacked />
+                  <MobileField label="模型" value={summarizeModelLimit(row.supportedModels || [])} stacked />
+                  <MobileField label="群组" value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
+                  <MobileField label="倍率" value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
+                  <MobileField label="额度" value={`${row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString()} / ${row.maxCost == null ? '成本不限' : formatMoney(row.maxCost)}`} stacked />
+                  <MobileField label="用量" value={`${(row.rangeUsage?.totalRequests || 0).toLocaleString()} 请求 · ${formatCompactTokens(row.rangeUsage?.totalTokens || 0)}`} stacked />
+                  <MobileField label="最近使用" value={formatIso(row.lastUsedAt)} stacked />
+                </MobileCard>
+              );
+            })}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

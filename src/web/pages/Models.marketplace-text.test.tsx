@@ -32,6 +32,8 @@ async function flushMicrotasks() {
 describe('Models marketplace text', () => {
   const originalDocument = globalThis.document;
   const originalMutationObserver = globalThis.MutationObserver;
+  const originalWindow = globalThis.window;
+  const originalMatchMedia = globalThis.matchMedia;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -75,6 +77,8 @@ describe('Models marketplace text', () => {
     vi.clearAllMocks();
     globalThis.document = originalDocument;
     globalThis.MutationObserver = originalMutationObserver;
+    globalThis.window = originalWindow;
+    globalThis.matchMedia = originalMatchMedia;
   });
 
   it('renders readable Chinese labels and fallback descriptions for marketplace models', async () => {
@@ -186,6 +190,71 @@ describe('Models marketplace text', () => {
       expect(text).toContain('NVIDIA');
       expect(text).toContain('DeepL');
       expect(text).not.toContain('其他未归类的模型');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('keeps a visible mobile filter entry on small screens', async () => {
+    const nextWindow = (originalWindow ? { ...originalWindow } : {}) as Window & typeof globalThis;
+    nextWindow.innerWidth = 768;
+    nextWindow.addEventListener = nextWindow.addEventListener || (() => {});
+    nextWindow.removeEventListener = nextWindow.removeEventListener || (() => {});
+    nextWindow.matchMedia = (() => ({
+      matches: true,
+      media: '(max-width: 768px)',
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    globalThis.window = nextWindow;
+    globalThis.matchMedia = nextWindow.matchMedia;
+
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/models']}>
+            <ToastProvider>
+              <Models />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root!.root)).toContain('筛选');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('keeps the mobile filter entry visible even while the first screen is still loading', async () => {
+    globalThis.window = {
+      innerWidth: 768,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    } as unknown as Window & typeof globalThis;
+    apiMock.getModelsMarketplace.mockImplementation(() => new Promise(() => {}));
+
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/models']}>
+            <ToastProvider>
+              <Models />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+
+      expect(collectText(root!.root)).toContain('筛选');
     } finally {
       root?.unmount();
     }

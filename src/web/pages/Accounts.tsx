@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
+import MobileBatchBar from '../components/MobileBatchBar.js';
+import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
@@ -82,7 +85,8 @@ export default function Accounts() {
   const [sortMode, setSortMode] = useState<SortMode>('custom');
   const [highlightAccountId, setHighlightAccountId] = useState<number | null>(null);
   const [expandedAccountIds, setExpandedAccountIds] = useState<number[]>([]);
-  const isMobile = useIsMobile(768);
+  const isMobile = useIsMobile();
+  const [showMobileTools, setShowMobileTools] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [addMode, setAddMode] = useState<'token' | 'login'>('token');
   const [loginForm, setLoginForm] = useState(createLoginForm);
@@ -216,6 +220,7 @@ export default function Accounts() {
     if (activeSegment === 'tokens') return [];
     return sortedAccounts.filter((account) => resolveAccountCredentialMode(account) === activeSegment);
   }, [activeSegment, sortedAccounts]);
+  const allVisibleAccountsSelected = visibleAccounts.length > 0 && visibleAccounts.every((account) => selectedAccountIds.includes(account.id));
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
 
@@ -728,10 +733,10 @@ export default function Accounts() {
 
   const toggleSelectAllVisibleAccounts = (checked: boolean) => {
     if (!checked) {
-      setSelectedAccountIds([]);
+      setSelectedAccountIds((current) => current.filter((id) => !visibleAccounts.some((account) => account.id === id)));
       return;
     }
-    setSelectedAccountIds(visibleAccounts.map((account) => account.id));
+    setSelectedAccountIds((current) => Array.from(new Set([...current, ...visibleAccounts.map((account) => account.id)])));
   };
 
   const toggleAccountDetails = (accountId: number) => {
@@ -914,35 +919,59 @@ export default function Accounts() {
         <h2 className="page-title">{tr('连接管理')}</h2>
         {activeSegment !== 'tokens' && (
           <div className="page-actions accounts-page-actions">
-            <div className="accounts-sort-select" style={{ minWidth: 156, position: 'relative', zIndex: 20 }}>
-              <ModernSelect
-                size="sm"
-                value={sortMode}
-                onChange={(nextValue) => setSortMode(nextValue as SortMode)}
-                options={[
-                  { value: 'custom', label: '自定义排序' },
-                  { value: 'balance-desc', label: '余额高到低' },
-                  { value: 'balance-asc', label: '余额低到高' },
-                ]}
-                placeholder="自定义排序"
-              />
-            </div>
-            {activeSegment === 'session' && (
-              <button
-                onClick={() => withLoading('checkin-all', () => api.triggerCheckinAll(), '已触发全部签到')}
-                disabled={actionLoading['checkin-all']}
-                className="btn btn-soft-primary"
-              >
-                {actionLoading['checkin-all'] ? <><span className="spinner spinner-sm" />{tr('签到中...')}</> : tr('全部签到')}
-              </button>
+            {isMobile ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowMobileTools(true)}
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                >
+                  排序与操作
+                </button>
+                <button
+                  type="button"
+                  data-testid="accounts-mobile-select-all"
+                  onClick={() => toggleSelectAllVisibleAccounts(!allVisibleAccountsSelected)}
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                >
+                  {allVisibleAccountsSelected ? '取消全选' : '全选可见项'}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="accounts-sort-select" style={{ minWidth: 156, position: 'relative', zIndex: 20 }}>
+                  <ModernSelect
+                    size="sm"
+                    value={sortMode}
+                    onChange={(nextValue) => setSortMode(nextValue as SortMode)}
+                    options={[
+                      { value: 'custom', label: '自定义排序' },
+                      { value: 'balance-desc', label: '余额高到低' },
+                      { value: 'balance-asc', label: '余额低到高' },
+                    ]}
+                    placeholder="自定义排序"
+                  />
+                </div>
+                {activeSegment === 'session' && (
+                  <button
+                    onClick={() => withLoading('checkin-all', () => api.triggerCheckinAll(), '已触发全部签到')}
+                    disabled={actionLoading['checkin-all']}
+                    className="btn btn-soft-primary"
+                  >
+                    {actionLoading['checkin-all'] ? <><span className="spinner spinner-sm" />{tr('签到中...')}</> : tr('全部签到')}
+                  </button>
+                )}
+                <button
+                  onClick={handleRefreshRuntimeHealth}
+                  disabled={actionLoading['health-refresh']}
+                  className="btn btn-soft-primary"
+                >
+                  {actionLoading['health-refresh'] ? <><span className="spinner spinner-sm" />{tr('刷新状态中...')}</> : tr('刷新账户状态')}
+                </button>
+              </>
             )}
-            <button
-              onClick={handleRefreshRuntimeHealth}
-              disabled={actionLoading['health-refresh']}
-              className="btn btn-soft-primary"
-            >
-              {actionLoading['health-refresh'] ? <><span className="spinner spinner-sm" />{tr('刷新状态中...')}</> : tr('刷新账户状态')}
-            </button>
             <button
               onClick={() => {
                 const nextOpen = !showAdd;
@@ -963,6 +992,48 @@ export default function Accounts() {
         )}
         {activeSegment === 'tokens' && embeddedTokenActions}
       </div>
+
+      <MobileFilterSheet open={showMobileTools} onClose={() => setShowMobileTools(false)} title="连接排序与操作">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>排序方式</div>
+            <ModernSelect
+              value={sortMode}
+              onChange={(nextValue) => setSortMode(nextValue as SortMode)}
+              options={[
+                { value: 'custom', label: '自定义排序' },
+                { value: 'balance-desc', label: '余额高到低' },
+                { value: 'balance-asc', label: '余额低到高' },
+              ]}
+              placeholder="自定义排序"
+            />
+          </div>
+          {activeSegment === 'session' && (
+            <button
+              onClick={async () => {
+                setShowMobileTools(false);
+                await withLoading('checkin-all', () => api.triggerCheckinAll(), '已触发全部签到');
+              }}
+              disabled={actionLoading['checkin-all']}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              {actionLoading['checkin-all'] ? <><span className="spinner spinner-sm" />{tr('签到中...')}</> : tr('全部签到')}
+            </button>
+          )}
+          <button
+            onClick={async () => {
+              setShowMobileTools(false);
+              await handleRefreshRuntimeHealth();
+            }}
+            disabled={actionLoading['health-refresh']}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {actionLoading['health-refresh'] ? <><span className="spinner spinner-sm" />{tr('刷新状态中...')}</> : tr('刷新账户状态')}
+          </button>
+        </div>
+      </MobileFilterSheet>
 
       <div
         style={{
@@ -1032,9 +1103,7 @@ export default function Accounts() {
       )}
 
       {isMobile && activeSegment !== 'tokens' && selectedAccountIds.length > 0 && (
-        <div className="mobile-actions-bar">
-          <span className="mobile-actions-info">已选 {selectedAccountIds.length} 项</span>
-          <div className="mobile-actions-row">
+        <MobileBatchBar info={`已选 ${selectedAccountIds.length} 项`}>
             <button data-testid="accounts-batch-refresh-balance" onClick={() => runBatchAccountAction('refreshBalance')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
               批量刷新余额
             </button>
@@ -1047,8 +1116,7 @@ export default function Accounts() {
             <button onClick={() => runBatchAccountAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
               批量删除
             </button>
-          </div>
-        </div>
+        </MobileBatchBar>
       )}
 
       {activeSegment === 'tokens' ? (
@@ -1502,7 +1570,7 @@ export default function Accounts() {
             )}
           >
             {editingAccount ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <ResponsiveFormGrid>
                 <input
                   placeholder="账号名称"
                   value={editForm.username}
@@ -1570,7 +1638,7 @@ export default function Accounts() {
                     />
                   </>
                 )}
-              </div>
+              </ResponsiveFormGrid>
             ) : null}
           </CenteredModal>
 
@@ -1590,7 +1658,7 @@ export default function Accounts() {
                       <MobileCard
                         key={a.id}
                         title={resolveAccountDisplayName(a)}
-                        actions={(
+                        headerActions={(
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <input
                               type="checkbox"
@@ -1605,6 +1673,27 @@ export default function Accounts() {
                               <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
                             )}
                           </div>
+                        )}
+                        footerActions={(
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => toggleAccountDetails(a.id)}
+                              className="btn btn-link"
+                            >
+                              {isExpanded ? '收起' : '详情'}
+                            </button>
+                            <button onClick={() => openEditPanel(a)} className="btn btn-link btn-link-info">
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => openModelModal(a)}
+                              disabled={actionLoading[`models-${a.id}`]}
+                              className="btn btn-link btn-link-info"
+                            >
+                              模型
+                            </button>
+                          </>
                         )}
                       >
                         <MobileField
@@ -1692,75 +1781,59 @@ export default function Accounts() {
                             />
                             <MobileField
                               label="提示"
+                              stacked
                               value={hintMessage}
                             />
+                            <div className="mobile-card-actions">
+                              <button
+                                onClick={() => handleTogglePin(a)}
+                                disabled={!!actionLoading[`pin-toggle-${a.id}`]}
+                                className={`btn btn-link ${a.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
+                              >
+                                {actionLoading[`pin-toggle-${a.id}`] ? <span className="spinner spinner-sm" /> : (a.isPinned ? '取消置顶' : '置顶')}
+                              </button>
+                              {sortMode === 'custom' && (
+                                <>
+                                  <button
+                                    onClick={() => handleMoveCustomOrder(a, 'up')}
+                                    disabled={!!actionLoading[`reorder-${a.id}`]}
+                                    className="btn btn-link btn-link-muted"
+                                  >
+                                    ↑ 上移
+                                  </button>
+                                  <button
+                                    onClick={() => handleMoveCustomOrder(a, 'down')}
+                                    disabled={!!actionLoading[`reorder-${a.id}`]}
+                                    className="btn btn-link btn-link-muted"
+                                  >
+                                    ↓ 下移
+                                  </button>
+                                </>
+                              )}
+                              {capabilities.canRefreshBalance && (
+                                <button onClick={() => withLoading(`refresh-${a.id}`, () => api.refreshBalance(a.id), '余额已刷新')} disabled={actionLoading[`refresh-${a.id}`]} className="btn btn-link btn-link-primary">
+                                  {actionLoading[`refresh-${a.id}`] ? <span className="spinner spinner-sm" /> : '刷新'}
+                                </button>
+                              )}
+                              {capabilities.canCheckin && (
+                                <button onClick={() => withLoading(`checkin-${a.id}`, () => api.triggerCheckin(a.id), '签到完成')} disabled={actionLoading[`checkin-${a.id}`]} className="btn btn-link btn-link-warning">
+                                  {actionLoading[`checkin-${a.id}`] ? <span className="spinner spinner-sm" /> : '签到'}
+                                </button>
+                              )}
+                              {a.status === 'expired' && !capabilities.proxyOnly && (
+                                <button
+                                  onClick={() => openRebindPanel(a)}
+                                  className="btn btn-link btn-link-warning"
+                                >
+                                  重新绑定
+                                </button>
+                              )}
+                              <button onClick={() => setDeleteConfirm({ mode: 'single', accountId: a.id, accountName: resolveAccountDisplayName(a) })} disabled={actionLoading[`delete-${a.id}`]} className="btn btn-link btn-link-danger">
+                                {actionLoading[`delete-${a.id}`] ? <span className="spinner spinner-sm" /> : '删除'}
+                              </button>
+                            </div>
                           </div>
                         ) : null}
-                        <div className="mobile-card-actions">
-                          <button
-                            type="button"
-                            onClick={() => toggleAccountDetails(a.id)}
-                            className="btn btn-link"
-                          >
-                            {isExpanded ? '收起' : '详情'}
-                          </button>
-                          <button
-                            onClick={() => handleTogglePin(a)}
-                            disabled={!!actionLoading[`pin-toggle-${a.id}`]}
-                            className={`btn btn-link ${a.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
-                          >
-                            {actionLoading[`pin-toggle-${a.id}`] ? <span className="spinner spinner-sm" /> : (a.isPinned ? '取消置顶' : '置顶')}
-                          </button>
-                          {sortMode === 'custom' && (
-                            <>
-                              <button
-                                onClick={() => handleMoveCustomOrder(a, 'up')}
-                                disabled={!!actionLoading[`reorder-${a.id}`]}
-                                className="btn btn-link btn-link-muted"
-                              >
-                                ↑
-                              </button>
-                              <button
-                                onClick={() => handleMoveCustomOrder(a, 'down')}
-                                disabled={!!actionLoading[`reorder-${a.id}`]}
-                                className="btn btn-link btn-link-muted"
-                              >
-                                ↓
-                              </button>
-                            </>
-                          )}
-                          {capabilities.canRefreshBalance && (
-                            <button onClick={() => withLoading(`refresh-${a.id}`, () => api.refreshBalance(a.id), '余额已刷新')} disabled={actionLoading[`refresh-${a.id}`]} className="btn btn-link btn-link-primary">
-                              {actionLoading[`refresh-${a.id}`] ? <span className="spinner spinner-sm" /> : '刷新'}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => openModelModal(a)}
-                            disabled={actionLoading[`models-${a.id}`]}
-                            className="btn btn-link btn-link-info"
-                          >
-                            模型
-                          </button>
-                          {capabilities.canCheckin && (
-                            <button onClick={() => withLoading(`checkin-${a.id}`, () => api.triggerCheckin(a.id), '签到完成')} disabled={actionLoading[`checkin-${a.id}`]} className="btn btn-link btn-link-warning">
-                              {actionLoading[`checkin-${a.id}`] ? <span className="spinner spinner-sm" /> : '签到'}
-                            </button>
-                          )}
-                          {a.status === 'expired' && !capabilities.proxyOnly && (
-                            <button
-                              onClick={() => openRebindPanel(a)}
-                              className="btn btn-link btn-link-warning"
-                            >
-                              重新绑定
-                            </button>
-                          )}
-                          <button onClick={() => openEditPanel(a)} className="btn btn-link btn-link-info">
-                            编辑
-                          </button>
-                          <button onClick={() => setDeleteConfirm({ mode: 'single', accountId: a.id, accountName: resolveAccountDisplayName(a) })} disabled={actionLoading[`delete-${a.id}`]} className="btn btn-link btn-link-danger">
-                            {actionLoading[`delete-${a.id}`] ? <span className="spinner spinner-sm" /> : '删除'}
-                          </button>
-                        </div>
                       </MobileCard>
                     );
                   })}
@@ -1772,7 +1845,7 @@ export default function Accounts() {
                     <th style={{ width: 44 }}>
                       <input
                         type="checkbox"
-                        checked={visibleAccounts.length > 0 && selectedAccountIds.length === visibleAccounts.length}
+                        checked={allVisibleAccountsSelected}
                         onChange={(e) => toggleSelectAllVisibleAccounts(e.target.checked)}
                       />
                     </th>

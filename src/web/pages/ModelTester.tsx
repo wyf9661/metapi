@@ -55,6 +55,7 @@ import {
 } from './helpers/conversationFileCapabilities.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import { tr } from '../i18n.js';
 
 type ChatJobResponse = {
@@ -646,6 +647,7 @@ function ParameterRow(props: {
 }
 
 export default function ModelTester() {
+  const isMobile = useIsMobile();
   const [models, setModels] = useState<string[]>([]);
   const [modelSearch, setModelSearch] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -2181,7 +2183,9 @@ export default function ModelTester() {
     return debugResponse;
   }, [activeDebugTab, debugPreview, debugRequest, debugResponse]);
 
-  const layoutColumns = debugPanelPresence.shouldRender
+  const layoutColumns = isMobile
+    ? '1fr'
+    : debugPanelPresence.shouldRender
     ? '340px minmax(0, 1fr) 360px'
     : '340px minmax(0, 1fr)';
 
@@ -2239,7 +2243,7 @@ export default function ModelTester() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }} className="animate-slide-up stagger-1">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }} className="animate-slide-up stagger-1">
         <div className="stat-summary-card stat-summary-purple">
           <div className="stat-summary-card-label">模型数量</div>
           <div className="stat-summary-card-value">{models.length}</div>
@@ -2279,7 +2283,7 @@ export default function ModelTester() {
           alignItems: 'stretch',
         }}
       >
-        <div className="card" style={{ padding: 16, minHeight: 680, maxHeight: 740, overflowY: 'auto' }}>
+        <div className="card" style={{ padding: 16, minHeight: isMobile ? 'auto' : 680, maxHeight: isMobile ? 'none' : 740, overflowY: isMobile ? 'visible' : 'auto', order: isMobile ? 2 : 0 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>设置</h3>
 
           <div style={{ marginBottom: 14 }}>
@@ -2299,7 +2303,7 @@ export default function ModelTester() {
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>模型</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexDirection: isMobile ? 'column' : 'row' }}>
               <input
                 value={modelSearch}
                 onChange={(event) => setModelSearch(event.target.value)}
@@ -2575,7 +2579,7 @@ export default function ModelTester() {
           </ParameterRow>
         </div>
 
-        <div className="card" style={{ padding: 0, overflow: 'hidden', minHeight: 680, maxHeight: 740, display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ padding: 0, overflow: 'hidden', minHeight: isMobile ? 'auto' : 680, maxHeight: isMobile ? 'none' : 740, display: 'flex', flexDirection: 'column', order: isMobile ? 1 : 0 }}>
           <div style={{
             padding: '14px 16px',
             borderBottom: '1px solid var(--color-border-light)',
@@ -2699,7 +2703,7 @@ export default function ModelTester() {
                         {isUser ? 'U' : (isSystem ? 'SYS' : 'AI')}
                       </div>
 
-                      <div style={{ maxWidth: '78%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ maxWidth: isMobile ? '100%' : '78%', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: isMobile ? 1 : 'initial' }}>
                         {showReasoning && (
                           <div style={{
                             border: '1px solid color-mix(in srgb, var(--color-primary) 28%, transparent)',
@@ -2854,7 +2858,7 @@ export default function ModelTester() {
             )}
 
             {inputs.mode === 'conversation' ? (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: isMobile ? 'stretch' : 'flex-end', flexDirection: isMobile ? 'column' : 'row' }}>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{
                     padding: '10px 12px',
@@ -2983,16 +2987,17 @@ export default function ModelTester() {
                   disabled={sending ? false : !canSend}
                   className="btn btn-primary"
                   style={{
-                    height: 78,
-                    padding: '0 20px',
+                    height: isMobile ? 50 : 78,
+                    padding: isMobile ? '0 16px' : '0 20px',
                     fontSize: 14,
                     fontWeight: 600,
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: isMobile ? 'row' : 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 4,
-                    minWidth: 88,
+                    minWidth: isMobile ? '100%' : 88,
+                    width: isMobile ? '100%' : 'auto',
                   }}
                 >
                   {sending ? (
@@ -3030,7 +3035,7 @@ export default function ModelTester() {
                       placeholder="输入搜索查询"
                       style={{ ...inputBaseStyle, resize: 'vertical' }}
                     />
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 120px', gap: 10 }}>
                       <input value={searchAllowedDomains} onChange={(event) => setSearchAllowedDomains(event.target.value)} placeholder="allowed_domains (逗号分隔)" style={inputBaseStyle} />
                       <input value={searchBlockedDomains} onChange={(event) => setSearchBlockedDomains(event.target.value)} placeholder="blocked_domains (逗号分隔)" style={inputBaseStyle} />
                       <input value={searchMaxResults} onChange={(event) => setSearchMaxResults(toNumber(event.target.value, 10))} type="number" min={1} max={20} style={inputBaseStyle} />
@@ -3047,7 +3052,7 @@ export default function ModelTester() {
                       style={{ ...inputBaseStyle, resize: 'vertical' }}
                     />
                     {(inputs.mode === 'images.edit' || inputs.mode === 'videos.create') && (
-                      <div style={{ display: 'grid', gridTemplateColumns: inputs.mode === 'images.edit' ? '1fr 1fr' : '1fr', gap: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (inputs.mode === 'images.edit' ? '1fr 1fr' : '1fr'), gap: 10 }}>
                         <label style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
                           <div style={{ marginBottom: 6 }}>{inputs.mode === 'images.edit' ? '原图' : '参考图'}</div>
                           <input type="file" accept="image/*" onChange={(event) => { void handleUploadChange(event.target.files, setImageSourceFile); }} />
@@ -3063,7 +3068,7 @@ export default function ModelTester() {
                   </>
                 )}
                 {inputs.mode === 'videos.inspect' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 160px', gap: 10 }}>
                     <input
                       value={videoInspectId}
                       onChange={(event) => setVideoInspectId(event.target.value)}
@@ -3100,7 +3105,7 @@ export default function ModelTester() {
         </div>
 
         {debugPanelPresence.shouldRender && (
-          <div className={`card panel-presence ${debugPanelPresence.isVisible ? '' : 'is-closing'}`.trim()} style={{ padding: 14, minHeight: 680, maxHeight: 740, display: 'flex', flexDirection: 'column' }}>
+          <div className={`card panel-presence ${debugPanelPresence.isVisible ? '' : 'is-closing'}`.trim()} style={{ padding: 14, minHeight: isMobile ? 'auto' : 680, maxHeight: isMobile ? 'none' : 740, display: 'flex', flexDirection: 'column', order: isMobile ? 3 : 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <h3 style={{ margin: 0, fontSize: 15 }}>调试</h3>
               <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
@@ -3108,7 +3113,7 @@ export default function ModelTester() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
               <button
                 className="btn btn-ghost"
                 style={{

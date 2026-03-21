@@ -13,7 +13,7 @@ import { useToast } from '../components/Toast.js';
 import { ModelBadge } from '../components/BrandIcon.js';
 import SiteBadgeLink from '../components/SiteBadgeLink.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
-import { MobileDrawer } from '../components/MobileDrawer.js';
+import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
@@ -673,11 +673,13 @@ export default function ProxyLogs() {
               筛选
             </button>
           </div>
-          <MobileDrawer open={showFilters} onClose={() => setShowFilters(false)}>
-            <div className="mobile-filter-panel">
-              {filterControls}
-            </div>
-          </MobileDrawer>
+          <MobileFilterSheet
+            open={showFilters}
+            onClose={() => setShowFilters(false)}
+            title={tr('筛选日志')}
+          >
+            {filterControls}
+          </MobileFilterSheet>
         </>
       ) : (
         <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -716,30 +718,64 @@ export default function ProxyLogs() {
               const billingProcessLines = detail ? buildBillingProcessLines(detailLog) : [];
               const downstreamKeySummary = renderDownstreamKeySummary(detailLog);
               const isExpanded = expanded === log.id;
+              const clientDisplay = resolveProxyLogClientDisplay(detailLog);
 
               return (
                 <MobileCard
                   key={log.id}
                   title={detailLog.modelRequested || 'unknown'}
-                  actions={(
+                  subtitle={formatDateTimeLocal(log.createdAt)}
+                  compact
+                  headerActions={(
                     <span className={`badge ${log.status === 'success' ? 'badge-success' : 'badge-error'}`} style={{ fontSize: 10 }}>
                       {log.status === 'success' ? '成功' : '失败'}
                     </span>
                   )}
+                  footerActions={(
+                    <button
+                      type="button"
+                      className="btn btn-link"
+                      onClick={() => handleToggleExpand(log.id)}
+                    >
+                      {isExpanded ? '收起详情' : '详情'}
+                    </button>
+                  )}
                 >
-                  <MobileField label="时间" value={formatDateTimeLocal(log.createdAt)} />
-                  <MobileField label="站点" value={<SiteBadgeLink siteId={siteIdByName.get(String(log.siteName || '').trim())} siteName={log.siteName} badgeStyle={{ fontSize: 11 }} />} />
-                  <MobileField label="客户端" value={renderProxyLogClientCell(detailLog)} />
-                  {downstreamKeySummary ? <MobileField label="下游 Key" value={downstreamKeySummary} /> : null}
-                  <MobileField label="用时" value={formatLatency(log.latencyMs)} />
-                  <MobileField label="输入" value={log.promptTokens?.toLocaleString() || '-'} />
-                  <MobileField label="输出" value={log.completionTokens?.toLocaleString() || '-'} />
-                  <MobileField
-                    label="花费"
-                    value={typeof log.estimatedCost === 'number' ? `$${log.estimatedCost.toFixed(6)}` : '-'}
-                  />
+                  <div className="mobile-inline-meta-row">
+                    <SiteBadgeLink siteId={siteIdByName.get(String(log.siteName || '').trim())} siteName={log.siteName} badgeStyle={{ fontSize: 11 }} />
+                    {clientDisplay.primary ? (
+                      <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                        {clientDisplay.primary}
+                      </span>
+                    ) : null}
+                    {clientDisplay.secondary ? (
+                      <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                        {clientDisplay.secondary}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mobile-summary-grid">
+                    <div className="mobile-summary-metric">
+                      <div className="mobile-summary-metric-label">用时</div>
+                      <div className="mobile-summary-metric-value">{formatLatency(log.latencyMs)}</div>
+                    </div>
+                    <div className="mobile-summary-metric">
+                      <div className="mobile-summary-metric-label">输入</div>
+                      <div className="mobile-summary-metric-value">{log.promptTokens?.toLocaleString() || '-'}</div>
+                    </div>
+                    <div className="mobile-summary-metric">
+                      <div className="mobile-summary-metric-label">输出</div>
+                      <div className="mobile-summary-metric-value">{log.completionTokens?.toLocaleString() || '-'}</div>
+                    </div>
+                    <div className="mobile-summary-metric">
+                      <div className="mobile-summary-metric-label">花费</div>
+                      <div className="mobile-summary-metric-value">{typeof log.estimatedCost === 'number' ? `$${log.estimatedCost.toFixed(6)}` : '-'}</div>
+                    </div>
+                  </div>
                   {isExpanded ? (
                     <div className="mobile-card-extra">
+                      <MobileField label="时间" value={formatDateTimeLocal(log.createdAt)} />
+                      <MobileField label="站点" value={<SiteBadgeLink siteId={siteIdByName.get(String(log.siteName || '').trim())} siteName={log.siteName} badgeStyle={{ fontSize: 11 }} />} />
                       <MobileField label="重试" value={log.retryCount > 0 ? log.retryCount : 0} />
                       {detailState?.loading && <div style={{ color: 'var(--color-text-muted)' }}>加载详情中...</div>}
                       {detailState?.error && <div style={{ color: 'var(--color-danger)' }}>{detailState.error}</div>}
@@ -758,15 +794,6 @@ export default function ProxyLogs() {
                       )}
                     </div>
                   ) : null}
-                  <div className="mobile-card-actions">
-                    <button
-                      type="button"
-                      className="btn btn-link"
-                      onClick={() => handleToggleExpand(log.id)}
-                    >
-                      {isExpanded ? '收起' : '详情'}
-                    </button>
-                  </div>
                 </MobileCard>
               );
             })}
