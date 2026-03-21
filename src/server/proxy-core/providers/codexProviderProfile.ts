@@ -4,7 +4,6 @@ import { config } from '../../config.js';
 
 const CODEX_CLIENT_VERSION = '0.101.0';
 const CODEX_DEFAULT_USER_AGENT = 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
-const CODEX_RESPONSES_WEBSOCKET_BETA = 'responses_websockets=2026-02-06';
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -81,7 +80,7 @@ function buildCodexRuntimeHeaders(input: {
   const codexTurnMetadata = getInputHeader(input.baseHeaders, 'x-codex-turn-metadata');
   const timingMetrics = getInputHeader(input.baseHeaders, 'x-responsesapi-include-timing-metrics');
   const openAiBeta = getInputHeader(input.baseHeaders, 'openai-beta')
-    || (websocketTransport ? CODEX_RESPONSES_WEBSOCKET_BETA : null);
+    || (websocketTransport ? asTrimmedString(config.codexResponsesWebsocketBeta) : null);
   const explicitSessionId = asTrimmedString(input.explicitSessionId);
   const continuityKey = asTrimmedString(input.continuityKey);
   const sessionId = (

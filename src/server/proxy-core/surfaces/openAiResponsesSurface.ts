@@ -135,14 +135,20 @@ function carriesResponsesFileUrlInput(value: unknown): boolean {
   return Object.values(value).some((entry) => carriesResponsesFileUrlInput(entry));
 }
 
-type UsageSummary = ReturnType<typeof parseProxyUsage>;
-
-function deriveCodexExplicitSessionId(body: Record<string, unknown>): string | null {
-  const promptCacheKey = typeof body.prompt_cache_key === 'string'
-    ? body.prompt_cache_key.trim()
-    : '';
-  return promptCacheKey || null;
+function shouldRefreshOauthResponsesRequest(input: {
+  oauthProvider?: string;
+  status: number;
+  response: { headers: { get(name: string): string | null } };
+  rawErrText: string;
+}): boolean {
+  if (input.status === 401) return true;
+  if (input.status !== 403 || input.oauthProvider !== 'codex') return false;
+  const authenticate = input.response.headers.get('www-authenticate') || '';
+  const combined = `${authenticate}\n${input.rawErrText || ''}`;
+  return /\b(invalid_token|expired_token|expired|invalid|unauthorized|account mismatch|authentication)\b/i.test(combined);
 }
+
+type UsageSummary = ReturnType<typeof parseProxyUsage>;
 
 export async function handleOpenAiResponsesSurfaceRequest(
   request: FastifyRequest,
@@ -274,7 +280,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
       );
       const buildEndpointRequest = (endpoint: 'chat' | 'messages' | 'responses') => {
         const upstreamStream = isStream || (isCodexSite && endpoint === 'responses');
-        const codexExplicitSessionId = deriveCodexExplicitSessionId(normalizedResponsesBody);
         const endpointRequest = buildUpstreamEndpointRequest({
           endpoint,
           modelName,
@@ -289,7 +294,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
           responsesOriginalBody: normalizedResponsesBody,
           downstreamHeaders: request.headers as Record<string, unknown>,
           providerHeaders: buildProviderHeaders(),
-          codexExplicitSessionId,
         });
         const upstreamPath = (
           isCompactRequest && endpoint === 'responses'
@@ -323,7 +327,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
         dispatchRequest,
       });
       const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
-        if (ctx.response.status === 401 && oauth) {
+        if (oauth && shouldRefreshOauthResponsesRequest({
+          oauthProvider: oauth.provider,
+          status: ctx.response.status,
+          response: ctx.response,
+          rawErrText: ctx.rawErrText || '',
+        })) {
           try {
             const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
             selected.tokenValue = refreshed.accessToken;

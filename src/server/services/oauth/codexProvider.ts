@@ -91,11 +91,15 @@ function parseTokenResponsePayload(payload: unknown): CodexTokenExchangeResult {
     throw new Error('codex token exchange response missing required fields');
   }
   const claims = parseJwtClaims(idToken);
+  const accountId = asTrimmedString(claims?.['https://api.openai.com/auth']?.chatgpt_account_id);
+  if (!accountId) {
+    throw new Error('codex token exchange response missing chatgpt_account_id');
+  }
   return {
     accessToken,
     refreshToken,
     idToken,
-    accountId: asTrimmedString(claims?.['https://api.openai.com/auth']?.chatgpt_account_id),
+    accountId,
     email: asTrimmedString(claims?.email),
     planType: asTrimmedString(claims?.['https://api.openai.com/auth']?.chatgpt_plan_type),
     tokenExpiresAt: Date.now() + expiresIn * 1000,
@@ -220,7 +224,7 @@ export const codexOauthProvider: OAuthProviderDefinition = {
     };
   },
   buildProxyHeaders: ({ oauth, downstreamHeaders }) => {
-    const accountId = getHeaderValue(downstreamHeaders, 'chatgpt-account-id') || oauth.accountId || oauth.accountKey;
+    const accountId = oauth.accountId || oauth.accountKey;
     const originator = getHeaderValue(downstreamHeaders, 'originator') || 'codex_cli_rs';
     const headers: Record<string, string> = {
       Originator: originator,

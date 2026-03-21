@@ -23,7 +23,57 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isTerminalEvent(payload: Record<string, unknown>): boolean {
   const type = asTrimmedString(payload.type);
-  return type === 'response.completed' || type === 'response.failed';
+  return type === 'response.completed'
+    || type === 'response.failed'
+    || type === 'response.incomplete'
+    || type === 'error';
+}
+
+function isFailureTerminalEvent(payload: Record<string, unknown>): boolean {
+  const type = asTrimmedString(payload.type);
+  return type === 'response.failed' || type === 'response.incomplete' || type === 'error';
+}
+
+function asFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function extractFailureTerminalStatus(payload: Record<string, unknown>): number {
+  const response = isRecord(payload.response) ? payload.response : null;
+  const responseError = response && isRecord(response.error) ? response.error : null;
+  const topLevelError = isRecord(payload.error) ? payload.error : null;
+  const candidates = [
+    payload.status,
+    payload.statusCode,
+    payload.code,
+    topLevelError?.status,
+    topLevelError?.statusCode,
+    topLevelError?.code,
+    responseError?.status,
+    responseError?.statusCode,
+    responseError?.code,
+  ];
+  for (const candidate of candidates) {
+    const status = asFiniteNumber(candidate);
+    if (status !== undefined) return status;
+  }
+  return 502;
+}
+
+function extractTerminalErrorMessage(payload: Record<string, unknown>): string {
+  const type = asTrimmedString(payload.type);
+  if (type === 'error' && isRecord(payload.error)) {
+    return asTrimmedString(payload.error.message) || 'upstream websocket error';
+  }
+  if ((type === 'response.failed' || type === 'response.incomplete') && isRecord(payload.response)) {
+    if (isRecord(payload.response.error)) {
+      return asTrimmedString(payload.response.error.message) || `upstream ${type}`;
+    }
+    if (isRecord(payload.response.incomplete_details)) {
+      return asTrimmedString(payload.response.incomplete_details.reason) || `upstream ${type}`;
+    }
+  }
+  return `upstream ${type || 'websocket error'}`;
 }
 
 export class CodexWebsocketRuntimeError extends Error {
@@ -212,6 +262,18 @@ async function sendSessionRequest(
         events.push(parsed);
         if (!isTerminalEvent(parsed)) return;
         if (settled) return;
+        if (isFailureTerminalEvent(parsed)) {
+          settled = true;
+          cleanup();
+          clearSessionSocket(session, socket);
+          void closeSocket(socket);
+          reject(new CodexWebsocketRuntimeError(extractTerminalErrorMessage(parsed), {
+            events: [...events],
+            status: extractFailureTerminalStatus(parsed),
+            payload: parsed,
+          }));
+          return;
+        }
         settled = true;
         cleanup();
         resolve({

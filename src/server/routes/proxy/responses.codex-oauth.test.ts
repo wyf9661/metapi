@@ -186,6 +186,7 @@ describe('responses proxy codex oauth refresh', () => {
       url: '/v1/responses',
       headers: {
         'user-agent': 'CodexClient/1.0',
+        'Chatgpt-Account-Id': 'spoofed-account',
       },
       payload: {
         model: 'gpt-5.2-codex',
@@ -212,6 +213,73 @@ describe('responses proxy codex oauth refresh', () => {
     expect(secondOptions.headers.Accept || secondOptions.headers.accept).toBe('text/event-stream');
     expect(secondOptions.headers.Connection || secondOptions.headers.connection).toBe('Keep-Alive');
     expect(response.json()?.output_text).toContain('ok after codex token refresh');
+  });
+
+  it('refreshes codex oauth token and retries the same responses request on 403', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'forbidden account mismatch', type: 'invalid_request_error' },
+      }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_codex_refreshed_403',
+        object: 'response',
+        model: 'gpt-5.2-codex',
+        status: 'completed',
+        output_text: 'ok after codex forbidden refresh',
+        usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      headers: {
+        'user-agent': 'CodexClient/1.0',
+      },
+      payload: {
+        model: 'gpt-5.2-codex',
+        input: 'hello codex',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(33);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(secondOptions.headers.Authorization).toBe('Bearer fresh-access-token');
+    expect(response.json()?.output_text).toContain('ok after codex forbidden refresh');
+  });
+
+  it('does not refresh codex oauth token on non-auth 403 responses', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      error: { message: 'quota exceeded for workspace', type: 'usage_limit_reached' },
+    }), {
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.2-codex',
+        input: 'hello codex',
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(refreshOauthAccessTokenSingleflightMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(response.json()).toMatchObject({
+      error: {
+        message: expect.stringContaining('quota exceeded for workspace'),
+      },
+    });
   });
 
   it('retries oauth responses requests with a normalized upstream URL after refresh', async () => {
@@ -316,7 +384,7 @@ describe('responses proxy codex oauth refresh', () => {
     ]);
   });
 
-  it('preserves explicit prompt_cache_key for codex responses requests', async () => {
+  it('preserves explicit prompt_cache_key for codex responses requests without converting it into codex session headers', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
       id: 'resp_codex_with_cache_key',
       object: 'response',
@@ -344,8 +412,8 @@ describe('responses proxy codex oauth refresh', () => {
 
     const [, options] = fetchMock.mock.calls[0] as [string, any];
     const forwardedBody = JSON.parse(options.body);
-    expect(options.headers.Session_id || options.headers.session_id).toBe('codex-cache-123');
-    expect(options.headers.Conversation_id || options.headers.conversation_id).toBe('codex-cache-123');
+    expect(String(options.headers.Session_id || options.headers.session_id || '')).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(options.headers.Conversation_id || options.headers.conversation_id).toBeUndefined();
     expect(forwardedBody.prompt_cache_key).toBe('codex-cache-123');
   });
 

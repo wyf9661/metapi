@@ -2037,13 +2037,14 @@ export class TokenRouter {
       return token ? token : null;
     }
 
-    const fallback = candidate.account.apiToken?.trim();
-    if (fallback) return fallback;
-
     if (getOauthInfoFromExtraConfig(candidate.account.extraConfig)) {
       const accessToken = candidate.account.accessToken?.trim();
-      return accessToken || null;
+      if (accessToken) return accessToken;
+      return null;
     }
+
+    const fallback = candidate.account.apiToken?.trim();
+    if (fallback) return fallback;
 
     return null;
   }
