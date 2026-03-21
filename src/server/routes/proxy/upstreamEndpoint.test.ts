@@ -196,6 +196,82 @@ describe('resolveUpstreamEndpointCandidates', () => {
     expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 
+  it('does not apply runtime endpoint memory to image attachments', async () => {
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'responses',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+      requestCapabilities: {
+        conversationFileSummary: {
+          hasImage: true,
+          hasAudio: false,
+          hasDocument: false,
+          hasRemoteDocumentUrl: false,
+        },
+      },
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'openai',
+      undefined,
+      {
+        conversationFileSummary: {
+          hasImage: true,
+          hasAudio: false,
+          hasDocument: false,
+          hasRemoteDocumentUrl: false,
+        },
+      },
+    );
+
+    expect(order).toEqual(['chat', 'messages', 'responses']);
+  });
+
+  it('does not apply runtime endpoint memory to document attachments', async () => {
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'messages',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+      requestCapabilities: {
+        hasNonImageFileInput: true,
+        conversationFileSummary: {
+          hasImage: false,
+          hasAudio: false,
+          hasDocument: true,
+          hasRemoteDocumentUrl: false,
+        },
+      },
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'openai',
+      undefined,
+      {
+        hasNonImageFileInput: true,
+        conversationFileSummary: {
+          hasImage: false,
+          hasAudio: false,
+          hasDocument: true,
+          hasRemoteDocumentUrl: false,
+        },
+      },
+    );
+
+    expect(order).toEqual(['responses', 'messages', 'chat']);
+  });
+
   it('remembers the last successful endpoint per site capability profile', async () => {
     recordUpstreamEndpointSuccess({
       siteId: baseContext.site.id,

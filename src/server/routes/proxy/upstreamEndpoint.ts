@@ -41,6 +41,8 @@ export type EndpointPreference = DownstreamFormat | 'responses';
 
 type EndpointCapabilityProfile = {
   preferMessagesForClaudeModel: boolean;
+  hasImageInput: boolean;
+  hasAudioInput: boolean;
   hasNonImageFileInput: boolean;
   hasRemoteDocumentUrl: boolean;
   wantsNativeResponsesReasoning: boolean;
@@ -711,20 +713,33 @@ function buildEndpointCapabilityProfile(input?: {
     wantsNativeResponsesReasoning?: boolean;
   };
 }): EndpointCapabilityProfile {
+  const conversationFileSummary = input?.requestCapabilities?.conversationFileSummary;
   return {
     preferMessagesForClaudeModel: (
       isClaudeFamilyModel(asTrimmedString(input?.modelName))
       || isClaudeFamilyModel(asTrimmedString(input?.requestedModelHint))
     ),
+    hasImageInput: conversationFileSummary?.hasImage === true,
+    hasAudioInput: conversationFileSummary?.hasAudio === true,
     hasNonImageFileInput: (
-      input?.requestCapabilities?.conversationFileSummary?.hasDocument === true
+      conversationFileSummary?.hasDocument === true
       || input?.requestCapabilities?.hasNonImageFileInput === true
     ),
     hasRemoteDocumentUrl: (
-      input?.requestCapabilities?.conversationFileSummary?.hasRemoteDocumentUrl === true
+      conversationFileSummary?.hasRemoteDocumentUrl === true
     ),
     wantsNativeResponsesReasoning: input?.requestCapabilities?.wantsNativeResponsesReasoning === true,
   };
+}
+
+function shouldUseEndpointRuntimeMemory(capabilityProfile: EndpointCapabilityProfile): boolean {
+  // Attachment-capable requests are not protocol-equivalent across chat/messages/responses.
+  // A transient 200 on one endpoint should not bias later multimodal requests onto a lossy path.
+  return (
+    !capabilityProfile.hasImageInput
+    && !capabilityProfile.hasAudioInput
+    && !capabilityProfile.hasNonImageFileInput
+  );
 }
 
 function buildEndpointRuntimeStateKey(input: {
@@ -866,17 +881,19 @@ export function recordUpstreamEndpointSuccess(input: {
     wantsNativeResponsesReasoning?: boolean;
   };
 }): void {
+  const capabilityProfile = buildEndpointCapabilityProfile({
+    modelName: input.modelName,
+    requestedModelHint: input.requestedModelHint,
+    requestCapabilities: input.requestCapabilities,
+  });
+  if (!shouldUseEndpointRuntimeMemory(capabilityProfile)) return;
   if (!shouldRememberSuccessfulEndpoint(input)) return;
 
   const nowMs = Date.now();
   const key = buildEndpointRuntimeStateKey({
     siteId: input.siteId,
     downstreamFormat: input.downstreamFormat,
-    capabilityProfile: buildEndpointCapabilityProfile({
-      modelName: input.modelName,
-      requestedModelHint: input.requestedModelHint,
-      requestCapabilities: input.requestCapabilities,
-    }),
+    capabilityProfile,
   });
   const state = getOrCreateEndpointRuntimeState(key, nowMs);
   state.preferredEndpoint = input.endpoint;
@@ -898,17 +915,19 @@ export function recordUpstreamEndpointFailure(input: {
     wantsNativeResponsesReasoning?: boolean;
   };
 }): void {
+  const capabilityProfile = buildEndpointCapabilityProfile({
+    modelName: input.modelName,
+    requestedModelHint: input.requestedModelHint,
+    requestCapabilities: input.requestCapabilities,
+  });
+  if (!shouldUseEndpointRuntimeMemory(capabilityProfile)) return;
   if (!shouldBlockEndpointByError(input.status, input.errorText)) return;
 
   const nowMs = Date.now();
   const key = buildEndpointRuntimeStateKey({
     siteId: input.siteId,
     downstreamFormat: input.downstreamFormat,
-    capabilityProfile: buildEndpointCapabilityProfile({
-      modelName: input.modelName,
-      requestedModelHint: input.requestedModelHint,
-      requestCapabilities: input.requestCapabilities,
-    }),
+    capabilityProfile,
   });
   const state = getOrCreateEndpointRuntimeState(key, nowMs);
   state.blockedUntilMsByEndpoint[input.endpoint] = nowMs + ENDPOINT_RUNTIME_BLOCK_TTL_MS;
@@ -1009,7 +1028,9 @@ export async function resolveUpstreamEndpointCandidates(
     capabilityProfile,
   });
   const applyRuntimePreference = (candidates: UpstreamEndpoint[]) => (
-    applyEndpointRuntimePreference(candidates, runtimeStateKey)
+    shouldUseEndpointRuntimeMemory(capabilityProfile)
+      ? applyEndpointRuntimePreference(candidates, runtimeStateKey)
+      : candidates
   );
   const conversationFileSummary = requestCapabilities?.conversationFileSummary ?? {
     hasImage: false,

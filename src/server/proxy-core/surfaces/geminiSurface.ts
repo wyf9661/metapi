@@ -367,6 +367,11 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     const isCountTokensAction = isGeminiCliDownstream
       ? options?.action === 'countTokens'
       : modelActionPath.endsWith(':countTokens');
+    const rawUrl = request.raw.url || request.url || '';
+    const wantsSseEnvelope = (
+      isStreamAction
+      && (isGeminiCliDownstream || /(?:^|[?&])alt=sse(?:&|$)/i.test(rawUrl))
+    );
     if (!requestedModel) {
       return reply.code(400).send({
         error: { message: 'Gemini model path is required', type: 'invalid_request_error' },
@@ -857,11 +862,18 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           parsedUsage.completionTokens,
           parsedUsage.totalTokens,
         );
-        return reply.code(upstream.status).send(
-          isGeminiCliDownstream
-            ? { response: geminiResponse }
-            : geminiResponse,
-        );
+        const downstreamPayload = isGeminiCliDownstream
+          ? { response: geminiResponse }
+          : geminiResponse;
+        if (wantsSseEnvelope) {
+          // Some compatibility upstreams finish stream requests with a final JSON payload.
+          // Preserve Gemini streaming UX by wrapping that terminal payload back into one SSE event.
+          return reply
+            .code(upstream.status)
+            .type('text/event-stream; charset=utf-8')
+            .send(geminiGenerateContentTransformer.stream.serializeSsePayload(downstreamPayload));
+        }
+        return reply.code(upstream.status).send(downstreamPayload);
       } catch (error) {
         lastStatus = 502;
         lastContentType = 'application/json';

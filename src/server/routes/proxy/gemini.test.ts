@@ -602,6 +602,81 @@ describe('gemini native proxy routes', () => {
     });
   });
 
+  it('serializes non-streaming generic upstream JSON into Gemini SSE when alt=sse is requested', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 41, routeId: 22 },
+      site: { id: 77, name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      account: { id: 37, username: 'openai-user@example.com' },
+      tokenName: 'default',
+      tokenValue: 'openai-access-token',
+      actualModel: 'gpt-4.1',
+    });
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      id: 'chatcmpl-openai-stream-1',
+      object: 'chat.completion',
+      created: 1_742_160_003,
+      model: 'gpt-4.1',
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: 'hello from openai stream fallback',
+          },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: {
+        prompt_tokens: 5,
+        completion_tokens: 6,
+        total_tokens: 11,
+      },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse',
+      headers: {
+        authorization: 'Bearer sk-managed-gemini',
+      },
+      payload: {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'hello' }],
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(parseSsePayloads(response.body)).toEqual([
+      {
+        responseId: 'chatcmpl-openai-stream-1',
+        modelVersion: 'gpt-4.1',
+        candidates: [
+          {
+            index: 0,
+            content: {
+              role: 'model',
+              parts: [{ text: 'hello from openai stream fallback' }],
+            },
+            finishReason: 'STOP',
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5,
+          candidatesTokenCount: 6,
+          totalTokenCount: 11,
+        },
+      },
+    ]);
+  });
+
   it('exposes GeminiCLI downstream generateContent endpoint and wraps the downstream response payload', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 42, routeId: 22 },
