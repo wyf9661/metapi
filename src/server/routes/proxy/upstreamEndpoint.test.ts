@@ -1803,6 +1803,79 @@ describe('buildUpstreamEndpointRequest', () => {
     ]);
   });
 
+  it('drops Responses-only tools when /v1/responses falls back to /v1/chat/completions', () => {
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'chat',
+      modelName: 'gpt-5.4',
+      stream: false,
+      tokenValue: 'sk-test',
+      sitePlatform: 'openai',
+      siteUrl: 'https://example.com',
+      downstreamFormat: 'responses',
+      openaiBody: {
+        model: 'gpt-5.4',
+        messages: [
+          {
+            role: 'user',
+            content: 'summarize the workspace state',
+          },
+        ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'Glob',
+              description: 'Search files',
+              parameters: {
+                type: 'object',
+                properties: {
+                  pattern: { type: 'string' },
+                },
+                required: ['pattern'],
+              },
+            },
+          },
+          {
+            type: 'custom',
+            name: 'browser',
+            format: { type: 'text' },
+          },
+          {
+            type: 'image_generation',
+            size: '1024x1024',
+          },
+        ],
+        tool_choice: {
+          type: 'custom',
+          name: 'browser',
+        },
+      },
+    });
+
+    expect(request.path).toBe('/v1/chat/completions');
+    expect(request.body).toMatchObject({
+      model: 'gpt-5.4',
+      stream: false,
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'Glob',
+            description: 'Search files',
+            parameters: {
+              type: 'object',
+              properties: {
+                pattern: { type: 'string' },
+              },
+              required: ['pattern'],
+            },
+          },
+        },
+      ],
+    });
+    expect(request.body.tool_choice).toBeUndefined();
+  });
+
   it('preserves Anthropic image and tool_result blocks instead of flattening to plain text', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'messages',
