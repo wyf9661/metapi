@@ -52,8 +52,9 @@ export function SortableChannelRow({
     gap: 8,
     padding: mobile ? '10px 12px' : '8px 12px',
     borderLeft: '2px solid var(--color-primary)',
+    borderBottom: '1px solid var(--color-border)',
     borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
-    background: isDragging ? 'rgba(59,130,246,0.08)' : 'rgba(79,70,229,0.02)',
+    background: isDragging ? 'rgba(59,130,246,0.08)' : 'var(--color-bg-card, rgba(79,70,229,0.02))',
     boxShadow: isDragging ? 'var(--shadow-sm)' : 'none',
   };
 
