@@ -304,6 +304,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
           runtime: endpointRequest.runtime,
         };
       };
+      const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
       const dispatchRequest = (compatibilityRequest: BuiltEndpointRequest, targetUrl?: string) => (
         dispatchRuntimeRequest({
           siteUrl: selected.site.url,
@@ -313,7 +314,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             method: 'POST',
             headers: requestForFetch.headers,
             body: JSON.stringify(requestForFetch.body),
-          }),
+          }, channelProxyUrl),
         })
       );
       const endpointStrategy = openAiResponsesTransformer.compatibility.createEndpointStrategy({
@@ -355,7 +356,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
       try {
         const endpointResult = await executeEndpointFlow({
           siteUrl: selected.site.url,
-          proxyUrl: resolveChannelProxyUrl(selected.site, selected.account.extraConfig),
           endpointCandidates,
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),
           dispatchRequest,

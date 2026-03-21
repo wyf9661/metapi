@@ -204,6 +204,7 @@ export async function handleChatSurfaceRequest(
         runtime: endpointRequest.runtime,
       };
     };
+    const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
     const dispatchRequest = (
       compatibilityRequest: BuiltEndpointRequest,
       targetUrl?: string,
@@ -216,7 +217,7 @@ export async function handleChatSurfaceRequest(
           method: 'POST',
           headers: requestForFetch.headers,
           body: JSON.stringify(requestForFetch.body),
-        }),
+        }, channelProxyUrl),
       })
     );
     const endpointStrategy = downstreamTransformer.compatibility.createEndpointStrategy({
@@ -265,7 +266,6 @@ export async function handleChatSurfaceRequest(
     try {
         const endpointResult = await executeEndpointFlow({
           siteUrl: selected.site.url,
-          proxyUrl: resolveChannelProxyUrl(selected.site, selected.account.extraConfig),
           endpointCandidates,
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),
           dispatchRequest,

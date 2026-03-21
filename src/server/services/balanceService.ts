@@ -201,7 +201,7 @@ async function refreshSub2ApiManagedSession(params: {
       method: 'POST',
       headers,
       body: JSON.stringify({ refresh_token: refreshToken }),
-    }));
+    }, getProxyUrlFromExtraConfig(params.account.extraConfig)));
     payload = await response.json().catch(() => null);
   } catch (err: any) {
     throw new Error(err?.message || 'sub2api token refresh request failed');
@@ -382,23 +382,23 @@ export async function refreshBalance(accountId: number) {
   let activeExtraConfig = account.extraConfig;
   let balanceInfo: BalanceInfo | null = null;
 
+  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
+
   if (isSub2ApiPlatform(site.platform)) {
     const managedAuth = getSub2ApiAuthFromExtraConfig(activeExtraConfig);
     if (managedAuth?.refreshToken && isNearTokenExpiry(managedAuth.tokenExpiresAt)) {
       try {
-        const refreshed = await refreshSub2ApiManagedSession({
+        const refreshed = await withAccountProxyOverride(accountProxyUrl, () => refreshSub2ApiManagedSession({
           account,
           site,
           currentAccessToken: activeAccessToken,
           currentExtraConfig: activeExtraConfig,
-        });
+        }));
         activeAccessToken = refreshed.accessToken;
         activeExtraConfig = refreshed.extraConfig;
       } catch {}
     }
   }
-
-  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
   const readBalance = async (token: string) => withAccountProxyOverride(accountProxyUrl,
     () => adapter.getBalance(site.url, token, platformUserId));
   const handleBalanceError = async (err: any) => {

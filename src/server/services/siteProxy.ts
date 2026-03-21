@@ -470,8 +470,10 @@ export function withSiteRecordProxyRequestInit(
     nextOptions.headers = mergedHeaders;
   }
   const accountNormalized = normalizeSiteProxyUrl(accountProxyUrl);
-  const proxyUrl = accountNormalized || resolveProxyUrlForSite(site);
-  return withExplicitProxyRequestInit(proxyUrl, nextOptions, !!accountNormalized);
+  const siteProxyUrl = resolveProxyUrlForSite(site);
+  const proxyUrl = accountNormalized || siteProxyUrl;
+  const isAccountOverride = !!accountNormalized && accountNormalized !== siteProxyUrl;
+  return withExplicitProxyRequestInit(proxyUrl, nextOptions, isAccountOverride);
 }
 
 export function resolveChannelProxyUrl(

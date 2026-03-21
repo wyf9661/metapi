@@ -653,25 +653,23 @@ export default function Accounts() {
     }
   };
 
+  const parseAccountExtraConfig = (account: any): Record<string, any> => {
+    try { return JSON.parse(account?.extraConfig || '{}') || {}; }
+    catch { return {}; }
+  };
+
   const extractManagedSub2ApiAuth = (account: any) => {
-    try {
-      const parsed = JSON.parse(account?.extraConfig || '{}');
-      const auth = parsed?.sub2apiAuth || {};
-      return {
-        refreshToken: typeof auth.refreshToken === 'string' ? auth.refreshToken : '',
-        tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : '',
-      };
-    } catch {
-      return { refreshToken: '', tokenExpiresAt: '' };
-    }
+    const parsed = parseAccountExtraConfig(account);
+    const auth = parsed?.sub2apiAuth || {};
+    return {
+      refreshToken: typeof auth.refreshToken === 'string' ? auth.refreshToken : '',
+      tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : '',
+    };
   };
 
   const openEditPanel = (account: any) => {
     const managedAuth = extractManagedSub2ApiAuth(account);
-    const proxyUrl = (() => {
-      try { return JSON.parse(account?.extraConfig || '{}')?.proxyUrl || ''; }
-      catch { return ''; }
-    })();
+    const proxyUrl = parseAccountExtraConfig(account)?.proxyUrl || '';
     closeAddPanel();
     setRebindTarget(null);
     setEditingAccount(account);
@@ -793,12 +791,10 @@ export default function Accounts() {
   };
 
   const extractPlatformUserId = (account: any): string => {
-    try {
-      const parsed = JSON.parse(account?.extraConfig || '{}');
-      const raw = parsed?.platformUserId;
-      const value = Number.parseInt(String(raw ?? ''), 10);
-      if (Number.isFinite(value) && value > 0) return String(value);
-    } catch { }
+    const parsed = parseAccountExtraConfig(account);
+    const raw = parsed?.platformUserId;
+    const value = Number.parseInt(String(raw ?? ''), 10);
+    if (Number.isFinite(value) && value > 0) return String(value);
     const guessed = Number.parseInt(String(account?.username || '').match(/(\d{3,8})$/)?.[1] || '', 10);
     return Number.isFinite(guessed) && guessed > 0 ? String(guessed) : '';
   };
@@ -1605,7 +1601,7 @@ export default function Accounts() {
                             <span className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 10 }}>
                               {connectionMode === 'apikey' ? 'API Key' : 'Session'}
                             </span>
-                            {(() => { try { return JSON.parse(a.extraConfig || '{}')?.proxyUrl; } catch { return null; } })() && (
+                            {parseAccountExtraConfig(a)?.proxyUrl && (
                               <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
                             )}
                           </div>
@@ -1818,7 +1814,7 @@ export default function Accounts() {
                             <span className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 10 }}>
                               {connectionMode === 'apikey' ? 'API Key' : 'Session'}
                             </span>
-                            {(() => { try { return JSON.parse(a.extraConfig || '{}')?.proxyUrl; } catch { return null; } })() && (
+                            {parseAccountExtraConfig(a)?.proxyUrl && (
                               <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
                             )}
                           </div>
