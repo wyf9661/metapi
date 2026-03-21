@@ -1,4 +1,10 @@
 import {
+  brotliDecompressSync,
+  gunzipSync,
+  inflateSync,
+  zstdDecompressSync,
+} from 'node:zlib';
+import {
   Response,
   fetch,
   type RequestInit as UndiciRequestInit,
@@ -63,13 +69,79 @@ export async function performFetch(
   return fetch(requestUrl, init);
 }
 
+function hasZstdContentEncoding(contentEncoding: string | null): boolean {
+  if (!contentEncoding) return false;
+  return contentEncoding
+    .split(',')
+    .some((encoding) => encoding.trim().toLowerCase() === 'zstd');
+}
+
+function looksLikeZstdFrame(buffer: Buffer): boolean {
+  return buffer.length >= 4
+    && buffer[0] === 0x28
+    && buffer[1] === 0xb5
+    && buffer[2] === 0x2f
+    && buffer[3] === 0xfd;
+}
+
+function decodeRuntimeResponseBuffer(buffer: Buffer, contentEncoding: string | null): Buffer {
+  if (!contentEncoding) return buffer;
+
+  let decoded = buffer;
+  const encodings = contentEncoding
+    .split(',')
+    .map((encoding) => encoding.trim().toLowerCase())
+    .filter(Boolean)
+    .reverse();
+
+  for (const encoding of encodings) {
+    if (encoding === 'zstd') {
+      decoded = zstdDecompressSync(decoded);
+      continue;
+    }
+    if (encoding === 'br') {
+      decoded = brotliDecompressSync(decoded);
+      continue;
+    }
+    if (encoding === 'gzip' || encoding === 'x-gzip') {
+      decoded = gunzipSync(decoded);
+      continue;
+    }
+    if (encoding === 'deflate') {
+      decoded = inflateSync(decoded);
+      continue;
+    }
+  }
+
+  return decoded;
+}
+
+export async function readRuntimeResponseText(
+  response: RuntimeResponse,
+): Promise<string> {
+  const contentEncoding = response.headers.get('content-encoding');
+  if (!hasZstdContentEncoding(contentEncoding)) {
+    return response.text().catch(() => '');
+  }
+
+  const rawBuffer = Buffer.from(await response.arrayBuffer());
+  try {
+    return decodeRuntimeResponseBuffer(rawBuffer, contentEncoding).toString('utf8');
+  } catch {
+    return looksLikeZstdFrame(rawBuffer) ? '' : rawBuffer.toString('utf8');
+  }
+}
+
 export async function materializeErrorResponse(
   response: RuntimeResponse,
 ): Promise<RuntimeResponse> {
   if (response.ok) return response;
-  const text = await response.text().catch(() => '');
+  const text = await readRuntimeResponseText(response);
+  const headers = new Headers(response.headers);
+  headers.delete('content-encoding');
+  headers.delete('content-length');
   return new Response(text, {
     status: response.status,
-    headers: response.headers,
+    headers,
   });
 }

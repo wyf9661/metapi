@@ -34,6 +34,7 @@ import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
 import { detectDownstreamClientContext, type DownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
+import { readRuntimeResponseText } from '../executors/types.js';
 
 const MAX_RETRIES = 2;
 const GEMINI_MODEL_PROBES = [
@@ -294,7 +295,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           geminiGenerateContentTransformer.resolveModelsUrl(selected.site.url, apiVersion, selected.tokenValue),
           { method: 'GET' },
         );
-        const text = await upstream.text();
+        const text = await readRuntimeResponseText(upstream);
         if (!upstream.ok) {
           lastStatus = upstream.status;
           lastText = text;
@@ -504,7 +505,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           if (!upstream.ok) {
             lastStatus = upstream.status;
             lastContentType = contentType;
-            lastText = await upstream.text();
+            lastText = await readRuntimeResponseText(upstream);
             await tokenRouter.recordFailure?.(selected.channel.id, {
               status: upstream.status,
               errorText: lastText,
@@ -612,7 +613,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             return;
           }
 
-          const text = await upstream.text();
+          const text = await readRuntimeResponseText(upstream);
           const aggregateState = geminiGenerateContentTransformer.stream.createAggregateState();
           let parsedUsage = EMPTY_PROXY_USAGE;
           try {
@@ -822,7 +823,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
 
         upstreamPath = endpointResult.upstreamPath;
         const upstream = endpointResult.upstream;
-        const rawText = await upstream.text();
+        const rawText = await readRuntimeResponseText(upstream);
         let upstreamData: unknown = rawText;
         try {
           upstreamData = JSON.parse(rawText);

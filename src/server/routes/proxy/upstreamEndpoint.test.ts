@@ -864,7 +864,7 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.headers['User-Agent']).toBe('claude-cli/2.1.63 (external, cli)');
     expect(request.headers.Connection).toBe('keep-alive');
     expect(request.headers.Accept).toBe('text/event-stream');
-    expect(request.headers['Accept-Encoding']).toBe('identity');
+    expect(request.headers['Accept-Encoding']).toBe('gzip, deflate, br, zstd');
   });
 
   it('uses claude-code beta headers and uncompressed non-stream responses for claude upstream requests', () => {
@@ -887,7 +887,7 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.headers['anthropic-beta']).toContain('oauth-2025-04-20');
     expect(request.headers['anthropic-beta']).toContain('context-management-2025-06-27');
     expect(request.headers.Accept).toBe('application/json');
-    expect(request.headers['Accept-Encoding']).toBe('identity');
+    expect(request.headers['Accept-Encoding']).toBe('gzip, deflate, br, zstd');
   });
 
   it('converts system roles to developer in native codex responses bodies', () => {
