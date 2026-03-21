@@ -7,6 +7,7 @@ import { resetUpstreamEndpointRuntimeState } from './upstreamEndpoint.js';
 const fetchMock = vi.fn();
 const fetchModelPricingCatalogMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
+const refreshOauthAccessTokenSingleflightMock = vi.fn();
 const selectChannelMock = vi.fn();
 const selectNextChannelMock = vi.fn();
 const recordSuccessMock = vi.fn();
@@ -43,6 +44,7 @@ function createDbSelectChain() {
 
 vi.mock('undici', () => ({
   fetch: (...args: unknown[]) => fetchMock(...args),
+  Response: globalThis.Response,
 }));
 
 vi.mock('../../services/modelPricingService.js', () => ({
@@ -51,6 +53,10 @@ vi.mock('../../services/modelPricingService.js', () => ({
 
 vi.mock('../../services/modelService.js', () => ({
   refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
+}));
+
+vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
+  refreshOauthAccessTokenSingleflight: (...args: unknown[]) => refreshOauthAccessTokenSingleflightMock(...args),
 }));
 
 vi.mock('../../services/tokenRouter.js', () => ({
@@ -154,6 +160,7 @@ describe('gemini native proxy routes', () => {
     fetchMock.mockReset();
     fetchModelPricingCatalogMock.mockReset();
     refreshModelsAndRebuildRoutesMock.mockReset();
+    refreshOauthAccessTokenSingleflightMock.mockReset();
     selectChannelMock.mockReset();
     selectNextChannelMock.mockReset();
     recordSuccessMock.mockReset();
@@ -511,6 +518,174 @@ describe('gemini native proxy routes', () => {
           finishReason: 'STOP',
         },
       ],
+    });
+  });
+
+  it('refreshes gemini-cli oauth token and retries the same internal request on 401', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 31, routeId: 22 },
+      site: { id: 66, name: 'gemini-cli-site', url: 'https://cloudcode-pa.googleapis.com', platform: 'gemini-cli' },
+      account: {
+        id: 36,
+        username: 'gemini-cli-user@example.com',
+        accessToken: 'oauth-access-token',
+        extraConfig: JSON.stringify({
+          credentialMode: 'session',
+          oauth: {
+            provider: 'gemini-cli',
+            email: 'gemini-cli-user@example.com',
+            projectId: 'project-before-refresh',
+            refreshToken: 'gemini-refresh-token',
+          },
+        }),
+      },
+      tokenName: 'default',
+      tokenValue: 'oauth-access-token',
+      actualModel: 'gemini-2.5-pro',
+    });
+    refreshOauthAccessTokenSingleflightMock.mockResolvedValue({
+      accountId: 36,
+      accessToken: 'refreshed-access-token',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'gemini-cli',
+          email: 'gemini-cli-user@example.com',
+          projectId: 'project-after-refresh',
+          refreshToken: 'gemini-refresh-token',
+        },
+      }),
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'token expired' },
+      }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'hello after refresh' }],
+                role: 'model',
+              },
+              finishReason: 'STOP',
+            },
+          ],
+        },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1beta/models/gemini-2.5-pro:generateContent',
+      headers: {
+        authorization: 'Bearer sk-managed-gemini',
+      },
+      payload: {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'hello' }],
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(36);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(selectNextChannelMock).not.toHaveBeenCalled();
+
+    const [, firstRequestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, secondRequestInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(firstRequestInit.headers).toMatchObject({
+      Authorization: 'Bearer oauth-access-token',
+    });
+    expect(secondRequestInit.headers).toMatchObject({
+      Authorization: 'Bearer refreshed-access-token',
+    });
+    expect(JSON.parse(String(secondRequestInit.body))).toEqual({
+      project: 'project-after-refresh',
+      model: 'gemini-2.5-pro',
+      request: {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'hello' }],
+          },
+        ],
+      },
+    });
+    expect(response.json()).toEqual({
+      responseId: '',
+      modelVersion: '',
+      candidates: [
+        {
+          index: 0,
+          content: {
+            parts: [{ text: 'hello after refresh' }],
+            role: 'model',
+          },
+          finishReason: 'STOP',
+        },
+      ],
+    });
+  });
+
+  it('returns a server error when gemini-cli oauth project metadata is missing at runtime', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 31, routeId: 22 },
+      site: { id: 66, name: 'gemini-cli-site', url: 'https://cloudcode-pa.googleapis.com', platform: 'gemini-cli' },
+      account: {
+        id: 36,
+        username: 'gemini-cli-user@example.com',
+        accessToken: 'oauth-access-token',
+        extraConfig: JSON.stringify({
+          credentialMode: 'session',
+          oauth: {
+            provider: 'gemini-cli',
+            email: 'gemini-cli-user@example.com',
+          },
+        }),
+      },
+      tokenName: 'default',
+      tokenValue: 'oauth-access-token',
+      actualModel: 'gemini-2.5-pro',
+    });
+    selectNextChannelMock.mockReturnValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1beta/models/gemini-2.5-pro:generateContent',
+      headers: {
+        authorization: 'Bearer sk-managed-gemini',
+      },
+      payload: {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'hello' }],
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(recordFailureMock).toHaveBeenCalledWith(31, {
+      status: 500,
+      errorText: 'Gemini CLI OAuth project is missing',
+    });
+    expect(JSON.parse(response.body)).toEqual({
+      error: {
+        message: 'Gemini CLI OAuth project is missing',
+        type: 'server_error',
+      },
     });
   });
 

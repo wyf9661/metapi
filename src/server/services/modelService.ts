@@ -24,6 +24,7 @@ import { withAccountProxyOverride, withExplicitProxyRequestInit, withSiteRecordP
 import { getCodexOauthInfoFromExtraConfig, isCodexPlatform } from './oauth/codexAccount.js';
 import { buildOauthInfo, getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
 import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from './oauth/claudeProvider.js';
+import { refreshOauthAccessTokenSingleflight } from './oauth/refreshSingleflight.js';
 import {
   ANTIGRAVITY_DAILY_UPSTREAM_BASE_URL,
   ANTIGRAVITY_MODELS_USER_AGENT,
@@ -485,6 +486,13 @@ function buildSuccessfulRefreshResult(input: {
   };
 }
 
+function shouldRetryModelDiscoveryWithOauthRefresh(error: unknown): boolean {
+  const message = ((error as { message?: string })?.message || '').toLowerCase();
+  return message.includes('http 401')
+    || message.includes('unauthorized')
+    || message.includes('unauthenticated');
+}
+
 export async function refreshModelsForAccount(accountId: number): Promise<ModelRefreshResult> {
   const row = await db.select().from(schema.accounts)
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
@@ -668,13 +676,35 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
   if (oauth?.provider === 'gemini-cli') {
     const checkedAt = new Date().toISOString();
     const startedAt = Date.now();
+    let discoveryAccount = account;
     try {
-      await withTimeout(
-        () => withAccountProxyOverride(accountProxyUrl,
-          () => validateGeminiCliOauthConnection({ account })),
-        MODEL_DISCOVERY_TIMEOUT_MS,
-        `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
-      );
+      try {
+        await withTimeout(
+          () => withAccountProxyOverride(accountProxyUrl,
+            () => validateGeminiCliOauthConnection({ account: discoveryAccount })),
+          MODEL_DISCOVERY_TIMEOUT_MS,
+          `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
+        );
+      } catch (error) {
+        if (!shouldRetryModelDiscoveryWithOauthRefresh(error)) {
+          throw error;
+        }
+        const refreshed = await refreshOauthAccessTokenSingleflight(discoveryAccount.id);
+        if (!refreshed?.extraConfig) {
+          throw error;
+        }
+        discoveryAccount = {
+          ...discoveryAccount,
+          accessToken: refreshed.accessToken,
+          extraConfig: refreshed.extraConfig,
+        };
+        await withTimeout(
+          () => withAccountProxyOverride(accountProxyUrl,
+            () => validateGeminiCliOauthConnection({ account: discoveryAccount })),
+          MODEL_DISCOVERY_TIMEOUT_MS,
+          `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
+        );
+      }
       await db.insert(schema.modelAvailability).values(
         GEMINI_CLI_STATIC_MODELS.map((modelName) => ({
           accountId,
@@ -685,7 +715,7 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
         })),
       ).run();
       await updateOauthModelDiscoveryState({
-        account,
+        account: discoveryAccount,
         checkedAt,
         status: 'healthy',
         lastDiscoveredModels: GEMINI_CLI_STATIC_MODELS,
@@ -709,7 +739,7 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
       const errorCode = classifyModelDiscoveryError(rawMessage);
       const errorMessage = `Gemini CLI 模型获取失败（${rawMessage}）`;
       await updateOauthModelDiscoveryState({
-        account,
+        account: discoveryAccount,
         checkedAt,
         status: 'abnormal',
         lastModelSyncError: errorMessage,
