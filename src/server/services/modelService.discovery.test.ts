@@ -719,6 +719,121 @@ describe('refreshModelsForAccount credential discovery', () => {
     });
   });
 
+  it('refreshes gemini oauth access token during validation after a 401 and persists the refreshed credentials', async () => {
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockRejectedValue(new Error('gemini oauth validation should not call adapter.getModels'));
+    undiciFetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'expired' }),
+        text: async () => 'expired',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'gemini-access-token-refreshed',
+          refresh_token: 'gemini-refresh-token-next',
+          expires_in: 3600,
+          token_type: 'Bearer',
+          scope: 'cloud-platform',
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ state: 'ENABLED' }),
+        text: async () => JSON.stringify({ state: 'ENABLED' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ email: 'gemini-refreshed-user@example.com' }),
+        text: async () => JSON.stringify({ email: 'gemini-refreshed-user@example.com' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ state: 'ENABLED' }),
+        text: async () => JSON.stringify({ state: 'ENABLED' }),
+      });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'gemini-refresh-site',
+      url: 'https://gemini.example.com',
+      platform: 'gemini',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'gemini-user@example.com',
+      accessToken: 'gemini-access-token-expired',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'gemini-cli',
+      oauthAccountKey: 'gemini-user@example.com',
+      oauthProjectId: 'project-refresh-demo',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'gemini-cli',
+          email: 'gemini-user@example.com',
+          accountId: 'gemini-user@example.com',
+          accountKey: 'gemini-user@example.com',
+          projectId: 'project-refresh-demo',
+          refreshToken: 'gemini-refresh-token',
+        },
+      }),
+    }).returning().get();
+
+    const result = await refreshModelsForAccount(account.id);
+
+    expect(result).toMatchObject({
+      accountId: account.id,
+      refreshed: true,
+      status: 'success',
+      modelCount: expect.any(Number),
+      discoveredByCredential: true,
+    });
+    expect(undiciFetchMock).toHaveBeenCalledTimes(5);
+    expect(String(undiciFetchMock.mock.calls[0]?.[0] || '')).toContain('/projects/project-refresh-demo/services/');
+    expect(undiciFetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: 'GET',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer gemini-access-token-expired',
+      }),
+    });
+    expect(String(undiciFetchMock.mock.calls[1]?.[0] || '')).toContain('oauth2.googleapis.com/token');
+    expect(String(undiciFetchMock.mock.calls[4]?.[0] || '')).toContain('/projects/project-refresh-demo/services/');
+    expect(undiciFetchMock.mock.calls[4]?.[1]).toMatchObject({
+      method: 'GET',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer gemini-access-token-refreshed',
+      }),
+    });
+
+    const latest = await db.select().from(schema.accounts)
+      .where(eq(schema.accounts.id, account.id))
+      .get();
+    expect(latest).toMatchObject({
+      accessToken: 'gemini-access-token-refreshed',
+      oauthProvider: 'gemini-cli',
+      oauthAccountKey: 'gemini-refreshed-user@example.com',
+      oauthProjectId: 'project-refresh-demo',
+    });
+    const parsed = JSON.parse(latest!.extraConfig || '{}');
+    expect(parsed.oauth).toMatchObject({
+      provider: 'gemini-cli',
+      email: 'gemini-refreshed-user@example.com',
+      refreshToken: 'gemini-refresh-token-next',
+      projectId: 'project-refresh-demo',
+      modelDiscoveryStatus: 'healthy',
+    });
+  });
+
   it('discovers antigravity oauth models via fetchAvailableModels fallback using the oauth project id', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockRejectedValue(new Error('antigravity oauth discovery should not call adapter.getModels'));
