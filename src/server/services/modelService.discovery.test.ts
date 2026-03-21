@@ -8,6 +8,7 @@ const getApiTokenMock = vi.fn();
 const getModelsMock = vi.fn();
 const undiciFetchMock = vi.fn();
 const proxyAgentCtorMock = vi.fn();
+const refreshOauthAccessTokenSingleflightMock = vi.fn();
 
 class MockProxyAgent {
   readonly proxyUrl: string;
@@ -31,6 +32,10 @@ vi.mock('undici', () => ({
   fetch: (...args: unknown[]) => undiciFetchMock(...args),
   ProxyAgent: MockProxyAgent,
   Agent: MockAgent,
+}));
+
+vi.mock('./oauth/refreshSingleflight.js', () => ({
+  refreshOauthAccessTokenSingleflight: (...args: unknown[]) => refreshOauthAccessTokenSingleflightMock(...args),
 }));
 
 type DbModule = typeof import('../db/index.js');
@@ -62,6 +67,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     getModelsMock.mockReset();
     undiciFetchMock.mockReset();
     proxyAgentCtorMock.mockReset();
+    refreshOauthAccessTokenSingleflightMock.mockReset();
 
     await db.delete(schema.routeChannels).run();
     await db.delete(schema.tokenRoutes).run();
@@ -719,39 +725,45 @@ describe('refreshModelsForAccount credential discovery', () => {
     });
   });
 
-  it('refreshes gemini oauth access token during validation after a 401 and persists the refreshed credentials', async () => {
+  it('refreshes gemini oauth access token during validation through singleflight and reuses the refreshed account state', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockRejectedValue(new Error('gemini oauth validation should not call adapter.getModels'));
+    refreshOauthAccessTokenSingleflightMock.mockImplementation(async (accountId: number) => {
+      const refreshedExtraConfig = JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'gemini-cli',
+          email: 'gemini-refreshed-user@example.com',
+          accountId: 'gemini-refreshed-user@example.com',
+          accountKey: 'gemini-refreshed-user@example.com',
+          projectId: 'project-refresh-demo',
+          refreshToken: 'gemini-refresh-token-next',
+        },
+      });
+
+      await db.update(schema.accounts).set({
+        accessToken: 'gemini-access-token-refreshed',
+        oauthProvider: 'gemini-cli',
+        oauthAccountKey: 'gemini-refreshed-user@example.com',
+        oauthProjectId: 'project-refresh-demo',
+        extraConfig: refreshedExtraConfig,
+        status: 'active',
+        updatedAt: '2026-03-21T00:00:00.000Z',
+      }).where(eq(schema.accounts.id, accountId)).run();
+
+      return {
+        accountId,
+        accessToken: 'gemini-access-token-refreshed',
+        accountKey: 'gemini-refreshed-user@example.com',
+        extraConfig: refreshedExtraConfig,
+      };
+    });
     undiciFetchMock
       .mockResolvedValueOnce({
         ok: false,
         status: 401,
         json: async () => ({ error: 'expired' }),
         text: async () => 'expired',
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          access_token: 'gemini-access-token-refreshed',
-          refresh_token: 'gemini-refresh-token-next',
-          expires_in: 3600,
-          token_type: 'Bearer',
-          scope: 'cloud-platform',
-        }),
-        text: async () => JSON.stringify({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ state: 'ENABLED' }),
-        text: async () => JSON.stringify({ state: 'ENABLED' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ email: 'gemini-refreshed-user@example.com' }),
-        text: async () => JSON.stringify({ email: 'gemini-refreshed-user@example.com' }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -798,7 +810,8 @@ describe('refreshModelsForAccount credential discovery', () => {
       modelCount: expect.any(Number),
       discoveredByCredential: true,
     });
-    expect(undiciFetchMock).toHaveBeenCalledTimes(5);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(account.id);
+    expect(undiciFetchMock).toHaveBeenCalledTimes(2);
     expect(String(undiciFetchMock.mock.calls[0]?.[0] || '')).toContain('/projects/project-refresh-demo/services/');
     expect(undiciFetchMock.mock.calls[0]?.[1]).toMatchObject({
       method: 'GET',
@@ -806,9 +819,11 @@ describe('refreshModelsForAccount credential discovery', () => {
         Authorization: 'Bearer gemini-access-token-expired',
       }),
     });
-    expect(String(undiciFetchMock.mock.calls[1]?.[0] || '')).toContain('oauth2.googleapis.com/token');
-    expect(String(undiciFetchMock.mock.calls[4]?.[0] || '')).toContain('/projects/project-refresh-demo/services/');
-    expect(undiciFetchMock.mock.calls[4]?.[1]).toMatchObject({
+    expect(
+      undiciFetchMock.mock.calls.some(([url]) => String(url || '').includes('oauth2.googleapis.com/token')),
+    ).toBe(false);
+    expect(String(undiciFetchMock.mock.calls[1]?.[0] || '')).toContain('/projects/project-refresh-demo/services/');
+    expect(undiciFetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: 'GET',
       headers: expect.objectContaining({
         Authorization: 'Bearer gemini-access-token-refreshed',

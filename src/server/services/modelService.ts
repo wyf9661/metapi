@@ -24,7 +24,7 @@ import { withAccountProxyOverride, withExplicitProxyRequestInit, withSiteRecordP
 import { getCodexOauthInfoFromExtraConfig, isCodexPlatform } from './oauth/codexAccount.js';
 import { buildOauthInfo, getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
 import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from './oauth/claudeProvider.js';
-import { getOAuthProviderDefinition } from './oauth/providers.js';
+import { refreshOauthAccessTokenSingleflight } from './oauth/refreshSingleflight.js';
 import {
   ANTIGRAVITY_DAILY_UPSTREAM_BASE_URL,
   ANTIGRAVITY_MODELS_USER_AGENT,
@@ -489,69 +489,6 @@ function shouldRetryModelDiscoveryWithOauthRefresh(error: unknown): boolean {
     || message.includes('unauthenticated');
 }
 
-async function refreshOauthAccountForModelDiscovery(
-  account: typeof schema.accounts.$inferSelect,
-): Promise<typeof schema.accounts.$inferSelect | null> {
-  const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
-  if (!oauth?.provider || !oauth.refreshToken) {
-    return null;
-  }
-
-  const definition = getOAuthProviderDefinition(oauth.provider);
-  if (!definition) {
-    return null;
-  }
-
-  const refreshed = await definition.refreshAccessToken({
-    refreshToken: oauth.refreshToken,
-    oauth: {
-      projectId: oauth.projectId,
-      providerData: oauth.providerData,
-    },
-  });
-  const nextOauth = buildOauthInfo(account.extraConfig, {
-    provider: oauth.provider,
-    accountId: refreshed.accountId || oauth.accountId,
-    accountKey: refreshed.accountKey || oauth.accountKey || refreshed.accountId || oauth.accountId,
-    email: refreshed.email || oauth.email,
-    planType: refreshed.planType || oauth.planType,
-    projectId: refreshed.projectId || oauth.projectId,
-    refreshToken: refreshed.refreshToken || oauth.refreshToken,
-    tokenExpiresAt: refreshed.tokenExpiresAt || oauth.tokenExpiresAt,
-    idToken: refreshed.idToken || oauth.idToken,
-    providerData: {
-      ...(oauth.providerData || {}),
-      ...(refreshed.providerData || {}),
-    },
-  });
-  const extraConfig = mergeAccountExtraConfig(account.extraConfig, {
-    credentialMode: 'session',
-    oauth: nextOauth,
-  });
-  const updatedAt = new Date().toISOString();
-
-  await db.update(schema.accounts).set({
-    accessToken: refreshed.accessToken,
-    oauthProvider: oauth.provider,
-    oauthAccountKey: nextOauth.accountKey || nextOauth.accountId || null,
-    oauthProjectId: nextOauth.projectId || null,
-    extraConfig,
-    status: 'active',
-    updatedAt,
-  }).where(eq(schema.accounts.id, account.id)).run();
-
-  return {
-    ...account,
-    accessToken: refreshed.accessToken,
-    oauthProvider: oauth.provider,
-    oauthAccountKey: nextOauth.accountKey || nextOauth.accountId || null,
-    oauthProjectId: nextOauth.projectId || null,
-    extraConfig,
-    status: 'active',
-    updatedAt,
-  };
-}
-
 export async function refreshModelsForAccount(accountId: number): Promise<ModelRefreshResult> {
   const row = await db.select().from(schema.accounts)
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
@@ -745,11 +682,15 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
         if (!shouldRetryModelDiscoveryWithOauthRefresh(error)) {
           throw error;
         }
-        const refreshedAccount = await refreshOauthAccountForModelDiscovery(discoveryAccount);
-        if (!refreshedAccount) {
+        const refreshed = await refreshOauthAccessTokenSingleflight(discoveryAccount.id);
+        if (!refreshed?.extraConfig) {
           throw error;
         }
-        discoveryAccount = refreshedAccount;
+        discoveryAccount = {
+          ...discoveryAccount,
+          accessToken: refreshed.accessToken,
+          extraConfig: refreshed.extraConfig,
+        };
         await withTimeout(
           () => withAccountProxyOverride(accountProxyUrl,
             () => validateGeminiCliOauthConnection({ account: discoveryAccount })),
