@@ -7,6 +7,7 @@ import { refreshModelsForAccount, rebuildTokenRoutesFromAvailability } from '../
 import { ensureDefaultTokenForAccount, syncTokensFromUpstream } from '../../services/accountTokenService.js';
 import {
   getCredentialModeFromExtraConfig,
+  getProxyUrlFromExtraConfig,
   guessPlatformUserIdFromUsername,
   hasOauthProvider,
   getSub2ApiAuthFromExtraConfig,
@@ -26,7 +27,7 @@ import {
   type RuntimeHealthState,
 } from '../../services/accountHealthService.js';
 import { appendSessionTokenRebindHint } from '../../services/alertRules.js';
-import { withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
+import { parseSiteProxyUrlInput, withAccountProxyOverride, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { createRateLimitGuard } from '../../middleware/requestRateLimit.js';
 
 type AccountWithSiteRow = {
@@ -981,7 +982,10 @@ export async function accountsRoutes(app: FastifyInstance) {
 
       let verifyResult: any;
       try {
-        verifyResult = await adapter.verifyToken(site.url, nextAccessToken, candidatePlatformUserId);
+        verifyResult = await withAccountProxyOverride(
+          getProxyUrlFromExtraConfig(account.extraConfig),
+          () => adapter.verifyToken(site.url, nextAccessToken, candidatePlatformUserId),
+        );
       } catch (err: any) {
         return reply.code(400).send({
           success: false,
@@ -1303,6 +1307,18 @@ export async function accountsRoutes(app: FastifyInstance) {
         return reply.code(400).send({ message: 'Invalid sortOrder value. Expected non-negative integer.' });
       }
       updates.sortOrder = normalizedSortOrder;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'proxyUrl')) {
+      const baseExtraConfig = typeof updates.extraConfig === 'string'
+        ? updates.extraConfig : account.extraConfig;
+      const { present, valid, proxyUrl: normalizedProxy } = parseSiteProxyUrlInput(body.proxyUrl);
+      if (present && !valid) {
+        return reply.code(400).send({ message: 'Invalid proxy URL format' });
+      }
+      updates.extraConfig = mergeAccountExtraConfig(baseExtraConfig, {
+        proxyUrl: normalizedProxy ?? undefined,
+      });
     }
 
     updates.updatedAt = new Date().toISOString();

@@ -8,6 +8,7 @@ import { refreshBalance } from './balanceService.js';
 import { parseCheckinRewardAmount } from './checkinRewardParser.js';
 import {
   getAutoReloginConfig,
+  getProxyUrlFromExtraConfig,
   getPlatformUserIdFromExtraConfig,
   guessPlatformUserIdFromUsername,
   mergeAccountExtraConfig,
@@ -16,6 +17,7 @@ import {
 import { decryptAccountPassword } from './accountCredentialService.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
+import { withAccountProxyOverride } from './siteProxy.js';
 
 type CheckinExecutionStatus = 'success' | 'failed' | 'skipped';
 
@@ -100,7 +102,10 @@ async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
   const password = decryptAccountPassword(relogin.passwordCipher);
   if (!password) return null;
 
-  const result = await adapter.login(site.url, relogin.username, password);
+  const result = await withAccountProxyOverride(
+    getProxyUrlFromExtraConfig(account.extraConfig),
+    () => adapter.login(site.url, relogin.username, password),
+  );
   if (!result.success || !result.accessToken) return null;
 
   await db.update(schema.accounts)
@@ -172,14 +177,17 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
     : guessPlatformUserIdFromUsername(account.username);
   const platformUserId = resolvePlatformUserId(account.extraConfig, account.username);
 
+  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
   let activeAccessToken = account.accessToken;
-  let result = await adapter.checkin(site.url, activeAccessToken, platformUserId);
+  let result = await withAccountProxyOverride(accountProxyUrl,
+    () => adapter.checkin(site.url, activeAccessToken, platformUserId));
 
   if (!result.success && shouldAttemptAutoRelogin(result.message)) {
     const refreshedAccessToken = await tryAutoRelogin(account, site);
     if (refreshedAccessToken) {
       activeAccessToken = refreshedAccessToken;
-      result = await adapter.checkin(site.url, activeAccessToken, platformUserId);
+      result = await withAccountProxyOverride(accountProxyUrl,
+        () => adapter.checkin(site.url, activeAccessToken, platformUserId));
     }
   }
 

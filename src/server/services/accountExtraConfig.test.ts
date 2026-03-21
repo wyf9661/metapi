@@ -3,6 +3,7 @@ import {
   buildStoredSub2ApiSubscriptionSummary,
   getCredentialModeFromExtraConfig,
   getPlatformUserIdFromExtraConfig,
+  getProxyUrlFromExtraConfig,
   getSub2ApiAuthFromExtraConfig,
   getSub2ApiSubscriptionFromExtraConfig,
   guessPlatformUserIdFromUsername,
@@ -70,6 +71,20 @@ describe('accountExtraConfig', () => {
     expect(getSub2ApiAuthFromExtraConfig(JSON.stringify({
       sub2apiAuth: { refreshToken: '  ' },
     }))).toBeNull();
+  });
+
+  it('reads proxyUrl from extra config', () => {
+    expect(getProxyUrlFromExtraConfig(JSON.stringify({ proxyUrl: 'http://127.0.0.1:7890' }))).toBe('http://127.0.0.1:7890');
+    expect(getProxyUrlFromExtraConfig(JSON.stringify({ proxyUrl: '  socks5://proxy.local:1080  ' }))).toBe('socks5://proxy.local:1080');
+  });
+
+  it('returns null for missing or empty proxyUrl', () => {
+    expect(getProxyUrlFromExtraConfig(JSON.stringify({}))).toBeNull();
+    expect(getProxyUrlFromExtraConfig(JSON.stringify({ proxyUrl: '' }))).toBeNull();
+    expect(getProxyUrlFromExtraConfig(JSON.stringify({ proxyUrl: '   ' }))).toBeNull();
+    expect(getProxyUrlFromExtraConfig(null)).toBeNull();
+    expect(getProxyUrlFromExtraConfig(undefined)).toBeNull();
+    expect(getProxyUrlFromExtraConfig('invalid-json')).toBeNull();
   });
 
   it('treats auto-mode api token connections as direct-account routable', () => {

@@ -2016,6 +2016,11 @@ body {
   color: var(--color-text-muted);
 }
 
+.badge-purple {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
 .badge-link {
   display: inline-flex;
   text-decoration: none;
@@ -2375,6 +2380,11 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 [data-theme="dark"] .badge-muted {
   background: rgba(255, 255, 255, 0.08);
   color: var(--color-text-muted);
+}
+
+[data-theme="dark"] .badge-purple {
+  background: #2e1065;
+  color: #c4b5fd;
 }
 
 [data-theme="dark"] .badge-link:hover .badge-muted,

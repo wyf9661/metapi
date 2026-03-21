@@ -111,6 +111,7 @@ export default function Accounts() {
     isPinned: false,
     refreshToken: '',
     tokenExpiresAt: '',
+    proxyUrl: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [rebindTarget, setRebindTarget] = useState<any | null>(null);
@@ -652,21 +653,23 @@ export default function Accounts() {
     }
   };
 
+  const parseAccountExtraConfig = (account: any): Record<string, any> => {
+    try { return JSON.parse(account?.extraConfig || '{}') || {}; }
+    catch { return {}; }
+  };
+
   const extractManagedSub2ApiAuth = (account: any) => {
-    try {
-      const parsed = JSON.parse(account?.extraConfig || '{}');
-      const auth = parsed?.sub2apiAuth || {};
-      return {
-        refreshToken: typeof auth.refreshToken === 'string' ? auth.refreshToken : '',
-        tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : '',
-      };
-    } catch {
-      return { refreshToken: '', tokenExpiresAt: '' };
-    }
+    const parsed = parseAccountExtraConfig(account);
+    const auth = parsed?.sub2apiAuth || {};
+    return {
+      refreshToken: typeof auth.refreshToken === 'string' ? auth.refreshToken : '',
+      tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : '',
+    };
   };
 
   const openEditPanel = (account: any) => {
     const managedAuth = extractManagedSub2ApiAuth(account);
+    const proxyUrl = parseAccountExtraConfig(account)?.proxyUrl || '';
     closeAddPanel();
     setRebindTarget(null);
     setEditingAccount(account);
@@ -680,6 +683,7 @@ export default function Accounts() {
       isPinned: !!account?.isPinned,
       refreshToken: managedAuth.refreshToken,
       tokenExpiresAt: managedAuth.tokenExpiresAt,
+      proxyUrl,
     });
   };
 
@@ -702,6 +706,7 @@ export default function Accounts() {
         isPinned: editForm.isPinned,
         refreshToken: editForm.refreshToken.trim() || null,
         tokenExpiresAt: editForm.tokenExpiresAt.trim() ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10) : null,
+        proxyUrl: editForm.proxyUrl.trim() || null,
       });
       toast.success('账号已更新');
       closeEditPanel();
@@ -786,12 +791,10 @@ export default function Accounts() {
   };
 
   const extractPlatformUserId = (account: any): string => {
-    try {
-      const parsed = JSON.parse(account?.extraConfig || '{}');
-      const raw = parsed?.platformUserId;
-      const value = Number.parseInt(String(raw ?? ''), 10);
-      if (Number.isFinite(value) && value > 0) return String(value);
-    } catch { }
+    const parsed = parseAccountExtraConfig(account);
+    const raw = parsed?.platformUserId;
+    const value = Number.parseInt(String(raw ?? ''), 10);
+    if (Number.isFinite(value) && value > 0) return String(value);
     const guessed = Number.parseInt(String(account?.username || '').match(/(\d{3,8})$/)?.[1] || '', 10);
     return Number.isFinite(guessed) && guessed > 0 ? String(guessed) : '';
   };
@@ -1542,6 +1545,15 @@ export default function Accounts() {
                   onChange={(e) => setEditForm((prev) => ({ ...prev, apiToken: e.target.value }))}
                   style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
                 />
+                <input
+                  placeholder="代理地址（可选，如 http://127.0.0.1:7890）"
+                  value={editForm.proxyUrl}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+                  style={inputStyle}
+                />
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -4 }}>
+                  覆盖站点和系统代理，留空则使用站点设置。支持 http/https/socks5 协议。
+                </div>
                 {((editingAccount?.site?.platform || '').toLowerCase() === 'sub2api') && (
                   <>
                     <input
@@ -1589,6 +1601,9 @@ export default function Accounts() {
                             <span className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 10 }}>
                               {connectionMode === 'apikey' ? 'API Key' : 'Session'}
                             </span>
+                            {parseAccountExtraConfig(a)?.proxyUrl && (
+                              <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
+                            )}
                           </div>
                         )}
                       >
@@ -1799,6 +1814,9 @@ export default function Accounts() {
                             <span className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 10 }}>
                               {connectionMode === 'apikey' ? 'API Key' : 'Session'}
                             </span>
+                            {parseAccountExtraConfig(a)?.proxyUrl && (
+                              <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
+                            )}
                           </div>
                         </td>
                         <td>

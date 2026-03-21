@@ -217,4 +217,77 @@ describe('siteProxy', () => {
     expect(headers.get('x-request-id')).toBe('req-1');
     expect('dispatcher' in requestInit).toBe(true);
   });
+
+  it('resolveChannelProxyUrl prefers account proxy over site proxy', async () => {
+    const { resolveChannelProxyUrl } = await import('./siteProxy.js');
+
+    const accountConfig = JSON.stringify({ proxyUrl: 'http://account-proxy:8080' });
+    const siteWithProxy = { useSystemProxy: true };
+
+    expect(resolveChannelProxyUrl(siteWithProxy, accountConfig)).toBe('http://account-proxy:8080');
+    expect(resolveChannelProxyUrl(siteWithProxy, null)).toBeNull();
+    expect(resolveChannelProxyUrl(siteWithProxy, JSON.stringify({}))).toBeNull();
+  });
+
+  it('withSiteRecordProxyRequestInit uses account proxy when provided', async () => {
+    const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
+    const result = withSiteRecordProxyRequestInit(
+      { useSystemProxy: false },
+      { method: 'POST' },
+      'http://account-proxy:8080',
+    );
+    expect('dispatcher' in result).toBe(true);
+  });
+
+  it('withSiteRecordProxyRequestInit ignores invalid account proxy', async () => {
+    const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
+    const result = withSiteRecordProxyRequestInit(
+      { useSystemProxy: false },
+      { method: 'POST' },
+      'not-a-url',
+    );
+    expect('dispatcher' in result).toBe(false);
+  });
+
+  it('withAccountProxyOverride sets ALS context for nested proxy calls', async () => {
+    const { withAccountProxyOverride, withSiteProxyRequestInit } = await import('./siteProxy.js');
+
+    await db.insert(schema.sites).values({
+      name: 'als-site',
+      url: 'https://als-site.example.com',
+      platform: 'new-api',
+    }).run();
+
+    const result = await withAccountProxyOverride(
+      'http://account-als-proxy:9090',
+      async () => {
+        return withSiteProxyRequestInit('https://als-site.example.com/v1/models', {
+          method: 'GET',
+        });
+      },
+    );
+
+    expect('dispatcher' in result).toBe(true);
+  });
+
+  it('withAccountProxyOverride skips ALS when proxy is null', async () => {
+    const { withAccountProxyOverride, withSiteProxyRequestInit } = await import('./siteProxy.js');
+
+    await db.insert(schema.sites).values({
+      name: 'als-null-site',
+      url: 'https://als-null-site.example.com',
+      platform: 'new-api',
+    }).run();
+
+    const result = await withAccountProxyOverride(
+      null,
+      async () => {
+        return withSiteProxyRequestInit('https://als-null-site.example.com/v1/models', {
+          method: 'GET',
+        });
+      },
+    );
+
+    expect('dispatcher' in result).toBe(false);
+  });
 });

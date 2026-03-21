@@ -7,6 +7,7 @@ import {
   buildStoredSub2ApiSubscriptionSummary,
   getAutoReloginConfig,
   getCredentialModeFromExtraConfig,
+  getProxyUrlFromExtraConfig,
   getSub2ApiAuthFromExtraConfig,
   mergeAccountExtraConfig,
   resolvePlatformUserId,
@@ -15,7 +16,7 @@ import { decryptAccountPassword } from './accountCredentialService.js';
 import { extractRuntimeHealth, setAccountRuntimeHealth } from './accountHealthService.js';
 import { updateTodayIncomeSnapshot } from './todayIncomeRewardService.js';
 import type { BalanceInfo } from './platforms/base.js';
-import { withSiteProxyRequestInit, withSiteRecordProxyRequestInit } from './siteProxy.js';
+import { withAccountProxyOverride, withSiteProxyRequestInit, withSiteRecordProxyRequestInit } from './siteProxy.js';
 
 function isSiteDisabled(status?: string | null): boolean {
   return (status || 'active') === 'disabled';
@@ -200,7 +201,7 @@ async function refreshSub2ApiManagedSession(params: {
       method: 'POST',
       headers,
       body: JSON.stringify({ refresh_token: refreshToken }),
-    }));
+    }, getProxyUrlFromExtraConfig(params.account.extraConfig)));
     payload = await response.json().catch(() => null);
   } catch (err: any) {
     throw new Error(err?.message || 'sub2api token refresh request failed');
@@ -317,7 +318,10 @@ async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
   const password = decryptAccountPassword(relogin.passwordCipher);
   if (!password) return null;
 
-  const loginResult = await adapter.login(site.url, relogin.username, password);
+  const loginResult = await withAccountProxyOverride(
+    getProxyUrlFromExtraConfig(account.extraConfig),
+    () => adapter.login(site.url, relogin.username, password),
+  );
   if (!loginResult.success || !loginResult.accessToken) return null;
 
   await db.update(schema.accounts)
@@ -378,23 +382,25 @@ export async function refreshBalance(accountId: number) {
   let activeExtraConfig = account.extraConfig;
   let balanceInfo: BalanceInfo | null = null;
 
+  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
+
   if (isSub2ApiPlatform(site.platform)) {
     const managedAuth = getSub2ApiAuthFromExtraConfig(activeExtraConfig);
     if (managedAuth?.refreshToken && isNearTokenExpiry(managedAuth.tokenExpiresAt)) {
       try {
-        const refreshed = await refreshSub2ApiManagedSession({
+        const refreshed = await withAccountProxyOverride(accountProxyUrl, () => refreshSub2ApiManagedSession({
           account,
           site,
           currentAccessToken: activeAccessToken,
           currentExtraConfig: activeExtraConfig,
-        });
+        }));
         activeAccessToken = refreshed.accessToken;
         activeExtraConfig = refreshed.extraConfig;
       } catch {}
     }
   }
-
-  const readBalance = async (token: string) => adapter.getBalance(site.url, token, platformUserId);
+  const readBalance = async (token: string) => withAccountProxyOverride(accountProxyUrl,
+    () => adapter.getBalance(site.url, token, platformUserId));
   const handleBalanceError = async (err: any) => {
     const message = appendSessionTokenRebindHint(err?.message || 'unknown error');
     setAccountRuntimeHealth(account.id, {
@@ -424,12 +430,12 @@ export async function refreshBalance(accountId: number) {
 
     if (canTryManagedSub2ApiRefresh) {
       try {
-        const refreshed = await refreshSub2ApiManagedSession({
+        const refreshed = await withAccountProxyOverride(accountProxyUrl, () => refreshSub2ApiManagedSession({
           account,
           site,
           currentAccessToken: activeAccessToken,
           currentExtraConfig: activeExtraConfig,
-        });
+        }));
         activeAccessToken = refreshed.accessToken;
         activeExtraConfig = refreshed.extraConfig;
         balanceInfo = await readBalance(activeAccessToken);
@@ -462,12 +468,12 @@ export async function refreshBalance(accountId: number) {
     supportsTodayIncomeLogFallback(site.platform)
   ) {
     try {
-      const fallbackIncome = await fetchTodayIncomeFromLogs({
+      const fallbackIncome = await withAccountProxyOverride(accountProxyUrl, () => fetchTodayIncomeFromLogs({
         baseUrl: site.url,
         accessToken: activeAccessToken,
         platform: site.platform,
         platformUserId,
-      });
+      }));
       if (typeof fallbackIncome === 'number' && Number.isFinite(fallbackIncome)) {
         balanceInfo.todayIncome = fallbackIncome;
       }

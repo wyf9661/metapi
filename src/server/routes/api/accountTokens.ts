@@ -17,8 +17,9 @@ import {
   syncTokensFromUpstream,
 } from '../../services/accountTokenService.js';
 import { getAdapter } from '../../services/platforms/index.js';
-import { getCredentialModeFromExtraConfig, resolvePlatformUserId } from '../../services/accountExtraConfig.js';
+import { getCredentialModeFromExtraConfig, getProxyUrlFromExtraConfig, resolvePlatformUserId } from '../../services/accountExtraConfig.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
+import { withAccountProxyOverride } from '../../services/siteProxy.js';
 import {
   rebuildTokenRoutesFromAvailability,
   refreshModelsForAccount,
@@ -261,15 +262,18 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
 
   try {
     const platformUserId = resolvePlatformUserId(row.accounts.extraConfig, row.accounts.username);
+    const accountProxyUrl = getProxyUrlFromExtraConfig(row.accounts.extraConfig);
     let tokens = await withTimeout(
-      () => adapter.getApiTokens(row.sites.url, row.accounts.accessToken, platformUserId),
+      () => withAccountProxyOverride(accountProxyUrl,
+        () => adapter.getApiTokens(row.sites.url, row.accounts.accessToken, platformUserId)),
       TOKEN_SYNC_TIMEOUT_MS,
       `token sync timeout (${Math.round(TOKEN_SYNC_TIMEOUT_MS / 1000)}s)`,
     );
 
     if (tokens.length === 0) {
       const fallback = await withTimeout(
-        () => adapter.getApiToken(row.sites.url, row.accounts.accessToken, platformUserId),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => adapter.getApiToken(row.sites.url, row.accounts.accessToken, platformUserId)),
         TOKEN_SYNC_TIMEOUT_MS,
         `token sync timeout (${Math.round(TOKEN_SYNC_TIMEOUT_MS / 1000)}s)`,
       );
@@ -579,20 +583,23 @@ export async function accountTokensRoutes(app: FastifyInstance) {
     }
 
     const platformUserId = resolvePlatformUserId(account.extraConfig, account.username);
-    const createdViaUpstream = await adapter.createApiToken(
-      site.url,
-      account.accessToken,
-      platformUserId,
-      {
-        name: asTrimmedString(body.name),
-        group: asTrimmedString(body.group),
-        unlimitedQuota,
-        remainQuota,
-        expiredTime,
-        allowIps: asTrimmedString(body.allowIps),
-        modelLimitsEnabled,
-        modelLimits: asTrimmedString(body.modelLimits),
-      },
+    const createdViaUpstream = await withAccountProxyOverride(
+      getProxyUrlFromExtraConfig(account.extraConfig),
+      () => adapter.createApiToken(
+        site.url,
+        account.accessToken,
+        platformUserId,
+        {
+          name: asTrimmedString(body.name),
+          group: asTrimmedString(body.group),
+          unlimitedQuota,
+          remainQuota,
+          expiredTime,
+          allowIps: asTrimmedString(body.allowIps),
+          modelLimitsEnabled,
+          modelLimits: asTrimmedString(body.modelLimits),
+        },
+      ),
     );
     if (!createdViaUpstream) {
       return reply.code(502).send({ success: false, message: '站点创建令牌失败' });
@@ -652,11 +659,14 @@ export async function accountTokensRoutes(app: FastifyInstance) {
 
     if (shouldDeleteUpstream) {
       const platformUserId = resolvePlatformUserId(account.extraConfig, account.username);
-      const upstreamDeleted = await adapter!.deleteApiToken(
-        site.url,
-        account.accessToken,
-        existing.token,
-        platformUserId,
+      const upstreamDeleted = await withAccountProxyOverride(
+        getProxyUrlFromExtraConfig(account.extraConfig),
+        () => adapter!.deleteApiToken(
+          site.url,
+          account.accessToken,
+          existing.token,
+          platformUserId,
+        ),
       );
       if (!upstreamDeleted) {
         return { success: false, message: '站点删除令牌失败，本地未删除' };
@@ -904,7 +914,10 @@ export async function accountTokensRoutes(app: FastifyInstance) {
 
     try {
       const platformUserId = resolvePlatformUserId(account.extraConfig, account.username);
-      const groups = await adapter.getUserGroups(site.url, account.accessToken, platformUserId);
+      const groups = await withAccountProxyOverride(
+        getProxyUrlFromExtraConfig(account.extraConfig),
+        () => adapter.getUserGroups(site.url, account.accessToken, platformUserId),
+      );
       const normalized = Array.from(new Set((groups || []).map((item) => String(item || '').trim()).filter(Boolean)));
       return { success: true, groups: normalized.length > 0 ? normalized : ['default'] };
     } catch (error: any) {

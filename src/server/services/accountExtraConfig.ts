@@ -114,6 +114,11 @@ export function normalizeCredentialMode(raw: unknown): AccountCredentialMode | u
   return normalized as AccountCredentialMode;
 }
 
+export function getProxyUrlFromExtraConfig(extraConfig?: string | null): string | null {
+  const parsed = parseExtraConfig(extraConfig);
+  return normalizeNonEmptyString(parsed.proxyUrl) ?? null;
+}
+
 export function getPlatformUserIdFromExtraConfig(extraConfig?: string | null): number | undefined {
   const parsed = parseExtraConfig(extraConfig);
   return normalizeUserId(parsed.platformUserId);

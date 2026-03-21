@@ -9,7 +9,7 @@ import { isModelAllowedByPolicyOrAllowedRoutes } from '../../services/downstream
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
 import { getOauthInfoFromExtraConfig } from '../../services/oauth/oauthAccount.js';
-import { withSiteProxyRequestInit } from '../../services/siteProxy.js';
+import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
 import { getDownstreamRoutingPolicy } from '../../routes/proxy/downstreamPolicy.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
@@ -470,6 +470,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               selected.tokenValue,
               query,
             );
+          const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
           const upstream = isInternalGemini
             ? await dispatchRuntimeRequest({
               siteUrl: selected.site.url,
@@ -489,11 +490,11 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                     : (isStreamAction ? 'streamGenerateContent' : 'generateContent'),
                 },
               },
-              buildInit: async (requestUrl, requestForFetch) => withSiteProxyRequestInit(requestUrl, {
+              buildInit: async (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
                 method: 'POST',
                 headers: requestForFetch.headers,
                 body: JSON.stringify(requestForFetch.body),
-              }),
+              }, channelProxyUrl),
             })
             : await fetch(targetUrl, {
               method: 'POST',
@@ -741,16 +742,17 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             runtime: endpointRequest.runtime,
           };
         };
+        const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
         const dispatchRequest = (compatibilityRequest: BuiltEndpointRequest, targetUrl?: string) => (
           dispatchRuntimeRequest({
             siteUrl: selected.site.url,
             targetUrl,
             request: compatibilityRequest,
-            buildInit: async (requestUrl, requestForFetch) => withSiteProxyRequestInit(requestUrl, {
+            buildInit: async (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
               method: 'POST',
               headers: requestForFetch.headers,
               body: JSON.stringify(requestForFetch.body),
-            }),
+            }, channelProxyUrl),
           })
         );
         const endpointStrategy = createChatEndpointStrategy({

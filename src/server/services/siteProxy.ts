@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
@@ -8,6 +9,7 @@ import { SocksClient } from 'socks';
 import type { Dispatcher, RequestInit as UndiciRequestInit } from 'undici';
 import { Agent as UndiciAgent, ProxyAgent } from 'undici';
 import { mergeHeadersWithSiteCustomHeaders } from './siteCustomHeaders.js';
+import { getProxyUrlFromExtraConfig } from './accountExtraConfig.js';
 
 const SITE_PROXY_CACHE_TTL_MS = 3_000;
 const SUPPORTED_PROXY_PROTOCOLS = new Set([
@@ -59,6 +61,17 @@ let siteProxyCache: {
 };
 
 const dispatcherCache = new Map<string, Dispatcher>();
+
+const accountProxyOverride = new AsyncLocalStorage<string | null>();
+
+export function withAccountProxyOverride<T>(
+  proxyUrl: string | null | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const normalized = normalizeSiteProxyUrl(proxyUrl);
+  if (!normalized) return fn();
+  return accountProxyOverride.run(normalized, fn);
+}
 
 type ParsedSocksProxyConfig = {
   shouldLookup: boolean;
@@ -145,19 +158,23 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
   return siteProxyCache.rows;
 }
 
-function getDispatcherByProxyUrl(proxyUrl: string): Dispatcher | undefined {
+function getDispatcherByProxyUrl(proxyUrl: string, skipCache = false): Dispatcher | undefined {
   const normalized = normalizeSiteProxyUrl(proxyUrl);
   if (!normalized) return undefined;
 
-  const cached = dispatcherCache.get(normalized);
-  if (cached) return cached;
+  if (!skipCache) {
+    const cached = dispatcherCache.get(normalized);
+    if (cached) return cached;
+  }
 
   try {
     const parsedProxyUrl = new URL(normalized);
     const dispatcher = SOCKS_PROXY_PROTOCOLS.has(parsedProxyUrl.protocol.toLowerCase())
       ? createSocksDispatcher(parsedProxyUrl)
       : new ProxyAgent(normalized);
-    dispatcherCache.set(normalized, dispatcher);
+    if (!skipCache) {
+      dispatcherCache.set(normalized, dispatcher);
+    }
     return dispatcher;
   } catch {
     return undefined;
@@ -398,11 +415,14 @@ export async function withSiteProxyRequestInit(
     nextOptions.headers = mergedHeaders;
   }
 
-  if (!resolved.proxyUrl) {
+  const alsOverride = accountProxyOverride.getStore();
+  const proxyUrl = alsOverride ?? resolved.proxyUrl;
+
+  if (!proxyUrl) {
     return nextOptions;
   }
 
-  const dispatcher = getDispatcherByProxyUrl(resolved.proxyUrl);
+  const dispatcher = getDispatcherByProxyUrl(proxyUrl, alsOverride != null);
   if (!dispatcher) {
     return nextOptions;
   }
@@ -416,11 +436,12 @@ export async function withSiteProxyRequestInit(
 export function withExplicitProxyRequestInit(
   proxyUrl: string | null | undefined,
   options?: UndiciRequestInit,
+  skipCache = false,
 ): UndiciRequestInit {
   const normalized = normalizeSiteProxyUrl(proxyUrl);
   if (!normalized) return options ?? {};
 
-  const dispatcher = getDispatcherByProxyUrl(normalized);
+  const dispatcher = getDispatcherByProxyUrl(normalized, skipCache);
   if (!dispatcher) return options ?? {};
 
   return {
@@ -439,6 +460,7 @@ export function resolveProxyUrlForSite(site: SiteProxyConfigLike | null | undefi
 export function withSiteRecordProxyRequestInit(
   site: SiteProxyConfigLike | null | undefined,
   options?: UndiciRequestInit,
+  accountProxyUrl?: string | null,
 ): UndiciRequestInit {
   const nextOptions: UndiciRequestInit = {
     ...(options || {}),
@@ -447,5 +469,20 @@ export function withSiteRecordProxyRequestInit(
   if (mergedHeaders) {
     nextOptions.headers = mergedHeaders;
   }
-  return withExplicitProxyRequestInit(resolveProxyUrlForSite(site), nextOptions);
+  const accountNormalized = normalizeSiteProxyUrl(accountProxyUrl) ?? accountProxyOverride.getStore();
+  const siteProxyUrl = resolveProxyUrlForSite(site);
+  const proxyUrl = accountNormalized || siteProxyUrl;
+  const isAccountOverride = !!accountNormalized && accountNormalized !== siteProxyUrl;
+  return withExplicitProxyRequestInit(proxyUrl, nextOptions, isAccountOverride);
+}
+
+export function resolveChannelProxyUrl(
+  site: SiteProxyConfigLike | null | undefined,
+  accountExtraConfig?: string | null,
+): string | null {
+  if (accountExtraConfig) {
+    const normalized = normalizeSiteProxyUrl(getProxyUrlFromExtraConfig(accountExtraConfig));
+    if (normalized) return normalized;
+  }
+  return resolveProxyUrlForSite(site);
 }

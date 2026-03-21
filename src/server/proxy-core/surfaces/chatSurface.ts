@@ -7,7 +7,7 @@ import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
 import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
-import { withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
+import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { type DownstreamFormat } from '../../transformers/shared/normalized.js';
 import {
   buildClaudeCountTokensUpstreamRequest,
@@ -204,6 +204,7 @@ export async function handleChatSurfaceRequest(
         runtime: endpointRequest.runtime,
       };
     };
+    const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
     const dispatchRequest = (
       compatibilityRequest: BuiltEndpointRequest,
       targetUrl?: string,
@@ -216,7 +217,7 @@ export async function handleChatSurfaceRequest(
           method: 'POST',
           headers: requestForFetch.headers,
           body: JSON.stringify(requestForFetch.body),
-        }),
+        }, channelProxyUrl),
       })
     );
     const endpointStrategy = downstreamTransformer.compatibility.createEndpointStrategy({
@@ -912,7 +913,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
           method: 'POST',
           headers: requestForFetch.headers,
           body: JSON.stringify(requestForFetch.body),
-        }),
+        }, resolveChannelProxyUrl(selected.site, selected.account.extraConfig)),
       });
 
       if (upstream.status === 401 && oauth) {
@@ -932,7 +933,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
               method: 'POST',
               headers: requestForFetch.headers,
               body: JSON.stringify(requestForFetch.body),
-            }),
+            }, resolveChannelProxyUrl(selected.site, selected.account.extraConfig)),
           });
         } catch {
           // Fall through to the regular upstream error handling below.

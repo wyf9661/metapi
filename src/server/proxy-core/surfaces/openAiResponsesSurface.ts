@@ -7,7 +7,7 @@ import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
 import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
-import { withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
+import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import {
   buildUpstreamEndpointRequest,
@@ -304,6 +304,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
           runtime: endpointRequest.runtime,
         };
       };
+      const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
       const dispatchRequest = (compatibilityRequest: BuiltEndpointRequest, targetUrl?: string) => (
         dispatchRuntimeRequest({
           siteUrl: selected.site.url,
@@ -313,7 +314,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             method: 'POST',
             headers: requestForFetch.headers,
             body: JSON.stringify(requestForFetch.body),
-          }),
+          }, channelProxyUrl),
         })
       );
       const endpointStrategy = openAiResponsesTransformer.compatibility.createEndpointStrategy({

@@ -10,6 +10,8 @@ import {
   isUsableAccountToken,
 } from './accountTokenService.js';
 import {
+  getCredentialModeFromExtraConfig,
+  getProxyUrlFromExtraConfig,
   mergeAccountExtraConfig,
   requiresManagedAccountTokens,
   resolvePlatformUserId,
@@ -18,7 +20,7 @@ import {
 import { invalidateTokenRouterCache } from './tokenRouter.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { clearAllRouteDecisionSnapshots } from './routeDecisionSnapshotStore.js';
-import { withSiteRecordProxyRequestInit } from './siteProxy.js';
+import { withAccountProxyOverride, withExplicitProxyRequestInit, withSiteRecordProxyRequestInit } from './siteProxy.js';
 import { getCodexOauthInfoFromExtraConfig, isCodexPlatform } from './oauth/codexAccount.js';
 import { buildOauthInfo, getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
 import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from './oauth/claudeProvider.js';
@@ -321,7 +323,7 @@ async function validateGeminiCliOauthConnection(input: {
   }
   const response = await fetch(
     `https://serviceusage.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/services/${encodeURIComponent(GEMINI_CLI_REQUIRED_SERVICE)}`,
-    {
+    withExplicitProxyRequestInit(getProxyUrlFromExtraConfig(input.account.extraConfig), {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -329,7 +331,7 @@ async function validateGeminiCliOauthConnection(input: {
         'User-Agent': GEMINI_CLI_USER_AGENT,
         'X-Goog-Api-Client': GEMINI_CLI_GOOGLE_API_CLIENT,
       },
-    },
+    }, true),
   );
   if (!response.ok) {
     const text = await response.text().catch(() => '');
@@ -493,6 +495,7 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
   const site = row.sites;
   const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
   const adapter = getAdapter(site.platform);
+  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
 
   const accountTokens = await db.select()
     .from(schema.accountTokens)
@@ -522,7 +525,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       const codexModels = await withTimeout(
-        () => discoverCodexModelsFromCloud({ site, account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => discoverCodexModelsFromCloud({ site, account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `codex model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -592,7 +596,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       await withTimeout(
-        () => validateClaudeOauthConnection({ site, account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => validateClaudeOauthConnection({ site, account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `claude oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -658,7 +663,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       await withTimeout(
-        () => validateGeminiCliOauthConnection({ account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => validateGeminiCliOauthConnection({ account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `gemini cli oauth validation timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -724,7 +730,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     const startedAt = Date.now();
     try {
       const antigravityModels = await withTimeout(
-        () => discoverAntigravityModelsFromCloud({ site, account }),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => discoverAntigravityModelsFromCloud({ site, account })),
         MODEL_DISCOVERY_TIMEOUT_MS,
         `antigravity model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -799,7 +806,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
   if (!account.apiToken && account.accessToken) {
     try {
       discoveredApiToken = await withTimeout(
-        () => adapter.getApiToken(site.url, account.accessToken, platformUserId),
+        () => withAccountProxyOverride(accountProxyUrl,
+          () => adapter.getApiToken(site.url, account.accessToken, platformUserId)),
         API_TOKEN_DISCOVERY_TIMEOUT_MS,
         `api token discovery timeout (${Math.round(API_TOKEN_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
@@ -881,7 +889,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     try {
       models = normalizeModels(
         await withTimeout(
-          () => adapter.getModels(site.url, credential, platformUserId),
+          () => withAccountProxyOverride(accountProxyUrl,
+            () => adapter.getModels(site.url, credential, platformUserId)),
           MODEL_DISCOVERY_TIMEOUT_MS,
           `model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
         ),
@@ -908,7 +917,8 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     try {
       models = normalizeModels(
         await withTimeout(
-          () => adapter.getModels(site.url, token.token, platformUserId),
+          () => withAccountProxyOverride(accountProxyUrl,
+            () => adapter.getModels(site.url, token.token, platformUserId)),
           MODEL_DISCOVERY_TIMEOUT_MS,
           `model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
         ),
