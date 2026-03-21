@@ -5,7 +5,9 @@ import { BrandGlyph, getBrand, hashColor, BrandIcon, type BrandInfo } from '../c
 import SiteBadgeLink from '../components/SiteBadgeLink.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
+import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import { mergeMarketplaceMetadata, shouldHydrateMarketplaceMetadata } from './helpers/modelsMarketplaceMetadata.js';
 import { tr } from '../i18n.js';
 
@@ -164,8 +166,10 @@ export default function Models() {
   const [pageSize, setPageSize] = useState(20);
   const [copied, setCopied] = useState<string | null>(null);
   const [filterCollapsed, setFilterCollapsed] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [metadataHydrating, setMetadataHydrating] = useState(false);
-  const filterPanelPresence = useAnimatedVisibility(!filterCollapsed, 220);
+  const isMobile = useIsMobile();
+  const filterPanelPresence = useAnimatedVisibility(!isMobile && !filterCollapsed, 220);
   const latestPrimaryRequestRef = useRef(0);
   const latestMetadataRequestRef = useRef(0);
   const location = useLocation();
@@ -241,6 +245,16 @@ export default function Models() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    if (viewMode !== 'card') {
+      setViewMode('card');
+    }
+    if (!filterCollapsed) {
+      setFilterCollapsed(true);
+    }
+  }, [filterCollapsed, isMobile, viewMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -387,18 +401,137 @@ export default function Models() {
     setTimeout(() => setCopied(null), 1500);
   };
 
+  const filterControls = (
+    <>
+      <div className="filter-panel-section">
+        <div className="filter-panel-title">
+          {tr('品牌')}
+          {activeBrand && <button onClick={() => setActiveBrand(null)}>{tr('重置')}</button>}
+        </div>
+        <div
+          className={`filter-item ${!activeBrand ? 'active' : ''}`}
+          onClick={() => setActiveBrand(null)}
+        >
+          <span className="filter-item-icon" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>✓</span>
+          {tr('全部品牌')}
+          <span className="filter-item-count">{data.models.length}</span>
+        </div>
+        {brandList.list.map(([brandName, { count, brand }]) => (
+          <div
+            key={brandName}
+            className={`filter-item ${activeBrand === brandName ? 'active' : ''}`}
+            onClick={() => setActiveBrand(activeBrand === brandName ? null : brandName)}
+          >
+            <span className="filter-item-icon" style={{ background: 'var(--color-bg)', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <BrandGlyph brand={brand} size={14} fallbackText={brandName} />
+            </span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{brandName}</span>
+            <span className="filter-item-count">{count}</span>
+          </div>
+        ))}
+        {brandList.otherCount > 0 && (
+          <div
+            className={`filter-item ${activeBrand === '__other__' ? 'active' : ''}`}
+            onClick={() => setActiveBrand(activeBrand === '__other__' ? null : '__other__')}
+          >
+            <span className="filter-item-icon" style={{ background: 'var(--color-bg)', color: 'var(--color-text-muted)', fontSize: 10, borderRadius: 4 }}>?</span>
+            {tr('其他')}
+            <span className="filter-item-count">{brandList.otherCount}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="filter-panel-section">
+        <div className="filter-panel-title">
+          {tr('供应商')}
+          {activeSite && <button onClick={() => setActiveSite(null)}>{tr('重置')}</button>}
+        </div>
+        {siteMap.map(([site, count]) => (
+          <div
+            key={site}
+            className={`filter-item ${activeSite === site ? 'active' : ''}`}
+            onClick={() => setActiveSite(activeSite === site ? null : site)}
+          >
+            <span className="filter-item-icon" style={{ background: hashColor(site), color: 'white', fontSize: 9, borderRadius: 4 }}>
+              {site.slice(0, 2).toUpperCase()}
+            </span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site}</span>
+            <span className="filter-item-count">{count}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="filter-panel-section">
+        <div className="filter-panel-title">{tr('排序方式')}</div>
+        {[
+          { key: 'accountCount' as SortColumn, label: tr('账号数') },
+          { key: 'tokenCount' as SortColumn, label: tr('令牌数') },
+          { key: 'avgLatency' as SortColumn, label: tr('延迟') },
+          { key: 'successRate' as SortColumn, label: tr('成功率') },
+          { key: 'name' as SortColumn, label: tr('名称') },
+        ].map(opt => (
+          <div
+            key={opt.key}
+            className={`filter-item ${sortBy === opt.key ? 'active' : ''}`}
+            onClick={() => {
+              if (sortBy === opt.key) {
+                setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+              } else {
+                setSortBy(opt.key);
+                setSortDir(opt.key === 'name' ? 'asc' : 'desc');
+              }
+            }}
+          >
+            {opt.label}
+            {sortBy === opt.key && (
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-primary)' }}>
+                {sortDir === 'desc' ? '↓' : '↑'}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
   /* ---- loading skeleton ---- */
   if (loading) {
     return (
-      <div className="animate-fade-in">
-        <div className="skeleton" style={{ width: 260, height: 28, marginBottom: 20 }} />
-        <div style={{ display: 'flex', gap: 24 }}>
+      <div className="animate-fade-in" style={{ display: 'flex', gap: 24, minHeight: 400 }}>
+        {!isMobile && (
           <div style={{ width: 240 }}>
             {[...Array(6)].map((_, i) => <div key={i} className="skeleton" style={{ height: 28, marginBottom: 8, borderRadius: 8 }} />)}
           </div>
-          <div style={{ flex: 1 }}>
-            {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 100, marginBottom: 12, borderRadius: 12 }} />)}
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="page-header" style={{ marginBottom: 16 }}>
+            <div>
+              <div className="skeleton" style={{ width: 220, height: 28, marginBottom: 8 }} />
+              <div className="skeleton" style={{ width: 160, height: 16 }} />
+            </div>
+            <div className="page-actions">
+              {isMobile && (
+                <button
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)', padding: '6px 12px' }}
+                  onClick={() => setShowFilters(true)}
+                >
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                  {tr('筛选')}
+                </button>
+              )}
+            </div>
           </div>
+          {isMobile && (
+            <MobileFilterSheet
+              open={showFilters}
+              onClose={() => setShowFilters(false)}
+              title={tr('筛选模型')}
+            >
+              {filterControls}
+            </MobileFilterSheet>
+          )}
+          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 100, marginBottom: 12, borderRadius: 12 }} />)}
         </div>
       </div>
     );
@@ -406,101 +539,9 @@ export default function Models() {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', gap: 24, minHeight: 400 }}>
-      {/* ====== LEFT: Filter Panel ====== */}
-      {filterPanelPresence.shouldRender && (
+      {!isMobile && filterPanelPresence.shouldRender && (
         <div className={`filter-panel filter-collapsible ${filterPanelPresence.isVisible ? '' : 'is-closing'}`.trim()}>
-          {/* Brand filter */}
-          <div className="filter-panel-section">
-            <div className="filter-panel-title">
-              {tr('品牌')}
-              {activeBrand && <button onClick={() => setActiveBrand(null)}>{tr('重置')}</button>}
-            </div>
-            <div
-              className={`filter-item ${!activeBrand ? 'active' : ''}`}
-              onClick={() => setActiveBrand(null)}
-            >
-              <span className="filter-item-icon" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>✓</span>
-              {tr('全部品牌')}
-              <span className="filter-item-count">{data.models.length}</span>
-            </div>
-            {brandList.list.map(([brandName, { count, brand }]) => (
-              <div
-                key={brandName}
-                className={`filter-item ${activeBrand === brandName ? 'active' : ''}`}
-                onClick={() => setActiveBrand(activeBrand === brandName ? null : brandName)}
-              >
-                <span className="filter-item-icon" style={{ background: 'var(--color-bg)', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <BrandGlyph brand={brand} size={14} fallbackText={brandName} />
-                </span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{brandName}</span>
-                <span className="filter-item-count">{count}</span>
-              </div>
-            ))}
-            {brandList.otherCount > 0 && (
-              <div
-                className={`filter-item ${activeBrand === '__other__' ? 'active' : ''}`}
-                onClick={() => setActiveBrand(activeBrand === '__other__' ? null : '__other__')}
-              >
-                <span className="filter-item-icon" style={{ background: 'var(--color-bg)', color: 'var(--color-text-muted)', fontSize: 10, borderRadius: 4 }}>?</span>
-                {tr('其他')}
-                <span className="filter-item-count">{brandList.otherCount}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Supplier filter */}
-          <div className="filter-panel-section">
-            <div className="filter-panel-title">
-              {tr('供应商')}
-              {activeSite && <button onClick={() => setActiveSite(null)}>{tr('重置')}</button>}
-            </div>
-            {siteMap.map(([site, count]) => (
-              <div
-                key={site}
-                className={`filter-item ${activeSite === site ? 'active' : ''}`}
-                onClick={() => setActiveSite(activeSite === site ? null : site)}
-              >
-                <span className="filter-item-icon" style={{ background: hashColor(site), color: 'white', fontSize: 9, borderRadius: 4 }}>
-                  {site.slice(0, 2).toUpperCase()}
-                </span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site}</span>
-                <span className="filter-item-count">{count}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Sort */}
-          <div className="filter-panel-section">
-            <div className="filter-panel-title">{tr('排序方式')}</div>
-            {[
-              { key: 'accountCount' as SortColumn, label: tr('账号数') },
-              { key: 'tokenCount' as SortColumn, label: tr('令牌数') },
-              { key: 'avgLatency' as SortColumn, label: tr('延迟') },
-              { key: 'successRate' as SortColumn, label: tr('成功率') },
-              { key: 'name' as SortColumn, label: tr('名称') },
-            ].map(opt => (
-              <div
-                key={opt.key}
-                className={`filter-item ${sortBy === opt.key ? 'active' : ''}`}
-                onClick={() => {
-                  if (sortBy === opt.key) {
-                    setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-                  } else {
-                    setSortBy(opt.key);
-                    setSortDir(opt.key === 'name' ? 'asc' : 'desc');
-                  }
-                }}
-              >
-                {opt.label}
-                {sortBy === opt.key && (
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-primary)' }}>
-                    {sortDir === 'desc' ? '↓' : '↑'}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-
+          {filterControls}
           <button
             className="btn btn-ghost"
             style={{ width: '100%', fontSize: 12, padding: '6px 10px', marginTop: 8, justifyContent: 'center', border: '1px solid var(--color-border)' }}
@@ -529,8 +570,18 @@ export default function Models() {
             )}
           </div>
           <div className="page-actions">
-            {filterCollapsed && (
-              <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)', padding: '6px 12px' }} onClick={() => setFilterCollapsed(false)}>
+            {(isMobile || filterCollapsed) && (
+              <button
+                className="btn btn-ghost"
+                style={{ border: '1px solid var(--color-border)', padding: '6px 12px' }}
+                onClick={() => {
+                  if (isMobile) {
+                    setShowFilters(true);
+                    return;
+                  }
+                  setFilterCollapsed(false);
+                }}
+              >
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                 {tr('筛选')}
               </button>
@@ -543,16 +594,28 @@ export default function Models() {
             {metadataHydrating && (
               <span className="badge badge-muted" style={{ fontSize: 11 }}>{tr('加载元数据中...')}</span>
             )}
-            <div className="view-toggle">
-              <button className={`view-toggle-btn ${viewMode === 'card' ? 'active' : ''}`} onClick={() => setViewMode('card')} data-tooltip={tr('卡片视图')} aria-label={tr('卡片视图')}>
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-              </button>
-              <button className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')} data-tooltip={tr('表格视图')} aria-label={tr('表格视图')}>
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M10 3v18M14 3v18" /></svg>
-              </button>
-            </div>
+            {!isMobile && (
+              <div className="view-toggle">
+                <button className={`view-toggle-btn ${viewMode === 'card' ? 'active' : ''}`} onClick={() => setViewMode('card')} data-tooltip={tr('卡片视图')} aria-label={tr('卡片视图')}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                </button>
+                <button className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')} data-tooltip={tr('表格视图')} aria-label={tr('表格视图')}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M10 3v18M14 3v18" /></svg>
+                </button>
+              </div>
+            )}
           </div>
         </div>
+
+        {isMobile && (
+          <MobileFilterSheet
+            open={showFilters}
+            onClose={() => setShowFilters(false)}
+            title={tr('筛选模型')}
+          >
+            {filterControls}
+          </MobileFilterSheet>
+        )}
 
         {/* Toolbar */}
         <div className="toolbar">
@@ -719,36 +782,74 @@ export default function Models() {
                       </div>
                     </div>
 
-                    <table className="data-table" style={{ width: '100%' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ fontWeight: 500 }}>{tr('站点')}</th>
-                          <th style={{ fontWeight: 500 }}>{tr('账号')}</th>
-                          <th style={{ fontWeight: 500 }}>{tr('令牌')}</th>
-                          <th style={{ fontWeight: 500 }}>{tr('延迟')}</th>
-                          <th style={{ fontWeight: 500 }}>{tr('余额')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {m.accounts.map(a => (
-                          <tr key={a.id}>
-                            <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
-                            <td style={{ fontSize: 12 }}>{a.username || `ID:${a.id}`}</td>
-                            <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {a.tokens.length > 0 ? a.tokens.map(t => (
-                                <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>{t.name}</span>
-                              )) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
-                            </td>
-                            <td>
-                              {a.latency != null ? (
-                                <span style={{ color: getMetricColor(a.latency), fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{a.latency}ms</span>
-                              ) : '—'}
-                            </td>
-                            <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>${(a.balance || 0).toFixed(2)}</td>
-                          </tr>
+                    {isMobile ? (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}>{tr('账号明细')}</div>
+                        {m.accounts.map((a) => (
+                          <div
+                            key={a.id}
+                            className="card"
+                            style={{ padding: 10, display: 'grid', gap: 8 }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                              <SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} />
+                              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{a.username || `ID:${a.id}`}</span>
+                            </div>
+                            <div style={{ display: 'grid', gap: 6 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+                                <span style={{ color: 'var(--color-text-muted)' }}>{tr('延迟')}</span>
+                                <span style={{ color: getMetricColor(a.latency), fontVariantNumeric: 'tabular-nums' }}>
+                                  {a.latency != null ? `${a.latency}ms` : '—'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+                                <span style={{ color: 'var(--color-text-muted)' }}>{tr('余额')}</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>${(a.balance || 0).toFixed(2)}</span>
+                              </div>
+                              <div style={{ display: 'grid', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('令牌')}</span>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                  {a.tokens.length > 0 ? a.tokens.map((t) => (
+                                    <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>{t.name}</span>
+                                  )) : <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>—</span>}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    ) : (
+                      <table className="data-table" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ fontWeight: 500 }}>{tr('站点')}</th>
+                            <th style={{ fontWeight: 500 }}>{tr('账号')}</th>
+                            <th style={{ fontWeight: 500 }}>{tr('令牌')}</th>
+                            <th style={{ fontWeight: 500 }}>{tr('延迟')}</th>
+                            <th style={{ fontWeight: 500 }}>{tr('余额')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {m.accounts.map(a => (
+                            <tr key={a.id}>
+                              <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
+                              <td style={{ fontSize: 12 }}>{a.username || `ID:${a.id}`}</td>
+                              <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                {a.tokens.length > 0 ? a.tokens.map(t => (
+                                  <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>{t.name}</span>
+                                )) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                              </td>
+                              <td>
+                                {a.latency != null ? (
+                                  <span style={{ color: getMetricColor(a.latency), fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{a.latency}ms</span>
+                                ) : '—'}
+                              </td>
+                              <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>${(a.balance || 0).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                     </div>
                   </div>
                 </div>

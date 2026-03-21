@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import ChangeKeyModal from '../components/ChangeKeyModal.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { BrandGlyph, InlineBrandIcon, getBrand, normalizeBrandIconKey } from '../components/BrandIcon.js';
@@ -204,6 +205,7 @@ function resolveRouteBrandSource(route: RouteSelectorItem): string {
 
 export default function Settings() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [runtime, setRuntime] = useState<RuntimeSettings>({
     checkinCron: '0 8 * * *',
     checkinScheduleMode: 'cron',
@@ -1020,7 +1022,7 @@ export default function Settings() {
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>定时任务</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 180px auto', gap: 12, alignItems: 'end', marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '180px 180px auto', gap: 12, alignItems: 'end', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到方式</div>
               <ModernSelect
@@ -1053,7 +1055,7 @@ export default function Settings() {
               {testingCheckin ? '触发中...' : '测试一次签到'}
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到 Cron</div>
               <input
@@ -1082,7 +1084,7 @@ export default function Settings() {
             }}
           >
             <div style={{ fontWeight: 600, fontSize: 13 }}>自动清理日志</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 160px', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>清理 Cron</div>
                 <input
@@ -1384,7 +1386,7 @@ export default function Settings() {
 
           <div className={`anim-collapse ${showAdvancedRouting ? 'is-open' : ''}`.trim()}>
             <div className="anim-collapse-inner" style={{ paddingTop: 2 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
               {([
                 ['baseWeightFactor', '基础权重因子'],
                 ['valueScoreFactor', '价值分因子'],
@@ -1430,7 +1432,7 @@ export default function Settings() {
             可先测试连接，再迁移数据；迁移完成后可保存为运行数据库配置（重启容器后生效）。
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '180px 1fr', gap: 10, marginBottom: 10, alignItems: 'center' }}>
             <ModernSelect
               value={migrationDialect}
               onChange={(value) => setMigrationDialect(value as DbDialect)}
@@ -1471,7 +1473,7 @@ export default function Settings() {
             />
           ) : (
             <div style={{ marginBottom: 10 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10, marginBottom: 8 }}>
                 <input
                   value={shorthandConnection.host}
                   onChange={(e) => setShorthandConnection((prev) => ({ ...prev, host: e.target.value }))}
@@ -1502,7 +1504,7 @@ export default function Settings() {
                 </button>
               </div>
               {showShorthandOptional && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, marginBottom: 8 }}>
                   <input
                     value={shorthandConnection.port}
                     onChange={(e) => setShorthandConnection((prev) => ({ ...prev, port: e.target.value }))}

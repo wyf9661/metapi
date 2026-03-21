@@ -1,7 +1,11 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    exclude: [
+      ...configDefaults.exclude,
+      '.worktrees/**',
+    ],
     // Many of our web tests rely on React's test utilities (act, etc.).
     // If NODE_ENV is accidentally set to "production" in the environment,
     // React switches to the production build where act() is not supported.

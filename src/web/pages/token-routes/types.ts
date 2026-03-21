@@ -154,6 +154,7 @@ export type SortableChannelRowProps = {
   loadingDecision: boolean;
   isSavingPriority: boolean;
   readOnly?: boolean;
+  mobile?: boolean;
   tokenOptions: RouteTokenOption[];
   activeTokenId: number;
   isUpdatingToken: boolean;

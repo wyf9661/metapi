@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 
 const ModelAnalysisPanel = lazy(() => import('../components/ModelAnalysisPanel.js'));
@@ -159,6 +160,7 @@ function buildAvailabilityBucketLogsRoute(siteId: number, bucket: SiteAvailabili
 }
 
 export default function Dashboard({ adminName = '\u7ba1\u7406\u5458' }: { adminName?: string }) {
+  const isMobile = useIsMobile();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -579,7 +581,7 @@ export default function Dashboard({ adminName = '\u7ba1\u7406\u5458' }: { adminN
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <div className="chart-panel-enter animate-slide-up stagger-6">
           <Suspense fallback={<ChartFallback height={320} />}>
             <SiteDistributionChart data={siteDistribution} loading={siteLoading} />
@@ -694,7 +696,7 @@ export default function Dashboard({ adminName = '\u7ba1\u7406\u5458' }: { adminN
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: 16 }}>
         <div className="chart-container animate-slide-up stagger-8">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>

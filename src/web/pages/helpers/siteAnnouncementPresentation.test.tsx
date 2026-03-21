@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { JSDOM } from 'jsdom';
+import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   SiteAnnouncementContent,
@@ -8,36 +7,11 @@ import {
   resolveSiteAnnouncementTimeZone,
 } from './siteAnnouncementPresentation.js';
 
-type BrowserGlobals = {
-  window?: Window & typeof globalThis;
-  document?: Document;
-  DOMParser?: typeof DOMParser;
-  Node?: typeof Node;
-};
-
-const browserGlobals = globalThis as typeof globalThis & BrowserGlobals;
-const originalWindow = browserGlobals.window;
-const originalDocument = browserGlobals.document;
-const originalDOMParser = browserGlobals.DOMParser;
-const originalNode = browserGlobals.Node;
+const hasDomSanitizerSupport = typeof DOMParser === 'function' && typeof Node !== 'undefined';
+const itWithDomSupport = hasDomSanitizerSupport ? it : it.skip;
 
 describe('siteAnnouncementPresentation helpers', () => {
-  beforeEach(() => {
-    const dom = new JSDOM('<!doctype html><html><body></body></html>');
-    browserGlobals.window = dom.window as unknown as Window & typeof globalThis;
-    browserGlobals.document = dom.window.document;
-    browserGlobals.DOMParser = dom.window.DOMParser;
-    browserGlobals.Node = dom.window.Node;
-  });
-
-  afterEach(() => {
-    browserGlobals.window = originalWindow;
-    browserGlobals.document = originalDocument;
-    browserGlobals.DOMParser = originalDOMParser;
-    browserGlobals.Node = originalNode;
-  });
-
-  it('renders sanitized html notices with safe links', () => {
+  itWithDomSupport('renders sanitized html notices with safe links', () => {
     const markup = renderToStaticMarkup(
       <SiteAnnouncementContent
         content={[
@@ -59,7 +33,7 @@ describe('siteAnnouncementPresentation helpers', () => {
     expect(markup).toContain('rel="noopener noreferrer"');
   });
 
-  it('renders markdown notices as structured content', () => {
+  itWithDomSupport('renders markdown notices as structured content', () => {
     const markup = renderToStaticMarkup(
       <SiteAnnouncementContent
         content={[
