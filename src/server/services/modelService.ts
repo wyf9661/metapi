@@ -499,21 +499,59 @@ export async function refreshModelsForAccount(
   const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
   const adapter = getAdapter(site.platform);
   const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
-
-  const accountTokens = await db.select()
-    .from(schema.accountTokens)
-    .where(eq(schema.accountTokens.accountId, accountId))
-    .all();
-
-  await db.delete(schema.modelAvailability)
-    .where(eq(schema.modelAvailability.accountId, accountId))
-    .run();
-
-  for (const token of accountTokens) {
-    await db.delete(schema.tokenModelAvailability)
+  const restoreAvailabilityOnFailure = options?.allowInactive === true;
+  const previousAccountTokens = restoreAvailabilityOnFailure
+    ? await db.select()
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, accountId))
+      .all()
+    : [];
+  const previousModelAvailability = restoreAvailabilityOnFailure
+    ? await db.select()
+      .from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, accountId))
+      .all()
+    : [];
+  const previousTokenModelAvailability = restoreAvailabilityOnFailure
+    ? (await Promise.all(previousAccountTokens.map(async (token) => db.select()
+      .from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+      .all()))).flat()
+    : [];
+
+  const clearExistingAvailability = async () => {
+    await db.delete(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, accountId))
       .run();
-  }
+
+    const currentAccountTokens = await db.select({ id: schema.accountTokens.id })
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, accountId))
+      .all();
+
+    for (const token of currentAccountTokens) {
+      await db.delete(schema.tokenModelAvailability)
+        .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+        .run();
+    }
+  };
+
+  const restorePreviousAvailability = async () => {
+    if (!restoreAvailabilityOnFailure) return;
+    await clearExistingAvailability();
+    if (previousModelAvailability.length > 0) {
+      await db.insert(schema.modelAvailability).values(
+        previousModelAvailability.map(({ id: _id, ...row }) => row),
+      ).run();
+    }
+    if (previousTokenModelAvailability.length > 0) {
+      await db.insert(schema.tokenModelAvailability).values(
+        previousTokenModelAvailability.map(({ id: _id, ...row }) => row),
+      ).run();
+    }
+  };
+
+  await clearExistingAvailability();
 
   if (isSiteDisabled(site.status)) {
     return buildSkippedRefreshResult(accountId, 'site_disabled', '站点已禁用');
@@ -583,6 +621,7 @@ export async function refreshModelsForAccount(
         source: 'model-discovery',
         checkedAt,
       });
+      await restorePreviousAvailability();
       return buildFailedRefreshResult({
         accountId,
         errorCode,
@@ -650,6 +689,7 @@ export async function refreshModelsForAccount(
         source: 'model-discovery',
         checkedAt,
       });
+      await restorePreviousAvailability();
       return buildFailedRefreshResult({
         accountId,
         errorCode,
@@ -717,6 +757,7 @@ export async function refreshModelsForAccount(
         source: 'model-discovery',
         checkedAt,
       });
+      await restorePreviousAvailability();
       return buildFailedRefreshResult({
         accountId,
         errorCode,
@@ -788,6 +829,7 @@ export async function refreshModelsForAccount(
         source: 'model-discovery',
         checkedAt,
       });
+      await restorePreviousAvailability();
       return buildFailedRefreshResult({
         accountId,
         errorCode,
@@ -960,6 +1002,7 @@ export async function refreshModelsForAccount(
       source: 'model-discovery',
       checkedAt: new Date().toISOString(),
     });
+    await restorePreviousAvailability();
     return buildFailedRefreshResult({
       accountId,
       errorCode,
