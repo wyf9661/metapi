@@ -147,6 +147,9 @@ describe('codexWebsocketRuntime', () => {
           id: 'resp-incomplete',
           model: parsed.model || 'gpt-5.4',
           status: 'incomplete',
+          incomplete_details: {
+            reason: 'max_output_tokens',
+          },
         },
       }));
     };
@@ -154,18 +157,34 @@ describe('codexWebsocketRuntime', () => {
     const { createCodexWebsocketRuntime, CodexWebsocketRuntimeError } = await import('./codexWebsocketRuntime.js');
     const runtime = createCodexWebsocketRuntime();
 
-    await expect(runtime.sendRequest({
-      sessionId: 'exec-session-incomplete',
-      requestUrl: upstreamWsUrl,
-      headers: {
-        Authorization: 'Bearer oauth-access-token',
-        'OpenAI-Beta': 'responses_websockets=2026-02-06',
-      },
-      body: {
-        model: 'gpt-5.4',
-        input: [],
-      },
-    })).rejects.toBeInstanceOf(CodexWebsocketRuntimeError);
+    let error: unknown;
+    try {
+      await runtime.sendRequest({
+        sessionId: 'exec-session-incomplete',
+        requestUrl: upstreamWsUrl,
+        headers: {
+          Authorization: 'Bearer oauth-access-token',
+          'OpenAI-Beta': 'responses_websockets=2026-02-06',
+        },
+        body: {
+          model: 'gpt-5.4',
+          input: [],
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(CodexWebsocketRuntimeError);
+    expect(error).toMatchObject({
+      message: 'max_output_tokens',
+      status: 502,
+    });
+    expect((error as CodexWebsocketRuntimeError).events).toEqual([
+      expect.objectContaining({
+        type: 'response.incomplete',
+      }),
+    ]);
   });
 
   it('treats top-level error frames as terminal websocket failures', async () => {
@@ -182,17 +201,36 @@ describe('codexWebsocketRuntime', () => {
     const { createCodexWebsocketRuntime, CodexWebsocketRuntimeError } = await import('./codexWebsocketRuntime.js');
     const runtime = createCodexWebsocketRuntime();
 
-    await expect(runtime.sendRequest({
-      sessionId: 'exec-session-error',
-      requestUrl: upstreamWsUrl,
-      headers: {
-        Authorization: 'Bearer oauth-access-token',
-        'OpenAI-Beta': 'responses_websockets=2026-02-06',
-      },
-      body: {
-        model: 'gpt-5.4',
-        input: [],
-      },
-    })).rejects.toBeInstanceOf(CodexWebsocketRuntimeError);
+    let error: unknown;
+    try {
+      await runtime.sendRequest({
+        sessionId: 'exec-session-error',
+        requestUrl: upstreamWsUrl,
+        headers: {
+          Authorization: 'Bearer oauth-access-token',
+          'OpenAI-Beta': 'responses_websockets=2026-02-06',
+        },
+        body: {
+          model: 'gpt-5.4',
+          input: [],
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(CodexWebsocketRuntimeError);
+    expect(error).toMatchObject({
+      message: 'account mismatch',
+      status: 502,
+    });
+    expect((error as CodexWebsocketRuntimeError).events).toEqual([
+      expect.objectContaining({
+        type: 'error',
+        error: expect.objectContaining({
+          message: 'account mismatch',
+        }),
+      }),
+    ]);
   });
 });

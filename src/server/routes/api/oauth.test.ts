@@ -19,6 +19,16 @@ function buildJwt(payload: Record<string, unknown>) {
   return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.signature`;
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('oauth routes', { timeout: 15_000 }, () => {
   let app: FastifyInstance;
   let db: DbModule['db'];
@@ -598,6 +608,118 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         refreshToken: 'stable-refresh-token',
         idToken: originalJwt,
       },
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]?.oauthAccountKey).toBe('chatgpt-account-existing');
+  });
+
+  it('keeps the existing codex account non-active while rebind model discovery is still pending', async () => {
+    const originalJwt = buildJwt({
+      email: 'codex-existing@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'chatgpt-account-existing',
+        chatgpt_plan_type: 'team',
+      },
+    });
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+    const existing = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'codex-existing@example.com',
+      accessToken: 'stable-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'chatgpt-account-existing',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'chatgpt-account-existing',
+          accountKey: 'chatgpt-account-existing',
+          email: 'codex-existing@example.com',
+          planType: 'team',
+          refreshToken: 'stable-refresh-token',
+          idToken: originalJwt,
+        },
+      }),
+    }).returning().get();
+
+    const reboundJwt = buildJwt({
+      email: 'codex-existing@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'chatgpt-account-rebound',
+        chatgpt_plan_type: 'plus',
+      },
+    });
+    const discoveryGate = createDeferred<ResponseLike>();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'rebound-access-token',
+          refresh_token: 'rebound-refresh-token',
+          id_token: reboundJwt,
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockImplementationOnce(() => discoveryGate.promise);
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/providers/codex/start',
+      headers: {
+        host: 'metapi.example',
+        'x-forwarded-proto': 'https',
+      },
+      payload: {
+        accountId: existing.id,
+      },
+    });
+    const startBody = startResponse.json() as { state: string };
+
+    const callbackPromise = app.inject({
+      method: 'POST',
+      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
+      payload: {
+        callbackUrl: `http://localhost:1455/auth/callback?state=${encodeURIComponent(startBody.state)}&code=oauth-code-rebind-pending`,
+      },
+    });
+
+    while (fetchMock.mock.calls.length < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const pendingRow = await db.select().from(schema.accounts).where(eq(schema.accounts.id, existing.id)).get();
+    expect(pendingRow?.status).toBe('disabled');
+
+    discoveryGate.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [{ id: 'gpt-5.4' }],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    } as ResponseLike);
+
+    const callbackResponse = await callbackPromise;
+    expect(callbackResponse.statusCode).toBe(200);
+
+    const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, existing.id)).get();
+    expect(stored).toMatchObject({
+      id: existing.id,
+      status: 'active',
+      accessToken: 'rebound-access-token',
+      oauthAccountKey: 'chatgpt-account-rebound',
     });
   });
 

@@ -194,6 +194,16 @@ function waitForSocketMessages(socket: WebSocket, count: number, timeoutMs = 100
   });
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function createClientSocket(baseUrl: string, headers: Record<string, string> = {}) {
   return new WebSocket(`${baseUrl}/v1/responses`, {
     headers: {
@@ -201,6 +211,10 @@ function createClientSocket(baseUrl: string, headers: Record<string, string> = {
       ...headers,
     },
   });
+}
+
+function createClientSocketForPath(path: string, headers: Record<string, string> = {}) {
+  return new WebSocket(path, { headers });
 }
 
 describe('responses websocket transport', () => {
@@ -545,6 +559,54 @@ describe('responses websocket transport', () => {
     expect(messages[0]?.response?.id).toBe('resp_http_fallback_401');
   });
 
+  it('preserves query parameter auth when websocket transport falls back to the HTTP responses route', async () => {
+    rejectedUpgradeStatus = 401;
+    rejectedUpgradeStatusText = 'Unauthorized';
+    rejectedUpgradeBody = JSON.stringify({
+      error: {
+        message: 'expired token',
+        type: 'invalid_request_error',
+      },
+    });
+    const selectedChannel = createSelectedChannel({
+      siteUrl: rejectedUpgradeSiteUrl,
+    });
+    selectChannelMock.mockReturnValue(selectedChannel);
+    previewSelectedChannelMock.mockResolvedValue(selectedChannel);
+    authorizeDownstreamTokenMock.mockResolvedValueOnce({
+      ok: true,
+      source: 'global',
+      token: 'sk-query-auth',
+      key: null,
+      policy: {
+        supportedModels: [],
+        allowedRouteIds: [],
+        siteWeightMultipliers: {},
+      },
+    });
+    fetchMock.mockResolvedValueOnce(createSseResponse([
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_http_fallback_query","model":"gpt-5.4","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+
+    const socket = createClientSocketForPath(`${baseUrl}/v1/responses?key=sk-query-auth`);
+    await waitForSocketOpen(socket);
+    const messagesPromise = waitForSocketMessages(socket, 1);
+
+    socket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-5.4',
+      input: [],
+    }));
+
+    const messages = await messagesPromise;
+    socket.close();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(messages[0]?.response?.id).toBe('resp_http_fallback_query');
+  });
+
   it('rejects websocket turns whose model is blocked by the downstream key policy before channel selection', async () => {
     authorizeDownstreamTokenMock.mockResolvedValueOnce({
       ok: true,
@@ -649,6 +711,111 @@ describe('responses websocket transport', () => {
     expect(secondBody.previous_response_id).toBeUndefined();
     expect(secondBody.model).toBe('gpt-4.1');
     expect(secondBody.instructions).toBe('be helpful');
+    expect(secondBody.input).toEqual([
+      {
+        id: 'msg_user_1',
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'call the tool' }],
+      },
+      {
+        id: 'fc_1',
+        type: 'function_call',
+        call_id: 'call_1',
+        status: 'completed',
+      },
+      {
+        id: 'msg_1',
+        type: 'message',
+        role: 'assistant',
+        status: 'completed',
+        content: [{ type: 'output_text', text: 'call tool' }],
+      },
+      {
+        id: 'tool_out_1',
+        type: 'function_call_output',
+        call_id: 'call_1',
+        output: 'tool result',
+      },
+    ]);
+  });
+
+  it('serializes websocket messages per connection so follow-up turns wait for the previous HTTP fallback to finish', async () => {
+    const selectedChannel = createSelectedChannel({
+      sitePlatform: 'openai',
+      actualModel: 'gpt-4.1',
+    });
+    selectChannelMock.mockReturnValue(selectedChannel);
+    previewSelectedChannelMock.mockResolvedValue(selectedChannel);
+    const firstResponseGate = createDeferred<Response>();
+    fetchMock
+      .mockImplementationOnce(() => firstResponseGate.promise)
+      .mockResolvedValueOnce(createSseResponse([
+        'event: response.completed\n',
+        'data: {"type":"response.completed","response":{"id":"resp_ws_2","model":"gpt-4.1","status":"completed","output":[{"id":"msg_2","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done"}]}],"usage":{"input_tokens":5,"output_tokens":1,"total_tokens":6}}}\n\n',
+        'data: [DONE]\n\n',
+      ]));
+
+    const socket = createClientSocket(baseUrl);
+    await waitForSocketOpen(socket);
+
+    socket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-4.1',
+      instructions: 'be helpful',
+      input: [
+        {
+          id: 'msg_user_1',
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'call the tool' }],
+        },
+      ],
+    }));
+
+    while (fetchMock.mock.calls.length < 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    socket.send(JSON.stringify({
+      type: 'response.create',
+      previous_response_id: 'resp_ws_1',
+      input: [
+        {
+          id: 'tool_out_1',
+          type: 'function_call_output',
+          call_id: 'call_1',
+          output: 'tool result',
+        },
+      ],
+    }));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const messagesPromise = waitForSocketMessages(socket, 4);
+    firstResponseGate.resolve(createSseResponse([
+      'event: response.output_item.done\n',
+      'data: {"type":"response.output_item.done","output_index":0,"item":{"id":"fc_1","type":"function_call","call_id":"call_1"}}\n\n',
+      'event: response.output_item.done\n',
+      'data: {"type":"response.output_item.done","output_index":1,"item":{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"call tool"}]}}\n\n',
+      'event: response.completed\n',
+      'data: {"type":"response.completed","response":{"id":"resp_ws_1","model":"gpt-4.1","status":"completed","output":[{"id":"fc_1","type":"function_call","call_id":"call_1"},{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"call tool"}]}],"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4}}}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+
+    const messages = await messagesPromise;
+    socket.close();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(messages.map((message) => message.type)).toEqual([
+      'response.output_item.done',
+      'response.output_item.done',
+      'response.completed',
+      'response.completed',
+    ]);
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const secondBody = JSON.parse(String(secondOptions.body));
     expect(secondBody.input).toEqual([
       {
         id: 'msg_user_1',

@@ -255,6 +255,33 @@ describe('responses proxy codex oauth refresh', () => {
     expect(response.json()?.output_text).toContain('ok after codex forbidden refresh');
   });
 
+  it('does not refresh codex oauth token on non-auth 403 responses', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      error: { message: 'quota exceeded for workspace', type: 'usage_limit_reached' },
+    }), {
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.2-codex',
+        input: 'hello codex',
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(refreshOauthAccessTokenSingleflightMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(response.json()).toMatchObject({
+      error: {
+        message: expect.stringContaining('quota exceeded for workspace'),
+      },
+    });
+  });
+
   it('retries oauth responses requests with a normalized upstream URL after refresh', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },

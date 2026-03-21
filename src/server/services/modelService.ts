@@ -481,7 +481,10 @@ function buildSuccessfulRefreshResult(input: {
   };
 }
 
-export async function refreshModelsForAccount(accountId: number): Promise<ModelRefreshResult> {
+export async function refreshModelsForAccount(
+  accountId: number,
+  options?: { allowInactive?: boolean },
+): Promise<ModelRefreshResult> {
   const row = await db.select().from(schema.accounts)
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .where(eq(schema.accounts.id, accountId))
@@ -516,7 +519,7 @@ export async function refreshModelsForAccount(accountId: number): Promise<ModelR
     return buildSkippedRefreshResult(accountId, 'site_disabled', '站点已禁用');
   }
 
-  if (account.status !== 'active') {
+  if (account.status !== 'active' && !options?.allowInactive) {
     return buildSkippedRefreshResult(accountId, 'adapter_or_status', '平台不可用或账号未激活');
   }
 

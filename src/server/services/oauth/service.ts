@@ -242,7 +242,7 @@ async function upsertOauthAccount(input: {
       accessToken: input.exchange.accessToken,
       apiToken: null,
       checkinEnabled: false,
-      status: 'active',
+      status: 'disabled',
       oauthProvider: input.definition.metadata.provider,
       oauthAccountKey: oauth.accountKey || oauth.accountId || null,
       oauthProjectId: oauth.projectId || null,
@@ -376,7 +376,10 @@ export async function handleOauthCallback(input: {
       throw new Error('failed to persist oauth account');
     }
 
-    const refreshResult = await refreshModelsForAccount(account.id);
+    const refreshResult = await refreshModelsForAccount(
+      account.id,
+      previousAccount ? { allowInactive: true } : undefined,
+    );
     if (refreshResult.status !== 'success') {
       if (created) {
         await db.delete(schema.accounts).where(eq(schema.accounts.id, account.id)).run();
@@ -399,6 +402,13 @@ export async function handleOauthCallback(input: {
       const errorMessage = refreshResult.errorMessage || `${input.provider} model discovery failed`;
       markOauthSessionError(input.state, errorMessage);
       throw new Error(errorMessage);
+    }
+
+    if (previousAccount) {
+      await db.update(schema.accounts).set({
+        status: 'active',
+        updatedAt: new Date().toISOString(),
+      }).where(eq(schema.accounts.id, account.id)).run();
     }
 
     await rebuildTokenRoutesFromAvailability();

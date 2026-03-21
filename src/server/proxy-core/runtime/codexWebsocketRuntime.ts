@@ -34,6 +34,32 @@ function isFailureTerminalEvent(payload: Record<string, unknown>): boolean {
   return type === 'response.failed' || type === 'response.incomplete' || type === 'error';
 }
 
+function asFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function extractFailureTerminalStatus(payload: Record<string, unknown>): number {
+  const response = isRecord(payload.response) ? payload.response : null;
+  const responseError = response && isRecord(response.error) ? response.error : null;
+  const topLevelError = isRecord(payload.error) ? payload.error : null;
+  const candidates = [
+    payload.status,
+    payload.statusCode,
+    payload.code,
+    topLevelError?.status,
+    topLevelError?.statusCode,
+    topLevelError?.code,
+    responseError?.status,
+    responseError?.statusCode,
+    responseError?.code,
+  ];
+  for (const candidate of candidates) {
+    const status = asFiniteNumber(candidate);
+    if (status !== undefined) return status;
+  }
+  return 502;
+}
+
 function extractTerminalErrorMessage(payload: Record<string, unknown>): string {
   const type = asTrimmedString(payload.type);
   if (type === 'error' && isRecord(payload.error)) {
@@ -243,7 +269,7 @@ async function sendSessionRequest(
           void closeSocket(socket);
           reject(new CodexWebsocketRuntimeError(extractTerminalErrorMessage(parsed), {
             events: [...events],
-            status: typeof parsed.status === 'number' && Number.isFinite(parsed.status) ? parsed.status : undefined,
+            status: extractFailureTerminalStatus(parsed),
             payload: parsed,
           }));
           return;
