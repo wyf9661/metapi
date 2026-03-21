@@ -21,6 +21,9 @@ type ParsedSummary = {
   tokensCount: number;
   routesCount: number;
   channelsCount: number;
+  siteDisabledModelsCount: number;
+  manualModelsCount: number;
+  downstreamApiKeysCount: number;
   settingsCount: number;
   ignoredSections: string[];
 };
@@ -76,7 +79,7 @@ const DEFAULT_WEBDAV_SNAPSHOT: WebdavConfigSnapshot = {
 
 const WEBDAV_EXPORT_TYPE_OPTIONS = [
   { value: 'all', label: '全部' },
-  { value: 'accounts', label: '账号与路由' },
+  { value: 'accounts', label: '连接与路由策略' },
   { value: 'preferences', label: '系统设置' },
 ] as const;
 
@@ -138,6 +141,9 @@ function parseImportSummary(raw: string): ParsedSummary | null {
     tokensCount: 0,
     routesCount: 0,
     channelsCount: 0,
+    siteDisabledModelsCount: 0,
+    manualModelsCount: 0,
+    downstreamApiKeysCount: 0,
     settingsCount: 0,
     ignoredSections: [],
   });
@@ -227,6 +233,9 @@ function parseImportSummary(raw: string): ParsedSummary | null {
       tokensCount: toCount(accountsSection?.accountTokens),
       routesCount: toCount(accountsSection?.tokenRoutes),
       channelsCount: toCount(accountsSection?.routeChannels),
+      siteDisabledModelsCount: toCount(accountsSection?.siteDisabledModels),
+      manualModelsCount: toCount(accountsSection?.manualModels),
+      downstreamApiKeysCount: toCount(accountsSection?.downstreamApiKeys),
       settingsCount: toCount(preferencesSection?.settings),
       ignoredSections,
     };
@@ -237,7 +246,7 @@ function parseImportSummary(raw: string): ParsedSummary | null {
 
 function buildImportSuccessMessage(result: any): string {
   const sections: string[] = [];
-  if (result?.sections?.accounts) sections.push('账号与路由');
+  if (result?.sections?.accounts) sections.push('连接与路由策略');
   if (result?.sections?.preferences) sections.push('系统设置');
 
   const parts = [`导入完成：${sections.length ? sections.join('、') : '无有效数据'}`];
@@ -418,7 +427,7 @@ export default function ImportExport() {
     }
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
       ? true
-      : window.confirm('导入会覆盖账号/路由或系统设置，确认继续？');
+      : window.confirm('导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？');
     if (!confirmed) {
       return;
     }
@@ -480,7 +489,7 @@ export default function ImportExport() {
   const handleImportFromWebdav = async () => {
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
       ? true
-      : window.confirm('从 WebDAV 导入会覆盖本地账号/路由或系统设置，确认继续？');
+      : window.confirm('从 WebDAV 导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？');
     if (!confirmed) return;
     setWebdavAction('import');
     try {
@@ -500,11 +509,11 @@ export default function ImportExport() {
         <div>
           <h2 className="page-title" style={{ marginBottom: 6 }}>{tr('导入 / 导出')}</h2>
           <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-            支持全量备份、分区备份与手动恢复。
+            支持配置型备份、分区备份与手动恢复。
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <span className="badge badge-muted" style={{ fontSize: 11 }}>Schema v2.0</span>
+          <span className="badge badge-muted" style={{ fontSize: 11 }}>Schema v2.1</span>
           <span className="badge badge-warning" style={{ fontSize: 11 }}>敏感数据请离线保管</span>
         </div>
       </div>
@@ -519,7 +528,7 @@ export default function ImportExport() {
             <span style={{ fontSize: 15, fontWeight: 700 }}>导出数据</span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
-            将数据导出为 JSON 文件进行备份
+            将连接、路由策略与设置导出为 JSON 文件进行备份
           </div>
 
           <div style={{ display: 'grid', gap: 8 }}>
@@ -529,7 +538,7 @@ export default function ImportExport() {
               className="btn btn-primary"
               style={{ justifyContent: 'space-between' }}
             >
-              <span>导出全部（账号 + 路由 + 设置）</span>
+              <span>导出全部（连接 + 路由 + 策略 + 设置）</span>
               {exportingType === 'all' ? <span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> : null}
             </button>
             <button
@@ -538,7 +547,7 @@ export default function ImportExport() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)', justifyContent: 'space-between' }}
             >
-              <span>仅导出账号与路由</span>
+              <span>仅导出连接与路由策略</span>
               {exportingType === 'accounts' ? <span className="spinner spinner-sm" /> : null}
             </button>
             <button
@@ -658,7 +667,7 @@ export default function ImportExport() {
                 {summary.valid ? (
                   <>
                     <div>结构有效，版本：{summary.version}，时间：{summary.timestampLabel}</div>
-                    <div>包含分区：{summary.hasAccounts ? '账号路由' : ''}{summary.hasAccounts && summary.hasPreferences ? ' + ' : ''}{summary.hasPreferences ? '系统设置' : ''}</div>
+                    <div>包含分区：{summary.hasAccounts ? '连接与路由策略' : ''}{summary.hasAccounts && summary.hasPreferences ? ' + ' : ''}{summary.hasPreferences ? '系统设置' : ''}</div>
                     {summary.isAllApiHubV2 ? (
                       <>
                         <div>检测到 ALL-API-Hub V2 兼容备份：将离线迁移可用连接。</div>
@@ -670,9 +679,17 @@ export default function ImportExport() {
                         ) : null}
                       </>
                     ) : null}
-                    {(summary.sitesCount || summary.accountsCount || summary.tokensCount || summary.routesCount || summary.channelsCount || summary.settingsCount) ? (
+                    {(summary.sitesCount
+                      || summary.accountsCount
+                      || summary.tokensCount
+                      || summary.routesCount
+                      || summary.channelsCount
+                      || summary.siteDisabledModelsCount
+                      || summary.manualModelsCount
+                      || summary.downstreamApiKeysCount
+                      || summary.settingsCount) ? (
                       <div>
-                        统计：站点 {summary.sitesCount} / 账号 {summary.accountsCount} / 令牌 {summary.tokensCount} / 路由 {summary.routesCount} / 通道 {summary.channelsCount} / 设置 {summary.settingsCount}
+                        统计：站点 {summary.sitesCount} / 账号 {summary.accountsCount} / 令牌 {summary.tokensCount} / 路由 {summary.routesCount} / 通道 {summary.channelsCount} / 站点禁用模型 {summary.siteDisabledModelsCount} / 手工模型 {summary.manualModelsCount} / 下游 Key {summary.downstreamApiKeysCount} / 设置 {summary.settingsCount}
                       </div>
                     ) : null}
                     {summary.hasLegacyData ? <div>检测到兼容结构：将按兼容模式导入。</div> : null}
@@ -853,9 +870,10 @@ export default function ImportExport() {
       <div className="card animate-slide-up stagger-4" style={{ marginTop: 14, padding: 16 }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>注意事项</div>
         <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.75 }}>
-          <div>1. 导入账号分区会覆盖现有站点、账号、令牌和路由配置。</div>
-          <div>2. 为避免锁死管理界面，管理员登录令牌（`auth_token`）不会从备份导入。</div>
-          <div>3. 建议先导出一份"全部备份"再执行导入操作。</div>
+          <div>1. 导入连接分区会覆盖备份中的站点、账号、令牌、路由、禁用模型、手工模型和下游 Key 配置。</div>
+          <div>2. 覆盖备份中的连接/路由/策略配置，但会保留本机日志、公告、缓存和统计。</div>
+          <div>3. 为避免锁死管理界面，管理员登录令牌（`auth_token`）不会从备份导入。</div>
+          <div>4. 建议先导出一份"全部备份"再执行导入操作。</div>
         </div>
       </div>
     </div>
