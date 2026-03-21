@@ -47,7 +47,7 @@ export function SortableChannelRow({
     opacity: isDragging ? 0.72 : channel.enabled === false ? 0.5 : 1,
     zIndex: isDragging ? 10 : 1,
     display: 'grid',
-    gridTemplateColumns: readOnly || mobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) auto auto',
+    gridTemplateColumns: readOnly || mobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) auto auto auto',
     alignItems: mobile ? 'stretch' : 'center',
     gap: 8,
     padding: mobile ? '10px 12px' : '8px 12px',
