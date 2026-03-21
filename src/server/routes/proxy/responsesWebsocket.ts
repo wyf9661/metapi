@@ -341,7 +341,7 @@ async function forwardResponsesRequestViaHttp(input: {
   preserveIncrementalMode: boolean;
   authToken: string;
 }): Promise<unknown[] | null> {
-  const injectHeaders = {
+  const injectHeaders: Record<string, string | string[]> = {
     ...buildInjectHeaders(input.request),
     [RESPONSES_WEBSOCKET_TRANSPORT_HEADER]: '1',
     ...(input.preserveIncrementalMode ? { [RESPONSES_WEBSOCKET_MODE_HEADER]: 'incremental' } : {}),

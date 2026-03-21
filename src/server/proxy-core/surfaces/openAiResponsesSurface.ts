@@ -138,7 +138,7 @@ function carriesResponsesFileUrlInput(value: unknown): boolean {
 function shouldRefreshOauthResponsesRequest(input: {
   oauthProvider?: string;
   status: number;
-  response: Response;
+  response: { headers: { get(name: string): string | null } };
   rawErrText: string;
 }): boolean {
   if (input.status === 401) return true;
