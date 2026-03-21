@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
+import ModernSelect from '../components/ModernSelect.js';
 import ImportExport from './ImportExport.js';
 
 const { apiMock, toastMock } = vi.hoisted(() => ({
@@ -389,6 +390,54 @@ describe('ImportExport', () => {
       await flushMicrotasks();
 
       expect(apiMock.saveBackupWebdavConfig).toHaveBeenCalledTimes(1);
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('renders webdav export type with ModernSelect instead of a native select', async () => {
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ImportExport />
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const fileUrlInput = root!.root.findAll((node) => (
+        node.type === 'input'
+        && node.props.placeholder === 'https://dav.example.com/backups/metapi.json'
+      )).at(-1);
+      const cronInput = root!.root.findAll((node) => (
+        node.type === 'input'
+        && node.props.placeholder === '0 */6 * * *'
+      )).at(-1);
+      const selects = root!.root.findAllByType(ModernSelect);
+      const exportTypeSelect = selects.at(-1);
+
+      expect(fileUrlInput?.props.style).toEqual(expect.objectContaining({
+        width: '100%',
+        padding: '10px 14px',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-sm)',
+        fontSize: 13,
+        background: 'var(--color-bg)',
+        color: 'var(--color-text-primary)',
+      }));
+      expect(root!.root.findAll((node) => node.type === 'select')).toHaveLength(0);
+      expect(exportTypeSelect?.props.value).toBe('all');
+      expect(exportTypeSelect?.props.options).toEqual([
+        { value: 'all', label: '全部' },
+        { value: 'accounts', label: '账号与路由' },
+        { value: 'preferences', label: '系统设置' },
+      ]);
+      expect(cronInput?.props.style).toEqual(expect.objectContaining({
+        fontFamily: 'var(--font-mono)',
+      }));
     } finally {
       root?.unmount();
     }
