@@ -34,9 +34,15 @@ describe('backupService', () => {
     await db.delete(schema.modelAvailability).run();
     await db.delete(schema.proxyLogs).run();
     await db.delete(schema.checkinLogs).run();
+    await db.delete(schema.siteAnnouncements).run();
+    await db.delete(schema.siteDisabledModels).run();
     await db.delete(schema.accountTokens).run();
     await db.delete(schema.accounts).run();
     await db.delete(schema.sites).run();
+    await db.delete(schema.downstreamApiKeys).run();
+    await db.delete(schema.proxyFiles).run();
+    await db.delete(schema.proxyVideoTasks).run();
+    await db.delete(schema.events).run();
     await db.delete(schema.settings).run();
   });
 
@@ -44,7 +50,7 @@ describe('backupService', () => {
     delete process.env.DATA_DIR;
   });
 
-  it('preserves extended fields in full backup import/export roundtrip', async () => {
+  it('exports backup-owned config in v2.1 backups and still roundtrips core connection fields', async () => {
     const now = new Date().toISOString();
     const site = await db.insert(schema.sites).values({
       name: 'roundtrip-site',
@@ -143,8 +149,85 @@ describe('backupService', () => {
       cooldownUntil: now,
     }).run();
 
-    const exported = await backupService.exportBackup('all');
-    const result = await backupService.importBackup(exported as unknown as Record<string, unknown>);
+    await db.insert(schema.siteDisabledModels).values({
+      siteId: site.id,
+      modelName: 'gpt-hidden',
+      createdAt: now,
+    }).run();
+
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: account.id,
+        modelName: 'gpt-manual',
+        available: true,
+        isManual: true,
+        latencyMs: null,
+        checkedAt: now,
+      },
+      {
+        accountId: account.id,
+        modelName: 'gpt-discovered',
+        available: true,
+        isManual: false,
+        latencyMs: 42,
+        checkedAt: now,
+      },
+    ]).run();
+
+    await db.insert(schema.downstreamApiKeys).values({
+      name: 'Shared Downstream',
+      key: 'downstream-roundtrip-key',
+      description: 'shared quota',
+      groupName: 'team-a',
+      tags: '["prod"]',
+      enabled: false,
+      expiresAt: now,
+      maxCost: 100,
+      usedCost: 11.5,
+      maxRequests: 500,
+      usedRequests: 33,
+      supportedModels: '["gpt-4o-mini"]',
+      allowedRouteIds: `[${route.id}]`,
+      siteWeightMultipliers: `{"${site.id}":1.5}`,
+      lastUsedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    }).run();
+
+    const exported = await backupService.exportBackup('all') as any;
+    expect(exported.version).toBe('2.1');
+    expect(exported.accounts.siteDisabledModels).toEqual([
+      { siteId: site.id, modelName: 'gpt-hidden' },
+    ]);
+    expect(exported.accounts.manualModels).toEqual([
+      { accountId: account.id, modelName: 'gpt-manual' },
+    ]);
+    expect(exported.accounts.downstreamApiKeys).toEqual([
+      expect.objectContaining({
+        name: 'Shared Downstream',
+        key: 'downstream-roundtrip-key',
+        description: 'shared quota',
+        groupName: 'team-a',
+        tags: '["prod"]',
+        enabled: false,
+        expiresAt: now,
+        maxCost: 100,
+        maxRequests: 500,
+        supportedModels: '["gpt-4o-mini"]',
+        allowedRouteIds: `[${route.id}]`,
+        siteWeightMultipliers: `{"${site.id}":1.5}`,
+      }),
+    ]);
+    expect(exported.accounts.accounts[0]).not.toHaveProperty('balanceUsed');
+    expect(exported.accounts.accounts[0]).not.toHaveProperty('lastCheckinAt');
+    expect(exported.accounts.accounts[0]).not.toHaveProperty('lastBalanceRefresh');
+    expect(exported.accounts.routeChannels[0]).not.toHaveProperty('successCount');
+    expect(exported.accounts.routeChannels[0]).not.toHaveProperty('lastUsedAt');
+    expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('usedCost');
+    expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('usedRequests');
+    expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('lastUsedAt');
+
+    const result = await backupService.importBackup(exported as Record<string, unknown>);
 
     expect(result.allImported).toBe(true);
     expect(result.sections.accounts).toBe(true);
@@ -155,6 +238,9 @@ describe('backupService', () => {
     const restoredAccount = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
     const restoredRoute = await db.select().from(schema.tokenRoutes).where(eq(schema.tokenRoutes.id, route.id)).get();
     const restoredChannel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.routeId, route.id)).get();
+    const restoredDisabledModels = await db.select().from(schema.siteDisabledModels).all();
+    const restoredModelAvailability = await db.select().from(schema.modelAvailability).all();
+    const restoredDownstreamKeys = await db.select().from(schema.downstreamApiKeys).all();
 
     expect(restoredSite?.proxyUrl).toBe('http://127.0.0.1:8080');
     expect(restoredSite?.externalCheckinUrl).toBe('https://checkin.roundtrip.example.com');
@@ -179,6 +265,29 @@ describe('backupService', () => {
     expect(restoredGroupSource?.sourceRouteId).toBe(sourceRoute.id);
 
     expect(restoredChannel?.sourceModel).toBe('gpt-4o');
+    expect(restoredDisabledModels).toEqual([
+      expect.objectContaining({ siteId: site.id, modelName: 'gpt-hidden' }),
+    ]);
+    expect(restoredModelAvailability.some((row) => row.modelName === 'gpt-manual' && row.isManual)).toBe(true);
+    expect(restoredModelAvailability.some((row) => row.modelName === 'gpt-discovered' && !row.isManual)).toBe(true);
+    expect(restoredDownstreamKeys).toEqual([
+      expect.objectContaining({
+        name: 'Shared Downstream',
+        key: 'downstream-roundtrip-key',
+        description: 'shared quota',
+        groupName: 'team-a',
+        tags: '["prod"]',
+        enabled: false,
+        maxCost: 100,
+        usedCost: 11.5,
+        maxRequests: 500,
+        usedRequests: 33,
+        supportedModels: '["gpt-4o-mini"]',
+        allowedRouteIds: `[${route.id}]`,
+        siteWeightMultipliers: `{"${site.id}":1.5}`,
+        lastUsedAt: now,
+      }),
+    ]);
   });
 
   it('preserves local logs and runtime stats when importing account backups', async () => {
@@ -340,6 +449,509 @@ describe('backupService', () => {
     expect(restoredCheckinLogs).toHaveLength(1);
     expect(restoredCheckinLogs[0]?.accountId).toBe(account.id);
     expect(restoredCheckinLogs[0]?.message).toBe('local-checkin');
+  });
+
+  it('preserves local-only state while replacing backup-owned config during account imports', async () => {
+    const exportedAt = '2026-03-20T09:00:00.000Z';
+    const localRuntimeAt = '2026-03-21T10:30:00.000Z';
+    const site = await db.insert(schema.sites).values({
+      name: 'backup-site',
+      url: 'https://preserve-local-state.example.com',
+      platform: 'new-api',
+      status: 'active',
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'preserve-user',
+      accessToken: 'session-token',
+      apiToken: 'api-token',
+      balance: 20,
+      balanceUsed: 3,
+      quota: 100,
+      status: 'active',
+      checkinEnabled: true,
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    const accountToken = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'default',
+      token: 'sk-preserve-token',
+      source: 'manual',
+      enabled: true,
+      isDefault: true,
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'gpt-preserve-*',
+      displayName: 'backup-route',
+      modelMapping: JSON.stringify({ to: 'gpt-4o-mini' }),
+      routeMode: 'pattern',
+      routingStrategy: 'weighted',
+      enabled: true,
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      tokenId: accountToken.id,
+      sourceModel: 'gpt-4o',
+      priority: 1,
+      weight: 10,
+      enabled: true,
+      manualOverride: false,
+      successCount: 1,
+      failCount: 0,
+      totalLatencyMs: 200,
+      totalCost: 0.5,
+      lastUsedAt: exportedAt,
+      lastSelectedAt: exportedAt,
+      lastFailAt: null,
+      consecutiveFailCount: 0,
+      cooldownLevel: 0,
+      cooldownUntil: null,
+    }).run();
+
+    const insertedChannel = await db.select()
+      .from(schema.routeChannels)
+      .where(eq(schema.routeChannels.routeId, route.id))
+      .get();
+
+    expect(insertedChannel).toBeTruthy();
+
+    await db.insert(schema.siteDisabledModels).values({
+      siteId: site.id,
+      modelName: 'gpt-backup-disabled',
+      createdAt: exportedAt,
+    }).run();
+
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: account.id,
+        modelName: 'gpt-backup-manual',
+        available: true,
+        isManual: true,
+        latencyMs: null,
+        checkedAt: exportedAt,
+      },
+      {
+        accountId: account.id,
+        modelName: 'gpt-cached',
+        available: false,
+        isManual: false,
+        latencyMs: 50,
+        checkedAt: exportedAt,
+      },
+    ]).run();
+
+    await db.insert(schema.tokenModelAvailability).values({
+      tokenId: accountToken.id,
+      modelName: 'gpt-token-cache',
+      available: false,
+      latencyMs: 33,
+      checkedAt: exportedAt,
+    }).run();
+
+    await db.insert(schema.siteAnnouncements).values({
+      siteId: site.id,
+      platform: 'new-api',
+      sourceKey: 'notice-1',
+      title: 'Backup banner',
+      content: 'Backup content',
+      level: 'info',
+      firstSeenAt: exportedAt,
+      lastSeenAt: exportedAt,
+      readAt: null,
+      dismissedAt: null,
+      rawPayload: '{"revision":"backup"}',
+    }).run();
+
+    const downstreamKey = await db.insert(schema.downstreamApiKeys).values({
+      name: 'Backup Downstream',
+      key: 'downstream-shared',
+      description: 'backup config',
+      groupName: 'team-a',
+      tags: '["backup"]',
+      enabled: false,
+      expiresAt: '2026-12-31T00:00:00.000Z',
+      maxCost: 25,
+      usedCost: 1.5,
+      maxRequests: 250,
+      usedRequests: 2,
+      supportedModels: '["gpt-4o"]',
+      allowedRouteIds: `[${route.id}]`,
+      siteWeightMultipliers: `{"${site.id}":1.25}`,
+      lastUsedAt: exportedAt,
+      createdAt: exportedAt,
+      updatedAt: exportedAt,
+    }).returning().get();
+
+    const exported = await backupService.exportBackup('accounts') as any;
+    expect(exported.version).toBe('2.1');
+
+    await db.insert(schema.events).values({
+      type: 'status',
+      title: 'keep-event',
+      message: 'should stay after import',
+      level: 'info',
+      createdAt: localRuntimeAt,
+    }).run();
+
+    await db.insert(schema.proxyVideoTasks).values({
+      publicId: 'video-task-1',
+      upstreamVideoId: 'upstream-video-1',
+      siteUrl: site.url,
+      tokenValue: account.accessToken,
+      createdAt: localRuntimeAt,
+      updatedAt: localRuntimeAt,
+    }).run();
+
+    await db.insert(schema.proxyFiles).values({
+      publicId: 'proxy-file-1',
+      ownerType: 'message',
+      ownerId: 'msg-1',
+      filename: 'snapshot.json',
+      mimeType: 'application/json',
+      byteSize: 4,
+      sha256: 'abcd',
+      contentBase64: 'e30=',
+      createdAt: localRuntimeAt,
+      updatedAt: localRuntimeAt,
+    }).run();
+
+    await db.update(schema.sites).set({
+      name: 'local-site-name',
+      updatedAt: localRuntimeAt,
+    }).where(eq(schema.sites.id, site.id)).run();
+
+    await db.update(schema.tokenRoutes).set({
+      displayName: 'local-route-name',
+      updatedAt: localRuntimeAt,
+    }).where(eq(schema.tokenRoutes.id, route.id)).run();
+
+    await db.update(schema.accounts).set({
+      balanceUsed: 99,
+      lastCheckinAt: localRuntimeAt,
+      lastBalanceRefresh: localRuntimeAt,
+      updatedAt: localRuntimeAt,
+    }).where(eq(schema.accounts.id, account.id)).run();
+
+    await db.update(schema.routeChannels).set({
+      successCount: 77,
+      failCount: 9,
+      totalLatencyMs: 4321,
+      totalCost: 7.89,
+      lastUsedAt: localRuntimeAt,
+      lastSelectedAt: localRuntimeAt,
+      lastFailAt: localRuntimeAt,
+      consecutiveFailCount: 4,
+      cooldownLevel: 2,
+      cooldownUntil: localRuntimeAt,
+    }).where(eq(schema.routeChannels.id, insertedChannel!.id)).run();
+
+    await db.delete(schema.siteDisabledModels)
+      .where(eq(schema.siteDisabledModels.siteId, site.id))
+      .run();
+    await db.insert(schema.siteDisabledModels).values({
+      siteId: site.id,
+      modelName: 'gpt-local-disabled',
+      createdAt: localRuntimeAt,
+    }).run();
+
+    await db.delete(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, account.id))
+      .run();
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: account.id,
+        modelName: 'gpt-local-manual',
+        available: true,
+        isManual: true,
+        latencyMs: null,
+        checkedAt: localRuntimeAt,
+      },
+      {
+        accountId: account.id,
+        modelName: 'gpt-cached',
+        available: true,
+        isManual: false,
+        latencyMs: 777,
+        checkedAt: localRuntimeAt,
+      },
+    ]).run();
+
+    await db.update(schema.tokenModelAvailability).set({
+      available: true,
+      latencyMs: 888,
+      checkedAt: localRuntimeAt,
+    }).where(eq(schema.tokenModelAvailability.tokenId, accountToken.id)).run();
+
+    await db.update(schema.siteAnnouncements).set({
+      title: 'Local banner',
+      content: 'Local content',
+      lastSeenAt: localRuntimeAt,
+      readAt: localRuntimeAt,
+      dismissedAt: localRuntimeAt,
+      rawPayload: '{"revision":"local"}',
+    }).where(eq(schema.siteAnnouncements.siteId, site.id)).run();
+
+    await db.update(schema.downstreamApiKeys).set({
+      name: 'Local Mutated Downstream',
+      description: 'local config',
+      groupName: 'team-local',
+      tags: '["local"]',
+      enabled: true,
+      expiresAt: '2027-01-01T00:00:00.000Z',
+      maxCost: 999,
+      usedCost: 44,
+      maxRequests: 999,
+      usedRequests: 55,
+      supportedModels: '["gpt-local"]',
+      allowedRouteIds: '[999]',
+      siteWeightMultipliers: '{"999":9}',
+      lastUsedAt: localRuntimeAt,
+      updatedAt: localRuntimeAt,
+    }).where(eq(schema.downstreamApiKeys.id, downstreamKey.id)).run();
+
+    const localOnlyDownstreamKey = await db.insert(schema.downstreamApiKeys).values({
+      name: 'Local Only Downstream',
+      key: 'downstream-local-only',
+      usedCost: 7,
+      usedRequests: 8,
+      lastUsedAt: localRuntimeAt,
+      createdAt: localRuntimeAt,
+      updatedAt: localRuntimeAt,
+    }).returning().get();
+
+    await db.insert(schema.checkinLogs).values({
+      accountId: account.id,
+      status: 'success',
+      message: 'local-checkin',
+      reward: '1.5',
+      createdAt: localRuntimeAt,
+    }).run();
+
+    await db.insert(schema.proxyLogs).values([
+      {
+        routeId: route.id,
+        channelId: insertedChannel!.id,
+        accountId: account.id,
+        downstreamApiKeyId: downstreamKey.id,
+        modelRequested: 'gpt-4o',
+        modelActual: 'gpt-4o',
+        status: 'success',
+        totalTokens: 321,
+        estimatedCost: 0.123,
+        createdAt: localRuntimeAt,
+      },
+      {
+        routeId: route.id,
+        channelId: insertedChannel!.id,
+        accountId: account.id,
+        downstreamApiKeyId: localOnlyDownstreamKey.id,
+        modelRequested: 'gpt-4o-mini',
+        modelActual: 'gpt-4o-mini',
+        status: 'failed',
+        totalTokens: 654,
+        estimatedCost: 0.456,
+        createdAt: localRuntimeAt,
+      },
+    ]).run();
+
+    const result = await backupService.importBackup(exported as Record<string, unknown>);
+
+    expect(result.allImported).toBe(true);
+    expect(result.sections.accounts).toBe(true);
+
+    const restoredSite = await db.select().from(schema.sites).where(eq(schema.sites.id, site.id)).get();
+    const restoredAccount = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    const restoredRoute = await db.select().from(schema.tokenRoutes).where(eq(schema.tokenRoutes.id, route.id)).get();
+    const restoredChannel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, insertedChannel!.id)).get();
+    const restoredDisabledModels = await db.select().from(schema.siteDisabledModels).all();
+    const restoredAvailability = await db.select().from(schema.modelAvailability).all();
+    const restoredTokenAvailability = await db.select().from(schema.tokenModelAvailability).all();
+    const restoredAnnouncements = await db.select().from(schema.siteAnnouncements).all();
+    const restoredDownstreamKeys = await db.select().from(schema.downstreamApiKeys).all();
+    const restoredProxyLogs = await db.select().from(schema.proxyLogs).all();
+    const restoredCheckinLogs = await db.select().from(schema.checkinLogs).all();
+    const restoredEvents = await db.select().from(schema.events).all();
+    const restoredProxyVideoTasks = await db.select().from(schema.proxyVideoTasks).all();
+    const restoredProxyFiles = await db.select().from(schema.proxyFiles).all();
+
+    expect(restoredSite?.name).toBe('backup-site');
+    expect(restoredRoute?.displayName).toBe('backup-route');
+    expect(restoredAccount?.balanceUsed).toBe(99);
+    expect(restoredAccount?.lastCheckinAt).toBe(localRuntimeAt);
+    expect(restoredAccount?.lastBalanceRefresh).toBe(localRuntimeAt);
+    expect(restoredChannel?.successCount).toBe(77);
+    expect(restoredChannel?.failCount).toBe(9);
+    expect(restoredChannel?.totalLatencyMs).toBe(4321);
+    expect(restoredChannel?.totalCost).toBe(7.89);
+    expect(restoredChannel?.lastUsedAt).toBe(localRuntimeAt);
+    expect(restoredChannel?.lastSelectedAt).toBe(localRuntimeAt);
+    expect(restoredChannel?.lastFailAt).toBe(localRuntimeAt);
+    expect(restoredChannel?.consecutiveFailCount).toBe(4);
+    expect(restoredChannel?.cooldownLevel).toBe(2);
+    expect(restoredChannel?.cooldownUntil).toBe(localRuntimeAt);
+
+    expect(restoredDisabledModels).toEqual([
+      expect.objectContaining({ siteId: site.id, modelName: 'gpt-backup-disabled' }),
+    ]);
+
+    const restoredManualModels = restoredAvailability
+      .filter((row) => row.isManual)
+      .map((row) => row.modelName)
+      .sort();
+    expect(restoredManualModels).toEqual(['gpt-backup-manual']);
+    const restoredCachedModel = restoredAvailability.find((row) => row.modelName === 'gpt-cached' && !row.isManual);
+    expect(restoredCachedModel).toEqual(expect.objectContaining({
+      available: true,
+      latencyMs: 777,
+      checkedAt: localRuntimeAt,
+    }));
+
+    expect(restoredTokenAvailability).toEqual([
+      expect.objectContaining({
+        tokenId: accountToken.id,
+        modelName: 'gpt-token-cache',
+        available: true,
+        latencyMs: 888,
+        checkedAt: localRuntimeAt,
+      }),
+    ]);
+
+    expect(restoredAnnouncements).toEqual([
+      expect.objectContaining({
+        siteId: site.id,
+        title: 'Local banner',
+        content: 'Local content',
+        lastSeenAt: localRuntimeAt,
+        readAt: localRuntimeAt,
+        dismissedAt: localRuntimeAt,
+        rawPayload: '{"revision":"local"}',
+      }),
+    ]);
+
+    expect(restoredDownstreamKeys).toEqual([
+      expect.objectContaining({
+        name: 'Backup Downstream',
+        key: 'downstream-shared',
+        description: 'backup config',
+        groupName: 'team-a',
+        tags: '["backup"]',
+        enabled: false,
+        expiresAt: '2026-12-31T00:00:00.000Z',
+        maxCost: 25,
+        usedCost: 44,
+        maxRequests: 250,
+        usedRequests: 55,
+        supportedModels: '["gpt-4o"]',
+        allowedRouteIds: `[${route.id}]`,
+        siteWeightMultipliers: `{"${site.id}":1.25}`,
+        lastUsedAt: localRuntimeAt,
+      }),
+    ]);
+
+    expect(restoredProxyLogs).toHaveLength(2);
+    const matchedDownstreamLog = restoredProxyLogs.find((row) => row.totalTokens === 321);
+    const orphanedDownstreamLog = restoredProxyLogs.find((row) => row.totalTokens === 654);
+    expect(matchedDownstreamLog?.downstreamApiKeyId).toBe(restoredDownstreamKeys[0]?.id);
+    expect(orphanedDownstreamLog?.downstreamApiKeyId).toBeNull();
+    expect(restoredCheckinLogs).toEqual([
+      expect.objectContaining({
+        accountId: account.id,
+        message: 'local-checkin',
+      }),
+    ]);
+    expect(restoredEvents).toHaveLength(1);
+    expect(restoredProxyVideoTasks).toHaveLength(1);
+    expect(restoredProxyFiles).toHaveLength(1);
+  });
+
+  it('keeps importing native v2.0 backups without the new v2.1 config arrays', async () => {
+    const localDownstreamKey = await db.insert(schema.downstreamApiKeys).values({
+      name: 'Local downstream',
+      key: 'local-downstream-key',
+      usedCost: 12,
+      usedRequests: 3,
+      createdAt: '2026-03-21T08:00:00.000Z',
+      updatedAt: '2026-03-21T08:00:00.000Z',
+    }).returning().get();
+
+    const payload = {
+      version: '2.0',
+      timestamp: Date.now(),
+      type: 'accounts',
+      accounts: {
+        sites: [
+          {
+            id: 1,
+            name: 'Legacy native site',
+            url: 'https://legacy-native.example.com',
+            externalCheckinUrl: null,
+            platform: 'new-api',
+            proxyUrl: null,
+            useSystemProxy: false,
+            customHeaders: null,
+            status: 'active',
+            isPinned: false,
+            sortOrder: 0,
+            globalWeight: 1,
+            apiKey: null,
+            createdAt: '2026-03-20T00:00:00.000Z',
+            updatedAt: '2026-03-20T00:00:00.000Z',
+          },
+        ],
+        accounts: [
+          {
+            id: 1,
+            siteId: 1,
+            username: 'legacy-user',
+            accessToken: 'legacy-session-token',
+            apiToken: 'legacy-api-token',
+            balance: 10,
+            quota: 20,
+            unitCost: null,
+            valueScore: 0,
+            status: 'active',
+            isPinned: false,
+            sortOrder: 0,
+            checkinEnabled: true,
+            extraConfig: null,
+            createdAt: '2026-03-20T00:00:00.000Z',
+            updatedAt: '2026-03-20T00:00:00.000Z',
+          },
+        ],
+        accountTokens: [],
+        tokenRoutes: [],
+        routeChannels: [],
+        routeGroupSources: [],
+      },
+    } as Record<string, unknown>;
+
+    const result = await backupService.importBackup(payload);
+
+    expect(result.allImported).toBe(true);
+    expect(result.sections.accounts).toBe(true);
+
+    const restoredSites = await db.select().from(schema.sites).all();
+    const restoredAccounts = await db.select().from(schema.accounts).all();
+    const restoredDownstreamKeys = await db.select().from(schema.downstreamApiKeys).all();
+
+    expect(restoredSites).toHaveLength(1);
+    expect(restoredAccounts).toHaveLength(1);
+    expect(restoredAccounts[0]?.username).toBe('legacy-user');
+    expect(restoredDownstreamKeys).toHaveLength(1);
+    expect(restoredDownstreamKeys[0]?.id).toBe(localDownstreamKey.id);
+    expect(restoredDownstreamKeys[0]?.key).toBe('local-downstream-key');
   });
 
   it('imports ALL-API-Hub style payload with accounts and preferences', async () => {

@@ -127,7 +127,7 @@ const allApiHubV2Payload = JSON.stringify({
 });
 
 const nativeMetapiPayload = JSON.stringify({
-  version: '2.0',
+  version: '2.1',
   timestamp: 1735689600000,
   accounts: {
     sites: [
@@ -176,6 +176,26 @@ const nativeMetapiPayload = JSON.stringify({
       },
     ],
     routeGroupSources: [],
+    siteDisabledModels: [
+      {
+        siteId: 1,
+        modelName: 'gpt-hidden',
+      },
+    ],
+    manualModels: [
+      {
+        accountId: 1,
+        modelName: 'gpt-manual',
+      },
+    ],
+    downstreamApiKeys: [
+      {
+        name: 'Shared Key',
+        key: 'downstream-native',
+        enabled: true,
+        supportedModels: '["gpt-5-nano"]',
+      },
+    ],
   },
   preferences: {
     settings: [
@@ -307,7 +327,7 @@ describe('ImportExport', () => {
 
       const rendered = collectText(root!.root);
       expect(rendered).not.toContain('ALL-API-Hub V2');
-      expect(rendered).toContain('统计：站点 1 / 账号 1 / 令牌 1 / 路由 1 / 通道 1 / 设置 1');
+      expect(rendered).toContain('统计：站点 1 / 账号 1 / 令牌 1 / 路由 1 / 通道 1 / 站点禁用模型 1 / 手工模型 1 / 下游 Key 1 / 设置 1');
     } finally {
       root?.unmount();
     }
@@ -346,7 +366,13 @@ describe('ImportExport', () => {
       await flushMicrotasks();
 
       expect(confirmSpy).toHaveBeenCalled();
+      expect(confirmSpy).toHaveBeenCalledWith(
+        '导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？',
+      );
       expect(apiMock.importBackup).toHaveBeenCalledTimes(1);
+      expect(toastMock.success).toHaveBeenCalledWith(
+        expect.stringContaining('导入完成：连接与路由策略、系统设置'),
+      );
       expect(toastMock.success).toHaveBeenCalledWith(
         expect.stringContaining('站点 3 / 账号 2 / API Key 连接 3 / 跳过 1'),
       );
@@ -395,6 +421,29 @@ describe('ImportExport', () => {
     }
   });
 
+  it('shows v2.1 config-backup wording and local-state notice', async () => {
+    let root: ReturnType<typeof create> | null = null;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ImportExport />
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const rendered = collectText(root!.root);
+      expect(rendered).toContain('Schema v2.1');
+      expect(rendered).toContain('导出全部（连接 + 路由 + 策略 + 设置）');
+      expect(rendered).toContain('仅导出连接与路由策略');
+      expect(rendered).toContain('覆盖备份中的连接/路由/策略配置，但会保留本机日志、公告、缓存和统计。');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('renders webdav export type with ModernSelect instead of a native select', async () => {
     let root: ReturnType<typeof create> | null = null;
 
@@ -432,7 +481,7 @@ describe('ImportExport', () => {
       expect(exportTypeSelect?.props.value).toBe('all');
       expect(exportTypeSelect?.props.options).toEqual([
         { value: 'all', label: '全部' },
-        { value: 'accounts', label: '账号与路由' },
+        { value: 'accounts', label: '连接与路由策略' },
         { value: 'preferences', label: '系统设置' },
       ]);
       expect(cronInput?.props.style).toEqual(expect.objectContaining({

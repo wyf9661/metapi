@@ -5,7 +5,7 @@ import { upsertSetting } from '../db/upsertSetting.js';
 import { mergeAccountExtraConfig } from './accountExtraConfig.js';
 import { getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
 
-const BACKUP_VERSION = '2.0';
+const BACKUP_VERSION = '2.1';
 
 export type BackupExportType = 'all' | 'accounts' | 'preferences';
 
@@ -41,16 +41,71 @@ type AccountTokenRow = typeof schema.accountTokens.$inferSelect;
 type TokenRouteRow = typeof schema.tokenRoutes.$inferSelect;
 type RouteChannelRow = typeof schema.routeChannels.$inferSelect;
 type RouteGroupSourceRow = typeof schema.routeGroupSources.$inferSelect;
+type SiteDisabledModelRow = typeof schema.siteDisabledModels.$inferSelect;
+type ModelAvailabilityRow = typeof schema.modelAvailability.$inferSelect;
+type TokenModelAvailabilityRow = typeof schema.tokenModelAvailability.$inferSelect;
 type ProxyLogRow = typeof schema.proxyLogs.$inferSelect;
 type CheckinLogRow = typeof schema.checkinLogs.$inferSelect;
+type DownstreamApiKeyRow = typeof schema.downstreamApiKeys.$inferSelect;
+type SiteAnnouncementRow = typeof schema.siteAnnouncements.$inferSelect;
+
+type BackupAccountRow = Omit<AccountRow, 'balanceUsed' | 'lastCheckinAt' | 'lastBalanceRefresh'>
+  & Partial<Pick<AccountRow, 'balanceUsed' | 'lastCheckinAt' | 'lastBalanceRefresh'>>;
+
+type BackupRouteChannelRow = Omit<RouteChannelRow,
+  'successCount'
+  | 'failCount'
+  | 'totalLatencyMs'
+  | 'totalCost'
+  | 'lastUsedAt'
+  | 'lastSelectedAt'
+  | 'lastFailAt'
+  | 'consecutiveFailCount'
+  | 'cooldownLevel'
+  | 'cooldownUntil'
+> & Partial<Pick<RouteChannelRow,
+  'successCount'
+  | 'failCount'
+  | 'totalLatencyMs'
+  | 'totalCost'
+  | 'lastUsedAt'
+  | 'lastSelectedAt'
+  | 'lastFailAt'
+  | 'consecutiveFailCount'
+  | 'cooldownLevel'
+  | 'cooldownUntil'
+>>;
+
+type BackupSiteDisabledModelRow = Pick<SiteDisabledModelRow, 'siteId' | 'modelName'>;
+type BackupManualModelRow = {
+  accountId: number;
+  modelName: string;
+};
+type BackupDownstreamApiKeyRow = Pick<DownstreamApiKeyRow,
+  'name'
+  | 'key'
+  | 'description'
+  | 'groupName'
+  | 'tags'
+  | 'enabled'
+  | 'expiresAt'
+  | 'maxCost'
+  | 'maxRequests'
+  | 'supportedModels'
+  | 'allowedRouteIds'
+  | 'siteWeightMultipliers'
+> & Partial<Pick<DownstreamApiKeyRow, 'usedCost' | 'usedRequests' | 'lastUsedAt'>>;
 
 interface AccountsBackupSection {
   sites: SiteRow[];
-  accounts: AccountRow[];
+  accounts: BackupAccountRow[];
   accountTokens: AccountTokenRow[];
   tokenRoutes: TokenRouteRow[];
-  routeChannels: RouteChannelRow[];
+  routeChannels: BackupRouteChannelRow[];
   routeGroupSources: RouteGroupSourceRow[];
+  siteDisabledModels?: BackupSiteDisabledModelRow[];
+  manualModels?: BackupManualModelRow[];
+  downstreamApiKeys?: BackupDownstreamApiKeyRow[];
 }
 
 interface PreferencesBackupSection {
@@ -105,13 +160,30 @@ type ProxyLogSnapshot = ProxyLogRow & {
   accountKey: string | null;
   routeKey: string | null;
   channelKey: string | null;
+  downstreamApiKeyKey: string | null;
 };
 
 type CheckinLogSnapshot = CheckinLogRow & {
   accountKey: string | null;
 };
 
+type SiteAnnouncementSnapshot = SiteAnnouncementRow & {
+  siteKey: string | null;
+};
+
+type ModelAvailabilitySnapshot = ModelAvailabilityRow & {
+  accountKey: string | null;
+};
+
+type TokenModelAvailabilitySnapshot = TokenModelAvailabilityRow & {
+  tokenKey: string | null;
+};
+
+type DownstreamApiKeyRuntimeSnapshot = Pick<DownstreamApiKeyRow, 'usedCost' | 'usedRequests' | 'lastUsedAt'>;
+
 interface RuntimeIdentityIndexes {
+  siteKeyById: Map<number, string>;
+  siteIdByKey: Map<string, number>;
   accountKeyById: Map<number, string>;
   accountIdByKey: Map<string, number>;
   tokenKeyById: Map<number, string>;
@@ -125,6 +197,11 @@ interface RuntimeIdentityIndexes {
 interface RuntimeStateSnapshot {
   accountRuntimeByKey: Map<string, AccountRuntimeSnapshot>;
   routeChannelRuntimeByKey: Map<string, RouteChannelRuntimeSnapshot>;
+  siteAnnouncements: SiteAnnouncementSnapshot[];
+  nonManualAvailability: ModelAvailabilitySnapshot[];
+  tokenAvailability: TokenModelAvailabilitySnapshot[];
+  downstreamApiKeyRuntimeByKey: Map<string, DownstreamApiKeyRuntimeSnapshot>;
+  downstreamApiKeyIdByKey: Map<string, number>;
   proxyLogs: ProxyLogSnapshot[];
   checkinLogs: CheckinLogSnapshot[];
 }
@@ -307,6 +384,10 @@ function buildRouteIdentityKey(row: Pick<TokenRouteRow, 'modelPattern' | 'routeM
   ].join('::');
 }
 
+function buildModelAvailabilityIdentityKey(accountKey: string, modelName: string): string {
+  return [accountKey, asString(modelName)].join('::');
+}
+
 function buildRouteChannelIdentityKey(
   row: Pick<RouteChannelRow, 'routeId' | 'accountId' | 'tokenId' | 'sourceModel'>,
   indexes: Pick<RuntimeIdentityIndexes, 'accountKeyById' | 'tokenKeyById' | 'routeKeyById'>,
@@ -321,6 +402,7 @@ function buildRouteChannelIdentityKey(
 
 function buildRuntimeIdentityIndexesFromSection(section: AccountsBackupSection): RuntimeIdentityIndexes {
   const siteKeyById = new Map<number, string>();
+  const siteIdByKey = new Map<string, number>();
   const accountKeyById = new Map<number, string>();
   const accountIdByKey = new Map<string, number>();
   const tokenKeyById = new Map<number, string>();
@@ -331,7 +413,9 @@ function buildRuntimeIdentityIndexesFromSection(section: AccountsBackupSection):
   const channelIdByKey = new Map<string, number>();
 
   for (const row of section.sites) {
-    siteKeyById.set(row.id, buildSiteIdentityKey(row));
+    const siteKey = buildSiteIdentityKey(row);
+    siteKeyById.set(row.id, siteKey);
+    siteIdByKey.set(siteKey, row.id);
   }
 
   for (const row of section.accounts) {
@@ -377,6 +461,8 @@ function buildRuntimeIdentityIndexesFromSection(section: AccountsBackupSection):
   }
 
   return {
+    siteKeyById,
+    siteIdByKey,
     accountKeyById,
     accountIdByKey,
     tokenKeyById,
@@ -389,7 +475,19 @@ function buildRuntimeIdentityIndexesFromSection(section: AccountsBackupSection):
 }
 
 async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapshot> {
-  const [sites, accounts, accountTokens, tokenRoutes, routeChannels, proxyLogs, checkinLogs] = await Promise.all([
+  const [
+    sites,
+    accounts,
+    accountTokens,
+    tokenRoutes,
+    routeChannels,
+    proxyLogs,
+    checkinLogs,
+    siteAnnouncements,
+    modelAvailability,
+    tokenModelAvailability,
+    downstreamApiKeys,
+  ] = await Promise.all([
     db.select().from(schema.sites).all(),
     db.select().from(schema.accounts).all(),
     db.select().from(schema.accountTokens).all(),
@@ -397,6 +495,10 @@ async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapsho
     db.select().from(schema.routeChannels).all(),
     db.select().from(schema.proxyLogs).all(),
     db.select().from(schema.checkinLogs).all(),
+    db.select().from(schema.siteAnnouncements).all(),
+    db.select().from(schema.modelAvailability).all(),
+    db.select().from(schema.tokenModelAvailability).all(),
+    db.select().from(schema.downstreamApiKeys).all(),
   ]);
 
   const siteKeyById = new Map<number, string>();
@@ -463,14 +565,46 @@ async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapsho
     });
   }
 
+  const downstreamApiKeyKeyById = new Map<number, string>();
+  const downstreamApiKeyIdByKey = new Map<string, number>();
+  const downstreamApiKeyRuntimeByKey = new Map<string, DownstreamApiKeyRuntimeSnapshot>();
+  for (const row of downstreamApiKeys) {
+    const key = asString(row.key);
+    if (!key) continue;
+    downstreamApiKeyKeyById.set(row.id, key);
+    downstreamApiKeyIdByKey.set(key, row.id);
+    downstreamApiKeyRuntimeByKey.set(key, {
+      usedCost: row.usedCost ?? 0,
+      usedRequests: row.usedRequests ?? 0,
+      lastUsedAt: row.lastUsedAt ?? null,
+    });
+  }
+
   return {
     accountRuntimeByKey,
     routeChannelRuntimeByKey,
+    siteAnnouncements: siteAnnouncements.map((row) => ({
+      ...row,
+      siteKey: siteKeyById.get(row.siteId) || null,
+    })),
+    nonManualAvailability: modelAvailability
+      .filter((row) => !row.isManual)
+      .map((row) => ({
+        ...row,
+        accountKey: accountKeyById.get(row.accountId) || null,
+      })),
+    tokenAvailability: tokenModelAvailability.map((row) => ({
+      ...row,
+      tokenKey: tokenKeyById.get(row.tokenId) || null,
+    })),
+    downstreamApiKeyRuntimeByKey,
+    downstreamApiKeyIdByKey,
     proxyLogs: proxyLogs.map((row) => ({
       ...row,
       accountKey: row.accountId ? (accountKeyById.get(row.accountId) || null) : null,
       routeKey: row.routeId ? (routeKeyById.get(row.routeId) || null) : null,
       channelKey: row.channelId ? (channelKeyById.get(row.channelId) || null) : null,
+      downstreamApiKeyKey: row.downstreamApiKeyId ? (downstreamApiKeyKeyById.get(row.downstreamApiKeyId) || null) : null,
     })),
     checkinLogs: checkinLogs.map((row) => ({
       ...row,
@@ -1192,20 +1326,69 @@ function isSettingValueAcceptable(key: string, value: unknown): boolean {
 }
 
 async function exportAccountsSection(): Promise<AccountsBackupSection> {
-  const sites = await db.select().from(schema.sites).orderBy(asc(schema.sites.id)).all();
-  const accounts = await db.select().from(schema.accounts).orderBy(asc(schema.accounts.id)).all();
-  const accountTokens = await db.select().from(schema.accountTokens).orderBy(asc(schema.accountTokens.id)).all();
-  const tokenRoutes = await db.select().from(schema.tokenRoutes).orderBy(asc(schema.tokenRoutes.id)).all();
-  const routeChannels = await db.select().from(schema.routeChannels).orderBy(asc(schema.routeChannels.id)).all();
-  const routeGroupSources = await db.select().from(schema.routeGroupSources).orderBy(asc(schema.routeGroupSources.id)).all();
-
-  return {
+  const [
     sites,
     accounts,
     accountTokens,
     tokenRoutes,
     routeChannels,
     routeGroupSources,
+    siteDisabledModels,
+    manualModels,
+    downstreamApiKeys,
+  ] = await Promise.all([
+    db.select().from(schema.sites).orderBy(asc(schema.sites.id)).all(),
+    db.select().from(schema.accounts).orderBy(asc(schema.accounts.id)).all(),
+    db.select().from(schema.accountTokens).orderBy(asc(schema.accountTokens.id)).all(),
+    db.select().from(schema.tokenRoutes).orderBy(asc(schema.tokenRoutes.id)).all(),
+    db.select().from(schema.routeChannels).orderBy(asc(schema.routeChannels.id)).all(),
+    db.select().from(schema.routeGroupSources).orderBy(asc(schema.routeGroupSources.id)).all(),
+    db.select().from(schema.siteDisabledModels)
+      .orderBy(asc(schema.siteDisabledModels.siteId), asc(schema.siteDisabledModels.modelName))
+      .all(),
+    db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.isManual, true))
+      .orderBy(asc(schema.modelAvailability.accountId), asc(schema.modelAvailability.modelName))
+      .all(),
+    db.select().from(schema.downstreamApiKeys).orderBy(asc(schema.downstreamApiKeys.id)).all(),
+  ]);
+
+  return {
+    sites,
+    accounts: accounts.map(({ balanceUsed: _balanceUsed, lastCheckinAt: _lastCheckinAt, lastBalanceRefresh: _lastBalanceRefresh, ...row }) => row),
+    accountTokens,
+    tokenRoutes,
+    routeChannels: routeChannels.map(({
+      successCount: _successCount,
+      failCount: _failCount,
+      totalLatencyMs: _totalLatencyMs,
+      totalCost: _totalCost,
+      lastUsedAt: _lastUsedAt,
+      lastSelectedAt: _lastSelectedAt,
+      lastFailAt: _lastFailAt,
+      consecutiveFailCount: _consecutiveFailCount,
+      cooldownLevel: _cooldownLevel,
+      cooldownUntil: _cooldownUntil,
+      ...row
+    }) => row),
+    routeGroupSources,
+    siteDisabledModels: siteDisabledModels.map((row) => ({
+      siteId: row.siteId,
+      modelName: row.modelName,
+    })),
+    manualModels: manualModels.map((row) => ({
+      accountId: row.accountId,
+      modelName: row.modelName,
+    })),
+    downstreamApiKeys: downstreamApiKeys.map(({
+      id: _id,
+      usedCost: _usedCost,
+      usedRequests: _usedRequests,
+      lastUsedAt: _lastUsedAt,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      ...row
+    }) => row),
   };
 }
 
@@ -1252,13 +1435,22 @@ function coerceAccountsSection(input: unknown): AccountsBackupSection | null {
   if (!isRecord(input)) return null;
 
   const sites = Array.isArray(input.sites) ? input.sites as SiteRow[] : null;
-  const accounts = Array.isArray(input.accounts) ? input.accounts as AccountRow[] : null;
+  const accounts = Array.isArray(input.accounts) ? input.accounts as BackupAccountRow[] : null;
   const accountTokens = Array.isArray(input.accountTokens) ? input.accountTokens as AccountTokenRow[] : null;
   const tokenRoutes = Array.isArray(input.tokenRoutes) ? input.tokenRoutes as TokenRouteRow[] : null;
-  const routeChannels = Array.isArray(input.routeChannels) ? input.routeChannels as RouteChannelRow[] : null;
+  const routeChannels = Array.isArray(input.routeChannels) ? input.routeChannels as BackupRouteChannelRow[] : null;
   const routeGroupSources = Array.isArray(input.routeGroupSources)
     ? input.routeGroupSources as RouteGroupSourceRow[]
     : [];
+  const siteDisabledModels = Array.isArray(input.siteDisabledModels)
+    ? input.siteDisabledModels as BackupSiteDisabledModelRow[]
+    : undefined;
+  const manualModels = Array.isArray(input.manualModels)
+    ? input.manualModels as BackupManualModelRow[]
+    : undefined;
+  const downstreamApiKeys = Array.isArray(input.downstreamApiKeys)
+    ? input.downstreamApiKeys as BackupDownstreamApiKeyRow[]
+    : undefined;
 
   if (!sites || !accounts || !accountTokens || !tokenRoutes || !routeChannels) return null;
 
@@ -1269,6 +1461,9 @@ function coerceAccountsSection(input: unknown): AccountsBackupSection | null {
     tokenRoutes,
     routeChannels,
     routeGroupSources,
+    siteDisabledModels,
+    manualModels,
+    downstreamApiKeys,
   };
 }
 
@@ -1347,8 +1542,14 @@ function detectImportMetadata(data: RawBackupData): {
 async function importAccountsSection(section: AccountsBackupSection): Promise<void> {
   const runtimeState = await collectCurrentRuntimeStateSnapshot();
   const importedIndexes = buildRuntimeIdentityIndexesFromSection(section);
+  const shouldReplaceSiteDisabledModels = Array.isArray(section.siteDisabledModels);
+  const shouldReplaceManualModels = Array.isArray(section.manualModels);
+  const shouldReplaceDownstreamApiKeys = Array.isArray(section.downstreamApiKeys);
 
   await db.transaction(async (tx) => {
+    if (shouldReplaceDownstreamApiKeys) {
+      await tx.delete(schema.downstreamApiKeys).run();
+    }
     await tx.delete(schema.proxyLogs).run();
     await tx.delete(schema.routeChannels).run();
     await tx.delete(schema.routeGroupSources).run();
@@ -1476,17 +1677,133 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
       }).run();
     }
 
+    if (shouldReplaceSiteDisabledModels) {
+      for (const row of section.siteDisabledModels || []) {
+        await tx.insert(schema.siteDisabledModels).values({
+          siteId: row.siteId,
+          modelName: row.modelName,
+        }).run();
+      }
+    }
+
+    const importedManualModelKeys = new Set<string>();
+    if (shouldReplaceManualModels) {
+      const checkedAt = new Date().toISOString();
+      for (const row of section.manualModels || []) {
+        const accountKey = importedIndexes.accountKeyById.get(row.accountId);
+        if (accountKey) {
+          importedManualModelKeys.add(buildModelAvailabilityIdentityKey(accountKey, row.modelName));
+        }
+        await tx.insert(schema.modelAvailability).values({
+          accountId: row.accountId,
+          modelName: row.modelName,
+          available: true,
+          isManual: true,
+          latencyMs: null,
+          checkedAt,
+        }).run();
+      }
+    }
+
+    for (const row of runtimeState.nonManualAvailability) {
+      if (!row.accountKey) continue;
+      const accountId = importedIndexes.accountIdByKey.get(row.accountKey);
+      if (!accountId) continue;
+      const modelKey = buildModelAvailabilityIdentityKey(row.accountKey, row.modelName);
+      if (importedManualModelKeys.has(modelKey)) continue;
+
+      await tx.insert(schema.modelAvailability).values({
+        accountId,
+        modelName: row.modelName,
+        available: row.available,
+        isManual: false,
+        latencyMs: row.latencyMs ?? null,
+        checkedAt: row.checkedAt,
+      }).run();
+    }
+
+    for (const row of runtimeState.tokenAvailability) {
+      if (!row.tokenKey) continue;
+      const tokenId = importedIndexes.tokenIdByKey.get(row.tokenKey);
+      if (!tokenId) continue;
+
+      await tx.insert(schema.tokenModelAvailability).values({
+        tokenId,
+        modelName: row.modelName,
+        available: row.available,
+        latencyMs: row.latencyMs ?? null,
+        checkedAt: row.checkedAt,
+      }).run();
+    }
+
+    for (const row of runtimeState.siteAnnouncements) {
+      if (!row.siteKey) continue;
+      const siteId = importedIndexes.siteIdByKey.get(row.siteKey);
+      if (!siteId) continue;
+
+      await tx.insert(schema.siteAnnouncements).values({
+        siteId,
+        platform: row.platform,
+        sourceKey: row.sourceKey,
+        title: row.title,
+        content: row.content,
+        level: row.level,
+        sourceUrl: row.sourceUrl ?? null,
+        startsAt: row.startsAt ?? null,
+        endsAt: row.endsAt ?? null,
+        upstreamCreatedAt: row.upstreamCreatedAt ?? null,
+        upstreamUpdatedAt: row.upstreamUpdatedAt ?? null,
+        firstSeenAt: row.firstSeenAt ?? null,
+        lastSeenAt: row.lastSeenAt ?? null,
+        readAt: row.readAt ?? null,
+        dismissedAt: row.dismissedAt ?? null,
+        rawPayload: row.rawPayload ?? null,
+      }).run();
+    }
+
+    const downstreamApiKeyIdByKey = shouldReplaceDownstreamApiKeys
+      ? new Map<string, number>()
+      : new Map(runtimeState.downstreamApiKeyIdByKey);
+    if (shouldReplaceDownstreamApiKeys) {
+      for (const row of section.downstreamApiKeys || []) {
+        const normalizedKey = asString(row.key);
+        if (!normalizedKey) continue;
+        const runtimeDownstream = runtimeState.downstreamApiKeyRuntimeByKey.get(normalizedKey);
+        const insertedKey = await tx.insert(schema.downstreamApiKeys).values({
+          name: row.name,
+          key: normalizedKey,
+          description: row.description ?? null,
+          groupName: row.groupName ?? null,
+          tags: row.tags ?? null,
+          enabled: row.enabled ?? true,
+          expiresAt: row.expiresAt ?? null,
+          maxCost: row.maxCost ?? null,
+          usedCost: runtimeDownstream?.usedCost ?? row.usedCost ?? 0,
+          maxRequests: row.maxRequests ?? null,
+          usedRequests: runtimeDownstream?.usedRequests ?? row.usedRequests ?? 0,
+          supportedModels: row.supportedModels ?? null,
+          allowedRouteIds: row.allowedRouteIds ?? null,
+          siteWeightMultipliers: row.siteWeightMultipliers ?? null,
+          lastUsedAt: runtimeDownstream?.lastUsedAt ?? row.lastUsedAt ?? null,
+        }).returning({ id: schema.downstreamApiKeys.id }).get();
+        downstreamApiKeyIdByKey.set(normalizedKey, insertedKey.id);
+      }
+    }
+
     for (const row of runtimeState.proxyLogs) {
       const accountId = row.accountKey ? (importedIndexes.accountIdByKey.get(row.accountKey) ?? null) : null;
       const routeId = row.routeKey ? (importedIndexes.routeIdByKey.get(row.routeKey) ?? null) : null;
       const channelId = row.channelKey ? (importedIndexes.channelIdByKey.get(row.channelKey) ?? null) : null;
+      const downstreamApiKeyId = row.downstreamApiKeyKey
+        ? (downstreamApiKeyIdByKey.get(row.downstreamApiKeyKey) ?? null)
+        : null;
 
       await tx.insert(schema.proxyLogs).values({
         id: row.id,
         routeId,
         channelId,
         accountId,
-        downstreamApiKeyId: row.downstreamApiKeyId ?? null,
+        downstreamApiKeyId,
         modelRequested: row.modelRequested ?? null,
         modelActual: row.modelActual ?? null,
         status: row.status ?? null,
