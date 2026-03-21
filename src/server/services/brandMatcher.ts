@@ -1,18 +1,15 @@
 /**
  * Server-side brand matching for global brand filtering.
  *
- * Matching semantics are aligned with the frontend BrandIcon.tsx BRAND_DEFINITIONS:
- * - `includes`: substring match (e.g. 'claude' matches 'claude-3-opus')
- * - `startsWith`: segment-level startsWith (e.g. 'gpt' matches 'gpt-4o' but not 'some-gpt')
- * - `segment`: exact segment match after splitting on /:-_ delimiters
- * - `boundary`: word-boundary regex match
+ * Context-building logic is ported from the frontend BrandIcon.tsx
+ * (collectBrandCandidates + buildMatchContext) to ensure identical
+ * matching behavior between route display and rebuild filtering.
  */
 
 type MatchMode = 'includes' | 'startsWith' | 'segment' | 'boundary';
 type KeywordRule = { keyword: string; mode: MatchMode };
 
 const BRAND_RULES: Record<string, KeywordRule[]> = {
-  // OpenAI: all startsWithAny in frontend
   'OpenAI': [
     { keyword: 'gpt', mode: 'startsWith' },
     { keyword: 'chatgpt', mode: 'startsWith' },
@@ -28,11 +25,9 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
     { keyword: 'o4', mode: 'startsWith' },
     { keyword: 'tts', mode: 'startsWith' },
   ],
-  // Anthropic: includesAny
   'Anthropic': [
     { keyword: 'claude', mode: 'includes' },
   ],
-  // Google: includesAny + startsWithAny for veo/google/
   'Google': [
     { keyword: 'gemini', mode: 'includes' },
     { keyword: 'gemma', mode: 'includes' },
@@ -48,7 +43,6 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
     { keyword: 'aqa', mode: 'includes' },
     { keyword: 'veo', mode: 'startsWith' },
   ],
-  // DeepSeek: includesAny + hasExactSegment
   'DeepSeek': [
     { keyword: 'deepseek', mode: 'includes' },
     { keyword: 'ds-chat', mode: 'segment' },
@@ -83,7 +77,6 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
     { keyword: 'moonshot', mode: 'includes' },
     { keyword: 'kimi', mode: 'includes' },
   ],
-  // 零一万物: startsWithAny('yi-') + matchesBoundary
   '零一万物': [
     { keyword: 'yi-', mode: 'startsWith' },
     { keyword: 'yi', mode: 'boundary' },
@@ -103,19 +96,16 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
   '豆包': [
     { keyword: 'doubao', mode: 'includes' },
   ],
-  // MiniMax: includesAny + hasExactSegment
   'MiniMax': [
     { keyword: 'minimax', mode: 'includes' },
     { keyword: 'abab', mode: 'includes' },
     { keyword: 'mini2.1', mode: 'segment' },
   ],
-  // Cohere: includesAny + startsWithAny('embed-')
   'Cohere': [
     { keyword: 'command', mode: 'includes' },
     { keyword: 'c4ai-', mode: 'includes' },
     { keyword: 'embed-', mode: 'startsWith' },
   ],
-  // Microsoft: includesAny + hasExactSegment('phi4')
   'Microsoft': [
     { keyword: 'microsoft/', mode: 'includes' },
     { keyword: 'phi-', mode: 'includes' },
@@ -125,13 +115,11 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
   'xAI': [
     { keyword: 'grok', mode: 'includes' },
   ],
-  // 阶跃星辰: includesAny('stepfun') + startsWithAny('step-', 'step3')
   '阶跃星辰': [
     { keyword: 'stepfun', mode: 'includes' },
     { keyword: 'step-', mode: 'startsWith' },
     { keyword: 'step3', mode: 'startsWith' },
   ],
-  // Stability: includesAny + startsWithAny('sd3')
   'Stability': [
     { keyword: 'flux', mode: 'includes' },
     { keyword: 'stablediffusion', mode: 'includes' },
@@ -139,7 +127,6 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
     { keyword: 'sdxl', mode: 'includes' },
     { keyword: 'sd3', mode: 'startsWith' },
   ],
-  // NVIDIA: includesAny + startsWithAny('nv-')
   'NVIDIA': [
     { keyword: 'nvidia/', mode: 'includes' },
     { keyword: 'nvclip', mode: 'includes' },
@@ -158,7 +145,6 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
     { keyword: 'baai/', mode: 'includes' },
     { keyword: 'bge-', mode: 'includes' },
   ],
-  // ByteDance: includesAny + startsWithAny('wan-', 'kat-')
   'ByteDance': [
     { keyword: 'bytedance', mode: 'includes' },
     { keyword: 'seed-oss', mode: 'includes' },
@@ -171,12 +157,10 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
   'InternLM': [
     { keyword: 'internlm', mode: 'includes' },
   ],
-  // Midjourney: includesAny + startsWithAny('mj_')
   'Midjourney': [
     { keyword: 'midjourney', mode: 'includes' },
     { keyword: 'mj_', mode: 'startsWith' },
   ],
-  // DeepL: startsWithAny('deepl-') + includesAny('deepl/')
   'DeepL': [
     { keyword: 'deepl/', mode: 'includes' },
     { keyword: 'deepl-', mode: 'startsWith' },
@@ -186,16 +170,92 @@ const BRAND_RULES: Record<string, KeywordRule[]> = {
   ],
 };
 
+// ── Context building (ported from frontend BrandIcon.tsx) ──
+
+function stripCommonWrappers(value: string): string {
+  return value
+    .replace(/^(?:\[[^\]]+\]|【[^】]+】)\s*/g, '')
+    .replace(/^re:\s*/g, '')
+    .replace(/^\^+/, '')
+    .replace(/\$+$/, '')
+    .trim();
+}
+
 /**
- * Get all available brand names.
+ * Recursively split model name on `/`, `:`, `,` to build all candidate strings.
+ * Mirrors the frontend collectBrandCandidates exactly.
  */
+function collectCandidates(modelName: string): string[] {
+  const queue: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: string) => {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    queue.push(normalized);
+  };
+
+  push(modelName);
+
+  for (let i = 0; i < queue.length; i++) {
+    const candidate = queue[i]!;
+    const cleaned = stripCommonWrappers(candidate);
+    push(cleaned);
+    if (cleaned.includes('/')) for (const part of cleaned.split('/')) push(part);
+    if (cleaned.includes(':')) for (const part of cleaned.split(':')) push(part);
+    if (cleaned.includes(',')) for (const part of cleaned.split(',')) push(part);
+  }
+
+  return queue;
+}
+
+type MatchContext = {
+  raw: string;       // first candidate (normalized full name)
+  candidates: string[];  // all candidates from recursive splitting
+  segments: string[];    // candidates split on /,:,\s (NOT on - or _)
+};
+
+function buildMatchContext(modelName: string): MatchContext {
+  const candidates = collectCandidates(modelName);
+  const raw = candidates[0] || modelName.trim().toLowerCase();
+  // Segments split on /,:,whitespace only — NOT on - or _ (matches frontend)
+  const segments = Array.from(new Set(
+    candidates
+      .flatMap((c) => c.split(/[/:,\s]+/g))
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ));
+  return { raw, candidates, segments };
+}
+
+// ── Matching functions (mirror frontend includesAny / startsWithAny / hasExactSegment / matchesBoundary) ──
+
+function matchesRule(ctx: MatchContext, rule: KeywordRule): boolean {
+  switch (rule.mode) {
+    case 'includes':
+      return ctx.raw.includes(rule.keyword)
+        || ctx.candidates.some((c) => c.includes(rule.keyword));
+    case 'startsWith':
+      return ctx.raw.startsWith(rule.keyword)
+        || ctx.segments.some((s) => s.startsWith(rule.keyword))
+        || ctx.candidates.some((c) => c.startsWith(rule.keyword));
+    case 'segment':
+      return ctx.segments.includes(rule.keyword);
+    case 'boundary': {
+      const pattern = new RegExp(`(^|[^a-z0-9])${rule.keyword}(?=$|[^a-z0-9])`);
+      return pattern.test(ctx.raw) || ctx.candidates.some((c) => pattern.test(c));
+    }
+    default:
+      return false;
+  }
+}
+
+// ── Public API ──
+
 export function getAllBrandNames(): string[] {
   return Object.keys(BRAND_RULES);
 }
 
-/**
- * Collect the rules for the blocked brands.
- */
 export function getBlockedBrandRules(blockedBrands: string[]): KeywordRule[] {
   const rules: KeywordRule[] = [];
   for (const brand of blockedBrands) {
@@ -205,40 +265,9 @@ export function getBlockedBrandRules(blockedBrands: string[]): KeywordRule[] {
   return rules;
 }
 
-/**
- * Split model name into segments (matching the frontend's segment logic).
- */
-function getSegments(lower: string): string[] {
-  return lower.split(/[/:,\s_\-]+/g).filter(Boolean);
-}
-
-/**
- * Check if a model name matches a single keyword rule.
- */
-function matchesRule(lower: string, segments: string[], rule: KeywordRule): boolean {
-  switch (rule.mode) {
-    case 'includes':
-      return lower.includes(rule.keyword);
-    case 'startsWith':
-      // Match if any segment starts with the keyword, or the full name starts with it
-      return lower.startsWith(rule.keyword) || segments.some((seg) => seg.startsWith(rule.keyword));
-    case 'segment':
-      return segments.includes(rule.keyword);
-    case 'boundary': {
-      const pattern = new RegExp(`(^|[^a-z0-9])${rule.keyword}(?=$|[^a-z0-9])`);
-      return pattern.test(lower);
-    }
-    default:
-      return false;
-  }
-}
-
-/**
- * Check if a model name matches any of the blocked brand rules.
- */
 export function isModelBlockedByBrand(modelName: string, rules: KeywordRule[]): boolean {
-  const lower = modelName.trim().toLowerCase();
-  if (!lower || rules.length === 0) return false;
-  const segments = getSegments(lower);
-  return rules.some((rule) => matchesRule(lower, segments, rule));
+  if (!modelName || rules.length === 0) return false;
+  const ctx = buildMatchContext(modelName);
+  if (!ctx.raw) return false;
+  return rules.some((rule) => matchesRule(ctx, rule));
 }

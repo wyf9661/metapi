@@ -220,7 +220,6 @@ export default function Sites() {
   const highlightTimerRef = useRef<number | null>(null);
   const toast = useToast();
   const [disabledModels, setDisabledModels] = useState<string[]>([]);
-  const [disabledModelInput, setDisabledModelInput] = useState('');
   const [disabledModelsLoading, setDisabledModelsLoading] = useState(false);
   const [disabledModelsSaving, setDisabledModelsSaving] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -357,7 +356,6 @@ export default function Sites() {
     // Load disabled models and available models for this site
     setDisabledModelsLoading(true);
     setDisabledModels([]);
-    setDisabledModelInput('');
     setAvailableModels([]);
     setDisabledModelSearch('');
     Promise.all([
@@ -370,22 +368,6 @@ export default function Sites() {
       })
       .catch(() => { })
       .finally(() => setDisabledModelsLoading(false));
-  };
-
-  const handleAddDisabledModel = () => {
-    const model = disabledModelInput.trim();
-    if (!model) return;
-    if (disabledModelSet.has(model)) {
-      toast.info(`模型 "${model}" 已在禁用列表中`);
-      setDisabledModelInput('');
-      return;
-    }
-    setDisabledModels((prev) => [...prev, model]);
-    setDisabledModelInput('');
-  };
-
-  const handleRemoveDisabledModel = (model: string) => {
-    setDisabledModels((prev) => prev.filter((m) => m !== model));
   };
 
   const handleSaveDisabledModels = async () => {
@@ -1039,57 +1021,6 @@ export default function Sites() {
                       </div>
                     )}
 
-                    {/* Manually disabled models not in available list */}
-                    {(() => {
-                      const availableSet = new Set(availableModels);
-                      const manualOnly = disabledModels.filter((m) => !availableSet.has(m));
-                      if (manualOnly.length === 0) return null;
-                      return (
-                        <div style={{ marginBottom: 10 }}>
-                          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>手动添加的禁用模型（不在站点已发现列表中）：</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {manualOnly.map((model) => (
-                              <span
-                                key={model}
-                                className="badge badge-muted"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px' }}
-                              >
-                                {model}
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveDisabledModel(model)}
-                                  style={{
-                                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                                    fontSize: 13, lineHeight: 1, color: 'var(--color-text-muted)',
-                                  }}
-                                  title={`移除 ${model}`}
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Manual input for models not in the list */}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        placeholder="手动输入模型名称，如 gpt-4o"
-                        value={disabledModelInput}
-                        onChange={(e) => setDisabledModelInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDisabledModel(); } }}
-                        style={{
-                          flex: 1, padding: '8px 12px', border: '1px solid var(--color-border)',
-                          borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
-                          background: 'var(--color-bg)', color: 'var(--color-text-primary)',
-                        }}
-                      />
-                      <button onClick={handleAddDisabledModel} className="btn btn-ghost" style={{ padding: '8px 14px', fontSize: 12, border: '1px solid var(--color-border)' }}>
-                        添加
-                      </button>
-                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
                       <button
                         onClick={handleSaveDisabledModels}
