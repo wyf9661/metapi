@@ -1542,32 +1542,60 @@ export function buildClaudeCountTokensUpstreamRequest(input: {
   delete sanitizedBody.maxTokens;
   delete sanitizedBody.stream;
   const providerProfile = resolveProviderProfile(sitePlatform);
-  if (providerProfile?.id !== 'claude') {
-    throw new Error(`missing claude provider profile for platform: ${sitePlatform || 'unknown'}`);
+  const effectiveClaudeHeaders = {
+    ...claudeHeaders,
+    ...(betas.length > 0 ? { 'anthropic-beta': betas.join(',') } : {}),
+  };
+
+  if (providerProfile?.id === 'claude') {
+    const prepared = providerProfile.prepareRequest({
+      endpoint: 'messages',
+      modelName: input.modelName,
+      stream: false,
+      tokenValue: input.tokenValue,
+      oauthProvider: input.oauthProvider,
+      sitePlatform,
+      baseHeaders: {
+        'Content-Type': 'application/json',
+      },
+      claudeHeaders: effectiveClaudeHeaders,
+      body: sanitizedBody,
+      action: 'countTokens',
+    });
+
+    return {
+      path: prepared.path,
+      headers: prepared.headers,
+      body: prepared.body,
+      runtime: {
+        executor: 'claude',
+        modelName: input.modelName,
+        stream: false,
+        action: 'countTokens',
+      },
+    };
   }
 
-  const prepared = providerProfile.prepareRequest({
-    endpoint: 'messages',
-    modelName: input.modelName,
-    stream: false,
-    tokenValue: input.tokenValue,
-    oauthProvider: input.oauthProvider,
-    sitePlatform,
+  const anthropicVersion = (
+    effectiveClaudeHeaders['anthropic-version']
+    || '2023-06-01'
+  );
+  const isClaudeOauthUpstream = sitePlatform === 'claude' && input.oauthProvider === 'claude';
+  const headers = buildClaudeRuntimeHeaders({
     baseHeaders: {
       'Content-Type': 'application/json',
     },
-    claudeHeaders: {
-      ...claudeHeaders,
-      ...(betas.length > 0 ? { 'anthropic-beta': betas.join(',') } : {}),
-    },
-    body: sanitizedBody,
-    action: 'countTokens',
+    claudeHeaders: effectiveClaudeHeaders,
+    anthropicVersion,
+    stream: false,
+    isClaudeOauthUpstream,
+    tokenValue: input.tokenValue,
   });
 
   return {
-    path: prepared.path,
-    headers: prepared.headers,
-    body: prepared.body,
+    path: '/v1/messages/count_tokens?beta=true',
+    headers,
+    body: sanitizedBody,
     runtime: {
       executor: 'claude',
       modelName: input.modelName,

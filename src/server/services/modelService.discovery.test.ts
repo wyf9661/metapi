@@ -537,6 +537,78 @@ describe('refreshModelsForAccount credential discovery', () => {
     ]);
   });
 
+  it('discovers Claude OAuth models from the upstream /v1/models response', async () => {
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockRejectedValue(new Error('claude oauth discovery should not call adapter.getModels'));
+    undiciFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [
+          { id: 'claude-3-7-sonnet-latest' },
+          { id: 'claude-opus-4-1-20250805' },
+        ],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'claude-site',
+      url: 'https://api.anthropic.com',
+      platform: 'claude',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'claude-user@example.com',
+      accessToken: 'claude-oauth-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'claude',
+          email: 'claude-user@example.com',
+          accountKey: 'claude-user@example.com',
+        },
+      }),
+    }).returning().get();
+
+    const result = await refreshModelsForAccount(account.id);
+
+    expect(result).toMatchObject({
+      accountId: account.id,
+      refreshed: true,
+      status: 'success',
+      errorCode: null,
+      tokenScanned: 0,
+      discoveredByCredential: true,
+      discoveredApiToken: false,
+      modelCount: 2,
+      modelsPreview: ['claude-3-7-sonnet-latest', 'claude-opus-4-1-20250805'],
+    });
+    expect(getModelsMock).not.toHaveBeenCalled();
+    expect(undiciFetchMock).toHaveBeenCalledTimes(1);
+    expect(String(undiciFetchMock.mock.calls[0]?.[0] || '')).toBe('https://api.anthropic.com/v1/models');
+    expect(undiciFetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: 'GET',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer claude-oauth-token',
+        Accept: 'application/json',
+        'anthropic-version': '2023-06-01',
+      }),
+    });
+
+    const rows = await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, account.id))
+      .all();
+    expect(rows.map((row) => row.modelName).sort()).toEqual([
+      'claude-3-7-sonnet-latest',
+      'claude-opus-4-1-20250805',
+    ]);
+  });
+
   it('marks codex oauth account abnormal when upstream cloud discovery fails', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockRejectedValue(new Error('codex plan discovery should not call adapter.getModels'));
