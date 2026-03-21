@@ -142,6 +142,38 @@ function headerMatchesPrefixes(headers: NormalizedClientHeaders, key: string, pr
   return prefixes.some((prefix) => headerIncludes(headers, key, prefix));
 }
 
+function normalizeClientDisplayName(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.length <= 120 ? trimmed : trimmed.slice(0, 120).trim() || null;
+}
+
+function normalizeClientAppId(value: string): string | null {
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
+function parseExplicitClientSelfReportValue(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (isRecord(parsed)) {
+      for (const key of ['client', 'name', 'app']) {
+        const raw = parsed[key];
+        if (typeof raw !== 'string') continue;
+        const normalized = normalizeClientDisplayName(raw);
+        if (normalized) return normalized;
+      }
+    }
+  } catch {
+    return normalizeClientDisplayName(trimmed);
+  }
+
+  return null;
+}
+
 function buildBodySummary(body: unknown): DownstreamClientBodySummary {
   if (!isRecord(body)) {
     return {
@@ -220,6 +252,20 @@ function detectDownstreamClientFingerprint(input: {
   };
 }
 
+function detectExplicitClientSelfReport(headers: NormalizedClientHeaders): DownstreamProtocolClientApp | null {
+  for (const value of headers['x-openai-client-user-agent'] || []) {
+    const clientAppName = parseExplicitClientSelfReportValue(value);
+    if (!clientAppName) continue;
+    return {
+      clientAppId: normalizeClientAppId(clientAppName) || 'self_reported_client',
+      clientAppName,
+      clientConfidence: 'exact',
+    };
+  }
+
+  return null;
+}
+
 function detectCodexOfficialClientApp(headers: NormalizedClientHeaders): DownstreamProtocolClientApp | null {
   for (const rule of codexOfficialClientAppRules) {
     const matchesOriginator = Array.isArray(rule.originatorPrefixes)
@@ -283,8 +329,10 @@ export function detectDownstreamClientContext(input: {
   body?: unknown;
 }): DownstreamClientContext {
   const detected = detectCliProfile(input);
+  const normalizedHeaders = normalizeHeaders(input.headers);
+  const explicitSelfReport = detectExplicitClientSelfReport(normalizedHeaders);
   const fingerprint = detectDownstreamClientFingerprint(input);
-  const protocolClientApp = fingerprint ? null : detectProtocolClientApp({
+  const protocolClientApp = fingerprint || explicitSelfReport ? null : detectProtocolClientApp({
     clientKind: detected.id,
     headers: input.headers,
   });
@@ -292,6 +340,6 @@ export function detectDownstreamClientContext(input: {
     clientKind: detected.id,
     ...(detected.sessionId ? { sessionId: detected.sessionId } : {}),
     ...(detected.traceHint ? { traceHint: detected.traceHint } : {}),
-    ...(fingerprint || protocolClientApp || {}),
+    ...(explicitSelfReport || fingerprint || protocolClientApp || {}),
   };
 }
