@@ -314,6 +314,44 @@ describe('downstream api keys routes', () => {
     });
   });
 
+  it('rejects duplicate key update with conflict status', async () => {
+    const firstRes = await app.inject({
+      method: 'POST',
+      url: '/api/downstream-keys',
+      payload: {
+        name: 'dup-a',
+        key: 'sk-dup-key-001',
+      },
+    });
+    expect(firstRes.statusCode).toBe(200);
+
+    const secondRes = await app.inject({
+      method: 'POST',
+      url: '/api/downstream-keys',
+      payload: {
+        name: 'dup-b',
+        key: 'sk-dup-key-002',
+      },
+    });
+    expect(secondRes.statusCode).toBe(200);
+
+    const secondId = secondRes.json().item.id as number;
+    const duplicateUpdateRes = await app.inject({
+      method: 'PUT',
+      url: `/api/downstream-keys/${secondId}`,
+      payload: {
+        name: 'dup-b-updated',
+        key: 'sk-dup-key-001',
+      },
+    });
+
+    expect(duplicateUpdateRes.statusCode).toBe(409);
+    expect(duplicateUpdateRes.json()).toMatchObject({
+      success: false,
+      message: 'API key 已存在',
+    });
+  });
+
   it('returns summary, overview and trend aggregated from proxy logs', async () => {
     const inserted = await db.insert(schema.downstreamApiKeys).values({
       name: 'analytics-key',
