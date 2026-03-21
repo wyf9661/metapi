@@ -156,4 +156,44 @@ describe('claude count_tokens proxy route', () => {
       },
     ]);
   });
+
+  it('supports /v1/messages/count_tokens for openai-platform gateways that expose Claude messages endpoints', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 12, routeId: 23 },
+      site: { name: 'gateway-site', url: 'https://gateway.example.com', platform: 'openai' },
+      account: { id: 34, username: 'gateway-user@example.com' },
+      tokenName: 'default',
+      tokenValue: 'sk-gateway',
+      actualModel: 'claude-sonnet-4-5-20250929',
+    });
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      input_tokens: 9,
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/messages/count_tokens',
+      payload: {
+        model: 'claude-sonnet-4-5-20250929',
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'count through a compatible gateway' }],
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ input_tokens: 9 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [targetUrl, options] = fetchMock.mock.calls[0] as [string, any];
+    expect(targetUrl).toBe('https://gateway.example.com/v1/messages/count_tokens?beta=true');
+    expect(options.headers['x-api-key']).toBe('sk-gateway');
+    expect(options.headers['anthropic-version']).toBe('2023-06-01');
+  });
 });

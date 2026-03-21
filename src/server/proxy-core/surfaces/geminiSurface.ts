@@ -9,6 +9,7 @@ import { isModelAllowedByPolicyOrAllowedRoutes } from '../../services/downstream
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
 import { getOauthInfoFromExtraConfig } from '../../services/oauth/oauthAccount.js';
+import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
 import { getDownstreamRoutingPolicy } from '../../routes/proxy/downstreamPolicy.js';
@@ -367,6 +368,11 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     const isCountTokensAction = isGeminiCliDownstream
       ? options?.action === 'countTokens'
       : modelActionPath.endsWith(':countTokens');
+    const rawUrl = request.raw.url || request.url || '';
+    const wantsSseEnvelope = (
+      isStreamAction
+      && (isGeminiCliDownstream || /(?:^|[?&])alt=sse(?:&|$)/i.test(rawUrl))
+    );
     if (!requestedModel) {
       return reply.code(400).send({
         error: { message: 'Gemini model path is required', type: 'invalid_request_error' },
@@ -401,7 +407,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         isGeminiCliDownstream ? omitGeminiCliModelField(request.body) : (request.body || {}),
         actualModel,
       );
-      const oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
+      let oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
       const isGeminiCli = isGeminiCliPlatform(selected.site.platform);
       const isInternalGemini = isInternalGeminiPlatform(selected.site.platform);
       const isDirectGeminiFamily = isDirectGeminiFamilyPlatform(selected.site.platform);
@@ -438,71 +444,92 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             ? buildGeminiCliActionPath({ isStreamAction, isCountTokensAction })
             : resolveUpstreamPath(apiVersion, actualModelAction);
           const query = new URLSearchParams(request.query as Record<string, string>).toString();
-          const requestBody = isInternalGemini
-            ? (
-              isCountTokensAction
-                ? { request: normalizedBody }
-                : wrapGeminiCliRequest({
-                  modelName: actualModel,
-                  projectId: oauth?.projectId || '',
-                  request: normalizedBody as Record<string, unknown>,
-                })
-            )
-            : normalizedBody;
-          const requestHeaders = isInternalGemini
-            ? {
-              'Content-Type': 'application/json',
-              ...(isStreamAction ? { Accept: 'text/event-stream' } : {}),
-              Authorization: `Bearer ${selected.tokenValue}`,
-              ...buildOauthProviderHeaders({
-                extraConfig: typeof selected.account.extraConfig === 'string' ? selected.account.extraConfig : null,
-                downstreamHeaders: request.headers as Record<string, unknown>,
-              }),
-            }
-            : {
-              'Content-Type': 'application/json',
-            };
-          const targetUrl = isInternalGemini
-            ? `${selected.site.url}${upstreamPath}`
-            : geminiGenerateContentTransformer.resolveActionUrl(
-              selected.site.url,
-              apiVersion,
-              actualModelAction,
-              selected.tokenValue,
-              query,
-            );
           const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
-          const upstream = isInternalGemini
-            ? await dispatchRuntimeRequest({
-              siteUrl: selected.site.url,
-              targetUrl,
-              request: {
-                endpoint: 'chat',
-                path: upstreamPath,
-                headers: requestHeaders,
-                body: requestBody as Record<string, unknown>,
-                runtime: {
-                  executor: isGeminiCli ? 'gemini-cli' : 'antigravity',
-                  modelName: actualModel,
-                  stream: isStreamAction,
-                  oauthProjectId: oauth?.projectId || null,
-                  action: isCountTokensAction
-                    ? 'countTokens'
-                    : (isStreamAction ? 'streamGenerateContent' : 'generateContent'),
+          const dispatchSelectedRequest = async () => {
+            const requestBody = isInternalGemini
+              ? (
+                isCountTokensAction
+                  ? { request: normalizedBody }
+                  : wrapGeminiCliRequest({
+                    modelName: actualModel,
+                    projectId: oauth?.projectId || '',
+                    request: normalizedBody as Record<string, unknown>,
+                  })
+              )
+              : normalizedBody;
+            const requestHeaders = isInternalGemini
+              ? {
+                'Content-Type': 'application/json',
+                ...(isStreamAction ? { Accept: 'text/event-stream' } : {}),
+                Authorization: `Bearer ${selected.tokenValue}`,
+                ...buildOauthProviderHeaders({
+                  extraConfig: typeof selected.account.extraConfig === 'string' ? selected.account.extraConfig : null,
+                  downstreamHeaders: request.headers as Record<string, unknown>,
+                }),
+              }
+              : {
+                'Content-Type': 'application/json',
+              };
+            const targetUrl = isInternalGemini
+              ? `${selected.site.url}${upstreamPath}`
+              : geminiGenerateContentTransformer.resolveActionUrl(
+                selected.site.url,
+                apiVersion,
+                actualModelAction,
+                selected.tokenValue,
+                query,
+              );
+
+            return isInternalGemini
+              ? dispatchRuntimeRequest({
+                siteUrl: selected.site.url,
+                targetUrl,
+                request: {
+                  endpoint: 'chat',
+                  path: upstreamPath,
+                  headers: requestHeaders,
+                  body: requestBody as Record<string, unknown>,
+                  runtime: {
+                    executor: isGeminiCli ? 'gemini-cli' : 'antigravity',
+                    modelName: actualModel,
+                    stream: isStreamAction,
+                    oauthProjectId: oauth?.projectId || null,
+                    action: isCountTokensAction
+                      ? 'countTokens'
+                      : (isStreamAction ? 'streamGenerateContent' : 'generateContent'),
+                  },
                 },
-              },
-              buildInit: async (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
+                buildInit: async (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
+                  method: 'POST',
+                  headers: requestForFetch.headers,
+                  body: JSON.stringify(requestForFetch.body),
+                }, channelProxyUrl),
+              })
+              : fetch(targetUrl, {
                 method: 'POST',
-                headers: requestForFetch.headers,
-                body: JSON.stringify(requestForFetch.body),
-              }, channelProxyUrl),
-            })
-            : await fetch(targetUrl, {
-              method: 'POST',
-              headers: requestHeaders,
-              body: JSON.stringify(requestBody),
-            });
-          const contentType = upstream.headers.get('content-type') || 'application/json';
+                headers: requestHeaders,
+                body: JSON.stringify(requestBody),
+              });
+          };
+
+          let upstream = await dispatchSelectedRequest();
+          let contentType = upstream.headers.get('content-type') || 'application/json';
+          if (upstream.status === 401 && oauth) {
+            try {
+              const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
+              selected.tokenValue = refreshed.accessToken;
+              selected.account = {
+                ...selected.account,
+                accessToken: refreshed.accessToken,
+                extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
+              };
+              oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
+              upstream = await dispatchSelectedRequest();
+              contentType = upstream.headers.get('content-type') || 'application/json';
+            } catch {
+              // Preserve the original 401 response when refresh fails.
+            }
+          }
           if (!upstream.ok) {
             lastStatus = upstream.status;
             lastContentType = contentType;
@@ -857,11 +884,18 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           parsedUsage.completionTokens,
           parsedUsage.totalTokens,
         );
-        return reply.code(upstream.status).send(
-          isGeminiCliDownstream
-            ? { response: geminiResponse }
-            : geminiResponse,
-        );
+        const downstreamPayload = isGeminiCliDownstream
+          ? { response: geminiResponse }
+          : geminiResponse;
+        if (wantsSseEnvelope) {
+          // Some compatibility upstreams finish stream requests with a final JSON payload.
+          // Preserve Gemini streaming UX by wrapping that terminal payload back into one SSE event.
+          return reply
+            .code(upstream.status)
+            .type('text/event-stream; charset=utf-8')
+            .send(geminiGenerateContentTransformer.stream.serializeSsePayload(downstreamPayload));
+        }
+        return reply.code(upstream.status).send(downstreamPayload);
       } catch (error) {
         lastStatus = 502;
         lastContentType = 'application/json';

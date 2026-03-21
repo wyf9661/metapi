@@ -869,7 +869,17 @@ export async function handleClaudeCountTokensSurfaceRequest(
     }
 
     excludeChannelIds.push(selected.channel.id);
-    if (String(selected.site.platform || '').trim().toLowerCase() !== 'claude') {
+    const modelName = selected.actualModel || requestedModel;
+    const endpointCandidates = await resolveUpstreamEndpointCandidates(
+      {
+        site: selected.site,
+        account: selected.account,
+      },
+      modelName,
+      'claude',
+      requestedModel,
+    );
+    if (!endpointCandidates.includes('messages')) {
       if (retryCount < MAX_RETRIES) {
         retryCount += 1;
         continue;
@@ -881,8 +891,6 @@ export async function handleClaudeCountTokensSurfaceRequest(
         },
       });
     }
-
-    const modelName = selected.actualModel || requestedModel;
     const oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
     const startTime = Date.now();
 

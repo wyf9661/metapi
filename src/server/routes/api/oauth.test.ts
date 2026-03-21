@@ -1058,6 +1058,168 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(String(fetchMock.mock.calls[7]?.[0] || '')).toContain('/projects/gen-lang-client-0123456789/services/cloudaicompanion.googleapis.com');
   });
 
+  it('surfaces Cloud AI API enable failures during Gemini CLI oauth setup and keeps the account rolled back', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'gemini-access-token',
+          refresh_token: 'gemini-refresh-token',
+          expires_in: 3600,
+          token_type: 'Bearer',
+          scope: 'cloud-platform',
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          projects: [
+            { projectId: 'project-enable-failure' },
+          ],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          cloudaicompanionProject: {
+            id: 'project-enable-failure',
+          },
+          allowedTiers: [
+            { id: 'legacy-tier', isDefault: true },
+          ],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          done: true,
+          response: {
+            cloudaicompanionProject: {
+              id: 'project-enable-failure',
+            },
+          },
+        }),
+        text: async () => JSON.stringify({ done: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ state: 'DISABLED' }),
+        text: async () => JSON.stringify({ state: 'DISABLED' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: { message: 'Permission denied for project-enable-failure' } }),
+        text: async () => JSON.stringify({ error: { message: 'Permission denied for project-enable-failure' } }),
+      });
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/providers/gemini-cli/start',
+      headers: {
+        host: 'metapi.example',
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    const startBody = startResponse.json() as { state: string };
+
+    const callbackResponse = await app.inject({
+      method: 'POST',
+      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
+      payload: {
+        callbackUrl: `http://localhost:8085/oauth2callback?state=${encodeURIComponent(startBody.state)}&code=gemini-oauth-code-enable-failure`,
+      },
+    });
+    expect(callbackResponse.statusCode).toBe(500);
+    expect(callbackResponse.json()).toMatchObject({
+      message: expect.stringContaining('project activation required'),
+    });
+
+    const sessionResponse = await app.inject({
+      method: 'GET',
+      url: `/api/oauth/sessions/${startBody.state}`,
+    });
+    expect(sessionResponse.statusCode).toBe(200);
+    expect(sessionResponse.json()).toMatchObject({
+      provider: 'gemini-cli',
+      status: 'error',
+      error: expect.stringContaining('Permission denied for project-enable-failure'),
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toEqual([]);
+  });
+
+  it('fails Gemini CLI oauth setup when the Google account has no available Cloud projects', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'gemini-access-token',
+          refresh_token: 'gemini-refresh-token',
+          expires_in: 3600,
+          token_type: 'Bearer',
+          scope: 'cloud-platform',
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          projects: [],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      });
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/providers/gemini-cli/start',
+      headers: {
+        host: 'metapi.example',
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    const startBody = startResponse.json() as { state: string };
+
+    const callbackResponse = await app.inject({
+      method: 'POST',
+      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
+      payload: {
+        callbackUrl: `http://localhost:8085/oauth2callback?state=${encodeURIComponent(startBody.state)}&code=gemini-oauth-code-no-projects`,
+      },
+    });
+    expect(callbackResponse.statusCode).toBe(500);
+    expect(callbackResponse.json()).toMatchObject({
+      message: 'no Google Cloud projects available for this account',
+    });
+
+    const sessionResponse = await app.inject({
+      method: 'GET',
+      url: `/api/oauth/sessions/${startBody.state}`,
+    });
+    expect(sessionResponse.statusCode).toBe(200);
+    expect(sessionResponse.json()).toMatchObject({
+      provider: 'gemini-cli',
+      status: 'error',
+      error: 'no Google Cloud projects available for this account',
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toEqual([]);
+  });
+
   it('lists oauth connection health metadata and supports deleting the connection', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'ChatGPT Codex OAuth',
