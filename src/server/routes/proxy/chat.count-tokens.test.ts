@@ -145,7 +145,7 @@ describe('claude count_tokens proxy route', () => {
     expect(targetUrl).toBe('https://api.anthropic.com/v1/messages/count_tokens?beta=true');
     expect(options.headers['anthropic-version']).toBe('2023-06-01');
     expect(options.headers['anthropic-beta']).toContain('claude-code-20250219');
-    expect(options.headers['Accept-Encoding']).toBe('gzip, deflate, br, zstd');
+    expect(options.headers['Accept-Encoding']).toBe('identity');
 
     const forwardedBody = JSON.parse(String(options.body));
     expect(forwardedBody.model).toBe('claude-opus-4-6');

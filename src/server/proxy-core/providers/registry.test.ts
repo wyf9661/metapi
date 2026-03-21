@@ -70,6 +70,7 @@ describe('resolveProviderProfile', () => {
     expect(result.headers.Authorization).toBe('Bearer oauth-access-token');
     expect(result.headers['x-api-key']).toBeUndefined();
     expect(result.headers['anthropic-version']).toBe('2023-06-01');
+    expect(result.headers['Accept-Encoding']).toBe('identity');
     expect(result.runtime).toMatchObject({
       executor: 'claude',
       modelName: 'claude-opus-4-6',
