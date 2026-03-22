@@ -235,7 +235,7 @@ export default function Settings() {
   const [savingProxyFailureRules, setSavingProxyFailureRules] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [showAdvancedRouting, setShowAdvancedRouting] = useState(false);
-  const [allBrandNames, setAllBrandNames] = useState<string[]>([]);
+  const [allBrandNames, setAllBrandNames] = useState<string[] | null>(null);
   const [blockedBrands, setBlockedBrands] = useState<string[]>([]);
   const [savingBrandFilter, setSavingBrandFilter] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
@@ -503,7 +503,7 @@ export default function Settings() {
     // Load brand list in background (non-blocking, best-effort)
     api.getBrandList()
       .then((res: any) => setAllBrandNames(Array.isArray(res?.brands) ? res.brands : []))
-      .catch(() => {/* best-effort */});
+      .catch(() => setAllBrandNames([]));
   };
 
   useEffect(() => {
@@ -1464,7 +1464,7 @@ export default function Settings() {
             屏蔽选定品牌后，路由重建时将自动跳过匹配该品牌的所有模型。点击品牌切换屏蔽状态，保存后自动触发路由重建。
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {allBrandNames.map((brand) => {
+            {(allBrandNames || []).map((brand) => {
               const isBlocked = blockedBrands.includes(brand);
               return (
                 <button
@@ -1489,8 +1489,11 @@ export default function Settings() {
                 </button>
               );
             })}
-            {allBrandNames.length === 0 && (
+            {allBrandNames === null && (
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>加载品牌列表中...</span>
+            )}
+            {allBrandNames !== null && allBrandNames.length === 0 && (
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可用品牌</span>
             )}
           </div>
           {blockedBrands.length > 0 && (
