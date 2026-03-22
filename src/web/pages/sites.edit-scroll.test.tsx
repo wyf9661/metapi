@@ -8,6 +8,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getSites: vi.fn(),
     getSiteDisabledModels: vi.fn().mockResolvedValue({ models: [] }),
+    getSiteAvailableModels: vi.fn().mockResolvedValue({ models: [] }),
   },
 }));
 

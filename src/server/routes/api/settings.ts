@@ -5,6 +5,7 @@ import { config } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
+import { getAllBrandNames } from '../../services/brandMatcher.js';
 import { updateBalanceRefreshCron, updateCheckinSchedule, updateLogCleanupSettings } from '../../services/checkinScheduler.js';
 import { sendNotification } from '../../services/notifyService.js';
 import {
@@ -71,6 +72,7 @@ interface RuntimeSettingsBody {
   routingWeights?: Partial<RoutingWeights>;
   proxyErrorKeywords?: string[] | string;
   proxyEmptyContentFailEnabled?: boolean;
+  globalBlockedBrands?: string[];
 }
 
 interface DatabaseMigrationBody {
@@ -395,6 +397,29 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       }
       return;
     }
+    case 'global_blocked_brands': {
+      try {
+        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        if (Array.isArray(parsed)) {
+          const nextBrands = parsed.filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter(Boolean);
+          const prev = JSON.stringify(config.globalBlockedBrands);
+          config.globalBlockedBrands = nextBrands;
+          if (prev !== JSON.stringify(nextBrands)) {
+            startBackgroundTask(
+              {
+                type: 'maintenance',
+                title: '品牌屏蔽变更后重建路由',
+                dedupeKey: 'refresh-models-and-rebuild-routes',
+              },
+              async () => refreshModelsAndRebuildRoutes(),
+            );
+          }
+        }
+      } catch {
+        return;
+      }
+      return;
+    }
     case 'webhook_url': {
       if (typeof value !== 'string') return;
       config.webhookUrl = value.trim();
@@ -562,6 +587,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     proxyErrorKeywords: config.proxyErrorKeywords,
     proxyEmptyContentFailEnabled: config.proxyEmptyContentFailEnabled,
     proxyTokenMasked: maskSecret(config.proxyToken),
+    globalBlockedBrands: config.globalBlockedBrands,
   };
 }
 
@@ -637,6 +663,10 @@ export async function settingsRoutes(app: FastifyInstance) {
   await app.get('/api/settings/runtime', async (request) => {
     const currentAdminIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
     return getRuntimeSettingsResponse(currentAdminIp);
+  });
+
+  app.get('/api/settings/brand-list', async () => {
+    return { brands: getAllBrandNames() };
   });
 
   app.post<{ Body: SystemProxyTestBody }>('/api/settings/system-proxy/test', async (request, reply) => {
@@ -944,6 +974,31 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.proxyEmptyContentFailEnabled = nextValue;
       upsertSetting('proxy_empty_content_fail_enabled', config.proxyEmptyContentFailEnabled);
+    }
+
+    if (body.globalBlockedBrands !== undefined) {
+      if (!Array.isArray(body.globalBlockedBrands)) {
+        return reply.code(400).send({ error: 'globalBlockedBrands must be an array of strings' });
+      }
+      const nextBrands = body.globalBlockedBrands.filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter(Boolean);
+      const uniqueBrands = Array.from(new Set(nextBrands));
+      const prev = JSON.stringify(config.globalBlockedBrands);
+      const next = JSON.stringify(uniqueBrands);
+      if (prev !== next) {
+        changedLabels.push('全局品牌屏蔽');
+      }
+      config.globalBlockedBrands = uniqueBrands;
+      upsertSetting('global_blocked_brands', JSON.stringify(uniqueBrands));
+      if (prev !== next) {
+        startBackgroundTask(
+          {
+            type: 'maintenance',
+            title: '品牌屏蔽变更后重建路由',
+            dedupeKey: 'refresh-models-and-rebuild-routes',
+          },
+          async () => refreshModelsAndRebuildRoutes(),
+        );
+      }
     }
 
     if (body.webhookUrl !== undefined) {

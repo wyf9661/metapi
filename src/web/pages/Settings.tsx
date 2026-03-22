@@ -54,6 +54,7 @@ type RuntimeSettings = {
   proxyTokenMasked?: string;
   adminIpAllowlist?: string[];
   currentAdminIp?: string;
+  globalBlockedBrands?: string[];
 };
 
 type SystemProxyTestState =
@@ -234,6 +235,9 @@ export default function Settings() {
   const [savingProxyFailureRules, setSavingProxyFailureRules] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [showAdvancedRouting, setShowAdvancedRouting] = useState(false);
+  const [allBrandNames, setAllBrandNames] = useState<string[] | null>(null);
+  const [blockedBrands, setBlockedBrands] = useState<string[]>([]);
+  const [savingBrandFilter, setSavingBrandFilter] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
   const [adminIpAllowlistText, setAdminIpAllowlistText] = useState('');
   const [clearingCache, setClearingCache] = useState(false);
@@ -451,7 +455,9 @@ export default function Settings() {
           ? runtimeInfo.adminIpAllowlist.filter((item: unknown) => typeof item === 'string')
           : [],
         currentAdminIp: typeof runtimeInfo.currentAdminIp === 'string' ? runtimeInfo.currentAdminIp : '',
+        globalBlockedBrands: Array.isArray(runtimeInfo.globalBlockedBrands) ? runtimeInfo.globalBlockedBrands : [],
       });
+      setBlockedBrands(Array.isArray(runtimeInfo.globalBlockedBrands) ? runtimeInfo.globalBlockedBrands : []);
       setProxyErrorKeywordsText(
         Array.isArray(runtimeInfo.proxyErrorKeywords)
           ? runtimeInfo.proxyErrorKeywords.filter((item: unknown) => typeof item === 'string').join('\n')
@@ -494,6 +500,10 @@ export default function Settings() {
     } finally {
       setLoading(false);
     }
+    // Load brand list in background (non-blocking, best-effort)
+    api.getBrandList()
+      .then((res: any) => setAllBrandNames(Array.isArray(res?.brands) ? res.brands : []))
+      .catch(() => setAllBrandNames([]));
   };
 
   useEffect(() => {
@@ -814,6 +824,27 @@ export default function Settings() {
       ...prev,
       routingWeights: applyRoutingProfilePreset(preset),
     }));
+  };
+
+  const handleSaveBrandFilter = async () => {
+    setSavingBrandFilter(true);
+    try {
+      const res = await api.updateRuntimeSettings({ globalBlockedBrands: blockedBrands });
+      const resolved = Array.isArray(res?.globalBlockedBrands) ? res.globalBlockedBrands : blockedBrands;
+      setRuntime((prev) => ({ ...prev, globalBlockedBrands: resolved }));
+      setBlockedBrands(resolved);
+      toast.success('品牌屏蔽设置已保存');
+      try {
+        await api.rebuildRoutes(false);
+        toast.success('路由已重建');
+      } catch {
+        toast.error('品牌屏蔽已保存，但路由重建失败，请手动重建');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || '保存品牌屏蔽设置失败');
+    } finally {
+      setSavingBrandFilter(false);
+    }
   };
 
   const saveSecuritySettings = async () => {
@@ -1426,7 +1457,56 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Global Brand Filter */}
         <div className="card animate-slide-up stagger-6" style={{ padding: 20 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>全局品牌屏蔽</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+            屏蔽选定品牌后，路由重建时将自动跳过匹配该品牌的所有模型。点击品牌切换屏蔽状态，保存后自动触发路由重建。
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {(allBrandNames || []).map((brand) => {
+              const isBlocked = blockedBrands.includes(brand);
+              return (
+                <button
+                  key={brand}
+                  type="button"
+                  role="switch"
+                  aria-checked={isBlocked}
+                  onClick={() => {
+                    if (isBlocked) {
+                      setBlockedBrands((prev) => prev.filter((b) => b !== brand));
+                    } else {
+                      setBlockedBrands((prev) => [...prev, brand]);
+                    }
+                  }}
+                  className={`badge ${isBlocked ? 'badge-warning' : 'badge-muted'}`}
+                  style={{
+                    fontSize: 12, cursor: 'pointer', border: 'none', padding: '5px 12px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {brand}
+                </button>
+              );
+            })}
+            {allBrandNames === null && (
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>加载品牌列表中...</span>
+            )}
+            {allBrandNames !== null && allBrandNames.length === 0 && (
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可用品牌</span>
+            )}
+          </div>
+          {blockedBrands.length > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 10 }}>
+              已屏蔽 {blockedBrands.length} 个品牌：{blockedBrands.join('、')}
+            </div>
+          )}
+          <button onClick={handleSaveBrandFilter} disabled={savingBrandFilter} className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }}>
+            {savingBrandFilter ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存品牌屏蔽'}
+          </button>
+        </div>
+
+        <div className="card animate-slide-up stagger-7" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>数据库迁移（SQLite / MySQL / PostgreSQL）</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             可先测试连接，再迁移数据；迁移完成后可保存为运行数据库配置（重启容器后生效）。
