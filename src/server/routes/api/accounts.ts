@@ -3,8 +3,8 @@ import { db, schema, runtimeDbDialect } from '../../db/index.js';
 import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { refreshBalance } from '../../services/balanceService.js';
 import { getAdapter } from '../../services/platforms/index.js';
-import { refreshModelsForAccount, rebuildTokenRoutesFromAvailability } from '../../services/modelService.js';
-import { ensureDefaultTokenForAccount, syncTokensFromUpstream } from '../../services/accountTokenService.js';
+import { rebuildTokenRoutesFromAvailability } from '../../services/modelService.js';
+import { convergeAccountMutation } from '../../services/accountMutationWorkflow.js';
 import {
   getCredentialModeFromExtraConfig,
   getProxyUrlFromExtraConfig,
@@ -153,37 +153,29 @@ async function initializeAccountInBackground({
     rebuiltRoutes: false,
   };
 
-  if (tokenType === 'session' && apiToken) {
-    try {
-      await ensureDefaultTokenForAccount(accountId, apiToken, { name: 'default', source: 'manual' });
-    } catch {}
-  }
-
+  let fetchedUpstreamTokens: Array<{ name?: string | null; key?: string | null; enabled?: boolean | null; tokenGroup?: string | null }> = [];
   if (tokenType === 'session' && accessToken) {
     try {
       const syncedTokens = await adapter.getApiTokens(site.url, accessToken, platformUserId);
       summary.syncedTokenCount = Array.isArray(syncedTokens) ? syncedTokens.length : 0;
-      if (summary.syncedTokenCount > 0) {
-        await syncTokensFromUpstream(accountId, syncedTokens);
-      }
+      fetchedUpstreamTokens = Array.isArray(syncedTokens) ? syncedTokens : [];
     } catch {}
   }
 
-  if (tokenType === 'session') {
-    try {
-      await refreshBalance(accountId);
-      summary.refreshedBalance = true;
-    } catch {}
-  }
-
-  if (skipModelFetch !== true) {
-    try {
-      await refreshModelsForAccount(accountId);
-      summary.refreshedModels = true;
-      await rebuildTokenRoutesFromAvailability();
-      summary.rebuiltRoutes = true;
-    } catch {}
-  }
+  const convergence = await convergeAccountMutation({
+    accountId,
+    preferredApiToken: tokenType === 'session' ? apiToken : null,
+    defaultTokenSource: 'manual',
+    ensurePreferredTokenBeforeSync: tokenType === 'session',
+    upstreamTokens: fetchedUpstreamTokens,
+    refreshBalance: tokenType === 'session',
+    refreshModels: skipModelFetch !== true,
+    rebuildRoutes: skipModelFetch !== true,
+    continueOnError: true,
+  });
+  summary.refreshedBalance = convergence.refreshedBalance;
+  summary.refreshedModels = convergence.refreshedModels;
+  summary.rebuiltRoutes = convergence.rebuiltRoutes;
 
   return summary;
 }
@@ -612,22 +604,16 @@ export async function accountsRoutes(app: FastifyInstance) {
       return { success: false, message: 'account create failed' };
     }
 
-    if (apiTokens.length > 0) {
-      try {
-        await syncTokensFromUpstream(result.id, apiTokens);
-      } catch { }
-    } else if (preferredApiToken) {
-      try {
-        await ensureDefaultTokenForAccount(result.id, preferredApiToken, { name: 'default', source: 'sync' });
-      } catch { }
-    }
-
-    // Auto-refresh balance
-    try { await refreshBalance(result.id); } catch { }
-    try {
-      await refreshModelsForAccount(result.id);
-      await rebuildTokenRoutesFromAvailability();
-    } catch { }
+    await convergeAccountMutation({
+      accountId: result.id,
+      preferredApiToken,
+      defaultTokenSource: 'sync',
+      upstreamTokens: apiTokens,
+      refreshBalance: true,
+      refreshModels: true,
+      rebuildRoutes: true,
+      continueOnError: true,
+    });
 
     const account = await db.select().from(schema.accounts).where(eq(schema.accounts.id, result.id)).get();
     return {
@@ -1043,19 +1029,15 @@ export async function accountsRoutes(app: FastifyInstance) {
 
       await db.update(schema.accounts).set(updates).where(eq(schema.accounts.id, accountId)).run();
 
-      if (nextApiToken) {
-        try {
-          await ensureDefaultTokenForAccount(accountId, nextApiToken, { name: 'default', source: 'sync' });
-        } catch {}
-      }
-
-      try {
-        await refreshBalance(accountId);
-      } catch {}
-      try {
-        await refreshModelsForAccount(accountId);
-        await rebuildTokenRoutesFromAvailability();
-      } catch {}
+      await convergeAccountMutation({
+        accountId,
+        preferredApiToken: nextApiToken,
+        defaultTokenSource: 'sync',
+        refreshBalance: true,
+        refreshModels: true,
+        rebuildRoutes: true,
+        continueOnError: true,
+      });
 
       const latest = await db.select().from(schema.accounts).where(eq(schema.accounts.id, accountId)).get();
       return {
@@ -1332,16 +1314,14 @@ export async function accountsRoutes(app: FastifyInstance) {
         ? explicitNextMode
         : (hasSessionTokenValue(nextAccessToken) ? 'session' : 'apikey');
 
-    if (nextCredentialMode !== 'apikey' && typeof updates.apiToken === 'string' && updates.apiToken.trim()) {
-      try {
-        await ensureDefaultTokenForAccount(id, updates.apiToken, { name: 'default', source: 'manual' });
-      } catch { }
-    }
-
-    try {
-      await refreshModelsForAccount(id);
-      await rebuildTokenRoutesFromAvailability();
-    } catch { }
+    await convergeAccountMutation({
+      accountId: id,
+      preferredApiToken: nextCredentialMode !== 'apikey' ? updates.apiToken : null,
+      defaultTokenSource: 'manual',
+      refreshModels: true,
+      rebuildRoutes: true,
+      continueOnError: true,
+    });
 
     return await db.select().from(schema.accounts).where(eq(schema.accounts.id, id)).get();
   });

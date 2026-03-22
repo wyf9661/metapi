@@ -243,11 +243,11 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const parsed = JSON.parse(accounts[0]?.extraConfig || '{}');
     expect(parsed.oauth).toMatchObject({
-      provider: 'antigravity',
       email: 'antigravity-user@example.com',
-      projectId: 'antigravity-auto-project',
       refreshToken: 'antigravity-refresh-token',
     });
+    expect(parsed.oauth).not.toHaveProperty('provider');
+    expect(parsed.oauth).not.toHaveProperty('projectId');
 
     expect(String(fetchMock.mock.calls[2]?.[0] || '')).toContain('/v1internal:loadCodeAssist');
     expect(String(fetchMock.mock.calls[3]?.[0] || '')).toContain('/v1internal:onboardUser');
@@ -419,14 +419,15 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(JSON.parse(accounts[0]?.extraConfig || '{}')).toMatchObject({
       credentialMode: 'session',
       oauth: {
-        provider: 'codex',
-        accountId: 'chatgpt-account-123',
         email: 'codex-user@example.com',
         planType: 'plus',
         refreshToken: 'oauth-refresh-token',
         idToken: jwt,
       },
     });
+    const codexStoredOauth = JSON.parse(accounts[0]?.extraConfig || '{}').oauth;
+    expect(codexStoredOauth).not.toHaveProperty('provider');
+    expect(codexStoredOauth).not.toHaveProperty('accountId');
 
     const models = await db.select().from(schema.modelAvailability).all();
     const modelNames = models.map((row) => row.modelName);
@@ -932,11 +933,11 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const parsed = JSON.parse(accounts[0]?.extraConfig || '{}');
     expect(parsed.oauth).toMatchObject({
-      provider: 'gemini-cli',
       email: 'gemini-user@example.com',
-      projectId: 'first-project-id',
       refreshToken: 'gemini-refresh-token',
     });
+    expect(parsed.oauth).not.toHaveProperty('provider');
+    expect(parsed.oauth).not.toHaveProperty('projectId');
 
     expect(String(fetchMock.mock.calls[1]?.[0] || '')).toContain('cloudresourcemanager.googleapis.com/v1/projects');
     expect(String(fetchMock.mock.calls[2]?.[0] || '')).toContain('/v1internal:loadCodeAssist');
@@ -1048,8 +1049,9 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const parsed = JSON.parse(accounts[0]?.extraConfig || '{}');
     expect(parsed.oauth).toMatchObject({
-      projectId: 'gen-lang-client-0123456789',
+      refreshToken: 'gemini-refresh-token',
     });
+    expect(parsed.oauth).not.toHaveProperty('projectId');
 
     expect(String(fetchMock.mock.calls[2]?.[0] || '')).toContain('/v1internal:loadCodeAssist');
     expect(String(fetchMock.mock.calls[3]?.[0] || '')).toContain('/v1internal:onboardUser');
@@ -1525,12 +1527,10 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       items: expect.arrayContaining([
         expect.objectContaining({
           provider: 'codex',
-          email: 'team-user@example.com',
           accountKey: 'chatgpt-team-account-a',
         }),
         expect.objectContaining({
           provider: 'codex',
-          email: 'team-user@example.com',
           accountKey: 'chatgpt-team-account-b',
         }),
       ]),

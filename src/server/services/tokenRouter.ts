@@ -1,5 +1,4 @@
 ﻿import { eq, inArray } from 'drizzle-orm';
-import { minimatch } from 'minimatch';
 import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
 import { config } from '../config.js';
@@ -10,7 +9,19 @@ import {
 } from './routeRoutingStrategy.js';
 import { type DownstreamRoutingPolicy, EMPTY_DOWNSTREAM_ROUTING_POLICY } from './downstreamPolicyTypes.js';
 import { isUsableAccountToken } from './accountTokenService.js';
-import { getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
+import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
+import {
+  isExactTokenRouteModelPattern,
+  isTokenRouteRegexPattern,
+  matchesTokenRouteModelPattern,
+  parseTokenRouteRegexPattern,
+} from '../../shared/tokenRoutePatterns.js';
+import {
+  normalizeTokenRouteMode,
+  type RouteDecision,
+  type RouteDecisionCandidate,
+  type RouteMode,
+} from '../../shared/tokenRouteContract.js';
 
 interface RouteMatch {
   route: RouteRow;
@@ -61,7 +72,6 @@ const FAILURE_BACKOFF_BASE_SEC = 15;
 const MIN_EFFECTIVE_UNIT_COST = 1e-6;
 const ROUND_ROBIN_FAILURE_THRESHOLD = 3;
 const ROUND_ROBIN_COOLDOWN_LEVELS_SEC = [0, 10 * 60, 60 * 60, 24 * 60 * 60] as const;
-const MAX_ROUTE_REGEX_BODY_LENGTH = 256;
 const SITE_RUNTIME_HEALTH_DECAY_HALF_LIFE_MS = 10 * 60 * 1000;
 const SITE_RUNTIME_MIN_MULTIPLIER = 0.08;
 const SITE_RUNTIME_LATENCY_BASELINE_MS = 2_500;
@@ -674,7 +684,6 @@ function filterSiteRuntimeBrokenCandidatesByModel(
     };
 }
 
-type RouteMode = 'pattern' | 'explicit_group';
 type RouteRow = typeof schema.tokenRoutes.$inferSelect & {
   routeMode: RouteMode;
   sourceRouteIds: number[];
@@ -848,33 +857,11 @@ export function filterRecentlyFailedCandidates<T extends { channel: FailureAware
   return healthy.length > 0 ? healthy : candidates;
 }
 
-export interface RouteDecisionCandidate {
-  channelId: number;
-  accountId: number;
-  username: string;
-  siteName: string;
-  tokenName: string;
-  priority: number;
-  weight: number;
-  eligible: boolean;
-  recentlyFailed: boolean;
-  avoidedByRecentFailure: boolean;
-  probability: number;
-  reason: string;
-}
-
-export interface RouteDecisionExplanation {
-  requestedModel: string;
-  actualModel: string;
-  matched: boolean;
+export type RouteDecisionExplanation = RouteDecision & {
   routeId?: number;
   modelPattern?: string;
-  selectedChannelId?: number;
   selectedAccountId?: number;
-  selectedLabel?: string;
-  summary: string[];
-  candidates: RouteDecisionCandidate[];
-}
+};
 
 const DEFAULT_DOWNSTREAM_POLICY: DownstreamRoutingPolicy = EMPTY_DOWNSTREAM_ROUTING_POLICY;
 
@@ -904,154 +891,23 @@ type CostSignal = {
 };
 
 export function isRegexModelPattern(pattern: string): boolean {
-  return pattern.trim().toLowerCase().startsWith('re:');
-}
-
-function readRegexQuantifierLength(pattern: string, startIndex: number): number {
-  const ch = pattern[startIndex];
-  if (ch === '*' || ch === '+' || ch === '?') return 1;
-  if (ch !== '{') return 0;
-
-  let index = startIndex + 1;
-  let sawDigit = false;
-  while (index < pattern.length && /\d/.test(pattern[index])) {
-    sawDigit = true;
-    index += 1;
-  }
-  if (!sawDigit) return 0;
-
-  if (pattern[index] === ',') {
-    index += 1;
-    while (index < pattern.length && /\d/.test(pattern[index])) {
-      index += 1;
-    }
-  }
-
-  if (pattern[index] !== '}') return 0;
-  return index - startIndex + 1;
-}
-
-function isSafeRegexPatternBody(body: string): boolean {
-  if (!body || body.length > MAX_ROUTE_REGEX_BODY_LENGTH) return false;
-  if (!/^[a-z0-9\s.^$|()[\]{}+*?\\:_/-]+$/i.test(body)) return false;
-  if (body.includes('(?=') || body.includes('(?!') || body.includes('(?<=') || body.includes('(?<!') || body.includes('(?<')) {
-    return false;
-  }
-  if (/(^|[^\\])\\[1-9]/.test(body)) {
-    return false;
-  }
-
-  const groupStack: Array<{ hasInnerQuantifier: boolean; hasAlternation: boolean }> = [];
-  let escaped = false;
-  let inCharClass = false;
-
-  for (let index = 0; index < body.length; index += 1) {
-    const ch = body[index];
-
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-
-    if (ch === '\\') {
-      escaped = true;
-      continue;
-    }
-
-    if (inCharClass) {
-      if (ch === ']') inCharClass = false;
-      continue;
-    }
-
-    if (ch === '[') {
-      inCharClass = true;
-      continue;
-    }
-
-    if (ch === '(') {
-      if (body[index + 1] === '?') {
-        if (body[index + 2] !== ':') {
-          return false;
-        }
-        groupStack.push({ hasInnerQuantifier: false, hasAlternation: false });
-        index += 2;
-        continue;
-      }
-
-      groupStack.push({ hasInnerQuantifier: false, hasAlternation: false });
-      continue;
-    }
-
-    if (ch === '|') {
-      if (groupStack.length > 0) {
-        groupStack[groupStack.length - 1].hasAlternation = true;
-      }
-      continue;
-    }
-
-    if (ch === ')') {
-      const group = groupStack.pop();
-      if (!group) return false;
-
-      const quantifierLength = readRegexQuantifierLength(body, index + 1);
-      if (quantifierLength > 0 && (group.hasInnerQuantifier || group.hasAlternation)) {
-        return false;
-      }
-
-      const parent = groupStack[groupStack.length - 1];
-      if (parent && (group.hasInnerQuantifier || quantifierLength > 0)) {
-        parent.hasInnerQuantifier = true;
-      }
-      continue;
-    }
-
-    const quantifierLength = readRegexQuantifierLength(body, index);
-    if (quantifierLength > 0) {
-      if (groupStack.length > 0) {
-        groupStack[groupStack.length - 1].hasInnerQuantifier = true;
-      }
-      index += quantifierLength - 1;
-    }
-  }
-
-  return !escaped && !inCharClass && groupStack.length === 0;
+  return isTokenRouteRegexPattern(pattern);
 }
 
 export function parseRegexModelPattern(pattern: string): RegExp | null {
-  if (!isRegexModelPattern(pattern)) return null;
-  const body = pattern.trim().slice(3).trim();
-  if (!body) return null;
-  if (!isSafeRegexPatternBody(body)) return null;
-  try {
-    return new RegExp(body);
-  } catch {
-    return null;
-  }
+  return parseTokenRouteRegexPattern(pattern).regex;
 }
 
 export function matchesModelPattern(model: string, pattern: string): boolean {
-  const normalizedPattern = (pattern || '').trim();
-  if (!normalizedPattern) return false;
-
-  if (normalizedPattern === model) return true;
-
-  if (isRegexModelPattern(normalizedPattern)) {
-    const re = parseRegexModelPattern(normalizedPattern);
-    return !!re && re.test(model);
-  }
-
-  return minimatch(model, normalizedPattern);
+  return matchesTokenRouteModelPattern(model, pattern);
 }
 
 function isExactRouteModelPattern(pattern: string): boolean {
-  const normalizedPattern = (pattern || '').trim();
-  if (!normalizedPattern) return false;
-  if (isRegexModelPattern(normalizedPattern)) return false;
-  return !/[\*\?\[]/.test(normalizedPattern);
+  return isExactTokenRouteModelPattern(pattern);
 }
 
 function normalizeRouteMode(routeMode: string | null | undefined): RouteMode {
-  return routeMode === 'explicit_group' ? 'explicit_group' : 'pattern';
+  return normalizeTokenRouteMode(routeMode);
 }
 
 function isExplicitGroupRoute(route: Pick<RouteRow, 'routeMode'> | Pick<typeof schema.tokenRoutes.$inferSelect, 'routeMode'>): boolean {
@@ -2037,7 +1893,7 @@ export class TokenRouter {
       return token ? token : null;
     }
 
-    if (getOauthInfoFromExtraConfig(candidate.account.extraConfig)) {
+    if (getOauthInfoFromAccount(candidate.account)) {
       const accessToken = candidate.account.accessToken?.trim();
       if (accessToken) return accessToken;
       return null;

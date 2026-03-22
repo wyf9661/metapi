@@ -43,6 +43,15 @@ export type OauthInfo = {
   lastDiscoveredModels?: string[];
 };
 
+export type StoredOauthState = Omit<OauthInfo, 'provider' | 'accountId' | 'accountKey' | 'projectId'>;
+
+type OauthIdentityCarrier = {
+  extraConfig?: string | null;
+  oauthProvider?: string | null;
+  oauthAccountKey?: string | null;
+  oauthProjectId?: string | null;
+};
+
 function parseExtraConfig(extraConfig?: string | null): ParsedExtraConfig {
   if (!extraConfig) return {};
   try {
@@ -104,14 +113,12 @@ function asModelDiscoveryStatus(value: unknown): OauthModelDiscoveryStatus | und
   return undefined;
 }
 
-export function getOauthInfoFromExtraConfig(extraConfig?: string | null): OauthInfo | null {
+function parseStoredOauthState(extraConfig?: string | null): Partial<OauthInfo> | null {
   const parsed = parseExtraConfig(extraConfig).oauth;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-  const provider = asTrimmedString(parsed.provider);
-  if (!provider) return null;
   const accountKey = asTrimmedString(parsed.accountKey) || asTrimmedString(parsed.accountId);
   return {
-    provider,
+    provider: asTrimmedString(parsed.provider),
     accountId: asTrimmedString(parsed.accountId) || accountKey,
     accountKey,
     email: asTrimmedString(parsed.email),
@@ -126,6 +133,46 @@ export function getOauthInfoFromExtraConfig(extraConfig?: string | null): OauthI
     lastModelSyncAt: asIsoDateTime(parsed.lastModelSyncAt),
     lastModelSyncError: asTrimmedString(parsed.lastModelSyncError),
     lastDiscoveredModels: asStringArray(parsed.lastDiscoveredModels),
+  };
+}
+
+export function getOauthInfoFromExtraConfig(extraConfig?: string | null): OauthInfo | null {
+  const parsed = parseStoredOauthState(extraConfig);
+  const provider = parsed?.provider;
+  if (!provider) return null;
+  return {
+    provider,
+    accountId: parsed.accountId || parsed.accountKey,
+    accountKey: parsed.accountKey,
+    email: parsed.email,
+    planType: parsed.planType,
+    projectId: parsed.projectId,
+    tokenExpiresAt: parsed.tokenExpiresAt,
+    refreshToken: parsed.refreshToken,
+    idToken: parsed.idToken,
+    providerData: parsed.providerData,
+    quota: parsed.quota,
+    modelDiscoveryStatus: parsed.modelDiscoveryStatus,
+    lastModelSyncAt: parsed.lastModelSyncAt,
+    lastModelSyncError: parsed.lastModelSyncError,
+    lastDiscoveredModels: parsed.lastDiscoveredModels,
+  };
+}
+
+export function getOauthInfoFromAccount(account?: OauthIdentityCarrier | null): OauthInfo | null {
+  if (!account) return null;
+  const stored = parseStoredOauthState(account.extraConfig);
+  const provider = asTrimmedString(account.oauthProvider) || stored?.provider;
+  if (!provider) return null;
+  const structuredAccountKey = asTrimmedString(account.oauthAccountKey);
+  const accountKey = structuredAccountKey || stored?.accountKey || stored?.accountId;
+  const projectId = asTrimmedString(account.oauthProjectId) || stored?.projectId;
+  return {
+    ...(stored || {}),
+    provider,
+    accountId: structuredAccountKey || stored?.accountId || accountKey,
+    accountKey,
+    projectId,
   };
 }
 
@@ -150,6 +197,47 @@ export function buildOauthInfo(
     next.accountId = next.accountKey;
   }
   return next;
+}
+
+export function buildOauthInfoFromAccount(
+  account?: OauthIdentityCarrier | null,
+  patch: Partial<OauthInfo> = {},
+): OauthInfo {
+  const provider = patch.provider || getOauthInfoFromAccount(account)?.provider;
+  if (!provider) {
+    throw new Error('oauth provider is required');
+  }
+  const current = getOauthInfoFromAccount(account);
+  const next: OauthInfo = {
+    provider,
+    ...(current || {}),
+    ...patch,
+  };
+  if (!next.accountKey && next.accountId) {
+    next.accountKey = next.accountId;
+  }
+  if (!next.accountId && next.accountKey) {
+    next.accountId = next.accountKey;
+  }
+  return next;
+}
+
+export function buildStoredOauthState(oauth: OauthInfo): StoredOauthState {
+  const {
+    provider: _provider,
+    accountId: _accountId,
+    accountKey: _accountKey,
+    projectId: _projectId,
+    ...stored
+  } = oauth;
+  return stored;
+}
+
+export function buildStoredOauthStateFromAccount(
+  account?: OauthIdentityCarrier | null,
+  patch: Partial<OauthInfo> = {},
+): StoredOauthState {
+  return buildStoredOauthState(buildOauthInfoFromAccount(account, patch));
 }
 
 export function isOauthProvider(

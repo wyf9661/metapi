@@ -3,7 +3,7 @@ import cron from 'node-cron';
 import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
 import { mergeAccountExtraConfig } from './accountExtraConfig.js';
-import { getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
+import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 
 const BACKUP_VERSION = '2.1';
 
@@ -317,7 +317,7 @@ function normalizeLegacyQuota(raw: unknown): number {
 }
 
 function resolveImportedOauthColumns(row: Pick<AccountRow, 'oauthProvider' | 'oauthAccountKey' | 'oauthProjectId' | 'extraConfig'>) {
-  const oauth = getOauthInfoFromExtraConfig(row.extraConfig);
+  const oauth = getOauthInfoFromAccount(row);
   const oauthProvider = row.oauthProvider || oauth?.provider || null;
   const oauthAccountKey = row.oauthAccountKey || oauth?.accountKey || oauth?.accountId || null;
   const oauthProjectId = row.oauthProjectId || oauth?.projectId || null;

@@ -2,7 +2,10 @@ import { extractClaudeCodeSessionId as extractClaudeCodeSessionIdViaProfile } fr
 import {
   detectCliProfile,
 } from '../../proxy-core/cliProfiles/registry.js';
-import { isCodexResponsesSurface as isCodexResponsesSurfaceViaProfile } from '../../proxy-core/cliProfiles/codexProfile.js';
+import {
+  detectCodexOfficialClientApp as detectCodexOfficialClientAppViaProfile,
+  isCodexResponsesSurface as isCodexResponsesSurfaceViaProfile,
+} from '../../proxy-core/cliProfiles/codexProfile.js';
 import type { CliProfileId } from '../../proxy-core/cliProfiles/types.js';
 
 export type DownstreamClientKind = CliProfileId;
@@ -42,58 +45,6 @@ type DownstreamProtocolClientApp = {
   clientAppName: string;
   clientConfidence: DownstreamClientConfidence;
 };
-
-type HeaderPrefixMatcherRule = {
-  id: string;
-  name: string;
-  userAgentPrefixes?: string[];
-  originatorPrefixes?: string[];
-};
-
-const codexOfficialClientAppRules: HeaderPrefixMatcherRule[] = [
-  {
-    id: 'codex_cli_rs',
-    name: 'Codex CLI',
-    userAgentPrefixes: ['codex_cli_rs/'],
-    originatorPrefixes: ['codex_cli_rs'],
-  },
-  {
-    id: 'codex_vscode',
-    name: 'Codex VSCode',
-    userAgentPrefixes: ['codex_vscode/'],
-    originatorPrefixes: ['codex_vscode'],
-  },
-  {
-    id: 'codex_app',
-    name: 'Codex App',
-    userAgentPrefixes: ['codex_app/'],
-    originatorPrefixes: ['codex_app'],
-  },
-  {
-    id: 'codex_chatgpt_desktop',
-    name: 'Codex Desktop',
-    userAgentPrefixes: ['codex_chatgpt_desktop/', 'codex desktop/'],
-    originatorPrefixes: ['codex_chatgpt_desktop', 'codex desktop'],
-  },
-  {
-    id: 'codex_atlas',
-    name: 'Codex Atlas',
-    userAgentPrefixes: ['codex_atlas/'],
-    originatorPrefixes: ['codex_atlas'],
-  },
-  {
-    id: 'codex_exec',
-    name: 'Codex Exec',
-    userAgentPrefixes: ['codex_exec/'],
-    originatorPrefixes: ['codex_exec'],
-  },
-  {
-    id: 'codex_sdk_ts',
-    name: 'Codex SDK TS',
-    userAgentPrefixes: ['codex_sdk_ts/'],
-    originatorPrefixes: ['codex_sdk_ts'],
-  },
-];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -136,10 +87,6 @@ function headerEquals(headers: NormalizedClientHeaders, key: string, expected: s
 function headerIncludes(headers: NormalizedClientHeaders, key: string, expectedFragment: string): boolean {
   const normalizedExpected = expectedFragment.trim().toLowerCase();
   return (headers[key.trim().toLowerCase()] || []).some((value) => value.trim().toLowerCase().includes(normalizedExpected));
-}
-
-function headerMatchesPrefixes(headers: NormalizedClientHeaders, key: string, prefixes: string[]): boolean {
-  return prefixes.some((prefix) => headerIncludes(headers, key, prefix));
 }
 
 function normalizeClientDisplayName(value: string): string | null {
@@ -276,25 +223,6 @@ function detectExplicitClientSelfReport(headers: NormalizedClientHeaders): Downs
   return null;
 }
 
-function detectCodexOfficialClientApp(headers: NormalizedClientHeaders): DownstreamProtocolClientApp | null {
-  for (const rule of codexOfficialClientAppRules) {
-    const matchesOriginator = Array.isArray(rule.originatorPrefixes)
-      && headerMatchesPrefixes(headers, 'originator', rule.originatorPrefixes);
-    const matchesUserAgent = Array.isArray(rule.userAgentPrefixes)
-      && headerMatchesPrefixes(headers, 'user-agent', rule.userAgentPrefixes);
-
-    if (!matchesOriginator && !matchesUserAgent) continue;
-
-    return {
-      clientAppId: rule.id,
-      clientAppName: rule.name,
-      clientConfidence: 'exact',
-    };
-  }
-
-  return null;
-}
-
 function detectProtocolClientApp(input: {
   clientKind: DownstreamClientKind;
   headers?: Record<string, unknown>;
@@ -313,8 +241,13 @@ function detectProtocolClientApp(input: {
         clientConfidence: 'exact',
       };
     case 'codex': {
-      const headers = normalizeHeaders(input.headers);
-      return detectCodexOfficialClientApp(headers) || {
+      const clientApp = detectCodexOfficialClientAppViaProfile(input.headers);
+      return (clientApp
+        ? {
+          ...clientApp,
+          clientConfidence: 'exact' as const,
+        }
+        : null) || {
         clientAppId: 'codex',
         clientAppName: 'Codex',
         clientConfidence: 'heuristic',

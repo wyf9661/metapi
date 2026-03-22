@@ -16,6 +16,11 @@ import {
   buildVerifyFailureHint,
   normalizeVerifyFailureMessage,
 } from './helpers/accountVerifyFeedback.js';
+import {
+  isTruthyFlag,
+  parsePositiveInt,
+  resolveAccountCredentialMode,
+} from './helpers/accountConnection.js';
 import { clearFocusParams, readFocusAccountIntent } from './helpers/navigationFocus.js';
 import { TokensPanel } from './Tokens.js';
 import { tr } from '../i18n.js';
@@ -56,17 +61,6 @@ function createTokenForm(credentialMode: 'session' | 'apikey' = 'session') {
 
 function createRebindForm(platformUserId = '') {
   return { accessToken: '', platformUserId, refreshToken: '', tokenExpiresAt: '' };
-}
-
-function isTruthyFlag(value: string | null): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes';
-}
-
-function parsePositiveInt(value: string | null): number {
-  const parsed = Number.parseInt(String(value || '').trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function resolveConnectionsSegment(search: string): ConnectionsSegment {
@@ -192,18 +186,6 @@ export default function Accounts() {
     setVerifying(false);
     setSaving(false);
     resetAddForms();
-  };
-
-  const resolveAccountCredentialMode = (account: any): 'session' | 'apikey' => {
-    const rawMode = String(account?.credentialMode || '').trim().toLowerCase();
-    if (rawMode === 'apikey') return 'apikey';
-    if (rawMode === 'session') return 'session';
-    const fromServer = account?.capabilities;
-    if (fromServer && typeof fromServer.proxyOnly === 'boolean') {
-      return fromServer.proxyOnly ? 'apikey' : 'session';
-    }
-    const hasSession = typeof account?.accessToken === 'string' && account.accessToken.trim().length > 0;
-    return hasSession ? 'session' : 'apikey';
   };
 
   const resolveAccountDisplayName = (account: any) => {

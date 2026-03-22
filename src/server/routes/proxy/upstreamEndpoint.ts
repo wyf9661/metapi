@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   rankConversationFileEndpoints,
   type ConversationFileInputSummary,
@@ -27,6 +27,14 @@ import {
   promoteResponsesCandidateAfterLegacyChatError,
   shouldPreferResponsesAfterLegacyChatError,
 } from '../../transformers/shared/endpointCompatibility.js';
+import {
+  buildClaudeRuntimeHeaders,
+  buildCodexRuntimeHeaders,
+  buildGeminiCliRuntimeHeaders,
+  buildGeminiCliUserAgent,
+  getInputHeader,
+  headerValueToString,
+} from '../../proxy-core/providers/headerUtils.js';
 export {
   buildMinimalJsonHeadersForCompatibility,
   isEndpointDispatchDeniedError,
@@ -104,23 +112,6 @@ function isClaudeFamilyModel(modelName: string): boolean {
   return normalized === 'claude' || normalized.startsWith('claude-') || normalized.includes('claude');
 }
 
-function headerValueToString(value: unknown): string | null {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed || null;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      if (typeof item !== 'string') continue;
-      const trimmed = item.trim();
-      if (trimmed) return trimmed;
-    }
-  }
-
-  return null;
-}
-
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
   'keep-alive',
@@ -146,11 +137,7 @@ const BLOCKED_PASSTHROUGH_HEADERS = new Set([
   'sec-websocket-extensions',
 ]);
 
-const CODEX_CLIENT_VERSION = '0.101.0';
-const CODEX_DEFAULT_USER_AGENT = 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
 const ANTIGRAVITY_RUNTIME_USER_AGENT = 'antigravity/1.19.6 darwin/arm64';
-const CLAUDE_DEFAULT_USER_AGENT = 'claude-cli/2.1.63 (external, cli)';
-const CLAUDE_DEFAULT_BETA_HEADER = 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05';
 
 function shouldSkipPassthroughHeader(key: string): boolean {
   return HOP_BY_HOP_HEADERS.has(key) || BLOCKED_PASSTHROUGH_HEADERS.has(key);
@@ -222,81 +209,6 @@ function extractResponsesPassthroughHeaders(
   return forwarded;
 }
 
-function getInputHeader(
-  headers: Record<string, unknown> | Record<string, string> | undefined,
-  key: string,
-): string | null {
-  if (!headers) return null;
-  for (const [candidateKey, candidateValue] of Object.entries(headers)) {
-    if (candidateKey.toLowerCase() !== key.toLowerCase()) continue;
-    return headerValueToString(candidateValue);
-  }
-  return null;
-}
-
-function parseGeminiCliUserAgentRuntime(userAgent: string | null): {
-  version: string;
-  platform: string;
-  arch: string;
-} | null {
-  if (!userAgent) return null;
-  const match = /^GeminiCLI\/([^/]+)\/[^ ]+ \(([^;]+); ([^)]+)\)$/i.exec(userAgent.trim());
-  if (!match) return null;
-  return {
-    version: match[1] || '0.31.0',
-    platform: match[2] || 'win32',
-    arch: match[3] || 'x64',
-  };
-}
-
-function buildGeminiCLIUserAgent(modelName: string, existingUserAgent?: string | null): string {
-  const parsed = parseGeminiCliUserAgentRuntime(existingUserAgent ?? null);
-  const version = parsed?.version || '0.31.0';
-  const platform = parsed?.platform || 'win32';
-  const arch = parsed?.arch || 'x64';
-  const effectiveModel = asTrimmedString(modelName) || 'unknown';
-  return `GeminiCLI/${version}/${effectiveModel} (${platform}; ${arch})`;
-}
-
-function uuidFromSeed(seed: string): string {
-  const hash = createHash('sha1').update(seed).digest();
-  const bytes = new Uint8Array(hash.subarray(0, 16));
-  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32),
-  ].join('-');
-}
-
-function mergeClaudeBetaHeader(
-  explicitValue: string | null,
-  extraBetas: string[] = [],
-): string {
-  const source = explicitValue || CLAUDE_DEFAULT_BETA_HEADER;
-  const seen = new Set<string>();
-  const merged: string[] = [];
-  for (const entry of source.split(',')) {
-    const normalized = entry.trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    merged.push(normalized);
-  }
-  if (!explicitValue) {
-    for (const entry of extraBetas) {
-      const normalized = entry.trim();
-      if (!normalized || seen.has(normalized)) continue;
-      seen.add(normalized);
-      merged.push(normalized);
-    }
-  }
-  return merged.join(',');
-}
-
 function extractClaudeBetasFromBody(body: Record<string, unknown>): {
   body: Record<string, unknown>;
   betas: string[];
@@ -327,80 +239,6 @@ function extractClaudeBetasFromBody(body: Record<string, unknown>): {
   };
 }
 
-function buildCodexRuntimeHeaders(input: {
-  baseHeaders: Record<string, string>;
-  providerHeaders?: Record<string, string>;
-  explicitSessionId?: string | null;
-  continuityKey?: string | null;
-}): Record<string, string> {
-  const authorization = (
-    getInputHeader(input.baseHeaders, 'authorization')
-    || getInputHeader(input.baseHeaders, 'Authorization')
-    || ''
-  );
-  const originator = getInputHeader(input.providerHeaders, 'originator') || 'codex_cli_rs';
-  const accountId = getInputHeader(input.providerHeaders, 'chatgpt-account-id');
-  const version = getInputHeader(input.baseHeaders, 'version') || CODEX_CLIENT_VERSION;
-  const userAgent = getInputHeader(input.baseHeaders, 'user-agent') || CODEX_DEFAULT_USER_AGENT;
-  const explicitSessionId = asTrimmedString(input.explicitSessionId);
-  const continuityKey = asTrimmedString(input.continuityKey);
-  const sessionId = (
-    getInputHeader(input.baseHeaders, 'session_id')
-    || getInputHeader(input.baseHeaders, 'session-id')
-    || explicitSessionId
-    || (continuityKey ? uuidFromSeed(`metapi:codex:${continuityKey}`) : null)
-    || randomUUID()
-  );
-  const conversationId = (
-    getInputHeader(input.baseHeaders, 'conversation_id')
-    || getInputHeader(input.baseHeaders, 'conversation-id')
-    || explicitSessionId
-    || (continuityKey ? sessionId : null)
-  );
-
-  return {
-    Authorization: authorization,
-    'Content-Type': 'application/json',
-    ...(accountId ? { 'Chatgpt-Account-Id': accountId } : {}),
-    Originator: originator,
-    Version: version,
-    Session_id: sessionId,
-    ...(conversationId ? { Conversation_id: conversationId } : {}),
-    'User-Agent': userAgent,
-    Accept: 'text/event-stream',
-    Connection: 'Keep-Alive',
-  };
-}
-
-function buildGeminiCliRuntimeHeaders(input: {
-  baseHeaders: Record<string, string>;
-  providerHeaders?: Record<string, string>;
-  modelName: string;
-  stream: boolean;
-}): Record<string, string> {
-  const apiClient = (
-    getInputHeader(input.providerHeaders, 'x-goog-api-client')
-    || getInputHeader(input.baseHeaders, 'x-goog-api-client')
-  );
-  const userAgent = buildGeminiCLIUserAgent(
-    input.modelName,
-    getInputHeader(input.providerHeaders, 'user-agent') || getInputHeader(input.baseHeaders, 'user-agent'),
-  );
-
-  const headers: Record<string, string> = {
-    Authorization: input.baseHeaders.Authorization,
-    'Content-Type': 'application/json',
-    'User-Agent': userAgent,
-  };
-  if (apiClient) {
-    headers['X-Goog-Api-Client'] = apiClient;
-  }
-  if (input.stream) {
-    headers.Accept = 'text/event-stream';
-  }
-  return headers;
-}
-
 function buildAntigravityRuntimeHeaders(input: {
   baseHeaders: Record<string, string>;
   stream: boolean;
@@ -411,47 +249,6 @@ function buildAntigravityRuntimeHeaders(input: {
     Accept: input.stream ? 'text/event-stream' : 'application/json',
     'User-Agent': ANTIGRAVITY_RUNTIME_USER_AGENT,
   };
-  return headers;
-}
-
-function buildClaudeRuntimeHeaders(input: {
-  baseHeaders: Record<string, string>;
-  claudeHeaders: Record<string, string>;
-  anthropicVersion: string;
-  stream: boolean;
-  isClaudeOauthUpstream: boolean;
-  tokenValue: string;
-  extraBetas?: string[];
-}): Record<string, string> {
-  const anthropicBeta = mergeClaudeBetaHeader(
-    getInputHeader(input.claudeHeaders, 'anthropic-beta'),
-    input.extraBetas,
-  );
-  const headers: Record<string, string> = {
-    ...input.baseHeaders,
-    ...input.claudeHeaders,
-    'anthropic-version': input.anthropicVersion,
-    ...(anthropicBeta ? { 'anthropic-beta': anthropicBeta } : {}),
-    'Anthropic-Dangerous-Direct-Browser-Access': 'true',
-    'X-App': 'cli',
-    'X-Stainless-Retry-Count': getInputHeader(input.claudeHeaders, 'x-stainless-retry-count') || '0',
-    'X-Stainless-Runtime-Version': getInputHeader(input.claudeHeaders, 'x-stainless-runtime-version') || 'v24.3.0',
-    'X-Stainless-Package-Version': getInputHeader(input.claudeHeaders, 'x-stainless-package-version') || '0.74.0',
-    'X-Stainless-Runtime': getInputHeader(input.claudeHeaders, 'x-stainless-runtime') || 'node',
-    'X-Stainless-Lang': getInputHeader(input.claudeHeaders, 'x-stainless-lang') || 'js',
-    'X-Stainless-Arch': getInputHeader(input.claudeHeaders, 'x-stainless-arch') || 'x64',
-    'X-Stainless-Os': getInputHeader(input.claudeHeaders, 'x-stainless-os') || 'Windows',
-    'X-Stainless-Timeout': getInputHeader(input.claudeHeaders, 'x-stainless-timeout') || '600',
-    'User-Agent': getInputHeader(input.claudeHeaders, 'user-agent') || CLAUDE_DEFAULT_USER_AGENT,
-    Connection: 'keep-alive',
-    Accept: input.stream ? 'text/event-stream' : 'application/json',
-    'Accept-Encoding': 'gzip, deflate, br, zstd',
-  };
-  if (input.isClaudeOauthUpstream) {
-    headers.Authorization = `Bearer ${input.tokenValue}`;
-  } else {
-    headers['x-api-key'] = input.tokenValue;
-  }
   return headers;
 }
 

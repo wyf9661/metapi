@@ -5,7 +5,36 @@ import {
   convertResponsesBodyToOpenAiBody,
   sanitizeResponsesBodyForProxy,
 } from './conversion.js';
-import { buildResponsesCompatibilityBodies } from './compatibility.js';
+import {
+  buildResponsesCompatibilityBodies,
+  convertOpenAiBodyToResponsesBody as convertOpenAiBodyToResponsesBodyViaCompatibility,
+  normalizeResponsesInputForCompatibility as normalizeResponsesInputForCompatibilityViaCompatibility,
+  normalizeResponsesMessageContent as normalizeResponsesMessageContentViaCompatibility,
+  sanitizeResponsesBodyForProxy as sanitizeResponsesBodyForProxyViaCompatibility,
+} from './compatibility.js';
+import {
+  normalizeResponsesInputForCompatibility,
+  normalizeResponsesMessageContent,
+} from './conversion.js';
+
+describe('responses conversion single source of truth', () => {
+  it('exports shared conversion helpers from one implementation', () => {
+    expect(normalizeResponsesInputForCompatibilityViaCompatibility).toBe(normalizeResponsesInputForCompatibility);
+    expect(
+      normalizeResponsesMessageContentViaCompatibility(
+        [{ type: 'text', text: 'hello' }],
+        'user',
+      ),
+    ).toEqual(
+      normalizeResponsesMessageContent(
+        'user',
+        [{ type: 'text', text: 'hello' }],
+      ),
+    );
+    expect(convertOpenAiBodyToResponsesBodyViaCompatibility).toBe(convertOpenAiBodyToResponsesBody);
+    expect(sanitizeResponsesBodyForProxyViaCompatibility).toBe(sanitizeResponsesBodyForProxy);
+  });
+});
 
 describe('sanitizeResponsesBodyForProxy', () => {
   it('preserves newer Responses request fields needed by the proxy', () => {

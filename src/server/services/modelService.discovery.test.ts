@@ -757,9 +757,9 @@ describe('refreshModelsForAccount credential discovery', () => {
       .get();
     const parsed = JSON.parse(latest!.extraConfig || '{}');
     expect(parsed.oauth).toMatchObject({
-      provider: 'codex',
       modelDiscoveryStatus: 'abnormal',
     });
+    expect(parsed.oauth).not.toHaveProperty('provider');
     expect(parsed.oauth.lastModelSyncError).toContain('HTTP 403');
     expect(parsed.oauth.lastModelSyncAt).toMatch(/\d{4}-\d{2}-\d{2}T/);
     expect(parsed.runtimeHealth?.state).toBe('unhealthy');
@@ -990,12 +990,12 @@ describe('refreshModelsForAccount credential discovery', () => {
     });
     const parsed = JSON.parse(latest!.extraConfig || '{}');
     expect(parsed.oauth).toMatchObject({
-      provider: 'gemini-cli',
       email: 'gemini-refreshed-user@example.com',
       refreshToken: 'gemini-refresh-token-next',
-      projectId: 'project-refresh-demo',
       modelDiscoveryStatus: 'healthy',
     });
+    expect(parsed.oauth).not.toHaveProperty('provider');
+    expect(parsed.oauth).not.toHaveProperty('projectId');
   });
 
   it('discovers antigravity oauth models via fetchAvailableModels fallback using the oauth project id', async () => {

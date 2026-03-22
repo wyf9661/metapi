@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import ChangeKeyModal from '../components/ChangeKeyModal.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
-import { BrandGlyph, InlineBrandIcon, getBrand, normalizeBrandIconKey } from '../components/BrandIcon.js';
+import { BrandGlyph, InlineBrandIcon, getBrand } from '../components/BrandIcon.js';
 import ModernSelect from '../components/ModernSelect.js';
 import {
   applyRoutingProfilePreset,
@@ -17,11 +17,15 @@ import { fuzzyMatch } from './helpers/fuzzySearch.js';
 import { clearAuthSession } from '../authSession.js';
 import { clearAppInstallationState } from '../appLocalState.js';
 import { tr } from '../i18n.js';
-import { ROUTE_ICON_NONE_VALUE } from './token-routes/utils.js';
+import {
+  isExactModelPattern,
+  parseBrandIconValue,
+  resolveRouteTitle,
+  ROUTE_ICON_NONE_VALUE,
+} from './token-routes/utils.js';
 import { generateDownstreamSkKey } from './helpers/generateDownstreamSkKey.js';
 
 const PROXY_TOKEN_PREFIX = 'sk-';
-const ROUTE_BRAND_ICON_PREFIX = 'brand:';
 const FACTORY_RESET_ADMIN_TOKEN = 'change-me-admin-token';
 const FACTORY_RESET_CONFIRM_SECONDS = 3;
 const CHECKIN_SCHEDULE_MODE_OPTIONS = [
@@ -174,31 +178,8 @@ function inferUrlDialect(connectionString: string): 'mysql' | 'postgres' | null 
   return null;
 }
 
-function isRegexModelPattern(pattern: string): boolean {
-  return pattern.trim().toLowerCase().startsWith('re:');
-}
-
-function isExactModelPattern(modelPattern: string): boolean {
-  const normalized = modelPattern.trim();
-  if (!normalized) return false;
-  if (isRegexModelPattern(normalized)) return false;
-  return !/[\*\?]/.test(normalized);
-}
-
-function routeTitle(route: RouteSelectorItem): string {
-  const displayName = (route.displayName || '').trim();
-  return displayName || route.modelPattern;
-}
-
-function parseBrandIconValue(raw: string | null | undefined): string | null {
-  const normalized = (raw || '').trim();
-  if (!normalized.startsWith(ROUTE_BRAND_ICON_PREFIX)) return null;
-  const icon = normalized.slice(ROUTE_BRAND_ICON_PREFIX.length).trim();
-  return normalizeBrandIconKey(icon);
-}
-
 function resolveRouteBrandSource(route: RouteSelectorItem): string {
-  const title = routeTitle(route);
+  const title = resolveRouteTitle(route);
   if (getBrand(title)) return title;
   return route.modelPattern;
 }
@@ -302,7 +283,7 @@ export default function Settings() {
   const groupRouteOptions = useMemo(() => (
     selectorRoutes
       .filter((route) => !isExactModelPattern(route.modelPattern))
-      .sort((a, b) => routeTitle(a).localeCompare(routeTitle(b), undefined, { sensitivity: 'base' }))
+      .sort((a, b) => resolveRouteTitle(a).localeCompare(resolveRouteTitle(b), undefined, { sensitivity: 'base' }))
   ), [selectorRoutes]);
 
   const filteredExactModelOptions = useMemo(() => {
@@ -315,7 +296,7 @@ export default function Settings() {
     const query = selectorGroupSearch.trim();
     if (!query) return groupRouteOptions;
     return groupRouteOptions.filter((route) => {
-      const matchText = `${routeTitle(route)} ${route.modelPattern} ${route.displayName || ''}`;
+      const matchText = `${resolveRouteTitle(route)} ${route.modelPattern} ${route.displayName || ''}`;
       return fuzzyMatch(matchText, query);
     });
   }, [groupRouteOptions, selectorGroupSearch]);
@@ -1926,7 +1907,7 @@ export default function Settings() {
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>没有匹配的群组</div>
                         ) : filteredGroupRouteOptions.map((route) => {
                           const checked = downstreamCreate.selectedGroupRouteIds.includes(route.id);
-                          const explicitBrandIcon = parseBrandIconValue(route.displayIcon);
+                          const explicitBrandIcon = parseBrandIconValue(route.displayIcon || '');
                           const explicitNoIcon = (route.displayIcon || '').trim() === ROUTE_ICON_NONE_VALUE;
                           const textIcon = explicitBrandIcon || explicitNoIcon ? '' : (route.displayIcon || '').trim();
                           return (
@@ -1985,9 +1966,9 @@ export default function Settings() {
                                     {explicitBrandIcon ? (
                                       <BrandGlyph
                                         icon={explicitBrandIcon}
-                                        alt={routeTitle(route)}
+                                        alt={resolveRouteTitle(route)}
                                         size={18}
-                                        fallbackText={routeTitle(route)}
+                                        fallbackText={resolveRouteTitle(route)}
                                       />
                                     ) : textIcon ? (
                                       textIcon
@@ -1996,7 +1977,7 @@ export default function Settings() {
                                     )}
                                   </span>
                                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {routeTitle(route)}
+                                    {resolveRouteTitle(route)}
                                   </span>
                                   {!route.enabled && (
                                     <span

@@ -1,13 +1,9 @@
 import { TextDecoder } from 'node:util';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
-import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
-import { isTokenExpiredError } from '../../services/alertRules.js';
-import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
+import { reportProxyAllFailed } from '../../services/alertService.js';
 import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
-import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { type DownstreamFormat } from '../../transformers/shared/normalized.js';
 import {
   buildClaudeCountTokensUpstreamRequest,
@@ -21,11 +17,9 @@ import {
   getDownstreamRoutingPolicy,
   recordDownstreamCostUsage,
 } from '../../routes/proxy/downstreamPolicy.js';
-import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
 import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
-import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
 import { anthropicMessagesTransformer } from '../../transformers/anthropic/messages/index.js';
@@ -37,8 +31,7 @@ import {
 import {
   buildOauthProviderHeaders,
 } from '../../services/oauth/service.js';
-import { getOauthInfoFromExtraConfig } from '../../services/oauth/oauthAccount.js';
-import { recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
+import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import {
   collectResponsesFinalPayloadFromSse,
@@ -50,10 +43,13 @@ import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
 } from '../../routes/proxy/geminiCliCompat.js';
-import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
-import { detectDownstreamClientContext, type DownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
-import { insertProxyLog } from '../../services/proxyLogStore.js';
+import { detectDownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
+import {
+  createSurfaceFailureToolkit,
+  createSurfaceDispatchRequest,
+  selectSurfaceChannelForAttempt,
+} from './sharedSurface.js';
 
 const MAX_RETRIES = 2;
 
@@ -114,19 +110,24 @@ export async function handleChatSurfaceRequest(
     proxyToken: getProxyAuthContext(request)?.token || null,
   });
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
+  const failureToolkit = createSurfaceFailureToolkit({
+    warningScope: 'chat',
+    downstreamPath,
+    maxRetries: MAX_RETRIES,
+    clientContext,
+    downstreamApiKeyId,
+  });
 
   const excludeChannelIds: number[] = [];
   let retryCount = 0;
 
   while (retryCount <= MAX_RETRIES) {
-    let selected = retryCount === 0
-      ? await tokenRouter.selectChannel(requestedModel, downstreamPolicy)
-      : await tokenRouter.selectNextChannel(requestedModel, excludeChannelIds, downstreamPolicy);
-
-    if (!selected && retryCount === 0) {
-      await refreshModelsAndRebuildRoutes();
-      selected = await tokenRouter.selectChannel(requestedModel, downstreamPolicy);
-    }
+    const selected = await selectSurfaceChannelForAttempt({
+      requestedModel,
+      downstreamPolicy,
+      excludeChannelIds,
+      retryCount,
+    });
 
     if (!selected) {
       await reportProxyAllFailed({
@@ -141,7 +142,7 @@ export async function handleChatSurfaceRequest(
     excludeChannelIds.push(selected.channel.id);
 
     const modelName = selected.actualModel || requestedModel;
-    const oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
+    const oauth = getOauthInfoFromAccount(selected.account);
     const isCodexSite = String(selected.site.platform || '').trim().toLowerCase() === 'codex';
     const endpointCandidates = [
       ...await resolveUpstreamEndpointCandidates(
@@ -170,7 +171,7 @@ export async function handleChatSurfaceRequest(
     };
     const buildProviderHeaders = () => (
       buildOauthProviderHeaders({
-        extraConfig: typeof selected.account.extraConfig === 'string' ? selected.account.extraConfig : null,
+        account: selected.account,
         downstreamHeaders: request.headers as Record<string, unknown>,
       })
     );
@@ -204,22 +205,10 @@ export async function handleChatSurfaceRequest(
         runtime: endpointRequest.runtime,
       };
     };
-    const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
-    const dispatchRequest = (
-      compatibilityRequest: BuiltEndpointRequest,
-      targetUrl?: string,
-    ) => (
-      dispatchRuntimeRequest({
-        siteUrl: selected.site.url,
-        targetUrl,
-        request: compatibilityRequest,
-        buildInit: (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
-          method: 'POST',
-          headers: requestForFetch.headers,
-          body: JSON.stringify(requestForFetch.body),
-        }, channelProxyUrl),
-      })
-    );
+    const dispatchRequest = createSurfaceDispatchRequest({
+      site: selected.site,
+      accountExtraConfig: selected.account.extraConfig,
+    });
     const endpointStrategy = downstreamTransformer.compatibility.createEndpointStrategy({
       downstreamFormat,
       endpointCandidates,
@@ -286,82 +275,34 @@ export async function handleChatSurfaceRequest(
           },
           shouldDowngrade: endpointStrategy.shouldDowngrade,
           onDowngrade: (ctx) => {
-          logProxy(
-            selected,
-            requestedModel,
-            'failed',
-            ctx.response.status,
-            Date.now() - startTime,
-            ctx.errText,
-            retryCount,
-            downstreamPath,
-          0,
-          0,
-          0,
-          0,
-          null,
-          null,
-          clientContext,
-          downstreamApiKeyId,
-        );
-      },
-      });
+            return failureToolkit.log({
+              selected,
+              modelRequested: requestedModel,
+              status: 'failed',
+              httpStatus: ctx.response.status,
+              latencyMs: Date.now() - startTime,
+              errorMessage: ctx.errText,
+              retryCount,
+            });
+          },
+        });
 
       if (!endpointResult.ok) {
-        const status = endpointResult.status || 502;
-        const errText = endpointResult.errText || 'unknown error';
-        const rawErrText = endpointResult.rawErrText || errText;
-        tokenRouter.recordFailure(selected.channel.id, {
-          status,
-          errorText: rawErrText,
-          modelName,
-        });
-        logProxy(
+        const failureOutcome = await failureToolkit.handleUpstreamFailure({
           selected,
           requestedModel,
-          'failed',
-          status,
-          Date.now() - startTime,
-          errText,
+          modelName,
+          status: endpointResult.status || 502,
+          errText: endpointResult.errText || 'unknown error',
+          rawErrText: endpointResult.rawErrText,
+          latencyMs: Date.now() - startTime,
           retryCount,
-          downstreamPath,
-          0,
-          0,
-          0,
-          0,
-          null,
-          null,
-          clientContext,
-          downstreamApiKeyId,
-        );
-        await recordOauthQuotaResetHint({
-          accountId: selected.account.id,
-          statusCode: status,
-          errorText: rawErrText,
         });
-
-        if (isTokenExpiredError({ status, message: errText })) {
-          await reportTokenExpired({
-            accountId: selected.account.id,
-            username: selected.account.username,
-            siteName: selected.site.name,
-            detail: `HTTP ${status}`,
-          });
-        }
-
-        if (shouldRetryProxyRequest(status, errText) && retryCount < MAX_RETRIES) {
+        if (failureOutcome.action === 'retry') {
           retryCount += 1;
           continue;
         }
-
-        await reportProxyAllFailed({
-          model: requestedModel,
-          reason: `upstream returned HTTP ${status}`,
-        });
-
-        return reply.code(status).send({
-          error: { message: errText, type: 'upstream_error' },
-        });
+        return reply.code(failureOutcome.status).send(failureOutcome.payload);
       }
 
       const upstream = endpointResult.upstream;
@@ -418,25 +359,18 @@ export async function handleChatSurfaceRequest(
             );
             const latency = Date.now() - startTime;
             if (streamResult.status === 'failed') {
-              tokenRouter.recordFailure(selected.channel.id, modelName);
-              logProxy(
+              await failureToolkit.recordStreamFailure({
                 selected,
                 requestedModel,
-                'failed',
-                200,
-                latency,
-                streamResult.errorMessage,
+                modelName,
+                errorMessage: streamResult.errorMessage,
+                latencyMs: latency,
                 retryCount,
-                downstreamPath,
-                parsedUsage.promptTokens,
-                parsedUsage.completionTokens,
-                parsedUsage.totalTokens,
-                0,
-                null,
-                successfulUpstreamPath,
-                clientContext,
-                downstreamApiKeyId,
-              );
+                promptTokens: parsedUsage.promptTokens,
+                completionTokens: parsedUsage.completionTokens,
+                totalTokens: parsedUsage.totalTokens,
+                upstreamPath: successfulUpstreamPath,
+              });
               return;
             }
             return;
@@ -454,71 +388,41 @@ export async function handleChatSurfaceRequest(
           const latency = Date.now() - startTime;
           const failure = detectProxyFailure({ rawText, usage: parsedUsage });
           if (failure) {
-            tokenRouter.recordFailure(selected.channel.id, {
-              status: failure.status,
-              errorText: failure.reason,
-              modelName,
-            });
-            logProxy(
+            const failureOutcome = await failureToolkit.handleDetectedFailure({
               selected,
               requestedModel,
-              'failed',
-              failure.status,
-              latency,
-              failure.reason,
+              modelName,
+              failure,
+              latencyMs: latency,
               retryCount,
-              downstreamPath,
-              parsedUsage.promptTokens,
-              parsedUsage.completionTokens,
-              parsedUsage.totalTokens,
-              0,
-              null,
-              successfulUpstreamPath,
-              clientContext,
-              downstreamApiKeyId,
-            );
-
-            if (shouldRetryProxyRequest(failure.status, failure.reason) && retryCount < MAX_RETRIES) {
+              promptTokens: parsedUsage.promptTokens,
+              completionTokens: parsedUsage.completionTokens,
+              totalTokens: parsedUsage.totalTokens,
+              upstreamPath: successfulUpstreamPath,
+            });
+            if (failureOutcome.action === 'retry') {
               retryCount += 1;
               continue;
             }
-
-            await reportProxyAllFailed({
-              model: requestedModel,
-              reason: failure.reason,
-            });
-
-            return reply.code(failure.status).send({
-              error: { message: failure.reason, type: 'upstream_error' },
-            });
+            return reply.code(failureOutcome.status).send(failureOutcome.payload);
           }
 
           startSseResponse();
           const streamResult = streamSession.consumeUpstreamFinalPayload(fallbackData, fallbackText, reply.raw);
           if (streamResult.status === 'failed') {
-            tokenRouter.recordFailure(selected.channel.id, {
-              status: 502,
-              errorText: streamResult.errorMessage,
-              modelName,
-            });
-            logProxy(
+            await failureToolkit.recordStreamFailure({
               selected,
               requestedModel,
-              'failed',
-              200,
-              latency,
-              streamResult.errorMessage,
+              modelName,
+              errorMessage: streamResult.errorMessage,
+              latencyMs: latency,
               retryCount,
-              downstreamPath,
-              parsedUsage.promptTokens,
-              parsedUsage.completionTokens,
-              parsedUsage.totalTokens,
-              0,
-              null,
-              successfulUpstreamPath,
-              clientContext,
-              downstreamApiKeyId,
-            );
+              promptTokens: parsedUsage.promptTokens,
+              completionTokens: parsedUsage.completionTokens,
+              totalTokens: parsedUsage.totalTokens,
+              upstreamPath: successfulUpstreamPath,
+              runtimeFailureStatus: 502,
+            });
             return;
           }
         } else {
@@ -550,29 +454,19 @@ export async function handleChatSurfaceRequest(
 
           const latency = Date.now() - startTime;
           if (streamResult.status === 'failed') {
-            tokenRouter.recordFailure(selected.channel.id, {
-              status: 502,
-              errorText: streamResult.errorMessage,
-              modelName,
-            });
-            logProxy(
+            await failureToolkit.recordStreamFailure({
               selected,
               requestedModel,
-              'failed',
-              200,
-              latency,
-              streamResult.errorMessage,
+              modelName,
+              errorMessage: streamResult.errorMessage,
+              latencyMs: latency,
               retryCount,
-              downstreamPath,
-              parsedUsage.promptTokens,
-              parsedUsage.completionTokens,
-              parsedUsage.totalTokens,
-              0,
-              null,
-              successfulUpstreamPath,
-              clientContext,
-              downstreamApiKeyId,
-            );
+              promptTokens: parsedUsage.promptTokens,
+              completionTokens: parsedUsage.completionTokens,
+              totalTokens: parsedUsage.totalTokens,
+              upstreamPath: successfulUpstreamPath,
+              runtimeFailureStatus: 502,
+            });
             return;
           }
 
@@ -609,24 +503,21 @@ export async function handleChatSurfaceRequest(
 
         tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
         recordDownstreamCostUsage(request, estimatedCost);
-        logProxy(
+        await failureToolkit.log({
           selected,
-          requestedModel,
-          'success',
-          200,
-          latency,
-          null,
+          modelRequested: requestedModel,
+          status: 'success',
+          httpStatus: 200,
+          latencyMs: latency,
+          errorMessage: null,
           retryCount,
-          downstreamPath,
-          resolvedUsage.promptTokens,
-          resolvedUsage.completionTokens,
-          resolvedUsage.totalTokens,
+          promptTokens: resolvedUsage.promptTokens,
+          completionTokens: resolvedUsage.completionTokens,
+          totalTokens: resolvedUsage.totalTokens,
           estimatedCost,
           billingDetails,
-          successfulUpstreamPath,
-          clientContext,
-          downstreamApiKeyId,
-        );
+          upstreamPath: successfulUpstreamPath,
+        });
         return;
       }
 
@@ -658,43 +549,23 @@ export async function handleChatSurfaceRequest(
       const parsedUsage = parseProxyUsage(upstreamData);
       const failure = detectProxyFailure({ rawText, usage: parsedUsage });
       if (failure) {
-        tokenRouter.recordFailure(selected.channel.id, {
-          status: failure.status,
-          errorText: failure.reason,
-          modelName,
-        });
-        logProxy(
+        const failureOutcome = await failureToolkit.handleDetectedFailure({
           selected,
           requestedModel,
-          'failed',
-          failure.status,
-          latency,
-          failure.reason,
+          modelName,
+          failure,
+          latencyMs: latency,
           retryCount,
-          downstreamPath,
-          parsedUsage.promptTokens,
-          parsedUsage.completionTokens,
-          parsedUsage.totalTokens,
-          0,
-          null,
-          successfulUpstreamPath,
-          clientContext,
-          downstreamApiKeyId,
-        );
-
-        if (shouldRetryProxyRequest(failure.status, failure.reason) && retryCount < MAX_RETRIES) {
+          promptTokens: parsedUsage.promptTokens,
+          completionTokens: parsedUsage.completionTokens,
+          totalTokens: parsedUsage.totalTokens,
+          upstreamPath: successfulUpstreamPath,
+        });
+        if (failureOutcome.action === 'retry') {
           retryCount += 1;
           continue;
         }
-
-        await reportProxyAllFailed({
-          model: requestedModel,
-          reason: failure.reason,
-        });
-
-        return reply.code(failure.status).send({
-          error: { message: failure.reason, type: 'upstream_error' },
-        });
+        return reply.code(failureOutcome.status).send(failureOutcome.payload);
       }
       const normalizedFinal = downstreamTransformer.transformFinalResponse(upstreamData, modelName, rawText);
       const downstreamResponse = downstreamTransformer.serializeFinalResponse(normalizedFinal, parsedUsage);
@@ -725,66 +596,37 @@ export async function handleChatSurfaceRequest(
 
       tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
       recordDownstreamCostUsage(request, estimatedCost);
-      logProxy(
+      await failureToolkit.log({
         selected,
-        requestedModel,
-        'success',
-        200,
-        latency,
-        null,
+        modelRequested: requestedModel,
+        status: 'success',
+        httpStatus: 200,
+        latencyMs: latency,
+        errorMessage: null,
         retryCount,
-        downstreamPath,
-        resolvedUsage.promptTokens,
-        resolvedUsage.completionTokens,
-        resolvedUsage.totalTokens,
+        promptTokens: resolvedUsage.promptTokens,
+        completionTokens: resolvedUsage.completionTokens,
+        totalTokens: resolvedUsage.totalTokens,
         estimatedCost,
         billingDetails,
-        successfulUpstreamPath,
-        clientContext,
-        downstreamApiKeyId,
-      );
+        upstreamPath: successfulUpstreamPath,
+      });
 
       return reply.send(downstreamResponse);
     } catch (err: any) {
-      tokenRouter.recordFailure(selected.channel.id, {
-        errorText: err?.message,
-        modelName,
-      });
-      logProxy(
+      const failureOutcome = await failureToolkit.handleExecutionError({
         selected,
         requestedModel,
-        'failed',
-        0,
-        Date.now() - startTime,
-        err?.message || 'network error',
+        modelName,
+        errorMessage: err?.message || 'network failure',
+        latencyMs: Date.now() - startTime,
         retryCount,
-        downstreamPath,
-        0,
-        0,
-        0,
-        0,
-        null,
-        null,
-        clientContext,
-        downstreamApiKeyId,
-      );
-
-      if (retryCount < MAX_RETRIES) {
+      });
+      if (failureOutcome.action === 'retry') {
         retryCount += 1;
         continue;
       }
-
-      await reportProxyAllFailed({
-        model: requestedModel,
-        reason: err?.message || 'network failure',
-      });
-
-      return reply.code(502).send({
-        error: {
-          message: `Upstream error: ${err?.message || 'network failure'}`,
-          type: 'upstream_error',
-        },
-      });
+      return reply.code(failureOutcome.status).send(failureOutcome.payload);
     }
   }
 }
@@ -845,18 +687,23 @@ export async function handleClaudeCountTokensSurfaceRequest(
   });
   const downstreamPolicy = getDownstreamRoutingPolicy(request);
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
+  const failureToolkit = createSurfaceFailureToolkit({
+    warningScope: 'chat',
+    downstreamPath,
+    maxRetries: MAX_RETRIES,
+    clientContext,
+    downstreamApiKeyId,
+  });
   const excludeChannelIds: number[] = [];
   let retryCount = 0;
 
   while (retryCount <= MAX_RETRIES) {
-    let selected = retryCount === 0
-      ? await tokenRouter.selectChannel(requestedModel, downstreamPolicy)
-      : await tokenRouter.selectNextChannel(requestedModel, excludeChannelIds, downstreamPolicy);
-
-    if (!selected && retryCount === 0) {
-      await refreshModelsAndRebuildRoutes();
-      selected = await tokenRouter.selectChannel(requestedModel, downstreamPolicy);
-    }
+    const selected = await selectSurfaceChannelForAttempt({
+      requestedModel,
+      downstreamPolicy,
+      excludeChannelIds,
+      retryCount,
+    });
 
     if (!selected) {
       await reportProxyAllFailed({
@@ -891,7 +738,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         },
       });
     }
-    const oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
+    const oauth = getOauthInfoFromAccount(selected.account);
     const startTime = Date.now();
 
     const buildRequest = () => {
@@ -914,15 +761,11 @@ export async function handleClaudeCountTokensSurfaceRequest(
 
     try {
       let upstreamRequest = buildRequest();
-      let upstream = await dispatchRuntimeRequest({
-        siteUrl: selected.site.url,
-        request: upstreamRequest,
-        buildInit: (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
-          method: 'POST',
-          headers: requestForFetch.headers,
-          body: JSON.stringify(requestForFetch.body),
-        }, resolveChannelProxyUrl(selected.site, selected.account.extraConfig)),
+      const dispatchRequest = createSurfaceDispatchRequest({
+        site: selected.site,
+        accountExtraConfig: selected.account.extraConfig,
       });
+      let upstream = await dispatchRequest(upstreamRequest);
 
       if ((upstream.status === 401 || upstream.status === 403) && oauth) {
         try {
@@ -934,15 +777,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
             extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
           };
           upstreamRequest = buildRequest();
-          upstream = await dispatchRuntimeRequest({
-            siteUrl: selected.site.url,
-            request: upstreamRequest,
-            buildInit: (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
-              method: 'POST',
-              headers: requestForFetch.headers,
-              body: JSON.stringify(requestForFetch.body),
-            }, resolveChannelProxyUrl(selected.site, selected.account.extraConfig)),
-          });
+          upstream = await dispatchRequest(upstreamRequest);
         } catch {
           // Fall through to the regular upstream error handling below.
         }
@@ -959,148 +794,50 @@ export async function handleClaudeCountTokensSurfaceRequest(
       }
 
       if (!upstream.ok) {
-        tokenRouter.recordFailure(selected.channel.id, {
-          status: upstream.status,
-          errorText: typeof payload === 'string' ? payload : text,
-          modelName,
-        });
-        logProxy(
+        const failureOutcome = await failureToolkit.handleUpstreamFailure({
           selected,
           requestedModel,
-          'failed',
-          upstream.status,
-          latency,
-          typeof payload === 'string' ? payload : JSON.stringify(payload),
+          modelName,
+          status: upstream.status,
+          errText: typeof payload === 'string' ? payload : JSON.stringify(payload),
+          rawErrText: typeof payload === 'string' ? payload : text,
+          latencyMs: latency,
           retryCount,
-          downstreamPath,
-          0,
-          0,
-          0,
-          0,
-          null,
-          upstreamRequest.path,
-          clientContext,
-          downstreamApiKeyId,
-        );
-        if (shouldRetryProxyRequest(upstream.status, typeof payload === 'string' ? payload : text) && retryCount < MAX_RETRIES) {
+        });
+        if (failureOutcome.action === 'retry') {
           retryCount += 1;
           continue;
         }
-        return reply.code(upstream.status).type(contentType).send(payload);
+        return reply.code(failureOutcome.status).type(contentType).send(payload);
       }
 
       tokenRouter.recordSuccess(selected.channel.id, latency, 0, modelName);
       recordDownstreamCostUsage(request, 0);
-      logProxy(
+      await failureToolkit.log({
         selected,
-        requestedModel,
-        'success',
-        upstream.status,
-        latency,
-        null,
+        modelRequested: requestedModel,
+        status: 'success',
+        httpStatus: upstream.status,
+        latencyMs: latency,
+        errorMessage: null,
         retryCount,
-        downstreamPath,
-        0,
-        0,
-        0,
-        0,
-        null,
-        upstreamRequest.path,
-        clientContext,
-        downstreamApiKeyId,
-      );
+        upstreamPath: upstreamRequest.path,
+      });
       return reply.code(upstream.status).type(contentType).send(payload);
     } catch (error: any) {
-      tokenRouter.recordFailure(selected.channel.id, {
-        errorText: error?.message,
-        modelName,
-      });
-      logProxy(
+      const failureOutcome = await failureToolkit.handleExecutionError({
         selected,
         requestedModel,
-        'failed',
-        0,
-        Date.now() - startTime,
-        error?.message || 'network error',
+        modelName,
+        errorMessage: error?.message || 'network failure',
+        latencyMs: Date.now() - startTime,
         retryCount,
-        downstreamPath,
-        0,
-        0,
-        0,
-        0,
-        null,
-        null,
-        clientContext,
-        downstreamApiKeyId,
-      );
-      if (retryCount < MAX_RETRIES) {
+      });
+      if (failureOutcome.action === 'retry') {
         retryCount += 1;
         continue;
       }
-      return reply.code(502).send({
-        error: {
-          message: `Upstream error: ${error?.message || 'network failure'}`,
-          type: 'upstream_error',
-        },
-      });
+      return reply.code(failureOutcome.status).send(failureOutcome.payload);
     }
-  }
-}
-
-async function logProxy(
-  selected: any,
-  modelRequested: string,
-  status: string,
-  httpStatus: number,
-  latencyMs: number,
-  errorMessage: string | null,
-  retryCount: number,
-  downstreamPath: string,
-  promptTokens = 0,
-  completionTokens = 0,
-  totalTokens = 0,
-  estimatedCost = 0,
-  billingDetails: unknown = null,
-  upstreamPath: string | null = null,
-  clientContext: DownstreamClientContext | null = null,
-  downstreamApiKeyId: number | null = null,
-) {
-  try {
-    const createdAt = formatUtcSqlDateTime(new Date());
-    const normalizedErrorMessage = composeProxyLogMessage({
-      clientKind: clientContext?.clientKind && clientContext.clientKind !== 'generic'
-        ? clientContext.clientKind
-        : null,
-      sessionId: clientContext?.sessionId || null,
-      traceHint: clientContext?.traceHint || null,
-      downstreamPath,
-      upstreamPath,
-      errorMessage,
-    });
-    await insertProxyLog({
-      routeId: selected.channel.routeId,
-      channelId: selected.channel.id,
-      accountId: selected.account.id,
-      downstreamApiKeyId,
-      modelRequested,
-      modelActual: selected.actualModel,
-      status,
-      httpStatus,
-      latencyMs,
-      promptTokens,
-      completionTokens,
-      totalTokens,
-      estimatedCost,
-      billingDetails,
-      clientFamily: clientContext?.clientKind || null,
-      clientAppId: clientContext?.clientAppId || null,
-      clientAppName: clientContext?.clientAppName || null,
-      clientConfidence: clientContext?.clientConfidence || null,
-      errorMessage: normalizedErrorMessage,
-      retryCount,
-      createdAt,
-    });
-  } catch (error) {
-    console.warn('[proxy/chat] failed to write proxy log', error);
   }
 }

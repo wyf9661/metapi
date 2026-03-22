@@ -21,8 +21,8 @@ import { invalidateTokenRouterCache } from './tokenRouter.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { clearAllRouteDecisionSnapshots } from './routeDecisionSnapshotStore.js';
 import { withAccountProxyOverride, withExplicitProxyRequestInit, withSiteRecordProxyRequestInit } from './siteProxy.js';
-import { getCodexOauthInfoFromExtraConfig, isCodexPlatform } from './oauth/codexAccount.js';
-import { buildOauthInfo, getOauthInfoFromExtraConfig } from './oauth/oauthAccount.js';
+import { isCodexPlatform } from './oauth/codexAccount.js';
+import { buildStoredOauthStateFromAccount, getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from './oauth/claudeProvider.js';
 import { refreshOauthAccessTokenSingleflight } from './oauth/refreshSingleflight.js';
 import {
@@ -241,10 +241,10 @@ async function updateOauthModelDiscoveryState(input: {
   lastModelSyncError?: string;
   lastDiscoveredModels?: string[];
 }) {
-  const oauth = getOauthInfoFromExtraConfig(input.account.extraConfig);
+  const oauth = getOauthInfoFromAccount(input.account);
   if (!oauth) return input.account.extraConfig || null;
   const extraConfig = mergeAccountExtraConfig(input.account.extraConfig, {
-    oauth: buildOauthInfo(input.account.extraConfig, {
+    oauth: buildStoredOauthStateFromAccount(input.account, {
       provider: oauth.provider,
       modelDiscoveryStatus: input.status,
       lastModelSyncAt: input.checkedAt,
@@ -267,7 +267,7 @@ async function discoverCodexModelsFromCloud(input: {
   if (!accessToken) {
     throw new Error('codex oauth access token missing');
   }
-  const oauth = getCodexOauthInfoFromExtraConfig(input.account.extraConfig);
+  const oauth = getOauthInfoFromAccount(input.account);
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     Accept: 'application/json',
@@ -321,7 +321,7 @@ async function validateGeminiCliOauthConnection(input: {
   if (!accessToken) {
     throw new Error('gemini cli oauth access token missing');
   }
-  const oauth = getOauthInfoFromExtraConfig(input.account.extraConfig);
+  const oauth = getOauthInfoFromAccount(input.account);
   const projectId = (oauth?.projectId || '').trim();
   if (!projectId) {
     throw new Error('gemini cli oauth project id missing');
@@ -357,7 +357,7 @@ async function discoverAntigravityModelsFromCloud(input: {
     throw new Error('antigravity oauth access token missing');
   }
 
-  const oauth = getOauthInfoFromExtraConfig(input.account.extraConfig);
+  const oauth = getOauthInfoFromAccount(input.account);
   const requestBody = oauth?.projectId ? { project: oauth.projectId } : {};
   let lastError = '';
 
@@ -508,7 +508,7 @@ export async function refreshModelsForAccount(
 
   const account = row.accounts;
   const site = row.sites;
-  const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
+  const oauth = getOauthInfoFromAccount(account);
   const adapter = getAdapter(site.platform);
   const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
 

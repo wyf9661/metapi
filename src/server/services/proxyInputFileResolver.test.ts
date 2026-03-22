@@ -76,4 +76,51 @@ describe('proxyInputFileResolver', () => {
       },
     });
   });
+
+  it('exports generic inline local file resolution for route-level callers', async () => {
+    getProxyFileByPublicIdForOwnerMock.mockResolvedValue({
+      publicId: 'file-metapi-abc',
+      filename: 'notes.md',
+      mimeType: 'text/markdown',
+      contentBase64: Buffer.from('# hello').toString('base64'),
+    });
+
+    const { inlineLocalInputFileReferences } = await import('./proxyInputFileResolver.js');
+    await expect(inlineLocalInputFileReferences(
+      {
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'file',
+                file: {
+                  file_id: 'file-metapi-abc',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      { ownerType: 'managed_key', ownerId: '7' },
+    )).resolves.toEqual({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              file: {
+                file_data: Buffer.from('# hello').toString('base64'),
+                filename: 'notes.md',
+                mime_type: 'text/markdown',
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
 });

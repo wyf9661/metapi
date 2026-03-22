@@ -7,6 +7,11 @@ import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import { useToast } from '../components/Toast.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
+import {
+  isTruthyFlag,
+  parsePositiveInt,
+  resolveAccountCredentialMode,
+} from './helpers/accountConnection.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import { useIsMobile } from '../components/useIsMobile.js';
@@ -37,18 +42,6 @@ type AccountTokenSyncResult = {
     id?: number;
     username?: string;
   };
-};
-
-const resolveAccountCredentialMode = (account: any): 'session' | 'apikey' => {
-  const rawMode = String(account?.credentialMode || '').trim().toLowerCase();
-  if (rawMode === 'apikey') return 'apikey';
-  if (rawMode === 'session') return 'session';
-  if (typeof account?.capabilities?.proxyOnly === 'boolean') {
-    return account.capabilities.proxyOnly ? 'apikey' : 'session';
-  }
-  return typeof account?.accessToken === 'string' && account.accessToken.trim()
-    ? 'session'
-    : 'apikey';
 };
 
 const isAccountSyncable = (account: any) =>
@@ -103,18 +96,6 @@ async function copyText(text: string) {
   textarea.select();
   document.execCommand('copy');
   document.body.removeChild(textarea);
-}
-
-function parsePositiveInt(input: string | null): number {
-  const value = Number.parseInt(String(input || '').trim(), 10);
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return value;
-}
-
-function isTruthyFlag(input: string | null): boolean {
-  if (!input) return false;
-  const normalized = input.trim().toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
 export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: TokensPanelProps) {

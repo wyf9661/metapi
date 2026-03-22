@@ -14,7 +14,13 @@ import {
   listOAuthProviderDefinitions,
   type OAuthProviderDefinition,
 } from './providers.js';
-import { buildOauthInfo, getOauthInfoFromExtraConfig } from './oauthAccount.js';
+import {
+  buildOauthInfo,
+  buildOauthInfoFromAccount,
+  buildStoredOauthState,
+  buildStoredOauthStateFromAccount,
+  getOauthInfoFromAccount,
+} from './oauthAccount.js';
 import { buildCodexOauthInfo } from './codexAccount.js';
 import { buildQuotaSnapshotFromOauthInfo, refreshOauthQuotaSnapshot } from './quota.js';
 
@@ -232,7 +238,7 @@ async function upsertOauthAccount(input: {
   });
   const extraConfig = mergeAccountExtraConfig(existing?.extraConfig, {
     credentialMode: 'session',
-    oauth,
+    oauth: buildStoredOauthState(oauth),
   });
 
   if (existing) {
@@ -511,7 +517,7 @@ export async function listOauthConnections(options: {
   }
 
   const items = rows.map((row) => {
-    const oauth = getOauthInfoFromExtraConfig(row.accounts.extraConfig)!;
+    const oauth = getOauthInfoFromAccount(row.accounts)!;
     const models = modelMap.get(row.accounts.id) || [];
     const status = (
       oauth.modelDiscoveryStatus === 'abnormal'
@@ -553,8 +559,8 @@ export async function deleteOauthConnection(accountId: number) {
   if (!account) {
     throw new Error('oauth account not found');
   }
-  const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
-  if (!oauth) {
+  const normalizedOauth = getOauthInfoFromAccount(account);
+  if (!normalizedOauth) {
     throw new Error('account is not managed by oauth');
   }
   await db.delete(schema.accounts).where(eq(schema.accounts.id, accountId)).run();
@@ -574,7 +580,7 @@ export async function startOauthRebindFlow(accountId: number, requestOrigin?: st
   if (!account) {
     throw new Error('oauth account not found');
   }
-  const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
+  const oauth = getOauthInfoFromAccount(account);
   if (!oauth) {
     throw new Error('account is not managed by oauth');
   }
@@ -587,10 +593,18 @@ export async function startOauthRebindFlow(accountId: number, requestOrigin?: st
 }
 
 export function buildOauthProviderHeaders(input: {
+  account?: {
+    extraConfig?: string | null;
+    oauthProvider?: string | null;
+    oauthAccountKey?: string | null;
+    oauthProjectId?: string | null;
+  } | null;
   extraConfig?: string | null;
   downstreamHeaders?: Record<string, unknown>;
 }) {
-  const oauth = getOauthInfoFromExtraConfig(input.extraConfig);
+  const oauth = getOauthInfoFromAccount(input.account || {
+    extraConfig: input.extraConfig,
+  });
   if (!oauth) return {};
   const definition = getOAuthProviderDefinition(oauth.provider);
   if (!definition?.buildProxyHeaders) return {};
@@ -619,7 +633,7 @@ export async function refreshOauthAccessToken(accountId: number) {
   if (!account) {
     throw new Error('oauth account not found');
   }
-  const oauth = getOauthInfoFromExtraConfig(account.extraConfig);
+  const oauth = getOauthInfoFromAccount(account);
   if (!oauth?.refreshToken) {
     throw new Error('oauth refresh token missing');
   }
@@ -635,7 +649,7 @@ export async function refreshOauthAccessToken(accountId: number) {
       providerData: oauth.providerData,
     },
   });
-  const nextOauth = buildOauthInfo(account.extraConfig, {
+  const nextOauth = buildOauthInfoFromAccount(account, {
     provider: oauth.provider,
     accountId: refreshed.accountId || oauth.accountId,
     accountKey: refreshed.accountKey || oauth.accountKey || refreshed.accountId || oauth.accountId,
@@ -652,7 +666,7 @@ export async function refreshOauthAccessToken(accountId: number) {
   });
   const extraConfig = mergeAccountExtraConfig(account.extraConfig, {
     credentialMode: 'session',
-    oauth: nextOauth,
+    oauth: buildStoredOauthStateFromAccount(account, nextOauth),
   });
 
   await db.update(schema.accounts).set({

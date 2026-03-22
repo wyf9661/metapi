@@ -1,5 +1,10 @@
 import type { CliProfileDefinition, DetectCliProfileInput } from './types.js';
 
+type CodexOfficialClientApp = {
+  clientAppId: string;
+  clientAppName: string;
+};
+
 const CODEX_OFFICIAL_CLIENT_USER_AGENT_PREFIXES = [
   'codex_cli_rs/',
   'codex_vscode/',
@@ -15,6 +20,51 @@ const CODEX_OFFICIAL_CLIENT_ORIGINATOR_PREFIXES = [
   'codex_',
   'codex ',
 ];
+
+const CODEX_OFFICIAL_CLIENT_APP_RULES = [
+  {
+    id: 'codex_cli_rs',
+    name: 'Codex CLI',
+    userAgentPrefixes: ['codex_cli_rs/'],
+    originatorPrefixes: ['codex_cli_rs'],
+  },
+  {
+    id: 'codex_vscode',
+    name: 'Codex VSCode',
+    userAgentPrefixes: ['codex_vscode/'],
+    originatorPrefixes: ['codex_vscode'],
+  },
+  {
+    id: 'codex_app',
+    name: 'Codex App',
+    userAgentPrefixes: ['codex_app/'],
+    originatorPrefixes: ['codex_app'],
+  },
+  {
+    id: 'codex_chatgpt_desktop',
+    name: 'Codex Desktop',
+    userAgentPrefixes: ['codex_chatgpt_desktop/', 'codex desktop/'],
+    originatorPrefixes: ['codex_chatgpt_desktop', 'codex desktop'],
+  },
+  {
+    id: 'codex_atlas',
+    name: 'Codex Atlas',
+    userAgentPrefixes: ['codex_atlas/'],
+    originatorPrefixes: ['codex_atlas'],
+  },
+  {
+    id: 'codex_exec',
+    name: 'Codex Exec',
+    userAgentPrefixes: ['codex_exec/'],
+    originatorPrefixes: ['codex_exec'],
+  },
+  {
+    id: 'codex_sdk_ts',
+    name: 'Codex SDK TS',
+    userAgentPrefixes: ['codex_sdk_ts/'],
+    originatorPrefixes: ['codex_sdk_ts'],
+  },
+] as const;
 
 function headerValueToString(value: unknown): string | null {
   if (typeof value === 'string') {
@@ -71,6 +121,23 @@ function isCodexPath(path: string): boolean {
   return normalizedPath.startsWith('/v1/responses')
     || normalizedPath === '/v1/chat/completions'
     || normalizedPath.startsWith('/v1/messages');
+}
+
+export function detectCodexOfficialClientApp(
+  headers?: Record<string, unknown>,
+): CodexOfficialClientApp | null {
+  for (const rule of CODEX_OFFICIAL_CLIENT_APP_RULES) {
+    const matchesOriginator = Array.isArray(rule.originatorPrefixes)
+      && matchesHeaderPrefixes(getHeaderValue(headers, 'originator'), [...rule.originatorPrefixes]);
+    const matchesUserAgent = Array.isArray(rule.userAgentPrefixes)
+      && matchesHeaderPrefixes(getHeaderValue(headers, 'user-agent'), [...rule.userAgentPrefixes]);
+    if (!matchesOriginator && !matchesUserAgent) continue;
+    return {
+      clientAppId: rule.id,
+      clientAppName: rule.name,
+    };
+  }
+  return null;
 }
 
 export function isCodexResponsesSurface(headers?: Record<string, unknown>): boolean {

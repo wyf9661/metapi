@@ -15,6 +15,7 @@ import {
   parseRouteDecisionSnapshot,
   saveRouteDecisionSnapshots,
 } from '../../services/routeDecisionSnapshotStore.js';
+import { normalizeTokenRouteMode, type RouteMode } from '../../../shared/tokenRouteContract.js';
 
 function isExactModelPattern(modelPattern: string): boolean {
   const normalized = modelPattern.trim();
@@ -23,14 +24,13 @@ function isExactModelPattern(modelPattern: string): boolean {
   return !/[\*\?]/.test(normalized);
 }
 
-type RouteMode = 'pattern' | 'explicit_group';
 type RouteRow = typeof schema.tokenRoutes.$inferSelect & {
   routeMode: RouteMode;
   sourceRouteIds: number[];
 };
 
 function normalizeRouteMode(routeMode: unknown): RouteMode {
-  return routeMode === 'explicit_group' ? 'explicit_group' : 'pattern';
+  return normalizeTokenRouteMode(routeMode);
 }
 
 function isExplicitGroupRoute(route: Pick<RouteRow, 'routeMode'> | Pick<typeof schema.tokenRoutes.$inferSelect, 'routeMode'>): boolean {

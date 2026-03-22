@@ -8,7 +8,7 @@ import { parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { isModelAllowedByPolicyOrAllowedRoutes } from '../../services/downstreamApiKeyService.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
-import { getOauthInfoFromExtraConfig } from '../../services/oauth/oauthAccount.js';
+import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
@@ -407,7 +407,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         isGeminiCliDownstream ? omitGeminiCliModelField(request.body) : (request.body || {}),
         actualModel,
       );
-      let oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
+      let oauth = getOauthInfoFromAccount(selected.account);
       const isGeminiCli = isGeminiCliPlatform(selected.site.platform);
       const isInternalGemini = isInternalGeminiPlatform(selected.site.platform);
       const isDirectGeminiFamily = isDirectGeminiFamilyPlatform(selected.site.platform);
@@ -463,7 +463,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 ...(isStreamAction ? { Accept: 'text/event-stream' } : {}),
                 Authorization: `Bearer ${selected.tokenValue}`,
                 ...buildOauthProviderHeaders({
-                  extraConfig: typeof selected.account.extraConfig === 'string' ? selected.account.extraConfig : null,
+                  account: selected.account,
                   downstreamHeaders: request.headers as Record<string, unknown>,
                 }),
               }
@@ -523,7 +523,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 accessToken: refreshed.accessToken,
                 extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
               };
-              oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
+              oauth = getOauthInfoFromAccount(selected.account);
               upstream = await dispatchSelectedRequest();
               contentType = upstream.headers.get('content-type') || 'application/json';
             } catch {
@@ -758,7 +758,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             forceNormalizeClaudeBody: requestOptions.forceNormalizeClaudeBody,
             downstreamHeaders: request.headers as Record<string, unknown>,
             providerHeaders: buildOauthProviderHeaders({
-              extraConfig: typeof selected.account.extraConfig === 'string' ? selected.account.extraConfig : null,
+              account: selected.account,
               downstreamHeaders: request.headers as Record<string, unknown>,
             }),
           });

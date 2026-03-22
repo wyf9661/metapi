@@ -1,7 +1,9 @@
 import type { ProxyResourceOwner } from '../middleware/auth.js';
-import { getProxyFileByPublicIdForOwner, LOCAL_PROXY_FILE_ID_PREFIX } from './proxyFileStore.js';
+import { getProxyFileByPublicIdForOwner } from './proxyFileStore.js';
 import { ensureBase64DataUrl } from '../transformers/shared/inputFile.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../proxy-core/capabilities/conversationFileCapabilities.js';
+
+const LOCAL_PROXY_FILE_ID_PREFIX = 'file-metapi-';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -140,7 +142,6 @@ async function resolveInputFileLike(fileLike: InputFileLike, owner: ProxyResourc
       throw new ProxyInputFileResolutionError(400, `unsupported file mime type: ${mimeType}`);
     }
     return {
-      fileId: fileLike.fileId,
       filename: fileLike.filename || stored.filename,
       fileData: stored.contentBase64,
       mimeType,
@@ -237,6 +238,36 @@ async function resolveResponsesMessageContent(content: unknown, owner: ProxyReso
     if (!fileLike || !shouldResolveInlineFileLike(fileLike)) return cloneJsonValue(item);
     return toResponsesResolvedBlock(await resolveInputFileLike(fileLike, owner));
   }));
+}
+
+export async function inlineLocalInputFileReferences(
+  value: unknown,
+  owner: ProxyResourceOwner,
+): Promise<unknown> {
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((item) => inlineLocalInputFileReferences(item, owner)));
+  }
+
+  if (!isRecord(value)) return cloneJsonValue(value);
+
+  const fileLike = normalizeInputFileLike(value);
+  if (fileLike && shouldResolveInlineFileLike(fileLike)) {
+    const resolved = await resolveInputFileLike(fileLike, owner);
+    const type = asTrimmedString(value.type).toLowerCase();
+    if (type === 'file') {
+      return toOpenAiResolvedBlock(resolved);
+    }
+    if (type === 'input_file') {
+      return toResponsesResolvedBlock(resolved);
+    }
+  }
+
+  const entries = await Promise.all(
+    Object.entries(value).map(async ([key, entryValue]) => (
+      [key, await inlineLocalInputFileReferences(entryValue, owner)] as const
+    )),
+  );
+  return Object.fromEntries(entries);
 }
 
 export async function resolveOpenAiBodyInputFiles(
