@@ -1484,11 +1484,13 @@ export default function TokenRoutes() {
                     onTokenDraftChange={stableTokenDraftChange}
                     onSaveToken={stableChannelTokenSave}
                     onDeleteChannel={stableDeleteChannel}
+                    onToggleChannelEnabled={stableToggleChannelEnabled}
                     onChannelDragEnd={stableChannelDragEnd}
                     missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
                     missingTokenGroupItems={getMissingTokenGroupItems(route.id)}
                     onCreateTokenForMissing={stableCreateTokenForMissing}
                     onAddChannel={stableAddChannel}
+                    onSiteBlockModel={stableSiteBlockModel}
                     expandedSourceGroupMap={expandedSourceGroupMap}
                     onToggleSourceGroup={stableToggleSourceGroup}
                   />
