@@ -1,4 +1,4 @@
-import { parseProxyLogMetadata } from '../../../shared/proxyLogMeta.js';
+import { parseProxyLogMetadata, type ParsedProxyLogMetadata } from '../../../shared/proxyLogMeta.js';
 
 type ComposeProxyLogMessageArgs = {
   clientKind?: string | null;
@@ -9,13 +9,7 @@ type ComposeProxyLogMessageArgs = {
   errorMessage?: string | null;
 };
 
-export type ParsedProxyLogMessageMeta = {
-  clientKind: string | null;
-  sessionId: string | null;
-  downstreamPath: string | null;
-  upstreamPath: string | null;
-  messageText: string;
-};
+export type ParsedProxyLogMessageMeta = ParsedProxyLogMetadata;
 
 export function parseProxyLogMessageMeta(rawMessage: string): ParsedProxyLogMessageMeta {
   return parseProxyLogMetadata(rawMessage);

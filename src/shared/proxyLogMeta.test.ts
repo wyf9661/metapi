@@ -24,4 +24,38 @@ describe('proxyLogMeta', () => {
       messageText: 'network timeout',
     });
   });
+
+  it('handles mixed-case, partial, reordered, and empty metadata safely', () => {
+    expect(parseProxyLogMetadata('[CLIENT:codex] [SESSION:turn-1] boom')).toEqual({
+      clientKind: 'codex',
+      sessionId: 'turn-1',
+      downstreamPath: null,
+      upstreamPath: null,
+      messageText: 'boom',
+    });
+
+    expect(parseProxyLogMetadata('[client:codex] boom')).toEqual({
+      clientKind: 'codex',
+      sessionId: null,
+      downstreamPath: null,
+      upstreamPath: null,
+      messageText: 'boom',
+    });
+
+    expect(parseProxyLogMetadata('[upstream:/x] [client:codex] [session:1] msg')).toEqual({
+      clientKind: 'codex',
+      sessionId: '1',
+      downstreamPath: null,
+      upstreamPath: '/x',
+      messageText: 'msg',
+    });
+
+    expect(parseProxyLogMetadata('')).toEqual({
+      clientKind: null,
+      sessionId: null,
+      downstreamPath: null,
+      upstreamPath: null,
+      messageText: '',
+    });
+  });
 });

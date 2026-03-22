@@ -290,7 +290,7 @@ export default function Settings() {
     const query = selectorGroupSearch.trim();
     if (!query) return groupRouteOptions;
     return groupRouteOptions.filter((route) => {
-      const matchText = `${resolveRouteTitle(route)} ${route.modelPattern} ${route.displayName || ''}`;
+      const matchText = `${resolveRouteTitle(route)} ${route.modelPattern}`;
       return fuzzyMatch(matchText, query);
     });
   }, [groupRouteOptions, selectorGroupSearch]);
@@ -1970,6 +1970,8 @@ export default function Settings() {
                                       <BrandGlyph brand={routeBrand} alt={routeTitle} size={18} fallbackText={routeTitle} />
                                     ) : routeIcon.kind === 'auto' ? (
                                       <InlineBrandIcon model={route.modelPattern} size={18} />
+                                    ) : routeIcon.kind === 'none' ? (
+                                      null
                                     ) : null}
                                   </span>
                                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
