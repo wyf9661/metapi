@@ -221,6 +221,7 @@ export default function Sites() {
   const highlightTimerRef = useRef<number | null>(null);
   const toast = useToast();
   const [disabledModels, setDisabledModels] = useState<string[]>([]);
+  const [disabledModelInput, setDisabledModelInput] = useState('');
   const [disabledModelsLoading, setDisabledModelsLoading] = useState(false);
   const [disabledModelsSaving, setDisabledModelsSaving] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -355,32 +356,54 @@ export default function Sites() {
     setEditor({ mode: 'edit', editingSiteId: site.id });
     setForm(siteFormFromSite(site));
     scrollToEditorTop();
-    // Load disabled models and available models for this site
+    // Load disabled models and discovered models independently so a best-effort
+    // availability fetch cannot wipe the existing disabled-model state.
     const loadSiteId = site.id;
     loadingModelsSiteIdRef.current = loadSiteId;
     setDisabledModelsLoading(true);
     setDisabledModels([]);
+    setDisabledModelInput('');
     setAvailableModels([]);
     setDisabledModelSearch('');
-    Promise.all([
-      api.getSiteDisabledModels(site.id),
-      api.getSiteAvailableModels(site.id),
-    ])
-      .then(([disabledRes, availableRes]: any[]) => {
-        // Guard: only apply if we're still editing the same site
+    let pendingLoads = 2;
+    const markLoadFinished = () => {
+      pendingLoads -= 1;
+      if (pendingLoads <= 0 && loadingModelsSiteIdRef.current === loadSiteId) {
+        setDisabledModelsLoading(false);
+      }
+    };
+
+    api.getSiteDisabledModels(site.id)
+      .then((disabledRes: any) => {
         if (loadingModelsSiteIdRef.current !== loadSiteId) return;
         setDisabledModels(Array.isArray(disabledRes?.models) ? disabledRes.models : []);
+      })
+      .catch((err: any) => {
+        console.warn('Failed to load site disabled models:', err?.message || err);
+      })
+      .finally(markLoadFinished);
+
+    api.getSiteAvailableModels(site.id)
+      .then((availableRes: any) => {
+        if (loadingModelsSiteIdRef.current !== loadSiteId) return;
         setAvailableModels(Array.isArray(availableRes?.models) ? availableRes.models : []);
       })
       .catch((err: any) => {
-        console.warn('Failed to load site models:', err?.message || err);
-        // Preserve previous (empty) model lists — don't clear UI silently
+        console.warn('Failed to load site available models:', err?.message || err);
       })
-      .finally(() => {
-        if (loadingModelsSiteIdRef.current === loadSiteId) {
-          setDisabledModelsLoading(false);
-        }
-      });
+      .finally(markLoadFinished);
+  };
+
+  const handleAddDisabledModel = () => {
+    const model = disabledModelInput.trim();
+    if (!model) return;
+    if (disabledModels.includes(model)) {
+      toast.info(`模型 "${model}" 已在禁用列表中`);
+      setDisabledModelInput('');
+      return;
+    }
+    setDisabledModels((prev) => [...prev, model]);
+    setDisabledModelInput('');
   };
 
   const handleSaveDisabledModels = async () => {
@@ -953,7 +976,7 @@ export default function Sites() {
                 ) : (
                   <>
                     {/* Search and brand group controls */}
-                    {brandGroups.length > 0 && (
+                    {brandGroups.length > 0 ? (
                       <div style={{ marginBottom: 10 }}>
                         <input
                           placeholder="搜索模型名称..."
@@ -1032,7 +1055,37 @@ export default function Sites() {
                           ))}
                         </div>
                       </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+                        暂无已发现模型，仍可手动添加需要屏蔽的模型名。
+                      </div>
                     )}
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, marginBottom: 10 }}>
+                      <input
+                        placeholder="输入模型名称，如 gpt-4o"
+                        value={disabledModelInput}
+                        onChange={(e) => setDisabledModelInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddDisabledModel();
+                          }
+                        }}
+                        style={{
+                          flex: 1, padding: '8px 12px', border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
+                          background: 'var(--color-bg)', color: 'var(--color-text-primary)',
+                        }}
+                      />
+                      <button
+                        onClick={handleAddDisabledModel}
+                        className="btn btn-ghost"
+                        style={{ padding: '8px 14px', fontSize: 12, border: '1px solid var(--color-border)' }}
+                      >
+                        添加模型
+                      </button>
+                    </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
                       <button
