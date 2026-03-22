@@ -267,6 +267,22 @@ export function SortableChannelRow({
                   </button>
 
                   <button
+                    onClick={() => onToggleEnabled(channel.enabled === false)}
+                    className={`btn btn-link ${channel.enabled === false ? 'btn-link-info' : 'btn-link-warning'}`}
+                  >
+                    {channel.enabled === false ? '启用' : '禁用'}
+                  </button>
+
+                  {onSiteBlockModel && channel.site?.id ? (
+                    <button
+                      onClick={onSiteBlockModel}
+                      className="btn btn-link btn-link-warning"
+                    >
+                      站点屏蔽
+                    </button>
+                  ) : null}
+
+                  <button
                     onClick={onDeleteChannel}
                     className="btn btn-link btn-link-danger"
                   >
@@ -463,6 +479,22 @@ export function SortableChannelRow({
               >
                 {isUpdatingToken ? <span className="spinner spinner-sm" /> : '保存'}
               </button>
+
+              <button
+                onClick={() => onToggleEnabled(channel.enabled === false)}
+                className={`btn btn-link ${channel.enabled === false ? 'btn-link-info' : 'btn-link-warning'}`}
+              >
+                {channel.enabled === false ? '启用' : '禁用'}
+              </button>
+
+              {onSiteBlockModel && channel.site?.id ? (
+                <button
+                  onClick={onSiteBlockModel}
+                  className="btn btn-link btn-link-warning"
+                >
+                  站点屏蔽
+                </button>
+              ) : null}
 
               <button
                 onClick={onDeleteChannel}
