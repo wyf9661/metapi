@@ -164,6 +164,7 @@ export default function TokenRoutes() {
   const candidatesLoadedRef = useRef(false);
   const candidatesPromiseRef = useRef<Promise<void> | null>(null);
   const candidatesVersionRef = useRef(0);
+  const candidatesSeqRef = useRef(0);
 
   const loadRouteDecisions = async (
     routeRows: RouteSummaryRow[],
@@ -235,10 +236,12 @@ export default function TokenRoutes() {
   const loadCandidates = (force?: boolean) => {
     if (candidatesLoadedRef.current && !force) return;
     if (candidatesPromiseRef.current && !force) return;
+    const seq = ++candidatesSeqRef.current;
     candidatesLoadedRef.current = true;
     const promise = (async () => {
       try {
         const candidateRows = await api.getModelTokenCandidates();
+        if (candidatesSeqRef.current !== seq) return; // stale
         startTransition(() => {
           setModelCandidates((candidateRows?.models || {}) as RouteModelCandidatesByModelName);
           setMissingTokenModelsByName(
@@ -251,7 +254,7 @@ export default function TokenRoutes() {
         });
         candidatesVersionRef.current = Date.now();
       } catch {
-        candidatesLoadedRef.current = false;
+        if (candidatesSeqRef.current === seq) candidatesLoadedRef.current = false;
       } finally {
         if (candidatesPromiseRef.current === promise) {
           candidatesPromiseRef.current = null;
@@ -740,6 +743,7 @@ export default function TokenRoutes() {
     let enabled = 0;
     let disabled = 0;
     for (const route of baseFilteredRoutes) {
+      if (route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true) continue;
       if (route.enabled) enabled++;
       else disabled++;
     }
@@ -748,8 +752,10 @@ export default function TokenRoutes() {
 
   const filteredRoutes = useMemo(() => {
     if (enabledFilter === 'all') return baseFilteredRoutes;
-    if (enabledFilter === 'enabled') return baseFilteredRoutes.filter((route) => route.enabled);
-    return baseFilteredRoutes.filter((route) => !route.enabled);
+    return baseFilteredRoutes.filter((route) => {
+      if (route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true) return false;
+      return enabledFilter === 'enabled' ? route.enabled : !route.enabled;
+    });
   }, [baseFilteredRoutes, enabledFilter]);
 
   useEffect(() => {
@@ -1451,7 +1457,7 @@ export default function TokenRoutes() {
                         <button
                           type="button"
                           className="btn btn-link"
-                          onClick={() => setAddChannelModalRouteId(route.id)}
+                          onClick={() => stableAddChannel(route.id)}
                         >
                           {tr('添加通道')}
                         </button>

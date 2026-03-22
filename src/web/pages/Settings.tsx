@@ -424,14 +424,6 @@ export default function Settings() {
         api.getRoutesLite(),
         api.getRuntimeDatabaseConfig(),
       ]);
-      let brandListBrands: string[] = [];
-      try {
-        const brandListRes = await api.getBrandList();
-        brandListBrands = Array.isArray(brandListRes?.brands) ? brandListRes.brands : [];
-      } catch {
-        // best-effort: brand list is non-critical
-      }
-      setAllBrandNames(brandListBrands);
       setMaskedToken(authInfo.masked || '****');
       setRuntime({
         checkinCron: runtimeInfo.checkinCron || '0 8 * * *',
@@ -508,6 +500,10 @@ export default function Settings() {
     } finally {
       setLoading(false);
     }
+    // Load brand list in background (non-blocking, best-effort)
+    api.getBrandList()
+      .then((res: any) => setAllBrandNames(Array.isArray(res?.brands) ? res.brands : []))
+      .catch(() => {/* best-effort */});
   };
 
   useEffect(() => {
@@ -834,10 +830,9 @@ export default function Settings() {
     setSavingBrandFilter(true);
     try {
       const res = await api.updateRuntimeSettings({ globalBlockedBrands: blockedBrands });
-      setRuntime((prev) => ({
-        ...prev,
-        globalBlockedBrands: Array.isArray(res?.globalBlockedBrands) ? res.globalBlockedBrands : blockedBrands,
-      }));
+      const resolved = Array.isArray(res?.globalBlockedBrands) ? res.globalBlockedBrands : blockedBrands;
+      setRuntime((prev) => ({ ...prev, globalBlockedBrands: resolved }));
+      setBlockedBrands(resolved);
       toast.success('品牌屏蔽设置已保存');
       try {
         await api.rebuildRoutes(false);

@@ -953,7 +953,7 @@ export default function Sites() {
                 ) : (
                   <>
                     {/* Search and brand group controls */}
-                    {availableModels.length > 0 && (
+                    {brandGroups.length > 0 && (
                       <div style={{ marginBottom: 10 }}>
                         <input
                           placeholder="搜索模型名称..."
@@ -1016,7 +1016,7 @@ export default function Sites() {
                                       checked={isDisabled}
                                       onChange={(e) => {
                                         if (e.target.checked) {
-                                          setDisabledModels((prev) => [...prev, model]);
+                                          setDisabledModels((prev) => Array.from(new Set([...prev, model])));
                                         } else {
                                           setDisabledModels((prev) => prev.filter((m) => m !== model));
                                         }
