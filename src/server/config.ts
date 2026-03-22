@@ -137,6 +137,7 @@ export function buildFastifyOptions(
 ): FastifyServerOptions {
   return {
     logger: true,
+    trustProxy: true,
     bodyLimit: appConfig.requestBodyLimit,
   };
 }

@@ -127,8 +127,8 @@ const CREATE_INDEX_SQL: Record<ProxyFileSchemaDialect, string[]> = {
     'CREATE INDEX IF NOT EXISTS "proxy_files_owner_lookup_idx" ON "proxy_files" ("owner_type", "owner_id", "deleted_at")',
   ],
   mysql: [
-    'CREATE UNIQUE INDEX `proxy_files_public_id_unique` ON `proxy_files` (`public_id`)',
-    'CREATE INDEX `proxy_files_owner_lookup_idx` ON `proxy_files` (`owner_type`, `owner_id`)',
+    'CREATE UNIQUE INDEX `proxy_files_public_id_unique` ON `proxy_files` (`public_id`(191))',
+    'CREATE INDEX `proxy_files_owner_lookup_idx` ON `proxy_files` (`owner_type`(191), `owner_id`(191), `deleted_at`)',
   ],
 };
 
