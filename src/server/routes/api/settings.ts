@@ -401,7 +401,19 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value;
         if (Array.isArray(parsed)) {
-          config.globalBlockedBrands = parsed.filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter(Boolean);
+          const nextBrands = parsed.filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter(Boolean);
+          const prev = JSON.stringify(config.globalBlockedBrands);
+          config.globalBlockedBrands = nextBrands;
+          if (prev !== JSON.stringify(nextBrands)) {
+            startBackgroundTask(
+              {
+                type: 'maintenance',
+                title: '品牌屏蔽变更后重建路由',
+                dedupeKey: 'refresh-models-and-rebuild-routes',
+              },
+              async () => refreshModelsAndRebuildRoutes(),
+            );
+          }
         }
       } catch {
         return;
@@ -965,9 +977,10 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     if (body.globalBlockedBrands !== undefined) {
-      const nextBrands = Array.isArray(body.globalBlockedBrands)
-        ? body.globalBlockedBrands.filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter(Boolean)
-        : [];
+      if (!Array.isArray(body.globalBlockedBrands)) {
+        return reply.code(400).send({ error: 'globalBlockedBrands must be an array of strings' });
+      }
+      const nextBrands = body.globalBlockedBrands.filter((b): b is string => typeof b === 'string').map((b) => b.trim()).filter(Boolean);
       const uniqueBrands = Array.from(new Set(nextBrands));
       const prev = JSON.stringify(config.globalBlockedBrands);
       const next = JSON.stringify(uniqueBrands);
@@ -976,6 +989,16 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.globalBlockedBrands = uniqueBrands;
       upsertSetting('global_blocked_brands', JSON.stringify(uniqueBrands));
+      if (prev !== next) {
+        startBackgroundTask(
+          {
+            type: 'maintenance',
+            title: '品牌屏蔽变更后重建路由',
+            dedupeKey: 'refresh-models-and-rebuild-routes',
+          },
+          async () => refreshModelsAndRebuildRoutes(),
+        );
+      }
     }
 
     if (body.webhookUrl !== undefined) {

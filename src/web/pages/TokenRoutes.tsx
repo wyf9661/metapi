@@ -163,6 +163,7 @@ export default function TokenRoutes() {
 
   const candidatesLoadedRef = useRef(false);
   const candidatesPromiseRef = useRef<Promise<void> | null>(null);
+  const candidatesVersionRef = useRef(0);
 
   const loadRouteDecisions = async (
     routeRows: RouteSummaryRow[],
@@ -248,6 +249,7 @@ export default function TokenRoutes() {
           );
           setEndpointTypesByModel(candidateRows?.endpointTypesByModel || {});
         });
+        candidatesVersionRef.current = Date.now();
       } catch {
         candidatesLoadedRef.current = false;
       } finally {
@@ -298,12 +300,14 @@ export default function TokenRoutes() {
       const res = await api.rebuildRoutes(true);
       if (res?.queued) {
         toast.info(res.message || '已开始重建路由，请稍后查看日志');
+        invalidateChannels();
         await load();
         return;
       }
       const createdRoutes = res?.rebuild?.createdRoutes ?? 0;
       const createdChannels = res?.rebuild?.createdChannels ?? 0;
       toast.success(`自动重建完成（新增 ${createdRoutes} 条路由 / ${createdChannels} 个通道）`);
+      invalidateChannels();
       await load();
     } catch (e: any) {
       toast.error(e.message || '重建路由失败');
@@ -778,7 +782,7 @@ export default function TokenRoutes() {
 
   // Lazy per-route candidate index — only computes for routes actually accessed
   const candidateIndexCacheRef = useRef<{ key: string; cache: Map<number, RouteCandidateView> }>({ key: '', cache: new Map() });
-  const candidateIndexCacheKey = `${routePatternsKey}|${Object.keys(modelCandidates).length}`;
+  const candidateIndexCacheKey = `${routePatternsKey}|${Object.keys(modelCandidates).length}|${candidatesVersionRef.current}`;
   if (candidateIndexCacheRef.current.key !== candidateIndexCacheKey) {
     candidateIndexCacheRef.current = { key: candidateIndexCacheKey, cache: new Map() };
   }
@@ -797,7 +801,7 @@ export default function TokenRoutes() {
 
   // Lazy per-route missing token index
   const missingTokenCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
-  const missingTokenCacheKey = `${routePatternsKey}|${Object.keys(missingTokenModelsByName).length}`;
+  const missingTokenCacheKey = `${routePatternsKey}|${Object.keys(missingTokenModelsByName).length}|${candidatesVersionRef.current}`;
   if (missingTokenCacheRef.current.key !== missingTokenCacheKey) {
     missingTokenCacheRef.current = { key: missingTokenCacheKey, cache: new Map() };
   }
@@ -816,7 +820,7 @@ export default function TokenRoutes() {
 
   // Lazy per-route missing token group index
   const missingTokenGroupCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
-  const missingTokenGroupCacheKey = `${routePatternsKey}|${Object.keys(missingTokenGroupModelsByName).length}`;
+  const missingTokenGroupCacheKey = `${routePatternsKey}|${Object.keys(missingTokenGroupModelsByName).length}|${candidatesVersionRef.current}`;
   if (missingTokenGroupCacheRef.current.key !== missingTokenGroupCacheKey) {
     missingTokenGroupCacheRef.current = { key: missingTokenGroupCacheKey, cache: new Map() };
   }
@@ -897,12 +901,16 @@ export default function TokenRoutes() {
   };
 
   const handleToggleChannelEnabled = async (channelId: number, routeId: number, enabled: boolean) => {
+    if (updatingChannel[channelId]) return;
+    setUpdatingChannel((prev) => ({ ...prev, [channelId]: true }));
     try {
       await api.updateChannel(channelId, { enabled });
       toast.success(enabled ? '通道已启用' : '通道已禁用');
       await loadChannels(routeId, true);
     } catch (e: any) {
       toast.error(e.message || '更新通道状态失败');
+    } finally {
+      setUpdatingChannel((prev) => ({ ...prev, [channelId]: false }));
     }
   };
 
@@ -1024,6 +1032,7 @@ export default function TokenRoutes() {
       await api.updateSiteDisabledModels(siteId, [...currentModels, modelName]);
       toast.success(`已将「${modelName}」加入站点「${siteName}」的禁用列表，正在重建路由...`);
       await api.rebuildRoutes(false);
+      invalidateChannels();
       await load();
     } catch (e: any) {
       toast.error(e.message || '站点屏蔽模型失败');
@@ -1324,7 +1333,7 @@ export default function TokenRoutes() {
           </button>
           <MobileFilterSheet open={showFilters} onClose={() => setShowFilters(false)} title={tr('筛选路由')}>
             <RouteFilterBar
-              totalRouteCount={listVisibleRoutes.length}
+              totalRouteCount={baseFilteredRoutes.length}
               activeBrand={activeBrand}
               setActiveBrand={setActiveBrand}
               activeSite={activeSite}
@@ -1347,7 +1356,7 @@ export default function TokenRoutes() {
         </>
       ) : (
         <RouteFilterBar
-          totalRouteCount={listVisibleRoutes.length}
+          totalRouteCount={baseFilteredRoutes.length}
           activeBrand={activeBrand}
           setActiveBrand={setActiveBrand}
           activeSite={activeSite}

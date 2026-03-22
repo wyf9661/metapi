@@ -417,15 +417,21 @@ export default function Settings() {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const [authInfo, runtimeInfo, downstreamInfo, routeRows, runtimeDatabaseInfo, brandListRes] = await Promise.all([
+      const [authInfo, runtimeInfo, downstreamInfo, routeRows, runtimeDatabaseInfo] = await Promise.all([
         api.getAuthInfo(),
         api.getRuntimeSettings(),
         api.getDownstreamApiKeys(),
         api.getRoutesLite(),
         api.getRuntimeDatabaseConfig(),
-        api.getBrandList(),
       ]);
-      setAllBrandNames(Array.isArray(brandListRes?.brands) ? brandListRes.brands : []);
+      let brandListBrands: string[] = [];
+      try {
+        const brandListRes = await api.getBrandList();
+        brandListBrands = Array.isArray(brandListRes?.brands) ? brandListRes.brands : [];
+      } catch {
+        // best-effort: brand list is non-critical
+      }
+      setAllBrandNames(brandListBrands);
       setMaskedToken(authInfo.masked || '****');
       setRuntime({
         checkinCron: runtimeInfo.checkinCron || '0 8 * * *',
@@ -1469,6 +1475,8 @@ export default function Settings() {
                 <button
                   key={brand}
                   type="button"
+                  role="switch"
+                  aria-checked={isBlocked}
                   onClick={() => {
                     if (isBlocked) {
                       setBlockedBrands((prev) => prev.filter((b) => b !== brand));

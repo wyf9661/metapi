@@ -534,9 +534,9 @@ export async function sitesRoutes(app: FastifyInstance) {
       .all();
 
     const models = Array.from(new Set([
-      ...accountModels.map((r) => r.modelName),
-      ...tokenModels.map((r) => r.modelName),
-    ])).filter((m) => m.trim().length > 0).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      ...accountModels.map((r) => r.modelName.trim()),
+      ...tokenModels.map((r) => r.modelName.trim()),
+    ])).filter((m) => m.length > 0).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
     return { siteId: id, models };
   });

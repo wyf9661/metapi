@@ -228,8 +228,9 @@ export default function Sites() {
   const disabledModelSet = useMemo(() => new Set(disabledModels), [disabledModels]);
 
   const brandGroups = useMemo(() => {
+    const allModels = Array.from(new Set([...availableModels, ...disabledModels]));
     const groups = new Map<string, string[]>();
-    for (const model of availableModels) {
+    for (const model of allModels) {
       const brand = getBrand(model);
       const brandName = brand?.name || '其他';
       if (!groups.has(brandName)) groups.set(brandName, []);
@@ -240,7 +241,7 @@ export default function Sites() {
       if (b[0] === '其他') return -1;
       return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
     });
-  }, [availableModels]);
+  }, [availableModels, disabledModels]);
 
   const filteredBrandGroups = useMemo(() => {
     const q = disabledModelSearch.trim().toLowerCase();
@@ -354,6 +355,7 @@ export default function Sites() {
     setForm(siteFormFromSite(site));
     scrollToEditorTop();
     // Load disabled models and available models for this site
+    const loadSiteId = site.id;
     setDisabledModelsLoading(true);
     setDisabledModels([]);
     setAvailableModels([]);
@@ -363,11 +365,18 @@ export default function Sites() {
       api.getSiteAvailableModels(site.id),
     ])
       .then(([disabledRes, availableRes]: any[]) => {
+        // Guard: only apply if we're still editing the same site
+        if (editor?.mode !== 'edit' && loadSiteId !== site.id) return;
         setDisabledModels(Array.isArray(disabledRes?.models) ? disabledRes.models : []);
         setAvailableModels(Array.isArray(availableRes?.models) ? availableRes.models : []);
       })
-      .catch(() => { })
-      .finally(() => setDisabledModelsLoading(false));
+      .catch((err: any) => {
+        console.warn('Failed to load site models:', err?.message || err);
+        // Preserve previous (empty) model lists — don't clear UI silently
+      })
+      .finally(() => {
+        setDisabledModelsLoading(false);
+      });
   };
 
   const handleSaveDisabledModels = async () => {

@@ -242,7 +242,7 @@ function matchesRule(ctx: MatchContext, rule: KeywordRule): boolean {
     case 'segment':
       return ctx.segments.includes(rule.keyword);
     case 'boundary': {
-      const pattern = new RegExp(`(^|[^a-z0-9])${rule.keyword}(?=$|[^a-z0-9])`);
+      const pattern = new RegExp(`(^|[/:_\\-\\s])${rule.keyword}(?=$|[/:_\\-\\s])`);
       return pattern.test(ctx.raw) || ctx.candidates.some((c) => pattern.test(c));
     }
     default:
