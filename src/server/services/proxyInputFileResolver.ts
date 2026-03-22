@@ -2,6 +2,7 @@ import type { ProxyResourceOwner } from '../middleware/auth.js';
 import { getProxyFileByPublicIdForOwner } from './proxyFileStore.js';
 import { ensureBase64DataUrl } from '../transformers/shared/inputFile.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../proxy-core/capabilities/conversationFileCapabilities.js';
+import { isSupportedConversationFileMimeType } from '../../shared/conversationFileTypes.js';
 
 const LOCAL_PROXY_FILE_ID_PREFIX = 'file-metapi-';
 
@@ -44,12 +45,7 @@ function inferMimeTypeFromFilename(filename: string): string {
 }
 
 function isSupportedMimeType(mimeType: string): boolean {
-  return mimeType === 'application/pdf'
-    || mimeType === 'text/plain'
-    || mimeType === 'text/markdown'
-    || mimeType === 'application/json'
-    || mimeType.startsWith('image/')
-    || mimeType.startsWith('audio/');
+  return isSupportedConversationFileMimeType(mimeType);
 }
 
 function audioFormatFromMimeType(mimeType: string, filename: string): string {

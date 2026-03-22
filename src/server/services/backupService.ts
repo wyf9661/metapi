@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
 import { mergeAccountExtraConfig } from './accountExtraConfig.js';
 import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
+import { PLATFORM_ALIASES, detectPlatformByUrlHint } from '../../shared/platformIdentity.js';
 
 const BACKUP_VERSION = '2.1';
 
@@ -243,38 +244,6 @@ const DIRECT_API_PLATFORMS = new Set([
   'gemini-cli',
   'antigravity',
 ]);
-
-const IMPORT_PLATFORM_ALIASES: Record<string, string> = {
-  anyrouter: 'anyrouter',
-  'wong-gongyi': 'new-api',
-  'vo-api': 'new-api',
-  'super-api': 'new-api',
-  'rix-api': 'new-api',
-  'neo-api': 'new-api',
-  newapi: 'new-api',
-  'new api': 'new-api',
-  'new-api': 'new-api',
-  oneapi: 'one-api',
-  'one api': 'one-api',
-  'one-api': 'one-api',
-  onehub: 'one-hub',
-  'one-hub': 'one-hub',
-  donehub: 'done-hub',
-  'done-hub': 'done-hub',
-  veloera: 'veloera',
-  sub2api: 'sub2api',
-  openai: 'openai',
-  anthropic: 'claude',
-  claude: 'claude',
-  google: 'gemini',
-  gemini: 'gemini',
-  cliproxyapi: 'cliproxyapi',
-  cpa: 'cliproxyapi',
-  'cli-proxy-api': 'cliproxyapi',
-  codex: 'codex',
-  'gemini-cli': 'gemini-cli',
-  antigravity: 'antigravity',
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -645,38 +614,14 @@ function normalizeOriginUrl(raw: string): string {
   }
 }
 
-function detectLocalPlatformByUrlHint(url: string): string | undefined {
-  const normalized = url.trim().toLowerCase();
-  if (!normalized) return undefined;
-
-  if (normalized.includes('api.openai.com')) return 'openai';
-  if (normalized.includes('chatgpt.com/backend-api/codex')) return 'codex';
-  if (normalized.includes('api.anthropic.com') || normalized.includes('anthropic.com/v1')) return 'claude';
-  if (
-    normalized.includes('generativelanguage.googleapis.com')
-    || normalized.includes('googleapis.com/v1beta/openai')
-    || normalized.includes('gemini.google.com')
-  ) {
-    return 'gemini';
-  }
-  if (normalized.includes('cloudcode-pa.googleapis.com')) return 'gemini-cli';
-  if (normalized.includes('anyrouter')) return 'anyrouter';
-  if (normalized.includes('donehub') || normalized.includes('done-hub')) return 'done-hub';
-  if (normalized.includes('onehub') || normalized.includes('one-hub')) return 'one-hub';
-  if (normalized.includes('veloera')) return 'veloera';
-  if (normalized.includes('sub2api')) return 'sub2api';
-  if (normalized.includes('127.0.0.1:8317') || normalized.includes('localhost:8317')) return 'cliproxyapi';
-
-  return undefined;
-}
-
 function resolveImportedPlatform(rawPlatform: unknown, rawUrl: string): string {
-  const normalizedPlatform = typeof rawPlatform === 'string'
-    ? IMPORT_PLATFORM_ALIASES[rawPlatform.trim().toLowerCase()]
-    : undefined;
+  const rawPlatformText = asString(rawPlatform).toLowerCase();
+  const normalizedPlatform = rawPlatformText
+    ? (PLATFORM_ALIASES[rawPlatformText] ?? (DIRECT_API_PLATFORMS.has(rawPlatformText) ? rawPlatformText : ''))
+    : '';
   if (normalizedPlatform) return normalizedPlatform;
 
-  const urlHint = detectLocalPlatformByUrlHint(rawUrl);
+  const urlHint = detectPlatformByUrlHint(rawUrl);
   if (urlHint) return urlHint;
 
   return normalizeLegacyPlatform(asString(rawPlatform));
@@ -688,9 +633,9 @@ function resolveImportedProfilePlatform(apiType: unknown, baseUrl: string): stri
   if (normalizedType === 'anthropic') return 'claude';
   if (normalizedType === 'google') return 'gemini';
   if (normalizedType === 'openai-compatible') {
-    return detectLocalPlatformByUrlHint(baseUrl) || 'openai';
+    return detectPlatformByUrlHint(baseUrl) || 'openai';
   }
-  return detectLocalPlatformByUrlHint(baseUrl) || 'openai';
+  return detectPlatformByUrlHint(baseUrl) || 'openai';
 }
 
 function pushDefaultImportedToken(

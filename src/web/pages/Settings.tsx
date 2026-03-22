@@ -19,9 +19,9 @@ import { clearAppInstallationState } from '../appLocalState.js';
 import { tr } from '../i18n.js';
 import {
   isExactModelPattern,
-  parseBrandIconValue,
+  resolveRouteBrand,
+  resolveRouteIcon,
   resolveRouteTitle,
-  ROUTE_ICON_NONE_VALUE,
 } from './token-routes/utils.js';
 import { generateDownstreamSkKey } from './helpers/generateDownstreamSkKey.js';
 
@@ -176,12 +176,6 @@ function inferUrlDialect(connectionString: string): 'mysql' | 'postgres' | null 
   if (normalized.startsWith('mysql://')) return 'mysql';
   if (normalized.startsWith('postgres://') || normalized.startsWith('postgresql://')) return 'postgres';
   return null;
-}
-
-function resolveRouteBrandSource(route: RouteSelectorItem): string {
-  const title = resolveRouteTitle(route);
-  if (getBrand(title)) return title;
-  return route.modelPattern;
 }
 
 export default function Settings() {
@@ -1907,9 +1901,9 @@ export default function Settings() {
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>没有匹配的群组</div>
                         ) : filteredGroupRouteOptions.map((route) => {
                           const checked = downstreamCreate.selectedGroupRouteIds.includes(route.id);
-                          const explicitBrandIcon = parseBrandIconValue(route.displayIcon || '');
-                          const explicitNoIcon = (route.displayIcon || '').trim() === ROUTE_ICON_NONE_VALUE;
-                          const textIcon = explicitBrandIcon || explicitNoIcon ? '' : (route.displayIcon || '').trim();
+                          const routeTitle = resolveRouteTitle(route);
+                          const routeIcon = resolveRouteIcon(route);
+                          const routeBrand = resolveRouteBrand(route);
                           return (
                             <label
                               key={route.id}
@@ -1963,21 +1957,23 @@ export default function Settings() {
                                       lineHeight: 1,
                                     }}
                                   >
-                                    {explicitBrandIcon ? (
+                                    {routeIcon.kind === 'brand' ? (
                                       <BrandGlyph
-                                        icon={explicitBrandIcon}
-                                        alt={resolveRouteTitle(route)}
+                                        icon={routeIcon.value}
+                                        alt={routeTitle}
                                         size={18}
-                                        fallbackText={resolveRouteTitle(route)}
+                                        fallbackText={routeTitle}
                                       />
-                                    ) : textIcon ? (
-                                      textIcon
-                                    ) : explicitNoIcon ? null : (
-                                      <InlineBrandIcon model={resolveRouteBrandSource(route)} size={18} />
-                                    )}
+                                    ) : routeIcon.kind === 'text' ? (
+                                      routeIcon.value
+                                    ) : routeIcon.kind === 'auto' && routeBrand ? (
+                                      <BrandGlyph brand={routeBrand} alt={routeTitle} size={18} fallbackText={routeTitle} />
+                                    ) : routeIcon.kind === 'auto' ? (
+                                      <InlineBrandIcon model={route.modelPattern} size={18} />
+                                    ) : null}
                                   </span>
                                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {resolveRouteTitle(route)}
+                                    {routeTitle}
                                   </span>
                                   {!route.enabled && (
                                     <span

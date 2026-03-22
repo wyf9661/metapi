@@ -1,6 +1,5 @@
 import { StandardApiProviderAdapterBase } from './standardApiProvider.js';
-
-const DEFAULT_ANTHROPIC_VERSION = '2023-06-01';
+import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from '../oauth/claudeProvider.js';
 
 export class ClaudeAdapter extends StandardApiProviderAdapterBase {
   readonly platformName = 'claude';
@@ -15,7 +14,7 @@ export class ClaudeAdapter extends StandardApiProviderAdapterBase {
       baseUrl,
       headers: {
         'x-api-key': apiToken,
-        'anthropic-version': DEFAULT_ANTHROPIC_VERSION,
+        'anthropic-version': CLAUDE_DEFAULT_ANTHROPIC_VERSION,
       },
     });
   }

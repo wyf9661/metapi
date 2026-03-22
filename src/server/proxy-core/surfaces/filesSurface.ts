@@ -8,6 +8,7 @@ import {
   softDeleteProxyFileByPublicIdForOwner,
 } from '../../services/proxyFileStore.js';
 import { ensureMultipartBufferParser, parseMultipartFormData } from '../../routes/proxy/multipart.js';
+import { isSupportedConversationFileMimeType } from '../../../shared/conversationFileTypes.js';
 
 function invalidRequest(reply: FastifyReply, message: string) {
   return reply.code(400).send({ error: { message, type: 'invalid_request_error' } });
@@ -58,15 +59,6 @@ function inferMimeTypeFromFilename(filename: string): string {
   return 'application/octet-stream';
 }
 
-function isSupportedProxyFileMimeType(mimeType: string): boolean {
-  return mimeType === 'application/pdf'
-    || mimeType === 'text/plain'
-    || mimeType === 'text/markdown'
-    || mimeType === 'application/json'
-    || mimeType.startsWith('image/')
-    || mimeType.startsWith('audio/');
-}
-
 export async function filesProxyRoute(app: FastifyInstance) {
   ensureMultipartBufferParser(app);
 
@@ -88,7 +80,7 @@ export async function filesProxyRoute(app: FastifyInstance) {
 
     const filename = fileEntry.name || 'upload.bin';
     const mimeType = (fileEntry.type || inferMimeTypeFromFilename(filename)).trim().toLowerCase();
-    if (!isSupportedProxyFileMimeType(mimeType)) {
+    if (!isSupportedConversationFileMimeType(mimeType)) {
       return invalidRequest(reply, `unsupported file mime type: ${mimeType || 'application/octet-stream'}`);
     }
 
