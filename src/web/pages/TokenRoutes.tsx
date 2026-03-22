@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -20,6 +20,7 @@ import {
   buildRouteMissingTokenIndex,
   normalizeMissingTokenModels,
   type MissingTokenModelsByName,
+  type RouteMissingTokenHint,
 } from './helpers/routeMissingTokenHints.js';
 import { buildVisibleRouteList } from './helpers/routeListVisibility.js';
 import { buildZeroChannelPlaceholderRoutes } from './helpers/zeroChannelRoutes.js';
@@ -156,6 +157,8 @@ export default function TokenRoutes() {
 
   const toast = useToast();
 
+  const candidatesLoadedRef = useRef(false);
+
   const loadRouteDecisions = async (
     routeRows: RouteSummaryRow[],
     options?: { force?: boolean; refreshPricingCatalog?: boolean; persistSnapshots?: boolean },
@@ -223,22 +226,31 @@ export default function TokenRoutes() {
     }
   };
 
+  const loadCandidates = async (force?: boolean) => {
+    if (candidatesLoadedRef.current && !force) return;
+    candidatesLoadedRef.current = true;
+    try {
+      const candidateRows = await api.getModelTokenCandidates();
+      startTransition(() => {
+        setModelCandidates((candidateRows?.models || {}) as RouteModelCandidatesByModelName);
+        setMissingTokenModelsByName(
+          normalizeMissingTokenModels((candidateRows?.modelsWithoutToken || {}) as MissingTokenModelsByName),
+        );
+        setMissingTokenGroupModelsByName(
+          normalizeMissingTokenModels((candidateRows?.modelsMissingTokenGroups || {}) as MissingTokenModelsByName),
+        );
+        setEndpointTypesByModel(candidateRows?.endpointTypesByModel || {});
+      });
+    } catch {
+      candidatesLoadedRef.current = false;
+    }
+  };
+
   const load = async () => {
-    const [summaryRows, candidateRows] = await Promise.all([
-      api.getRoutesSummary(),
-      api.getModelTokenCandidates(),
-    ]);
+    const summaryRows = await api.getRoutesSummary();
 
     const summaries = (summaryRows || []) as RouteSummaryRow[];
     setRouteSummaries(summaries);
-    setModelCandidates((candidateRows?.models || {}) as RouteModelCandidatesByModelName);
-    setMissingTokenModelsByName(
-      normalizeMissingTokenModels((candidateRows?.modelsWithoutToken || {}) as MissingTokenModelsByName),
-    );
-    setMissingTokenGroupModelsByName(
-      normalizeMissingTokenModels((candidateRows?.modelsMissingTokenGroups || {}) as MissingTokenModelsByName),
-    );
-    setEndpointTypesByModel(candidateRows?.endpointTypesByModel || {});
     const decisionPlaceholder: Record<number, RouteDecision | null> = {};
     for (const route of summaries) {
       decisionPlaceholder[route.id] = route.decisionSnapshot || null;
@@ -247,6 +259,11 @@ export default function TokenRoutes() {
     setDecisionAutoSkipped(
       summaries.some((route) => isRouteExactModel(route) && !route.decisionSnapshot),
     );
+
+    // Silently refresh candidates in the background if already loaded
+    if (candidatesLoadedRef.current) {
+      loadCandidates(true);
+    }
   };
 
   useEffect(() => {
@@ -256,6 +273,9 @@ export default function TokenRoutes() {
       } catch {
         toast.error('加载路由配置失败');
       }
+      // Preload candidates in background after first paint
+      const scheduleIdle = typeof requestIdleCallback === 'function' ? requestIdleCallback : (cb: () => void) => setTimeout(cb, 0);
+      scheduleIdle(() => loadCandidates());
     })();
   }, []);
 
@@ -313,6 +333,7 @@ export default function TokenRoutes() {
   }, [form.displayName, form.modelPattern, form.routeMode, form.sourceRouteIds.length, saving]);
 
   const previewModelSamples = useMemo(() => {
+    if (!showManual) return [];
     const names = new Set<string>();
     for (const modelName of Object.keys(modelCandidates || {})) {
       const normalized = modelName.trim();
@@ -326,7 +347,7 @@ export default function TokenRoutes() {
     return Array.from(names)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
       .slice(0, 800);
-  }, [modelCandidates, routeSummaries]);
+  }, [showManual, modelCandidates, routeSummaries]);
 
   const exactSourceRouteOptions = useMemo(
     () => routeSummaries.filter((route) => isRouteExactModel(route)),
@@ -395,6 +416,7 @@ export default function TokenRoutes() {
   };
 
   const handleEditRoute = (route: RouteSummaryRow) => {
+    loadCandidates();
     setEditingRouteId(route.id);
     const routeMode = normalizeRouteMode(route.routeMode);
     setForm({
@@ -583,15 +605,17 @@ export default function TokenRoutes() {
   }, [listVisibleRoutes, routeEndpointTypesByRouteId]);
 
   const sourceEndpointTypesByRouteId = useMemo(() => {
+    if (!showManual) return {};
     const next: Record<number, string[]> = {};
     for (const route of exactSourceRouteOptions) {
       next[route.id] = Array.from(routeEndpointTypesByRouteId[route.id] || new Set<string>())
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
     }
     return next;
-  }, [exactSourceRouteOptions, routeEndpointTypesByRouteId]);
+  }, [showManual, exactSourceRouteOptions, routeEndpointTypesByRouteId]);
 
   const routeBrandIconCandidates = useMemo(() => {
+    if (!showManual) return [];
     const byIcon = new Map<string, BrandInfo>();
 
     for (const route of visibleRouteRows) {
@@ -606,7 +630,7 @@ export default function TokenRoutes() {
 
     return Array.from(byIcon.values())
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-  }, [visibleRouteRows, modelCandidates]);
+  }, [showManual, visibleRouteRows, modelCandidates]);
 
   const routeIconSelectOptions = useMemo<RouteIconOption[]>(() => ([
     ...ROUTE_ICON_OPTIONS,
@@ -780,22 +804,61 @@ export default function TokenRoutes() {
     [filteredRoutes, visibleRouteCount],
   );
 
-  const routeModelCandidateIndex = useMemo(
-    () => buildRouteModelCandidatesIndex(routePatterns, modelCandidates, matchesModelPattern),
-    [routePatterns, modelCandidates],
-  );
-
-  const routeMissingTokenIndex = useMemo(
-    () => buildRouteMissingTokenIndex(routePatterns, missingTokenModelsByName, matchesModelPattern),
-    [routePatterns, missingTokenModelsByName],
-  );
-  const routeMissingTokenGroupIndex = useMemo(
-    () => buildRouteMissingTokenIndex(routePatterns, missingTokenGroupModelsByName, matchesModelPattern),
-    [routePatterns, missingTokenGroupModelsByName],
-  );
+  // Lazy per-route candidate index — only computes for routes actually accessed
+  const candidateIndexCacheRef = useRef<{ key: string; cache: Map<number, RouteCandidateView> }>({ key: '', cache: new Map() });
+  const candidateIndexCacheKey = `${routePatterns.length}:${Object.keys(modelCandidates).length}`;
+  if (candidateIndexCacheRef.current.key !== candidateIndexCacheKey) {
+    candidateIndexCacheRef.current = { key: candidateIndexCacheKey, cache: new Map() };
+  }
 
   const getRouteCandidateView = (routeId: number): RouteCandidateView => {
-    return routeModelCandidateIndex[routeId] || EMPTY_ROUTE_CANDIDATE_VIEW;
+    const cache = candidateIndexCacheRef.current.cache;
+    const cached = cache.get(routeId);
+    if (cached) return cached;
+    const route = routePatterns.find((r) => r.id === routeId);
+    if (!route) return EMPTY_ROUTE_CANDIDATE_VIEW;
+    const index = buildRouteModelCandidatesIndex([route], modelCandidates, matchesModelPattern);
+    const view = index[routeId] || EMPTY_ROUTE_CANDIDATE_VIEW;
+    cache.set(routeId, view);
+    return view;
+  };
+
+  // Lazy per-route missing token index
+  const missingTokenCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
+  const missingTokenCacheKey = `${routePatterns.length}:${Object.keys(missingTokenModelsByName).length}`;
+  if (missingTokenCacheRef.current.key !== missingTokenCacheKey) {
+    missingTokenCacheRef.current = { key: missingTokenCacheKey, cache: new Map() };
+  }
+
+  const getRouteMissingTokenHints = (routeId: number): RouteMissingTokenHint[] => {
+    const cache = missingTokenCacheRef.current.cache;
+    const cached = cache.get(routeId);
+    if (cached) return cached;
+    const route = routePatterns.find((r) => r.id === routeId);
+    if (!route) return [];
+    const index = buildRouteMissingTokenIndex([route], missingTokenModelsByName, matchesModelPattern);
+    const hints = index[routeId] || [];
+    cache.set(routeId, hints);
+    return hints;
+  };
+
+  // Lazy per-route missing token group index
+  const missingTokenGroupCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
+  const missingTokenGroupCacheKey = `${routePatterns.length}:${Object.keys(missingTokenGroupModelsByName).length}`;
+  if (missingTokenGroupCacheRef.current.key !== missingTokenGroupCacheKey) {
+    missingTokenGroupCacheRef.current = { key: missingTokenGroupCacheKey, cache: new Map() };
+  }
+
+  const getRouteMissingTokenGroupHints = (routeId: number): RouteMissingTokenHint[] => {
+    const cache = missingTokenGroupCacheRef.current.cache;
+    const cached = cache.get(routeId);
+    if (cached) return cached;
+    const route = routePatterns.find((r) => r.id === routeId);
+    if (!route) return [];
+    const index = buildRouteMissingTokenIndex([route], missingTokenGroupModelsByName, matchesModelPattern);
+    const hints = index[routeId] || [];
+    cache.set(routeId, hints);
+    return hints;
   };
 
   const routeById = useMemo(
@@ -1000,6 +1063,7 @@ export default function TokenRoutes() {
     if (isCurrentlyExpanded) {
       setExpandedRouteIds((prev) => prev.filter((id) => id !== routeId));
     } else {
+      loadCandidates();
       setExpandedRouteIds((prev) => [...prev, routeId]);
       // Load channels on demand
       const route = routeById.get(routeId) || null;
@@ -1014,84 +1078,78 @@ export default function TokenRoutes() {
     }
   };
 
-  const missingTokenSiteItemsByRouteId = useMemo(() => {
-    const result: Record<number, MissingTokenRouteSiteActionItem[]> = {};
-    for (const routeId of Object.keys(routeMissingTokenIndex).map(Number)) {
-      const missingTokenHints = routeMissingTokenIndex[routeId] || [];
-      const siteMap = new Map<string, MissingTokenRouteSiteActionItem>();
-      for (const hint of missingTokenHints) {
-        for (const account of hint.accounts) {
-          if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
-          const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
-          const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
-          const accountLabel = account.username || `account-${account.accountId}`;
-          const existing = siteMap.get(key);
-          if (!existing) {
-            siteMap.set(key, { key, siteName, accountId: account.accountId, accountLabel });
-            continue;
-          }
-          if (account.accountId < existing.accountId) {
-            existing.accountId = account.accountId;
-            existing.accountLabel = accountLabel;
-          }
+  const getMissingTokenSiteItems = (routeId: number): MissingTokenRouteSiteActionItem[] => {
+    const missingTokenHints = getRouteMissingTokenHints(routeId);
+    if (missingTokenHints.length === 0) return EMPTY_MISSING_ITEMS;
+    const siteMap = new Map<string, MissingTokenRouteSiteActionItem>();
+    for (const hint of missingTokenHints) {
+      for (const account of hint.accounts) {
+        if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
+        const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
+        const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
+        const accountLabel = account.username || `account-${account.accountId}`;
+        const existing = siteMap.get(key);
+        if (!existing) {
+          siteMap.set(key, { key, siteName, accountId: account.accountId, accountLabel });
+          continue;
+        }
+        if (account.accountId < existing.accountId) {
+          existing.accountId = account.accountId;
+          existing.accountLabel = accountLabel;
         }
       }
-      result[routeId] = Array.from(siteMap.values()).sort((a, b) => (
-        a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
-      ));
     }
-    return result;
-  }, [routeMissingTokenIndex]);
+    return Array.from(siteMap.values()).sort((a, b) => (
+      a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
+    ));
+  };
 
-  const missingTokenGroupItemsByRouteId = useMemo(() => {
-    const result: Record<number, MissingTokenGroupRouteSiteActionItem[]> = {};
-    for (const routeId of Object.keys(routeMissingTokenGroupIndex).map(Number)) {
-      const missingGroupHints = routeMissingTokenGroupIndex[routeId] || [];
-      const siteMap = new Map<string, MissingTokenGroupRouteSiteActionItem>();
-      for (const hint of missingGroupHints) {
-        for (const account of hint.accounts) {
-          if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
-          const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
-          const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
-          const accountLabel = account.username || `account-${account.accountId}`;
-          const missingGroups = Array.isArray(account.missingGroups) ? account.missingGroups : [];
-          const requiredGroups = Array.isArray(account.requiredGroups) ? account.requiredGroups : [];
-          const availableGroups = Array.isArray(account.availableGroups) ? account.availableGroups : [];
-          const existing = siteMap.get(key);
-          if (!existing) {
-            siteMap.set(key, {
-              key,
-              siteName,
-              accountId: account.accountId,
-              accountLabel,
-              missingGroups: [...missingGroups],
-              requiredGroups: [...requiredGroups],
-              availableGroups: [...availableGroups],
-              ...(account.groupCoverageUncertain === true ? { groupCoverageUncertain: true } : {}),
-            });
-            continue;
-          }
-          if (account.accountId < existing.accountId) {
-            existing.accountId = account.accountId;
-            existing.accountLabel = accountLabel;
-          }
-          existing.missingGroups = Array.from(new Set([...existing.missingGroups, ...missingGroups]))
-            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-          existing.requiredGroups = Array.from(new Set([...existing.requiredGroups, ...requiredGroups]))
-            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-          existing.availableGroups = Array.from(new Set([...existing.availableGroups, ...availableGroups]))
-            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-          if (account.groupCoverageUncertain === true) {
-            existing.groupCoverageUncertain = true;
-          }
+  const getMissingTokenGroupItems = (routeId: number): MissingTokenGroupRouteSiteActionItem[] => {
+    const missingGroupHints = getRouteMissingTokenGroupHints(routeId);
+    if (missingGroupHints.length === 0) return EMPTY_MISSING_GROUP_ITEMS;
+    const siteMap = new Map<string, MissingTokenGroupRouteSiteActionItem>();
+    for (const hint of missingGroupHints) {
+      for (const account of hint.accounts) {
+        if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
+        const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
+        const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
+        const accountLabel = account.username || `account-${account.accountId}`;
+        const missingGroups = Array.isArray(account.missingGroups) ? account.missingGroups : [];
+        const requiredGroups = Array.isArray(account.requiredGroups) ? account.requiredGroups : [];
+        const availableGroups = Array.isArray(account.availableGroups) ? account.availableGroups : [];
+        const existing = siteMap.get(key);
+        if (!existing) {
+          siteMap.set(key, {
+            key,
+            siteName,
+            accountId: account.accountId,
+            accountLabel,
+            missingGroups: [...missingGroups],
+            requiredGroups: [...requiredGroups],
+            availableGroups: [...availableGroups],
+            ...(account.groupCoverageUncertain === true ? { groupCoverageUncertain: true } : {}),
+          });
+          continue;
+        }
+        if (account.accountId < existing.accountId) {
+          existing.accountId = account.accountId;
+          existing.accountLabel = accountLabel;
+        }
+        existing.missingGroups = Array.from(new Set([...existing.missingGroups, ...missingGroups]))
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        existing.requiredGroups = Array.from(new Set([...existing.requiredGroups, ...requiredGroups]))
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        existing.availableGroups = Array.from(new Set([...existing.availableGroups, ...availableGroups]))
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        if (account.groupCoverageUncertain === true) {
+          existing.groupCoverageUncertain = true;
         }
       }
-      result[routeId] = Array.from(siteMap.values()).sort((a, b) => (
-        a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
-      ));
     }
-    return result;
-  }, [routeMissingTokenGroupIndex]);
+    return Array.from(siteMap.values()).sort((a, b) => (
+      a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
+    ));
+  };
 
   // Stable callbacks for RouteCard memo (use refs to avoid dependency on closure variables)
   const toggleExpandRef = useRef(toggleExpand);
@@ -1116,7 +1174,10 @@ export default function TokenRoutes() {
     (channelId: number, tokenId: number) => setChannelTokenDraft((prev) => ({ ...prev, [channelId]: tokenId })),
     [],
   );
-  const stableAddChannel = useCallback((routeId: number) => setAddChannelModalRouteId(routeId), []);
+  const stableAddChannel = useCallback((routeId: number) => {
+    loadCandidates();
+    setAddChannelModalRouteId(routeId);
+  }, []);
   const stableToggleSourceGroup = useCallback(
     (groupKey: string) => setExpandedSourceGroupMap((prev) => ({ ...prev, [groupKey]: !prev[groupKey] })),
     [],
@@ -1247,6 +1308,7 @@ export default function TokenRoutes() {
 
           <button
             onClick={() => {
+              loadCandidates();
               resetRouteForm();
               setShowManual(true);
             }}
@@ -1259,7 +1321,10 @@ export default function TokenRoutes() {
           <button
             type="button"
             aria-pressed={showZeroChannelRoutes}
-            onClick={() => setShowZeroChannelRoutes((prev) => !prev)}
+            onClick={() => {
+              if (!showZeroChannelRoutes) loadCandidates();
+              setShowZeroChannelRoutes((prev) => !prev);
+            }}
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
@@ -1278,7 +1343,10 @@ export default function TokenRoutes() {
           <button
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px', marginBottom: 12 }}
-            onClick={() => setShowFilters(true)}
+            onClick={() => {
+              loadCandidates();
+              setShowFilters(true);
+            }}
           >
             {tr('筛选')}
           </button>
@@ -1324,7 +1392,10 @@ export default function TokenRoutes() {
           endpointTypeList={endpointTypeList}
           groupRouteList={groupRouteList}
           collapsed={filterCollapsed}
-          onToggle={() => setFilterCollapsed((prev) => !prev)}
+          onToggle={() => {
+            if (filterCollapsed) loadCandidates();
+            setFilterCollapsed((prev) => !prev);
+          }}
         />
       )}
 
@@ -1479,8 +1550,8 @@ export default function TokenRoutes() {
               onDeleteChannel={stableDeleteChannel}
               onToggleChannelEnabled={stableToggleChannelEnabled}
               onChannelDragEnd={stableChannelDragEnd}
-              missingTokenSiteItems={missingTokenSiteItemsByRouteId[route.id] || EMPTY_MISSING_ITEMS}
-              missingTokenGroupItems={missingTokenGroupItemsByRouteId[route.id] || EMPTY_MISSING_GROUP_ITEMS}
+              missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
+              missingTokenGroupItems={getMissingTokenGroupItems(route.id)}
               onCreateTokenForMissing={stableCreateTokenForMissing}
               onAddChannel={stableAddChannel}
               onSiteBlockModel={stableSiteBlockModel}
@@ -1530,7 +1601,7 @@ export default function TokenRoutes() {
           routeTitle={resolveRouteTitle(addChannelModalRoute)}
           candidateView={getRouteCandidateView(addChannelModalRoute.id)}
           onSuccess={handleAddChannelSuccess}
-          missingTokenHints={routeMissingTokenIndex[addChannelModalRoute.id] || []}
+          missingTokenHints={getRouteMissingTokenHints(addChannelModalRoute.id)}
           onCreateTokenForMissing={handleCreateTokenForMissingAccount}
           existingChannelAccountIds={new Set((channelsByRouteId[addChannelModalRoute.id] || []).map((c) => c.accountId))}
         />
