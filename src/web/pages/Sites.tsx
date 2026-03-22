@@ -216,6 +216,7 @@ export default function Sites() {
     count?: number;
   }>(null);
   const lastEditorRef = useRef<SiteEditorState | null>(null);
+  const loadingModelsSiteIdRef = useRef<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
   const highlightTimerRef = useRef<number | null>(null);
   const toast = useToast();
@@ -356,6 +357,7 @@ export default function Sites() {
     scrollToEditorTop();
     // Load disabled models and available models for this site
     const loadSiteId = site.id;
+    loadingModelsSiteIdRef.current = loadSiteId;
     setDisabledModelsLoading(true);
     setDisabledModels([]);
     setAvailableModels([]);
@@ -366,7 +368,7 @@ export default function Sites() {
     ])
       .then(([disabledRes, availableRes]: any[]) => {
         // Guard: only apply if we're still editing the same site
-        if (editor?.mode !== 'edit' && loadSiteId !== site.id) return;
+        if (loadingModelsSiteIdRef.current !== loadSiteId) return;
         setDisabledModels(Array.isArray(disabledRes?.models) ? disabledRes.models : []);
         setAvailableModels(Array.isArray(availableRes?.models) ? availableRes.models : []);
       })
@@ -375,7 +377,9 @@ export default function Sites() {
         // Preserve previous (empty) model lists — don't clear UI silently
       })
       .finally(() => {
-        setDisabledModelsLoading(false);
+        if (loadingModelsSiteIdRef.current === loadSiteId) {
+          setDisabledModelsLoading(false);
+        }
       });
   };
 
