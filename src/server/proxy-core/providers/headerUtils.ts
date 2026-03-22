@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { pbkdf2Sync, randomUUID } from 'node:crypto';
 
 const CODEX_CLIENT_VERSION = '0.101.0';
 const CODEX_DEFAULT_USER_AGENT = 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
@@ -33,8 +33,8 @@ export function getInputHeader(
 }
 
 export function uuidFromSeed(seed: string): string {
-  const hash = createHash('sha1').update(seed).digest();
-  const bytes = new Uint8Array(hash.subarray(0, 16));
+  const derived = pbkdf2Sync(seed, 'metapi-runtime-header-seed', 10_000, 16, 'sha256');
+  const bytes = new Uint8Array(derived);
   bytes[6] = (bytes[6]! & 0x0f) | 0x50;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
   const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
@@ -153,7 +153,7 @@ export function buildCodexRuntimeHeaders(input: {
   );
 
   return {
-    Authorization: authorization,
+    ...(authorization ? { Authorization: authorization } : {}),
     'Content-Type': 'application/json',
     ...(accountId ? { 'Chatgpt-Account-Id': accountId } : {}),
     Originator: originator,
@@ -221,6 +221,7 @@ export function buildGeminiCliRuntimeHeaders(input: {
   modelName: string;
   stream: boolean;
 }): Record<string, string> {
+  const authorization = getInputHeader(input.baseHeaders, 'authorization');
   const apiClient = (
     getInputHeader(input.providerHeaders, 'x-goog-api-client')
     || getInputHeader(input.baseHeaders, 'x-goog-api-client')
@@ -231,7 +232,7 @@ export function buildGeminiCliRuntimeHeaders(input: {
   );
 
   const headers: Record<string, string> = {
-    Authorization: input.baseHeaders.Authorization,
+    ...(authorization ? { Authorization: authorization } : {}),
     'Content-Type': 'application/json',
     'User-Agent': userAgent,
   };

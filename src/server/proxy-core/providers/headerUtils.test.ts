@@ -101,7 +101,7 @@ describe('provider header utils', () => {
 
     const headers = buildGeminiCliRuntimeHeaders({
       baseHeaders: {
-        Authorization: 'Bearer test',
+        authorization: 'Bearer test',
       },
       providerHeaders: {
         'x-goog-api-client': 'gl-node/22 gccl/0.31.0',

@@ -65,7 +65,7 @@ export function isRouteExactModel(route: Pick<RouteRow | RouteSummaryRow, 'model
   return !isExplicitGroupRoute(route) && isExactModelPattern(route.modelPattern);
 }
 
-export function parseRegexModelPattern(modelPattern: string): { regex: RegExp | null; error: string | null } {
+export function parseRegexModelPattern(modelPattern: string): { regex: { test(value: string): boolean } | null; error: string | null } {
   return parseTokenRouteRegexPattern(modelPattern);
 }
 

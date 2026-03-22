@@ -208,7 +208,7 @@ async function proxyTestStreamRequest(data: ProxyTestRequestEnvelope, signal?: A
     clearAuthSession(localStorage);
     throw new Error('Session expired');
   }
-  return fetch('/api/test/proxy/stream', {
+  const response = await fetch('/api/test/proxy/stream', {
     method: 'POST',
     signal,
     headers: {
@@ -217,6 +217,11 @@ async function proxyTestStreamRequest(data: ProxyTestRequestEnvelope, signal?: A
     },
     body: JSON.stringify(data),
   });
+  if (response.status === 401 || response.status === 403) {
+    clearAuthSession(localStorage);
+    throw new Error('Session expired');
+  }
+  return response;
 }
 
 export type ProxyTestJobResponse = {

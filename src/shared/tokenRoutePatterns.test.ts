@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 describe('token route pattern helpers', () => {
   it('treats bracket-prefixed literal model names as exact patterns', async () => {
-    const { isExactTokenRouteModelPattern } = await import('./tokenRoutePatterns.js');
+    const {
+      isExactTokenRouteModelPattern,
+      matchesTokenRouteModelPattern,
+    } = await import('./tokenRoutePatterns.js');
     expect(isExactTokenRouteModelPattern('[NV]deepseek-v3.1-terminus')).toBe(true);
+    expect(matchesTokenRouteModelPattern('[NV]deepseek-v3.1-terminus', '[NV]deepseek-v3.1-terminus')).toBe(true);
+    expect(matchesTokenRouteModelPattern('Ndeepseek-v3.1-terminus', '[NV]deepseek-v3.1-terminus')).toBe(false);
   });
 
   it('rejects unsafe nested-quantifier regex patterns', async () => {
@@ -12,8 +17,8 @@ describe('token route pattern helpers', () => {
       parseTokenRouteRegexPattern,
     } = await import('./tokenRoutePatterns.js');
 
-    expect(parseTokenRouteRegexPattern('re:^(a+)+$').regex).toBeNull();
-    expect(matchesTokenRouteModelPattern('aaaa', 're:^(a+)+$')).toBe(false);
+    expect(parseTokenRouteRegexPattern('re:(?=claude)').regex).toBeNull();
+    expect(matchesTokenRouteModelPattern('claude-sonnet-4-6', 're:(?=claude)')).toBe(false);
   });
 
   it('supports exact, glob, and safe regex route matches', async () => {
@@ -22,5 +27,6 @@ describe('token route pattern helpers', () => {
     expect(matchesTokenRouteModelPattern('gpt-4o-mini', 'gpt-4o-mini')).toBe(true);
     expect(matchesTokenRouteModelPattern('claude-sonnet-4-6', 'claude-*')).toBe(true);
     expect(matchesTokenRouteModelPattern('claude-sonnet-4-6', 're:^claude-(opus|sonnet)-4-6$')).toBe(true);
+    expect(matchesTokenRouteModelPattern('gpt-4o-mini-2025', 're:^gpt-4o-mini-\\d+$')).toBe(true);
   });
 });

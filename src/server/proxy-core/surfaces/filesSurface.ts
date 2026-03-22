@@ -8,7 +8,10 @@ import {
   softDeleteProxyFileByPublicIdForOwner,
 } from '../../services/proxyFileStore.js';
 import { ensureMultipartBufferParser, parseMultipartFormData } from '../../routes/proxy/multipart.js';
-import { isSupportedConversationFileMimeType } from '../../../shared/conversationFileTypes.js';
+import {
+  isSupportedConversationFileMimeType,
+  resolveConversationFileMimeType,
+} from '../../../shared/conversationFileTypes.js';
 
 function invalidRequest(reply: FastifyReply, message: string) {
   return reply.code(400).send({ error: { message, type: 'invalid_request_error' } });
@@ -44,21 +47,6 @@ function toFileObject(record: {
   };
 }
 
-function inferMimeTypeFromFilename(filename: string): string {
-  const normalized = filename.trim().toLowerCase();
-  if (normalized.endsWith('.pdf')) return 'application/pdf';
-  if (normalized.endsWith('.txt')) return 'text/plain';
-  if (normalized.endsWith('.md') || normalized.endsWith('.markdown')) return 'text/markdown';
-  if (normalized.endsWith('.json')) return 'application/json';
-  if (normalized.endsWith('.png')) return 'image/png';
-  if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) return 'image/jpeg';
-  if (normalized.endsWith('.gif')) return 'image/gif';
-  if (normalized.endsWith('.webp')) return 'image/webp';
-  if (normalized.endsWith('.wav')) return 'audio/wav';
-  if (normalized.endsWith('.mp3')) return 'audio/mpeg';
-  return 'application/octet-stream';
-}
-
 export async function filesProxyRoute(app: FastifyInstance) {
   ensureMultipartBufferParser(app);
 
@@ -79,7 +67,7 @@ export async function filesProxyRoute(app: FastifyInstance) {
     }
 
     const filename = fileEntry.name || 'upload.bin';
-    const mimeType = (fileEntry.type || inferMimeTypeFromFilename(filename)).trim().toLowerCase();
+    const mimeType = resolveConversationFileMimeType(fileEntry.type, filename);
     if (!isSupportedConversationFileMimeType(mimeType)) {
       return invalidRequest(reply, `unsupported file mime type: ${mimeType || 'application/octet-stream'}`);
     }

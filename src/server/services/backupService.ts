@@ -617,7 +617,11 @@ function normalizeOriginUrl(raw: string): string {
 function resolveImportedPlatform(rawPlatform: unknown, rawUrl: string): string {
   const rawPlatformText = asString(rawPlatform).toLowerCase();
   const normalizedPlatform = rawPlatformText
-    ? (PLATFORM_ALIASES[rawPlatformText] ?? (DIRECT_API_PLATFORMS.has(rawPlatformText) ? rawPlatformText : ''))
+    ? (
+      Object.prototype.hasOwnProperty.call(PLATFORM_ALIASES, rawPlatformText)
+        ? PLATFORM_ALIASES[rawPlatformText]
+        : (DIRECT_API_PLATFORMS.has(rawPlatformText) ? rawPlatformText : '')
+    )
     : '';
   if (normalizedPlatform) return normalizedPlatform;
 

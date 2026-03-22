@@ -715,46 +715,50 @@ export async function handleOpenAiResponsesSurfaceRequest(
           usage: parsedUsage,
           serializationMode: isCompactRequest ? 'compact' : 'response',
         });
-        const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
-          site: selected.site,
-          account: selected.account,
-          tokenValue: selected.tokenValue,
-          tokenName: selected.tokenName,
-          modelName: selected.actualModel || requestedModel,
-          requestStartedAtMs: startTime,
-          requestEndedAtMs: startTime + latency,
-          localLatencyMs: latency,
-          usage: {
-            promptTokens: parsedUsage.promptTokens,
-            completionTokens: parsedUsage.completionTokens,
-            totalTokens: parsedUsage.totalTokens,
-          },
-        });
-        const { estimatedCost, billingDetails } = await resolveProxyLogBilling({
-          site: selected.site,
-          account: selected.account,
-          modelName: selected.actualModel || requestedModel,
-          parsedUsage,
-          resolvedUsage,
-        });
+        try {
+          const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
+            site: selected.site,
+            account: selected.account,
+            tokenValue: selected.tokenValue,
+            tokenName: selected.tokenName,
+            modelName: selected.actualModel || requestedModel,
+            requestStartedAtMs: startTime,
+            requestEndedAtMs: startTime + latency,
+            localLatencyMs: latency,
+            usage: {
+              promptTokens: parsedUsage.promptTokens,
+              completionTokens: parsedUsage.completionTokens,
+              totalTokens: parsedUsage.totalTokens,
+            },
+          });
+          const { estimatedCost, billingDetails } = await resolveProxyLogBilling({
+            site: selected.site,
+            account: selected.account,
+            modelName: selected.actualModel || requestedModel,
+            parsedUsage,
+            resolvedUsage,
+          });
 
-        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
-        recordDownstreamCostUsage(request, estimatedCost);
-        await failureToolkit.log({
-          selected,
-          modelRequested: requestedModel,
-          status: 'success',
-          httpStatus: 200,
-          latencyMs: latency,
-          errorMessage: null,
-          retryCount,
-          promptTokens: resolvedUsage.promptTokens,
-          completionTokens: resolvedUsage.completionTokens,
-          totalTokens: resolvedUsage.totalTokens,
-          estimatedCost,
-          billingDetails,
-          upstreamPath: successfulUpstreamPath,
-        });
+          tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
+          recordDownstreamCostUsage(request, estimatedCost);
+          await failureToolkit.log({
+            selected,
+            modelRequested: requestedModel,
+            status: 'success',
+            httpStatus: 200,
+            latencyMs: latency,
+            errorMessage: null,
+            retryCount,
+            promptTokens: resolvedUsage.promptTokens,
+            completionTokens: resolvedUsage.completionTokens,
+            totalTokens: resolvedUsage.totalTokens,
+            estimatedCost,
+            billingDetails,
+            upstreamPath: successfulUpstreamPath,
+          });
+        } catch (error) {
+          console.error('[responses] post-response bookkeeping failed:', error);
+        }
         return reply.send(downstreamData);
       } catch (err: any) {
         const failureOutcome = await failureToolkit.handleExecutionError({

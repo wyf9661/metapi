@@ -10,6 +10,11 @@ describe('accountConnection helpers', () => {
     expect(resolveAccountCredentialMode({ credentialMode: 'apikey' })).toBe('apikey');
     expect(resolveAccountCredentialMode({ capabilities: { proxyOnly: true } })).toBe('apikey');
     expect(resolveAccountCredentialMode({ accessToken: ' session-token ' })).toBe('session');
+    expect(resolveAccountCredentialMode({
+      credentialMode: 'session',
+      capabilities: { proxyOnly: true },
+      accessToken: 'api-token-ignored-by-explicit-mode',
+    })).toBe('session');
     expect(resolveAccountCredentialMode({})).toBe('apikey');
   });
 
@@ -17,6 +22,9 @@ describe('accountConnection helpers', () => {
     expect(parsePositiveInt('42')).toBe(42);
     expect(parsePositiveInt(' 0 ')).toBe(0);
     expect(parsePositiveInt('abc')).toBe(0);
+    expect(parsePositiveInt('42abc')).toBe(0);
+    expect(parsePositiveInt('1e3')).toBe(0);
+    expect(parsePositiveInt('1.5')).toBe(0);
     expect(parsePositiveInt(null)).toBe(0);
   });
 

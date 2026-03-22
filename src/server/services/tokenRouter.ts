@@ -894,7 +894,7 @@ export function isRegexModelPattern(pattern: string): boolean {
   return isTokenRouteRegexPattern(pattern);
 }
 
-export function parseRegexModelPattern(pattern: string): RegExp | null {
+export function parseRegexModelPattern(pattern: string): { test(value: string): boolean } | null {
   return parseTokenRouteRegexPattern(pattern).regex;
 }
 

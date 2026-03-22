@@ -516,15 +516,16 @@ export async function listOauthConnections(options: {
     routeChannelCountByAccount.set(row.accountId, row.count ?? 0);
   }
 
-  const items = rows.map((row) => {
-    const oauth = getOauthInfoFromAccount(row.accounts)!;
+  const items = rows.flatMap((row) => {
+    const oauth = getOauthInfoFromAccount(row.accounts);
+    if (!oauth) return [];
     const models = modelMap.get(row.accounts.id) || [];
     const status = (
       oauth.modelDiscoveryStatus === 'abnormal'
       || row.accounts.status !== 'active'
       || row.sites.status !== 'active'
     ) ? 'abnormal' : 'healthy';
-    return {
+    return [{
       accountId: row.accounts.id,
       siteId: row.sites.id,
       provider: oauth.provider,
@@ -546,7 +547,7 @@ export async function listOauthConnections(options: {
         url: row.sites.url,
         platform: row.sites.platform,
       },
-    };
+    }];
   });
 
   return { items, total, limit, offset };

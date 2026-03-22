@@ -11,7 +11,9 @@ export function resolveAccountCredentialMode(account: any): 'session' | 'apikey'
 }
 
 export function parsePositiveInt(input: string | null): number {
-  const value = Number.parseInt(String(input || '').trim(), 10);
+  const normalized = String(input || '').trim();
+  if (!/^\d+$/.test(normalized)) return 0;
+  const value = Number.parseInt(normalized, 10);
   if (!Number.isFinite(value) || value <= 0) return 0;
   return value;
 }

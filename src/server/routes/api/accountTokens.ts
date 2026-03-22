@@ -228,11 +228,39 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
 
   if (!row.accounts.accessToken) {
     if (row.accounts.apiToken) {
-      await convergeAccountMutation({
-        accountId,
-        preferredApiToken: row.accounts.apiToken,
-        defaultTokenSource: 'legacy',
-      });
+      try {
+        const convergence = await convergeAccountMutation({
+          accountId,
+          preferredApiToken: row.accounts.apiToken,
+          defaultTokenSource: 'legacy',
+          rebuildRoutes: true,
+        });
+        if (convergence.defaultTokenId != null) {
+          return {
+            ...base,
+            status: 'synced',
+            reason: 'legacy_default_token_restored',
+            message: 'restored local default token from legacy api token',
+            synced: true,
+            created: 0,
+            updated: 0,
+            total: 0,
+            defaultTokenId: convergence.defaultTokenId,
+          };
+        }
+      } catch (error: any) {
+        return {
+          ...base,
+          status: 'failed',
+          reason: 'sync_error',
+          message: error?.message || 'sync failed',
+          synced: false,
+          created: 0,
+          updated: 0,
+          total: 0,
+          defaultTokenId: null,
+        };
+      }
     }
     return {
       ...base,

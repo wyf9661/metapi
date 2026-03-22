@@ -27,6 +27,24 @@ describe('geminiGenerateContentTransformer.inbound', () => {
     expect(geminiGenerateContentOutbound.resolveActionUrl).toBe(resolveGeminiGenerateContentUrl);
   });
 
+  it('preserves base-url query params when resolving Gemini endpoints', () => {
+    expect(
+      resolveGeminiNativeBaseUrl('https://example.com/native?alt=sse', 'v1beta'),
+    ).toBe('https://example.com/native/v1beta?alt=sse');
+    expect(
+      resolveGeminiModelsUrl('https://example.com/native?alt=sse', 'v1beta', 'api-key'),
+    ).toBe('https://example.com/native/v1beta/models?alt=sse&key=api-key');
+    expect(
+      resolveGeminiGenerateContentUrl(
+        'https://example.com/native?alt=sse',
+        'v1beta',
+        '/models/gemini-2.5-pro:generateContent',
+        'api-key',
+        '?trace=1',
+      ),
+    ).toBe('https://example.com/native/v1beta/models/gemini-2.5-pro:generateContent?alt=sse&trace=1&key=api-key');
+  });
+
   it('parses native Gemini requests into canonical envelopes', () => {
     const result = geminiGenerateContentTransformer.parseRequest({
       model: 'gemini-2.5-pro',

@@ -808,7 +808,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
           retryCount += 1;
           continue;
         }
-        return reply.code(failureOutcome.status).type(contentType).send(payload);
+        return reply.code(failureOutcome.status).send(failureOutcome.payload);
       }
 
       tokenRouter.recordSuccess(selected.channel.id, latency, 0, modelName);

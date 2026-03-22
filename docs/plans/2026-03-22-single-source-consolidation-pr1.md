@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Savepoint Commit
+## Task 1: Savepoint Commit
 
 **Files:**
 - Commit: `src/server/config.ts`
@@ -42,7 +42,7 @@ git cherry-pick <savepoint-commit>
 
 Expected: first commit preserved inside PR1 branch before the larger consolidation commit.
 
-### Task 2: Responses Single Source
+## Task 2: Responses Single Source
 
 **Files:**
 - Create: `src/server/transformers/openai/responses/normalization.ts`
@@ -63,7 +63,7 @@ Make `conversion.ts` and `compatibility.ts` import the shared helpers instead of
 Run: `npm test -- src/server/transformers/openai/responses/conversion.test.ts`
 Expected: PASS, including assertions that compatibility exports point at the shared implementation.
 
-### Task 3: Shared Surface Orchestration
+## Task 3: Shared Surface Orchestration
 
 **Files:**
 - Create: `src/server/proxy-core/surfaces/sharedSurface.ts`
@@ -85,7 +85,7 @@ Make chat and responses surfaces consume the shared orchestration helpers instea
 Run: `npm test -- src/server/proxy-core/surfaces/sharedSurface.test.ts`
 Expected: PASS
 
-### Task 4: Provider Header Builders
+## Task 4: Provider Header Builders
 
 **Files:**
 - Create: `src/server/proxy-core/providers/headerUtils.ts`
@@ -108,7 +108,7 @@ Make both provider profiles and `upstreamEndpoint.ts` call the shared header bui
 Run: `npm test -- src/server/proxy-core/providers/headerUtils.test.ts`
 Expected: PASS
 
-### Task 5: Cross-Layer Token Route Contract
+## Task 5: Cross-Layer Token Route Contract
 
 **Files:**
 - Create: `src/shared/tokenRouteContract.js`
@@ -137,7 +137,7 @@ Make token router, route APIs, token-routes helpers, and settings consume the sh
 Run: `npm test -- src/shared/tokenRouteContract.test.ts src/shared/tokenRoutePatterns.test.ts`
 Expected: PASS
 
-### Task 6: Account Mutation Workflow
+## Task 6: Account Mutation Workflow
 
 **Files:**
 - Create: `src/server/services/accountMutationWorkflow.ts`
@@ -158,7 +158,7 @@ Make account and account-token APIs call the workflow service instead of each ow
 Run: `npm test -- src/server/services/accountMutationWorkflow.test.ts`
 Expected: PASS
 
-### Task 7: Standard API Provider Base
+## Task 7: Standard API Provider Base
 
 **Files:**
 - Create: `src/server/services/platforms/standardApiProvider.ts`
@@ -182,7 +182,7 @@ Make OpenAI, Claude, Gemini, and CLIProxyAPI adapters extend the shared base ins
 Run: `npm test -- src/server/services/platforms/standardApiProvider.test.ts src/server/services/platforms/llmUpstream.test.ts`
 Expected: PASS
 
-### Task 8: Shared Input File Resolution And Web Helpers
+## Task 8: Shared Input File Resolution And Web Helpers
 
 **Files:**
 - Modify: `src/server/services/proxyInputFileResolver.ts`
@@ -212,7 +212,7 @@ Make `testProxy` / `proxyTest` and stream variants reuse the same implementation
 Run: `npm test -- src/server/services/proxyInputFileResolver.test.ts src/web/pages/helpers/accountConnection.test.ts src/web/api.test.ts`
 Expected: PASS
 
-### Task 9: PR1 Verification And Commit
+## Task 9: PR1 Verification And Commit
 
 **Files:**
 - Verify: `scripts/dev/copy-runtime-db-generated.ts`

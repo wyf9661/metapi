@@ -1,4 +1,8 @@
 export const CONVERSATION_DOCUMENT_ACCEPT_PARTS = ['.pdf', '.txt', '.md', '.markdown', '.json'];
+const GENERIC_MIME_TYPES = new Set([
+  'application/octet-stream',
+  'binary/octet-stream',
+]);
 const DOCUMENT_MIME_TYPES = new Set([
   'application/json',
   'application/pdf',
@@ -11,6 +15,37 @@ const AUDIO_EXTENSIONS = ['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.wav', '.web
 
 function normalizeValue(value) {
   return (value || '').trim().toLowerCase();
+}
+
+export function inferConversationFileMimeType(filename) {
+  const normalized = normalizeValue(filename);
+  if (normalized.endsWith('.pdf')) return 'application/pdf';
+  if (normalized.endsWith('.txt')) return 'text/plain';
+  if (normalized.endsWith('.md') || normalized.endsWith('.markdown')) return 'text/markdown';
+  if (normalized.endsWith('.json')) return 'application/json';
+  if (normalized.endsWith('.png')) return 'image/png';
+  if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) return 'image/jpeg';
+  if (normalized.endsWith('.gif')) return 'image/gif';
+  if (normalized.endsWith('.webp')) return 'image/webp';
+  if (normalized.endsWith('.svg')) return 'image/svg+xml';
+  if (normalized.endsWith('.avif')) return 'image/avif';
+  if (normalized.endsWith('.bmp')) return 'image/bmp';
+  if (normalized.endsWith('.wav')) return 'audio/wav';
+  if (normalized.endsWith('.mp3')) return 'audio/mpeg';
+  if (normalized.endsWith('.m4a')) return 'audio/mp4';
+  if (normalized.endsWith('.ogg')) return 'audio/ogg';
+  if (normalized.endsWith('.aac')) return 'audio/aac';
+  if (normalized.endsWith('.flac')) return 'audio/flac';
+  if (normalized.endsWith('.weba')) return 'audio/webm';
+  return 'application/octet-stream';
+}
+
+export function resolveConversationFileMimeType(mimeType, filename) {
+  const normalizedMimeType = normalizeValue(mimeType);
+  if (normalizedMimeType && !GENERIC_MIME_TYPES.has(normalizedMimeType)) {
+    return normalizedMimeType;
+  }
+  return inferConversationFileMimeType(filename);
 }
 
 export function classifyConversationFileMimeType(mimeType) {
@@ -26,6 +61,7 @@ export function detectConversationFileKind(file) {
     if (mimeType.startsWith('image/')) return 'image';
     if (mimeType.startsWith('audio/')) return 'audio';
     if (DOCUMENT_MIME_TYPES.has(mimeType)) return 'document';
+    if (!GENERIC_MIME_TYPES.has(mimeType)) return 'unknown';
   }
 
   const filename = normalizeValue(file?.filename);

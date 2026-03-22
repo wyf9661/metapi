@@ -242,12 +242,12 @@ function detectProtocolClientApp(input: {
       };
     case 'codex': {
       const clientApp = detectCodexOfficialClientAppViaProfile(input.headers);
-      return (clientApp
+      return clientApp
         ? {
           ...clientApp,
           clientConfidence: 'exact' as const,
         }
-        : null) || {
+        : {
         clientAppId: 'codex',
         clientAppName: 'Codex',
         clientConfidence: 'heuristic',

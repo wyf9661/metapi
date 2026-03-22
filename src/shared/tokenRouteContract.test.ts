@@ -8,5 +8,6 @@ describe('token route contract', () => {
     expect(normalizeTokenRouteMode('pattern')).toBe('pattern');
     expect(normalizeTokenRouteMode('anything-else')).toBe('pattern');
     expect(normalizeTokenRouteMode(null)).toBe('pattern');
+    expect(normalizeTokenRouteMode(undefined)).toBe('pattern');
   });
 });

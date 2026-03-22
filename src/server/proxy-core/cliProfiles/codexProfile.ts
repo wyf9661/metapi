@@ -66,33 +66,43 @@ const CODEX_OFFICIAL_CLIENT_APP_RULES = [
   },
 ] as const;
 
-function headerValueToString(value: unknown): string | null {
+function headerValueToStrings(value: unknown): string[] {
   if (typeof value === 'string') {
     const trimmed = value.trim();
-    return trimmed || null;
+    return trimmed ? [trimmed] : [];
   }
 
   if (Array.isArray(value)) {
+    const values: string[] = [];
     for (const item of value) {
       if (typeof item !== 'string') continue;
       const trimmed = item.trim();
-      if (trimmed) return trimmed;
+      if (trimmed) values.push(trimmed);
     }
+    return values;
   }
 
-  return null;
+  return [];
+}
+
+function headerValueToString(value: unknown): string | null {
+  return headerValueToStrings(value)[0] || null;
 }
 
 function getHeaderValue(headers: Record<string, unknown> | undefined, targetKey: string): string | null {
-  if (!headers) return null;
+  return getHeaderValues(headers, targetKey)[0] || null;
+}
+
+function getHeaderValues(headers: Record<string, unknown> | undefined, targetKey: string): string[] {
+  if (!headers) return [];
   const normalizedTarget = targetKey.trim().toLowerCase();
+  const values: string[] = [];
 
   for (const [rawKey, rawValue] of Object.entries(headers)) {
     if (rawKey.trim().toLowerCase() !== normalizedTarget) continue;
-    return headerValueToString(rawValue);
+    values.push(...headerValueToStrings(rawValue));
   }
-
-  return null;
+  return values;
 }
 
 function hasHeaderPrefix(headers: Record<string, unknown> | undefined, prefix: string): boolean {
@@ -104,16 +114,18 @@ function hasHeaderPrefix(headers: Record<string, unknown> | undefined, prefix: s
   });
 }
 
-function matchesHeaderPrefixes(value: string | null, prefixes: string[]): boolean {
-  const normalizedValue = value?.trim().toLowerCase() || '';
-  if (!normalizedValue) return false;
+function matchesHeaderPrefixes(value: string | string[] | null, prefixes: readonly string[]): boolean {
+  const values = Array.isArray(value)
+    ? value.map((item) => item.trim().toLowerCase()).filter(Boolean)
+    : [value?.trim().toLowerCase() || ''].filter(Boolean);
+  if (values.length === 0) return false;
 
-  return prefixes.some((prefix) => {
+  return values.some((normalizedValue) => prefixes.some((prefix) => {
     const normalizedPrefix = prefix.trim().toLowerCase();
     if (!normalizedPrefix) return false;
     return normalizedValue.startsWith(normalizedPrefix)
       || normalizedValue.includes(normalizedPrefix);
-  });
+  }));
 }
 
 function isCodexPath(path: string): boolean {
@@ -127,10 +139,8 @@ export function detectCodexOfficialClientApp(
   headers?: Record<string, unknown>,
 ): CodexOfficialClientApp | null {
   for (const rule of CODEX_OFFICIAL_CLIENT_APP_RULES) {
-    const matchesOriginator = Array.isArray(rule.originatorPrefixes)
-      && matchesHeaderPrefixes(getHeaderValue(headers, 'originator'), [...rule.originatorPrefixes]);
-    const matchesUserAgent = Array.isArray(rule.userAgentPrefixes)
-      && matchesHeaderPrefixes(getHeaderValue(headers, 'user-agent'), [...rule.userAgentPrefixes]);
+    const matchesOriginator = matchesHeaderPrefixes(getHeaderValues(headers, 'originator'), rule.originatorPrefixes);
+    const matchesUserAgent = matchesHeaderPrefixes(getHeaderValues(headers, 'user-agent'), rule.userAgentPrefixes);
     if (!matchesOriginator && !matchesUserAgent) continue;
     return {
       clientAppId: rule.id,
@@ -156,9 +166,9 @@ export function isCodexRequest(input: DetectCliProfileInput): boolean {
   const headers = input.headers;
   if (!headers) return false;
 
-  const originator = getHeaderValue(headers, 'originator');
+  const originator = getHeaderValues(headers, 'originator');
   if (matchesHeaderPrefixes(originator, CODEX_OFFICIAL_CLIENT_ORIGINATOR_PREFIXES)) return true;
-  if (matchesHeaderPrefixes(getHeaderValue(headers, 'user-agent'), CODEX_OFFICIAL_CLIENT_USER_AGENT_PREFIXES)) return true;
+  if (matchesHeaderPrefixes(getHeaderValues(headers, 'user-agent'), CODEX_OFFICIAL_CLIENT_USER_AGENT_PREFIXES)) return true;
   if (getHeaderValue(headers, 'openai-beta')) return true;
   if (hasHeaderPrefix(headers, 'x-stainless-')) return true;
   if (getCodexSessionId(headers)) return true;

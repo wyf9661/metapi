@@ -123,4 +123,46 @@ describe('proxyInputFileResolver', () => {
       ],
     });
   });
+
+  it('falls back from application/octet-stream to filename-based mime inference', async () => {
+    const { inlineLocalInputFileReferences } = await import('./proxyInputFileResolver.js');
+    await expect(inlineLocalInputFileReferences(
+      {
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'file',
+                file: {
+                  filename: 'paper.pdf',
+                  mime_type: 'application/octet-stream',
+                  file_data: Buffer.from('%PDF-octet').toString('base64'),
+                },
+              },
+            ],
+          },
+        ],
+      },
+      { ownerType: 'managed_key', ownerId: '7' },
+    )).resolves.toEqual({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              file: {
+                file_data: Buffer.from('%PDF-octet').toString('base64'),
+                filename: 'paper.pdf',
+                mime_type: 'application/pdf',
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
 });

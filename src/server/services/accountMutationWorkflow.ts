@@ -77,6 +77,16 @@ export async function convergeAccountMutation(input: {
       result.tokenSync = tokenSync;
       result.defaultTokenId = tokenSync.defaultTokenId ?? result.defaultTokenId;
     }
+    if (!input.ensurePreferredTokenBeforeSync && input.preferredApiToken?.trim()) {
+      const defaultTokenId = await runStep(() => ensureDefaultTokenForAccount(
+        input.accountId,
+        input.preferredApiToken!,
+        { name: 'default', source: input.defaultTokenSource || 'manual' },
+      ));
+      if (defaultTokenId != null) {
+        result.defaultTokenId = defaultTokenId;
+      }
+    }
   } else if (!input.ensurePreferredTokenBeforeSync && input.preferredApiToken?.trim()) {
     const defaultTokenId = await runStep(() => ensureDefaultTokenForAccount(
       input.accountId,

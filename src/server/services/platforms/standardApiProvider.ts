@@ -13,7 +13,11 @@ type FetchModelsOptions = {
 };
 
 export function normalizePlatformBaseUrl(baseUrl: string): string {
-  return (baseUrl || '').replace(/\/+$/, '');
+  let normalized = baseUrl || '';
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
 }
 
 export function resolveVersionedModelsUrl(baseUrl: string): string {

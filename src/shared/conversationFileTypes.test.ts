@@ -4,7 +4,9 @@ import {
   buildConversationAcceptList,
   classifyConversationFileMimeType,
   detectConversationFileKind,
+  inferConversationFileMimeType,
   isSupportedConversationFileMimeType,
+  resolveConversationFileMimeType,
 } from './conversationFileTypes.js';
 
 describe('conversationFileTypes', () => {
@@ -30,5 +32,14 @@ describe('conversationFileTypes', () => {
       image: true,
       audio: false,
     })).toBe('.pdf,.txt,.md,.markdown,.json,image/*');
+  });
+
+  it('falls back from generic mime types to filename-based inference consistently', () => {
+    expect(inferConversationFileMimeType('photo.avif')).toBe('image/avif');
+    expect(resolveConversationFileMimeType('application/octet-stream', 'paper.pdf')).toBe('application/pdf');
+    expect(detectConversationFileKind({
+      filename: 'paper.pdf',
+      mimeType: 'application/octet-stream',
+    })).toBe('document');
   });
 });
