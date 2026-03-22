@@ -107,6 +107,10 @@ function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): str
   return '已切换为权重随机策略';
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export default function TokenRoutes() {
   const navigate = useNavigate();
   const [routeSummaries, setRouteSummaries] = useState<RouteSummaryRow[]>([]);
@@ -158,6 +162,7 @@ export default function TokenRoutes() {
   const toast = useToast();
 
   const candidatesLoadedRef = useRef(false);
+  const candidatesPromiseRef = useRef<Promise<void> | null>(null);
 
   const loadRouteDecisions = async (
     routeRows: RouteSummaryRow[],
@@ -226,24 +231,32 @@ export default function TokenRoutes() {
     }
   };
 
-  const loadCandidates = async (force?: boolean) => {
+  const loadCandidates = (force?: boolean) => {
     if (candidatesLoadedRef.current && !force) return;
+    if (candidatesPromiseRef.current && !force) return;
     candidatesLoadedRef.current = true;
-    try {
-      const candidateRows = await api.getModelTokenCandidates();
-      startTransition(() => {
-        setModelCandidates((candidateRows?.models || {}) as RouteModelCandidatesByModelName);
-        setMissingTokenModelsByName(
-          normalizeMissingTokenModels((candidateRows?.modelsWithoutToken || {}) as MissingTokenModelsByName),
-        );
-        setMissingTokenGroupModelsByName(
-          normalizeMissingTokenModels((candidateRows?.modelsMissingTokenGroups || {}) as MissingTokenModelsByName),
-        );
-        setEndpointTypesByModel(candidateRows?.endpointTypesByModel || {});
-      });
-    } catch {
-      candidatesLoadedRef.current = false;
-    }
+    const promise = (async () => {
+      try {
+        const candidateRows = await api.getModelTokenCandidates();
+        startTransition(() => {
+          setModelCandidates((candidateRows?.models || {}) as RouteModelCandidatesByModelName);
+          setMissingTokenModelsByName(
+            normalizeMissingTokenModels((candidateRows?.modelsWithoutToken || {}) as MissingTokenModelsByName),
+          );
+          setMissingTokenGroupModelsByName(
+            normalizeMissingTokenModels((candidateRows?.modelsMissingTokenGroups || {}) as MissingTokenModelsByName),
+          );
+          setEndpointTypesByModel(candidateRows?.endpointTypesByModel || {});
+        });
+      } catch {
+        candidatesLoadedRef.current = false;
+      } finally {
+        if (candidatesPromiseRef.current === promise) {
+          candidatesPromiseRef.current = null;
+        }
+      }
+    })();
+    candidatesPromiseRef.current = promise;
   };
 
   const load = async () => {
@@ -494,10 +507,11 @@ export default function TokenRoutes() {
   };
 
   // Stable derived value: only changes when route patterns change (not on enabled toggle)
+  const routePatternsKey = visibleRouteRows.map((r) => `${r.id}:${r.modelPattern}:${r.routeMode || 'pattern'}`).join(',');
   const routePatterns = useMemo(
     () => visibleRouteRows.map((r) => ({ id: r.id, modelPattern: r.modelPattern, routeMode: r.routeMode })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visibleRouteRows.map((r) => `${r.id}:${r.modelPattern}:${r.routeMode || 'pattern'}`).join(',')],
+    [routePatternsKey],
   );
 
   const routeBrandById = useMemo(() => {
@@ -677,55 +691,9 @@ export default function TokenRoutes() {
     })
   ), [listVisibleRoutes, sortBy, sortDir]);
 
-  const enabledCounts = useMemo(() => {
-    // Count enabled/disabled within the currently filtered scope (excluding the enabled filter itself)
-    let base = sortedRoutes;
-
-    if (activeGroupFilter === '__all__') {
-      base = base.filter((route) => !isRouteExactModel(route));
-    } else if (typeof activeGroupFilter === 'number') {
-      base = base.filter((route) => route.id === activeGroupFilter);
-    }
-    if (activeBrand) {
-      if (activeBrand === '__other__') {
-        base = base.filter((route) => !(routeBrandById.get(route.id) || null));
-      } else {
-        base = base.filter((route) => (routeBrandById.get(route.id)?.name || '') === activeBrand);
-      }
-    }
-    if (activeSite) {
-      base = base.filter((route) => route.siteNames?.includes(activeSite));
-    }
-    if (activeEndpointType) {
-      base = base.filter((route) => (routeEndpointTypesByRouteId[route.id] || new Set<string>()).has(activeEndpointType));
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      base = base.filter((route) => {
-        const modelPattern = route.modelPattern.toLowerCase();
-        const displayName = (route.displayName || '').toLowerCase();
-        const title = resolveRouteTitle(route).toLowerCase();
-        return modelPattern.includes(q) || displayName.includes(q) || title.includes(q);
-      });
-    }
-
-    let enabled = 0;
-    let disabled = 0;
-    for (const route of base) {
-      if (route.enabled) enabled++;
-      else disabled++;
-    }
-    return { enabled, disabled };
-  }, [sortedRoutes, activeGroupFilter, activeBrand, activeSite, activeEndpointType, search, routeBrandById, routeEndpointTypesByRouteId]);
-
-  const filteredRoutes = useMemo(() => {
+  // Shared base filter: all filters EXCEPT enabledFilter
+  const baseFilteredRoutes = useMemo(() => {
     let list = sortedRoutes;
-
-    if (enabledFilter === 'enabled') {
-      list = list.filter((route) => route.enabled);
-    } else if (enabledFilter === 'disabled') {
-      list = list.filter((route) => !route.enabled);
-    }
 
     if (activeGroupFilter === '__all__') {
       list = list.filter((route) => !isRouteExactModel(route));
@@ -742,9 +710,7 @@ export default function TokenRoutes() {
     }
 
     if (activeSite) {
-      list = list.filter((route) =>
-        route.siteNames?.includes(activeSite),
-      );
+      list = list.filter((route) => route.siteNames?.includes(activeSite));
     }
 
     if (activeEndpointType) {
@@ -764,17 +730,23 @@ export default function TokenRoutes() {
     }
 
     return list;
-  }, [
-    sortedRoutes,
-    enabledFilter,
-    activeGroupFilter,
-    activeBrand,
-    activeSite,
-    activeEndpointType,
-    search,
-    routeBrandById,
-    routeEndpointTypesByRouteId,
-  ]);
+  }, [sortedRoutes, activeGroupFilter, activeBrand, activeSite, activeEndpointType, search, routeBrandById, routeEndpointTypesByRouteId]);
+
+  const enabledCounts = useMemo(() => {
+    let enabled = 0;
+    let disabled = 0;
+    for (const route of baseFilteredRoutes) {
+      if (route.enabled) enabled++;
+      else disabled++;
+    }
+    return { enabled, disabled };
+  }, [baseFilteredRoutes]);
+
+  const filteredRoutes = useMemo(() => {
+    if (enabledFilter === 'all') return baseFilteredRoutes;
+    if (enabledFilter === 'enabled') return baseFilteredRoutes.filter((route) => route.enabled);
+    return baseFilteredRoutes.filter((route) => !route.enabled);
+  }, [baseFilteredRoutes, enabledFilter]);
 
   useEffect(() => {
     setVisibleRouteCount(getInitialVisibleCount(filteredRoutes.length, ROUTE_RENDER_CHUNK));
@@ -806,7 +778,7 @@ export default function TokenRoutes() {
 
   // Lazy per-route candidate index — only computes for routes actually accessed
   const candidateIndexCacheRef = useRef<{ key: string; cache: Map<number, RouteCandidateView> }>({ key: '', cache: new Map() });
-  const candidateIndexCacheKey = `${routePatterns.length}:${Object.keys(modelCandidates).length}`;
+  const candidateIndexCacheKey = `${routePatternsKey}|${Object.keys(modelCandidates).length}`;
   if (candidateIndexCacheRef.current.key !== candidateIndexCacheKey) {
     candidateIndexCacheRef.current = { key: candidateIndexCacheKey, cache: new Map() };
   }
@@ -825,7 +797,7 @@ export default function TokenRoutes() {
 
   // Lazy per-route missing token index
   const missingTokenCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
-  const missingTokenCacheKey = `${routePatterns.length}:${Object.keys(missingTokenModelsByName).length}`;
+  const missingTokenCacheKey = `${routePatternsKey}|${Object.keys(missingTokenModelsByName).length}`;
   if (missingTokenCacheRef.current.key !== missingTokenCacheKey) {
     missingTokenCacheRef.current = { key: missingTokenCacheKey, cache: new Map() };
   }
@@ -844,7 +816,7 @@ export default function TokenRoutes() {
 
   // Lazy per-route missing token group index
   const missingTokenGroupCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
-  const missingTokenGroupCacheKey = `${routePatterns.length}:${Object.keys(missingTokenGroupModelsByName).length}`;
+  const missingTokenGroupCacheKey = `${routePatternsKey}|${Object.keys(missingTokenGroupModelsByName).length}`;
   if (missingTokenGroupCacheRef.current.key !== missingTokenGroupCacheKey) {
     missingTokenGroupCacheRef.current = { key: missingTokenGroupCacheKey, cache: new Map() };
   }
@@ -1026,7 +998,7 @@ export default function TokenRoutes() {
       dialog.innerHTML = `
         <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认站点屏蔽</div>
         <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
-          将模型「<b>${modelName}</b>」加入站点「<b>${siteName}</b>」的禁用列表。<br/>执行后将自动触发路由重建，该站点下此模型的通道将不再生成。
+          将模型「<b>${escapeHtml(modelName)}</b>」加入站点「<b>${escapeHtml(siteName)}</b>」的禁用列表。<br/>执行后将自动触发路由重建，该站点下此模型的通道将不再生成。
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px">
           <button id="__sb_cancel" class="btn btn-ghost" style="padding:6px 16px">取消</button>
@@ -1513,8 +1485,8 @@ export default function TokenRoutes() {
                     onSaveToken={stableChannelTokenSave}
                     onDeleteChannel={stableDeleteChannel}
                     onChannelDragEnd={stableChannelDragEnd}
-                    missingTokenSiteItems={missingTokenSiteItemsByRouteId[route.id] || EMPTY_MISSING_ITEMS}
-                    missingTokenGroupItems={missingTokenGroupItemsByRouteId[route.id] || EMPTY_MISSING_GROUP_ITEMS}
+                    missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
+                    missingTokenGroupItems={getMissingTokenGroupItems(route.id)}
                     onCreateTokenForMissing={stableCreateTokenForMissing}
                     onAddChannel={stableAddChannel}
                     expandedSourceGroupMap={expandedSourceGroupMap}
