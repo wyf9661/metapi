@@ -70,6 +70,32 @@ describe('sites proxy settings', () => {
     expect(payload.globalWeight).toBe(1.5);
   });
 
+  it('returns a conflict response when the same platform and url already exist', async () => {
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/sites',
+      payload: {
+        name: 'existing-site',
+        url: 'https://duplicate-site.example.com/',
+        platform: 'new-api',
+      },
+    });
+    expect(first.statusCode).toBe(200);
+
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: '/api/sites',
+      payload: {
+        name: 'duplicate-site',
+        url: 'https://duplicate-site.example.com',
+        platform: 'new-api',
+      },
+    });
+
+    expect(duplicate.statusCode).toBe(409);
+    expect((duplicate.json() as { error?: string }).error).toContain('already exists');
+  });
+
   it('rejects invalid useSystemProxy flag', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -161,6 +187,43 @@ describe('sites proxy settings', () => {
     const payload = response.json() as { proxyUrl?: string | null; useSystemProxy?: boolean };
     expect(payload.proxyUrl).toBe('http://127.0.0.1:8080');
     expect(payload.useSystemProxy).toBe(true);
+  });
+
+  it('returns a conflict response when updating a site to an existing platform and url', async () => {
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/sites',
+      payload: {
+        name: 'first-site',
+        url: 'https://first-site.example.com',
+        platform: 'new-api',
+      },
+    });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/sites',
+      payload: {
+        name: 'second-site',
+        url: 'https://second-site.example.com',
+        platform: 'new-api',
+      },
+    });
+    expect(second.statusCode).toBe(200);
+
+    const { id } = second.json() as { id: number };
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/sites/${id}`,
+      payload: {
+        url: 'https://first-site.example.com/',
+        platform: 'new-api',
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as { error?: string }).error).toContain('already exists');
   });
 
   it('rejects invalid custom headers json', async () => {

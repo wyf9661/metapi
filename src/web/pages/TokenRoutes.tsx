@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -20,6 +20,7 @@ import {
   buildRouteMissingTokenIndex,
   normalizeMissingTokenModels,
   type MissingTokenModelsByName,
+  type RouteMissingTokenHint,
 } from './helpers/routeMissingTokenHints.js';
 import { buildVisibleRouteList } from './helpers/routeListVisibility.js';
 import { buildZeroChannelPlaceholderRoutes } from './helpers/zeroChannelRoutes.js';
@@ -54,7 +55,7 @@ import {
   getModelPatternError,
 } from './token-routes/utils.js';
 import { useRouteChannels } from './token-routes/useRouteChannels.js';
-import RouteFilterBar from './token-routes/RouteFilterBar.js';
+import RouteFilterBar, { type EnabledFilter } from './token-routes/RouteFilterBar.js';
 import ManualRoutePanel from './token-routes/ManualRoutePanel.js';
 import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
@@ -106,6 +107,10 @@ function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): str
   return '已切换为权重随机策略';
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export default function TokenRoutes() {
   const navigate = useNavigate();
   const [routeSummaries, setRouteSummaries] = useState<RouteSummaryRow[]>([]);
@@ -119,6 +124,7 @@ export default function TokenRoutes() {
   const [activeSite, setActiveSite] = useState<string | null>(null);
   const [activeEndpointType, setActiveEndpointType] = useState<string | null>(null);
   const [activeGroupFilter, setActiveGroupFilter] = useState<GroupFilter>(null);
+  const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>('all');
   const [filterCollapsed, setFilterCollapsed] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showZeroChannelRoutes, setShowZeroChannelRoutes] = useState(false);
@@ -154,6 +160,11 @@ export default function TokenRoutes() {
   } = useRouteChannels();
 
   const toast = useToast();
+
+  const candidatesLoadedRef = useRef(false);
+  const candidatesPromiseRef = useRef<Promise<void> | null>(null);
+  const candidatesVersionRef = useRef(0);
+  const candidatesSeqRef = useRef(0);
 
   const loadRouteDecisions = async (
     routeRows: RouteSummaryRow[],
@@ -222,22 +233,42 @@ export default function TokenRoutes() {
     }
   };
 
+  const loadCandidates = (force?: boolean) => {
+    if (candidatesLoadedRef.current && !force) return;
+    if (candidatesPromiseRef.current && !force) return;
+    const seq = ++candidatesSeqRef.current;
+    candidatesLoadedRef.current = true;
+    const promise = (async () => {
+      try {
+        const candidateRows = await api.getModelTokenCandidates();
+        if (candidatesSeqRef.current !== seq) return; // stale
+        startTransition(() => {
+          setModelCandidates((candidateRows?.models || {}) as RouteModelCandidatesByModelName);
+          setMissingTokenModelsByName(
+            normalizeMissingTokenModels((candidateRows?.modelsWithoutToken || {}) as MissingTokenModelsByName),
+          );
+          setMissingTokenGroupModelsByName(
+            normalizeMissingTokenModels((candidateRows?.modelsMissingTokenGroups || {}) as MissingTokenModelsByName),
+          );
+          setEndpointTypesByModel(candidateRows?.endpointTypesByModel || {});
+        });
+        candidatesVersionRef.current = Date.now();
+      } catch {
+        if (candidatesSeqRef.current === seq) candidatesLoadedRef.current = false;
+      } finally {
+        if (candidatesPromiseRef.current === promise) {
+          candidatesPromiseRef.current = null;
+        }
+      }
+    })();
+    candidatesPromiseRef.current = promise;
+  };
+
   const load = async () => {
-    const [summaryRows, candidateRows] = await Promise.all([
-      api.getRoutesSummary(),
-      api.getModelTokenCandidates(),
-    ]);
+    const summaryRows = await api.getRoutesSummary();
 
     const summaries = (summaryRows || []) as RouteSummaryRow[];
     setRouteSummaries(summaries);
-    setModelCandidates((candidateRows?.models || {}) as RouteModelCandidatesByModelName);
-    setMissingTokenModelsByName(
-      normalizeMissingTokenModels((candidateRows?.modelsWithoutToken || {}) as MissingTokenModelsByName),
-    );
-    setMissingTokenGroupModelsByName(
-      normalizeMissingTokenModels((candidateRows?.modelsMissingTokenGroups || {}) as MissingTokenModelsByName),
-    );
-    setEndpointTypesByModel(candidateRows?.endpointTypesByModel || {});
     const decisionPlaceholder: Record<number, RouteDecision | null> = {};
     for (const route of summaries) {
       decisionPlaceholder[route.id] = route.decisionSnapshot || null;
@@ -246,6 +277,11 @@ export default function TokenRoutes() {
     setDecisionAutoSkipped(
       summaries.some((route) => isRouteExactModel(route) && !route.decisionSnapshot),
     );
+
+    // Silently refresh candidates in the background if already loaded
+    if (candidatesLoadedRef.current) {
+      loadCandidates(true);
+    }
   };
 
   useEffect(() => {
@@ -255,6 +291,9 @@ export default function TokenRoutes() {
       } catch {
         toast.error('加载路由配置失败');
       }
+      // Preload candidates in background after first paint
+      const scheduleIdle = typeof requestIdleCallback === 'function' ? requestIdleCallback : (cb: () => void) => setTimeout(cb, 0);
+      scheduleIdle(() => loadCandidates());
     })();
   }, []);
 
@@ -264,12 +303,14 @@ export default function TokenRoutes() {
       const res = await api.rebuildRoutes(true);
       if (res?.queued) {
         toast.info(res.message || '已开始重建路由，请稍后查看日志');
+        invalidateChannels();
         await load();
         return;
       }
       const createdRoutes = res?.rebuild?.createdRoutes ?? 0;
       const createdChannels = res?.rebuild?.createdChannels ?? 0;
       toast.success(`自动重建完成（新增 ${createdRoutes} 条路由 / ${createdChannels} 个通道）`);
+      invalidateChannels();
       await load();
     } catch (e: any) {
       toast.error(e.message || '重建路由失败');
@@ -312,6 +353,7 @@ export default function TokenRoutes() {
   }, [form.displayName, form.modelPattern, form.routeMode, form.sourceRouteIds.length, saving]);
 
   const previewModelSamples = useMemo(() => {
+    if (!showManual) return [];
     const names = new Set<string>();
     for (const modelName of Object.keys(modelCandidates || {})) {
       const normalized = modelName.trim();
@@ -325,7 +367,7 @@ export default function TokenRoutes() {
     return Array.from(names)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
       .slice(0, 800);
-  }, [modelCandidates, routeSummaries]);
+  }, [showManual, modelCandidates, routeSummaries]);
 
   const exactSourceRouteOptions = useMemo(
     () => routeSummaries.filter((route) => isRouteExactModel(route)),
@@ -394,6 +436,7 @@ export default function TokenRoutes() {
   };
 
   const handleEditRoute = (route: RouteSummaryRow) => {
+    loadCandidates();
     setEditingRouteId(route.id);
     const routeMode = normalizeRouteMode(route.routeMode);
     setForm({
@@ -471,10 +514,11 @@ export default function TokenRoutes() {
   };
 
   // Stable derived value: only changes when route patterns change (not on enabled toggle)
+  const routePatternsKey = visibleRouteRows.map((r) => `${r.id}:${r.modelPattern}:${r.routeMode || 'pattern'}`).join(',');
   const routePatterns = useMemo(
     () => visibleRouteRows.map((r) => ({ id: r.id, modelPattern: r.modelPattern, routeMode: r.routeMode })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visibleRouteRows.map((r) => `${r.id}:${r.modelPattern}:${r.routeMode || 'pattern'}`).join(',')],
+    [routePatternsKey],
   );
 
   const routeBrandById = useMemo(() => {
@@ -582,15 +626,17 @@ export default function TokenRoutes() {
   }, [listVisibleRoutes, routeEndpointTypesByRouteId]);
 
   const sourceEndpointTypesByRouteId = useMemo(() => {
+    if (!showManual) return {};
     const next: Record<number, string[]> = {};
     for (const route of exactSourceRouteOptions) {
       next[route.id] = Array.from(routeEndpointTypesByRouteId[route.id] || new Set<string>())
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
     }
     return next;
-  }, [exactSourceRouteOptions, routeEndpointTypesByRouteId]);
+  }, [showManual, exactSourceRouteOptions, routeEndpointTypesByRouteId]);
 
   const routeBrandIconCandidates = useMemo(() => {
+    if (!showManual) return [];
     const byIcon = new Map<string, BrandInfo>();
 
     for (const route of visibleRouteRows) {
@@ -605,7 +651,7 @@ export default function TokenRoutes() {
 
     return Array.from(byIcon.values())
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-  }, [visibleRouteRows, modelCandidates]);
+  }, [showManual, visibleRouteRows, modelCandidates]);
 
   const routeIconSelectOptions = useMemo<RouteIconOption[]>(() => ([
     ...ROUTE_ICON_OPTIONS,
@@ -652,7 +698,8 @@ export default function TokenRoutes() {
     })
   ), [listVisibleRoutes, sortBy, sortDir]);
 
-  const filteredRoutes = useMemo(() => {
+  // Shared base filter: all filters EXCEPT enabledFilter
+  const baseFilteredRoutes = useMemo(() => {
     let list = sortedRoutes;
 
     if (activeGroupFilter === '__all__') {
@@ -670,9 +717,7 @@ export default function TokenRoutes() {
     }
 
     if (activeSite) {
-      list = list.filter((route) =>
-        route.siteNames?.includes(activeSite),
-      );
+      list = list.filter((route) => route.siteNames?.includes(activeSite));
     }
 
     if (activeEndpointType) {
@@ -692,16 +737,26 @@ export default function TokenRoutes() {
     }
 
     return list;
-  }, [
-    sortedRoutes,
-    activeGroupFilter,
-    activeBrand,
-    activeSite,
-    activeEndpointType,
-    search,
-    routeBrandById,
-    routeEndpointTypesByRouteId,
-  ]);
+  }, [sortedRoutes, activeGroupFilter, activeBrand, activeSite, activeEndpointType, search, routeBrandById, routeEndpointTypesByRouteId]);
+
+  const enabledCounts = useMemo(() => {
+    let enabled = 0;
+    let disabled = 0;
+    for (const route of baseFilteredRoutes) {
+      if (route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true) continue;
+      if (route.enabled) enabled++;
+      else disabled++;
+    }
+    return { enabled, disabled };
+  }, [baseFilteredRoutes]);
+
+  const filteredRoutes = useMemo(() => {
+    if (enabledFilter === 'all') return baseFilteredRoutes;
+    return baseFilteredRoutes.filter((route) => {
+      if (route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true) return false;
+      return enabledFilter === 'enabled' ? route.enabled : !route.enabled;
+    });
+  }, [baseFilteredRoutes, enabledFilter]);
 
   useEffect(() => {
     setVisibleRouteCount(getInitialVisibleCount(filteredRoutes.length, ROUTE_RENDER_CHUNK));
@@ -713,6 +768,8 @@ export default function TokenRoutes() {
 
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
+  const shouldShowLoadMore = filteredRoutes.length > 0 && visibleRouteCount < filteredRoutes.length;
+
   useEffect(() => {
     const el = loadMoreSentinelRef.current;
     if (!el) return;
@@ -722,29 +779,68 @@ export default function TokenRoutes() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [handleLoadMoreRoutes]);
+  }, [handleLoadMoreRoutes, shouldShowLoadMore]);
 
   const visibleRoutes = useMemo(
     () => filteredRoutes.slice(0, visibleRouteCount),
     [filteredRoutes, visibleRouteCount],
   );
 
-  const routeModelCandidateIndex = useMemo(
-    () => buildRouteModelCandidatesIndex(routePatterns, modelCandidates, matchesModelPattern),
-    [routePatterns, modelCandidates],
-  );
-
-  const routeMissingTokenIndex = useMemo(
-    () => buildRouteMissingTokenIndex(routePatterns, missingTokenModelsByName, matchesModelPattern),
-    [routePatterns, missingTokenModelsByName],
-  );
-  const routeMissingTokenGroupIndex = useMemo(
-    () => buildRouteMissingTokenIndex(routePatterns, missingTokenGroupModelsByName, matchesModelPattern),
-    [routePatterns, missingTokenGroupModelsByName],
-  );
+  // Lazy per-route candidate index — only computes for routes actually accessed
+  const candidateIndexCacheRef = useRef<{ key: string; cache: Map<number, RouteCandidateView> }>({ key: '', cache: new Map() });
+  const candidateIndexCacheKey = `${routePatternsKey}|${Object.keys(modelCandidates).length}|${candidatesVersionRef.current}`;
+  if (candidateIndexCacheRef.current.key !== candidateIndexCacheKey) {
+    candidateIndexCacheRef.current = { key: candidateIndexCacheKey, cache: new Map() };
+  }
 
   const getRouteCandidateView = (routeId: number): RouteCandidateView => {
-    return routeModelCandidateIndex[routeId] || EMPTY_ROUTE_CANDIDATE_VIEW;
+    const cache = candidateIndexCacheRef.current.cache;
+    const cached = cache.get(routeId);
+    if (cached) return cached;
+    const route = routePatterns.find((r) => r.id === routeId);
+    if (!route) return EMPTY_ROUTE_CANDIDATE_VIEW;
+    const index = buildRouteModelCandidatesIndex([route], modelCandidates, matchesModelPattern);
+    const view = index[routeId] || EMPTY_ROUTE_CANDIDATE_VIEW;
+    cache.set(routeId, view);
+    return view;
+  };
+
+  // Lazy per-route missing token index
+  const missingTokenCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
+  const missingTokenCacheKey = `${routePatternsKey}|${Object.keys(missingTokenModelsByName).length}|${candidatesVersionRef.current}`;
+  if (missingTokenCacheRef.current.key !== missingTokenCacheKey) {
+    missingTokenCacheRef.current = { key: missingTokenCacheKey, cache: new Map() };
+  }
+
+  const getRouteMissingTokenHints = (routeId: number): RouteMissingTokenHint[] => {
+    const cache = missingTokenCacheRef.current.cache;
+    const cached = cache.get(routeId);
+    if (cached) return cached;
+    const route = routePatterns.find((r) => r.id === routeId);
+    if (!route) return [];
+    const index = buildRouteMissingTokenIndex([route], missingTokenModelsByName, matchesModelPattern);
+    const hints = index[routeId] || [];
+    cache.set(routeId, hints);
+    return hints;
+  };
+
+  // Lazy per-route missing token group index
+  const missingTokenGroupCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
+  const missingTokenGroupCacheKey = `${routePatternsKey}|${Object.keys(missingTokenGroupModelsByName).length}|${candidatesVersionRef.current}`;
+  if (missingTokenGroupCacheRef.current.key !== missingTokenGroupCacheKey) {
+    missingTokenGroupCacheRef.current = { key: missingTokenGroupCacheKey, cache: new Map() };
+  }
+
+  const getRouteMissingTokenGroupHints = (routeId: number): RouteMissingTokenHint[] => {
+    const cache = missingTokenGroupCacheRef.current.cache;
+    const cached = cache.get(routeId);
+    if (cached) return cached;
+    const route = routePatterns.find((r) => r.id === routeId);
+    if (!route) return [];
+    const index = buildRouteMissingTokenIndex([route], missingTokenGroupModelsByName, matchesModelPattern);
+    const hints = index[routeId] || [];
+    cache.set(routeId, hints);
+    return hints;
   };
 
   const routeById = useMemo(
@@ -763,17 +859,64 @@ export default function TokenRoutes() {
   };
 
   const handleDeleteChannel = async (channelId: number, routeId: number) => {
+    const dismissedKey = 'metapi:channel-delete-warning-dismissed';
+    const dismissed = localStorage.getItem(dismissedKey) === 'true';
+    if (!dismissed) {
+      const dontAskAgain = { checked: false };
+      const confirmed = await new Promise<boolean>((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
+        dialog.innerHTML = `
+          <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认移除通道</div>
+          <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
+            移除的通道会在定时模型刷新时被自动重建恢复。<br/>如果只是想临时停用通道，建议使用<b>禁用开关</b>。
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-muted);margin-bottom:16px;cursor:pointer">
+            <input type="checkbox" id="__ch_del_dismiss" /> 以后不再提示
+          </label>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button id="__ch_del_cancel" class="btn btn-ghost" style="padding:6px 16px">取消</button>
+            <button id="__ch_del_confirm" class="btn btn-danger" style="padding:6px 16px">确认移除</button>
+          </div>
+        `;
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        dialog.querySelector('#__ch_del_cancel')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(false); });
+        dialog.querySelector('#__ch_del_confirm')!.addEventListener('click', () => {
+          dontAskAgain.checked = (dialog.querySelector('#__ch_del_dismiss') as HTMLInputElement).checked;
+          document.body.removeChild(overlay);
+          resolve(true);
+        });
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } });
+      });
+      if (!confirmed) return;
+      if (dontAskAgain.checked) localStorage.setItem(dismissedKey, 'true');
+    }
     try {
       await api.deleteChannel(channelId);
       toast.success('通道已移除');
-      // Reload channels for this route
       await loadChannels(routeId, true);
-      // Update channel count in summary
       setRouteSummaries((prev) =>
         prev.map((r) => r.id === routeId ? { ...r, channelCount: Math.max(0, r.channelCount - 1) } : r),
       );
     } catch (e: any) {
       toast.error(e.message || '移除通道失败');
+    }
+  };
+
+  const handleToggleChannelEnabled = async (channelId: number, routeId: number, enabled: boolean) => {
+    if (updatingChannel[channelId]) return;
+    setUpdatingChannel((prev) => ({ ...prev, [channelId]: true }));
+    try {
+      await api.updateChannel(channelId, { enabled });
+      toast.success(enabled ? '通道已启用' : '通道已禁用');
+      await loadChannels(routeId, true);
+    } catch (e: any) {
+      toast.error(e.message || '更新通道状态失败');
+    } finally {
+      setUpdatingChannel((prev) => ({ ...prev, [channelId]: false }));
     }
   };
 
@@ -847,11 +990,67 @@ export default function TokenRoutes() {
     }
   };
 
+  const handleSiteBlockModel = async (channelId: number, routeId: number) => {
+    const channels = channelsByRouteId[routeId] || [];
+    const channel = channels.find((c) => c.id === channelId);
+    if (!channel?.site?.id) {
+      toast.error('找不到通道对应的站点信息');
+      return;
+    }
+    const route = routeSummaries.find((r) => r.id === routeId);
+    const modelName = channel.sourceModel || (route && isExactModelPattern(route.modelPattern) ? route.modelPattern : '') || '';
+    if (!modelName) {
+      toast.error('该通道没有精确模型名，无法使用站点屏蔽（通配符路由请在站点编辑中手动禁用）');
+      return;
+    }
+    const siteName = channel.site.name || '未知站点';
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+      const dialog = document.createElement('div');
+      dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
+      dialog.innerHTML = `
+        <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认站点屏蔽</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
+          将模型「<b>${escapeHtml(modelName)}</b>」加入站点「<b>${escapeHtml(siteName)}</b>」的禁用列表。<br/>执行后将自动触发路由重建，该站点下此模型的通道将不再生成。
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <button id="__sb_cancel" class="btn btn-ghost" style="padding:6px 16px">取消</button>
+          <button id="__sb_confirm" class="btn btn-warning" style="padding:6px 16px">确认屏蔽</button>
+        </div>
+      `;
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+      dialog.querySelector('#__sb_cancel')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(false); });
+      dialog.querySelector('#__sb_confirm')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(true); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } });
+    });
+    if (!confirmed) return;
+
+    try {
+      const siteId = channel.site.id;
+      const existing = await api.getSiteDisabledModels(siteId);
+      const currentModels: string[] = existing?.models || [];
+      if (currentModels.includes(modelName)) {
+        toast.info(`模型「${modelName}」已在站点「${siteName}」的禁用列表中`);
+        return;
+      }
+      await api.updateSiteDisabledModels(siteId, [...currentModels, modelName]);
+      toast.success(`已将「${modelName}」加入站点「${siteName}」的禁用列表，正在重建路由...`);
+      await api.rebuildRoutes(false);
+      invalidateChannels();
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || '站点屏蔽模型失败');
+    }
+  };
+
   const toggleExpand = async (routeId: number) => {
     const isCurrentlyExpanded = expandedRouteIds.includes(routeId);
     if (isCurrentlyExpanded) {
       setExpandedRouteIds((prev) => prev.filter((id) => id !== routeId));
     } else {
+      loadCandidates();
       setExpandedRouteIds((prev) => [...prev, routeId]);
       // Load channels on demand
       const route = routeById.get(routeId) || null;
@@ -866,84 +1065,78 @@ export default function TokenRoutes() {
     }
   };
 
-  const missingTokenSiteItemsByRouteId = useMemo(() => {
-    const result: Record<number, MissingTokenRouteSiteActionItem[]> = {};
-    for (const routeId of Object.keys(routeMissingTokenIndex).map(Number)) {
-      const missingTokenHints = routeMissingTokenIndex[routeId] || [];
-      const siteMap = new Map<string, MissingTokenRouteSiteActionItem>();
-      for (const hint of missingTokenHints) {
-        for (const account of hint.accounts) {
-          if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
-          const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
-          const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
-          const accountLabel = account.username || `account-${account.accountId}`;
-          const existing = siteMap.get(key);
-          if (!existing) {
-            siteMap.set(key, { key, siteName, accountId: account.accountId, accountLabel });
-            continue;
-          }
-          if (account.accountId < existing.accountId) {
-            existing.accountId = account.accountId;
-            existing.accountLabel = accountLabel;
-          }
+  const getMissingTokenSiteItems = (routeId: number): MissingTokenRouteSiteActionItem[] => {
+    const missingTokenHints = getRouteMissingTokenHints(routeId);
+    if (missingTokenHints.length === 0) return EMPTY_MISSING_ITEMS;
+    const siteMap = new Map<string, MissingTokenRouteSiteActionItem>();
+    for (const hint of missingTokenHints) {
+      for (const account of hint.accounts) {
+        if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
+        const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
+        const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
+        const accountLabel = account.username || `account-${account.accountId}`;
+        const existing = siteMap.get(key);
+        if (!existing) {
+          siteMap.set(key, { key, siteName, accountId: account.accountId, accountLabel });
+          continue;
+        }
+        if (account.accountId < existing.accountId) {
+          existing.accountId = account.accountId;
+          existing.accountLabel = accountLabel;
         }
       }
-      result[routeId] = Array.from(siteMap.values()).sort((a, b) => (
-        a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
-      ));
     }
-    return result;
-  }, [routeMissingTokenIndex]);
+    return Array.from(siteMap.values()).sort((a, b) => (
+      a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
+    ));
+  };
 
-  const missingTokenGroupItemsByRouteId = useMemo(() => {
-    const result: Record<number, MissingTokenGroupRouteSiteActionItem[]> = {};
-    for (const routeId of Object.keys(routeMissingTokenGroupIndex).map(Number)) {
-      const missingGroupHints = routeMissingTokenGroupIndex[routeId] || [];
-      const siteMap = new Map<string, MissingTokenGroupRouteSiteActionItem>();
-      for (const hint of missingGroupHints) {
-        for (const account of hint.accounts) {
-          if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
-          const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
-          const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
-          const accountLabel = account.username || `account-${account.accountId}`;
-          const missingGroups = Array.isArray(account.missingGroups) ? account.missingGroups : [];
-          const requiredGroups = Array.isArray(account.requiredGroups) ? account.requiredGroups : [];
-          const availableGroups = Array.isArray(account.availableGroups) ? account.availableGroups : [];
-          const existing = siteMap.get(key);
-          if (!existing) {
-            siteMap.set(key, {
-              key,
-              siteName,
-              accountId: account.accountId,
-              accountLabel,
-              missingGroups: [...missingGroups],
-              requiredGroups: [...requiredGroups],
-              availableGroups: [...availableGroups],
-              ...(account.groupCoverageUncertain === true ? { groupCoverageUncertain: true } : {}),
-            });
-            continue;
-          }
-          if (account.accountId < existing.accountId) {
-            existing.accountId = account.accountId;
-            existing.accountLabel = accountLabel;
-          }
-          existing.missingGroups = Array.from(new Set([...existing.missingGroups, ...missingGroups]))
-            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-          existing.requiredGroups = Array.from(new Set([...existing.requiredGroups, ...requiredGroups]))
-            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-          existing.availableGroups = Array.from(new Set([...existing.availableGroups, ...availableGroups]))
-            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-          if (account.groupCoverageUncertain === true) {
-            existing.groupCoverageUncertain = true;
-          }
+  const getMissingTokenGroupItems = (routeId: number): MissingTokenGroupRouteSiteActionItem[] => {
+    const missingGroupHints = getRouteMissingTokenGroupHints(routeId);
+    if (missingGroupHints.length === 0) return EMPTY_MISSING_GROUP_ITEMS;
+    const siteMap = new Map<string, MissingTokenGroupRouteSiteActionItem>();
+    for (const hint of missingGroupHints) {
+      for (const account of hint.accounts) {
+        if (!Number.isFinite(account.accountId) || account.accountId <= 0) continue;
+        const siteName = (account.siteName || '').trim() || `site-${account.siteId || 'unknown'}`;
+        const key = `${account.siteId || 0}::${siteName.toLowerCase()}`;
+        const accountLabel = account.username || `account-${account.accountId}`;
+        const missingGroups = Array.isArray(account.missingGroups) ? account.missingGroups : [];
+        const requiredGroups = Array.isArray(account.requiredGroups) ? account.requiredGroups : [];
+        const availableGroups = Array.isArray(account.availableGroups) ? account.availableGroups : [];
+        const existing = siteMap.get(key);
+        if (!existing) {
+          siteMap.set(key, {
+            key,
+            siteName,
+            accountId: account.accountId,
+            accountLabel,
+            missingGroups: [...missingGroups],
+            requiredGroups: [...requiredGroups],
+            availableGroups: [...availableGroups],
+            ...(account.groupCoverageUncertain === true ? { groupCoverageUncertain: true } : {}),
+          });
+          continue;
+        }
+        if (account.accountId < existing.accountId) {
+          existing.accountId = account.accountId;
+          existing.accountLabel = accountLabel;
+        }
+        existing.missingGroups = Array.from(new Set([...existing.missingGroups, ...missingGroups]))
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        existing.requiredGroups = Array.from(new Set([...existing.requiredGroups, ...requiredGroups]))
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        existing.availableGroups = Array.from(new Set([...existing.availableGroups, ...availableGroups]))
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        if (account.groupCoverageUncertain === true) {
+          existing.groupCoverageUncertain = true;
         }
       }
-      result[routeId] = Array.from(siteMap.values()).sort((a, b) => (
-        a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
-      ));
     }
-    return result;
-  }, [routeMissingTokenGroupIndex]);
+    return Array.from(siteMap.values()).sort((a, b) => (
+      a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
+    ));
+  };
 
   // Stable callbacks for RouteCard memo (use refs to avoid dependency on closure variables)
   const toggleExpandRef = useRef(toggleExpand);
@@ -968,7 +1161,10 @@ export default function TokenRoutes() {
     (channelId: number, tokenId: number) => setChannelTokenDraft((prev) => ({ ...prev, [channelId]: tokenId })),
     [],
   );
-  const stableAddChannel = useCallback((routeId: number) => setAddChannelModalRouteId(routeId), []);
+  const stableAddChannel = useCallback((routeId: number) => {
+    loadCandidates();
+    setAddChannelModalRouteId(routeId);
+  }, []);
   const stableToggleSourceGroup = useCallback(
     (groupKey: string) => setExpandedSourceGroupMap((prev) => ({ ...prev, [groupKey]: !prev[groupKey] })),
     [],
@@ -985,6 +1181,12 @@ export default function TokenRoutes() {
     (channelId: number, routeId: number) => handleDeleteChannelRef.current(channelId, routeId),
     [],
   );
+  const handleToggleChannelEnabledRef = useRef(handleToggleChannelEnabled);
+  handleToggleChannelEnabledRef.current = handleToggleChannelEnabled;
+  const stableToggleChannelEnabled = useCallback(
+    (channelId: number, routeId: number, enabled: boolean) => handleToggleChannelEnabledRef.current(channelId, routeId, enabled),
+    [],
+  );
   const handleChannelDragEndRef = useRef(handleChannelDragEnd);
   handleChannelDragEndRef.current = handleChannelDragEnd;
   const stableChannelDragEnd = useCallback(
@@ -995,6 +1197,12 @@ export default function TokenRoutes() {
   handleCreateTokenRef.current = handleCreateTokenForMissingAccount;
   const stableCreateTokenForMissing = useCallback(
     (accountId: number, modelName: string) => handleCreateTokenRef.current(accountId, modelName),
+    [],
+  );
+  const handleSiteBlockModelRef = useRef(handleSiteBlockModel);
+  handleSiteBlockModelRef.current = handleSiteBlockModel;
+  const stableSiteBlockModel = useCallback(
+    (channelId: number, routeId: number) => handleSiteBlockModelRef.current(channelId, routeId),
     [],
   );
 
@@ -1087,6 +1295,7 @@ export default function TokenRoutes() {
 
           <button
             onClick={() => {
+              loadCandidates();
               resetRouteForm();
               setShowManual(true);
             }}
@@ -1099,7 +1308,10 @@ export default function TokenRoutes() {
           <button
             type="button"
             aria-pressed={showZeroChannelRoutes}
-            onClick={() => setShowZeroChannelRoutes((prev) => !prev)}
+            onClick={() => {
+              if (!showZeroChannelRoutes) loadCandidates();
+              setShowZeroChannelRoutes((prev) => !prev);
+            }}
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
@@ -1116,14 +1328,24 @@ export default function TokenRoutes() {
       <ResponsiveFilterPanel
         isMobile={isMobile}
         mobileOpen={showFilters}
-        onMobileOpen={() => setShowFilters(true)}
         onMobileClose={() => setShowFilters(false)}
         mobileTitle={tr('筛选路由')}
         mobileTriggerWrapperClassName=""
-        mobileTriggerButtonStyle={{ border: '1px solid var(--color-border)', padding: '8px 14px', marginBottom: 12 }}
+        mobileTrigger={(
+          <button
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)', padding: '8px 14px', marginBottom: 12 }}
+            onClick={() => {
+              loadCandidates();
+              setShowFilters(true);
+            }}
+          >
+            {tr('筛选')}
+          </button>
+        )}
         mobileContent={(
           <RouteFilterBar
-            totalRouteCount={listVisibleRoutes.length}
+            totalRouteCount={baseFilteredRoutes.length}
             activeBrand={activeBrand}
             setActiveBrand={setActiveBrand}
             activeSite={activeSite}
@@ -1132,6 +1354,9 @@ export default function TokenRoutes() {
             setActiveEndpointType={setActiveEndpointType}
             activeGroupFilter={activeGroupFilter}
             setActiveGroupFilter={setActiveGroupFilter}
+            enabledFilter={enabledFilter}
+            setEnabledFilter={setEnabledFilter}
+            enabledCounts={enabledCounts}
             brandList={brandList}
             siteList={siteList}
             endpointTypeList={endpointTypeList}
@@ -1142,7 +1367,7 @@ export default function TokenRoutes() {
         )}
         desktopContent={(
           <RouteFilterBar
-            totalRouteCount={listVisibleRoutes.length}
+            totalRouteCount={baseFilteredRoutes.length}
             activeBrand={activeBrand}
             setActiveBrand={setActiveBrand}
             activeSite={activeSite}
@@ -1151,12 +1376,18 @@ export default function TokenRoutes() {
             setActiveEndpointType={setActiveEndpointType}
             activeGroupFilter={activeGroupFilter}
             setActiveGroupFilter={setActiveGroupFilter}
+            enabledFilter={enabledFilter}
+            setEnabledFilter={setEnabledFilter}
+            enabledCounts={enabledCounts}
             brandList={brandList}
             siteList={siteList}
             endpointTypeList={endpointTypeList}
             groupRouteList={groupRouteList}
             collapsed={filterCollapsed}
-            onToggle={() => setFilterCollapsed((prev) => !prev)}
+            onToggle={() => {
+              if (filterCollapsed) loadCandidates();
+              setFilterCollapsed((prev) => !prev);
+            }}
           />
         )}
       />
@@ -1232,7 +1463,7 @@ export default function TokenRoutes() {
                         <button
                           type="button"
                           className="btn btn-link"
-                          onClick={() => setAddChannelModalRouteId(route.id)}
+                          onClick={() => stableAddChannel(route.id)}
                         >
                           {tr('添加通道')}
                         </button>
@@ -1274,11 +1505,13 @@ export default function TokenRoutes() {
                     onTokenDraftChange={stableTokenDraftChange}
                     onSaveToken={stableChannelTokenSave}
                     onDeleteChannel={stableDeleteChannel}
+                    onToggleChannelEnabled={stableToggleChannelEnabled}
                     onChannelDragEnd={stableChannelDragEnd}
-                    missingTokenSiteItems={missingTokenSiteItemsByRouteId[route.id] || EMPTY_MISSING_ITEMS}
-                    missingTokenGroupItems={missingTokenGroupItemsByRouteId[route.id] || EMPTY_MISSING_GROUP_ITEMS}
+                    missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
+                    missingTokenGroupItems={getMissingTokenGroupItems(route.id)}
                     onCreateTokenForMissing={stableCreateTokenForMissing}
                     onAddChannel={stableAddChannel}
+                    onSiteBlockModel={stableSiteBlockModel}
                     expandedSourceGroupMap={expandedSourceGroupMap}
                     onToggleSourceGroup={stableToggleSourceGroup}
                   />
@@ -1310,11 +1543,13 @@ export default function TokenRoutes() {
               onTokenDraftChange={stableTokenDraftChange}
               onSaveToken={stableChannelTokenSave}
               onDeleteChannel={stableDeleteChannel}
+              onToggleChannelEnabled={stableToggleChannelEnabled}
               onChannelDragEnd={stableChannelDragEnd}
-              missingTokenSiteItems={missingTokenSiteItemsByRouteId[route.id] || EMPTY_MISSING_ITEMS}
-              missingTokenGroupItems={missingTokenGroupItemsByRouteId[route.id] || EMPTY_MISSING_GROUP_ITEMS}
+              missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
+              missingTokenGroupItems={getMissingTokenGroupItems(route.id)}
               onCreateTokenForMissing={stableCreateTokenForMissing}
               onAddChannel={stableAddChannel}
+              onSiteBlockModel={stableSiteBlockModel}
               expandedSourceGroupMap={expandedSourceGroupMap}
               onToggleSourceGroup={stableToggleSourceGroup}
             />
@@ -1322,7 +1557,7 @@ export default function TokenRoutes() {
         })}
       </div>
 
-      {filteredRoutes.length > 0 && visibleRouteCount < filteredRoutes.length && (
+      {shouldShowLoadMore && (
         <div
           ref={loadMoreSentinelRef}
           style={{ textAlign: 'center', padding: '12px 0', fontSize: 12, color: 'var(--color-text-muted)' }}
@@ -1361,7 +1596,7 @@ export default function TokenRoutes() {
           routeTitle={resolveRouteTitle(addChannelModalRoute)}
           candidateView={getRouteCandidateView(addChannelModalRoute.id)}
           onSuccess={handleAddChannelSuccess}
-          missingTokenHints={routeMissingTokenIndex[addChannelModalRoute.id] || []}
+          missingTokenHints={getRouteMissingTokenHints(addChannelModalRoute.id)}
           onCreateTokenForMissing={handleCreateTokenForMissingAccount}
           existingChannelAccountIds={new Set((channelsByRouteId[addChannelModalRoute.id] || []).map((c) => c.accountId))}
         />

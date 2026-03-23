@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { getBrand } from '../components/BrandIcon.js';
 import CenteredModal from '../components/CenteredModal.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
@@ -215,6 +216,7 @@ export default function Sites() {
     count?: number;
   }>(null);
   const lastEditorRef = useRef<SiteEditorState | null>(null);
+  const loadingModelsSiteIdRef = useRef<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
   const highlightTimerRef = useRef<number | null>(null);
   const toast = useToast();
@@ -222,6 +224,34 @@ export default function Sites() {
   const [disabledModelInput, setDisabledModelInput] = useState('');
   const [disabledModelsLoading, setDisabledModelsLoading] = useState(false);
   const [disabledModelsSaving, setDisabledModelsSaving] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [disabledModelSearch, setDisabledModelSearch] = useState('');
+
+  const disabledModelSet = useMemo(() => new Set(disabledModels), [disabledModels]);
+
+  const brandGroups = useMemo(() => {
+    const allModels = Array.from(new Set([...availableModels, ...disabledModels]));
+    const groups = new Map<string, string[]>();
+    for (const model of allModels) {
+      const brand = getBrand(model);
+      const brandName = brand?.name || '其他';
+      if (!groups.has(brandName)) groups.set(brandName, []);
+      groups.get(brandName)!.push(model);
+    }
+    return [...groups.entries()].sort((a, b) => {
+      if (a[0] === '其他') return 1;
+      if (b[0] === '其他') return -1;
+      return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
+    });
+  }, [availableModels, disabledModels]);
+
+  const filteredBrandGroups = useMemo(() => {
+    const q = disabledModelSearch.trim().toLowerCase();
+    if (!q) return brandGroups;
+    return brandGroups
+      .map(([brandName, models]) => [brandName, models.filter((m) => m.toLowerCase().includes(q))] as [string, string[]])
+      .filter(([, models]) => models.length > 0);
+  }, [brandGroups, disabledModelSearch]);
 
   if (editor) lastEditorRef.current = editor;
   const activeEditor = editor || lastEditorRef.current;
@@ -326,14 +356,42 @@ export default function Sites() {
     setEditor({ mode: 'edit', editingSiteId: site.id });
     setForm(siteFormFromSite(site));
     scrollToEditorTop();
-    // Load disabled models for this site
+    // Load disabled models and discovered models independently so a best-effort
+    // availability fetch cannot wipe the existing disabled-model state.
+    const loadSiteId = site.id;
+    loadingModelsSiteIdRef.current = loadSiteId;
     setDisabledModelsLoading(true);
     setDisabledModels([]);
     setDisabledModelInput('');
+    setAvailableModels([]);
+    setDisabledModelSearch('');
+    let pendingLoads = 2;
+    const markLoadFinished = () => {
+      pendingLoads -= 1;
+      if (pendingLoads <= 0 && loadingModelsSiteIdRef.current === loadSiteId) {
+        setDisabledModelsLoading(false);
+      }
+    };
+
     api.getSiteDisabledModels(site.id)
-      .then((res: any) => setDisabledModels(Array.isArray(res?.models) ? res.models : []))
-      .catch(() => { })
-      .finally(() => setDisabledModelsLoading(false));
+      .then((disabledRes: any) => {
+        if (loadingModelsSiteIdRef.current !== loadSiteId) return;
+        setDisabledModels(Array.isArray(disabledRes?.models) ? disabledRes.models : []);
+      })
+      .catch((err: any) => {
+        console.warn('Failed to load site disabled models:', err?.message || err);
+      })
+      .finally(markLoadFinished);
+
+    api.getSiteAvailableModels(site.id)
+      .then((availableRes: any) => {
+        if (loadingModelsSiteIdRef.current !== loadSiteId) return;
+        setAvailableModels(Array.isArray(availableRes?.models) ? availableRes.models : []);
+      })
+      .catch((err: any) => {
+        console.warn('Failed to load site available models:', err?.message || err);
+      })
+      .finally(markLoadFinished);
   };
 
   const handleAddDisabledModel = () => {
@@ -346,10 +404,6 @@ export default function Sites() {
     }
     setDisabledModels((prev) => [...prev, model]);
     setDisabledModelInput('');
-  };
-
-  const handleRemoveDisabledModel = (model: string) => {
-    setDisabledModels((prev) => prev.filter((m) => m !== model));
   };
 
   const handleSaveDisabledModels = async () => {
@@ -891,7 +945,7 @@ export default function Sites() {
               <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>禁用模型管理</div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                  在此站点禁用指定模型后，路由重建时将不为该站点的这些模型创建通道。
+                  在此站点禁用指定模型后，路由重建时将不为该站点的这些模型创建通道。勾选表示禁用该模型。
                 </div>
                 {disabledModelsLoading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>
@@ -899,55 +953,131 @@ export default function Sites() {
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10, minHeight: 24 }}>
-                      {disabledModels.length === 0 && (
-                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无禁用模型</span>
-                      )}
-                      {disabledModels.map((model) => (
-                        <span
-                          key={model}
-                          className="badge badge-muted"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px' }}
-                        >
-                          {model}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveDisabledModel(model)}
-                            style={{
-                              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                              fontSize: 13, lineHeight: 1, color: 'var(--color-text-muted)',
-                            }}
-                            title={`移除 ${model}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    {/* Search and brand group controls */}
+                    {brandGroups.length > 0 ? (
+                      <div style={{ marginBottom: 10 }}>
+                        <input
+                          placeholder="搜索模型名称..."
+                          value={disabledModelSearch}
+                          onChange={(e) => setDisabledModelSearch(e.target.value)}
+                          style={{
+                            width: '100%', padding: '6px 10px', border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
+                            background: 'var(--color-bg)', color: 'var(--color-text-primary)', marginBottom: 8,
+                          }}
+                        />
+                        {/* Brand group quick actions */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: '24px' }}>按品牌全选：</span>
+                          {brandGroups.map(([brandName, models]) => {
+                            const allDisabled = models.every((m) => disabledModelSet.has(m));
+                            return (
+                              <button
+                                key={brandName}
+                                type="button"
+                                onClick={() => {
+                                  if (allDisabled) {
+                                    const removeSet = new Set(models);
+                                    setDisabledModels((prev) => prev.filter((m) => !removeSet.has(m)));
+                                  } else {
+                                    setDisabledModels((prev) => Array.from(new Set([...prev, ...models])));
+                                  }
+                                }}
+                                className={`badge ${allDisabled ? 'badge-warning' : 'badge-muted'}`}
+                                style={{ fontSize: 10, cursor: 'pointer', border: 'none', padding: '3px 8px' }}
+                                data-tooltip={allDisabled ? `取消禁用全部 ${brandName} 模型 (${models.length})` : `禁用全部 ${brandName} 模型 (${models.length})`}
+                              >
+                                {brandName} ({models.length})
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* Checkbox list */}
+                        <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px 0' }}>
+                          {filteredBrandGroups.length === 0 ? (
+                            <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>无匹配模型</div>
+                          ) : filteredBrandGroups.map(([brandName, models]) => (
+                            <div key={brandName}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 12px', background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border-light)' }}>
+                                {brandName} ({models.length})
+                              </div>
+                              {models.map((model) => {
+                                const isDisabled = disabledModelSet.has(model);
+                                return (
+                                  <label
+                                    key={model}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 8, padding: '3px 12px',
+                                      fontSize: 12, cursor: 'pointer', lineHeight: 1.6,
+                                      background: isDisabled ? 'color-mix(in srgb, var(--color-warning) 8%, transparent)' : 'transparent',
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isDisabled}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setDisabledModels((prev) => Array.from(new Set([...prev, model])));
+                                        } else {
+                                          setDisabledModels((prev) => prev.filter((m) => m !== model));
+                                        }
+                                      }}
+                                    />
+                                    <span style={{ color: isDisabled ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>
+                                      {model}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+                        暂无已发现模型，仍可手动添加需要屏蔽的模型名。
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, marginBottom: 10 }}>
                       <input
                         placeholder="输入模型名称，如 gpt-4o"
                         value={disabledModelInput}
                         onChange={(e) => setDisabledModelInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDisabledModel(); } }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddDisabledModel();
+                          }
+                        }}
                         style={{
                           flex: 1, padding: '8px 12px', border: '1px solid var(--color-border)',
                           borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
                           background: 'var(--color-bg)', color: 'var(--color-text-primary)',
                         }}
                       />
-                      <button onClick={handleAddDisabledModel} className="btn btn-ghost" style={{ padding: '8px 14px', fontSize: 12, border: '1px solid var(--color-border)' }}>
-                        添加
+                      <button
+                        onClick={handleAddDisabledModel}
+                        className="btn btn-ghost"
+                        style={{ padding: '8px 14px', fontSize: 12, border: '1px solid var(--color-border)' }}
+                      >
+                        添加模型
                       </button>
                     </div>
-                    <button
-                      onClick={handleSaveDisabledModels}
-                      disabled={disabledModelsSaving}
-                      className="btn btn-primary"
-                      style={{ marginTop: 10, fontSize: 12, padding: '6px 16px' }}
-                    >
-                      {disabledModelsSaving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存禁用列表'}
-                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                      <button
+                        onClick={handleSaveDisabledModels}
+                        disabled={disabledModelsSaving}
+                        className="btn btn-primary"
+                        style={{ fontSize: 12, padding: '6px 16px' }}
+                      >
+                        {disabledModelsSaving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存禁用列表'}
+                      </button>
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                        已禁用 {disabledModels.length} 个模型
+                      </span>
+                    </div>
                   </>
                 )}
               </div>

@@ -9,6 +9,7 @@ const { apiMock, toastMock } = vi.hoisted(() => ({
   apiMock: {
     getSites: vi.fn(),
     getSiteDisabledModels: vi.fn(),
+    getSiteAvailableModels: vi.fn(),
     updateSiteDisabledModels: vi.fn(),
     rebuildRoutes: vi.fn(),
   },
@@ -45,8 +46,11 @@ async function flushMicrotasks() {
 }
 
 describe('Sites disabled models save', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     apiMock.getSites.mockResolvedValue([
       {
         id: 1,
@@ -57,39 +61,48 @@ describe('Sites disabled models save', () => {
       },
     ]);
     apiMock.getSiteDisabledModels.mockResolvedValue({ models: [] });
+    apiMock.getSiteAvailableModels.mockResolvedValue({ models: [] });
     apiMock.updateSiteDisabledModels.mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
+    consoleWarnSpy.mockRestore();
     vi.clearAllMocks();
   });
+
+  async function renderSitesEditor() {
+    let root: ReturnType<typeof create> | null = null;
+    await act(async () => {
+      root = create(
+        <MemoryRouter initialEntries={['/sites']}>
+          <ToastProvider>
+            <Sites />
+          </ToastProvider>
+        </MemoryRouter>,
+      );
+    });
+    await flushMicrotasks();
+
+    const editButton = root.root.find((node) => (
+      node.type === 'button'
+      && typeof node.props.onClick === 'function'
+      && collectText(node).trim() === '编辑'
+    ));
+
+    await act(async () => {
+      editButton.props.onClick();
+    });
+    await flushMicrotasks();
+
+    return root;
+  }
 
   it('reports route rebuild failure after saving disabled models from sites editor', async () => {
     apiMock.rebuildRoutes.mockRejectedValue(new Error('rebuild failed'));
 
     let root: ReturnType<typeof create> | null = null;
     try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/sites']}>
-            <ToastProvider>
-              <Sites />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const editButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '编辑'
-      ));
-
-      await act(async () => {
-        editButton.props.onClick();
-      });
-      await flushMicrotasks();
+      root = await renderSitesEditor();
 
       const saveButton = root.root.find((node) => (
         node.type === 'button'
@@ -106,6 +119,76 @@ describe('Sites disabled models save', () => {
       expect(apiMock.rebuildRoutes).toHaveBeenCalledWith(false, false);
       expect(toastMock.error).toHaveBeenCalledWith('禁用模型列表已保存，但路由重建失败，请手动刷新路由');
       expect(toastMock.success).not.toHaveBeenCalledWith('禁用模型列表已保存，路由已重建');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('preserves existing disabled models when available-model loading fails', async () => {
+    apiMock.getSiteDisabledModels.mockResolvedValue({ models: ['gpt-4o'] });
+    apiMock.getSiteAvailableModels.mockRejectedValue(new Error('available models failed'));
+    apiMock.rebuildRoutes.mockResolvedValue({ success: true });
+
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      root = await renderSitesEditor();
+
+      const saveButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('保存禁用列表')
+      ));
+
+      await act(async () => {
+        await saveButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.updateSiteDisabledModels).toHaveBeenCalledWith(1, ['gpt-4o']);
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('allows adding a disabled model manually when no available models are discovered', async () => {
+    apiMock.rebuildRoutes.mockResolvedValue({ success: true });
+
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      root = await renderSitesEditor();
+
+      const manualInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.placeholder === '输入模型名称，如 gpt-4o'
+      ));
+
+      await act(async () => {
+        manualInput.props.onChange({ target: { value: 'gpt-4o' } });
+      });
+
+      const addButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '添加模型'
+      ));
+
+      await act(async () => {
+        addButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const saveButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('保存禁用列表')
+      ));
+
+      await act(async () => {
+        await saveButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.updateSiteDisabledModels).toHaveBeenCalledWith(1, ['gpt-4o']);
     } finally {
       root?.unmount();
     }

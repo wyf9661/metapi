@@ -61,6 +61,7 @@ type RouteCardProps = {
   onTokenDraftChange: (channelId: number, tokenId: number) => void;
   onSaveToken: (routeId: number, channelId: number, accountId: number) => void;
   onDeleteChannel: (channelId: number, routeId: number) => void;
+  onToggleChannelEnabled: (channelId: number, routeId: number, enabled: boolean) => void;
   onChannelDragEnd: (routeId: number, event: DragEndEvent) => void;
   // Missing token hints
   missingTokenSiteItems: MissingTokenRouteSiteActionItem[];
@@ -68,6 +69,8 @@ type RouteCardProps = {
   onCreateTokenForMissing: (accountId: number, modelName: string) => void;
   // Add channel
   onAddChannel: (routeId: number) => void;
+  // Site block model
+  onSiteBlockModel: (channelId: number, routeId: number) => void;
   // Source group expansion
   expandedSourceGroupMap: Record<string, boolean>;
   onToggleSourceGroup: (groupKey: string) => void;
@@ -119,11 +122,13 @@ function RouteCardInner({
   onTokenDraftChange,
   onSaveToken,
   onDeleteChannel,
+  onToggleChannelEnabled,
   onChannelDragEnd,
   missingTokenSiteItems,
   missingTokenGroupItems,
   onCreateTokenForMissing,
   onAddChannel,
+  onSiteBlockModel,
   expandedSourceGroupMap,
   onToggleSourceGroup,
 }: RouteCardProps) {
@@ -548,6 +553,7 @@ function RouteCardInner({
                                 onTokenDraftChange={onTokenDraftChange}
                                 onSaveToken={() => onSaveToken(route.id, channel.id, channel.accountId)}
                                 onDeleteChannel={() => onDeleteChannel(channel.id, route.id)}
+                                onToggleEnabled={(enabled) => onToggleChannelEnabled(channel.id, route.id, enabled)}
                               />
                             );
                           })}
@@ -572,6 +578,8 @@ function RouteCardInner({
                                 onTokenDraftChange={onTokenDraftChange}
                                 onSaveToken={() => onSaveToken(route.id, channel.id, channel.accountId)}
                                 onDeleteChannel={() => onDeleteChannel(channel.id, route.id)}
+                                onToggleEnabled={(enabled) => onToggleChannelEnabled(channel.id, route.id, enabled)}
+                                onSiteBlockModel={() => onSiteBlockModel(channel.id, route.id)}
                               />
                             );
                           })}

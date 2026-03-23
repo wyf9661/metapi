@@ -451,6 +451,7 @@ export const api = {
   detectSite: (url: string) => request('/api/sites/detect', { method: 'POST', body: JSON.stringify({ url }) }),
   getSiteDisabledModels: (siteId: number) => request(`/api/sites/${siteId}/disabled-models`),
   updateSiteDisabledModels: (siteId: number, models: string[]) => request(`/api/sites/${siteId}/disabled-models`, { method: 'PUT', body: JSON.stringify({ models }) }),
+  getSiteAvailableModels: (siteId: number) => request(`/api/sites/${siteId}/available-models`),
 
   // Accounts
   getAccounts: () => request('/api/accounts'),
@@ -600,6 +601,7 @@ export const api = {
     method: 'POST', body: JSON.stringify({ oldToken, newToken }),
   }),
   getRuntimeSettings: () => request('/api/settings/runtime'),
+  getBrandList: () => request('/api/settings/brand-list'),
   updateRuntimeSettings: (data: any) => request('/api/settings/runtime', {
     method: 'PUT',
     body: JSON.stringify(data),
