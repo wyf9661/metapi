@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
-import MobileBatchBar from '../components/MobileBatchBar.js';
 import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
+import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
 import { useToast } from '../components/Toast.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import {
@@ -996,9 +996,12 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         ) : null}
       </CenteredModal>
 
-      {!isMobile && selectedTokenIds.length > 0 && (
-        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>已选 {selectedTokenIds.length} 项</span>
+      {selectedTokenIds.length > 0 && (
+        <ResponsiveBatchActionBar
+          isMobile={isMobile}
+          info={`已选 ${selectedTokenIds.length} 项`}
+          desktopStyle={{ marginBottom: 12 }}
+        >
           <button onClick={() => runBatchTokenAction('enable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
             批量启用
           </button>
@@ -1008,21 +1011,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
           <button data-testid="tokens-batch-delete" onClick={() => runBatchTokenAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
             批量删除
           </button>
-        </div>
-      )}
-
-      {isMobile && selectedTokenIds.length > 0 && (
-        <MobileBatchBar info={`已选 ${selectedTokenIds.length} 项`}>
-            <button onClick={() => runBatchTokenAction('enable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-              批量启用
-            </button>
-            <button onClick={() => runBatchTokenAction('disable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-              批量禁用
-            </button>
-            <button data-testid="tokens-batch-delete" onClick={() => runBatchTokenAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
-              批量删除
-            </button>
-        </MobileBatchBar>
+        </ResponsiveBatchActionBar>
       )}
 
       <CenteredModal

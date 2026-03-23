@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
-import MobileBatchBar from '../components/MobileBatchBar.js';
 import MobileFilterSheet from '../components/MobileFilterSheet.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
+import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
@@ -1066,9 +1066,12 @@ export default function Accounts() {
           : <>确定要删除选中的 <strong>{deleteConfirm?.count || 0}</strong> 个连接吗？</>}
       />
 
-      {!isMobile && activeSegment !== 'tokens' && selectedAccountIds.length > 0 && (
-        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>已选 {selectedAccountIds.length} 项</span>
+      {activeSegment !== 'tokens' && selectedAccountIds.length > 0 && (
+        <ResponsiveBatchActionBar
+          isMobile={isMobile}
+          info={`已选 ${selectedAccountIds.length} 项`}
+          desktopStyle={{ marginBottom: 12 }}
+        >
           <button data-testid="accounts-batch-refresh-balance" onClick={() => runBatchAccountAction('refreshBalance')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
             批量刷新余额
           </button>
@@ -1081,24 +1084,7 @@ export default function Accounts() {
           <button onClick={() => runBatchAccountAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
             批量删除
           </button>
-        </div>
-      )}
-
-      {isMobile && activeSegment !== 'tokens' && selectedAccountIds.length > 0 && (
-        <MobileBatchBar info={`已选 ${selectedAccountIds.length} 项`}>
-            <button data-testid="accounts-batch-refresh-balance" onClick={() => runBatchAccountAction('refreshBalance')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-              批量刷新余额
-            </button>
-            <button onClick={() => runBatchAccountAction('enable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-              批量启用
-            </button>
-            <button onClick={() => runBatchAccountAction('disable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-              批量禁用
-            </button>
-            <button onClick={() => runBatchAccountAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
-              批量删除
-            </button>
-        </MobileBatchBar>
+        </ResponsiveBatchActionBar>
       )}
 
       {activeSegment === 'tokens' ? (

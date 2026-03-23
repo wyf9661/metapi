@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
-import MobileBatchBar from '../components/MobileBatchBar.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
@@ -1687,24 +1687,17 @@ export default function DownstreamKeys() {
       </div>
 
       {selectedIds.length > 0 ? (
-        isMobile ? (
-          <MobileBatchBar info={`已选 ${selectedIds.length} 个密钥`}>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>归类/标签</button>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量启用', selectedIds)} disabled={batchActionLoading}>启用</button>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量禁用', selectedIds)} disabled={batchActionLoading}>禁用</button>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量清零用量', selectedIds)} disabled={batchActionLoading}>清零</button>
-            <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>删除</button>
-          </MobileBatchBar>
-        ) : (
-          <div className="card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>已选 {selectedIds.length} 个密钥</span>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>批量归类/标签</button>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量启用', selectedIds)} disabled={batchActionLoading}>批量启用</button>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量禁用', selectedIds)} disabled={batchActionLoading}>批量禁用</button>
-            <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量清零用量', selectedIds)} disabled={batchActionLoading}>批量清零用量</button>
-            <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>批量删除</button>
-          </div>
-        )
+        <ResponsiveBatchActionBar
+          isMobile={isMobile}
+          info={`已选 ${selectedIds.length} 个密钥`}
+          infoStyle={{ color: 'var(--color-text-primary)' }}
+        >
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>{isMobile ? '归类/标签' : '批量归类/标签'}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量启用', selectedIds)} disabled={batchActionLoading}>{isMobile ? '启用' : '批量启用'}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量禁用', selectedIds)} disabled={batchActionLoading}>{isMobile ? '禁用' : '批量禁用'}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量清零用量', selectedIds)} disabled={batchActionLoading}>{isMobile ? '清零' : '批量清零用量'}</button>
+          <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>{isMobile ? '删除' : '批量删除'}</button>
+        </ResponsiveBatchActionBar>
       ) : null}
 
       <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
