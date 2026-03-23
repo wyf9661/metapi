@@ -6,8 +6,9 @@ import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import ChangeKeyModal from '../components/ChangeKeyModal.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
-import { BrandGlyph, InlineBrandIcon, getBrand } from '../components/BrandIcon.js';
 import ModernSelect from '../components/ModernSelect.js';
+import FactoryResetModal from './settings/FactoryResetModal.js';
+import RouteSelectorModal from './settings/RouteSelectorModal.js';
 import {
   applyRoutingProfilePreset,
   resolveRoutingProfilePreset,
@@ -19,8 +20,6 @@ import { clearAppInstallationState } from '../appLocalState.js';
 import { tr } from '../i18n.js';
 import {
   isExactModelPattern,
-  resolveRouteBrand,
-  resolveRouteIcon,
   resolveRouteTitle,
 } from './token-routes/utils.js';
 import { generateDownstreamSkKey } from './helpers/generateDownstreamSkKey.js';
@@ -1730,287 +1729,34 @@ export default function Settings() {
         );
         return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
       })()}
-      {factoryResetPresence.shouldRender && (() => {
-        const confirmLabel = factoryResetting
-          ? '重新初始化中...'
-          : (factoryResetSecondsLeft > 0
-            ? `确认重新初始化系统（${factoryResetSecondsLeft}s）`
-            : '确认重新初始化系统');
-        const modal = (
-          <div className={`modal-backdrop ${factoryResetPresence.isVisible ? '' : 'is-closing'}`.trim()} onClick={closeFactoryResetModal}>
-            <div
-              className={`modal-content ${factoryResetPresence.isVisible ? '' : 'is-closing'}`.trim()}
-              style={{ maxWidth: 720, border: '1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border))' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-header" style={{ color: 'var(--color-danger)' }}>确认重新初始化系统</div>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ padding: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', fontSize: 12, lineHeight: 1.8 }}>
-                  这是不可逆操作。系统会清空当前 metapi 使用中的全部数据库内容，并在成功后立即退出当前登录状态。
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.9 }}>
-                  <div>• 当前若使用外部 MySQL/Postgres，也会先清空该外部库中的 metapi 数据。</div>
-                  <div>• 系统随后会强制切回默认 SQLite。</div>
-                  <div>• 管理员 Token 将重置为 <code style={{ fontFamily: 'var(--font-mono)' }}>{FACTORY_RESET_ADMIN_TOKEN}</code>。</div>
-                  <div>• 完成后会立即退出登录并刷新页面，回到当前首装初始状态。</div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button onClick={closeFactoryResetModal} disabled={factoryResetting} className="btn btn-ghost">取消</button>
-                <button onClick={handleFactoryReset} disabled={factoryResetting || factoryResetSecondsLeft > 0} className="btn btn-danger">
-                  {factoryResetting
-                    ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {confirmLabel}</>
-                    : confirmLabel}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-        return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
-      })()}
-      {selectorModalPresence.shouldRender && (() => {
-        const modal = (
-          <div className={`modal-backdrop ${selectorModalPresence.isVisible ? '' : 'is-closing'}`.trim()} onClick={closeSelectorModal}>
-            <div
-              className={`modal-content ${selectorModalPresence.isVisible ? '' : 'is-closing'}`.trim()}
-              style={{ maxWidth: 860 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-header">勾选模型和群组</div>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  选择结果会保存到当前下游 API Key：精确模型用于模型白名单，群组用于路由范围限制。
-                </div>
-                {selectorLoading ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    <span className="spinner spinner-sm" />
-                    加载路由中...
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-                    <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 10 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                        精确模型 ({selectorModelSearch.trim()
-                          ? `${filteredExactModelOptions.length}/${exactModelOptions.length}`
-                          : exactModelOptions.length})
-                      </div>
-                      <input
-                        value={selectorModelSearch}
-                        onChange={(e) => setSelectorModelSearch(e.target.value)}
-                        placeholder="搜索精确模型（支持模糊匹配）"
-                        style={{ ...inputStyle, padding: '8px 10px', fontSize: 12, marginBottom: 8 }}
-                      />
-                      <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {exactModelOptions.length === 0 ? (
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可选精确模型</div>
-                        ) : filteredExactModelOptions.length === 0 ? (
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>没有匹配的精确模型</div>
-                        ) : filteredExactModelOptions.map((modelName) => {
-                          const checked = downstreamCreate.selectedModels.includes(modelName);
-                          const brand = getBrand(modelName);
-                          return (
-                            <label
-                              key={modelName}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 10,
-                                cursor: 'pointer',
-                                border: `1px solid ${checked ? 'color-mix(in srgb, var(--color-primary) 45%, transparent)' : 'var(--color-border-light)'}`,
-                                borderRadius: 10,
-                                padding: '8px 10px',
-                                background: checked
-                                  ? 'color-mix(in srgb, var(--color-primary) 9%, var(--color-bg-card))'
-                                  : 'var(--color-bg-card)',
-                                transition: 'all 0.15s ease',
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleModelSelection(modelName)}
-                                style={{ width: 18, height: 18, accentColor: 'var(--color-primary)', flexShrink: 0 }}
-                              />
-                              <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <code
-                                  style={{
-                                    fontWeight: 600,
-                                    fontSize: 12,
-                                    background: 'var(--color-bg)',
-                                    padding: '4px 10px',
-                                    borderRadius: 8,
-                                    color: 'var(--color-text-primary)',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    maxWidth: '100%',
-                                  }}
-                                >
-                                  {brand ? (
-                                    <InlineBrandIcon model={modelName} size={18} />
-                                  ) : (
-                                    <span
-                                      style={{
-                                        width: 18,
-                                        height: 18,
-                                        borderRadius: 6,
-                                        background: 'var(--color-bg-card)',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: 10,
-                                        color: 'var(--color-text-muted)',
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      {modelName.slice(0, 1).toUpperCase()}
-                                    </span>
-                                  )}
-                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {modelName}
-                                  </span>
-                                </code>
-                                {brand && (
-                                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', paddingLeft: 6 }}>
-                                    {brand.name}
-                                  </div>
-                                )}
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 10 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                        群组 ({selectorGroupSearch.trim()
-                          ? `${filteredGroupRouteOptions.length}/${groupRouteOptions.length}`
-                          : groupRouteOptions.length})
-                      </div>
-                      <input
-                        value={selectorGroupSearch}
-                        onChange={(e) => setSelectorGroupSearch(e.target.value)}
-                        placeholder="Search groups (name / pattern)"
-                        style={{ ...inputStyle, padding: '8px 10px', fontSize: 12, marginBottom: 8 }}
-                      />
-                      <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {groupRouteOptions.length === 0 ? (
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可选群组</div>
-                        ) : filteredGroupRouteOptions.length === 0 ? (
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>没有匹配的群组</div>
-                        ) : filteredGroupRouteOptions.map((route) => {
-                          const checked = downstreamCreate.selectedGroupRouteIds.includes(route.id);
-                          const routeTitle = resolveRouteTitle(route);
-                          const routeIcon = resolveRouteIcon(route);
-                          const routeBrand = resolveRouteBrand(route);
-                          return (
-                            <label
-                              key={route.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: 10,
-                                cursor: 'pointer',
-                                border: `1px solid ${checked ? 'color-mix(in srgb, var(--color-primary) 45%, transparent)' : 'var(--color-border-light)'}`,
-                                borderRadius: 10,
-                                padding: '8px 10px',
-                                background: checked
-                                  ? 'color-mix(in srgb, var(--color-primary) 9%, var(--color-bg-card))'
-                                  : 'var(--color-bg-card)',
-                                transition: 'all 0.15s ease',
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                style={{ marginTop: 4, width: 18, height: 18, accentColor: 'var(--color-primary)', flexShrink: 0 }}
-                                checked={checked}
-                                onChange={() => toggleGroupRouteSelection(route.id)}
-                              />
-                              <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <code
-                                  style={{
-                                    fontWeight: 600,
-                                    fontSize: 12,
-                                    background: 'var(--color-bg)',
-                                    padding: '4px 10px',
-                                    borderRadius: 8,
-                                    color: 'var(--color-text-primary)',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    maxWidth: '100%',
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      width: 18,
-                                      height: 18,
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      borderRadius: 6,
-                                      background: 'var(--color-bg-card)',
-                                      flexShrink: 0,
-                                      overflow: 'hidden',
-                                      fontSize: 12,
-                                      lineHeight: 1,
-                                    }}
-                                  >
-                                    {routeIcon.kind === 'brand' ? (
-                                      <BrandGlyph
-                                        icon={routeIcon.value}
-                                        alt={routeTitle}
-                                        size={18}
-                                        fallbackText={routeTitle}
-                                      />
-                                    ) : routeIcon.kind === 'text' ? (
-                                      routeIcon.value
-                                    ) : routeIcon.kind === 'auto' && routeBrand ? (
-                                      <BrandGlyph brand={routeBrand} alt={routeTitle} size={18} fallbackText={routeTitle} />
-                                    ) : routeIcon.kind === 'auto' ? (
-                                      <InlineBrandIcon model={route.modelPattern} size={18} />
-                                    ) : routeIcon.kind === 'none' ? (
-                                      null
-                                    ) : null}
-                                  </span>
-                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {routeTitle}
-                                  </span>
-                                  {!route.enabled && (
-                                    <span
-                                      style={{
-                                        fontSize: 10,
-                                        padding: '1px 6px',
-                                        borderRadius: 999,
-                                        background: 'var(--color-danger-bg)',
-                                        color: 'var(--color-danger)',
-                                      }}
-                                    >
-                                      已禁用
-                                    </span>
-                                  )}
-                                </code>
-                                <code style={{ fontSize: 11, color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', paddingLeft: 6 }}>
-                                  {route.modelPattern}
-                                </code>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button onClick={closeSelectorModal} className="btn btn-ghost">关闭</button>
-              </div>
-            </div>
-          </div>
-        );
-        return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
-      })()}
+      <FactoryResetModal
+        presence={factoryResetPresence}
+        factoryResetting={factoryResetting}
+        factoryResetSecondsLeft={factoryResetSecondsLeft}
+        adminToken={FACTORY_RESET_ADMIN_TOKEN}
+        onClose={closeFactoryResetModal}
+        onConfirm={handleFactoryReset}
+      />
+      <RouteSelectorModal
+        presence={selectorModalPresence}
+        loading={selectorLoading}
+        exactModelOptions={exactModelOptions}
+        filteredExactModelOptions={filteredExactModelOptions}
+        groupRouteOptions={groupRouteOptions}
+        filteredGroupRouteOptions={filteredGroupRouteOptions}
+        selectorModelSearch={selectorModelSearch}
+        selectorGroupSearch={selectorGroupSearch}
+        onSelectorModelSearchChange={setSelectorModelSearch}
+        onSelectorGroupSearchChange={setSelectorGroupSearch}
+        selection={{
+          selectedModels: downstreamCreate.selectedModels,
+          selectedGroupRouteIds: downstreamCreate.selectedGroupRouteIds,
+        }}
+        onToggleModelSelection={toggleModelSelection}
+        onToggleGroupRouteSelection={toggleGroupRouteSelection}
+        onClose={closeSelectorModal}
+        inputStyle={inputStyle}
+      />
     </div>
   );
 }
