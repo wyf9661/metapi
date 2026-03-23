@@ -189,9 +189,21 @@ export const codexCliProfile: CliProfileDefinition = {
     if (!isCodexRequest(input)) return null;
 
     const sessionId = getCodexSessionId(input.headers) || undefined;
+    const clientApp = detectCodexOfficialClientApp(input.headers);
     return {
       id: 'codex',
       ...(sessionId ? { sessionId, traceHint: sessionId } : {}),
+      ...(clientApp
+        ? {
+          clientAppId: clientApp.clientAppId,
+          clientAppName: clientApp.clientAppName,
+          clientConfidence: 'exact' as const,
+        }
+        : {
+          clientAppId: 'codex',
+          clientAppName: 'Codex',
+          clientConfidence: 'heuristic' as const,
+        }),
     };
   },
 };

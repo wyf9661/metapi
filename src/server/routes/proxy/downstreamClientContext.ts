@@ -1,15 +1,11 @@
-import { extractClaudeCodeSessionId as extractClaudeCodeSessionIdViaProfile } from '../../proxy-core/cliProfiles/claudeCodeProfile.js';
-import {
-  detectCliProfile,
-} from '../../proxy-core/cliProfiles/registry.js';
-import {
-  detectCodexOfficialClientApp as detectCodexOfficialClientAppViaProfile,
-  isCodexResponsesSurface as isCodexResponsesSurfaceViaProfile,
-} from '../../proxy-core/cliProfiles/codexProfile.js';
-import type { CliProfileId } from '../../proxy-core/cliProfiles/types.js';
+import { detectCliProfile } from '../../proxy-core/cliProfiles/registry.js';
+import type {
+  CliProfileClientConfidence,
+  CliProfileId,
+} from '../../proxy-core/cliProfiles/types.js';
 
 export type DownstreamClientKind = CliProfileId;
-export type DownstreamClientConfidence = 'exact' | 'heuristic';
+export type DownstreamClientConfidence = CliProfileClientConfidence;
 
 export type DownstreamClientContext = {
   clientKind: DownstreamClientKind;
@@ -40,7 +36,7 @@ type DownstreamClientFingerprintRule = {
   match(input: DownstreamClientFingerprintInput): DownstreamClientConfidence | null;
 };
 
-type DownstreamProtocolClientApp = {
+type DownstreamResolvedClientApp = {
   clientAppId: string;
   clientAppName: string;
   clientConfidence: DownstreamClientConfidence;
@@ -199,7 +195,7 @@ function detectDownstreamClientFingerprint(input: {
   };
 }
 
-function detectExplicitClientSelfReport(headers: NormalizedClientHeaders): DownstreamProtocolClientApp | null {
+function detectExplicitClientSelfReport(headers: NormalizedClientHeaders): DownstreamResolvedClientApp | null {
   for (const value of headers['x-openai-client-user-agent'] || []) {
     const clientAppName = parseExplicitClientSelfReportValue(value);
     if (!clientAppName) continue;
@@ -223,49 +219,6 @@ function detectExplicitClientSelfReport(headers: NormalizedClientHeaders): Downs
   return null;
 }
 
-function detectProtocolClientApp(input: {
-  clientKind: DownstreamClientKind;
-  headers?: Record<string, unknown>;
-}): DownstreamProtocolClientApp | null {
-  switch (input.clientKind) {
-    case 'claude_code':
-      return {
-        clientAppId: 'claude_code',
-        clientAppName: 'Claude Code',
-        clientConfidence: 'exact',
-      };
-    case 'gemini_cli':
-      return {
-        clientAppId: 'gemini_cli',
-        clientAppName: 'Gemini CLI',
-        clientConfidence: 'exact',
-      };
-    case 'codex': {
-      const clientApp = detectCodexOfficialClientAppViaProfile(input.headers);
-      return clientApp
-        ? {
-          ...clientApp,
-          clientConfidence: 'exact' as const,
-        }
-        : {
-        clientAppId: 'codex',
-        clientAppName: 'Codex',
-        clientConfidence: 'heuristic',
-      };
-    }
-    default:
-      return null;
-  }
-}
-
-export function isCodexResponsesSurface(headers?: Record<string, unknown>): boolean {
-  return isCodexResponsesSurfaceViaProfile(headers);
-}
-
-export function extractClaudeCodeSessionId(userId: string): string | null {
-  return extractClaudeCodeSessionIdViaProfile(userId);
-}
-
 export function detectDownstreamClientContext(input: {
   downstreamPath: string;
   headers?: Record<string, unknown>;
@@ -275,14 +228,21 @@ export function detectDownstreamClientContext(input: {
   const normalizedHeaders = normalizeHeaders(input.headers);
   const explicitSelfReport = detectExplicitClientSelfReport(normalizedHeaders);
   const fingerprint = detectDownstreamClientFingerprint(input);
-  const protocolClientApp = fingerprint || explicitSelfReport ? null : detectProtocolClientApp({
-    clientKind: detected.id,
-    headers: input.headers,
-  });
+  const profileClientApp = fingerprint || explicitSelfReport
+    ? null
+    : (
+      detected.clientAppId && detected.clientAppName
+        ? {
+          clientAppId: detected.clientAppId,
+          clientAppName: detected.clientAppName,
+          ...(detected.clientConfidence ? { clientConfidence: detected.clientConfidence } : {}),
+        }
+        : null
+    );
   return {
     clientKind: detected.id,
     ...(detected.sessionId ? { sessionId: detected.sessionId } : {}),
     ...(detected.traceHint ? { traceHint: detected.traceHint } : {}),
-    ...(explicitSelfReport || fingerprint || protocolClientApp || {}),
+    ...(explicitSelfReport || fingerprint || profileClientApp || {}),
   };
 }
