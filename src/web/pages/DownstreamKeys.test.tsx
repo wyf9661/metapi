@@ -193,7 +193,7 @@ describe('DownstreamKeys page', () => {
       expect(text).toContain('主分组');
       expect(text).toContain('移动端');
     } finally {
-      root.unmount();
+      root?.unmount();
     }
   });
 
@@ -447,7 +447,7 @@ describe('DownstreamKeys page', () => {
       expect(collectText(root!.root)).not.toContain('固定窗口对比');
       expect(collectText(root!.root)).not.toContain('trend:2');
     } finally {
-      root.unmount();
+      root?.unmount();
     }
   });
 

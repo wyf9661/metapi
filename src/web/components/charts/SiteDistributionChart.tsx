@@ -139,7 +139,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               value: (datum: unknown) => {
                 const item = coerceDatumRecord(datum);
                 const pct = safeNumber(item._percent_);
-                return `${safeNumber(pct).toFixed(1)}%`;
+                return `${pct.toFixed(1)}%`;
               },
             },
             {

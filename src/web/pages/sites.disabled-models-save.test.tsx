@@ -146,7 +146,7 @@ describe('Sites disabled models save', () => {
 
       expect(apiMock.updateSiteDisabledModels).toHaveBeenCalledWith(1, ['gpt-4o']);
     } finally {
-      root.unmount();
+      root?.unmount();
     }
   });
 
@@ -190,7 +190,7 @@ describe('Sites disabled models save', () => {
 
       expect(apiMock.updateSiteDisabledModels).toHaveBeenCalledWith(1, ['gpt-4o']);
     } finally {
-      root.unmount();
+      root?.unmount();
     }
   });
 });
