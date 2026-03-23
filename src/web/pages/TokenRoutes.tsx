@@ -7,7 +7,7 @@ import { BrandGlyph, getBrand, InlineBrandIcon, type BrandInfo } from '../compon
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
-import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { tr } from '../i18n.js';
 import {
@@ -1113,54 +1113,53 @@ export default function TokenRoutes() {
       </div>
 
       {/* Collapsible filter panel */}
-      {isMobile ? (
-        <>
-          <button
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '8px 14px', marginBottom: 12 }}
-            onClick={() => setShowFilters(true)}
-          >
-            {tr('筛选')}
-          </button>
-          <MobileFilterSheet open={showFilters} onClose={() => setShowFilters(false)} title={tr('筛选路由')}>
-            <RouteFilterBar
-              totalRouteCount={listVisibleRoutes.length}
-              activeBrand={activeBrand}
-              setActiveBrand={setActiveBrand}
-              activeSite={activeSite}
-              setActiveSite={setActiveSite}
-              activeEndpointType={activeEndpointType}
-              setActiveEndpointType={setActiveEndpointType}
-              activeGroupFilter={activeGroupFilter}
-              setActiveGroupFilter={setActiveGroupFilter}
-              brandList={brandList}
-              siteList={siteList}
-              endpointTypeList={endpointTypeList}
-              groupRouteList={groupRouteList}
-              collapsed={false}
-              onToggle={() => setShowFilters(false)}
-            />
-          </MobileFilterSheet>
-        </>
-      ) : (
-        <RouteFilterBar
-          totalRouteCount={listVisibleRoutes.length}
-          activeBrand={activeBrand}
-          setActiveBrand={setActiveBrand}
-          activeSite={activeSite}
-          setActiveSite={setActiveSite}
-          activeEndpointType={activeEndpointType}
-          setActiveEndpointType={setActiveEndpointType}
-          activeGroupFilter={activeGroupFilter}
-          setActiveGroupFilter={setActiveGroupFilter}
-          brandList={brandList}
-          siteList={siteList}
-          endpointTypeList={endpointTypeList}
-          groupRouteList={groupRouteList}
-          collapsed={filterCollapsed}
-          onToggle={() => setFilterCollapsed((prev) => !prev)}
-        />
-      )}
+      <ResponsiveFilterPanel
+        isMobile={isMobile}
+        mobileOpen={showFilters}
+        onMobileOpen={() => setShowFilters(true)}
+        onMobileClose={() => setShowFilters(false)}
+        mobileTitle={tr('筛选路由')}
+        mobileTriggerWrapperClassName=""
+        mobileTriggerButtonStyle={{ border: '1px solid var(--color-border)', padding: '8px 14px', marginBottom: 12 }}
+        mobileContent={(
+          <RouteFilterBar
+            totalRouteCount={listVisibleRoutes.length}
+            activeBrand={activeBrand}
+            setActiveBrand={setActiveBrand}
+            activeSite={activeSite}
+            setActiveSite={setActiveSite}
+            activeEndpointType={activeEndpointType}
+            setActiveEndpointType={setActiveEndpointType}
+            activeGroupFilter={activeGroupFilter}
+            setActiveGroupFilter={setActiveGroupFilter}
+            brandList={brandList}
+            siteList={siteList}
+            endpointTypeList={endpointTypeList}
+            groupRouteList={groupRouteList}
+            collapsed={false}
+            onToggle={() => setShowFilters(false)}
+          />
+        )}
+        desktopContent={(
+          <RouteFilterBar
+            totalRouteCount={listVisibleRoutes.length}
+            activeBrand={activeBrand}
+            setActiveBrand={setActiveBrand}
+            activeSite={activeSite}
+            setActiveSite={setActiveSite}
+            activeEndpointType={activeEndpointType}
+            setActiveEndpointType={setActiveEndpointType}
+            activeGroupFilter={activeGroupFilter}
+            setActiveGroupFilter={setActiveGroupFilter}
+            brandList={brandList}
+            siteList={siteList}
+            endpointTypeList={endpointTypeList}
+            groupRouteList={groupRouteList}
+            collapsed={filterCollapsed}
+            onToggle={() => setFilterCollapsed((prev) => !prev)}
+          />
+        )}
+      />
 
       {/* Info tip */}
       <div className="info-tip" style={{ marginBottom: 12 }}>

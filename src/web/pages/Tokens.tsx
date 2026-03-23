@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
-import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
 import { useToast } from '../components/Toast.js';
@@ -825,41 +825,47 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         </div>
       )}
 
-      <MobileFilterSheet open={showMobileTools} onClose={() => setShowMobileTools(false)} title="令牌同步与筛选">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>同步账号</div>
-            <ModernSelect
-              value={String(syncingAccountId || 0)}
-              onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
-              options={[
-                { value: '0', label: '选择账号后同步站点令牌' },
-                ...activeAccounts.map((account) => ({
-                  value: String(account.id),
-                  label: `${account.username || `account-${account.id}`} @ ${account.site?.name || '-'}`,
-                })),
-              ]}
-              placeholder="选择账号后同步站点令牌"
-            />
+      <ResponsiveFilterPanel
+        isMobile={isMobile}
+        mobileOpen={showMobileTools}
+        onMobileClose={() => setShowMobileTools(false)}
+        mobileTitle="令牌同步与筛选"
+        mobileContent={(
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>同步账号</div>
+              <ModernSelect
+                value={String(syncingAccountId || 0)}
+                onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
+                options={[
+                  { value: '0', label: '选择账号后同步站点令牌' },
+                  ...activeAccounts.map((account) => ({
+                    value: String(account.id),
+                    label: `${account.username || `account-${account.id}`} @ ${account.site?.name || '-'}`,
+                  })),
+                ]}
+                placeholder="选择账号后同步站点令牌"
+              />
+            </div>
+            <button
+              onClick={handleSync}
+              disabled={syncing || syncingAll || !syncingAccountId}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              {syncing ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
+            </button>
+            <button
+              onClick={handleSyncAll}
+              disabled={syncing || syncingAll || activeAccounts.length === 0}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步全部账号'}
+            </button>
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncing || syncingAll || !syncingAccountId}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
-          >
-            {syncing ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
-          </button>
-          <button
-            onClick={handleSyncAll}
-            disabled={syncing || syncingAll || activeAccounts.length === 0}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
-          >
-            {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步全部账号'}
-          </button>
-        </div>
-      </MobileFilterSheet>
+        )}
+      />
 
       <div className="info-tip" style={{ marginBottom: 12 }}>
         新增令牌会调用站点 API 创建新密钥，再自动同步到本地。支持设置分组、额度、过期时间和 IP 白名单；已存在密钥可直接用“同步站点令牌”读取。

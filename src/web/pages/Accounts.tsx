@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
-import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
 import { useToast } from '../components/Toast.js';
@@ -976,47 +976,53 @@ export default function Accounts() {
         {activeSegment === 'tokens' && embeddedTokenActions}
       </div>
 
-      <MobileFilterSheet open={showMobileTools} onClose={() => setShowMobileTools(false)} title="连接排序与操作">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>排序方式</div>
-            <ModernSelect
-              value={sortMode}
-              onChange={(nextValue) => setSortMode(nextValue as SortMode)}
-              options={[
-                { value: 'custom', label: '自定义排序' },
-                { value: 'balance-desc', label: '余额高到低' },
-                { value: 'balance-asc', label: '余额低到高' },
-              ]}
-              placeholder="自定义排序"
-            />
-          </div>
-          {activeSegment === 'session' && (
+      <ResponsiveFilterPanel
+        isMobile={isMobile}
+        mobileOpen={showMobileTools}
+        onMobileClose={() => setShowMobileTools(false)}
+        mobileTitle="连接排序与操作"
+        mobileContent={(
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>排序方式</div>
+              <ModernSelect
+                value={sortMode}
+                onChange={(nextValue) => setSortMode(nextValue as SortMode)}
+                options={[
+                  { value: 'custom', label: '自定义排序' },
+                  { value: 'balance-desc', label: '余额高到低' },
+                  { value: 'balance-asc', label: '余额低到高' },
+                ]}
+                placeholder="自定义排序"
+              />
+            </div>
+            {activeSegment === 'session' && (
+              <button
+                onClick={async () => {
+                  setShowMobileTools(false);
+                  await withLoading('checkin-all', () => api.triggerCheckinAll(), '已触发全部签到');
+                }}
+                disabled={actionLoading['checkin-all']}
+                className="btn btn-ghost"
+                style={{ border: '1px solid var(--color-border)' }}
+              >
+                {actionLoading['checkin-all'] ? <><span className="spinner spinner-sm" />{tr('签到中...')}</> : tr('全部签到')}
+              </button>
+            )}
             <button
               onClick={async () => {
                 setShowMobileTools(false);
-                await withLoading('checkin-all', () => api.triggerCheckinAll(), '已触发全部签到');
+                await handleRefreshRuntimeHealth();
               }}
-              disabled={actionLoading['checkin-all']}
+              disabled={actionLoading['health-refresh']}
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {actionLoading['checkin-all'] ? <><span className="spinner spinner-sm" />{tr('签到中...')}</> : tr('全部签到')}
+              {actionLoading['health-refresh'] ? <><span className="spinner spinner-sm" />{tr('刷新状态中...')}</> : tr('刷新账户状态')}
             </button>
-          )}
-          <button
-            onClick={async () => {
-              setShowMobileTools(false);
-              await handleRefreshRuntimeHealth();
-            }}
-            disabled={actionLoading['health-refresh']}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
-          >
-            {actionLoading['health-refresh'] ? <><span className="spinner spinner-sm" />{tr('刷新状态中...')}</> : tr('刷新账户状态')}
-          </button>
-        </div>
-      </MobileFilterSheet>
+          </div>
+        )}
+      />
 
       <div
         style={{
