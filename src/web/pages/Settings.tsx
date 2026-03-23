@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
@@ -7,6 +6,7 @@ import { useIsMobile } from '../components/useIsMobile.js';
 import ChangeKeyModal from '../components/ChangeKeyModal.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import ModernSelect from '../components/ModernSelect.js';
+import DownstreamApiKeyModal from './settings/DownstreamApiKeyModal.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
 import RouteSelectorModal from './settings/RouteSelectorModal.js';
 import {
@@ -1630,105 +1630,22 @@ export default function Settings() {
           </div>
         </div>
       </div>
-      {downstreamModalPresence.shouldRender && (() => {
-        const modal = (
-          <div className={`modal-backdrop ${downstreamModalPresence.isVisible ? '' : 'is-closing'}`.trim()} onClick={closeDownstreamModal}>
-            <div
-              className={`modal-content ${downstreamModalPresence.isVisible ? '' : 'is-closing'}`.trim()}
-              style={{ maxWidth: 860 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-header">
-                {editingDownstreamId ? '编辑下游 API Key' : '新增下游 API Key'}
-              </div>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-                  <input
-                    value={downstreamCreate.name}
-                    onChange={(e) => setDownstreamCreate((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="Name (e.g. cc-project)"
-                    style={inputStyle}
-                  />
-                  <input
-                    value={downstreamCreate.key}
-                    onChange={(e) => setDownstreamCreate((prev) => ({ ...prev, key: e.target.value.trim() }))}
-                    placeholder="sk-xxxx"
-                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
-                  />
-                  <input
-                    value={downstreamCreate.maxCost}
-                    onChange={(e) => setDownstreamCreate((prev) => ({ ...prev, maxCost: e.target.value }))}
-                    placeholder="最大费用（可选）"
-                    type="number"
-                    min={0}
-                    step={0.000001}
-                    style={inputStyle}
-                  />
-                  <input
-                    value={downstreamCreate.maxRequests}
-                    onChange={(e) => setDownstreamCreate((prev) => ({ ...prev, maxRequests: e.target.value }))}
-                    placeholder="最大请求数（可选）"
-                    type="number"
-                    min={0}
-                    step={1}
-                    style={inputStyle}
-                  />
-                  <input
-                    value={downstreamCreate.expiresAt}
-                    onChange={(e) => setDownstreamCreate((prev) => ({ ...prev, expiresAt: e.target.value }))}
-                    type="datetime-local"
-                    placeholder="过期时间（可选）"
-                    style={inputStyle}
-                  />
-                  <input
-                    value={downstreamCreate.description}
-                    onChange={(e) => setDownstreamCreate((prev) => ({ ...prev, description: e.target.value }))}
-                    placeholder="备注（可选）"
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    已选模型 {downstreamCreate.selectedModels.length} 个，已选群组 {downstreamCreate.selectedGroupRouteIds.length} 个
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button
-                      onClick={async () => {
-                        if (selectorRoutes.length === 0) await loadRouteSelectorRoutes();
-                        setSelectorModelSearch('');
-                        setSelectorGroupSearch('');
-                        setSelectorOpen(true);
-                      }}
-                      className="btn btn-ghost"
-                      style={{ border: '1px solid var(--color-border)' }}
-                    >
-                      勾选模型和群组
-                    </button>
-                    {(downstreamCreate.selectedModels.length > 0 || downstreamCreate.selectedGroupRouteIds.length > 0) && (
-                      <button
-                        onClick={() => setDownstreamCreate((prev) => ({ ...prev, selectedModels: [], selectedGroupRouteIds: [] }))}
-                        className="btn btn-link btn-link-warning"
-                      >
-                        清空选择
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button onClick={closeDownstreamModal} className="btn btn-ghost">取消</button>
-                <button onClick={saveDownstreamKey} disabled={downstreamSaving} className="btn btn-primary">
-                  {downstreamSaving
-                    ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</>
-                    : (editingDownstreamId ? '更新 API Key' : '新增 API Key')}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-        return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
-      })()}
+      <DownstreamApiKeyModal
+        presence={downstreamModalPresence}
+        editingDownstreamId={editingDownstreamId}
+        downstreamCreate={downstreamCreate}
+        downstreamSaving={downstreamSaving}
+        inputStyle={inputStyle}
+        onChange={(updater) => setDownstreamCreate((prev) => updater(prev))}
+        onOpenSelector={async () => {
+          if (selectorRoutes.length === 0) await loadRouteSelectorRoutes();
+          setSelectorModelSearch('');
+          setSelectorGroupSearch('');
+          setSelectorOpen(true);
+        }}
+        onClose={closeDownstreamModal}
+        onSave={saveDownstreamKey}
+      />
       <FactoryResetModal
         presence={factoryResetPresence}
         factoryResetting={factoryResetting}
