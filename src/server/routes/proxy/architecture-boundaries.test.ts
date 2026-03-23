@@ -154,6 +154,7 @@ describe('proxy route architecture boundaries', () => {
     expect(chatSurfaceSource).not.toContain('refreshOauthAccessTokenSingleflight(');
     expect(chatSurfaceSource).not.toContain('resolveProxyUsageWithSelfLogFallback(');
     expect(chatSurfaceSource).not.toContain('resolveProxyLogBilling(');
+    expect((chatSurfaceSource.match(/bestEffortMetrics:/g) || []).length).toBeGreaterThanOrEqual(2);
 
     expect(responsesSurfaceSource).toContain('trySurfaceOauthRefreshRecovery(');
     expect(responsesSurfaceSource).toContain('recordSurfaceSuccess(');

@@ -179,11 +179,12 @@ export function getOauthInfoFromAccount(account?: OauthIdentityCarrier | null): 
   if (!provider) return null;
   const structuredAccountKey = asTrimmedString(account.oauthAccountKey);
   const accountKey = structuredAccountKey || storedIdentity?.accountKey || storedIdentity?.accountId;
+  const accountId = storedIdentity?.accountId || structuredAccountKey || accountKey;
   const projectId = asTrimmedString(account.oauthProjectId) || storedIdentity?.projectId;
   return {
     ...(storedRuntime || {}),
     provider,
-    accountId: structuredAccountKey || storedIdentity?.accountId || accountKey,
+    accountId,
     accountKey,
     projectId,
   };
@@ -275,13 +276,12 @@ export function buildStoredOauthStateFromAccount(
 }
 
 export function isOauthProvider(
-  account: Pick<typeof schema.accounts.$inferSelect, 'extraConfig'> | string | null | undefined,
+  account: OauthIdentityCarrier | string | null | undefined,
   provider?: string,
 ): boolean {
-  const extraConfig = typeof account === 'string' || account == null
-    ? account
-    : account.extraConfig;
-  const oauth = getOauthInfoFromExtraConfig(extraConfig);
+  const oauth = typeof account === 'string' || account == null
+    ? getOauthInfoFromExtraConfig(account)
+    : getOauthInfoFromAccount(account);
   if (!oauth) return false;
   if (!provider) return true;
   return oauth.provider === provider;

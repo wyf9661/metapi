@@ -15,7 +15,7 @@ type DebugPanelPresence = {
 type DebugPanelProps = {
   presence: DebugPanelPresence;
   isMobile: boolean;
-  debugTimestamp: number | null;
+  debugTimestamp: string | null;
   activeDebugTab: DebugTab;
   onTabChange: (tab: DebugTab) => void;
   debugTabContent: string;

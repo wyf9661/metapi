@@ -24,6 +24,8 @@ describe('route refresh workflow architecture boundaries', () => {
 
     expect(statsSource).toContain("from '../../services/routeRefreshWorkflow.js'");
     expectNoDirectModelServiceRouteRefresh(statsSource);
+    expect(tokensSource).toContain('const rebuild = await routeRefreshWorkflow.rebuildRoutesOnly();');
+    expect(statsSource).toContain('const rebuild = await routeRefreshWorkflow.rebuildRoutesOnly();');
   });
 
   it('keeps proxy fallback refreshes and scheduler hooks on the route refresh workflow', () => {

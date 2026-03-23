@@ -126,6 +126,7 @@ export default function ConversationComposer({
                       <button
                         type="button"
                         onClick={() => onRemoveConversationFile(file.localId)}
+                        aria-label={`移除附件 ${file.name || file.localId || '附件'}`}
                         style={{
                           border: 'none',
                           background: 'transparent',
@@ -148,6 +149,7 @@ export default function ConversationComposer({
           value={input}
           onChange={(event) => onInputChange(event.target.value)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
               if (sending) {

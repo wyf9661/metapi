@@ -8,6 +8,25 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function firstNonEmptyTrimmedString(...values: unknown[]): string {
+  for (const value of values) {
+    const normalized = asTrimmedString(value);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function firstMeaningfulValue(...values: unknown[]): unknown {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      if (value.trim()) return value;
+      continue;
+    }
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
 function toTextBlockType(role: string): 'input_text' | 'output_text' {
   return role === 'assistant' ? 'output_text' : 'input_text';
 }
@@ -47,12 +66,12 @@ function normalizeResponsesContentItem(
 
   const type = asTrimmedString(item.type).toLowerCase();
   if (!type) {
-    const text = asTrimmedString(item.text ?? item.content ?? item.output_text);
+    const text = firstNonEmptyTrimmedString(item.text, item.content, item.output_text);
     return text ? { type: toTextBlockType(role), text } : null;
   }
 
   if (type === 'input_text' || type === 'output_text' || type === 'text') {
-    const text = asTrimmedString(item.text ?? item.content ?? item.output_text);
+    const text = firstNonEmptyTrimmedString(item.text, item.content, item.output_text);
     if (!text) return null;
     return {
       ...item,
@@ -62,7 +81,7 @@ function normalizeResponsesContentItem(
   }
 
   if (type === 'input_image' || type === 'image_url') {
-    const imageUrl = normalizeImageUrlValue(item.image_url ?? item.url);
+    const imageUrl = normalizeImageUrlValue(item.image_url) ?? normalizeImageUrlValue(item.url);
     if (!imageUrl) return null;
     return {
       ...item,
@@ -124,7 +143,10 @@ export function normalizeResponsesMessageItem(item: Record<string, unknown>): Re
   }
 
   const role = asTrimmedString(item.role).toLowerCase() || 'user';
-  const normalizedContent = normalizeResponsesMessageContent(item.content ?? item.text, role);
+  const normalizedContent = normalizeResponsesMessageContent(
+    firstMeaningfulValue(item.content, item.text),
+    role,
+  );
 
   if (type === 'message') {
     return {
@@ -143,8 +165,8 @@ export function normalizeResponsesMessageItem(item: Record<string, unknown>): Re
     };
   }
 
-  if (typeof item.content === 'string') {
-    const text = item.content.trim();
+  if (typeof item.content === 'string' || typeof item.text === 'string') {
+    const text = firstNonEmptyTrimmedString(item.content, item.text);
     return text ? toResponsesInputMessageFromText(text) : item;
   }
 

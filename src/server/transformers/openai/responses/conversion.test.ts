@@ -75,6 +75,48 @@ describe('responses conversion single source of truth', () => {
       },
     ]);
   });
+
+  it('falls back to non-empty text and image sources when earlier compatibility fields are blank', () => {
+    const normalized = normalizeResponsesInputForCompatibility([
+      {
+        role: 'assistant',
+        content: '',
+        text: 'done',
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: '   ', content: 'hello' },
+          { type: 'image_url', image_url: '   ', url: 'https://example.com/image.png' },
+        ],
+      },
+    ]);
+
+    expect(normalized).toEqual([
+      expect.objectContaining({
+        type: 'message',
+        role: 'assistant',
+        text: 'done',
+        content: [{ type: 'output_text', text: 'done' }],
+      }),
+      expect.objectContaining({
+        type: 'message',
+        role: 'user',
+        content: [
+          expect.objectContaining({
+            type: 'input_text',
+            text: 'hello',
+            content: 'hello',
+          }),
+          expect.objectContaining({
+            type: 'input_image',
+            image_url: 'https://example.com/image.png',
+            url: 'https://example.com/image.png',
+          }),
+        ],
+      }),
+    ]);
+  });
 });
 
 describe('sanitizeResponsesBodyForProxy', () => {

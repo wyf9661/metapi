@@ -1387,7 +1387,7 @@ export async function statsRoutes(app: FastifyInstance) {
     }
 
     const refresh = await refreshModelsForAccount(accountId);
-    const rebuild = routeRefreshWorkflow.rebuildRoutesOnly();
+    const rebuild = await routeRefreshWorkflow.rebuildRoutesOnly();
     return { success: true, refresh, rebuild };
   });
 

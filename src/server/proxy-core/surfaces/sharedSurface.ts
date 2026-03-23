@@ -113,7 +113,11 @@ export async function selectSurfaceChannelForAttempt(input: {
     );
 
   if (!selected && input.retryCount === 0) {
-    await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+    try {
+      await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+    } catch (error) {
+      console.warn('[proxy/surface] failed to refresh routes after empty selection', error);
+    }
     selected = await tokenRouter.selectChannel(input.requestedModel, input.downstreamPolicy);
   }
 

@@ -21,6 +21,7 @@ const resolveProxyUsageWithSelfLogFallbackMock = vi.fn();
 const resolveProxyLogBillingMock = vi.fn();
 const refreshOauthAccessTokenSingleflightMock = vi.fn();
 const consoleWarnMock = vi.spyOn(console, 'warn').mockImplementation(() => {});
+const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 vi.mock('../../services/tokenRouter.js', () => ({
   tokenRouter: {
@@ -88,6 +89,7 @@ vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
 describe('selectSurfaceChannelForAttempt', () => {
   afterAll(() => {
     consoleWarnMock.mockRestore();
+    consoleErrorMock.mockRestore();
   });
 
   beforeEach(() => {
@@ -111,6 +113,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     resolveProxyLogBillingMock.mockReset();
     refreshOauthAccessTokenSingleflightMock.mockReset();
     consoleWarnMock.mockClear();
+    consoleErrorMock.mockClear();
   });
 
   it('refreshes models and retries selectChannel on the first attempt when no channel is available', async () => {
@@ -153,6 +156,29 @@ describe('selectSurfaceChannelForAttempt', () => {
       EMPTY_DOWNSTREAM_ROUTING_POLICY,
     );
     expect(refreshModelsAndRebuildRoutesMock).not.toHaveBeenCalled();
+  });
+
+  it('logs refresh failures and still retries selection once on the first attempt', async () => {
+    const selected = { channel: { id: 33 } };
+    selectChannelMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(selected);
+    refreshModelsAndRebuildRoutesMock.mockRejectedValueOnce(new Error('refresh failed'));
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+    });
+
+    expect(result).toBe(selected);
+    expect(selectChannelMock).toHaveBeenCalledTimes(2);
+    expect(consoleWarnMock).toHaveBeenCalledWith(
+      '[proxy/surface] failed to refresh routes after empty selection',
+      expect.any(Error),
+    );
   });
 
   it('writes proxy logs through the shared log formatter and store', async () => {
@@ -822,6 +848,66 @@ describe('selectSurfaceChannelForAttempt', () => {
       },
       estimatedCost: 0.42,
       billingDetails: { source: 'pricing-test' },
+    });
+  });
+
+  it('treats success metrics as best-effort when requested', async () => {
+    resolveProxyUsageWithSelfLogFallbackMock.mockRejectedValueOnce(new Error('billing failed'));
+    const logSuccess = vi.fn().mockResolvedValue(undefined);
+    const recordDownstreamCost = vi.fn();
+
+    const { recordSurfaceSuccess } = await import('./sharedSurface.js');
+    const result = await recordSurfaceSuccess({
+      selected: {
+        channel: { id: 11, routeId: 22 },
+        account: { id: 33, username: 'oauth-user' },
+        site: { id: 44, url: 'https://upstream.example.com', name: 'Codex OAuth' },
+        tokenValue: 'live-token',
+        tokenName: 'default',
+        actualModel: 'upstream-model',
+      },
+      requestedModel: 'gpt-5.2',
+      modelName: 'upstream-model',
+      parsedUsage: {
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+      },
+      requestStartedAtMs: 1000,
+      latencyMs: 250,
+      retryCount: 1,
+      upstreamPath: '/v1/responses',
+      logSuccess,
+      recordDownstreamCost,
+      bestEffortMetrics: {
+        errorLabel: '[proxy/chat] failed to record success metrics',
+      },
+    });
+
+    expect(consoleErrorMock).toHaveBeenCalledWith(
+      '[proxy/chat] failed to record success metrics',
+      expect.any(Error),
+    );
+    expect(recordSuccessMock).toHaveBeenCalledWith(11, 250, 0, 'upstream-model');
+    expect(recordDownstreamCost).toHaveBeenCalledWith(0);
+    expect(logSuccess).toHaveBeenCalledWith(expect.objectContaining({
+      promptTokens: 10,
+      completionTokens: 5,
+      totalTokens: 15,
+      estimatedCost: 0,
+      billingDetails: null,
+    }));
+    expect(result).toEqual({
+      resolvedUsage: {
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+        recoveredFromSelfLog: false,
+        estimatedCostFromQuota: 0,
+        selfLogBillingMeta: null,
+      },
+      estimatedCost: 0,
+      billingDetails: null,
     });
   });
 });

@@ -49,6 +49,7 @@ export default function DownstreamKeyDrawer({
   useEffect(() => {
     if (!open || !item?.id) return;
     let cancelled = false;
+    setOverview(null);
     setOverviewLoading(true);
     api.getDownstreamApiKeyOverview(item.id)
       .then((res: any) => {
@@ -71,6 +72,7 @@ export default function DownstreamKeyDrawer({
   useEffect(() => {
     if (!open || !item?.id) return;
     let cancelled = false;
+    setBuckets([]);
     setTrendLoading(true);
     api.getDownstreamApiKeyTrend(item.id, { range: trendRange })
       .then((res: any) => {

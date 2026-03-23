@@ -1315,12 +1315,18 @@ export async function accountsRoutes(app: FastifyInstance) {
       explicitNextMode && explicitNextMode !== 'auto'
         ? explicitNextMode
         : (hasSessionTokenValue(nextAccessToken) ? 'session' : 'apikey');
+    const needsModelRefresh =
+      Object.prototype.hasOwnProperty.call(body, 'accessToken')
+      || Object.prototype.hasOwnProperty.call(body, 'apiToken')
+      || Object.prototype.hasOwnProperty.call(body, 'extraConfig')
+      || Object.prototype.hasOwnProperty.call(body, 'proxyUrl')
+      || wantsManagedSub2ApiAuthPatch;
 
     await convergeAccountMutation({
       accountId: id,
       preferredApiToken: nextCredentialMode !== 'apikey' ? updates.apiToken : null,
       defaultTokenSource: 'manual',
-      refreshModels: true,
+      refreshModels: needsModelRefresh,
       rebuildRoutes: true,
       continueOnError: true,
     });

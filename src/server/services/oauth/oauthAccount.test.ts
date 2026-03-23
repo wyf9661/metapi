@@ -4,10 +4,11 @@ import {
   buildOauthInfoFromAccount,
   buildStoredOauthStateFromAccount,
   getOauthInfoFromAccount,
+  isOauthProvider,
 } from './oauthAccount.js';
 
 describe('oauth account identity helpers', () => {
-  it('prefers structured oauth identity columns over extraConfig metadata', () => {
+  it('prefers structured oauth provider/accountKey/projectId columns while preserving a legacy accountId', () => {
     const oauth = getOauthInfoFromAccount({
       oauthProvider: 'gemini-cli',
       oauthAccountKey: 'structured-user@example.com',
@@ -25,7 +26,7 @@ describe('oauth account identity helpers', () => {
 
     expect(oauth).toEqual(expect.objectContaining({
       provider: 'gemini-cli',
-      accountId: 'structured-user@example.com',
+      accountId: 'json-user',
       accountKey: 'structured-user@example.com',
       projectId: 'structured-project',
       refreshToken: 'refresh-token',
@@ -82,6 +83,29 @@ describe('oauth account identity helpers', () => {
     }));
   });
 
+  it('preserves legacy accountId when structured oauthAccountKey differs', () => {
+    const oauth = getOauthInfoFromAccount({
+      oauthProvider: 'codex',
+      oauthAccountKey: 'structured-account-key',
+      oauthProjectId: null,
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'legacy-account-id',
+          accountKey: 'legacy-account-key',
+          refreshToken: 'refresh-token',
+        },
+      }),
+    });
+
+    expect(oauth).toEqual(expect.objectContaining({
+      provider: 'codex',
+      accountId: 'legacy-account-id',
+      accountKey: 'structured-account-key',
+      refreshToken: 'refresh-token',
+    }));
+  });
+
   it('builds patched oauth state from structured identity columns and current runtime state', () => {
     const oauth = buildOauthInfoFromAccount({
       oauthProvider: 'codex',
@@ -133,6 +157,32 @@ describe('oauth account identity helpers', () => {
       modelDiscoveryStatus: 'healthy',
       quota: { status: 'supported' },
     });
+  });
+
+  it('still recognizes oauth providers from account rows after persisted state strips identity fields', () => {
+    const account = {
+      oauthProvider: 'codex',
+      oauthAccountKey: 'structured-account',
+      oauthProjectId: 'structured-project',
+      extraConfig: JSON.stringify({
+        oauth: buildStoredOauthStateFromAccount({
+          oauthProvider: 'codex',
+          oauthAccountKey: 'structured-account',
+          oauthProjectId: 'structured-project',
+          extraConfig: JSON.stringify({
+            oauth: {
+              provider: 'codex',
+              accountId: 'legacy-account',
+              refreshToken: 'refresh-token',
+            },
+          }),
+        }),
+      }),
+    };
+
+    expect(isOauthProvider(account)).toBe(true);
+    expect(isOauthProvider(account, 'codex')).toBe(true);
+    expect(isOauthProvider(account, 'gemini-cli')).toBe(false);
   });
 
   it('builds a structured identity backfill patch from legacy oauth metadata only for missing columns', () => {

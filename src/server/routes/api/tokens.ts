@@ -1170,7 +1170,7 @@ export async function tokensRoutes(app: FastifyInstance) {
   app.post<{ Body?: { refreshModels?: boolean; wait?: boolean } }>('/api/routes/rebuild', async (request, reply) => {
     const body = (request.body || {}) as { refreshModels?: boolean };
     if (body.refreshModels === false) {
-      const rebuild = routeRefreshWorkflow.rebuildRoutesOnly();
+      const rebuild = await routeRefreshWorkflow.rebuildRoutesOnly();
       return { success: true, rebuild };
     }
 

@@ -218,34 +218,39 @@ export async function discoverAntigravityModelsFromCloud(input: {
   }
 
   const oauth = getOauthInfoFromAccount(input.account);
-  const requestBody = oauth?.projectId ? { project: oauth.projectId } : {};
+  const projectId = (oauth?.projectId || '').trim();
+  const requestBody = projectId ? { project: projectId } : {};
   let lastError = '';
 
   for (const baseUrl of buildAntigravityDiscoveryBaseUrls(input.site.url || ANTIGRAVITY_UPSTREAM_BASE_URL)) {
-    const response = await fetch(
-      `${baseUrl}/v1internal:fetchAvailableModels`,
-      withSiteRecordProxyRequestInit(input.site, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'User-Agent': ANTIGRAVITY_MODELS_USER_AGENT,
-        },
-        body: JSON.stringify(requestBody),
-      }),
-    );
-    if (!response.ok) {
-      lastError = await response.text().catch(() => '') || `HTTP ${response.status}`;
-      continue;
-    }
+    try {
+      const response = await fetch(
+        `${baseUrl}/v1internal:fetchAvailableModels`,
+        withSiteRecordProxyRequestInit(input.site, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': ANTIGRAVITY_MODELS_USER_AGENT,
+          },
+          body: JSON.stringify(requestBody),
+        }),
+      );
+      if (!response.ok) {
+        lastError = await response.text().catch(() => '') || `HTTP ${response.status}`;
+        continue;
+      }
 
-    const payload = await response.json();
-    const models = normalizeDiscoveredModels(extractAntigravityModelIds(payload));
-    if (models.length > 0) {
-      return models;
+      const payload = await response.json();
+      const models = normalizeDiscoveredModels(extractAntigravityModelIds(payload));
+      if (models.length > 0) {
+        return models;
+      }
+      lastError = '未获取到可用模型';
+    } catch (error) {
+      lastError = error instanceof Error ? `${baseUrl}: ${error.message}` : String(error);
     }
-    lastError = '未获取到可用模型';
   }
 
   throw new Error(lastError || '未获取到可用模型');
