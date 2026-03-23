@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { db, schema } from '../../db/index.js';
 import { and, eq } from 'drizzle-orm';
 import { detectSite } from '../../services/siteDetector.js';
@@ -74,6 +74,64 @@ function normalizeOptionalExternalCheckinUrl(input: unknown): {
     return { valid: false, present: true, url: null };
   }
   return { valid: true, present: true, url: parsed.toString().replace(/\/+$/, '') };
+}
+
+type ErrorLike = {
+  message?: string;
+  code?: string | number;
+  cause?: unknown;
+};
+
+function normalizeSiteUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function getErrorChain(error: unknown): ErrorLike[] {
+  const chain: ErrorLike[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    chain.push(current as ErrorLike);
+    current = (current as ErrorLike).cause;
+  }
+  return chain;
+}
+
+function isSitesPlatformUrlConflict(error: unknown): boolean {
+  return getErrorChain(error).some((entry) => {
+    const message = String(entry.message || '');
+    const lowered = message.toLowerCase();
+    const code = String(entry.code || '');
+    const isSqliteSitesUnique = (
+      (code === 'SQLITE_CONSTRAINT' || code === 'SQLITE_CONSTRAINT_UNIQUE')
+      && lowered.includes('unique constraint failed: sites.platform, sites.url')
+    );
+    return (code === '23505' && lowered.includes('sites_platform_url_unique'))
+      || (code === 'ER_DUP_ENTRY' && lowered.includes('sites_platform_url_unique'))
+      || isSqliteSitesUnique
+      || (lowered.includes('duplicate key value violates unique constraint') && lowered.includes('sites_platform_url_unique'))
+      || (lowered.includes('duplicate entry') && lowered.includes('sites_platform_url_unique'));
+  });
+}
+
+function findExistingSiteBinding(
+  siteRows: Array<{ id: number; url: string; platform: string }>,
+  platform: string,
+  normalizedUrl: string,
+  excludedSiteId?: number,
+) {
+  return siteRows.find((site) => (
+    site.platform === platform
+    && site.url === normalizedUrl
+    && site.id !== excludedSiteId
+  ));
+}
+
+function sendSiteBindingConflict(reply: FastifyReply, platform: string, normalizedUrl: string) {
+  return reply.code(409).send({
+    error: `A ${platform} site with URL ${normalizedUrl} already exists.`,
+  });
 }
 
 type SiteSubscriptionAggregate = {
@@ -267,6 +325,7 @@ export async function sitesRoutes(app: FastifyInstance) {
 
     const existingSites = await db.select().from(schema.sites).all();
     const maxSortOrder = existingSites.reduce((max, site) => Math.max(max, site.sortOrder || 0), -1);
+    const normalizedUrl = normalizeSiteUrl(url);
 
     let detectedPlatform = platform;
     if (!detectedPlatform) {
@@ -276,19 +335,32 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (!detectedPlatform) {
       return { error: 'Could not detect platform. Please specify manually.' };
     }
-    const inserted = await db.insert(schema.sites).values({
-      name,
-      url: url.replace(/\/+$/, ''),
-      platform: detectedPlatform,
-      proxyUrl: normalizedProxyUrl.proxyUrl,
-      useSystemProxy: normalizedUseSystemProxy ?? false,
-      customHeaders: normalizedCustomHeaders.customHeaders,
-      externalCheckinUrl: normalizedExternalCheckinUrl.url,
-      status: normalizedStatus ?? 'active',
-      isPinned: normalizedPinned ?? false,
-      sortOrder: normalizedSortOrder ?? (maxSortOrder + 1),
-      globalWeight: normalizedGlobalWeight ?? 1,
-    }).run();
+    const conflictingSite = findExistingSiteBinding(existingSites, detectedPlatform, normalizedUrl);
+    if (conflictingSite) {
+      return sendSiteBindingConflict(reply, detectedPlatform, normalizedUrl);
+    }
+
+    let inserted;
+    try {
+      inserted = await db.insert(schema.sites).values({
+        name,
+        url: normalizedUrl,
+        platform: detectedPlatform,
+        proxyUrl: normalizedProxyUrl.proxyUrl,
+        useSystemProxy: normalizedUseSystemProxy ?? false,
+        customHeaders: normalizedCustomHeaders.customHeaders,
+        externalCheckinUrl: normalizedExternalCheckinUrl.url,
+        status: normalizedStatus ?? 'active',
+        isPinned: normalizedPinned ?? false,
+        sortOrder: normalizedSortOrder ?? (maxSortOrder + 1),
+        globalWeight: normalizedGlobalWeight ?? 1,
+      }).run();
+    } catch (error) {
+      if (isSitesPlatformUrlConflict(error)) {
+        return sendSiteBindingConflict(reply, detectedPlatform, normalizedUrl);
+      }
+      throw error;
+    }
     const siteId = Number(inserted.lastInsertRowid || 0);
     if (siteId <= 0) {
       return reply.code(500).send({ error: 'Create site failed' });
@@ -360,8 +432,23 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: normalizedCustomHeaders.error || 'Invalid customHeaders.' });
     }
 
+    const nextUrl = body.url !== undefined ? normalizeSiteUrl(body.url) : existingSite.url;
+    const nextPlatform = body.platform !== undefined ? body.platform : existingSite.platform;
+    const siteIdentityChanged = nextUrl !== existingSite.url || nextPlatform !== existingSite.platform;
+    if (siteIdentityChanged) {
+      const siteRows = await db.select({
+        id: schema.sites.id,
+        url: schema.sites.url,
+        platform: schema.sites.platform,
+      }).from(schema.sites).all();
+      const conflictingSite = findExistingSiteBinding(siteRows, nextPlatform, nextUrl, id);
+      if (conflictingSite) {
+        return sendSiteBindingConflict(reply, nextPlatform, nextUrl);
+      }
+    }
+
     if (body.name !== undefined) updates.name = body.name;
-    if (body.url !== undefined) updates.url = body.url.replace(/\/+$/, '');
+    if (body.url !== undefined) updates.url = nextUrl;
     if (body.platform !== undefined) updates.platform = body.platform;
     if (normalizedProxyUrl.present) updates.proxyUrl = normalizedProxyUrl.proxyUrl;
     if (body.useSystemProxy !== undefined) updates.useSystemProxy = normalizedUseSystemProxy;
@@ -372,7 +459,14 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (body.sortOrder !== undefined) updates.sortOrder = normalizedSortOrder;
     if (body.globalWeight !== undefined) updates.globalWeight = normalizedGlobalWeight;
     updates.updatedAt = new Date().toISOString();
-    await db.update(schema.sites).set(updates).where(eq(schema.sites.id, id)).run();
+    try {
+      await db.update(schema.sites).set(updates).where(eq(schema.sites.id, id)).run();
+    } catch (error) {
+      if (isSitesPlatformUrlConflict(error)) {
+        return sendSiteBindingConflict(reply, nextPlatform, nextUrl);
+      }
+      throw error;
+    }
 
     if (body.status !== undefined && normalizedStatus) {
       await applySiteStatusSideEffects(id, existingSite.name, normalizedStatus);
