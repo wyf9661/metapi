@@ -1,7 +1,7 @@
 ﻿import { FastifyInstance } from 'fastify';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
-import { rebuildTokenRoutesFromAvailability, refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
+import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import {
   ACCOUNT_TOKEN_VALUE_STATUS_READY,
   isUsableAccountToken,
@@ -15,6 +15,7 @@ import {
   parseRouteDecisionSnapshot,
   saveRouteDecisionSnapshots,
 } from '../../services/routeDecisionSnapshotStore.js';
+import { normalizeTokenRouteMode, type RouteMode } from '../../../shared/tokenRouteContract.js';
 
 function isExactModelPattern(modelPattern: string): boolean {
   const normalized = modelPattern.trim();
@@ -23,14 +24,13 @@ function isExactModelPattern(modelPattern: string): boolean {
   return !/[\*\?]/.test(normalized);
 }
 
-type RouteMode = 'pattern' | 'explicit_group';
 type RouteRow = typeof schema.tokenRoutes.$inferSelect & {
   routeMode: RouteMode;
   sourceRouteIds: number[];
 };
 
 function normalizeRouteMode(routeMode: unknown): RouteMode {
-  return routeMode === 'explicit_group' ? 'explicit_group' : 'pattern';
+  return normalizeTokenRouteMode(routeMode);
 }
 
 function isExplicitGroupRoute(route: Pick<RouteRow, 'routeMode'> | Pick<typeof schema.tokenRoutes.$inferSelect, 'routeMode'>): boolean {
@@ -1170,12 +1170,12 @@ export async function tokensRoutes(app: FastifyInstance) {
   app.post<{ Body?: { refreshModels?: boolean; wait?: boolean } }>('/api/routes/rebuild', async (request, reply) => {
     const body = (request.body || {}) as { refreshModels?: boolean };
     if (body.refreshModels === false) {
-      const rebuild = rebuildTokenRoutesFromAvailability();
+      const rebuild = await routeRefreshWorkflow.rebuildRoutesOnly();
       return { success: true, rebuild };
     }
 
     if ((request.body as { wait?: boolean } | undefined)?.wait) {
-      const result = await refreshModelsAndRebuildRoutes();
+      const result = await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
       return { success: true, ...result };
     }
 
@@ -1192,7 +1192,7 @@ export async function tokensRoutes(app: FastifyInstance) {
         },
         failureMessage: (currentTask) => `刷新模型并重建路由失败：${currentTask.error || 'unknown error'}`,
       },
-      async () => refreshModelsAndRebuildRoutes(),
+      async () => routeRefreshWorkflow.refreshModelsAndRebuildRoutes(),
     );
 
     return reply.code(202).send({

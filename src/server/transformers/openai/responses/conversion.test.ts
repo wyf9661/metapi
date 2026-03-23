@@ -5,7 +5,119 @@ import {
   convertResponsesBodyToOpenAiBody,
   sanitizeResponsesBodyForProxy,
 } from './conversion.js';
-import { buildResponsesCompatibilityBodies } from './compatibility.js';
+import {
+  buildResponsesCompatibilityBodies,
+  convertOpenAiBodyToResponsesBody as convertOpenAiBodyToResponsesBodyViaCompatibility,
+  normalizeResponsesInputForCompatibility as normalizeResponsesInputForCompatibilityViaCompatibility,
+  normalizeResponsesMessageContent as normalizeResponsesMessageContentViaCompatibility,
+  sanitizeResponsesBodyForProxy as sanitizeResponsesBodyForProxyViaCompatibility,
+} from './compatibility.js';
+import {
+  normalizeResponsesInputForCompatibility,
+  normalizeResponsesMessageContent,
+} from './conversion.js';
+
+describe('responses conversion single source of truth', () => {
+  it('exports shared conversion helpers from one implementation', () => {
+    expect(normalizeResponsesInputForCompatibilityViaCompatibility).toBe(normalizeResponsesInputForCompatibility);
+    expect(
+      normalizeResponsesMessageContentViaCompatibility(
+        [{ type: 'text', text: 'hello' }],
+        'user',
+      ),
+    ).toEqual(
+      normalizeResponsesMessageContent(
+        'user',
+        [{ type: 'text', text: 'hello' }],
+      ),
+    );
+    expect(convertOpenAiBodyToResponsesBodyViaCompatibility).toBe(convertOpenAiBodyToResponsesBody);
+    expect(sanitizeResponsesBodyForProxyViaCompatibility).toBe(sanitizeResponsesBodyForProxy);
+  });
+
+  it('preserves extra properties when normalizing role-only message items', () => {
+    expect(normalizeResponsesInputForCompatibility([
+      {
+        role: 'assistant',
+        content: 'done',
+        id: 'msg_1',
+        status: 'completed',
+      },
+    ])).toEqual([
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'done' }],
+        id: 'msg_1',
+        status: 'completed',
+      },
+    ]);
+  });
+
+  it('filters whitespace-only string entries from normalized responses input arrays', () => {
+    expect(normalizeResponsesInputForCompatibility([
+      'hello',
+      '   ',
+      {
+        role: 'user',
+        content: 'world',
+      },
+    ])).toEqual([
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'hello' }],
+      },
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'world' }],
+      },
+    ]);
+  });
+
+  it('falls back to non-empty text and image sources when earlier compatibility fields are blank', () => {
+    const normalized = normalizeResponsesInputForCompatibility([
+      {
+        role: 'assistant',
+        content: '',
+        text: 'done',
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: '   ', content: 'hello' },
+          { type: 'image_url', image_url: '   ', url: 'https://example.com/image.png' },
+        ],
+      },
+    ]);
+
+    expect(normalized).toEqual([
+      expect.objectContaining({
+        type: 'message',
+        role: 'assistant',
+        text: 'done',
+        content: [{ type: 'output_text', text: 'done' }],
+      }),
+      expect.objectContaining({
+        type: 'message',
+        role: 'user',
+        content: [
+          expect.objectContaining({
+            type: 'input_text',
+            text: 'hello',
+            content: 'hello',
+          }),
+          expect.objectContaining({
+            type: 'input_image',
+            image_url: 'https://example.com/image.png',
+            url: 'https://example.com/image.png',
+          }),
+        ],
+      }),
+    ]);
+  });
+});
 
 describe('sanitizeResponsesBodyForProxy', () => {
   it('preserves newer Responses request fields needed by the proxy', () => {

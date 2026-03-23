@@ -7,7 +7,7 @@ import { BrandGlyph, getBrand, InlineBrandIcon, type BrandInfo } from '../compon
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
-import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { tr } from '../i18n.js';
 import {
@@ -1325,8 +1325,13 @@ export default function TokenRoutes() {
       </div>
 
       {/* Collapsible filter panel */}
-      {isMobile ? (
-        <>
+      <ResponsiveFilterPanel
+        isMobile={isMobile}
+        mobileOpen={showFilters}
+        onMobileClose={() => setShowFilters(false)}
+        mobileTitle={tr('筛选路由')}
+        mobileTriggerWrapperClassName=""
+        mobileTrigger={(
           <button
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px', marginBottom: 12 }}
@@ -1337,54 +1342,55 @@ export default function TokenRoutes() {
           >
             {tr('筛选')}
           </button>
-          <MobileFilterSheet open={showFilters} onClose={() => setShowFilters(false)} title={tr('筛选路由')}>
-            <RouteFilterBar
-              totalRouteCount={baseFilteredRoutes.length}
-              activeBrand={activeBrand}
-              setActiveBrand={setActiveBrand}
-              activeSite={activeSite}
-              setActiveSite={setActiveSite}
-              activeEndpointType={activeEndpointType}
-              setActiveEndpointType={setActiveEndpointType}
-              activeGroupFilter={activeGroupFilter}
-              setActiveGroupFilter={setActiveGroupFilter}
-              enabledFilter={enabledFilter}
-              setEnabledFilter={setEnabledFilter}
-              enabledCounts={enabledCounts}
-              brandList={brandList}
-              siteList={siteList}
-              endpointTypeList={endpointTypeList}
-              groupRouteList={groupRouteList}
-              collapsed={false}
-              onToggle={() => setShowFilters(false)}
-            />
-          </MobileFilterSheet>
-        </>
-      ) : (
-        <RouteFilterBar
-          totalRouteCount={baseFilteredRoutes.length}
-          activeBrand={activeBrand}
-          setActiveBrand={setActiveBrand}
-          activeSite={activeSite}
-          setActiveSite={setActiveSite}
-          activeEndpointType={activeEndpointType}
-          setActiveEndpointType={setActiveEndpointType}
-          activeGroupFilter={activeGroupFilter}
-          setActiveGroupFilter={setActiveGroupFilter}
-          enabledFilter={enabledFilter}
-          setEnabledFilter={setEnabledFilter}
-          enabledCounts={enabledCounts}
-          brandList={brandList}
-          siteList={siteList}
-          endpointTypeList={endpointTypeList}
-          groupRouteList={groupRouteList}
-          collapsed={filterCollapsed}
-          onToggle={() => {
-            if (filterCollapsed) loadCandidates();
-            setFilterCollapsed((prev) => !prev);
-          }}
-        />
-      )}
+        )}
+        mobileContent={(
+          <RouteFilterBar
+            totalRouteCount={baseFilteredRoutes.length}
+            activeBrand={activeBrand}
+            setActiveBrand={setActiveBrand}
+            activeSite={activeSite}
+            setActiveSite={setActiveSite}
+            activeEndpointType={activeEndpointType}
+            setActiveEndpointType={setActiveEndpointType}
+            activeGroupFilter={activeGroupFilter}
+            setActiveGroupFilter={setActiveGroupFilter}
+            enabledFilter={enabledFilter}
+            setEnabledFilter={setEnabledFilter}
+            enabledCounts={enabledCounts}
+            brandList={brandList}
+            siteList={siteList}
+            endpointTypeList={endpointTypeList}
+            groupRouteList={groupRouteList}
+            collapsed={false}
+            onToggle={() => setShowFilters(false)}
+          />
+        )}
+        desktopContent={(
+          <RouteFilterBar
+            totalRouteCount={baseFilteredRoutes.length}
+            activeBrand={activeBrand}
+            setActiveBrand={setActiveBrand}
+            activeSite={activeSite}
+            setActiveSite={setActiveSite}
+            activeEndpointType={activeEndpointType}
+            setActiveEndpointType={setActiveEndpointType}
+            activeGroupFilter={activeGroupFilter}
+            setActiveGroupFilter={setActiveGroupFilter}
+            enabledFilter={enabledFilter}
+            setEnabledFilter={setEnabledFilter}
+            enabledCounts={enabledCounts}
+            brandList={brandList}
+            siteList={siteList}
+            endpointTypeList={endpointTypeList}
+            groupRouteList={groupRouteList}
+            collapsed={filterCollapsed}
+            onToggle={() => {
+              if (filterCollapsed) loadCandidates();
+              setFilterCollapsed((prev) => !prev);
+            }}
+          />
+        )}
+      />
 
       {/* Info tip */}
       <div className="info-tip" style={{ marginBottom: 12 }}>

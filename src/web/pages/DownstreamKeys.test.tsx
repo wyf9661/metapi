@@ -360,6 +360,97 @@ describe('DownstreamKeys page', () => {
     }
   });
 
+  it('clears stale drawer overview and trend data when switching to another key', async () => {
+    apiMock.getDownstreamApiKeysSummary.mockResolvedValue({
+      success: true,
+      items: [
+        buildSummaryItem(),
+        buildSummaryItem({
+          id: 2,
+          name: 'batch-key',
+          keyMasked: 'sk-b****0315',
+          groupName: '项目B',
+          rangeUsage: {
+            totalRequests: 1,
+            successRequests: 1,
+            failedRequests: 0,
+            successRate: 100,
+            totalTokens: 12,
+            totalCost: 0.01,
+          },
+        }),
+      ],
+    });
+    apiMock.getDownstreamApiKeys.mockResolvedValue({
+      success: true,
+      items: [
+        buildRawItem(),
+        buildRawItem({
+          id: 2,
+          name: 'batch-key',
+          key: 'sk-batch-0315',
+          keyMasked: 'sk-b****0315',
+          groupName: '项目B',
+        }),
+      ],
+    });
+    apiMock.getDownstreamApiKeyOverview
+      .mockResolvedValueOnce({
+        success: true,
+        item: buildSummaryItem(),
+        usage: {
+          last24h: { totalRequests: 3, successRequests: 2, failedRequests: 1, successRate: 66.7, totalTokens: 4200, totalCost: 0.42 },
+          last7d: { totalRequests: 9, successRequests: 8, failedRequests: 1, successRate: 88.9, totalTokens: 12400, totalCost: 1.24 },
+          all: { totalRequests: 20, successRequests: 18, failedRequests: 2, successRate: 90, totalTokens: 55200, totalCost: 5.52 },
+        },
+      })
+      .mockImplementationOnce(() => new Promise(() => {}));
+    apiMock.getDownstreamApiKeyTrend
+      .mockResolvedValueOnce({
+        success: true,
+        buckets: [
+          { startUtc: '2026-03-15T08:00:00.000Z', totalRequests: 2, totalTokens: 1200, totalCost: 0.12, successRate: 100 },
+          { startUtc: '2026-03-15T09:00:00.000Z', totalRequests: 1, totalTokens: 3000, totalCost: 0.3, successRate: 0 },
+        ],
+      })
+      .mockImplementationOnce(() => new Promise(() => {}));
+
+    let root: ReturnType<typeof create> | null = null;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const rows = root!.root.findAll((node) => node.type === 'tr' && typeof node.props.onClick === 'function');
+      const smokeRow = rows.find((node) => collectText(node).includes('smoke-key'));
+      const batchRow = rows.find((node) => collectText(node).includes('batch-key'));
+      await act(async () => {
+        smokeRow!.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root!.root)).toContain('固定窗口对比');
+      expect(collectText(root!.root)).toContain('trend:2');
+
+      await act(async () => {
+        batchRow!.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root!.root)).not.toContain('固定窗口对比');
+      expect(collectText(root!.root)).not.toContain('trend:2');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('separates exact models from group routes in advanced config and uses single-column layout', async () => {
     let root: ReturnType<typeof create> | null = null;
     try {

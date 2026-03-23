@@ -211,8 +211,7 @@ describe('Tokens edit modal and row selection', () => {
       });
       await flushMicrotasks();
 
-      expect(JSON.stringify(root.toJSON())).toContain('已选 ');
-      expect(JSON.stringify(root.toJSON())).toContain('"1"');
+      expect(collectText(root.root)).toContain('已选 1 项');
 
       const copyButton = root.root
         .findAll((node) => node.type === 'button')
@@ -224,8 +223,7 @@ describe('Tokens edit modal and row selection', () => {
       });
       await flushMicrotasks();
 
-      expect(JSON.stringify(root.toJSON())).toContain('已选 ');
-      expect(JSON.stringify(root.toJSON())).toContain('"1"');
+      expect(collectText(root.root)).toContain('已选 1 项');
     } finally {
       root?.unmount();
     }

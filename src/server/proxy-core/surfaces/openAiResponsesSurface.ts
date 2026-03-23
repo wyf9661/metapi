@@ -1,13 +1,7 @@
 import { TextDecoder } from 'node:util';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { tokenRouter } from '../../services/tokenRouter.js';
-import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
-import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
-import { isTokenExpiredError } from '../../services/alertRules.js';
-import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
-import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
+import { reportProxyAllFailed } from '../../services/alertService.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
-import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import {
   buildUpstreamEndpointRequest,
@@ -16,14 +10,9 @@ import {
   resolveUpstreamEndpointCandidates,
 } from '../../routes/proxy/upstreamEndpoint.js';
 import { ensureModelAllowedForDownstreamKey, getDownstreamRoutingPolicy, recordDownstreamCostUsage } from '../../routes/proxy/downstreamPolicy.js';
-import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
-import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
-import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
-import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
-import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
 import { normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
 import {
   ProxyInputFileResolutionError,
@@ -32,9 +21,7 @@ import {
 import {
   buildOauthProviderHeaders,
 } from '../../services/oauth/service.js';
-import { getOauthInfoFromExtraConfig } from '../../services/oauth/oauthAccount.js';
-import { recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
-import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
+import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
 import {
   collectResponsesFinalPayloadFromSse,
   collectResponsesFinalPayloadFromSseText,
@@ -50,8 +37,14 @@ import {
   summarizeConversationFileInputsInOpenAiBody,
   summarizeConversationFileInputsInResponsesBody,
 } from '../capabilities/conversationFileCapabilities.js';
-import { detectDownstreamClientContext, type DownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
-import { insertProxyLog } from '../../services/proxyLogStore.js';
+import { detectDownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
+import {
+  createSurfaceFailureToolkit,
+  createSurfaceDispatchRequest,
+  recordSurfaceSuccess,
+  selectSurfaceChannelForAttempt,
+  trySurfaceOauthRefreshRecovery,
+} from './sharedSurface.js';
 
 const MAX_RETRIES = 2;
 
@@ -185,18 +178,23 @@ export async function handleOpenAiResponsesSurfaceRequest(
     if (!await ensureModelAllowedForDownstreamKey(request, reply, requestedModel)) return;
     const downstreamPolicy = getDownstreamRoutingPolicy(request);
     const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
+    const failureToolkit = createSurfaceFailureToolkit({
+      warningScope: 'responses',
+      downstreamPath,
+      maxRetries: MAX_RETRIES,
+      clientContext,
+      downstreamApiKeyId,
+    });
     const excludeChannelIds: number[] = [];
     let retryCount = 0;
 
     while (retryCount <= MAX_RETRIES) {
-      let selected = retryCount === 0
-        ? await tokenRouter.selectChannel(requestedModel, downstreamPolicy)
-        : await tokenRouter.selectNextChannel(requestedModel, excludeChannelIds, downstreamPolicy);
-
-      if (!selected && retryCount === 0) {
-        await refreshModelsAndRebuildRoutes();
-        selected = await tokenRouter.selectChannel(requestedModel, downstreamPolicy);
-      }
+      const selected = await selectSurfaceChannelForAttempt({
+        requestedModel,
+        downstreamPolicy,
+        excludeChannelIds,
+        retryCount,
+      });
 
       if (!selected) {
         await reportProxyAllFailed({
@@ -211,7 +209,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
       excludeChannelIds.push(selected.channel.id);
 
       const modelName = selected.actualModel || requestedModel;
-      const oauth = getOauthInfoFromExtraConfig(selected.account.extraConfig);
+      const oauth = getOauthInfoFromAccount(selected.account);
       const isCodexSite = String(selected.site.platform || '').trim().toLowerCase() === 'codex';
       const owner = getProxyResourceOwner(request);
       let normalizedResponsesBody: Record<string, unknown> = {
@@ -274,7 +272,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
       };
       const buildProviderHeaders = () => (
         buildOauthProviderHeaders({
-          extraConfig: typeof selected.account.extraConfig === 'string' ? selected.account.extraConfig : null,
+          account: selected.account,
           downstreamHeaders: request.headers as Record<string, unknown>,
         })
       );
@@ -308,19 +306,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
           runtime: endpointRequest.runtime,
         };
       };
-      const channelProxyUrl = resolveChannelProxyUrl(selected.site, selected.account.extraConfig);
-      const dispatchRequest = (compatibilityRequest: BuiltEndpointRequest, targetUrl?: string) => (
-        dispatchRuntimeRequest({
-          siteUrl: selected.site.url,
-          targetUrl,
-          request: compatibilityRequest,
-          buildInit: (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(selected.site, {
-            method: 'POST',
-            headers: requestForFetch.headers,
-            body: JSON.stringify(requestForFetch.body),
-          }, channelProxyUrl),
-        })
-      );
+      const dispatchRequest = createSurfaceDispatchRequest({
+        site: selected.site,
+        accountExtraConfig: selected.account.extraConfig,
+      });
       const endpointStrategy = openAiResponsesTransformer.compatibility.createEndpointStrategy({
         isStream: isStream || isCodexSite,
         requiresNativeResponsesFileUrl,
@@ -333,28 +322,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
           response: ctx.response,
           rawErrText: ctx.rawErrText || '',
         })) {
-          try {
-            const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
-            selected.tokenValue = refreshed.accessToken;
-            selected.account = {
-              ...selected.account,
-              accessToken: refreshed.accessToken,
-              extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
-            };
-            const refreshedRequest = buildEndpointRequest(ctx.request.endpoint);
-            const refreshedTargetUrl = buildUpstreamUrl(selected.site.url, refreshedRequest.path);
-            const refreshedResponse = await dispatchRequest(refreshedRequest, refreshedTargetUrl);
-            if (refreshedResponse.ok) {
-              return {
-                upstream: refreshedResponse,
-                upstreamPath: refreshedRequest.path,
-              };
-            }
-            ctx.request = refreshedRequest;
-            ctx.response = refreshedResponse;
-            ctx.rawErrText = await refreshedResponse.text().catch(() => 'unknown error');
-          } catch {
-            return endpointStrategy.tryRecover(ctx);
+          const recovered = await trySurfaceOauthRefreshRecovery({
+            ctx,
+            selected,
+            siteUrl: selected.site.url,
+            buildRequest: (endpoint) => buildEndpointRequest(endpoint),
+            dispatchRequest,
+          });
+          if (recovered?.upstream?.ok) {
+            return recovered;
           }
         }
         return endpointStrategy.tryRecover(ctx);
@@ -385,136 +361,57 @@ export async function handleOpenAiResponsesSurfaceRequest(
           },
           shouldDowngrade: endpointStrategy.shouldDowngrade,
           onDowngrade: (ctx) => {
-            logProxy(
+            return failureToolkit.log({
               selected,
-              requestedModel,
-              'failed',
-              ctx.response.status,
-              Date.now() - startTime,
-              ctx.errText,
+              modelRequested: requestedModel,
+              status: 'failed',
+              httpStatus: ctx.response.status,
+              latencyMs: Date.now() - startTime,
+              errorMessage: ctx.errText,
               retryCount,
-              downstreamPath,
-              0,
-              0,
-              0,
-              0,
-              null,
-              null,
-              clientContext,
-              downstreamApiKeyId,
-            );
+            });
           },
         });
 
         if (!endpointResult.ok) {
-          const status = endpointResult.status || 502;
-          const errText = endpointResult.errText || 'unknown error';
-          const rawErrText = endpointResult.rawErrText || errText;
-          tokenRouter.recordFailure(selected.channel.id, {
-            status,
-            errorText: rawErrText,
-            modelName,
-          });
-          logProxy(
+          const failureOutcome = await failureToolkit.handleUpstreamFailure({
             selected,
             requestedModel,
-            'failed',
-            status,
-            Date.now() - startTime,
-            errText,
+            modelName,
+            status: endpointResult.status || 502,
+            errText: endpointResult.errText || 'unknown error',
+            rawErrText: endpointResult.rawErrText,
+            latencyMs: Date.now() - startTime,
             retryCount,
-            downstreamPath,
-            0,
-            0,
-            0,
-            0,
-            null,
-            null,
-            clientContext,
-            downstreamApiKeyId,
-          );
-          await recordOauthQuotaResetHint({
-            accountId: selected.account.id,
-            statusCode: status,
-            errorText: rawErrText,
           });
-
-          if (isTokenExpiredError({ status, message: errText })) {
-            await reportTokenExpired({
-              accountId: selected.account.id,
-              username: selected.account.username,
-              siteName: selected.site.name,
-              detail: `HTTP ${status}`,
-            });
-          }
-
-          if (shouldRetryProxyRequest(status, errText) && retryCount < MAX_RETRIES) {
+          if (failureOutcome.action === 'retry') {
             retryCount += 1;
             continue;
           }
-
-          await reportProxyAllFailed({
-            model: requestedModel,
-            reason: `upstream returned HTTP ${status}`,
-          });
-          return reply.code(status).send({ error: { message: errText, type: 'upstream_error' } });
+          return reply.code(failureOutcome.status).send(failureOutcome.payload);
         }
 
       const upstream = endpointResult.upstream;
       const successfulUpstreamPath = endpointResult.upstreamPath;
       const finalizeStreamSuccess = async (parsedUsage: UsageSummary, latency: number) => {
-        let usageForLog = {
-          promptTokens: parsedUsage.promptTokens,
-          completionTokens: parsedUsage.completionTokens,
-          totalTokens: parsedUsage.totalTokens,
-        };
-        let estimatedCost = 0;
-        let billingDetails: unknown = null;
-
         try {
-          const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
-            site: selected.site,
-            account: selected.account,
-            tokenValue: selected.tokenValue,
-            tokenName: selected.tokenName,
-            modelName: selected.actualModel || requestedModel,
+          await recordSurfaceSuccess({
+            selected,
+            requestedModel,
+            modelName,
+            parsedUsage,
             requestStartedAtMs: startTime,
-            requestEndedAtMs: startTime + latency,
-            localLatencyMs: latency,
-            usage: {
-              promptTokens: parsedUsage.promptTokens,
-              completionTokens: parsedUsage.completionTokens,
-              totalTokens: parsedUsage.totalTokens,
+            latencyMs: latency,
+            retryCount,
+            upstreamPath: successfulUpstreamPath,
+            logSuccess: failureToolkit.log,
+            recordDownstreamCost: (estimatedCost) => {
+              recordDownstreamCostUsage(request, estimatedCost);
+            },
+            bestEffortMetrics: {
+              errorLabel: '[responses] post-stream bookkeeping failed:',
             },
           });
-          usageForLog = {
-            promptTokens: resolvedUsage.promptTokens,
-            completionTokens: resolvedUsage.completionTokens,
-            totalTokens: resolvedUsage.totalTokens,
-          };
-          const billing = await resolveProxyLogBilling({
-            site: selected.site,
-            account: selected.account,
-            modelName: selected.actualModel || requestedModel,
-            parsedUsage,
-            resolvedUsage,
-          });
-          estimatedCost = billing.estimatedCost;
-          billingDetails = billing.billingDetails;
-        } catch (error) {
-          console.error('[responses] post-stream bookkeeping failed:', error);
-        }
-
-        try {
-          tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
-          recordDownstreamCostUsage(request, estimatedCost);
-          logProxy(
-            selected, requestedModel, 'success', 200, latency, null, retryCount, downstreamPath,
-            usageForLog.promptTokens, usageForLog.completionTokens, usageForLog.totalTokens, estimatedCost, billingDetails,
-            successfulUpstreamPath,
-            clientContext,
-            downstreamApiKeyId,
-          );
         } catch (error) {
           console.error('[responses] post-stream success logging failed:', error);
         }
@@ -569,25 +466,18 @@ export async function handleOpenAiResponsesSurfaceRequest(
               );
               const latency = Date.now() - startTime;
               if (streamResult.status === 'failed') {
-                tokenRouter.recordFailure(selected.channel.id, modelName);
-                logProxy(
+                await failureToolkit.recordStreamFailure({
                   selected,
                   requestedModel,
-                  'failed',
-                  200,
-                  latency,
-                  streamResult.errorMessage,
+                  modelName,
+                  errorMessage: streamResult.errorMessage,
+                  latencyMs: latency,
                   retryCount,
-                  downstreamPath,
-                  parsedUsage.promptTokens,
-                  parsedUsage.completionTokens,
-                  parsedUsage.totalTokens,
-                  0,
-                  null,
-                  successfulUpstreamPath,
-                  clientContext,
-                  downstreamApiKeyId,
-                );
+                  promptTokens: parsedUsage.promptTokens,
+                  completionTokens: parsedUsage.completionTokens,
+                  totalTokens: parsedUsage.totalTokens,
+                  upstreamPath: successfulUpstreamPath,
+                });
                 return;
               }
 
@@ -608,68 +498,41 @@ export async function handleOpenAiResponsesSurfaceRequest(
             const latency = Date.now() - startTime;
             const failure = detectProxyFailure({ rawText, usage: parsedUsage });
             if (failure) {
-              tokenRouter.recordFailure(selected.channel.id, {
-                status: failure.status,
-                errorText: failure.reason,
-                modelName,
-              });
-              logProxy(
+              const failureOutcome = await failureToolkit.handleDetectedFailure({
                 selected,
                 requestedModel,
-                'failed',
-                failure.status,
-                latency,
-                failure.reason,
+                modelName,
+                failure,
+                latencyMs: latency,
                 retryCount,
-                downstreamPath,
-                parsedUsage.promptTokens,
-                parsedUsage.completionTokens,
-                parsedUsage.totalTokens,
-                0,
-                null,
-                successfulUpstreamPath,
-                clientContext,
-                downstreamApiKeyId,
-              );
-
-              if (shouldRetryProxyRequest(failure.status, failure.reason) && retryCount < MAX_RETRIES) {
+                promptTokens: parsedUsage.promptTokens,
+                completionTokens: parsedUsage.completionTokens,
+                totalTokens: parsedUsage.totalTokens,
+                upstreamPath: successfulUpstreamPath,
+              });
+              if (failureOutcome.action === 'retry') {
                 retryCount += 1;
                 continue;
               }
-
-              await reportProxyAllFailed({
-                model: requestedModel,
-                reason: failure.reason,
-              });
-              return reply.code(failure.status).send({ error: { message: failure.reason, type: 'upstream_error' } });
+              return reply.code(failureOutcome.status).send(failureOutcome.payload);
             }
 
             startSseResponse();
             const streamResult = streamSession.consumeUpstreamFinalPayload(upstreamData, rawText, reply.raw);
             if (streamResult.status === 'failed') {
-              tokenRouter.recordFailure(selected.channel.id, {
-                status: 502,
-                errorText: streamResult.errorMessage,
-                modelName,
-              });
-              logProxy(
+              await failureToolkit.recordStreamFailure({
                 selected,
                 requestedModel,
-                'failed',
-                200,
-                latency,
-                streamResult.errorMessage,
+                modelName,
+                errorMessage: streamResult.errorMessage,
+                latencyMs: latency,
                 retryCount,
-                downstreamPath,
-                parsedUsage.promptTokens,
-                parsedUsage.completionTokens,
-                parsedUsage.totalTokens,
-                0,
-                null,
-                successfulUpstreamPath,
-                clientContext,
-                downstreamApiKeyId,
-              );
+                promptTokens: parsedUsage.promptTokens,
+                completionTokens: parsedUsage.completionTokens,
+                totalTokens: parsedUsage.totalTokens,
+                upstreamPath: successfulUpstreamPath,
+                runtimeFailureStatus: 502,
+              });
               return;
             }
 
@@ -707,29 +570,19 @@ export async function handleOpenAiResponsesSurfaceRequest(
 
           const latency = Date.now() - startTime;
           if (streamResult.status === 'failed') {
-            tokenRouter.recordFailure(selected.channel.id, {
-              status: 502,
-              errorText: streamResult.errorMessage,
-              modelName,
-            });
-            logProxy(
+            await failureToolkit.recordStreamFailure({
               selected,
               requestedModel,
-              'failed',
-              200,
-              latency,
-              streamResult.errorMessage,
+              modelName,
+              errorMessage: streamResult.errorMessage,
+              latencyMs: latency,
               retryCount,
-              downstreamPath,
-              parsedUsage.promptTokens,
-              parsedUsage.completionTokens,
-              parsedUsage.totalTokens,
-              0,
-              null,
-              successfulUpstreamPath,
-              clientContext,
-              downstreamApiKeyId,
-            );
+              promptTokens: parsedUsage.promptTokens,
+              completionTokens: parsedUsage.completionTokens,
+              totalTokens: parsedUsage.totalTokens,
+              upstreamPath: successfulUpstreamPath,
+              runtimeFailureStatus: 502,
+            });
             return;
           }
 
@@ -775,39 +628,23 @@ export async function handleOpenAiResponsesSurfaceRequest(
         const parsedUsage = parseProxyUsage(upstreamData);
         const failure = detectProxyFailure({ rawText, usage: parsedUsage });
         if (failure) {
-          tokenRouter.recordFailure(selected.channel.id, {
-            status: failure.status,
-            errorText: failure.reason,
-            modelName,
-          });
-          logProxy(
+          const failureOutcome = await failureToolkit.handleDetectedFailure({
             selected,
             requestedModel,
-            'failed',
-            failure.status,
-            latency,
-            failure.reason,
+            modelName,
+            failure,
+            latencyMs: latency,
             retryCount,
-            downstreamPath,
-            parsedUsage.promptTokens,
-            parsedUsage.completionTokens,
-            parsedUsage.totalTokens,
-            0,
-            null,
-            successfulUpstreamPath,
-            clientContext,
-            downstreamApiKeyId,
-          );
-          if (shouldRetryProxyRequest(failure.status, failure.reason) && retryCount < MAX_RETRIES) {
+            promptTokens: parsedUsage.promptTokens,
+            completionTokens: parsedUsage.completionTokens,
+            totalTokens: parsedUsage.totalTokens,
+            upstreamPath: successfulUpstreamPath,
+          });
+          if (failureOutcome.action === 'retry') {
             retryCount += 1;
             continue;
           }
-
-          await reportProxyAllFailed({
-            model: requestedModel,
-            reason: failure.reason,
-          });
-          return reply.code(failure.status).send({ error: { message: failure.reason, type: 'upstream_error' } });
+          return reply.code(failureOutcome.status).send(failureOutcome.payload);
         }
         const normalized = openAiResponsesTransformer.transformFinalResponse(
           upstreamData,
@@ -820,131 +657,42 @@ export async function handleOpenAiResponsesSurfaceRequest(
           usage: parsedUsage,
           serializationMode: isCompactRequest ? 'compact' : 'response',
         });
-        const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
-          site: selected.site,
-          account: selected.account,
-          tokenValue: selected.tokenValue,
-          tokenName: selected.tokenName,
-          modelName: selected.actualModel || requestedModel,
-          requestStartedAtMs: startTime,
-          requestEndedAtMs: startTime + latency,
-          localLatencyMs: latency,
-          usage: {
-            promptTokens: parsedUsage.promptTokens,
-            completionTokens: parsedUsage.completionTokens,
-            totalTokens: parsedUsage.totalTokens,
-          },
-        });
-        const { estimatedCost, billingDetails } = await resolveProxyLogBilling({
-          site: selected.site,
-          account: selected.account,
-          modelName: selected.actualModel || requestedModel,
-          parsedUsage,
-          resolvedUsage,
-        });
-
-        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
-        recordDownstreamCostUsage(request, estimatedCost);
-        logProxy(
-          selected, requestedModel, 'success', 200, latency, null, retryCount, downstreamPath,
-          resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails,
-          successfulUpstreamPath,
-          clientContext,
-          downstreamApiKeyId,
-        );
+        try {
+          await recordSurfaceSuccess({
+            selected,
+            requestedModel,
+            modelName,
+            parsedUsage,
+            requestStartedAtMs: startTime,
+            latencyMs: latency,
+            retryCount,
+            upstreamPath: successfulUpstreamPath,
+            logSuccess: failureToolkit.log,
+            recordDownstreamCost: (estimatedCost) => {
+              recordDownstreamCostUsage(request, estimatedCost);
+            },
+            bestEffortMetrics: {
+              errorLabel: '[responses] post-response bookkeeping failed:',
+            },
+          });
+        } catch (error) {
+          console.error('[responses] post-response success logging failed:', error);
+        }
         return reply.send(downstreamData);
       } catch (err: any) {
-        tokenRouter.recordFailure(selected.channel.id, {
-          errorText: err?.message,
-          modelName,
-        });
-        logProxy(
+        const failureOutcome = await failureToolkit.handleExecutionError({
           selected,
           requestedModel,
-          'failed',
-          0,
-          Date.now() - startTime,
-          err.message,
+          modelName,
+          errorMessage: err?.message || 'network failure',
+          latencyMs: Date.now() - startTime,
           retryCount,
-          downstreamPath,
-          0,
-          0,
-          0,
-          0,
-          null,
-          null,
-          clientContext,
-          downstreamApiKeyId,
-        );
-        if (retryCount < MAX_RETRIES) {
+        });
+        if (failureOutcome.action === 'retry') {
           retryCount += 1;
           continue;
         }
-        await reportProxyAllFailed({
-          model: requestedModel,
-          reason: err.message || 'network failure',
-        });
-        return reply.code(502).send({
-          error: { message: `Upstream error: ${err.message}`, type: 'upstream_error' },
-        });
+        return reply.code(failureOutcome.status).send(failureOutcome.payload);
       }
     }
-}
-
-async function logProxy(
-  selected: any,
-  modelRequested: string,
-  status: string,
-  httpStatus: number,
-  latencyMs: number,
-  errorMessage: string | null,
-  retryCount: number,
-  downstreamPath: string,
-  promptTokens = 0,
-  completionTokens = 0,
-  totalTokens = 0,
-  estimatedCost = 0,
-  billingDetails: unknown = null,
-  upstreamPath: string | null = null,
-  clientContext: DownstreamClientContext | null = null,
-  downstreamApiKeyId: number | null = null,
-) {
-  try {
-    const createdAt = formatUtcSqlDateTime(new Date());
-    const normalizedErrorMessage = composeProxyLogMessage({
-      clientKind: clientContext?.clientKind && clientContext.clientKind !== 'generic'
-        ? clientContext.clientKind
-        : null,
-      sessionId: clientContext?.sessionId || null,
-      traceHint: clientContext?.traceHint || null,
-      downstreamPath,
-      upstreamPath,
-      errorMessage,
-    });
-    await insertProxyLog({
-      routeId: selected.channel.routeId,
-      channelId: selected.channel.id,
-      accountId: selected.account.id,
-      downstreamApiKeyId,
-      modelRequested,
-      modelActual: selected.actualModel,
-      status,
-      httpStatus,
-      latencyMs,
-      promptTokens,
-      completionTokens,
-      totalTokens,
-      estimatedCost,
-      billingDetails,
-      clientFamily: clientContext?.clientKind || null,
-      clientAppId: clientContext?.clientAppId || null,
-      clientAppName: clientContext?.clientAppName || null,
-      clientConfidence: clientContext?.clientConfidence || null,
-      errorMessage: normalizedErrorMessage,
-      retryCount,
-      createdAt,
-    });
-  } catch (error) {
-    console.warn('[proxy/responses] failed to write proxy log', error);
-  }
 }

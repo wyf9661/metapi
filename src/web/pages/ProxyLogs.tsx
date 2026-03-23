@@ -13,7 +13,7 @@ import { useToast } from '../components/Toast.js';
 import { ModelBadge } from '../components/BrandIcon.js';
 import SiteBadgeLink from '../components/SiteBadgeLink.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
-import MobileFilterSheet from '../components/MobileFilterSheet.js';
+import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
@@ -661,31 +661,19 @@ export default function ProxyLogs() {
         </div>
       </div>
 
-      {isMobile ? (
-        <>
-          <div className="mobile-filter-row">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
-              onClick={() => setShowFilters(true)}
-            >
-              筛选
-            </button>
-          </div>
-          <MobileFilterSheet
-            open={showFilters}
-            onClose={() => setShowFilters(false)}
-            title={tr('筛选日志')}
-          >
+      <ResponsiveFilterPanel
+        isMobile={isMobile}
+        mobileOpen={showFilters}
+        onMobileOpen={() => setShowFilters(true)}
+        onMobileClose={() => setShowFilters(false)}
+        mobileTitle={tr('筛选日志')}
+        mobileContent={filterControls}
+        desktopContent={(
+          <div className="toolbar" style={{ marginBottom: 12 }}>
             {filterControls}
-          </MobileFilterSheet>
-        </>
-      ) : (
-        <div className="toolbar" style={{ marginBottom: 12 }}>
-          {filterControls}
-        </div>
-      )}
+          </div>
+        )}
+      />
 
       {hasInvalidTimeRange && (
         <div className="alert alert-error" style={{ marginBottom: 12 }}>

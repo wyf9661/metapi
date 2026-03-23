@@ -1,7 +1,8 @@
 import {
-  normalizeResponsesInputForCompatibility as normalizeResponsesInputForCompatibilityViaCompatibility,
+  normalizeResponsesInputForCompatibility,
+  normalizeResponsesMessageContentBlocks,
   normalizeResponsesMessageItem,
-} from './compatibility.js';
+} from './normalization.js';
 import { normalizeInputFileBlock, toOpenAiChatFileBlock } from '../../shared/inputFile.js';
 import { buildShortToolNameMap, getShortToolName } from '../../shared/toolNameShortener.js';
 
@@ -236,10 +237,6 @@ function normalizeToolOutput(raw: unknown): string {
   return '';
 }
 
-export function normalizeResponsesInputForCompatibility(input: unknown): unknown {
-  return normalizeResponsesInputForCompatibilityViaCompatibility(input);
-}
-
 function toResponsesInputMessageFromText(text: string): Record<string, unknown> {
   return {
     type: 'message',
@@ -366,17 +363,7 @@ function normalizeResponsesBodyForCompatibility(
 }
 
 export function normalizeResponsesMessageContent(role: string, content: unknown): Array<Record<string, unknown>> {
-  const normalized = normalizeResponsesMessageItem({
-    type: 'message',
-    role,
-    content,
-  });
-
-  if (isRecord(normalized) && Array.isArray(normalized.content)) {
-    return normalized.content.filter((item): item is Record<string, unknown> => isRecord(item));
-  }
-
-  return [];
+  return normalizeResponsesMessageContentBlocks(role, content);
 }
 
 const RESPONSES_COMPATIBILITY_FILTER_FIELDS = new Set([
@@ -883,3 +870,5 @@ export function convertResponsesBodyToOpenAiBody(
 
   return payload;
 }
+
+export { normalizeResponsesInputForCompatibility };
