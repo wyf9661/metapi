@@ -42,4 +42,14 @@ describe('conversationFileTypes', () => {
       mimeType: 'application/octet-stream',
     })).toBe('document');
   });
+
+  it('strips MIME parameters before matching support and kind rules', () => {
+    expect(resolveConversationFileMimeType('text/plain; charset=utf-8', 'notes.txt')).toBe('text/plain');
+    expect(classifyConversationFileMimeType('text/plain; charset=utf-8')).toBe('document');
+    expect(detectConversationFileKind({
+      filename: 'notes.txt',
+      mimeType: 'text/plain; charset=utf-8',
+    })).toBe('document');
+    expect(isSupportedConversationFileMimeType('text/plain; charset=utf-8')).toBe(true);
+  });
 });

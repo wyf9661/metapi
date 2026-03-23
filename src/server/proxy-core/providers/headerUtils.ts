@@ -32,6 +32,24 @@ export function getInputHeader(
   return null;
 }
 
+function normalizeLowerCaseHeaderMap(
+  sources: Array<Record<string, unknown> | Record<string, string> | undefined>,
+  shouldSkip: (key: string) => boolean,
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const source of sources) {
+    if (!source) continue;
+    for (const [key, value] of Object.entries(source)) {
+      const normalizedValue = headerValueToString(value);
+      if (!normalizedValue) continue;
+      const normalizedKey = key.toLowerCase();
+      if (shouldSkip(normalizedKey)) continue;
+      normalized[normalizedKey] = normalizedValue;
+    }
+  }
+  return normalized;
+}
+
 export function uuidFromSeed(seed: string): string {
   const derived = pbkdf2Sync(seed, 'metapi-runtime-header-seed', 10_000, 16, 'sha256');
   const bytes = new Uint8Array(derived);
@@ -52,17 +70,10 @@ export function mergeClaudeBetaHeader(
   defaultValue: string,
   extraBetas: string[] = [],
 ): string {
-  const source = explicitValue || defaultValue;
   const seen = new Set<string>();
   const merged: string[] = [];
-  for (const entry of source.split(',')) {
-    const normalized = entry.trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    merged.push(normalized);
-  }
-  if (!explicitValue) {
-    for (const entry of extraBetas) {
+  for (const source of [defaultValue, explicitValue ?? '', ...extraBetas]) {
+    for (const entry of source.split(',')) {
       const normalized = entry.trim();
       if (!normalized || seen.has(normalized)) continue;
       seen.add(normalized);
@@ -187,9 +198,24 @@ export function buildClaudeRuntimeHeaders(input: {
     input.defaultBetaHeader || CLAUDE_DEFAULT_BETA_HEADER,
     input.extraBetas,
   );
+  const passthroughHeaders = normalizeLowerCaseHeaderMap(
+    [input.baseHeaders, input.claudeHeaders],
+    (key) => (
+      key === 'accept'
+      || key === 'accept-encoding'
+      || key === 'anthropic-beta'
+      || key === 'anthropic-dangerous-direct-browser-access'
+      || key === 'anthropic-version'
+      || key === 'authorization'
+      || key === 'connection'
+      || key === 'user-agent'
+      || key === 'x-api-key'
+      || key === 'x-app'
+      || key.startsWith('x-stainless-')
+    ),
+  );
   const headers: Record<string, string> = {
-    ...input.baseHeaders,
-    ...input.claudeHeaders,
+    ...passthroughHeaders,
     'anthropic-version': input.anthropicVersion,
     ...(anthropicBeta ? { 'anthropic-beta': anthropicBeta } : {}),
     'Anthropic-Dangerous-Direct-Browser-Access': 'true',

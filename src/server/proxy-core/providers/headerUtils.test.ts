@@ -25,7 +25,7 @@ describe('provider header utils', () => {
     ).toBe('beta-a,beta-b,beta-c');
     expect(
       mergeClaudeBetaHeader('custom-a,custom-b', 'beta-a,beta-b', ['beta-c']),
-    ).toBe('custom-a,custom-b');
+    ).toBe('beta-a,beta-b,custom-a,custom-b,beta-c');
   });
 
   it('preserves gemini cli runtime metadata when rebuilding user agents', async () => {
@@ -79,9 +79,12 @@ describe('provider header utils', () => {
     const headers = buildClaudeRuntimeHeaders({
       baseHeaders: {
         'Content-Type': 'application/json',
+        authorization: 'Bearer stale-token',
       },
       claudeHeaders: {
         'anthropic-beta': 'custom-beta',
+        'x-api-key': 'stale-api-key',
+        'user-agent': 'custom-agent',
       },
       anthropicVersion: '2023-06-01',
       stream: true,
@@ -90,9 +93,13 @@ describe('provider header utils', () => {
     });
 
     expect(headers['anthropic-version']).toBe('2023-06-01');
-    expect(headers['anthropic-beta']).toBe('custom-beta');
+    expect(headers['anthropic-beta']).toContain('claude-code-20250219');
+    expect(headers['anthropic-beta']).toContain('custom-beta');
     expect(headers.Authorization).toBe('Bearer oauth-token');
+    expect(headers.authorization).toBeUndefined();
     expect(headers['x-api-key']).toBeUndefined();
+    expect(headers['user-agent']).toBeUndefined();
+    expect(headers['User-Agent']).toBe('custom-agent');
     expect(headers.Accept).toBe('text/event-stream');
   });
 

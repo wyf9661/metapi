@@ -7,6 +7,7 @@ import {
 
 class TestStandardApiProviderAdapter extends StandardApiProviderAdapterBase {
   readonly platformName = 'test-standard';
+  fetchJsonImpl = async () => ({ data: [] as Array<{ id: string }> });
 
   async detect(_url: string): Promise<boolean> {
     return false;
@@ -14,6 +15,14 @@ class TestStandardApiProviderAdapter extends StandardApiProviderAdapterBase {
 
   async getModels(_baseUrl: string, _token: string): Promise<string[]> {
     return [];
+  }
+
+  protected override async fetchJson<T>(url: string, options?: Parameters<StandardApiProviderAdapterBase['fetchJson']>[1]): Promise<T> {
+    return this.fetchJsonImpl(url, options) as Promise<T>;
+  }
+
+  async fetchModelsForTest(options: Parameters<StandardApiProviderAdapterBase['fetchModelsFromStandardEndpoint']>[0]) {
+    return this.fetchModelsFromStandardEndpoint(options);
   }
 }
 
@@ -42,5 +51,34 @@ describe('standardApiProvider helpers', () => {
       used: 0,
       quota: 0,
     });
+  });
+
+  it('does not swallow mapper bugs while still returning empty lists for network failures', async () => {
+    const adapter = new TestStandardApiProviderAdapter();
+    adapter.fetchJsonImpl = async () => ({ data: [{ id: 'gpt-5' }] });
+
+    await expect(adapter.fetchModelsForTest({
+      baseUrl: 'https://api.example.com',
+      mapResponse: () => {
+        throw new Error('mapper exploded');
+      },
+    })).rejects.toThrow('mapper exploded');
+
+    adapter.fetchJsonImpl = async () => {
+      throw new Error('network failed');
+    };
+
+    await expect(adapter.fetchModelsForTest({
+      baseUrl: 'https://api.example.com',
+    })).resolves.toEqual([]);
+  });
+
+  it('rejects invalid payload shapes instead of silently treating them as no models', async () => {
+    const adapter = new TestStandardApiProviderAdapter();
+    adapter.fetchJsonImpl = async () => ({ data: 'not-an-array' });
+
+    await expect(adapter.fetchModelsForTest({
+      baseUrl: 'https://api.example.com',
+    })).rejects.toThrow('invalid standard models payload');
   });
 });

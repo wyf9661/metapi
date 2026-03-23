@@ -233,7 +233,6 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
           accountId,
           preferredApiToken: row.accounts.apiToken,
           defaultTokenSource: 'legacy',
-          rebuildRoutes: true,
         });
         if (convergence.defaultTokenId != null) {
           return {

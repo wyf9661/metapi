@@ -29,10 +29,7 @@ import {
 } from '../../transformers/shared/endpointCompatibility.js';
 import {
   buildClaudeRuntimeHeaders,
-  buildCodexRuntimeHeaders,
-  buildGeminiCliRuntimeHeaders,
   buildGeminiCliUserAgent,
-  getInputHeader,
   headerValueToString,
 } from '../../proxy-core/providers/headerUtils.js';
 export {
@@ -1234,7 +1231,10 @@ export function buildUpstreamEndpointRequest(input: {
     );
     const configuredResponsesBody = applyConfiguredPayloadRules(body);
 
-    if (providerProfile?.id === 'codex') {
+    if (sitePlatform === 'codex') {
+      if (providerProfile?.id !== 'codex') {
+        throw new Error(`missing codex provider profile for platform: ${sitePlatform}`);
+      }
       return providerProfile.prepareRequest({
         endpoint: 'responses',
         modelName: input.modelName,
@@ -1254,39 +1254,14 @@ export function buildUpstreamEndpointRequest(input: {
       });
     }
 
-    const headers = sitePlatform === 'codex'
-      ? buildCodexRuntimeHeaders({
-        baseHeaders: {
-          ...commonHeaders,
-          ...responsesHeaders,
-        },
-        providerHeaders: input.providerHeaders,
-        explicitSessionId: asTrimmedString(input.codexExplicitSessionId) || null,
-        continuityKey: asTrimmedString(input.codexSessionCacheKey) || null,
-      })
-      : ensureStreamAcceptHeader({
-        ...commonHeaders,
-        ...responsesHeaders,
-      }, input.stream);
-    const codexSessionId = sitePlatform === 'codex'
-      ? (getInputHeader(headers, 'session_id') || getInputHeader(headers, 'session-id'))
-      : null;
-    const shouldInjectDerivedPromptCacheKey = sitePlatform === 'codex'
-      && !!codexSessionId
-      && !asTrimmedString((configuredResponsesBody as Record<string, unknown>).prompt_cache_key)
-      && !asTrimmedString(input.codexExplicitSessionId)
-      && !!asTrimmedString(input.codexSessionCacheKey);
-    const runtimeBody = shouldInjectDerivedPromptCacheKey
-      ? {
-        ...configuredResponsesBody,
-        prompt_cache_key: codexSessionId,
-      }
-      : configuredResponsesBody;
-
+    const headers = ensureStreamAcceptHeader({
+      ...commonHeaders,
+      ...responsesHeaders,
+    }, input.stream);
     return {
       path: resolveEndpointPath('responses'),
       headers,
-      body: runtimeBody,
+      body: configuredResponsesBody,
       runtime,
     };
   }

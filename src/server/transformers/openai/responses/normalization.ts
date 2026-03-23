@@ -136,6 +136,7 @@ export function normalizeResponsesMessageItem(item: Record<string, unknown>): Re
 
   if (asTrimmedString(item.role)) {
     return {
+      ...item,
       type: 'message',
       role,
       content: normalizedContent,
@@ -158,13 +159,13 @@ export function normalizeResponsesInputForCompatibility(input: unknown): unknown
   }
 
   if (Array.isArray(input)) {
-    return input.map((item) => {
+    return input.flatMap((item) => {
       if (typeof item === 'string') {
         const normalized = item.trim();
-        return normalized ? toResponsesInputMessageFromText(normalized) : item;
+        return normalized ? [toResponsesInputMessageFromText(normalized)] : [];
       }
-      if (!isRecord(item)) return item;
-      return normalizeResponsesMessageItem(item);
+      if (!isRecord(item)) return [item];
+      return [normalizeResponsesMessageItem(item)];
     });
   }
 

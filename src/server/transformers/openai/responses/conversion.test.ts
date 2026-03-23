@@ -34,6 +34,47 @@ describe('responses conversion single source of truth', () => {
     expect(convertOpenAiBodyToResponsesBodyViaCompatibility).toBe(convertOpenAiBodyToResponsesBody);
     expect(sanitizeResponsesBodyForProxyViaCompatibility).toBe(sanitizeResponsesBodyForProxy);
   });
+
+  it('preserves extra properties when normalizing role-only message items', () => {
+    expect(normalizeResponsesInputForCompatibility([
+      {
+        role: 'assistant',
+        content: 'done',
+        id: 'msg_1',
+        status: 'completed',
+      },
+    ])).toEqual([
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'done' }],
+        id: 'msg_1',
+        status: 'completed',
+      },
+    ]);
+  });
+
+  it('filters whitespace-only string entries from normalized responses input arrays', () => {
+    expect(normalizeResponsesInputForCompatibility([
+      'hello',
+      '   ',
+      {
+        role: 'user',
+        content: 'world',
+      },
+    ])).toEqual([
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'hello' }],
+      },
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'world' }],
+      },
+    ]);
+  });
 });
 
 describe('sanitizeResponsesBodyForProxy', () => {

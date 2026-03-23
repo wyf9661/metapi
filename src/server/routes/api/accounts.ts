@@ -3,8 +3,10 @@ import { db, schema, runtimeDbDialect } from '../../db/index.js';
 import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { refreshBalance } from '../../services/balanceService.js';
 import { getAdapter } from '../../services/platforms/index.js';
-import { rebuildTokenRoutesFromAvailability } from '../../services/modelService.js';
-import { convergeAccountMutation } from '../../services/accountMutationWorkflow.js';
+import {
+  convergeAccountMutation,
+  rebuildRoutesBestEffort,
+} from '../../services/accountMutationWorkflow.js';
 import {
   getCredentialModeFromExtraConfig,
   getProxyUrlFromExtraConfig,
@@ -1330,9 +1332,7 @@ export async function accountsRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string } }>('/api/accounts/:id', async (request) => {
     const id = parseInt(request.params.id);
     await db.delete(schema.accounts).where(eq(schema.accounts.id, id)).run();
-    try {
-      await rebuildTokenRoutesFromAvailability();
-    } catch { }
+    await rebuildRoutesBestEffort();
     return { success: true };
   });
 
@@ -1386,9 +1386,7 @@ export async function accountsRoutes(app: FastifyInstance) {
     }
 
     if (shouldRebuildRoutes) {
-      try {
-        await rebuildTokenRoutesFromAvailability();
-      } catch { }
+      await rebuildRoutesBestEffort();
     }
 
     return {
@@ -1596,10 +1594,7 @@ export async function accountsRoutes(app: FastifyInstance) {
           }
         }
       });
-
-      try {
-        await rebuildTokenRoutesFromAvailability();
-      } catch { }
+      await rebuildRoutesBestEffort();
 
       return { success: true };
     } catch (err: any) {

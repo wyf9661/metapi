@@ -60,18 +60,27 @@ export abstract class StandardApiProviderAdapterBase extends BasePlatformAdapter
       ? options.resolveUrl(normalizedBaseUrl)
       : resolveVersionedModelsUrl(normalizedBaseUrl);
 
+    let payload: any;
     try {
-      const payload = await this.fetchJson<any>(url, {
+      payload = await this.fetchJson<any>(url, {
         headers: options.headers,
       });
-      const rows = options.mapResponse
-        ? options.mapResponse(payload)
-        : (payload?.data || []).map((item: any) => item?.id);
-      return rows
-        .map((item) => (typeof item === 'string' ? item.trim() : ''))
-        .filter((item) => item.length > 0);
     } catch {
       return [];
     }
+
+    const rows = options.mapResponse
+      ? options.mapResponse(payload)
+      : Array.isArray(payload?.data)
+        ? payload.data.map((item: any) => item?.id)
+        : null;
+
+    if (!Array.isArray(rows)) {
+      throw new Error('invalid standard models payload');
+    }
+
+    return rows
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter((item) => item.length > 0);
   }
 }

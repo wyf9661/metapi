@@ -20,6 +20,15 @@ export type CoverageBatchRebuildResult =
   | { success: true; result: Awaited<ReturnType<typeof rebuildTokenRoutesFromAvailability>> }
   | { success: false; error: string };
 
+export async function rebuildRoutesBestEffort(): Promise<boolean> {
+  try {
+    await rebuildTokenRoutesFromAvailability();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function convergeAccountMutation(input: {
   accountId: number;
   preferredApiToken?: string | null;
@@ -110,7 +119,7 @@ export async function convergeAccountMutation(input: {
     const modelRefreshResult = await runStep(() => refreshModelsForAccount(input.accountId));
     if (modelRefreshResult) {
       result.modelRefreshResult = modelRefreshResult;
-      result.refreshedModels = true;
+      result.refreshedModels = modelRefreshResult.refreshed === true;
     }
   }
 
@@ -133,6 +142,11 @@ export async function refreshAccountCoverageBatch<TFailure>(input: {
   refresh: Array<ModelRefreshResult | TFailure>;
   rebuild: CoverageBatchRebuildResult | null;
 }> {
+  if (!Number.isInteger(input.batchSize) || input.batchSize <= 0) {
+    throw new Error('batchSize must be a positive integer');
+  }
+
+  const batchSize = input.batchSize;
   const uniqueAccountIds = Array.from(new Set(
     input.accountIds.filter((id) => Number.isFinite(id) && id > 0),
   ));
@@ -142,8 +156,8 @@ export async function refreshAccountCoverageBatch<TFailure>(input: {
   }
 
   const refresh: Array<ModelRefreshResult | TFailure> = [];
-  for (let offset = 0; offset < uniqueAccountIds.length; offset += input.batchSize) {
-    const batch = uniqueAccountIds.slice(offset, offset + input.batchSize);
+  for (let offset = 0; offset < uniqueAccountIds.length; offset += batchSize) {
+    const batch = uniqueAccountIds.slice(offset, offset + batchSize);
     const settled = await Promise.allSettled(
       batch.map(async (accountId) => refreshModelsForAccount(accountId)),
     );

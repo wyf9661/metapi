@@ -2,7 +2,6 @@ import { TextDecoder } from 'node:util';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { reportProxyAllFailed } from '../../services/alertService.js';
-import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { type DownstreamFormat } from '../../transformers/shared/normalized.js';
 import {
@@ -19,8 +18,6 @@ import {
 } from '../../routes/proxy/downstreamPolicy.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
-import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
-import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
 import { anthropicMessagesTransformer } from '../../transformers/anthropic/messages/index.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
@@ -32,7 +29,6 @@ import {
   buildOauthProviderHeaders,
 } from '../../services/oauth/service.js';
 import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
-import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import {
   collectResponsesFinalPayloadFromSse,
   collectResponsesFinalPayloadFromSseText,
@@ -48,7 +44,9 @@ import { detectDownstreamClientContext } from '../../routes/proxy/downstreamClie
 import {
   createSurfaceFailureToolkit,
   createSurfaceDispatchRequest,
+  recordSurfaceSuccess,
   selectSurfaceChannelForAttempt,
+  trySurfaceOauthRefreshRecovery,
 } from './sharedSurface.js';
 
 const MAX_RETRIES = 2;
@@ -224,28 +222,15 @@ export async function handleChatSurfaceRequest(
     });
     const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
       if ((ctx.response.status === 401 || ctx.response.status === 403) && oauth) {
-        try {
-          const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
-          selected.tokenValue = refreshed.accessToken;
-          selected.account = {
-            ...selected.account,
-            accessToken: refreshed.accessToken,
-            extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
-          };
-          const refreshedRequest = buildEndpointRequest(ctx.request.endpoint);
-          const refreshedTargetUrl = buildUpstreamUrl(selected.site.url, refreshedRequest.path);
-          const refreshedResponse = await dispatchRequest(refreshedRequest, refreshedTargetUrl);
-          if (refreshedResponse.ok) {
-            return {
-              upstream: refreshedResponse,
-              upstreamPath: refreshedRequest.path,
-            };
-          }
-          ctx.request = refreshedRequest;
-          ctx.response = refreshedResponse;
-          ctx.rawErrText = await refreshedResponse.text().catch(() => 'unknown error');
-        } catch {
-          return endpointStrategy.tryRecover(ctx);
+        const recovered = await trySurfaceOauthRefreshRecovery({
+          ctx,
+          selected,
+          siteUrl: selected.site.url,
+          buildRequest: (endpoint) => buildEndpointRequest(endpoint),
+          dispatchRequest,
+        });
+        if (recovered?.upstream?.ok) {
+          return recovered;
         }
       }
       return endpointStrategy.tryRecover(ctx);
@@ -477,46 +462,19 @@ export async function handleChatSurfaceRequest(
         }
 
         const latency = Date.now() - startTime;
-        const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
-          site: selected.site,
-          account: selected.account,
-          tokenValue: selected.tokenValue,
-          tokenName: selected.tokenName,
-          modelName,
-          requestStartedAtMs: startTime,
-          requestEndedAtMs: startTime + latency,
-          localLatencyMs: latency,
-          usage: {
-            promptTokens: parsedUsage.promptTokens,
-            completionTokens: parsedUsage.completionTokens,
-            totalTokens: parsedUsage.totalTokens,
-          },
-        });
-
-        const { estimatedCost, billingDetails } = await resolveProxyLogBilling({
-          site: selected.site,
-          account: selected.account,
+        await recordSurfaceSuccess({
+          selected,
+          requestedModel,
           modelName,
           parsedUsage,
-          resolvedUsage,
-        });
-
-        tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
-        recordDownstreamCostUsage(request, estimatedCost);
-        await failureToolkit.log({
-          selected,
-          modelRequested: requestedModel,
-          status: 'success',
-          httpStatus: 200,
+          requestStartedAtMs: startTime,
           latencyMs: latency,
-          errorMessage: null,
           retryCount,
-          promptTokens: resolvedUsage.promptTokens,
-          completionTokens: resolvedUsage.completionTokens,
-          totalTokens: resolvedUsage.totalTokens,
-          estimatedCost,
-          billingDetails,
           upstreamPath: successfulUpstreamPath,
+          logSuccess: failureToolkit.log,
+          recordDownstreamCost: (estimatedCost) => {
+            recordDownstreamCostUsage(request, estimatedCost);
+          },
         });
         return;
       }
@@ -570,46 +528,19 @@ export async function handleChatSurfaceRequest(
       const normalizedFinal = downstreamTransformer.transformFinalResponse(upstreamData, modelName, rawText);
       const downstreamResponse = downstreamTransformer.serializeFinalResponse(normalizedFinal, parsedUsage);
 
-      const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
-        site: selected.site,
-        account: selected.account,
-        tokenValue: selected.tokenValue,
-        tokenName: selected.tokenName,
-        modelName,
-        requestStartedAtMs: startTime,
-        requestEndedAtMs: startTime + latency,
-        localLatencyMs: latency,
-        usage: {
-          promptTokens: parsedUsage.promptTokens,
-          completionTokens: parsedUsage.completionTokens,
-          totalTokens: parsedUsage.totalTokens,
-        },
-      });
-
-      const { estimatedCost, billingDetails } = await resolveProxyLogBilling({
-        site: selected.site,
-        account: selected.account,
+      await recordSurfaceSuccess({
+        selected,
+        requestedModel,
         modelName,
         parsedUsage,
-        resolvedUsage,
-      });
-
-      tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
-      recordDownstreamCostUsage(request, estimatedCost);
-      await failureToolkit.log({
-        selected,
-        modelRequested: requestedModel,
-        status: 'success',
-        httpStatus: 200,
+        requestStartedAtMs: startTime,
         latencyMs: latency,
-        errorMessage: null,
         retryCount,
-        promptTokens: resolvedUsage.promptTokens,
-        completionTokens: resolvedUsage.completionTokens,
-        totalTokens: resolvedUsage.totalTokens,
-        estimatedCost,
-        billingDetails,
         upstreamPath: successfulUpstreamPath,
+        logSuccess: failureToolkit.log,
+        recordDownstreamCost: (estimatedCost) => {
+          recordDownstreamCostUsage(request, estimatedCost);
+        },
       });
 
       return reply.send(downstreamResponse);
@@ -768,18 +699,25 @@ export async function handleClaudeCountTokensSurfaceRequest(
       let upstream = await dispatchRequest(upstreamRequest);
 
       if ((upstream.status === 401 || upstream.status === 403) && oauth) {
-        try {
-          const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
-          selected.tokenValue = refreshed.accessToken;
-          selected.account = {
-            ...selected.account,
-            accessToken: refreshed.accessToken,
-            extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
-          };
+        const recoverContext = {
+          request: upstreamRequest,
+          response: upstream,
+          rawErrText: '',
+        };
+        const recovered = await trySurfaceOauthRefreshRecovery({
+          ctx: recoverContext,
+          selected,
+          siteUrl: selected.site.url,
+          buildRequest: () => buildRequest(),
+          dispatchRequest,
+          captureFailureBody: false,
+        });
+        if (recovered?.upstream?.ok) {
           upstreamRequest = buildRequest();
-          upstream = await dispatchRequest(upstreamRequest);
-        } catch {
-          // Fall through to the regular upstream error handling below.
+          upstream = recovered.upstream;
+        } else {
+          upstreamRequest = recoverContext.request;
+          upstream = recoverContext.response;
         }
       }
 

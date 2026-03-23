@@ -107,6 +107,19 @@ describe('accountMutationWorkflow', () => {
     expect(rebuildTokenRoutesFromAvailabilityMock).toHaveBeenCalledTimes(1);
   });
 
+  it('only marks refreshedModels when the refresh result explicitly says it refreshed', async () => {
+    refreshModelsForAccountMock.mockResolvedValue({ accountId: 4, refreshed: false, status: 'skipped' });
+
+    const { convergeAccountMutation } = await import('./accountMutationWorkflow.js');
+    const result = await convergeAccountMutation({
+      accountId: 4,
+      refreshModels: true,
+    });
+
+    expect(result.modelRefreshResult).toEqual({ accountId: 4, refreshed: false, status: 'skipped' });
+    expect(result.refreshedModels).toBe(false);
+  });
+
   it('refreshes model coverage in batches and maps failures', async () => {
     refreshModelsForAccountMock
       .mockResolvedValueOnce({ accountId: 1, refreshed: true, status: 'success' })
@@ -128,5 +141,27 @@ describe('accountMutationWorkflow', () => {
       success: true,
       result: { createdRoutes: 2 },
     });
+  });
+
+  it('rejects invalid batch sizes before starting the batch loop', async () => {
+    const { refreshAccountCoverageBatch } = await import('./accountMutationWorkflow.js');
+
+    await expect(refreshAccountCoverageBatch({
+      accountIds: [1, 2],
+      batchSize: 1.5,
+      mapFailure: (accountId, errorMessage) => ({ accountId, errorMessage }),
+    })).rejects.toThrow('batchSize must be a positive integer');
+
+    expect(refreshModelsForAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('exposes a best-effort route rebuild helper for controller callers', async () => {
+    rebuildTokenRoutesFromAvailabilityMock.mockResolvedValueOnce({ createdRoutes: 1 });
+
+    const { rebuildRoutesBestEffort } = await import('./accountMutationWorkflow.js');
+    await expect(rebuildRoutesBestEffort()).resolves.toBe(true);
+
+    rebuildTokenRoutesFromAvailabilityMock.mockRejectedValueOnce(new Error('rebuild failed'));
+    await expect(rebuildRoutesBestEffort()).resolves.toBe(false);
   });
 });

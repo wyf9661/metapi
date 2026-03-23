@@ -86,6 +86,11 @@ function isSafeRegexPatternBody(body) {
       continue;
     }
     if (ch === '\\') {
+      const next = body[index + 1];
+      if (!next) return false;
+      if (/[a-z]/i.test(next) && next !== 'd') {
+        return false;
+      }
       escaped = true;
       continue;
     }
@@ -99,10 +104,7 @@ function isSafeRegexPatternBody(body) {
     }
     if (ch === '(') {
       if (body[index + 1] === '?') {
-        if (body[index + 2] !== ':') return false;
-        groupStack.push({ hasInnerQuantifier: false, hasAlternation: false });
-        index += 2;
-        continue;
+        return false;
       }
       groupStack.push({ hasInnerQuantifier: false, hasAlternation: false });
       continue;

@@ -17,6 +17,12 @@ function normalizeValue(value) {
   return (value || '').trim().toLowerCase();
 }
 
+function normalizeMimeType(value) {
+  const normalized = normalizeValue(value);
+  const [essence] = normalized.split(';');
+  return (essence || '').trim();
+}
+
 export function inferConversationFileMimeType(filename) {
   const normalized = normalizeValue(filename);
   if (normalized.endsWith('.pdf')) return 'application/pdf';
@@ -41,7 +47,7 @@ export function inferConversationFileMimeType(filename) {
 }
 
 export function resolveConversationFileMimeType(mimeType, filename) {
-  const normalizedMimeType = normalizeValue(mimeType);
+  const normalizedMimeType = normalizeMimeType(mimeType);
   if (normalizedMimeType && !GENERIC_MIME_TYPES.has(normalizedMimeType)) {
     return normalizedMimeType;
   }
@@ -49,14 +55,14 @@ export function resolveConversationFileMimeType(mimeType, filename) {
 }
 
 export function classifyConversationFileMimeType(mimeType) {
-  const normalized = normalizeValue(mimeType);
+  const normalized = normalizeMimeType(mimeType);
   if (normalized.startsWith('image/')) return 'image';
   if (normalized.startsWith('audio/')) return 'audio';
   return 'document';
 }
 
 export function detectConversationFileKind(file) {
-  const mimeType = normalizeValue(file?.mimeType);
+  const mimeType = normalizeMimeType(file?.mimeType);
   if (mimeType) {
     if (mimeType.startsWith('image/')) return 'image';
     if (mimeType.startsWith('audio/')) return 'audio';
@@ -73,7 +79,7 @@ export function detectConversationFileKind(file) {
 }
 
 export function isSupportedConversationFileMimeType(mimeType) {
-  const normalized = normalizeValue(mimeType);
+  const normalized = normalizeMimeType(mimeType);
   return DOCUMENT_MIME_TYPES.has(normalized)
     || normalized.startsWith('image/')
     || normalized.startsWith('audio/');

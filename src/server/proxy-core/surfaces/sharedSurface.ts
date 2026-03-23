@@ -3,16 +3,20 @@ import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import type { SiteProxyConfigLike } from '../../services/siteProxy.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
+import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import type { DownstreamRoutingPolicy } from '../../services/downstreamPolicyTypes.js';
 import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
 import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
+import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import type { DownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';
 import { dispatchRuntimeRequest } from '../../routes/proxy/runtimeExecutor.js';
 import type { BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
+import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
 import { recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
+import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 
 type SelectedChannel = Awaited<ReturnType<typeof tokenRouter.selectChannel>>;
 type SurfaceWarningScope = 'chat' | 'responses';
@@ -38,6 +42,34 @@ type SurfaceFailureResponse = {
 type SurfaceFailureOutcome =
   | { action: 'retry' }
   | SurfaceFailureResponse;
+
+type SurfaceOauthRefreshSelectedChannel = {
+  account: {
+    id: number;
+    accessToken?: string | null;
+    extraConfig?: string | null;
+  };
+  tokenValue: string;
+};
+
+type SurfaceOauthRefreshContext<TRequest extends BuiltEndpointRequest> = {
+  request: TRequest;
+  response: Awaited<ReturnType<typeof dispatchRuntimeRequest>>;
+  rawErrText: string;
+};
+
+type SurfaceSuccessSelectedChannel = SurfaceSelectedChannel & {
+  account: Record<string, unknown> & { id: number };
+  site: Record<string, unknown>;
+  tokenValue: string;
+  tokenName?: string | null;
+};
+
+type SurfaceUsageSummary = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
 
 export async function selectSurfaceChannelForAttempt(input: {
   requestedModel: string;
@@ -146,6 +178,150 @@ export function createSurfaceDispatchRequest(input: {
   );
 }
 
+export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpointRequest>(input: {
+  ctx: SurfaceOauthRefreshContext<TRequest>;
+  selected: SurfaceOauthRefreshSelectedChannel;
+  siteUrl: string;
+  buildRequest: (endpoint: TRequest['endpoint']) => TRequest;
+  dispatchRequest: (
+    request: TRequest,
+    targetUrl: string,
+  ) => Promise<Awaited<ReturnType<typeof dispatchRuntimeRequest>>>;
+  captureFailureBody?: boolean;
+}): Promise<{
+  upstream: Awaited<ReturnType<typeof dispatchRuntimeRequest>>;
+  upstreamPath: string;
+} | null> {
+  try {
+    const refreshed = await refreshOauthAccessTokenSingleflight(input.selected.account.id);
+    input.selected.tokenValue = refreshed.accessToken;
+    input.selected.account = {
+      ...input.selected.account,
+      accessToken: refreshed.accessToken,
+      extraConfig: refreshed.extraConfig ?? input.selected.account.extraConfig,
+    };
+
+    const refreshedRequest = input.buildRequest(input.ctx.request.endpoint);
+    const refreshedTargetUrl = buildUpstreamUrl(input.siteUrl, refreshedRequest.path);
+    const refreshedResponse = await input.dispatchRequest(refreshedRequest, refreshedTargetUrl);
+    if (refreshedResponse.ok) {
+      return {
+        upstream: refreshedResponse,
+        upstreamPath: refreshedRequest.path,
+      };
+    }
+
+    input.ctx.request = refreshedRequest;
+    input.ctx.response = refreshedResponse;
+    if (input.captureFailureBody !== false) {
+      input.ctx.rawErrText = await refreshedResponse.text().catch(() => 'unknown error');
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export async function recordSurfaceSuccess(input: {
+  selected: SurfaceSuccessSelectedChannel;
+  requestedModel: string;
+  modelName: string;
+  parsedUsage: SurfaceUsageSummary;
+  requestStartedAtMs: number;
+  latencyMs: number;
+  retryCount: number;
+  upstreamPath?: string | null;
+  logSuccess: (args: {
+    selected: SurfaceSelectedChannel;
+    modelRequested: string;
+    status: string;
+    httpStatus: number;
+    latencyMs: number;
+    errorMessage: string | null;
+    retryCount: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    estimatedCost?: number;
+    billingDetails?: unknown;
+    upstreamPath?: string | null;
+  }) => Promise<void>;
+  recordDownstreamCost?: (estimatedCost: number) => void;
+  bestEffortMetrics?: {
+    errorLabel: string;
+  };
+}) {
+  let resolvedUsage = {
+    promptTokens: input.parsedUsage.promptTokens,
+    completionTokens: input.parsedUsage.completionTokens,
+    totalTokens: input.parsedUsage.totalTokens,
+  };
+  let estimatedCost = 0;
+  let billingDetails: unknown = null;
+
+  try {
+    resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
+      site: input.selected.site,
+      account: input.selected.account,
+      tokenValue: input.selected.tokenValue,
+      tokenName: input.selected.tokenName,
+      modelName: input.modelName,
+      requestStartedAtMs: input.requestStartedAtMs,
+      requestEndedAtMs: input.requestStartedAtMs + input.latencyMs,
+      localLatencyMs: input.latencyMs,
+      usage: {
+        promptTokens: input.parsedUsage.promptTokens,
+        completionTokens: input.parsedUsage.completionTokens,
+        totalTokens: input.parsedUsage.totalTokens,
+      },
+    });
+    const billing = await resolveProxyLogBilling({
+      site: input.selected.site,
+      account: input.selected.account,
+      modelName: input.modelName,
+      parsedUsage: input.parsedUsage,
+      resolvedUsage,
+    });
+    estimatedCost = billing.estimatedCost;
+    billingDetails = billing.billingDetails;
+  } catch (error) {
+    if (!input.bestEffortMetrics) {
+      throw error;
+    }
+    console.error(input.bestEffortMetrics.errorLabel, error);
+  }
+
+  tokenRouter.recordSuccess(
+    input.selected.channel.id,
+    input.latencyMs,
+    estimatedCost,
+    input.modelName,
+  );
+  input.recordDownstreamCost?.(estimatedCost);
+  await input.logSuccess({
+    selected: input.selected,
+    modelRequested: input.requestedModel,
+    status: 'success',
+    httpStatus: 200,
+    latencyMs: input.latencyMs,
+    errorMessage: null,
+    retryCount: input.retryCount,
+    promptTokens: resolvedUsage.promptTokens,
+    completionTokens: resolvedUsage.completionTokens,
+    totalTokens: resolvedUsage.totalTokens,
+    estimatedCost,
+    billingDetails,
+    upstreamPath: input.upstreamPath,
+  });
+
+  return {
+    resolvedUsage,
+    estimatedCost,
+    billingDetails,
+  };
+}
+
 export function createSurfaceFailureToolkit(input: {
   warningScope: SurfaceWarningScope;
   downstreamPath: string;
@@ -193,6 +369,14 @@ export function createSurfaceFailureToolkit(input: {
     ? { action: 'retry' as const }
     : null;
 
+  const runBestEffort = (label: string, fn: () => Promise<unknown>) => {
+    void Promise.resolve()
+      .then(fn)
+      .catch((error) => {
+        console.warn(`[proxy/${input.warningScope}] failed to ${label}`, error);
+      });
+  };
+
   return {
     log,
     async handleUpstreamFailure(args: {
@@ -220,19 +404,19 @@ export function createSurfaceFailureToolkit(input: {
         errorMessage: args.errText,
         retryCount: args.retryCount,
       });
-      await recordOauthQuotaResetHint({
+      runBestEffort('record oauth quota reset hint', () => recordOauthQuotaResetHint({
         accountId: args.selected.account.id,
         statusCode: args.status,
         errorText: rawErrText,
-      });
+      }));
 
       if (isTokenExpiredError({ status: args.status, message: args.errText })) {
-        await reportTokenExpired({
+        runBestEffort('report token expired', () => reportTokenExpired({
           accountId: args.selected.account.id,
           username: args.selected.account.username,
           siteName: args.selected.site.name,
           detail: `HTTP ${args.status}`,
-        });
+        }));
       }
 
       if (shouldRetryProxyRequest(args.status, args.errText)) {
@@ -240,10 +424,10 @@ export function createSurfaceFailureToolkit(input: {
         if (retry) return retry;
       }
 
-      await reportProxyAllFailed({
+      runBestEffort('report proxy all failed', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: `upstream returned HTTP ${args.status}`,
-      });
+      }));
 
       return {
         action: 'respond',
@@ -293,10 +477,10 @@ export function createSurfaceFailureToolkit(input: {
         if (retry) return retry;
       }
 
-      await reportProxyAllFailed({
+      runBestEffort('report proxy all failed', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: args.failure.reason,
-      });
+      }));
 
       return {
         action: 'respond',
@@ -335,10 +519,10 @@ export function createSurfaceFailureToolkit(input: {
       const retry = maybeRetry(args.retryCount);
       if (retry) return retry;
 
-      await reportProxyAllFailed({
+      runBestEffort('report proxy all failed', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: args.errorMessage || 'network failure',
-      });
+      }));
 
       return {
         action: 'respond',
@@ -374,7 +558,10 @@ export function createSurfaceFailureToolkit(input: {
           modelName: args.modelName,
         });
       } else {
-        await tokenRouter.recordFailure(args.selected.channel.id, args.modelName);
+        await tokenRouter.recordFailure(args.selected.channel.id, {
+          errorText: errorMessage,
+          modelName: args.modelName,
+        });
       }
       await log({
         selected: args.selected,

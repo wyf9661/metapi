@@ -1,8 +1,6 @@
 import { TextDecoder } from 'node:util';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { tokenRouter } from '../../services/tokenRouter.js';
 import { reportProxyAllFailed } from '../../services/alertService.js';
-import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import {
@@ -14,8 +12,6 @@ import {
 import { ensureModelAllowedForDownstreamKey, getDownstreamRoutingPolicy, recordDownstreamCostUsage } from '../../routes/proxy/downstreamPolicy.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
-import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
-import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
 import { normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
 import {
@@ -26,7 +22,6 @@ import {
   buildOauthProviderHeaders,
 } from '../../services/oauth/service.js';
 import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
-import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import {
   collectResponsesFinalPayloadFromSse,
   collectResponsesFinalPayloadFromSseText,
@@ -46,7 +41,9 @@ import { detectDownstreamClientContext } from '../../routes/proxy/downstreamClie
 import {
   createSurfaceFailureToolkit,
   createSurfaceDispatchRequest,
+  recordSurfaceSuccess,
   selectSurfaceChannelForAttempt,
+  trySurfaceOauthRefreshRecovery,
 } from './sharedSurface.js';
 
 const MAX_RETRIES = 2;
@@ -325,28 +322,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
           response: ctx.response,
           rawErrText: ctx.rawErrText || '',
         })) {
-          try {
-            const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
-            selected.tokenValue = refreshed.accessToken;
-            selected.account = {
-              ...selected.account,
-              accessToken: refreshed.accessToken,
-              extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
-            };
-            const refreshedRequest = buildEndpointRequest(ctx.request.endpoint);
-            const refreshedTargetUrl = buildUpstreamUrl(selected.site.url, refreshedRequest.path);
-            const refreshedResponse = await dispatchRequest(refreshedRequest, refreshedTargetUrl);
-            if (refreshedResponse.ok) {
-              return {
-                upstream: refreshedResponse,
-                upstreamPath: refreshedRequest.path,
-              };
-            }
-            ctx.request = refreshedRequest;
-            ctx.response = refreshedResponse;
-            ctx.rawErrText = await refreshedResponse.text().catch(() => 'unknown error');
-          } catch {
-            return endpointStrategy.tryRecover(ctx);
+          const recovered = await trySurfaceOauthRefreshRecovery({
+            ctx,
+            selected,
+            siteUrl: selected.site.url,
+            buildRequest: (endpoint) => buildEndpointRequest(endpoint),
+            dispatchRequest,
+          });
+          if (recovered?.upstream?.ok) {
+            return recovered;
           }
         }
         return endpointStrategy.tryRecover(ctx);
@@ -410,65 +394,23 @@ export async function handleOpenAiResponsesSurfaceRequest(
       const upstream = endpointResult.upstream;
       const successfulUpstreamPath = endpointResult.upstreamPath;
       const finalizeStreamSuccess = async (parsedUsage: UsageSummary, latency: number) => {
-        let usageForLog = {
-          promptTokens: parsedUsage.promptTokens,
-          completionTokens: parsedUsage.completionTokens,
-          totalTokens: parsedUsage.totalTokens,
-        };
-        let estimatedCost = 0;
-        let billingDetails: unknown = null;
-
         try {
-          const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
-            site: selected.site,
-            account: selected.account,
-            tokenValue: selected.tokenValue,
-            tokenName: selected.tokenName,
-            modelName: selected.actualModel || requestedModel,
-            requestStartedAtMs: startTime,
-            requestEndedAtMs: startTime + latency,
-            localLatencyMs: latency,
-            usage: {
-              promptTokens: parsedUsage.promptTokens,
-              completionTokens: parsedUsage.completionTokens,
-              totalTokens: parsedUsage.totalTokens,
-            },
-          });
-          usageForLog = {
-            promptTokens: resolvedUsage.promptTokens,
-            completionTokens: resolvedUsage.completionTokens,
-            totalTokens: resolvedUsage.totalTokens,
-          };
-          const billing = await resolveProxyLogBilling({
-            site: selected.site,
-            account: selected.account,
-            modelName: selected.actualModel || requestedModel,
-            parsedUsage,
-            resolvedUsage,
-          });
-          estimatedCost = billing.estimatedCost;
-          billingDetails = billing.billingDetails;
-        } catch (error) {
-          console.error('[responses] post-stream bookkeeping failed:', error);
-        }
-
-        try {
-          tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
-          recordDownstreamCostUsage(request, estimatedCost);
-          await failureToolkit.log({
+          await recordSurfaceSuccess({
             selected,
-            modelRequested: requestedModel,
-            status: 'success',
-            httpStatus: 200,
+            requestedModel,
+            modelName,
+            parsedUsage,
+            requestStartedAtMs: startTime,
             latencyMs: latency,
-            errorMessage: null,
             retryCount,
-            promptTokens: usageForLog.promptTokens,
-            completionTokens: usageForLog.completionTokens,
-            totalTokens: usageForLog.totalTokens,
-            estimatedCost,
-            billingDetails,
             upstreamPath: successfulUpstreamPath,
+            logSuccess: failureToolkit.log,
+            recordDownstreamCost: (estimatedCost) => {
+              recordDownstreamCostUsage(request, estimatedCost);
+            },
+            bestEffortMetrics: {
+              errorLabel: '[responses] post-stream bookkeeping failed:',
+            },
           });
         } catch (error) {
           console.error('[responses] post-stream success logging failed:', error);
@@ -716,48 +658,25 @@ export async function handleOpenAiResponsesSurfaceRequest(
           serializationMode: isCompactRequest ? 'compact' : 'response',
         });
         try {
-          const resolvedUsage = await resolveProxyUsageWithSelfLogFallback({
-            site: selected.site,
-            account: selected.account,
-            tokenValue: selected.tokenValue,
-            tokenName: selected.tokenName,
-            modelName: selected.actualModel || requestedModel,
+          await recordSurfaceSuccess({
+            selected,
+            requestedModel,
+            modelName,
+            parsedUsage,
             requestStartedAtMs: startTime,
-            requestEndedAtMs: startTime + latency,
-            localLatencyMs: latency,
-            usage: {
-              promptTokens: parsedUsage.promptTokens,
-              completionTokens: parsedUsage.completionTokens,
-              totalTokens: parsedUsage.totalTokens,
+            latencyMs: latency,
+            retryCount,
+            upstreamPath: successfulUpstreamPath,
+            logSuccess: failureToolkit.log,
+            recordDownstreamCost: (estimatedCost) => {
+              recordDownstreamCostUsage(request, estimatedCost);
+            },
+            bestEffortMetrics: {
+              errorLabel: '[responses] post-response bookkeeping failed:',
             },
           });
-          const { estimatedCost, billingDetails } = await resolveProxyLogBilling({
-            site: selected.site,
-            account: selected.account,
-            modelName: selected.actualModel || requestedModel,
-            parsedUsage,
-            resolvedUsage,
-          });
-
-          tokenRouter.recordSuccess(selected.channel.id, latency, estimatedCost, modelName);
-          recordDownstreamCostUsage(request, estimatedCost);
-          await failureToolkit.log({
-            selected,
-            modelRequested: requestedModel,
-            status: 'success',
-            httpStatus: 200,
-            latencyMs: latency,
-            errorMessage: null,
-            retryCount,
-            promptTokens: resolvedUsage.promptTokens,
-            completionTokens: resolvedUsage.completionTokens,
-            totalTokens: resolvedUsage.totalTokens,
-            estimatedCost,
-            billingDetails,
-            upstreamPath: successfulUpstreamPath,
-          });
         } catch (error) {
-          console.error('[responses] post-response bookkeeping failed:', error);
+          console.error('[responses] post-response success logging failed:', error);
         }
         return reply.send(downstreamData);
       } catch (err: any) {
