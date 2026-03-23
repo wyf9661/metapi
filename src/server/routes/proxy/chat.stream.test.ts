@@ -644,7 +644,8 @@ describe('chat proxy stream behavior', () => {
     expect(response.statusCode).toBe(200);
 
     const [_targetUrl, options] = fetchMock.mock.calls[0] as [string, any];
-    expect(options.headers['anthropic-beta']).toBe('code-2025-09-30');
+    expect(options.headers['anthropic-beta']).toContain('claude-code-20250219');
+    expect(options.headers['anthropic-beta']).toContain('code-2025-09-30');
     expect(options.headers['x-claude-client']).toBe('claude-code');
 
     const forwardedBody = JSON.parse(options.body);
