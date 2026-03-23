@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { mergeAccountExtraConfig } from '../accountExtraConfig.js';
-import { refreshModelsForAccount, rebuildTokenRoutesFromAvailability } from '../modelService.js';
+import { refreshModelsForAccount } from '../modelService.js';
+import * as routeRefreshWorkflow from '../routeRefreshWorkflow.js';
 import {
   createOauthSession,
   getOauthSession,
@@ -22,6 +23,7 @@ import {
   getOauthInfoFromAccount,
 } from './oauthAccount.js';
 import { buildCodexOauthInfo } from './codexAccount.js';
+import { ensureOauthIdentityBackfill } from './oauthIdentityBackfill.js';
 import { buildQuotaSnapshotFromOauthInfo, refreshOauthQuotaSnapshot } from './quota.js';
 
 type OAuthProviderMetadata = ReturnType<typeof listOauthProviders>[number];
@@ -404,7 +406,7 @@ export async function handleOauthCallback(input: {
           updatedAt: previousAccount.updatedAt,
         }).where(eq(schema.accounts.id, previousAccount.id)).run();
       }
-      await rebuildTokenRoutesFromAvailability();
+      await routeRefreshWorkflow.rebuildRoutesOnly();
       const errorMessage = refreshResult.errorMessage || `${input.provider} model discovery failed`;
       markOauthSessionError(input.state, errorMessage);
       throw new Error(errorMessage);
@@ -417,7 +419,7 @@ export async function handleOauthCallback(input: {
       }).where(eq(schema.accounts.id, account.id)).run();
     }
 
-    await rebuildTokenRoutesFromAvailability();
+    await routeRefreshWorkflow.rebuildRoutesOnly();
     markOauthSessionSuccess(input.state, {
       accountId: account.id,
       siteId: site.id,
@@ -464,6 +466,7 @@ export async function listOauthConnections(options: {
   limit?: number;
   offset?: number;
 } = {}) {
+  await ensureOauthIdentityBackfill();
   const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 50)));
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
 
@@ -565,7 +568,7 @@ export async function deleteOauthConnection(accountId: number) {
     throw new Error('account is not managed by oauth');
   }
   await db.delete(schema.accounts).where(eq(schema.accounts.id, accountId)).run();
-  await rebuildTokenRoutesFromAvailability();
+  await routeRefreshWorkflow.rebuildRoutesOnly();
   return { success: true };
 }
 

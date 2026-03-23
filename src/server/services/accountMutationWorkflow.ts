@@ -4,10 +4,10 @@ import {
   syncTokensFromUpstream,
 } from './accountTokenService.js';
 import {
-  rebuildTokenRoutesFromAvailability,
   refreshModelsForAccount,
   type ModelRefreshResult,
 } from './modelService.js';
+import * as routeRefreshWorkflow from './routeRefreshWorkflow.js';
 
 type UpstreamTokenLike = {
   name?: string | null;
@@ -17,16 +17,11 @@ type UpstreamTokenLike = {
 };
 
 export type CoverageBatchRebuildResult =
-  | { success: true; result: Awaited<ReturnType<typeof rebuildTokenRoutesFromAvailability>> }
+  | { success: true; result: Awaited<ReturnType<typeof routeRefreshWorkflow.rebuildRoutesOnly>> }
   | { success: false; error: string };
 
 export async function rebuildRoutesBestEffort(): Promise<boolean> {
-  try {
-    await rebuildTokenRoutesFromAvailability();
-    return true;
-  } catch {
-    return false;
-  }
+  return routeRefreshWorkflow.rebuildRoutesBestEffort();
 }
 
 export async function convergeAccountMutation(input: {
@@ -47,7 +42,7 @@ export async function convergeAccountMutation(input: {
   rebuiltRoutes: boolean;
   balanceResult: Awaited<ReturnType<typeof refreshBalance>> | null;
   modelRefreshResult: ModelRefreshResult | null;
-  rebuildResult: Awaited<ReturnType<typeof rebuildTokenRoutesFromAvailability>> | null;
+  rebuildResult: Awaited<ReturnType<typeof routeRefreshWorkflow.rebuildRoutesOnly>> | null;
 }> {
   const result = {
     defaultTokenId: null as number | null,
@@ -57,7 +52,7 @@ export async function convergeAccountMutation(input: {
     rebuiltRoutes: false,
     balanceResult: null as Awaited<ReturnType<typeof refreshBalance>> | null,
     modelRefreshResult: null as ModelRefreshResult | null,
-    rebuildResult: null as Awaited<ReturnType<typeof rebuildTokenRoutesFromAvailability>> | null,
+    rebuildResult: null as Awaited<ReturnType<typeof routeRefreshWorkflow.rebuildRoutesOnly>> | null,
   };
 
   const runStep = async <T>(fn: () => Promise<T>): Promise<T | null> => {
@@ -124,7 +119,7 @@ export async function convergeAccountMutation(input: {
   }
 
   if (input.rebuildRoutes) {
-    const rebuildResult = await runStep(() => rebuildTokenRoutesFromAvailability());
+    const rebuildResult = await runStep(() => routeRefreshWorkflow.rebuildRoutesOnly());
     if (rebuildResult) {
       result.rebuildResult = rebuildResult;
       result.rebuiltRoutes = true;
@@ -180,7 +175,7 @@ export async function refreshAccountCoverageBatch<TFailure>(input: {
       refresh,
       rebuild: {
         success: true,
-        result: await rebuildTokenRoutesFromAvailability(),
+        result: await routeRefreshWorkflow.rebuildRoutesOnly(),
       },
     };
   } catch (error) {

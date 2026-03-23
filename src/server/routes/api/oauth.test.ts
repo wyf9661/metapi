@@ -1537,6 +1537,69 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
   });
 
+  it('backfills structured oauth identity columns for legacy oauth rows before listing connections', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'Legacy Codex',
+      url: 'https://codex.example.com',
+      platform: 'codex',
+      status: 'active',
+      useSystemProxy: false,
+      isPinned: false,
+      globalWeight: 1,
+      sortOrder: 0,
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'legacy-user@example.com',
+      accessToken: 'legacy-oauth-access-token',
+      status: 'active',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountKey: 'legacy-chatgpt-account',
+          projectId: 'legacy-project',
+          refreshToken: 'legacy-refresh-token',
+          modelDiscoveryStatus: 'healthy',
+        },
+      }),
+      isPinned: false,
+      sortOrder: 0,
+    }).returning().get();
+
+    expect(account.oauthProvider).toBeNull();
+    expect(account.oauthAccountKey).toBeNull();
+    expect(account.oauthProjectId).toBeNull();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/connections',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      total: 1,
+      items: [
+        expect.objectContaining({
+          provider: 'codex',
+          accountKey: 'legacy-chatgpt-account',
+          projectId: 'legacy-project',
+          username: 'legacy-user@example.com',
+        }),
+      ],
+    });
+
+    const backfilled = await db.select().from(schema.accounts)
+      .where(eq(schema.accounts.id, account.id))
+      .get();
+
+    expect(backfilled).toEqual(expect.objectContaining({
+      oauthProvider: 'codex',
+      oauthAccountKey: 'legacy-chatgpt-account',
+      oauthProjectId: 'legacy-project',
+    }));
+  });
+
   it('rejects malformed manual callback submissions', async () => {
     const startResponse = await app.inject({
       method: 'POST',

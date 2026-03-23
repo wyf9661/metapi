@@ -52,6 +52,8 @@ type OauthIdentityCarrier = {
   oauthProjectId?: string | null;
 };
 
+type StoredOauthIdentity = Pick<OauthInfo, 'provider' | 'accountId' | 'accountKey' | 'projectId'>;
+
 function parseExtraConfig(extraConfig?: string | null): ParsedExtraConfig {
   if (!extraConfig) return {};
   try {
@@ -113,17 +115,26 @@ function asModelDiscoveryStatus(value: unknown): OauthModelDiscoveryStatus | und
   return undefined;
 }
 
-function parseStoredOauthState(extraConfig?: string | null): Partial<OauthInfo> | null {
+function parseStoredOauthIdentity(extraConfig?: string | null): StoredOauthIdentity | null {
   const parsed = parseExtraConfig(extraConfig).oauth;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   const accountKey = asTrimmedString(parsed.accountKey) || asTrimmedString(parsed.accountId);
+  const provider = asTrimmedString(parsed.provider);
+  if (!provider) return null;
   return {
-    provider: asTrimmedString(parsed.provider),
+    provider,
     accountId: asTrimmedString(parsed.accountId) || accountKey,
     accountKey,
+    projectId: asTrimmedString(parsed.projectId),
+  };
+}
+
+function parseStoredOauthRuntimeState(extraConfig?: string | null): Partial<OauthInfo> | null {
+  const parsed = parseExtraConfig(extraConfig).oauth;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  return {
     email: asTrimmedString(parsed.email),
     planType: asTrimmedString(parsed.planType),
-    projectId: asTrimmedString(parsed.projectId),
     tokenExpiresAt: asPositiveInteger(parsed.tokenExpiresAt),
     refreshToken: asTrimmedString(parsed.refreshToken),
     idToken: asTrimmedString(parsed.idToken),
@@ -137,43 +148,66 @@ function parseStoredOauthState(extraConfig?: string | null): Partial<OauthInfo> 
 }
 
 export function getOauthInfoFromExtraConfig(extraConfig?: string | null): OauthInfo | null {
-  const parsed = parseStoredOauthState(extraConfig);
-  const provider = parsed?.provider;
+  const identity = parseStoredOauthIdentity(extraConfig);
+  const runtime = parseStoredOauthRuntimeState(extraConfig);
+  const provider = identity?.provider;
   if (!provider) return null;
   return {
     provider,
-    accountId: parsed.accountId || parsed.accountKey,
-    accountKey: parsed.accountKey,
-    email: parsed.email,
-    planType: parsed.planType,
-    projectId: parsed.projectId,
-    tokenExpiresAt: parsed.tokenExpiresAt,
-    refreshToken: parsed.refreshToken,
-    idToken: parsed.idToken,
-    providerData: parsed.providerData,
-    quota: parsed.quota,
-    modelDiscoveryStatus: parsed.modelDiscoveryStatus,
-    lastModelSyncAt: parsed.lastModelSyncAt,
-    lastModelSyncError: parsed.lastModelSyncError,
-    lastDiscoveredModels: parsed.lastDiscoveredModels,
+    accountId: identity?.accountId || identity?.accountKey,
+    accountKey: identity?.accountKey,
+    projectId: identity?.projectId,
+    email: runtime?.email,
+    planType: runtime?.planType,
+    tokenExpiresAt: runtime?.tokenExpiresAt,
+    refreshToken: runtime?.refreshToken,
+    idToken: runtime?.idToken,
+    providerData: runtime?.providerData,
+    quota: runtime?.quota,
+    modelDiscoveryStatus: runtime?.modelDiscoveryStatus,
+    lastModelSyncAt: runtime?.lastModelSyncAt,
+    lastModelSyncError: runtime?.lastModelSyncError,
+    lastDiscoveredModels: runtime?.lastDiscoveredModels,
   };
 }
 
 export function getOauthInfoFromAccount(account?: OauthIdentityCarrier | null): OauthInfo | null {
   if (!account) return null;
-  const stored = parseStoredOauthState(account.extraConfig);
-  const provider = asTrimmedString(account.oauthProvider) || stored?.provider;
+  const storedIdentity = parseStoredOauthIdentity(account.extraConfig);
+  const storedRuntime = parseStoredOauthRuntimeState(account.extraConfig);
+  const provider = asTrimmedString(account.oauthProvider) || storedIdentity?.provider;
   if (!provider) return null;
   const structuredAccountKey = asTrimmedString(account.oauthAccountKey);
-  const accountKey = structuredAccountKey || stored?.accountKey || stored?.accountId;
-  const projectId = asTrimmedString(account.oauthProjectId) || stored?.projectId;
+  const accountKey = structuredAccountKey || storedIdentity?.accountKey || storedIdentity?.accountId;
+  const projectId = asTrimmedString(account.oauthProjectId) || storedIdentity?.projectId;
   return {
-    ...(stored || {}),
+    ...(storedRuntime || {}),
     provider,
-    accountId: structuredAccountKey || stored?.accountId || accountKey,
+    accountId: structuredAccountKey || storedIdentity?.accountId || accountKey,
     accountKey,
     projectId,
   };
+}
+
+export function buildOauthIdentityBackfillPatch(
+  account?: OauthIdentityCarrier | null,
+): Partial<Pick<OauthIdentityCarrier, 'oauthProvider' | 'oauthAccountKey' | 'oauthProjectId'>> | null {
+  if (!account) return null;
+  const legacyIdentity = parseStoredOauthIdentity(account.extraConfig);
+  if (!legacyIdentity?.provider) return null;
+
+  const patch: Partial<Pick<OauthIdentityCarrier, 'oauthProvider' | 'oauthAccountKey' | 'oauthProjectId'>> = {};
+  if (!asTrimmedString(account.oauthProvider)) {
+    patch.oauthProvider = legacyIdentity.provider;
+  }
+  if (!asTrimmedString(account.oauthAccountKey) && (legacyIdentity.accountKey || legacyIdentity.accountId)) {
+    patch.oauthAccountKey = legacyIdentity.accountKey || legacyIdentity.accountId;
+  }
+  if (!asTrimmedString(account.oauthProjectId) && legacyIdentity.projectId) {
+    patch.oauthProjectId = legacyIdentity.projectId;
+  }
+
+  return Object.keys(patch).length > 0 ? patch : null;
 }
 
 export function buildOauthInfo(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildOauthIdentityBackfillPatch,
   buildOauthInfoFromAccount,
   buildStoredOauthStateFromAccount,
   getOauthInfoFromAccount,
@@ -131,6 +132,42 @@ describe('oauth account identity helpers', () => {
       refreshToken: 'refresh-token',
       modelDiscoveryStatus: 'healthy',
       quota: { status: 'supported' },
+    });
+  });
+
+  it('builds a structured identity backfill patch from legacy oauth metadata only for missing columns', () => {
+    expect(buildOauthIdentityBackfillPatch({
+      oauthProvider: null,
+      oauthAccountKey: null,
+      oauthProjectId: null,
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountKey: 'legacy-account',
+          projectId: 'legacy-project',
+          refreshToken: 'refresh-token',
+        },
+      }),
+    })).toEqual({
+      oauthProvider: 'codex',
+      oauthAccountKey: 'legacy-account',
+      oauthProjectId: 'legacy-project',
+    });
+
+    expect(buildOauthIdentityBackfillPatch({
+      oauthProvider: 'codex',
+      oauthAccountKey: 'structured-account',
+      oauthProjectId: null,
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'legacy-provider-ignored',
+          accountKey: 'legacy-account-ignored',
+          projectId: 'legacy-project',
+          refreshToken: 'refresh-token',
+        },
+      }),
+    })).toEqual({
+      oauthProjectId: 'legacy-project',
     });
   });
 });

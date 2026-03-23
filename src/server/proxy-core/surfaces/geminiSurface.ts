@@ -11,7 +11,7 @@ import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
 import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
-import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
+import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { getDownstreamRoutingPolicy } from '../../routes/proxy/downstreamPolicy.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../../routes/proxy/endpointFlow.js';
 import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
@@ -278,7 +278,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         if (!isDirectGeminiFamilyPlatform(selected.site.platform)) {
           let models = await readRouteAwareGeminiModels(request);
           if (models.length <= 0) {
-            await refreshModelsAndRebuildRoutes();
+            await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
             models = await readRouteAwareGeminiModels(request);
           }
           return reply.code(200).send({ models });

@@ -1,7 +1,7 @@
 ﻿import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { fetch } from 'undici';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
+import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
@@ -46,7 +46,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
         : await tokenRouter.selectNextChannel(requestedModel, excludeChannelIds, downstreamPolicy);
 
       if (!selected && retryCount === 0) {
-        await refreshModelsAndRebuildRoutes();
+        await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
         selected = await tokenRouter.selectChannel(requestedModel, downstreamPolicy);
       }
 

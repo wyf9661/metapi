@@ -1,4 +1,4 @@
-import { refreshModelsAndRebuildRoutes } from '../../services/modelService.js';
+import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import type { SiteProxyConfigLike } from '../../services/siteProxy.js';
@@ -86,7 +86,7 @@ export async function selectSurfaceChannelForAttempt(input: {
     );
 
   if (!selected && input.retryCount === 0) {
-    await refreshModelsAndRebuildRoutes();
+    await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
     selected = await tokenRouter.selectChannel(input.requestedModel, input.downstreamPolicy);
   }
 
