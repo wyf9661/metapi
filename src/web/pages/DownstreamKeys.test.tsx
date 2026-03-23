@@ -165,7 +165,7 @@ afterEach(() => {
 
 describe('DownstreamKeys page', () => {
   it('loads management data and renders merged row content', async () => {
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -193,7 +193,7 @@ describe('DownstreamKeys page', () => {
       expect(text).toContain('主分组');
       expect(text).toContain('移动端');
     } finally {
-      root?.unmount();
+      root.unmount();
     }
   });
 
@@ -213,7 +213,7 @@ describe('DownstreamKeys page', () => {
       ],
     });
 
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -236,7 +236,7 @@ describe('DownstreamKeys page', () => {
 
       const select = root!.root.findAllByType('select').find((node) => collectText(node).includes('仅禁用'));
       await act(async () => {
-        select.props.onChange({ target: { value: 'disabled' } });
+        select!.props.onChange({ target: { value: 'disabled' } });
       });
       await flushMicrotasks();
       expect(collectText(root!.root)).toContain('batch-key');
@@ -247,7 +247,7 @@ describe('DownstreamKeys page', () => {
   });
 
   it('supports create flow and drawer trend loading', async () => {
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -327,7 +327,7 @@ describe('DownstreamKeys page', () => {
         ],
       });
 
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -415,7 +415,7 @@ describe('DownstreamKeys page', () => {
       })
       .mockImplementationOnce(() => new Promise(() => {}));
 
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -447,12 +447,12 @@ describe('DownstreamKeys page', () => {
       expect(collectText(root!.root)).not.toContain('固定窗口对比');
       expect(collectText(root!.root)).not.toContain('trend:2');
     } finally {
-      root?.unmount();
+      root.unmount();
     }
   });
 
   it('separates exact models from group routes in advanced config and uses single-column layout', async () => {
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -503,7 +503,7 @@ describe('DownstreamKeys page', () => {
       { id: 14, modelPattern: 'claude-opus-4-6', displayName: 'Claude Opus 4.6', enabled: true },
     ]);
 
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -570,7 +570,7 @@ describe('DownstreamKeys page', () => {
   });
 
   it('uses backend batch api for selected rows', async () => {
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(
@@ -606,7 +606,7 @@ describe('DownstreamKeys page', () => {
   });
 
   it('supports group and tag editing plus batch metadata update', async () => {
-    let root: ReturnType<typeof create> | null = null;
+    let root!: WebTestRenderer;
     try {
       await act(async () => {
         root = create(

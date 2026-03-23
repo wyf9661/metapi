@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { BrandInfo } from '../../components/BrandIcon.js';
 import type { RouteDecision, RouteDecisionCandidate, RouteMode } from '../../../shared/tokenRouteContract.js';
+export type { RouteDecision, RouteDecisionCandidate, RouteMode } from '../../../shared/tokenRouteContract.js';
 
 export type RouteSortBy = 'modelPattern' | 'channelCount';
 export type RouteSortDir = 'asc' | 'desc';

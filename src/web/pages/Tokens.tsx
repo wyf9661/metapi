@@ -44,6 +44,20 @@ type AccountTokenSyncResult = {
   };
 };
 
+type SyncableAccount = {
+  id: number;
+  username?: string | null;
+  accessToken?: string | null;
+  status?: string | null;
+  credentialMode?: string | null;
+  capabilities?: {
+    proxyOnly?: boolean;
+  } | null;
+  site?: {
+    status?: string | null;
+    name?: string | null;
+  } | null;
+};
 const isAccountSyncable = (account: any) =>
   resolveAccountCredentialMode(account) === 'session'
   && account?.status === 'active'
@@ -162,11 +176,11 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       const nextTokens = tokenRows || [];
       setTokens(nextTokens);
       setSelectedTokenIds((current) => current.filter((id) => nextTokens.some((token: any) => token.id === id)));
-      const latestAccounts = accountRows || [];
+      const latestAccounts: SyncableAccount[] = Array.isArray(accountRows) ? accountRows : [];
       setAccounts(latestAccounts);
 
       const syncableAccounts = latestAccounts.filter(isAccountSyncable);
-      const hasCurrentSelected = syncableAccounts.some((account) => account.id === syncingAccountId);
+      const hasCurrentSelected = syncableAccounts.some((account: SyncableAccount) => account.id === syncingAccountId);
       if (!hasCurrentSelected) {
         setSyncingAccountId(syncableAccounts[0]?.id || 0);
       }
@@ -209,7 +223,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     api.getAccountTokenGroups(form.accountId)
       .then((res: any) => {
         if (cancelled) return;
-        const groups = Array.isArray(res?.groups)
+        const groups: string[] = Array.isArray(res?.groups)
           ? res.groups.map((item: any) => String(item || '').trim()).filter(Boolean)
           : [];
         const normalized = Array.from(new Set(groups));

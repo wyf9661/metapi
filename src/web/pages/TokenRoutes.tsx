@@ -238,7 +238,8 @@ export default function TokenRoutes() {
     if (candidatesPromiseRef.current && !force) return;
     const seq = ++candidatesSeqRef.current;
     candidatesLoadedRef.current = true;
-    const promise = (async () => {
+    let promise!: Promise<void>;
+    promise = (async () => {
       try {
         const candidateRows = await api.getModelTokenCandidates();
         if (candidatesSeqRef.current !== seq) return; // stale

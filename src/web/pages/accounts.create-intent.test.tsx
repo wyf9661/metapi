@@ -31,7 +31,7 @@ async function renderAccounts(initialEntry: string) {
   ]);
   apiMock.getAccountTokens.mockResolvedValue([]);
 
-  let root: ReturnType<typeof create> | null = null;
+  let root!: WebTestRenderer;
   await act(async () => {
     root = create(
       <MemoryRouter initialEntries={[initialEntry]}>
