@@ -320,6 +320,123 @@ describe('sanitizeResponsesBodyForProxy', () => {
     });
     expect(result.max_completion_tokens).toBeUndefined();
   });
+
+  it('normalizes failed input item statuses before proxying Responses requests', () => {
+    const result = sanitizeResponsesBodyForProxy(
+      {
+        model: 'gpt-5',
+        input: [
+          {
+            role: 'assistant',
+            status: 'failed',
+            content: [
+              {
+                type: 'output_text',
+                text: 'tool step failed',
+              },
+            ],
+          },
+          {
+            type: 'function_call',
+            call_id: 'call_1',
+            name: 'lookup_weather',
+            arguments: '{"city":"Shanghai"}',
+            status: 'failed',
+          },
+          {
+            type: 'function_call_output',
+            call_id: 'call_1',
+            output: '{"error":"timeout"}',
+            status: 'completed',
+          },
+        ],
+      },
+      'gpt-5',
+      false,
+    );
+
+    expect(result.input).toEqual([
+      {
+        type: 'message',
+        role: 'assistant',
+        status: 'incomplete',
+        content: [
+          {
+            type: 'output_text',
+            text: 'tool step failed',
+          },
+        ],
+      },
+      {
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'lookup_weather',
+        arguments: '{"city":"Shanghai"}',
+        status: 'incomplete',
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'call_1',
+        output: '{"error":"timeout"}',
+        status: 'completed',
+      },
+    ]);
+  });
+
+  it('drops unsupported input item statuses before proxying Responses requests', () => {
+    const result = sanitizeResponsesBodyForProxy(
+      {
+        model: 'gpt-5',
+        input: [
+          {
+            type: 'message',
+            role: 'user',
+            status: 'errored',
+            content: 'hello',
+          },
+          {
+            type: 'function_call',
+            call_id: 'call_2',
+            name: 'lookup_weather',
+            arguments: '{}',
+            status: 'invalid',
+          },
+          {
+            type: 'reasoning',
+            id: 'rs_1',
+            status: 'broken',
+            summary: [],
+          },
+        ],
+      },
+      'gpt-5',
+      false,
+    );
+
+    expect(result.input).toEqual([
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: 'hello',
+          },
+        ],
+      },
+      {
+        type: 'function_call',
+        call_id: 'call_2',
+        name: 'lookup_weather',
+        arguments: '{}',
+      },
+      {
+        type: 'reasoning',
+        id: 'rs_1',
+        summary: [],
+      },
+    ]);
+  });
 });
 
 describe('convertOpenAiBodyToResponsesBody', () => {

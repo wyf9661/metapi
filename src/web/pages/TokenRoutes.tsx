@@ -24,6 +24,10 @@ import {
 } from './helpers/routeMissingTokenHints.js';
 import { buildVisibleRouteList } from './helpers/routeListVisibility.js';
 import { buildZeroChannelPlaceholderRoutes } from './helpers/zeroChannelRoutes.js';
+import {
+  getRouteRoutingStrategyLabel,
+  normalizeRouteRoutingStrategyValue,
+} from './token-routes/routingStrategy.js';
 
 import type {
   RouteSortBy,
@@ -88,18 +92,6 @@ const EMPTY_ROUTE_FORM: RouteEditorForm = {
   sourceRouteIds: [],
   advancedOpen: false,
 };
-
-function normalizeRouteRoutingStrategyValue(value?: RouteRoutingStrategy | null): RouteRoutingStrategy {
-  if (value === 'round_robin' || value === 'stable_first') return value;
-  return 'weighted';
-}
-
-function getRouteRoutingStrategyLabel(value?: RouteRoutingStrategy | null): string {
-  const strategy = normalizeRouteRoutingStrategyValue(value);
-  if (strategy === 'round_robin') return tr('轮询');
-  if (strategy === 'stable_first') return tr('稳定优先');
-  return tr('权重随机');
-}
 
 function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): string {
   if (value === 'round_robin') return '已切换为轮询策略';

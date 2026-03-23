@@ -546,6 +546,67 @@ describe('TokenRouter selection scoring', () => {
     expect((recoveredCandidateB?.probability || 0)).toBeLessThan(70);
   });
 
+  it('does not open a site breaker for repeated timeout validation errors', async () => {
+    config.routingWeights = {
+      baseWeightFactor: 1,
+      valueScoreFactor: 0,
+      costWeight: 0,
+      balanceWeight: 0,
+      usageWeight: 0,
+    };
+
+    const route = await createRoute('gpt-5.4');
+
+    const siteA = await createSite('timeout-validation-a');
+    const accountA = await createAccount(siteA.id, 'timeout-validation-user-a');
+    const tokenA = await createToken(accountA.id, 'timeout-validation-token-a');
+    const channelA = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: accountA.id,
+      tokenId: tokenA.id,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+    }).returning().get();
+
+    const siteB = await createSite('timeout-validation-b');
+    const accountB = await createAccount(siteB.id, 'timeout-validation-user-b');
+    const tokenB = await createToken(accountB.id, 'timeout-validation-token-b');
+    const channelB = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: accountB.id,
+      tokenId: tokenB.id,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+    }).returning().get();
+
+    const router = new TokenRouter();
+    for (let index = 0; index < 3; index += 1) {
+      await router.recordFailure(channelA.id, {
+        status: 400,
+        errorText: 'invalid timeout parameter',
+      });
+    }
+    await db.update(schema.routeChannels).set({
+      cooldownUntil: null,
+      lastFailAt: null,
+      failCount: 0,
+    }).where(eq(schema.routeChannels.id, channelA.id)).run();
+    invalidateTokenRouterCache();
+
+    const decision = await router.explainSelection('gpt-5.4');
+    const candidateA = decision.candidates.find((candidate) => candidate.channelId === channelA.id);
+    const candidateB = decision.candidates.find((candidate) => candidate.channelId === channelB.id);
+
+    expect(candidateA).toBeTruthy();
+    expect(candidateB).toBeTruthy();
+    expect(candidateA?.reason || '').not.toContain('站点熔断');
+    expect(candidateB?.reason || '').not.toContain('站点熔断');
+    expect(decision.summary.join(' ')).not.toContain('站点熔断避让');
+    expect((candidateA?.probability || 0)).toBeGreaterThan(0);
+  });
+
   it('uses persisted site success and latency history to prefer historically healthier sites', async () => {
     config.routingWeights = {
       baseWeightFactor: 1,

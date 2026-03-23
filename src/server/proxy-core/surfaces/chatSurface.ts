@@ -41,6 +41,7 @@ import {
 } from '../../routes/proxy/geminiCliCompat.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 import { detectDownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
+import { canRetryProxyChannel, getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import {
   createSurfaceFailureToolkit,
   createSurfaceDispatchRequest,
@@ -49,14 +50,23 @@ import {
   trySurfaceOauthRefreshRecovery,
 } from './sharedSurface.js';
 
-const MAX_RETRIES = 2;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function prioritizeEndpointCandidate(
+  candidates: Array<'chat' | 'messages' | 'responses'>,
+  preferred: 'chat' | 'messages' | 'responses',
+): Array<'chat' | 'messages' | 'responses'> {
+  if (!candidates.includes(preferred)) return candidates;
+  return [
+    preferred,
+    ...candidates.filter((candidate) => candidate !== preferred),
+  ];
 }
 
 export async function handleChatSurfaceRequest(
@@ -108,10 +118,11 @@ export async function handleChatSurfaceRequest(
     proxyToken: getProxyAuthContext(request)?.token || null,
   });
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
+  const maxRetries = getProxyMaxChannelRetries();
   const failureToolkit = createSurfaceFailureToolkit({
     warningScope: 'chat',
     downstreamPath,
-    maxRetries: MAX_RETRIES,
+    maxRetries,
     clientContext,
     downstreamApiKeyId,
   });
@@ -119,7 +130,7 @@ export async function handleChatSurfaceRequest(
   const excludeChannelIds: number[] = [];
   let retryCount = 0;
 
-  while (retryCount <= MAX_RETRIES) {
+  while (retryCount <= maxRetries) {
     const selected = await selectSurfaceChannelForAttempt({
       requestedModel,
       downstreamPolicy,
@@ -142,7 +153,7 @@ export async function handleChatSurfaceRequest(
     const modelName = selected.actualModel || requestedModel;
     const oauth = getOauthInfoFromAccount(selected.account);
     const isCodexSite = String(selected.site.platform || '').trim().toLowerCase() === 'codex';
-    const endpointCandidates = [
+    let endpointCandidates = [
       ...await resolveUpstreamEndpointCandidates(
         {
           site: selected.site,
@@ -157,6 +168,9 @@ export async function handleChatSurfaceRequest(
         },
       ),
     ];
+    if (oauth?.provider === 'codex' && downstreamFormat === 'openai') {
+      endpointCandidates = prioritizeEndpointCandidate(endpointCandidates, 'responses');
+    }
     const endpointRuntimeContext = {
       siteId: selected.site.id,
       modelName,
@@ -624,17 +638,18 @@ export async function handleClaudeCountTokensSurfaceRequest(
   });
   const downstreamPolicy = getDownstreamRoutingPolicy(request);
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
+  const maxRetries = getProxyMaxChannelRetries();
   const failureToolkit = createSurfaceFailureToolkit({
     warningScope: 'chat',
     downstreamPath,
-    maxRetries: MAX_RETRIES,
+    maxRetries,
     clientContext,
     downstreamApiKeyId,
   });
   const excludeChannelIds: number[] = [];
   let retryCount = 0;
 
-  while (retryCount <= MAX_RETRIES) {
+  while (retryCount <= maxRetries) {
     const selected = await selectSurfaceChannelForAttempt({
       requestedModel,
       downstreamPolicy,
@@ -664,7 +679,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       requestedModel,
     );
     if (!endpointCandidates.includes('messages')) {
-      if (retryCount < MAX_RETRIES) {
+      if (canRetryProxyChannel(retryCount)) {
         retryCount += 1;
         continue;
       }

@@ -16,6 +16,9 @@ import {
   recordUpstreamEndpointSuccess,
   resetUpstreamEndpointRuntimeState,
   resolveUpstreamEndpointCandidates,
+  boundEndpointRuntimeModelKey,
+  MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH,
+  MODEL_KEY_HASH_SUFFIX_LENGTH,
 } from './upstreamEndpoint.js';
 
 const baseContext = {
@@ -290,6 +293,50 @@ describe('resolveUpstreamEndpointCandidates', () => {
     );
 
     expect(order).toEqual(['responses', 'chat', 'messages']);
+  });
+
+  it('keeps learned endpoint state scoped to the model key', async () => {
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'responses',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+    });
+
+    const learnedOrder = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'openai',
+    );
+
+    const unrelatedModelOrder = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-4.1',
+      'openai',
+    );
+
+    expect(learnedOrder).toEqual(['responses', 'chat', 'messages']);
+    expect(unrelatedModelOrder).toEqual(['chat', 'messages', 'responses']);
+  });
+
+  it('bounds runtime model keys before storing them', () => {
+    const longModelName = 'gpt-' + 'a'.repeat(MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH + 32);
+    const boundedKey = boundEndpointRuntimeModelKey(longModelName);
+
+    expect(boundedKey.length).toBeLessThanOrEqual(
+      MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH + 1 + MODEL_KEY_HASH_SUFFIX_LENGTH,
+    );
+    expect(boundedKey.startsWith(longModelName.slice(0, MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH))).toBe(true);
+    expect(boundedKey).toMatch(
+      new RegExp(`-[0-9a-f]{${MODEL_KEY_HASH_SUFFIX_LENGTH}}$`),
+    );
+    expect(boundEndpointRuntimeModelKey(longModelName)).toEqual(boundedKey);
   });
 
   it('keeps remote-document-url requests on a separate runtime preference bucket from inline document requests', async () => {

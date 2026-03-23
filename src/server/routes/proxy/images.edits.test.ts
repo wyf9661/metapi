@@ -143,6 +143,64 @@ describe('/v1/images/edits route', () => {
     expect(targetUrl).toBe('https://upstream.example.com/v1/images/edits');
   });
 
+  it('returns an upstream error instead of fabricating an empty success when image generation JSON is malformed', async () => {
+    fetchMock.mockResolvedValue(new Response('not-json', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/images/generations',
+      headers: {
+        authorization: 'Bearer sk-demo',
+      },
+      payload: {
+        model: 'gpt-image-1',
+        prompt: 'draw a cat',
+      },
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toEqual({
+      error: {
+        message: 'not-json',
+        type: 'upstream_error',
+      },
+    });
+    expect(selectNextChannelMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps returning a successful image edit response when post-success accounting fails', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      created: 1,
+      data: [{ b64_json: 'iVBORw0KGgo=' }],
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    estimateProxyCostMock.mockRejectedValueOnce(new Error('cost failed'));
+
+    const boundary = 'metapi-boundary-accounting';
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/images/edits',
+      headers: {
+        authorization: 'Bearer sk-demo',
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: buildMultipartBody(boundary),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      created: 1,
+      data: [{ b64_json: 'iVBORw0KGgo=' }],
+    });
+    expect(selectNextChannelMock).not.toHaveBeenCalled();
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
+
   it('returns explicit not-supported error for /v1/images/variations', async () => {
     const response = await app.inject({
       method: 'POST',

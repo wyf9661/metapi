@@ -222,6 +222,8 @@ export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpo
 }): Promise<{
   upstream: Awaited<ReturnType<typeof dispatchRuntimeRequest>>;
   upstreamPath: string;
+  request?: TRequest;
+  targetUrl?: string;
 } | null> {
   try {
     const refreshed = await refreshOauthAccessTokenSingleflight(input.selected.account.id);
@@ -239,6 +241,8 @@ export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpo
       return {
         upstream: refreshedResponse,
         upstreamPath: refreshedRequest.path,
+        request: refreshedRequest,
+        targetUrl: refreshedTargetUrl,
       };
     }
 

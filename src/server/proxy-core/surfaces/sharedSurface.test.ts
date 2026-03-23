@@ -690,6 +690,13 @@ describe('selectSurfaceChannelForAttempt', () => {
       headers: { authorization: 'Bearer new-access-token' },
     }), 'https://upstream.example.com/v1/responses');
     expect(result).toEqual({
+      request: {
+        endpoint: 'responses',
+        path: '/v1/responses',
+        headers: { authorization: 'Bearer new-access-token' },
+        body: { model: 'gpt-5.2' },
+      },
+      targetUrl: 'https://upstream.example.com/v1/responses',
       upstream: refreshedResponse,
       upstreamPath: '/v1/responses',
     });

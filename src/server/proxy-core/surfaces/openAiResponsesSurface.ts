@@ -38,6 +38,7 @@ import {
   summarizeConversationFileInputsInResponsesBody,
 } from '../capabilities/conversationFileCapabilities.js';
 import { detectDownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
+import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import {
   createSurfaceFailureToolkit,
   createSurfaceDispatchRequest,
@@ -45,8 +46,6 @@ import {
   selectSurfaceChannelForAttempt,
   trySurfaceOauthRefreshRecovery,
 } from './sharedSurface.js';
-
-const MAX_RETRIES = 2;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -178,17 +177,18 @@ export async function handleOpenAiResponsesSurfaceRequest(
     if (!await ensureModelAllowedForDownstreamKey(request, reply, requestedModel)) return;
     const downstreamPolicy = getDownstreamRoutingPolicy(request);
     const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
+    const maxRetries = getProxyMaxChannelRetries();
     const failureToolkit = createSurfaceFailureToolkit({
       warningScope: 'responses',
       downstreamPath,
-      maxRetries: MAX_RETRIES,
+      maxRetries,
       clientContext,
       downstreamApiKeyId,
     });
     const excludeChannelIds: number[] = [];
     let retryCount = 0;
 
-    while (retryCount <= MAX_RETRIES) {
+    while (retryCount <= maxRetries) {
       const selected = await selectSurfaceChannelForAttempt({
         requestedModel,
         downstreamPolicy,

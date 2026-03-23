@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import {
   rankConversationFileEndpoints,
   type ConversationFileInputSummary,
@@ -45,6 +45,7 @@ export type UpstreamEndpoint = 'chat' | 'messages' | 'responses';
 export type EndpointPreference = DownstreamFormat | 'responses';
 
 type EndpointCapabilityProfile = {
+  modelKey: string;
   preferMessagesForClaudeModel: boolean;
   hasImageInput: boolean;
   hasAudioInput: boolean;
@@ -56,6 +57,7 @@ type EndpointCapabilityProfile = {
 type EndpointRuntimeState = {
   preferredEndpoint: UpstreamEndpoint | null;
   preferredUpdatedAtMs: number;
+  lastTouchedAtMs: number;
   blockedUntilMsByEndpoint: Partial<Record<UpstreamEndpoint, number>>;
 };
 
@@ -75,7 +77,23 @@ type ChannelContext = {
 
 const ENDPOINT_RUNTIME_PREFERRED_TTL_MS = 24 * 60 * 60 * 1000;
 const ENDPOINT_RUNTIME_BLOCK_TTL_MS = 6 * 60 * 60 * 1000;
+const MAX_ENDPOINT_RUNTIME_STATES = 512;
+export const MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH = 64;
+export const MODEL_KEY_HASH_SUFFIX_LENGTH = 8;
 const endpointRuntimeStates = new Map<string, EndpointRuntimeState>();
+
+export function boundEndpointRuntimeModelKey(value: string): string {
+  if (value.length <= MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH) {
+    return value;
+  }
+
+  const prefix = value.slice(0, MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH);
+  const hash = createHash('sha256')
+    .update(value)
+    .digest('hex')
+    .slice(0, MODEL_KEY_HASH_SUFFIX_LENGTH);
+  return `${prefix}-${hash}`;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -83,6 +101,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeEndpointRuntimeModelKey(...values: Array<unknown>): string {
+  for (const value of values) {
+    const normalized = asTrimmedString(value).toLowerCase();
+    if (normalized) return boundEndpointRuntimeModelKey(normalized);
+  }
+  return boundEndpointRuntimeModelKey('unknown-model');
 }
 
 function resolveRequestedModelForPayloadRules(input: {
@@ -509,6 +535,7 @@ function buildEndpointCapabilityProfile(input?: {
 }): EndpointCapabilityProfile {
   const conversationFileSummary = input?.requestCapabilities?.conversationFileSummary;
   return {
+    modelKey: normalizeEndpointRuntimeModelKey(input?.modelName, input?.requestedModelHint),
     preferMessagesForClaudeModel: (
       isClaudeFamilyModel(asTrimmedString(input?.modelName))
       || isClaudeFamilyModel(asTrimmedString(input?.requestedModelHint))
@@ -545,7 +572,7 @@ function buildEndpointRuntimeStateKey(input: {
   return [
     String(input.siteId),
     input.downstreamFormat,
-    capabilityProfile.preferMessagesForClaudeModel ? 'claude' : 'generic',
+    capabilityProfile.modelKey,
     capabilityProfile.hasNonImageFileInput ? 'files' : 'nofiles',
     capabilityProfile.hasRemoteDocumentUrl ? 'remoteurl' : 'noremoteurl',
     capabilityProfile.wantsNativeResponsesReasoning ? 'reasoning' : 'noreasoning',
@@ -553,15 +580,21 @@ function buildEndpointRuntimeStateKey(input: {
 }
 
 function getOrCreateEndpointRuntimeState(key: string, nowMs = Date.now()): EndpointRuntimeState {
+  sweepEndpointRuntimeStates(nowMs);
   const existing = endpointRuntimeStates.get(key);
-  if (existing) return existing;
+  if (existing) {
+    existing.lastTouchedAtMs = nowMs;
+    return existing;
+  }
 
   const initial: EndpointRuntimeState = {
     preferredEndpoint: null,
     preferredUpdatedAtMs: nowMs,
+    lastTouchedAtMs: nowMs,
     blockedUntilMsByEndpoint: {},
   };
   endpointRuntimeStates.set(key, initial);
+  enforceEndpointRuntimeStateLimit();
   return initial;
 }
 
@@ -588,6 +621,7 @@ function applyEndpointRuntimePreference(
 ): UpstreamEndpoint[] {
   const state = endpointRuntimeStates.get(key);
   if (!state || candidates.length <= 1) return candidates;
+  state.lastTouchedAtMs = nowMs;
 
   const blocked = new Set<UpstreamEndpoint>();
   for (const endpoint of candidates) {
@@ -615,6 +649,33 @@ function applyEndpointRuntimePreference(
 
   maybeDeleteEndpointRuntimeState(key, nowMs);
   return next;
+}
+
+function sweepEndpointRuntimeStates(nowMs = Date.now()): void {
+  for (const [key, state] of endpointRuntimeStates.entries()) {
+    const hasActiveBlock = Object.values(state.blockedUntilMsByEndpoint).some((untilMs) => (
+      typeof untilMs === 'number' && untilMs > nowMs
+    ));
+    const preferredFresh = (
+      !!state.preferredEndpoint
+      && (state.preferredUpdatedAtMs + ENDPOINT_RUNTIME_PREFERRED_TTL_MS) > nowMs
+    );
+    const recentlyTouched = (state.lastTouchedAtMs + ENDPOINT_RUNTIME_PREFERRED_TTL_MS) > nowMs;
+    if (!hasActiveBlock && !preferredFresh && !recentlyTouched) {
+      endpointRuntimeStates.delete(key);
+    }
+  }
+}
+
+function enforceEndpointRuntimeStateLimit(): void {
+  if (endpointRuntimeStates.size <= MAX_ENDPOINT_RUNTIME_STATES) return;
+
+  const entries = [...endpointRuntimeStates.entries()]
+    .sort((left, right) => left[1].lastTouchedAtMs - right[1].lastTouchedAtMs);
+  const overflowCount = endpointRuntimeStates.size - MAX_ENDPOINT_RUNTIME_STATES;
+  for (const [key] of entries.slice(0, overflowCount)) {
+    endpointRuntimeStates.delete(key);
+  }
 }
 
 function inferSuggestedEndpointFromError(errorText?: string | null): UpstreamEndpoint | null {

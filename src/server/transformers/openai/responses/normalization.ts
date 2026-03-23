@@ -8,6 +8,36 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+const ALLOWED_RESPONSES_INPUT_STATUSES = new Set([
+  'in_progress',
+  'completed',
+  'incomplete',
+]);
+
+function normalizeResponsesInputStatus(value: unknown): string | undefined {
+  const normalized = asTrimmedString(value).toLowerCase();
+  if (!normalized) return undefined;
+  if (normalized === 'failed') return 'incomplete';
+  return ALLOWED_RESPONSES_INPUT_STATUSES.has(normalized) ? normalized : undefined;
+}
+
+function withNormalizedResponsesInputStatus(item: Record<string, unknown>): Record<string, unknown> {
+  const normalizedStatus = normalizeResponsesInputStatus(item.status);
+  if (normalizedStatus) {
+    return {
+      ...item,
+      status: normalizedStatus,
+    };
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(item, 'status')) {
+    return item;
+  }
+
+  const { status: _status, ...rest } = item;
+  return rest;
+}
+
 function firstNonEmptyTrimmedString(...values: unknown[]): string {
   for (const value of values) {
     const normalized = asTrimmedString(value);
@@ -139,7 +169,7 @@ function toResponsesInputMessageFromText(text: string): Record<string, unknown> 
 export function normalizeResponsesMessageItem(item: Record<string, unknown>): Record<string, unknown> {
   const type = asTrimmedString(item.type).toLowerCase();
   if (type === 'function_call' || type === 'function_call_output') {
-    return item;
+    return withNormalizedResponsesInputStatus(item);
   }
 
   const role = asTrimmedString(item.role).toLowerCase() || 'user';
@@ -149,20 +179,20 @@ export function normalizeResponsesMessageItem(item: Record<string, unknown>): Re
   );
 
   if (type === 'message') {
-    return {
+    return withNormalizedResponsesInputStatus({
       ...item,
       role,
       content: normalizedContent,
-    };
+    });
   }
 
   if (asTrimmedString(item.role)) {
-    return {
+    return withNormalizedResponsesInputStatus({
       ...item,
       type: 'message',
       role,
       content: normalizedContent,
-    };
+    });
   }
 
   if (typeof item.content === 'string' || typeof item.text === 'string') {
@@ -170,7 +200,7 @@ export function normalizeResponsesMessageItem(item: Record<string, unknown>): Re
     return text ? toResponsesInputMessageFromText(text) : item;
   }
 
-  return item;
+  return withNormalizedResponsesInputStatus(item);
 }
 
 export function normalizeResponsesInputForCompatibility(input: unknown): unknown {

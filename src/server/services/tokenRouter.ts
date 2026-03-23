@@ -3,6 +3,7 @@ import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
 import { config } from '../config.js';
 import { getCachedModelRoutingReferenceCost, refreshModelPricingCatalog } from './modelPricingService.js';
+import { RETRYABLE_TIMEOUT_PATTERNS } from './proxyRetryPolicy.js';
 import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
@@ -133,8 +134,7 @@ const SITE_VALIDATION_FAILURE_PATTERNS: RegExp[] = [
 const SITE_TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
   /bad\s+gateway/i,
   /gateway\s+time-?out/i,
-  /timed?\s*out/i,
-  /timeout/i,
+  ...RETRYABLE_TIMEOUT_PATTERNS,
   /service\s+unavailable/i,
   /temporar(?:y|ily)\s+unavailable/i,
   /cpu\s+overloaded/i,
@@ -505,7 +505,9 @@ function scheduleSiteRuntimeHealthPersistence(): void {
   if (siteRuntimeHealthSaveTimer) return;
   siteRuntimeHealthSaveTimer = setTimeout(() => {
     siteRuntimeHealthSaveTimer = null;
-    void persistSiteRuntimeHealthState();
+    void persistSiteRuntimeHealthState().catch((error) => {
+      console.error('Failed to persist site runtime health state', error);
+    });
   }, SITE_RUNTIME_HEALTH_PERSIST_DEBOUNCE_MS);
 }
 
@@ -560,8 +562,11 @@ async function ensureSiteRuntimeHealthStateLoaded(): Promise<void> {
     siteRuntimeHealthLoadPromise = (async () => {
       try {
         await loadSiteRuntimeHealthStateFromSettings();
-      } finally {
         siteRuntimeHealthLoaded = true;
+      } catch (error) {
+        console.warn('Failed to restore site runtime health state from settings', error);
+        siteRuntimeHealthLoadPromise = null;
+        siteRuntimeHealthLoaded = false;
       }
     })();
   }
