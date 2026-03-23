@@ -34,6 +34,12 @@ type ProxyLogDetailState = {
   error?: string;
 };
 
+type ProxyLogSiteFilterOption = {
+  id: number;
+  name: string;
+  status: string | null;
+};
+
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
 const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
@@ -353,14 +359,17 @@ export default function ProxyLogs() {
       try {
         const result = await api.getSites();
         const rows = Array.isArray(result) ? result : (result?.sites || []);
-        const normalized = rows
+        const normalized: ProxyLogSiteFilterOption[] = rows
           .map((site: any) => ({
             id: Number(site?.id || 0),
             name: String(site?.name || '').trim() || `站点 #${site?.id ?? ''}`,
             status: typeof site?.status === 'string' ? site.status : null,
           }))
-          .filter((site) => site.id > 0)
-          .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+          .filter((site: ProxyLogSiteFilterOption) => site.id > 0)
+          .sort(
+            (left: ProxyLogSiteFilterOption, right: ProxyLogSiteFilterOption) =>
+              left.name.localeCompare(right.name, 'zh-CN'),
+          );
         if (!cancelled) setSites(normalized);
       } catch (error) {
         console.error('Failed to load sites for proxy log filters:', error);
@@ -701,7 +710,7 @@ export default function ProxyLogs() {
               const detailState = detailById[log.id];
               const detail = detailState?.data;
               const detailLog: ProxyLogRenderItem = detail ? { ...log, ...detail } : log;
-              const pathMeta = parseProxyLogPathMeta(detailLog.errorMessage);
+              const pathMeta = parseProxyLogPathMeta(detailLog.errorMessage ?? undefined);
               const billingDetailSummary = detail ? formatBillingDetailSummary(detailLog) : null;
               const billingProcessLines = detail ? buildBillingProcessLines(detailLog) : [];
               const downstreamKeySummary = renderDownstreamKeySummary(detailLog);
@@ -808,7 +817,7 @@ export default function ProxyLogs() {
                 const detailState = detailById[log.id];
                 const detail = detailState?.data;
                 const detailLog: ProxyLogRenderItem = detail ? { ...log, ...detail } : log;
-                const pathMeta = parseProxyLogPathMeta(detailLog.errorMessage);
+                const pathMeta = parseProxyLogPathMeta(detailLog.errorMessage ?? undefined);
                 const billingDetailSummary = detail ? formatBillingDetailSummary(detailLog) : null;
                 const billingProcessLines = detail ? buildBillingProcessLines(detailLog) : [];
                 const downstreamKeySummary = renderDownstreamKeySummary(detailLog);

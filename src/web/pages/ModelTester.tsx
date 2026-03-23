@@ -41,12 +41,14 @@ import {
   type DebugTab,
   type ModelTesterInputs,
   type ModelTesterModeState,
-  type ParameterEnabled,
-  type PlaygroundMode,
-  type PlaygroundMultipartFile,
-  type TestTargetFormat,
-  type TestChatPayload,
-} from './helpers/modelTesterSession.js';
+    type ParameterEnabled,
+    type PlaygroundMode,
+    type PlaygroundProtocol,
+    type PlaygroundMultipartFile,
+    type ProxyTestEnvelope,
+    type TestTargetFormat,
+    type TestChatPayload,
+  } from './helpers/modelTesterSession.js';
 import {
   buildConversationFileAccept,
   buildConversationFileHint,
