@@ -9,6 +9,8 @@ import {
   type LogicalColumnType,
 } from './schemaMetadata.js';
 
+export type { LogicalColumnType } from './schemaMetadata.js';
+
 export interface SchemaContractColumn {
   logicalType: LogicalColumnType;
   notNull: boolean;

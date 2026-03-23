@@ -59,8 +59,23 @@ type SurfaceOauthRefreshContext<TRequest extends BuiltEndpointRequest> = {
 };
 
 type SurfaceSuccessSelectedChannel = SurfaceSelectedChannel & {
-  account: Record<string, unknown> & { id: number };
-  site: Record<string, unknown>;
+  account: Record<string, unknown> & {
+    id: number;
+    username?: string | null;
+    accessToken?: string | null;
+    apiToken?: string | null;
+    extraConfig?: string | null;
+    platformUserId?: number | null;
+  };
+  site: Record<string, unknown> & {
+    id: number;
+    url: string;
+    platform: string;
+    apiKey?: string | null;
+    useSystemProxy?: boolean | null;
+    proxyUrl?: string | null;
+    name?: string | null;
+  };
   tokenValue: string;
   tokenName?: string | null;
 };
@@ -69,6 +84,18 @@ type SurfaceUsageSummary = {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  promptTokensIncludeCache: boolean | null;
+};
+
+type SurfaceResolvedUsageSummary = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  recoveredFromSelfLog: boolean;
+  estimatedCostFromQuota: number;
+  selfLogBillingMeta: import('../../services/proxyUsageFallbackService.js').SelfLogBillingMeta | null;
 };
 
 export async function selectSurfaceChannelForAttempt(input: {
@@ -251,11 +278,18 @@ export async function recordSurfaceSuccess(input: {
   bestEffortMetrics?: {
     errorLabel: string;
   };
-}) {
-  let resolvedUsage = {
+}): Promise<{
+  resolvedUsage: SurfaceResolvedUsageSummary;
+  estimatedCost: number;
+  billingDetails: unknown;
+}> {
+  let resolvedUsage: SurfaceResolvedUsageSummary = {
     promptTokens: input.parsedUsage.promptTokens,
     completionTokens: input.parsedUsage.completionTokens,
     totalTokens: input.parsedUsage.totalTokens,
+    recoveredFromSelfLog: false,
+    estimatedCostFromQuota: 0,
+    selfLogBillingMeta: null,
   };
   let estimatedCost = 0;
   let billingDetails: unknown = null;
