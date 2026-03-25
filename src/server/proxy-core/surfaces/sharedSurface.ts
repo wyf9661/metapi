@@ -187,13 +187,17 @@ export function clearSurfaceStickyChannel(input: {
 }
 
 export async function acquireSurfaceChannelLease(input: {
+  stickySessionKey?: string | null;
   selected: {
     channel: { id: number };
     account?: { extraConfig?: string | null } | null;
   };
 }) {
   return await proxyChannelCoordinator.acquireChannelLease({
-    channelId: input.selected.channel.id,
+    // Only session-addressable requests should consume the guarded per-channel
+    // lease pool. Requests without a stable downstream session key should keep
+    // the pre-sticky-session parallel behavior instead of contending globally.
+    channelId: input.stickySessionKey ? input.selected.channel.id : 0,
     accountExtraConfig: input.selected.account?.extraConfig,
   });
 }

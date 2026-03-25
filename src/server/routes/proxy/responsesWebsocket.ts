@@ -14,6 +14,7 @@ import { tokenRouter } from '../../services/tokenRouter.js';
 import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import { buildUpstreamEndpointRequest } from './upstreamEndpoint.js';
+import { config } from '../../config.js';
 
 const installedApps = new WeakSet<FastifyInstance>();
 const WS_TURN_STATE_HEADER = 'x-codex-turn-state';
@@ -56,32 +57,6 @@ function headerValueToTrimmedString(value: unknown): string {
   return '';
 }
 
-function toBooleanLike(value: unknown): boolean | null {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') return true;
-    if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false;
-  }
-  return null;
-}
-
-function parseExtraConfigRecord(extraConfig: unknown): Record<string, unknown> | null {
-  if (typeof extraConfig !== 'string') return null;
-  try {
-    const parsed = JSON.parse(extraConfig);
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function readNestedRecord(value: unknown, key: string): Record<string, unknown> | null {
-  if (!isRecord(value)) return null;
-  const nested = value[key];
-  return isRecord(nested) ? nested : null;
-}
-
 function selectedChannelModelMatches(
   selectedChannel: SelectedChannel | null,
   requestModel: string,
@@ -101,23 +76,7 @@ function selectedChannelSupportsCodexWebsocketTransport(
   const platform = asTrimmedString(selectedChannel.site?.platform).toLowerCase();
   if (platform !== 'codex') return false;
   if (!selectedChannelModelMatches(selectedChannel, requestModel)) return false;
-
-  const extraConfig = parseExtraConfigRecord(selectedChannel.account.extraConfig);
-  const oauth = readNestedRecord(extraConfig, 'oauth');
-  const providerData = readNestedRecord(oauth, 'providerData');
-  const candidateFlags = [
-    extraConfig?.websockets,
-    readNestedRecord(extraConfig, 'attributes')?.websockets,
-    readNestedRecord(extraConfig, 'metadata')?.websockets,
-    providerData?.websockets,
-    readNestedRecord(providerData, 'attributes')?.websockets,
-    readNestedRecord(providerData, 'metadata')?.websockets,
-  ];
-  for (const candidate of candidateFlags) {
-    const parsed = toBooleanLike(candidate);
-    if (parsed !== null) return parsed;
-  }
-  return true;
+  return !!config.codexUpstreamWebsocketEnabled;
 }
 
 function selectedChannelSupportsIncrementalInput(

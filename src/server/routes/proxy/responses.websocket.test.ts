@@ -248,6 +248,7 @@ function createClientSocketForPath(path: string, headers: Record<string, string>
 
 describe('responses websocket transport', () => {
   const originalCodexResponsesWebsocketBeta = config.codexResponsesWebsocketBeta;
+  const originalCodexUpstreamWebsocketEnabled = config.codexUpstreamWebsocketEnabled;
   let app: FastifyInstance;
   let baseUrl: string;
   let upstreamServer: WebSocketServer;
@@ -328,6 +329,7 @@ describe('responses websocket transport', () => {
     upstreamUpgradeHeaders = {};
     upstreamRequests = [];
     (config as any).codexResponsesWebsocketBeta = originalCodexResponsesWebsocketBeta;
+    (config as any).codexUpstreamWebsocketEnabled = true;
     rejectedUpgradeStatus = 426;
     rejectedUpgradeStatusText = 'Upgrade Required';
     rejectedUpgradeBody = 'Upgrade Required';
@@ -363,6 +365,7 @@ describe('responses websocket transport', () => {
   });
 
   afterAll(async () => {
+    (config as any).codexUpstreamWebsocketEnabled = originalCodexUpstreamWebsocketEnabled;
     await new Promise<void>((resolve) => rejectedUpgradeServer.close(() => resolve()));
     await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
     await app.close();
@@ -1430,20 +1433,8 @@ describe('responses websocket transport', () => {
     });
   });
 
-  it('disables codex websocket incremental transport when the selected account marks websockets as disabled', async () => {
-    const selectedChannel = createSelectedChannel({
-      extraConfig: JSON.stringify({
-        credentialMode: 'session',
-        websockets: false,
-        oauth: {
-          provider: 'codex',
-          accountId: 'chatgpt-account-123',
-          email: 'codex-user@example.com',
-        },
-      }),
-    });
-    selectChannelMock.mockReturnValue(selectedChannel);
-    previewSelectedChannelMock.mockResolvedValue(selectedChannel);
+  it('falls back to the HTTP responses route when codex upstream websocket is globally disabled', async () => {
+    (config as any).codexUpstreamWebsocketEnabled = false;
     fetchMock
       .mockResolvedValueOnce(createSseResponse([
         'event: response.completed\n',

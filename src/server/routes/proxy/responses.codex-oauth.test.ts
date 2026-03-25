@@ -20,6 +20,9 @@ const refreshOauthAccessTokenSingleflightMock = vi.fn();
 const recordOauthQuotaResetHintMock = vi.fn();
 const insertedProxyLogs: Record<string, unknown>[] = [];
 const originalProxyEmptyContentFailEnabled = config.proxyEmptyContentFailEnabled;
+const originalProxyStickySessionEnabled = config.proxyStickySessionEnabled;
+const originalProxySessionChannelConcurrencyLimit = config.proxySessionChannelConcurrencyLimit;
+const originalProxySessionChannelQueueWaitMs = config.proxySessionChannelQueueWaitMs;
 const dbInsertMock = vi.fn((_arg?: any) => ({
   values: (values: Record<string, unknown>) => {
     insertedProxyLogs.push(values);
@@ -136,6 +139,9 @@ describe('responses proxy codex oauth refresh', () => {
   beforeEach(() => {
     resetCodexHttpSessionQueue();
     config.proxyEmptyContentFailEnabled = false;
+    config.proxyStickySessionEnabled = originalProxyStickySessionEnabled;
+    config.proxySessionChannelConcurrencyLimit = originalProxySessionChannelConcurrencyLimit;
+    config.proxySessionChannelQueueWaitMs = originalProxySessionChannelQueueWaitMs;
     fetchMock.mockReset();
     selectChannelMock.mockReset();
     selectNextChannelMock.mockReset();
@@ -180,6 +186,9 @@ describe('responses proxy codex oauth refresh', () => {
 
   afterAll(async () => {
     config.proxyEmptyContentFailEnabled = originalProxyEmptyContentFailEnabled;
+    config.proxyStickySessionEnabled = originalProxyStickySessionEnabled;
+    config.proxySessionChannelConcurrencyLimit = originalProxySessionChannelConcurrencyLimit;
+    config.proxySessionChannelQueueWaitMs = originalProxySessionChannelQueueWaitMs;
     await app.close();
   });
 
@@ -559,6 +568,68 @@ describe('responses proxy codex oauth refresh', () => {
     const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
     expect(firstOptions.headers.Session_id || firstOptions.headers.session_id).toBe('session-http-serial-1');
     expect(secondOptions.headers.Session_id || secondOptions.headers.session_id).toBe('session-http-serial-1');
+  });
+
+  it('does not gate codex responses requests without a downstream session id behind the session lease queue', async () => {
+    config.proxyStickySessionEnabled = true;
+    config.proxySessionChannelConcurrencyLimit = 1;
+    config.proxySessionChannelQueueWaitMs = 20;
+
+    const firstUpstream = createDeferred<Response>();
+    fetchMock
+      .mockImplementationOnce(() => firstUpstream.promise)
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_codex_parallel_2',
+        object: 'response',
+        model: 'gpt-5.2-codex',
+        status: 'completed',
+        output_text: 'second request finished',
+        usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const firstResponsePromise = app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.2-codex',
+        input: 'first request',
+      },
+    });
+
+    await waitFor(() => fetchMock.mock.calls.length === 1);
+
+    const secondResponsePromise = app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-5.2-codex',
+        input: 'second request',
+      },
+    });
+
+    await waitFor(() => fetchMock.mock.calls.length === 2);
+
+    firstUpstream.resolve(new Response(JSON.stringify({
+      id: 'resp_codex_parallel_1',
+      object: 'response',
+      model: 'gpt-5.2-codex',
+      status: 'completed',
+      output_text: 'first request finished',
+      usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const [firstResponse, secondResponse] = await Promise.all([
+      firstResponsePromise,
+      secondResponsePromise,
+    ]);
+    expect(firstResponse.statusCode).toBe(200);
+    expect(secondResponse.statusCode).toBe(200);
   });
 
   it('records codex usage_limit_reached reset hints on upstream 429 failures', async () => {

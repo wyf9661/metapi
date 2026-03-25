@@ -380,6 +380,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 
 	      const startTime = Date.now();
 	      const leaseResult = await acquireSurfaceChannelLease({
+	        stickySessionKey,
 	        selected,
 	      });
 	      if (leaseResult.status === 'timeout') {

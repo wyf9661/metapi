@@ -264,6 +264,7 @@ export async function handleChatSurfaceRequest(
     };
     let startTime = Date.now();
     const leaseResult = await acquireSurfaceChannelLease({
+      stickySessionKey,
       selected,
     });
     if (leaseResult.status === 'timeout') {
@@ -789,6 +790,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
     const oauth = getOauthInfoFromAccount(selected.account);
     const startTime = Date.now();
     const leaseResult = await acquireSurfaceChannelLease({
+      stickySessionKey,
       selected,
     });
     if (leaseResult.status === 'timeout') {
