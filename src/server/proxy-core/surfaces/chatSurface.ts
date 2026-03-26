@@ -872,7 +872,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
 
       const latency = Date.now() - startTime;
       const contentType = upstream.headers.get('content-type') || 'application/json';
-      const text = await upstream.text();
+      const text = await readRuntimeResponseText(upstream);
       let payload: unknown = text;
       try {
         payload = JSON.parse(text);

@@ -18,6 +18,7 @@ import { buildUpstreamUrl } from '../../routes/proxy/upstreamUrl.js';
 import { recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
+import { readRuntimeResponseText } from '../executors/types.js';
 
 type SelectedChannel = Awaited<ReturnType<typeof tokenRouter.selectChannel>>;
 type SurfaceWarningScope = 'chat' | 'responses';
@@ -333,7 +334,8 @@ export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpo
     input.ctx.request = refreshedRequest;
     input.ctx.response = refreshedResponse;
     if (input.captureFailureBody !== false) {
-      input.ctx.rawErrText = await refreshedResponse.text().catch(() => 'unknown error');
+      const failureBody = await readRuntimeResponseText(refreshedResponse).catch(() => '');
+      input.ctx.rawErrText = failureBody.trim() || 'unknown error';
     }
   } catch {
     return null;
