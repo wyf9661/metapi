@@ -9,7 +9,11 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getProxyLogs: vi.fn(),
     getProxyLogDetail: vi.fn(),
+    getProxyDebugTraces: vi.fn(),
+    getProxyDebugTraceDetail: vi.fn(),
+    getRuntimeSettings: vi.fn(),
     getSites: vi.fn(),
+    updateRuntimeSettings: vi.fn(),
   },
 }));
 
@@ -97,6 +101,17 @@ describe('ProxyLogs server-driven page', () => {
       { id: 9, name: 'main-site', status: 'active' },
       { id: 12, name: 'backup-site', status: 'active' },
     ]);
+    apiMock.getRuntimeSettings.mockResolvedValue({
+      proxyDebugTraceEnabled: false,
+      proxyDebugCaptureHeaders: true,
+      proxyDebugCaptureBodies: false,
+      proxyDebugCaptureStreamChunks: false,
+      proxyDebugTargetSessionId: '',
+      proxyDebugTargetClientKind: '',
+      proxyDebugTargetModel: '',
+      proxyDebugRetentionHours: 24,
+      proxyDebugMaxBodyBytes: 262144,
+    });
     apiMock.getProxyLogs.mockResolvedValue(buildListResponse());
     apiMock.getProxyLogDetail.mockResolvedValue({
       id: 101,
@@ -151,6 +166,40 @@ describe('ProxyLogs server-driven page', () => {
         },
       },
     });
+    apiMock.getProxyDebugTraces.mockResolvedValue({
+      items: [
+        {
+          id: 701,
+          createdAt: '2026-03-28 18:00:00',
+          requestedModel: 'gpt-4o',
+          downstreamPath: '/v1/responses',
+          finalStatus: 'failed',
+          finalUpstreamPath: '/responses',
+          clientKind: 'codex',
+          sessionId: 'sess-debug-1',
+        },
+      ],
+    });
+    apiMock.getProxyDebugTraceDetail.mockResolvedValue({
+      trace: {
+        id: 701,
+        requestedModel: 'gpt-4o',
+        sessionId: 'sess-debug-1',
+      },
+      attempts: [],
+    });
+    apiMock.updateRuntimeSettings.mockResolvedValue({
+      success: true,
+      proxyDebugTraceEnabled: true,
+      proxyDebugCaptureHeaders: true,
+      proxyDebugCaptureBodies: true,
+      proxyDebugCaptureStreamChunks: false,
+      proxyDebugTargetSessionId: 'sess-debug-1',
+      proxyDebugTargetClientKind: 'codex',
+      proxyDebugTargetModel: 'gpt-4o',
+      proxyDebugRetentionHours: 12,
+      proxyDebugMaxBodyBytes: 131072,
+    });
   });
 
   afterEach(() => {
@@ -188,6 +237,85 @@ describe('ProxyLogs server-driven page', () => {
       expect(text).toContain('Codex');
       expect(text).toContain('推测');
       expect(text).toContain('下游 Key: 移动端灰度');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('allows toggling proxy debug settings directly from the proxy logs page', async () => {
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/logs']}>
+            <ToastProvider>
+              <ProxyLogs />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const debugButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('调试')
+      ));
+
+      await act(async () => {
+        debugButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.getRuntimeSettings).toHaveBeenCalled();
+      expect(apiMock.getProxyDebugTraces).toHaveBeenCalled();
+      expect(collectText(root.root)).toContain('最近调试追踪');
+      expect(collectText(root.root)).toContain('sess-debug-1');
+
+      const traceEnabledToggle = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.type === 'checkbox'
+        && node.props['data-debug-setting'] === 'trace-enabled'
+      ));
+      const captureBodiesToggle = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.type === 'checkbox'
+        && node.props['data-debug-setting'] === 'capture-bodies'
+      ));
+      const sessionInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props['data-debug-setting'] === 'target-session-id'
+      ));
+      const retentionInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props['data-debug-setting'] === 'retention-hours'
+      ));
+
+      await act(async () => {
+        traceEnabledToggle.props.onChange({ target: { checked: true } });
+        captureBodiesToggle.props.onChange({ target: { checked: true } });
+        sessionInput.props.onChange({ target: { value: 'sess-debug-1' } });
+        retentionInput.props.onChange({ target: { value: '12' } });
+      });
+
+      const saveButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '保存调试设置'
+      ));
+
+      await act(async () => {
+        saveButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith(expect.objectContaining({
+        proxyDebugTraceEnabled: true,
+        proxyDebugCaptureBodies: true,
+        proxyDebugTargetSessionId: 'sess-debug-1',
+        proxyDebugRetentionHours: 12,
+      }));
     } finally {
       root?.unmount();
     }

@@ -2,7 +2,7 @@ import { zstdCompressSync } from 'node:zlib';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../config.js';
-import { resetUpstreamEndpointRuntimeState } from './upstreamEndpoint.js';
+import { resetUpstreamEndpointRuntimeState } from '../../services/upstreamEndpointRuntimeMemory.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();

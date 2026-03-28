@@ -55,6 +55,15 @@ describe('settings and auth events', () => {
     config.codexUpstreamWebsocketEnabled = false;
     config.proxySessionChannelConcurrencyLimit = 2;
     config.proxySessionChannelQueueWaitMs = 1500;
+    (config as any).proxyDebugTraceEnabled = false;
+    (config as any).proxyDebugCaptureHeaders = true;
+    (config as any).proxyDebugCaptureBodies = false;
+    (config as any).proxyDebugCaptureStreamChunks = false;
+    (config as any).proxyDebugTargetSessionId = '';
+    (config as any).proxyDebugTargetClientKind = '';
+    (config as any).proxyDebugTargetModel = '';
+    (config as any).proxyDebugRetentionHours = 24;
+    (config as any).proxyDebugMaxBodyBytes = 262144;
     config.routingFallbackUnitCost = 1;
     (config as any).telegramEnabled = false;
     (config as any).telegramApiBaseUrl = 'https://api.telegram.org';
@@ -144,6 +153,67 @@ describe('settings and auth events', () => {
     expect(savedWebsocket?.value).toBe(JSON.stringify(true));
     expect(savedConcurrency?.value).toBe(JSON.stringify(6));
     expect(savedQueueWait?.value).toBe(JSON.stringify(4200));
+  });
+
+  it('persists proxy debug runtime settings from runtime settings', async () => {
+    const updateResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/runtime',
+      payload: {
+        proxyDebugTraceEnabled: true,
+        proxyDebugCaptureHeaders: true,
+        proxyDebugCaptureBodies: true,
+        proxyDebugCaptureStreamChunks: true,
+        proxyDebugTargetSessionId: 'sess-debug-1',
+        proxyDebugTargetClientKind: 'codex',
+        proxyDebugTargetModel: 'gpt-4o',
+        proxyDebugRetentionHours: 12,
+        proxyDebugMaxBodyBytes: 131072,
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    const updated = updateResponse.json() as {
+      proxyDebugTraceEnabled?: boolean;
+      proxyDebugCaptureHeaders?: boolean;
+      proxyDebugCaptureBodies?: boolean;
+      proxyDebugCaptureStreamChunks?: boolean;
+      proxyDebugTargetSessionId?: string;
+      proxyDebugTargetClientKind?: string;
+      proxyDebugTargetModel?: string;
+      proxyDebugRetentionHours?: number;
+      proxyDebugMaxBodyBytes?: number;
+    };
+    expect(updated).toMatchObject({
+      proxyDebugTraceEnabled: true,
+      proxyDebugCaptureHeaders: true,
+      proxyDebugCaptureBodies: true,
+      proxyDebugCaptureStreamChunks: true,
+      proxyDebugTargetSessionId: 'sess-debug-1',
+      proxyDebugTargetClientKind: 'codex',
+      proxyDebugTargetModel: 'gpt-4o',
+      proxyDebugRetentionHours: 12,
+      proxyDebugMaxBodyBytes: 131072,
+    });
+
+    const savedEnabled = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_trace_enabled')).get();
+    const savedHeaders = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_capture_headers')).get();
+    const savedBodies = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_capture_bodies')).get();
+    const savedStreamChunks = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_capture_stream_chunks')).get();
+    const savedTargetSessionId = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_target_session_id')).get();
+    const savedTargetClientKind = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_target_client_kind')).get();
+    const savedTargetModel = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_target_model')).get();
+    const savedRetentionHours = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_retention_hours')).get();
+    const savedMaxBodyBytes = await db.select().from(schema.settings).where(eq(schema.settings.key, 'proxy_debug_max_body_bytes')).get();
+    expect(savedEnabled?.value).toBe(JSON.stringify(true));
+    expect(savedHeaders?.value).toBe(JSON.stringify(true));
+    expect(savedBodies?.value).toBe(JSON.stringify(true));
+    expect(savedStreamChunks?.value).toBe(JSON.stringify(true));
+    expect(savedTargetSessionId?.value).toBe(JSON.stringify('sess-debug-1'));
+    expect(savedTargetClientKind?.value).toBe(JSON.stringify('codex'));
+    expect(savedTargetModel?.value).toBe(JSON.stringify('gpt-4o'));
+    expect(savedRetentionHours?.value).toBe(JSON.stringify(12));
+    expect(savedMaxBodyBytes?.value).toBe(JSON.stringify(131072));
   });
 
   it('returns current recognized admin IP in runtime settings response', async () => {

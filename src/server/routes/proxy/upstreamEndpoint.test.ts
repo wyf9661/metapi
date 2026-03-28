@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../config.js';
 
 const fetchModelPricingCatalogMock = vi.fn(async (_arg?: unknown): Promise<any> => null);
@@ -12,14 +12,17 @@ import {
   buildUpstreamEndpointRequest,
   isUnsupportedMediaTypeError,
   isEndpointDowngradeError,
+  resolveUpstreamEndpointCandidates,
+} from './upstreamEndpoint.js';
+import {
   recordUpstreamEndpointFailure,
   recordUpstreamEndpointSuccess,
   resetUpstreamEndpointRuntimeState,
-  resolveUpstreamEndpointCandidates,
+  getUpstreamEndpointRuntimeStateSnapshot,
   boundEndpointRuntimeModelKey,
   MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH,
   MODEL_KEY_HASH_SUFFIX_LENGTH,
-} from './upstreamEndpoint.js';
+} from '../../services/upstreamEndpointRuntimeMemory.js';
 
 const baseContext = {
   site: {
@@ -51,6 +54,9 @@ describe('resolveUpstreamEndpointCandidates', () => {
       overrideRaw: [],
       filter: [],
     };
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('uses downstream-aligned endpoint priority for unknown platforms', async () => {
@@ -236,6 +242,64 @@ describe('resolveUpstreamEndpointCandidates', () => {
     expect(order).toEqual(['chat', 'messages', 'responses']);
   });
 
+  it('does not expose preferred endpoint in snapshot when runtime memory is disabled for multimodal requests', () => {
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'responses',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+      requestCapabilities: {
+        conversationFileSummary: {
+          hasImage: true,
+          hasAudio: false,
+          hasDocument: false,
+          hasRemoteDocumentUrl: false,
+        },
+      },
+    });
+
+    expect(getUpstreamEndpointRuntimeStateSnapshot({
+      siteId: baseContext.site.id,
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+      requestCapabilities: {
+        conversationFileSummary: {
+          hasImage: true,
+          hasAudio: false,
+          hasDocument: false,
+          hasRemoteDocumentUrl: false,
+        },
+      },
+    })).toMatchObject({
+      enabled: false,
+      preferredEndpoint: null,
+      blockedEndpoints: [],
+    });
+  });
+
+  it('does not expose expired preferred endpoints in the runtime snapshot', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-28T00:00:00.000Z'));
+
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'chat',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+    });
+
+    vi.setSystemTime(new Date('2026-03-29T01:00:00.000Z'));
+
+    expect(getUpstreamEndpointRuntimeStateSnapshot({
+      siteId: baseContext.site.id,
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+    })).toMatchObject({
+      enabled: true,
+      preferredEndpoint: null,
+    });
+  });
+
   it('does not apply runtime endpoint memory to document attachments', async () => {
     recordUpstreamEndpointSuccess({
       siteId: baseContext.site.id,
@@ -379,12 +443,13 @@ describe('resolveUpstreamEndpointCandidates', () => {
   });
 
   it('does not remember messages fallback success for generic /v1/responses requests', async () => {
-    recordUpstreamEndpointSuccess({
+    const memoryWrite = recordUpstreamEndpointSuccess({
       siteId: baseContext.site.id,
       endpoint: 'messages',
       downstreamFormat: 'responses',
       modelName: 'gpt-5.3',
     });
+    expect(memoryWrite).toBeNull();
 
     const order = await resolveUpstreamEndpointCandidates(
       {
@@ -398,8 +463,23 @@ describe('resolveUpstreamEndpointCandidates', () => {
     expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
+  it('returns the applied success write when runtime memory stores a preferred endpoint', () => {
+    const memoryWrite = recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'responses',
+      downstreamFormat: 'responses',
+      modelName: 'gpt-5.3',
+    });
+
+    expect(memoryWrite).toMatchObject({
+      action: 'success',
+      endpoint: 'responses',
+      preferredEndpoint: 'responses',
+    });
+  });
+
   it('does not block generic /v1/responses endpoints on transient upstream errors', async () => {
-    recordUpstreamEndpointFailure({
+    const memoryWrite = recordUpstreamEndpointFailure({
       siteId: baseContext.site.id,
       endpoint: 'responses',
       downstreamFormat: 'responses',
@@ -407,6 +487,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       status: 504,
       errorText: '{"error":{"message":"Gateway time-out","type":"upstream_error"}}',
     });
+    expect(memoryWrite).toBeNull();
 
     const order = await resolveUpstreamEndpointCandidates(
       {
@@ -421,13 +502,19 @@ describe('resolveUpstreamEndpointCandidates', () => {
   });
 
   it('learns a better endpoint from explicit upstream protocol errors', async () => {
-    recordUpstreamEndpointFailure({
+    const memoryWrite = recordUpstreamEndpointFailure({
       siteId: baseContext.site.id,
       endpoint: 'chat',
       downstreamFormat: 'openai',
       modelName: 'gpt-5.3',
       status: 400,
       errorText: 'Unsupported legacy protocol: /v1/chat/completions is not supported. Please use /v1/responses.',
+    });
+    expect(memoryWrite).toMatchObject({
+      action: 'failure',
+      endpoint: 'chat',
+      blockedEndpoint: 'chat',
+      preferredEndpoint: 'responses',
     });
 
     const order = await resolveUpstreamEndpointCandidates(

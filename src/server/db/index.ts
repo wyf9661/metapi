@@ -34,6 +34,8 @@ const TABLES_WITH_NUMERIC_ID = new Set([
   'route_group_sources',
   'route_channels',
   'proxy_logs',
+  'proxy_debug_traces',
+  'proxy_debug_attempts',
   'proxy_video_tasks',
   'proxy_files',
   'downstream_api_keys',

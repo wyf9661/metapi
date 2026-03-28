@@ -227,6 +227,51 @@ function applyRuntimeSettings(settingsMap: Map<string, string>) {
     config.proxySessionChannelQueueWaitMs = Math.trunc(proxySessionChannelQueueWaitMs);
   }
 
+  const proxyDebugTraceEnabled = parseSettingFromMap<boolean>(settingsMap, 'proxy_debug_trace_enabled');
+  if (typeof proxyDebugTraceEnabled === 'boolean') {
+    config.proxyDebugTraceEnabled = proxyDebugTraceEnabled;
+  }
+
+  const proxyDebugCaptureHeaders = parseSettingFromMap<boolean>(settingsMap, 'proxy_debug_capture_headers');
+  if (typeof proxyDebugCaptureHeaders === 'boolean') {
+    config.proxyDebugCaptureHeaders = proxyDebugCaptureHeaders;
+  }
+
+  const proxyDebugCaptureBodies = parseSettingFromMap<boolean>(settingsMap, 'proxy_debug_capture_bodies');
+  if (typeof proxyDebugCaptureBodies === 'boolean') {
+    config.proxyDebugCaptureBodies = proxyDebugCaptureBodies;
+  }
+
+  const proxyDebugCaptureStreamChunks = parseSettingFromMap<boolean>(settingsMap, 'proxy_debug_capture_stream_chunks');
+  if (typeof proxyDebugCaptureStreamChunks === 'boolean') {
+    config.proxyDebugCaptureStreamChunks = proxyDebugCaptureStreamChunks;
+  }
+
+  const proxyDebugTargetSessionId = parseSettingFromMap<string>(settingsMap, 'proxy_debug_target_session_id');
+  if (typeof proxyDebugTargetSessionId === 'string') {
+    config.proxyDebugTargetSessionId = proxyDebugTargetSessionId.trim();
+  }
+
+  const proxyDebugTargetClientKind = parseSettingFromMap<string>(settingsMap, 'proxy_debug_target_client_kind');
+  if (typeof proxyDebugTargetClientKind === 'string') {
+    config.proxyDebugTargetClientKind = proxyDebugTargetClientKind.trim();
+  }
+
+  const proxyDebugTargetModel = parseSettingFromMap<string>(settingsMap, 'proxy_debug_target_model');
+  if (typeof proxyDebugTargetModel === 'string') {
+    config.proxyDebugTargetModel = proxyDebugTargetModel.trim();
+  }
+
+  const proxyDebugRetentionHours = parseSettingFromMap<number>(settingsMap, 'proxy_debug_retention_hours');
+  if (typeof proxyDebugRetentionHours === 'number' && Number.isFinite(proxyDebugRetentionHours) && proxyDebugRetentionHours >= 1) {
+    config.proxyDebugRetentionHours = Math.trunc(proxyDebugRetentionHours);
+  }
+
+  const proxyDebugMaxBodyBytes = parseSettingFromMap<number>(settingsMap, 'proxy_debug_max_body_bytes');
+  if (typeof proxyDebugMaxBodyBytes === 'number' && Number.isFinite(proxyDebugMaxBodyBytes) && proxyDebugMaxBodyBytes >= 1024) {
+    config.proxyDebugMaxBodyBytes = Math.trunc(proxyDebugMaxBodyBytes);
+  }
+
   const routingWeights = parseSettingFromMap<Partial<typeof config.routingWeights>>(settingsMap, 'routing_weights');
   if (routingWeights && typeof routingWeights === 'object') {
     config.routingWeights = {

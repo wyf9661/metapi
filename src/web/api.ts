@@ -351,6 +351,72 @@ export type ProxyLogsResponse = {
   summary: ProxyLogsSummary;
 };
 
+export type ProxyDebugTraceListItem = {
+  id: number;
+  createdAt: string;
+  downstreamPath: string;
+  clientKind?: string | null;
+  sessionId?: string | null;
+  requestedModel?: string | null;
+  selectedChannelId?: number | null;
+  finalStatus?: string | null;
+  finalHttpStatus?: number | null;
+  finalUpstreamPath?: string | null;
+};
+
+export type ProxyDebugTraceDetail = {
+  trace: {
+    id: number;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    downstreamPath?: string | null;
+    clientKind?: string | null;
+    sessionId?: string | null;
+    traceHint?: string | null;
+    requestedModel?: string | null;
+    stickySessionKey?: string | null;
+    stickyHitChannelId?: number | null;
+    selectedChannelId?: number | null;
+    selectedRouteId?: number | null;
+    selectedAccountId?: number | null;
+    selectedSiteId?: number | null;
+    selectedSitePlatform?: string | null;
+    endpointCandidatesJson?: string | null;
+    endpointRuntimeStateJson?: string | null;
+    decisionSummaryJson?: string | null;
+    requestHeadersJson?: string | null;
+    requestBodyJson?: string | null;
+    finalStatus?: string | null;
+    finalHttpStatus?: number | null;
+    finalUpstreamPath?: string | null;
+    finalResponseHeadersJson?: string | null;
+    finalResponseBodyJson?: string | null;
+  };
+  attempts: Array<{
+    id: number;
+    attemptIndex: number;
+    endpoint: string;
+    requestPath: string;
+    targetUrl: string;
+    runtimeExecutor?: string | null;
+    requestHeadersJson?: string | null;
+    requestBodyJson?: string | null;
+    responseStatus?: number | null;
+    responseHeadersJson?: string | null;
+    responseBodyJson?: string | null;
+    rawErrorText?: string | null;
+    recoverApplied?: boolean | null;
+    downgradeDecision?: boolean | null;
+    downgradeReason?: string | null;
+    memoryWriteJson?: string | null;
+    createdAt?: string | null;
+  }>;
+};
+
+export type ProxyDebugTracesResponse = {
+  items: ProxyDebugTraceListItem[];
+};
+
 export type OAuthProviderInfo = {
   provider: string;
   label: string;
@@ -546,6 +612,8 @@ export const api = {
   getDashboard: () => request('/api/stats/dashboard'),
   getProxyLogs: (params?: ProxyLogsQuery) => request(`/api/stats/proxy-logs${buildQueryString(params)}`) as Promise<ProxyLogsResponse>,
   getProxyLogDetail: (id: number) => request(`/api/stats/proxy-logs/${id}`) as Promise<ProxyLogDetail>,
+  getProxyDebugTraces: (params?: { limit?: number }) => request(`/api/stats/proxy-debug/traces${buildQueryString(params)}`) as Promise<ProxyDebugTracesResponse>,
+  getProxyDebugTraceDetail: (id: number) => request(`/api/stats/proxy-debug/traces/${id}`) as Promise<ProxyDebugTraceDetail>,
   checkModels: (accountId: number) => request(`/api/models/check/${accountId}`, { method: 'POST' }),
   getSiteDistribution: () => request('/api/stats/site-distribution'),
   getSiteTrend: (days = 7) => request(`/api/stats/site-trend?days=${days}`),

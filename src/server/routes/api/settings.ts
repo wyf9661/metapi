@@ -41,6 +41,15 @@ interface RuntimeSettingsBody {
   codexUpstreamWebsocketEnabled?: boolean;
   proxySessionChannelConcurrencyLimit?: number;
   proxySessionChannelQueueWaitMs?: number;
+  proxyDebugTraceEnabled?: boolean;
+  proxyDebugCaptureHeaders?: boolean;
+  proxyDebugCaptureBodies?: boolean;
+  proxyDebugCaptureStreamChunks?: boolean;
+  proxyDebugTargetSessionId?: string;
+  proxyDebugTargetClientKind?: string;
+  proxyDebugTargetModel?: string;
+  proxyDebugRetentionHours?: number;
+  proxyDebugMaxBodyBytes?: number;
   checkinCron?: string;
   checkinScheduleMode?: 'cron' | 'interval';
   checkinIntervalHours?: number;
@@ -409,6 +418,62 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.proxySessionChannelQueueWaitMs = Math.trunc(queueWaitMs);
       return;
     }
+    case 'proxy_debug_trace_enabled': {
+      try {
+        config.proxyDebugTraceEnabled = parseBooleanFlag(value, '代理调试追踪开关');
+      } catch {
+        return;
+      }
+      return;
+    }
+    case 'proxy_debug_capture_headers': {
+      try {
+        config.proxyDebugCaptureHeaders = parseBooleanFlag(value, '代理调试请求头采集');
+      } catch {
+        return;
+      }
+      return;
+    }
+    case 'proxy_debug_capture_bodies': {
+      try {
+        config.proxyDebugCaptureBodies = parseBooleanFlag(value, '代理调试请求体采集');
+      } catch {
+        return;
+      }
+      return;
+    }
+    case 'proxy_debug_capture_stream_chunks': {
+      try {
+        config.proxyDebugCaptureStreamChunks = parseBooleanFlag(value, '代理调试流式分片采集');
+      } catch {
+        return;
+      }
+      return;
+    }
+    case 'proxy_debug_target_session_id': {
+      config.proxyDebugTargetSessionId = typeof value === 'string' ? value.trim() : '';
+      return;
+    }
+    case 'proxy_debug_target_client_kind': {
+      config.proxyDebugTargetClientKind = typeof value === 'string' ? value.trim() : '';
+      return;
+    }
+    case 'proxy_debug_target_model': {
+      config.proxyDebugTargetModel = typeof value === 'string' ? value.trim() : '';
+      return;
+    }
+    case 'proxy_debug_retention_hours': {
+      const retentionHours = Number(value);
+      if (!Number.isFinite(retentionHours) || retentionHours < 1) return;
+      config.proxyDebugRetentionHours = Math.trunc(retentionHours);
+      return;
+    }
+    case 'proxy_debug_max_body_bytes': {
+      const maxBodyBytes = Number(value);
+      if (!Number.isFinite(maxBodyBytes) || maxBodyBytes < 1024) return;
+      config.proxyDebugMaxBodyBytes = Math.trunc(maxBodyBytes);
+      return;
+    }
     case 'proxy_empty_content_fail_enabled': {
       try {
         config.proxyEmptyContentFailEnabled = parseBooleanFlag(value, '空内容判定失败开关');
@@ -580,6 +645,15 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     codexUpstreamWebsocketEnabled: config.codexUpstreamWebsocketEnabled,
     proxySessionChannelConcurrencyLimit: config.proxySessionChannelConcurrencyLimit,
     proxySessionChannelQueueWaitMs: config.proxySessionChannelQueueWaitMs,
+    proxyDebugTraceEnabled: config.proxyDebugTraceEnabled,
+    proxyDebugCaptureHeaders: config.proxyDebugCaptureHeaders,
+    proxyDebugCaptureBodies: config.proxyDebugCaptureBodies,
+    proxyDebugCaptureStreamChunks: config.proxyDebugCaptureStreamChunks,
+    proxyDebugTargetSessionId: config.proxyDebugTargetSessionId,
+    proxyDebugTargetClientKind: config.proxyDebugTargetClientKind,
+    proxyDebugTargetModel: config.proxyDebugTargetModel,
+    proxyDebugRetentionHours: config.proxyDebugRetentionHours,
+    proxyDebugMaxBodyBytes: config.proxyDebugMaxBodyBytes,
     routingFallbackUnitCost: config.routingFallbackUnitCost,
     routingWeights: config.routingWeights,
     webhookUrl: config.webhookUrl,
@@ -1005,6 +1079,127 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.proxySessionChannelQueueWaitMs = nextQueueWaitMs;
       upsertSetting('proxy_session_channel_queue_wait_ms', config.proxySessionChannelQueueWaitMs);
+    }
+
+    if (body.proxyDebugTraceEnabled !== undefined) {
+      let nextValue = false;
+      try {
+        nextValue = parseBooleanFlag(body.proxyDebugTraceEnabled, '代理调试追踪开关');
+      } catch (err: any) {
+        return reply.code(400).send({
+          success: false,
+          message: err?.message || '代理调试追踪开关格式无效',
+        });
+      }
+      if (nextValue !== config.proxyDebugTraceEnabled) {
+        changedLabels.push('代理调试追踪');
+      }
+      config.proxyDebugTraceEnabled = nextValue;
+      upsertSetting('proxy_debug_trace_enabled', config.proxyDebugTraceEnabled);
+    }
+
+    if (body.proxyDebugCaptureHeaders !== undefined) {
+      let nextValue = false;
+      try {
+        nextValue = parseBooleanFlag(body.proxyDebugCaptureHeaders, '代理调试请求头采集');
+      } catch (err: any) {
+        return reply.code(400).send({
+          success: false,
+          message: err?.message || '代理调试请求头采集格式无效',
+        });
+      }
+      if (nextValue !== config.proxyDebugCaptureHeaders) {
+        changedLabels.push('代理调试请求头采集');
+      }
+      config.proxyDebugCaptureHeaders = nextValue;
+      upsertSetting('proxy_debug_capture_headers', config.proxyDebugCaptureHeaders);
+    }
+
+    if (body.proxyDebugCaptureBodies !== undefined) {
+      let nextValue = false;
+      try {
+        nextValue = parseBooleanFlag(body.proxyDebugCaptureBodies, '代理调试请求体采集');
+      } catch (err: any) {
+        return reply.code(400).send({
+          success: false,
+          message: err?.message || '代理调试请求体采集格式无效',
+        });
+      }
+      if (nextValue !== config.proxyDebugCaptureBodies) {
+        changedLabels.push('代理调试请求体采集');
+      }
+      config.proxyDebugCaptureBodies = nextValue;
+      upsertSetting('proxy_debug_capture_bodies', config.proxyDebugCaptureBodies);
+    }
+
+    if (body.proxyDebugCaptureStreamChunks !== undefined) {
+      let nextValue = false;
+      try {
+        nextValue = parseBooleanFlag(body.proxyDebugCaptureStreamChunks, '代理调试流式分片采集');
+      } catch (err: any) {
+        return reply.code(400).send({
+          success: false,
+          message: err?.message || '代理调试流式分片采集格式无效',
+        });
+      }
+      if (nextValue !== config.proxyDebugCaptureStreamChunks) {
+        changedLabels.push('代理调试流式分片采集');
+      }
+      config.proxyDebugCaptureStreamChunks = nextValue;
+      upsertSetting('proxy_debug_capture_stream_chunks', config.proxyDebugCaptureStreamChunks);
+    }
+
+    if (body.proxyDebugTargetSessionId !== undefined) {
+      const nextValue = String(body.proxyDebugTargetSessionId || '').trim();
+      if (nextValue !== config.proxyDebugTargetSessionId) {
+        changedLabels.push('代理调试目标会话');
+      }
+      config.proxyDebugTargetSessionId = nextValue;
+      upsertSetting('proxy_debug_target_session_id', config.proxyDebugTargetSessionId);
+    }
+
+    if (body.proxyDebugTargetClientKind !== undefined) {
+      const nextValue = String(body.proxyDebugTargetClientKind || '').trim();
+      if (nextValue !== config.proxyDebugTargetClientKind) {
+        changedLabels.push('代理调试目标客户端');
+      }
+      config.proxyDebugTargetClientKind = nextValue;
+      upsertSetting('proxy_debug_target_client_kind', config.proxyDebugTargetClientKind);
+    }
+
+    if (body.proxyDebugTargetModel !== undefined) {
+      const nextValue = String(body.proxyDebugTargetModel || '').trim();
+      if (nextValue !== config.proxyDebugTargetModel) {
+        changedLabels.push('代理调试目标模型');
+      }
+      config.proxyDebugTargetModel = nextValue;
+      upsertSetting('proxy_debug_target_model', config.proxyDebugTargetModel);
+    }
+
+    if (body.proxyDebugRetentionHours !== undefined) {
+      const retentionHours = Number(body.proxyDebugRetentionHours);
+      if (!Number.isFinite(retentionHours) || retentionHours < 1) {
+        return reply.code(400).send({ success: false, message: '代理调试保留时长必须是大于等于 1 的整数小时' });
+      }
+      const nextValue = Math.trunc(retentionHours);
+      if (nextValue !== config.proxyDebugRetentionHours) {
+        changedLabels.push(`代理调试保留时长（${config.proxyDebugRetentionHours}h -> ${nextValue}h）`);
+      }
+      config.proxyDebugRetentionHours = nextValue;
+      upsertSetting('proxy_debug_retention_hours', config.proxyDebugRetentionHours);
+    }
+
+    if (body.proxyDebugMaxBodyBytes !== undefined) {
+      const maxBodyBytes = Number(body.proxyDebugMaxBodyBytes);
+      if (!Number.isFinite(maxBodyBytes) || maxBodyBytes < 1024) {
+        return reply.code(400).send({ success: false, message: '代理调试抓取体积上限必须是大于等于 1024 的整数字节' });
+      }
+      const nextValue = Math.trunc(maxBodyBytes);
+      if (nextValue !== config.proxyDebugMaxBodyBytes) {
+        changedLabels.push(`代理调试抓取体积上限（${config.proxyDebugMaxBodyBytes}B -> ${nextValue}B）`);
+      }
+      config.proxyDebugMaxBodyBytes = nextValue;
+      upsertSetting('proxy_debug_max_body_bytes', config.proxyDebugMaxBodyBytes);
     }
 
     if (body.proxyErrorKeywords !== undefined) {
