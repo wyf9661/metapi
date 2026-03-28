@@ -15,6 +15,7 @@ import {
   listOAuthProviderDefinitions,
   type OAuthProviderDefinition,
 } from './providers.js';
+import { ensureOauthProviderSite } from './oauthSiteRegistry.js';
 import {
   buildOauthInfo,
   buildOauthInfoFromAccount,
@@ -28,6 +29,7 @@ import {
   type OauthExtraConfigInput,
   type OauthIdentityCarrierLike,
 } from './codexAccount.js';
+import { resolveOauthAccountProxyUrl, resolveOauthProviderProxyUrl } from './requestProxy.js';
 import { ensureOauthIdentityBackfill } from './oauthIdentityBackfill.js';
 import { buildQuotaSnapshotFromOauthInfo, refreshOauthQuotaSnapshot } from './quota.js';
 
@@ -140,30 +142,8 @@ async function getNextAccountSortOrder(): Promise<number> {
   return (row?.maxSortOrder ?? -1) + 1;
 }
 
-async function getNextSiteSortOrder(): Promise<number> {
-  const row = await db.select({
-    maxSortOrder: sql<number>`COALESCE(MAX(${schema.sites.sortOrder}), -1)`,
-  }).from(schema.sites).get();
-  return (row?.maxSortOrder ?? -1) + 1;
-}
-
 async function ensureOauthSite(definition: OAuthProviderDefinition) {
-  const existing = await db.select().from(schema.sites).where(and(
-    eq(schema.sites.platform, definition.site.platform),
-    eq(schema.sites.url, definition.site.url),
-  )).get();
-  if (existing) return existing;
-
-  return db.insert(schema.sites).values({
-    name: definition.site.name,
-    url: definition.site.url,
-    platform: definition.site.platform,
-    status: 'active',
-    useSystemProxy: false,
-    isPinned: false,
-    globalWeight: 1,
-    sortOrder: await getNextSiteSortOrder(),
-  }).returning().get();
+  return ensureOauthProviderSite(definition);
 }
 
 async function findExistingOauthAccount(input: {
@@ -375,12 +355,14 @@ export async function handleOauthCallback(input: {
   }
 
   try {
+    const proxyUrl = await resolveOauthProviderProxyUrl(input.provider);
     const exchange = await definition.exchangeAuthorizationCode({
       code,
       state: input.state,
       redirectUri: session.redirectUri,
       codeVerifier: session.codeVerifier,
       projectId: session.projectId,
+      proxyUrl,
     });
     const { account, site, created, previousAccount } = await upsertOauthAccount({
       definition,
@@ -655,6 +637,7 @@ export async function refreshOauthAccessToken(accountId: number) {
       projectId: oauth.projectId,
       providerData: oauth.providerData,
     },
+    proxyUrl: await resolveOauthAccountProxyUrl(account.siteId),
   });
   const nextOauth = buildOauthInfoFromAccount(account, {
     provider: oauth.provider,

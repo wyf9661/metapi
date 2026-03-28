@@ -6,9 +6,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const fetchMock = vi.fn();
+const undiciAgentCtorMock = vi.fn();
+const undiciProxyAgentCtorMock = vi.fn();
 
 vi.mock('undici', () => ({
   fetch: (...args: unknown[]) => fetchMock(...args),
+  Agent: class MockUndiciAgent {
+    constructor(...args: unknown[]) {
+      undiciAgentCtorMock(...args);
+    }
+  },
+  ProxyAgent: class MockUndiciProxyAgent {
+    constructor(...args: unknown[]) {
+      undiciProxyAgentCtorMock(...args);
+    }
+  },
 }));
 
 type DbModule = typeof import('../../db/index.js');
@@ -51,13 +63,18 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
   beforeEach(async () => {
     fetchMock.mockReset();
+    undiciAgentCtorMock.mockReset();
+    undiciProxyAgentCtorMock.mockReset();
     await db.delete(schema.routeChannels).run();
     await db.delete(schema.tokenRoutes).run();
     await db.delete(schema.tokenModelAvailability).run();
     await db.delete(schema.modelAvailability).run();
     await db.delete(schema.accountTokens).run();
     await db.delete(schema.accounts).run();
+    await db.delete(schema.settings).run();
     await db.delete(schema.sites).run();
+    const { invalidateSiteProxyCache } = await import('../../services/siteProxy.js');
+    invalidateSiteProxyCache();
   });
 
   afterAll(async () => {
@@ -432,6 +449,74 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     const models = await db.select().from(schema.modelAvailability).all();
     const modelNames = models.map((row) => row.modelName);
     expect(modelNames.sort()).toEqual(['gpt-5', 'gpt-5.2-codex', 'gpt-5.4']);
+  });
+
+  it('includes dispatcher for codex token exchange when oauth site enables the system proxy', async () => {
+    const jwt = buildJwt({
+      email: 'codex-proxy@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'chatgpt-account-proxy',
+        chatgpt_plan_type: 'plus',
+      },
+    });
+    await db.insert(schema.settings).values({
+      key: 'system_proxy_url',
+      value: JSON.stringify('http://127.0.0.1:7890'),
+    }).run();
+    await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+      useSystemProxy: true,
+    }).run();
+
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'oauth-access-token',
+          refresh_token: 'oauth-refresh-token',
+          id_token: jwt,
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [{ id: 'gpt-5.4' }],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      });
+
+    const startResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/providers/codex/start',
+      headers: {
+        host: 'metapi.example',
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    const startBody = startResponse.json() as { state: string };
+
+    const callbackResponse = await app.inject({
+      method: 'POST',
+      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
+      payload: {
+        callbackUrl: `http://localhost:1455/auth/callback?state=${encodeURIComponent(startBody.state)}&code=oauth-code-proxy`,
+      },
+    });
+    expect(callbackResponse.statusCode).toBe(200);
+    const codexTokenCall = fetchMock.mock.calls.find((call) => String(call[0] || '') === 'https://auth.openai.com/oauth/token');
+    const codexTokenFetchInit = codexTokenCall?.[1] as Record<string, unknown> | undefined;
+    expect(codexTokenFetchInit).toEqual(expect.objectContaining({
+      dispatcher: expect.anything(),
+    }));
   });
 
   it('marks oauth session as error and avoids creating a connection when manual codex callback model discovery fails', async () => {
