@@ -45,15 +45,15 @@ export default function About() {
       try {
         const status = await api.getUpdateCenterStatus() as {
           currentVersion?: string;
-          githubRelease?: { normalizedVersion?: string } | null;
-          dockerHubTag?: { normalizedVersion?: string } | null;
+          githubRelease?: { normalizedVersion?: string; displayVersion?: string } | null;
+          dockerHubTag?: { normalizedVersion?: string; displayVersion?: string } | null;
         };
         if (cancelled) return;
         if (status.currentVersion) {
           setCurrentVersion(`v${status.currentVersion}`);
         }
-        setLatestGitHubVersion(String(status.githubRelease?.normalizedVersion || ''));
-        setLatestDockerHubVersion(String(status.dockerHubTag?.normalizedVersion || ''));
+        setLatestGitHubVersion(String(status.githubRelease?.displayVersion || status.githubRelease?.normalizedVersion || ''));
+        setLatestDockerHubVersion(String(status.dockerHubTag?.displayVersion || status.dockerHubTag?.normalizedVersion || ''));
       } catch {
         // ignore update-center lookup failures on about page
       }

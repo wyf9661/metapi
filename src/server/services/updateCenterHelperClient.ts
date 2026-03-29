@@ -12,7 +12,17 @@ export type UpdateCenterHelperStatus = {
   revision: string | null;
   imageRepository: string | null;
   imageTag: string | null;
+  imageDigest: string | null;
   healthy: boolean;
+  history?: Array<{
+    revision: string;
+    updatedAt: string | null;
+    status: string | null;
+    description: string | null;
+    imageRepository: string | null;
+    imageTag: string | null;
+    imageDigest: string | null;
+  }>;
   error?: string;
 };
 
@@ -20,9 +30,17 @@ export type UpdateCenterDeploySummary = {
   success: boolean;
   targetSource: UpdateCenterVersionSource;
   targetTag: string;
+  targetDigest: string | null;
   previousRevision: string | null;
   finalRevision: string | null;
   rolledBack: boolean;
+  logLines: string[];
+};
+
+export type UpdateCenterRollbackSummary = {
+  success: boolean;
+  targetRevision: string;
+  finalRevision: string | null;
   logLines: string[];
 };
 
@@ -118,7 +136,8 @@ export async function streamUpdateCenterDeploy(
     config: UpdateCenterConfig;
     helperToken: string;
     source: UpdateCenterVersionSource;
-    targetVersion: string;
+    targetTag: string;
+    targetDigest?: string | null;
   },
   onLog?: (message: string) => void,
 ): Promise<UpdateCenterDeploySummary> {
@@ -134,7 +153,8 @@ export async function streamUpdateCenterDeploy(
       chartRef: input.config.chartRef,
       imageRepository: input.config.imageRepository,
       source: input.source,
-      targetVersion: input.targetVersion,
+      targetTag: input.targetTag,
+      targetDigest: input.targetDigest || null,
     }),
   });
 
@@ -182,6 +202,76 @@ export async function streamUpdateCenterDeploy(
 
   if (!finalResult) {
     throw new Error('helper deploy stream ended without a result event');
+  }
+
+  return finalResult;
+}
+
+export async function streamUpdateCenterRollback(
+  input: {
+    config: UpdateCenterConfig;
+    helperToken: string;
+    targetRevision: string;
+  },
+  onLog?: (message: string) => void,
+): Promise<UpdateCenterRollbackSummary> {
+  const response = await fetch(`${input.config.helperBaseUrl.replace(/\/$/, '')}/rollback`, {
+    method: 'POST',
+    headers: {
+      ...buildHelperHeaders(input.helperToken, 'text/event-stream'),
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      namespace: input.config.namespace,
+      releaseName: input.config.releaseName,
+      targetRevision: input.targetRevision,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`helper rollback failed with HTTP ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error('helper rollback response did not include a stream body');
+  }
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = '';
+  let finalResult: UpdateCenterRollbackSummary | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    buffer = parseSseBuffer(buffer, (event, data) => {
+      if (event === 'log' && data && typeof data === 'object') {
+        const message = String((data as HelperDeployLogEvent).message || '').trim();
+        if (message) onLog?.(message);
+        return;
+      }
+      if (event === 'result') {
+        finalResult = data as UpdateCenterRollbackSummary;
+      }
+    });
+  }
+
+  if (buffer.trim()) {
+    parseSseBuffer(`${buffer}\n\n`, (event, data) => {
+      if (event === 'log' && data && typeof data === 'object') {
+        const message = String((data as HelperDeployLogEvent).message || '').trim();
+        if (message) onLog?.(message);
+        return;
+      }
+      if (event === 'result') {
+        finalResult = data as UpdateCenterRollbackSummary;
+      }
+    });
+  }
+
+  if (!finalResult) {
+    throw new Error('helper rollback stream ended without a result event');
   }
 
   return finalResult;

@@ -49,8 +49,20 @@ describe('update helper app', () => {
       namespace: 'ai',
       revision: '17',
       imageRepository: '1467078763/metapi',
-      imageTag: '1.3.1',
+      imageTag: 'latest',
+      imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
       healthy: true,
+      history: [
+        {
+          revision: '16',
+          updatedAt: '2026-03-28T12:00:00Z',
+          status: 'superseded',
+          description: 'Rollback to stable digest',
+          imageRepository: '1467078763/metapi',
+          imageTag: 'main',
+          imageDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        },
+      ],
     });
 
     const app = await buildUpdateHelperApp({
@@ -73,6 +85,7 @@ describe('update helper app', () => {
       healthy: true,
       releaseName: 'metapi',
       namespace: 'ai',
+      imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
     });
     expect(getStatus).toHaveBeenCalledWith({
       namespace: 'ai',
@@ -88,6 +101,7 @@ describe('update helper app', () => {
         success: true,
         targetSource: input.targetSource,
         targetTag: input.targetTag,
+        targetDigest: input.targetDigest,
         previousRevision: '17',
         finalRevision: '18',
         rolledBack: false,
@@ -115,7 +129,8 @@ describe('update helper app', () => {
         chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
         imageRepository: '1467078763/metapi',
         source: 'github-release',
-        targetVersion: '1.3.0',
+        targetTag: 'latest',
+        targetDigest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
       },
     });
 
@@ -124,6 +139,49 @@ describe('update helper app', () => {
     expect(response.body).toContain('event: log');
     expect(response.body).toContain('Running helm upgrade');
     expect(response.body).toContain('event: result');
-    expect(response.body).toContain('"targetTag":"1.3.0"');
+    expect(response.body).toContain('"targetTag":"latest"');
+    expect(response.body).toContain('"targetDigest":"sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35"');
+  });
+
+  it('streams rollback logs and final result as SSE when requested', async () => {
+    const rollback = vi.fn().mockImplementation(async (input, onLog) => {
+      onLog?.('Running helm rollback');
+      onLog?.('Waiting for rollout');
+      return {
+        success: true,
+        targetRevision: input.targetRevision,
+        finalRevision: '20',
+        logLines: ['Running helm rollback', 'Waiting for rollout'],
+      };
+    });
+
+    const app = await buildUpdateHelperApp({
+      token: 'helper-token',
+      getStatus: vi.fn(),
+      deploy: vi.fn(),
+      rollback,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/rollback',
+      headers: {
+        authorization: 'Bearer helper-token',
+        accept: 'text/event-stream',
+      },
+      payload: {
+        namespace: 'ai',
+        releaseName: 'metapi',
+        targetRevision: '16',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.body).toContain('event: log');
+    expect(response.body).toContain('Running helm rollback');
+    expect(response.body).toContain('event: result');
+    expect(response.body).toContain('"targetRevision":"16"');
   });
 });

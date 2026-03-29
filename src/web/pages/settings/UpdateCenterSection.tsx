@@ -20,14 +20,34 @@ type UpdateCenterStatus = {
   };
   githubRelease?: {
     normalizedVersion?: string;
+    displayVersion?: string;
+    tagName?: string;
+    digest?: string | null;
+    publishedAt?: string | null;
   } | null;
   dockerHubTag?: {
     normalizedVersion?: string;
+    displayVersion?: string;
+    tagName?: string;
+    digest?: string | null;
+    publishedAt?: string | null;
   } | null;
   helper?: {
     ok?: boolean;
     healthy?: boolean;
     error?: string | null;
+    revision?: string | null;
+    imageTag?: string | null;
+    imageDigest?: string | null;
+    history?: Array<{
+      revision?: string;
+      updatedAt?: string | null;
+      status?: string | null;
+      description?: string | null;
+      imageRepository?: string | null;
+      imageTag?: string | null;
+      imageDigest?: string | null;
+    }>;
   } | null;
   runningTask?: {
     id?: string;
@@ -158,6 +178,23 @@ function getSourceBadge(enabled: boolean, version?: string) {
   return { className: 'badge badge-warning', label: '未发现版本' };
 }
 
+function formatShortDigest(digest?: string | null) {
+  const value = String(digest || '').trim();
+  if (!value) return '';
+  return value.slice(0, 'sha256:'.length + 12);
+}
+
+function formatImageTarget(tag?: string | null, digest?: string | null) {
+  const normalizedTag = String(tag || '').trim();
+  const shortDigest = formatShortDigest(digest);
+  if (normalizedTag && shortDigest) {
+    return `${normalizedTag} @ ${shortDigest}`;
+  }
+  if (normalizedTag) return normalizedTag;
+  if (shortDigest) return shortDigest;
+  return '';
+}
+
 export default function UpdateCenterSection() {
   const toast = useToast();
   const isMobile = useIsMobile();
@@ -223,8 +260,36 @@ export default function UpdateCenterSection() {
     }
   };
 
-  const runDeploy = async (source: 'github-release' | 'docker-hub-tag', targetVersion: string) => {
-    if (!targetVersion) return;
+  const streamTaskLogs = async (taskId: string) => {
+    await api.streamUpdateCenterTaskLogs(taskId, {
+      signal: streamAbortRef.current?.signal,
+      onLog: (entry) => {
+        const message = String(entry?.message || '').trim();
+        if (!message) return;
+        setLogs((prev) => [...prev, message].slice(-200));
+      },
+      onDone: (payload) => {
+        setTaskStatus(String(payload?.status || 'unknown'));
+      },
+    });
+  };
+
+  const hydrateTaskSnapshot = async (taskId: string) => {
+    const taskResponse = await api.getTask(taskId) as { task?: { status?: string; logs?: Array<{ message?: string }> } };
+    const task = taskResponse.task;
+    if (!task) return false;
+    setTaskStatus(String(task.status || 'unknown'));
+    setLogs(Array.isArray(task.logs) ? task.logs.map((entry) => String(entry?.message || '')).filter(Boolean) : []);
+    toast.info('实时日志流已断开，已回退到任务详情快照');
+    return true;
+  };
+
+  const runDeploy = async (
+    source: 'github-release' | 'docker-hub-tag',
+    target: { tag?: string | null; digest?: string | null },
+  ) => {
+    const targetTag = String(target.tag || '').trim();
+    if (!targetTag) return;
     setDeploying(true);
     setLogs([]);
     setTaskStatus('running');
@@ -233,32 +298,21 @@ export default function UpdateCenterSection() {
     let taskId = '';
 
     try {
-      const response = await api.deployUpdateCenter({ source, targetVersion }) as { task?: { id: string } };
+      const response = await api.deployUpdateCenter({
+        source,
+        targetTag,
+        targetDigest: target.digest || null,
+      }) as { task?: { id: string } };
       taskId = response.task?.id || '';
       if (!taskId) {
         throw new Error('部署任务未返回 taskId');
       }
 
-      await api.streamUpdateCenterTaskLogs(taskId, {
-        signal: streamAbortRef.current.signal,
-        onLog: (entry) => {
-          const message = String(entry?.message || '').trim();
-          if (!message) return;
-          setLogs((prev) => [...prev, message].slice(-200));
-        },
-        onDone: (payload) => {
-          setTaskStatus(String(payload?.status || 'unknown'));
-        },
-      });
+      await streamTaskLogs(taskId);
     } catch (error: any) {
       if (taskId) {
         try {
-          const taskResponse = await api.getTask(taskId) as { task?: { status?: string; logs?: Array<{ message?: string }> } };
-          const task = taskResponse.task;
-          if (task) {
-            setTaskStatus(String(task.status || 'unknown'));
-            setLogs(Array.isArray(task.logs) ? task.logs.map((entry) => String(entry?.message || '')).filter(Boolean) : []);
-            toast.info('实时日志流已断开，已回退到任务详情快照');
+          if (await hydrateTaskSnapshot(taskId)) {
             return;
           }
         } catch {
@@ -267,6 +321,41 @@ export default function UpdateCenterSection() {
       }
       setTaskStatus('failed');
       toast.error(error?.message || '部署失败');
+    } finally {
+      setDeploying(false);
+      void loadStatus();
+    }
+  };
+
+  const runRollback = async (targetRevision: string) => {
+    if (!targetRevision) return;
+    setDeploying(true);
+    setLogs([]);
+    setTaskStatus('running');
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = new AbortController();
+    let taskId = '';
+
+    try {
+      const response = await api.rollbackUpdateCenter({ targetRevision }) as { task?: { id: string } };
+      taskId = response.task?.id || '';
+      if (!taskId) {
+        throw new Error('回退任务未返回 taskId');
+      }
+
+      await streamTaskLogs(taskId);
+    } catch (error: any) {
+      if (taskId) {
+        try {
+          if (await hydrateTaskSnapshot(taskId)) {
+            return;
+          }
+        } catch {
+          // fall through to the generic error state
+        }
+      }
+      setTaskStatus('failed');
+      toast.error(error?.message || '回退失败');
     } finally {
       setDeploying(false);
       void loadStatus();
@@ -530,7 +619,7 @@ export default function UpdateCenterSection() {
             </div>
             <div style={{ ...fieldHintStyle, marginBottom: 10 }}>优先使用仓库稳定版 release，适合保留语义化版本节奏。</div>
             <div style={{ ...summaryValueStyle, fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
-              {status?.githubRelease?.normalizedVersion || '未发现'}
+              {status?.githubRelease?.displayVersion || status?.githubRelease?.normalizedVersion || '未发现'}
             </div>
             <div style={{ ...fieldHintStyle, marginBottom: 12 }}>
               {renderDeployReason(config.githubReleasesEnabled, status?.githubRelease?.normalizedVersion, status?.helper?.error)}
@@ -539,7 +628,10 @@ export default function UpdateCenterSection() {
               type="button"
               onClick={() => {
                 if (!helperHealthy) return;
-                void runDeploy('github-release', status?.githubRelease?.normalizedVersion || '');
+                void runDeploy('github-release', {
+                  tag: status?.githubRelease?.tagName || status?.githubRelease?.normalizedVersion || '',
+                  digest: null,
+                });
               }}
               disabled={!canDeployGithub}
               className={config.defaultDeploySource === 'github-release' ? 'btn btn-primary' : 'btn btn-ghost'}
@@ -563,16 +655,22 @@ export default function UpdateCenterSection() {
             </div>
             <div style={{ ...fieldHintStyle, marginBottom: 10 }}>适合镜像标签领先于 release 的场景，直接跟随容器分发节奏。</div>
             <div style={{ ...summaryValueStyle, fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
-              {status?.dockerHubTag?.normalizedVersion || '未发现'}
+              {status?.dockerHubTag?.displayVersion || status?.dockerHubTag?.normalizedVersion || '未发现'}
             </div>
             <div style={{ ...fieldHintStyle, marginBottom: 12 }}>
               {renderDeployReason(config.dockerHubTagsEnabled, status?.dockerHubTag?.normalizedVersion, status?.helper?.error)}
+            </div>
+            <div style={{ ...fieldHintStyle, marginBottom: 12 }}>
+              最近推送：{formatTaskTime(status?.dockerHubTag?.publishedAt)}
             </div>
             <button
               type="button"
               onClick={() => {
                 if (!helperHealthy) return;
-                void runDeploy('docker-hub-tag', status?.dockerHubTag?.normalizedVersion || '');
+                void runDeploy('docker-hub-tag', {
+                  tag: status?.dockerHubTag?.tagName || status?.dockerHubTag?.normalizedVersion || '',
+                  digest: status?.dockerHubTag?.digest || null,
+                });
               }}
               disabled={!canDeployDocker}
               className={config.defaultDeploySource === 'docker-hub-tag' ? 'btn btn-primary' : 'btn btn-ghost'}
@@ -599,6 +697,9 @@ export default function UpdateCenterSection() {
             <div style={fieldHintStyle}>
               {status?.helper?.error || 'Helper 正常时会先执行 helm upgrade，再等待 kubectl rollout status。'}
             </div>
+            <div style={{ ...fieldHintStyle, marginTop: 6 }}>
+              当前镜像：{formatImageTarget(status?.helper?.imageTag, status?.helper?.imageDigest) || '等待 helper 返回运行中镜像'}
+            </div>
           </div>
 
           <div style={sectionPanelStyle}>
@@ -624,6 +725,76 @@ export default function UpdateCenterSection() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div style={{ ...sectionPanelStyle, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>回退历史</div>
+          <span className="badge badge-muted">最近 revision</span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+          这里展示 helper 读到的最近 Helm revision。支持直接回退到某个旧 revision，适合快速滚回上一次稳定镜像。
+        </div>
+        {status?.helper?.history && status.helper.history.length > 0 ? (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {status.helper.history.map((entry) => {
+              const revision = String(entry?.revision || '').trim();
+              const isCurrentRevision = revision && revision === String(status?.helper?.revision || '').trim();
+              return (
+                <div
+                  key={revision || 'unknown-revision'}
+                  style={{
+                    border: '1px solid var(--color-border-light)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: 12,
+                    display: 'grid',
+                    gap: 6,
+                    background: 'var(--color-bg-card)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                      revision {revision || '-'}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {entry?.status ? (
+                        <span className="badge badge-muted">{entry.status}</span>
+                      ) : null}
+                      {isCurrentRevision ? (
+                        <span className="badge badge-info">当前运行</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div style={{ ...summaryValueStyle, fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                    {formatImageTarget(entry?.imageTag, entry?.imageDigest) || '未记录镜像信息'}
+                  </div>
+                  {entry?.description ? (
+                    <div style={fieldHintStyle}>{entry.description}</div>
+                  ) : null}
+                  <div style={fieldHintStyle}>更新时间：{formatTaskTime(entry?.updatedAt)}</div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isCurrentRevision) return;
+                        void runRollback(revision);
+                      }}
+                      disabled={!helperHealthy || deploying || isCurrentRevision || !revision}
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)' }}
+                    >
+                      回退到 revision {revision}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={fieldHintStyle}>
+            Helper 还没有返回可回退的 revision 历史。至少成功部署过一次后，这里才会稳定显示历史记录。
+          </div>
+        )}
       </div>
 
       <div style={sectionPanelStyle}>

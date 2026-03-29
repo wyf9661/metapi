@@ -25,11 +25,18 @@ import {
 import {
   getUpdateCenterHelperStatus,
   streamUpdateCenterDeploy,
+  streamUpdateCenterRollback,
 } from '../../services/updateCenterHelperClient.js';
 
 type DeployBody = {
   source?: UpdateCenterVersionSource;
   targetVersion?: string;
+  targetTag?: string;
+  targetDigest?: string;
+};
+
+type RollbackBody = {
+  targetRevision?: string;
 };
 
 const UPDATE_CENTER_DEPLOY_TASK_TYPE = 'update-center.deploy';
@@ -44,14 +51,18 @@ function getUpdateCenterHelperToken(): string {
   ).trim();
 }
 
-function assertDeployableConfig(config: UpdateCenterConfig) {
+function assertHelperConfig(config: UpdateCenterConfig) {
   if (!config.enabled) throw new Error('update center is disabled');
   if (!config.helperBaseUrl) throw new Error('helperBaseUrl is required');
   if (!config.namespace) throw new Error('namespace is required');
   if (!config.releaseName) throw new Error('releaseName is required');
+  if (!getUpdateCenterHelperToken()) throw new Error('DEPLOY_HELPER_TOKEN is required');
+}
+
+function assertDeployableConfig(config: UpdateCenterConfig) {
+  assertHelperConfig(config);
   if (!config.chartRef) throw new Error('chartRef is required');
   if (!config.imageRepository) throw new Error('imageRepository is required');
-  if (!getUpdateCenterHelperToken()) throw new Error('DEPLOY_HELPER_TOKEN is required');
 }
 
 function getDeployTasks() {
@@ -163,11 +174,12 @@ export async function updateCenterRoutes(app: FastifyInstance) {
       : request.body?.source === 'github-release'
         ? 'github-release'
         : config.defaultDeploySource;
-    const targetVersion = String(request.body?.targetVersion || '').trim();
-    if (!targetVersion) {
+    const targetTag = String(request.body?.targetTag || request.body?.targetVersion || '').trim();
+    const targetDigest = String(request.body?.targetDigest || '').trim() || null;
+    if (!targetTag) {
       return reply.code(400).send({
         success: false,
-        message: 'targetVersion is required',
+        message: 'targetTag is required',
       });
     }
 
@@ -182,7 +194,7 @@ export async function updateCenterRoutes(app: FastifyInstance) {
       },
       async () => {
         await Promise.resolve();
-        appendBackgroundTaskLog(taskId, `Resolving target version: ${targetVersion}`);
+        appendBackgroundTaskLog(taskId, `Resolving target image: ${targetTag}${targetDigest ? ` @ ${targetDigest}` : ''}`);
         appendBackgroundTaskLog(taskId, `Contacting deploy helper: ${config.helperBaseUrl}`);
 
         const result = await streamUpdateCenterDeploy(
@@ -190,7 +202,8 @@ export async function updateCenterRoutes(app: FastifyInstance) {
             config,
             helperToken: getUpdateCenterHelperToken(),
             source,
-            targetVersion,
+            targetTag,
+            targetDigest,
           },
           (message) => {
             appendBackgroundTaskLog(taskId, message);
@@ -201,6 +214,66 @@ export async function updateCenterRoutes(app: FastifyInstance) {
           throw new Error('deploy helper reported a failed deployment');
         }
         appendBackgroundTaskLog(taskId, result.rolledBack ? 'Deployment rolled back' : 'Deployment finished successfully');
+        return result;
+      },
+    );
+    taskId = task.id;
+
+    return reply.code(202).send({
+      success: true,
+      reused,
+      task,
+    });
+  });
+
+  app.post<{ Body: RollbackBody }>('/api/update-center/rollback', async (request, reply) => {
+    const config = await loadUpdateCenterConfig();
+    try {
+      assertHelperConfig(config);
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: summarizeHelperError(error),
+      });
+    }
+
+    const targetRevision = String(request.body?.targetRevision || '').trim();
+    if (!targetRevision) {
+      return reply.code(400).send({
+        success: false,
+        message: 'targetRevision is required',
+      });
+    }
+
+    let taskId = '';
+    const { task, reused } = startBackgroundTask(
+      {
+        type: UPDATE_CENTER_DEPLOY_TASK_TYPE,
+        title: '更新中心回退',
+        dedupeKey: UPDATE_CENTER_DEPLOY_DEDUPE_KEY,
+        successTitle: '更新中心回退已完成',
+        failureTitle: '更新中心回退失败',
+      },
+      async () => {
+        await Promise.resolve();
+        appendBackgroundTaskLog(taskId, `Resolving rollback revision: ${targetRevision}`);
+        appendBackgroundTaskLog(taskId, `Contacting deploy helper: ${config.helperBaseUrl}`);
+
+        const result = await streamUpdateCenterRollback(
+          {
+            config,
+            helperToken: getUpdateCenterHelperToken(),
+            targetRevision,
+          },
+          (message) => {
+            appendBackgroundTaskLog(taskId, message);
+          },
+        );
+
+        if (!result.success) {
+          throw new Error('deploy helper reported a failed rollback');
+        }
+        appendBackgroundTaskLog(taskId, 'Rollback finished successfully');
         return result;
       },
     );

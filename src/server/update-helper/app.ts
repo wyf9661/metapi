@@ -2,9 +2,12 @@ import Fastify, { type FastifyInstance } from 'fastify';
 
 import {
   executeUpdateHelperDeploy,
+  executeUpdateHelperRollback,
   getUpdateHelperStatus,
   type UpdateHelperDeployInput,
   type UpdateHelperDeploySummary,
+  type UpdateHelperRollbackInput,
+  type UpdateHelperRollbackSummary,
   type UpdateHelperStatus,
 } from './service.js';
 
@@ -15,6 +18,10 @@ type BuildUpdateHelperAppOptions = {
     input: UpdateHelperDeployInput,
     onLog?: (message: string) => void,
   ) => Promise<UpdateHelperDeploySummary>;
+  rollback?: (
+    input: UpdateHelperRollbackInput,
+    onLog?: (message: string) => void,
+  ) => Promise<UpdateHelperRollbackSummary>;
 };
 
 function requireBearerToken(requestAuthHeader: string | undefined, expectedToken: string) {
@@ -34,7 +41,16 @@ function toDeployInput(body: Record<string, unknown>): UpdateHelperDeployInput {
     chartRef: String(body.chartRef || '').trim(),
     imageRepository: String(body.imageRepository || '').trim(),
     targetSource: body.source === 'docker-hub-tag' ? 'docker-hub-tag' : 'github-release',
-    targetTag: String(body.targetVersion || '').trim(),
+    targetTag: String(body.targetTag || body.targetVersion || '').trim(),
+    targetDigest: String(body.targetDigest || '').trim() || null,
+  };
+}
+
+function toRollbackInput(body: Record<string, unknown>): UpdateHelperRollbackInput {
+  return {
+    namespace: String(body.namespace || '').trim(),
+    releaseName: String(body.releaseName || '').trim(),
+    targetRevision: String(body.targetRevision || '').trim(),
   };
 }
 
@@ -42,6 +58,7 @@ export async function buildUpdateHelperApp(options: BuildUpdateHelperAppOptions)
   const app = Fastify();
   const getStatus = options.getStatus || (async (input) => await getUpdateHelperStatus(input));
   const deploy = options.deploy || (async (input, onLog) => await executeUpdateHelperDeploy(input, undefined, onLog));
+  const rollback = options.rollback || (async (input, onLog) => await executeUpdateHelperRollback(input, undefined, onLog));
 
   app.addHook('onRequest', async (request, reply) => {
     const path = String(request.raw.url || '').split('?')[0];
@@ -75,7 +92,7 @@ export async function buildUpdateHelperApp(options: BuildUpdateHelperAppOptions)
     if (!input.namespace || !input.releaseName || !input.chartRef || !input.imageRepository || !input.targetTag) {
       return reply.code(400).send({
         success: false,
-        message: 'namespace, releaseName, chartRef, imageRepository, and targetVersion are required',
+        message: 'namespace, releaseName, chartRef, imageRepository, and targetTag are required',
       });
     }
 
@@ -90,6 +107,32 @@ export async function buildUpdateHelperApp(options: BuildUpdateHelperAppOptions)
     reply.raw.setHeader('Connection', 'keep-alive');
 
     const result = await deploy(input, (message) => {
+      writeSseEvent(reply, 'log', { message });
+    });
+    writeSseEvent(reply, 'result', result);
+    reply.raw.end();
+  });
+
+  app.post<{ Body: Record<string, unknown> }>('/rollback', async (request, reply) => {
+    const input = toRollbackInput(request.body || {});
+    if (!input.namespace || !input.releaseName || !input.targetRevision) {
+      return reply.code(400).send({
+        success: false,
+        message: 'namespace, releaseName, and targetRevision are required',
+      });
+    }
+
+    const wantsSse = String(request.headers.accept || '').includes('text/event-stream');
+    if (!wantsSse) {
+      return await rollback(input);
+    }
+
+    reply.hijack();
+    reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+    reply.raw.setHeader('Connection', 'keep-alive');
+
+    const result = await rollback(input, (message) => {
       writeSseEvent(reply, 'log', { message });
     });
     writeSseEvent(reply, 'result', result);

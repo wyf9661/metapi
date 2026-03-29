@@ -114,7 +114,7 @@ describe('update center version service', () => {
   });
 
   describe('selectLatestDockerHubTag', () => {
-    it('ignores non-semver tags and prereleases', () => {
+    it('prefers release aliases ahead of semver tags', () => {
       const latest = selectLatestDockerHubTag([
         'latest',
         'main',
@@ -125,8 +125,8 @@ describe('update center version service', () => {
       ]);
 
       expect(latest).toMatchObject({
-        rawVersion: '1.10.0',
-        normalizedVersion: '1.10.0',
+        rawVersion: 'latest',
+        normalizedVersion: 'latest',
         source: 'docker-hub-tag',
       });
     });
@@ -200,13 +200,27 @@ describe('update center version service', () => {
   });
 
   describe('fetchLatestDockerHubTag', () => {
-    it('fetches tags and returns the latest semver tag only', async () => {
+    it('prefers alias tags like latest and includes digest metadata', async () => {
       fetchMock.mockResolvedValue(new Response(JSON.stringify({
         results: [
-          { name: 'latest' },
-          { name: 'v1.2.3-rc.1' },
-          { name: 'v1.2.3' },
-          { name: '1.10.0' },
+          {
+            name: 'latest',
+            digest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+            tag_last_pushed: '2026-03-29T11:54:35.591877Z',
+          },
+          {
+            name: 'v1.2.3-rc.1',
+          },
+          {
+            name: 'v1.2.3',
+            digest: 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+            tag_last_pushed: '2026-03-28T11:54:35.591877Z',
+          },
+          {
+            name: '1.10.0',
+            digest: 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+            tag_last_pushed: '2026-03-27T11:54:35.591877Z',
+          },
         ],
       }), {
         status: 200,
@@ -216,9 +230,37 @@ describe('update center version service', () => {
       const latest = await fetchLatestDockerHubTag();
       expect(latest).toMatchObject({
         source: 'docker-hub-tag',
-        normalizedVersion: '1.10.0',
+        rawVersion: 'latest',
+        normalizedVersion: 'latest',
+        tagName: 'latest',
+        digest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+        displayVersion: 'latest @ sha256:efb2ee655386',
+        publishedAt: '2026-03-29T11:54:35.591877Z',
       });
       expect(String(fetchMock.mock.calls[0]?.[0] || '')).toContain('/v2/repositories/1467078763/metapi/tags');
+    });
+
+    it('falls back to the highest stable semver tag when no alias tags are present', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({
+        results: [
+          { name: 'sha-b9ae85e' },
+          { name: 'v1.2.3' },
+          { name: '1.10.0', digest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+        ],
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+      const latest = await fetchLatestDockerHubTag();
+      expect(latest).toMatchObject({
+        source: 'docker-hub-tag',
+        rawVersion: '1.10.0',
+        normalizedVersion: '1.10.0',
+        tagName: '1.10.0',
+        digest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        displayVersion: '1.10.0 @ sha256:aaaaaaaaaaaa',
+      });
     });
   });
 });

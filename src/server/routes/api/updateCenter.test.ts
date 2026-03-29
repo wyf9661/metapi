@@ -10,11 +10,13 @@ const {
   fetchLatestDockerHubTagMock,
   getUpdateCenterHelperStatusMock,
   streamUpdateCenterDeployMock,
+  streamUpdateCenterRollbackMock,
 } = vi.hoisted(() => ({
   fetchLatestStableGitHubReleaseMock: vi.fn(),
   fetchLatestDockerHubTagMock: vi.fn(),
   getUpdateCenterHelperStatusMock: vi.fn(),
   streamUpdateCenterDeployMock: vi.fn(),
+  streamUpdateCenterRollbackMock: vi.fn(),
 }));
 
 vi.mock('../../services/updateCenterVersionService.js', async () => {
@@ -29,6 +31,7 @@ vi.mock('../../services/updateCenterVersionService.js', async () => {
 vi.mock('../../services/updateCenterHelperClient.js', () => ({
   getUpdateCenterHelperStatus: (...args: unknown[]) => getUpdateCenterHelperStatusMock(...args),
   streamUpdateCenterDeploy: (...args: unknown[]) => streamUpdateCenterDeployMock(...args),
+  streamUpdateCenterRollback: (...args: unknown[]) => streamUpdateCenterRollbackMock(...args),
 }));
 
 type DbModule = typeof import('../../db/index.js');
@@ -89,6 +92,7 @@ describe('update center routes', () => {
     fetchLatestDockerHubTagMock.mockReset();
     getUpdateCenterHelperStatusMock.mockReset();
     streamUpdateCenterDeployMock.mockReset();
+    streamUpdateCenterRollbackMock.mockReset();
     resetBackgroundTasks?.();
 
     await db.delete(schema.events).run();
@@ -112,8 +116,12 @@ describe('update center routes', () => {
     });
     fetchLatestDockerHubTagMock.mockResolvedValue({
       source: 'docker-hub-tag',
-      rawVersion: '1.3.1',
-      normalizedVersion: '1.3.1',
+      rawVersion: 'latest',
+      normalizedVersion: 'latest',
+      tagName: 'latest',
+      digest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+      displayVersion: 'latest @ sha256:efb2ee655386',
+      publishedAt: '2026-03-29T11:54:35.591877Z',
       url: null,
     });
     getUpdateCenterHelperStatusMock.mockResolvedValue({
@@ -122,8 +130,20 @@ describe('update center routes', () => {
       namespace: 'ai',
       revision: '12',
       imageRepository: '1467078763/metapi',
-      imageTag: '1.2.3',
+      imageTag: 'latest',
+      imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
       healthy: true,
+      history: [
+        {
+          revision: '11',
+          updatedAt: '2026-03-28T12:00:00Z',
+          status: 'superseded',
+          description: 'Rollback to stable digest',
+          imageRepository: '1467078763/metapi',
+          imageTag: 'main',
+          imageDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        },
+      ],
     });
 
     const saveResponse = await app.inject({
@@ -164,12 +184,21 @@ describe('update center routes', () => {
         normalizedVersion: '1.3.0',
       },
       dockerHubTag: {
-        normalizedVersion: '1.3.1',
+        normalizedVersion: 'latest',
+        displayVersion: 'latest @ sha256:efb2ee655386',
+        digest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
       },
       helper: {
         ok: true,
         healthy: true,
         releaseName: 'metapi',
+        imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        history: [
+          {
+            revision: '11',
+            imageTag: 'main',
+          },
+        ],
       },
     });
   });
@@ -276,6 +305,7 @@ describe('update center routes', () => {
         success: true,
         targetSource: 'github-release',
         targetTag: '1.3.0',
+        targetDigest: null,
         previousRevision: '12',
         finalRevision: '13',
         rolledBack: false,
@@ -347,6 +377,62 @@ describe('update center routes', () => {
     });
   });
 
+  it('forwards digest-aware deploy requests to the helper client', async () => {
+    await saveValidConfig();
+
+    streamUpdateCenterDeployMock.mockResolvedValue({
+      success: true,
+      targetSource: 'docker-hub-tag',
+      targetTag: 'latest',
+      targetDigest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+      previousRevision: '13',
+      finalRevision: '14',
+      rolledBack: false,
+      logLines: ['Running helm upgrade'],
+    });
+
+    const deployResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'docker-hub-tag',
+        targetTag: 'latest',
+        targetDigest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+      },
+    });
+
+    expect(deployResponse.statusCode).toBe(202);
+    expect(streamUpdateCenterDeployMock).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'docker-hub-tag',
+      targetTag: 'latest',
+      targetDigest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+    }), expect.any(Function));
+  });
+
+  it('starts rollback tasks for explicit revision requests', async () => {
+    await saveValidConfig();
+
+    streamUpdateCenterRollbackMock.mockResolvedValue({
+      success: true,
+      targetRevision: '11',
+      finalRevision: '15',
+      logLines: ['Running helm rollback'],
+    });
+
+    const rollbackResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/rollback',
+      payload: {
+        targetRevision: '11',
+      },
+    });
+
+    expect(rollbackResponse.statusCode).toBe(202);
+    expect(streamUpdateCenterRollbackMock).toHaveBeenCalledWith(expect.objectContaining({
+      targetRevision: '11',
+    }), expect.any(Function));
+  });
+
   it('streams deployment logs for known tasks and rejects unknown task ids', async () => {
     await saveValidConfig();
 
@@ -364,6 +450,7 @@ describe('update center routes', () => {
         success: true,
         targetSource: 'docker-hub-tag',
         targetTag: '1.3.1',
+        targetDigest: null,
         previousRevision: '13',
         finalRevision: '14',
         rolledBack: false,

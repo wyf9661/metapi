@@ -760,7 +760,15 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({}),
   }),
-  deployUpdateCenter: (data: { source: 'github-release' | 'docker-hub-tag'; targetVersion: string }) => request('/api/update-center/deploy', {
+  deployUpdateCenter: (data: {
+    source: 'github-release' | 'docker-hub-tag';
+    targetTag: string;
+    targetDigest?: string | null;
+  }) => request('/api/update-center/deploy', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  rollbackUpdateCenter: (data: { targetRevision: string }) => request('/api/update-center/rollback', {
     method: 'POST',
     body: JSON.stringify(data),
   }),

@@ -35,10 +35,12 @@ describe('About update center', () => {
       currentVersion: '1.2.3',
       githubRelease: {
         normalizedVersion: '1.3.0',
+        displayVersion: '1.3.0',
         url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
       },
       dockerHubTag: {
-        normalizedVersion: '1.3.1',
+        normalizedVersion: 'latest',
+        displayVersion: 'latest @ sha256:efb2ee655386',
       },
     });
   });
@@ -64,7 +66,7 @@ describe('About update center', () => {
       expect(text).toContain('GitHub 稳定版');
       expect(text).toContain('1.3.0');
       expect(text).toContain('Docker Hub');
-      expect(text).toContain('1.3.1');
+      expect(text).toContain('latest @ sha256:efb2ee655386');
       expect(text).toContain('前往更新中心');
     } finally {
       root?.unmount();

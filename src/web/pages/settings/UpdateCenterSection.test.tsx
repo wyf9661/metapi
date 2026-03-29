@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     saveUpdateCenterConfig: vi.fn(),
     checkUpdateCenter: vi.fn(),
     deployUpdateCenter: vi.fn(),
+    rollbackUpdateCenter: vi.fn(),
     streamUpdateCenterTaskLogs: vi.fn(),
   },
 }));
@@ -57,13 +58,31 @@ describe('UpdateCenterSection', () => {
       },
       githubRelease: {
         normalizedVersion: '1.3.0',
+        displayVersion: '1.3.0',
       },
       dockerHubTag: {
-        normalizedVersion: '1.3.1',
+        normalizedVersion: 'latest',
+        tagName: 'latest',
+        digest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+        displayVersion: 'latest @ sha256:efb2ee655386',
+        publishedAt: '2026-03-29T11:54:35.591877Z',
       },
       helper: {
         ok: true,
         healthy: true,
+        imageTag: 'latest',
+        imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        history: [
+          {
+            revision: '16',
+            updatedAt: '2026-03-28T12:00:00Z',
+            status: 'superseded',
+            description: 'Rollback to stable digest',
+            imageRepository: '1467078763/metapi',
+            imageTag: 'main',
+            imageDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          },
+        ],
       },
       runningTask: null,
       lastFinishedTask: null,
@@ -85,9 +104,14 @@ describe('UpdateCenterSection', () => {
     apiMock.checkUpdateCenter.mockResolvedValue({
       githubRelease: {
         normalizedVersion: '1.3.0',
+        displayVersion: '1.3.0',
       },
       dockerHubTag: {
-        normalizedVersion: '1.3.1',
+        normalizedVersion: 'latest',
+        tagName: 'latest',
+        digest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+        displayVersion: 'latest @ sha256:efb2ee655386',
+        publishedAt: '2026-03-29T11:54:35.591877Z',
       },
     });
     apiMock.deployUpdateCenter.mockResolvedValue({
@@ -95,6 +119,13 @@ describe('UpdateCenterSection', () => {
       reused: false,
       task: {
         id: 'task-1',
+      },
+    });
+    apiMock.rollbackUpdateCenter.mockResolvedValue({
+      success: true,
+      reused: false,
+      task: {
+        id: 'task-2',
       },
     });
     apiMock.streamUpdateCenterTaskLogs.mockImplementation(async (_taskId: string, handlers: { onLog?: (entry: { message: string }) => void; onDone?: (payload: { status: string }) => void }) => {
@@ -190,11 +221,13 @@ describe('UpdateCenterSection', () => {
 
       expect(apiMock.deployUpdateCenter).toHaveBeenCalledWith({
         source: 'github-release',
-        targetVersion: '1.3.0',
+        targetTag: '1.3.0',
+        targetDigest: null,
       });
       expect(apiMock.streamUpdateCenterTaskLogs).toHaveBeenCalledWith('task-1', expect.any(Object));
 
       const text = collectText(root.root);
+      expect(text).toContain('latest @ sha256:efb2ee655386');
       expect(text).toContain('Running helm upgrade');
       expect(text).toContain('Waiting for rollout');
       expect(text).toContain('任务状态 · 已完成');
@@ -221,7 +254,8 @@ describe('UpdateCenterSection', () => {
         normalizedVersion: '1.3.0',
       },
       dockerHubTag: {
-        normalizedVersion: '1.3.1',
+        normalizedVersion: 'latest',
+        displayVersion: 'latest @ sha256:efb2ee655386',
       },
       helper: {
         ok: false,
@@ -267,6 +301,44 @@ describe('UpdateCenterSection', () => {
       });
 
       expect(apiMock.deployUpdateCenter).not.toHaveBeenCalled();
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('renders rollback history and triggers rollback tasks for previous revisions', async () => {
+    let root!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <UpdateCenterSection />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const rollbackButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('回退到 revision 16')
+      ));
+
+      await act(async () => {
+        await rollbackButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.rollbackUpdateCenter).toHaveBeenCalledWith({
+        targetRevision: '16',
+      });
+      expect(apiMock.streamUpdateCenterTaskLogs).toHaveBeenCalledWith('task-2', expect.any(Object));
+
+      const text = collectText(root.root);
+      expect(text).toContain('sha256:bbbbbbbbbbbb');
+      expect(text).toContain('Rollback to stable digest');
     } finally {
       root?.unmount();
     }

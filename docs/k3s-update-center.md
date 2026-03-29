@@ -113,9 +113,10 @@ docker compose up -d
 
 - 一个可用的 K3s / Kubernetes 集群
 - 用 Helm 部署的 Metapi release
-- 你的 chart 支持下面两个 values：
+- 你的 chart 至少支持下面三个 values：
   - `image.repository`
   - `image.tag`
+  - `image.digest`
 - 目标 Deployment 带有 `app.kubernetes.io/instance=<releaseName>` 标签
 - 主 Metapi 服务可以访问：
   - GitHub API
@@ -129,6 +130,7 @@ docker compose up -d
 Deploy Helper 是一个跑在集群里的小服务。它不负责对外提供 Metapi 功能，只负责接受主 Metapi 发来的部署请求，然后在集群里执行：
 
 - `helm history`
+- `helm get values`
 - `helm upgrade`
 - `kubectl rollout status`
 - 必要时 `helm rollback`
@@ -223,9 +225,11 @@ helper 端使用：
 3. 确认页面状态都正常：
    - 当前运行版本正常显示
    - 版本来源发现了可部署版本
+   - 如果 Docker Hub 显示的是 `latest @ sha256:...`，说明页面已经识别到 alias tag 当前指向的具体镜像 digest
    - Deploy Helper 显示健康
 4. 再点部署按钮
 5. 在页面下方看部署日志
+6. 如果升级后发现问题，可以直接在“回退历史”里点旧 revision 回滚；只要该 revision 当时记录了 digest，就会跟着一起回到对应镜像
 
 如果实时日志流断开，页面会自动回退到最近任务快照。
 
@@ -258,6 +262,8 @@ About 页里的“更新提醒”更像一个轻量入口：
 - K3s / Kubernetes
 - Helm release
 - Deploy Helper
+
+另外，如果你想用“按 digest 精确部署/回退”这条链路，还要确认你的 chart 没有忽略 `image.digest` 这个值；否则页面虽然能显示 digest，真正部署时还是只会落到 tag 语义。
 - 对齐的 token
 
 缺其中任何一项，都只能看，不能真正部署。
