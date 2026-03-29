@@ -165,6 +165,12 @@ export default function OAuthManagement() {
   const [oauthProxyClearEnabled, setOauthProxyClearEnabled] = useState(false);
   const [oauthProxyUrl, setOauthProxyUrl] = useState('');
 
+  const resetOauthProxySettings = () => {
+    setOauthProxyEnabled(false);
+    setOauthProxyClearEnabled(false);
+    setOauthProxyUrl('');
+  };
+
   const loadConnections = async () => {
     const response = await api.getOAuthConnections({
       limit: CONNECTION_PAGE_LIMIT,
@@ -303,6 +309,7 @@ export default function OAuthManagement() {
         authorizationUrl: started.authorizationUrl,
         instructions: started.instructions,
       });
+      resetOauthProxySettings();
       openOAuthPopup(provider.provider, started.authorizationUrl);
     } catch (error: any) {
       setSessionMessage(error?.message || '无法启动 OAuth 授权');

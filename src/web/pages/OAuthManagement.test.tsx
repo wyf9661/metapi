@@ -854,6 +854,144 @@ describe('OAuthManagement page', () => {
     }
   });
 
+  it('resets temporary oauth proxy settings after starting an authorization flow', async () => {
+    apiMock.getOAuthProviders.mockResolvedValue({
+      providers: [
+        {
+          provider: 'codex',
+          label: 'ChatGPT Codex',
+          platform: 'codex',
+          enabled: true,
+          loginType: 'oauth',
+          requiresProjectId: false,
+          supportsDirectAccountRouting: true,
+          supportsCloudValidation: true,
+          supportsNativeProxy: true,
+        },
+        {
+          provider: 'claude',
+          label: 'Claude',
+          platform: 'claude',
+          enabled: true,
+          loginType: 'oauth',
+          requiresProjectId: false,
+          supportsDirectAccountRouting: true,
+          supportsCloudValidation: true,
+          supportsNativeProxy: true,
+        },
+      ],
+    });
+    apiMock.getOAuthConnections.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+    });
+    apiMock.startOAuthProvider
+      .mockResolvedValueOnce({
+        provider: 'codex',
+        state: 'oauth-state-codex',
+        authorizationUrl: 'https://auth.openai.com/oauth/authorize?state=oauth-state-codex',
+        instructions: {
+          redirectUri: 'http://localhost:1455/auth/callback',
+          callbackPort: 1455,
+          callbackPath: '/auth/callback',
+          manualCallbackDelayMs: 15000,
+        },
+      })
+      .mockResolvedValueOnce({
+        provider: 'claude',
+        state: 'oauth-state-claude',
+        authorizationUrl: 'https://console.anthropic.com/oauth/authorize?state=oauth-state-claude',
+        instructions: {
+          redirectUri: 'http://localhost:54545/callback',
+          callbackPort: 54545,
+          callbackPath: '/callback',
+          manualCallbackDelayMs: 15000,
+        },
+      });
+    apiMock.getOAuthSession.mockResolvedValue({
+      provider: 'codex',
+      state: 'oauth-state-codex',
+      status: 'pending',
+    });
+
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <ToastProvider>
+            <MemoryRouter>
+              <OAuthManagement />
+            </MemoryRouter>
+          </ToastProvider>,
+        );
+      });
+      await flushMicrotasks();
+
+      const proxyToggle = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.type === 'checkbox'
+        && node.props['data-oauth-setting'] === 'use-proxy'
+      ));
+      const proxyInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props['data-oauth-setting'] === 'proxy-url'
+      ));
+      const startButtons = root.root.findAll((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && String(node.props.children).startsWith('连接 ')
+      ));
+
+      await act(async () => {
+        proxyToggle.props.onChange({ target: { checked: true } });
+      });
+      await act(async () => {
+        proxyInput.props.onChange({ target: { value: 'http://127.0.0.1:7890' } });
+      });
+      await act(async () => {
+        await startButtons[0].props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.startOAuthProvider).toHaveBeenNthCalledWith(1, 'codex', {
+        projectId: undefined,
+        proxyUrl: 'http://127.0.0.1:7890',
+      });
+
+      const resetProxyToggle = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.type === 'checkbox'
+        && node.props['data-oauth-setting'] === 'use-proxy'
+      ));
+      const resetProxyInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props['data-oauth-setting'] === 'proxy-url'
+      ));
+
+      expect(resetProxyToggle.props.checked).toBe(false);
+      expect(resetProxyInput.props.value).toBe('');
+
+      const refreshedStartButtons = root.root.findAll((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && String(node.props.children).startsWith('连接 ')
+      ));
+
+      await act(async () => {
+        await refreshedStartButtons[1].props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.startOAuthProvider).toHaveBeenNthCalledWith(2, 'claude', {
+        projectId: undefined,
+      });
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('shows oauth connection status metadata and allows deleting a connection', async () => {
     apiMock.getOAuthProviders.mockResolvedValue({
       providers: [
