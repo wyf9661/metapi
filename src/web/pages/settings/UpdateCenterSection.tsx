@@ -1,0 +1,679 @@
+import React, { useEffect, useRef, useState, type CSSProperties } from 'react';
+
+import { api } from '../../api.js';
+import ModernSelect from '../../components/ModernSelect.js';
+import { useToast } from '../../components/Toast.js';
+import { useIsMobile } from '../../components/useIsMobile.js';
+
+type UpdateCenterStatus = {
+  currentVersion?: string;
+  config?: {
+    enabled: boolean;
+    helperBaseUrl: string;
+    namespace: string;
+    releaseName: string;
+    chartRef: string;
+    imageRepository: string;
+    githubReleasesEnabled: boolean;
+    dockerHubTagsEnabled: boolean;
+    defaultDeploySource: 'github-release' | 'docker-hub-tag';
+  };
+  githubRelease?: {
+    normalizedVersion?: string;
+  } | null;
+  dockerHubTag?: {
+    normalizedVersion?: string;
+  } | null;
+  helper?: {
+    ok?: boolean;
+    healthy?: boolean;
+    error?: string | null;
+  } | null;
+  runningTask?: {
+    id?: string;
+    status?: string;
+  } | null;
+  lastFinishedTask?: {
+    id?: string;
+    status?: string;
+    finishedAt?: string | null;
+  } | null;
+};
+
+const DEFAULT_CONFIG: NonNullable<UpdateCenterStatus['config']> = {
+  enabled: false,
+  helperBaseUrl: '',
+  namespace: 'default',
+  releaseName: '',
+  chartRef: '',
+  imageRepository: '1467078763/metapi',
+  githubReleasesEnabled: true,
+  dockerHubTagsEnabled: true,
+  defaultDeploySource: 'github-release',
+};
+
+const DEPLOY_SOURCE_OPTIONS = [
+  {
+    value: 'github-release',
+    label: 'GitHub Releases',
+    description: '优先跟踪仓库稳定版 release。',
+  },
+  {
+    value: 'docker-hub-tag',
+    label: 'Docker Hub Tags',
+    description: '适合直接跟随镜像标签推进部署。',
+  },
+] as const;
+
+const inputStyle: CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 13,
+  outline: 'none',
+  background: 'var(--color-bg)',
+  color: 'var(--color-text-primary)',
+};
+
+const sectionPanelStyle: CSSProperties = {
+  border: '1px solid var(--color-border-light)',
+  borderRadius: 'var(--radius-md)',
+  padding: 14,
+  background: 'var(--color-bg)',
+};
+
+const summaryLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--color-text-muted)',
+  marginBottom: 6,
+};
+
+const summaryValueStyle: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 600,
+  color: 'var(--color-text-primary)',
+  lineHeight: 1.4,
+};
+
+const fieldLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--color-text-muted)',
+  marginBottom: 6,
+};
+
+const fieldHintStyle: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--color-text-muted)',
+  lineHeight: 1.5,
+};
+
+function formatTaskTime(value?: string | null) {
+  if (!value) return '暂无完成记录';
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return value;
+  return new Date(timestamp).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getTaskBadge(status?: string | null) {
+  switch (status) {
+    case 'running':
+      return { className: 'badge badge-info', label: '进行中' };
+    case 'pending':
+      return { className: 'badge badge-warning', label: '排队中' };
+    case 'succeeded':
+      return { className: 'badge badge-success', label: '已完成' };
+    case 'failed':
+      return { className: 'badge badge-error', label: '失败' };
+    default:
+      return { className: 'badge badge-muted', label: '空闲' };
+  }
+}
+
+function getHelperBadge(helper?: UpdateCenterStatus['helper'] | null, helperBaseUrl?: string) {
+  if (!helperBaseUrl) {
+    return { className: 'badge badge-muted', label: '未配置' };
+  }
+  if (helper?.healthy) {
+    return { className: 'badge badge-success', label: 'Healthy' };
+  }
+  if (helper?.ok) {
+    return { className: 'badge badge-warning', label: '可达但未就绪' };
+  }
+  return { className: 'badge badge-error', label: '不可用' };
+}
+
+function getSourceBadge(enabled: boolean, version?: string) {
+  if (!enabled) {
+    return { className: 'badge badge-muted', label: '已停用' };
+  }
+  if (version) {
+    return { className: 'badge badge-success', label: '可部署' };
+  }
+  return { className: 'badge badge-warning', label: '未发现版本' };
+}
+
+export default function UpdateCenterSection() {
+  const toast = useToast();
+  const isMobile = useIsMobile();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [status, setStatus] = useState<UpdateCenterStatus | null>(null);
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [taskStatus, setTaskStatus] = useState('');
+  const streamAbortRef = useRef<AbortController | null>(null);
+
+  const loadStatus = async () => {
+    setLoading(true);
+    try {
+      const next = await api.getUpdateCenterStatus() as UpdateCenterStatus;
+      setStatus(next);
+      setConfig(next.config || DEFAULT_CONFIG);
+    } catch (error: any) {
+      toast.error(error?.message || '加载更新中心失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadStatus();
+    return () => {
+      streamAbortRef.current?.abort();
+    };
+  }, []);
+
+  const saveConfig = async () => {
+    setSaving(true);
+    try {
+      const result = await api.saveUpdateCenterConfig(config) as { config?: UpdateCenterStatus['config'] };
+      const nextConfig = result.config || config;
+      setConfig(nextConfig);
+      setStatus((prev) => ({
+        ...(prev || {}),
+        config: nextConfig,
+      }));
+      toast.success('更新中心配置已保存');
+    } catch (error: any) {
+      toast.error(error?.message || '保存更新中心配置失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const checkNow = async () => {
+    setChecking(true);
+    try {
+      const next = await api.checkUpdateCenter() as UpdateCenterStatus;
+      setStatus(next);
+      setConfig(next.config || DEFAULT_CONFIG);
+      toast.success('已刷新更新信息');
+    } catch (error: any) {
+      toast.error(error?.message || '检查更新失败');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const runDeploy = async (source: 'github-release' | 'docker-hub-tag', targetVersion: string) => {
+    if (!targetVersion) return;
+    setDeploying(true);
+    setLogs([]);
+    setTaskStatus('running');
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = new AbortController();
+    let taskId = '';
+
+    try {
+      const response = await api.deployUpdateCenter({ source, targetVersion }) as { task?: { id: string } };
+      taskId = response.task?.id || '';
+      if (!taskId) {
+        throw new Error('部署任务未返回 taskId');
+      }
+
+      await api.streamUpdateCenterTaskLogs(taskId, {
+        signal: streamAbortRef.current.signal,
+        onLog: (entry) => {
+          const message = String(entry?.message || '').trim();
+          if (!message) return;
+          setLogs((prev) => [...prev, message].slice(-200));
+        },
+        onDone: (payload) => {
+          setTaskStatus(String(payload?.status || 'unknown'));
+        },
+      });
+    } catch (error: any) {
+      if (taskId) {
+        try {
+          const taskResponse = await api.getTask(taskId) as { task?: { status?: string; logs?: Array<{ message?: string }> } };
+          const task = taskResponse.task;
+          if (task) {
+            setTaskStatus(String(task.status || 'unknown'));
+            setLogs(Array.isArray(task.logs) ? task.logs.map((entry) => String(entry?.message || '')).filter(Boolean) : []);
+            toast.info('实时日志流已断开，已回退到任务详情快照');
+            return;
+          }
+        } catch {
+          // fall through to the generic error state
+        }
+      }
+      setTaskStatus('failed');
+      toast.error(error?.message || '部署失败');
+    } finally {
+      setDeploying(false);
+      void loadStatus();
+    }
+  };
+
+  const helperHealthy = !!status?.helper?.healthy;
+  const helperBadge = getHelperBadge(status?.helper, config.helperBaseUrl);
+  const runningTaskBadge = getTaskBadge(status?.runningTask?.status || taskStatus || undefined);
+  const lastFinishedTaskBadge = getTaskBadge(status?.lastFinishedTask?.status || undefined);
+  const visibleTaskStatus = taskStatus || status?.runningTask?.status || status?.lastFinishedTask?.status || 'idle';
+
+  const canDeployGithub = Boolean(
+    !deploying
+    && config.enabled
+    && helperHealthy
+    && config.githubReleasesEnabled
+    && status?.githubRelease?.normalizedVersion,
+  );
+  const canDeployDocker = Boolean(
+    !deploying
+    && config.enabled
+    && helperHealthy
+    && config.dockerHubTagsEnabled
+    && status?.dockerHubTag?.normalizedVersion,
+  );
+
+  const renderDeployReason = (enabled: boolean, version?: string, helperError?: string | null) => {
+    if (!config.enabled) return '更新中心已关闭，保存启用后才能部署。';
+    if (!enabled) return '当前来源已停用，开启后才会参与检查和部署。';
+    if (!helperHealthy) return helperError || 'Deploy Helper 未健康，先修复 helper 再部署。';
+    if (!version) return '当前来源还没有可部署版本。';
+    return '版本可用，点击按钮即可通过 helper 发起滚动更新。';
+  };
+
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>更新中心</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+          正在加载部署来源、版本状态和 helper 健康检查...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>更新中心</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.55 }}>
+          在设置页里统一查看 GitHub Releases、Docker Hub 版本和 K3s helper 状态，避免部署信息散落在多个入口。
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <div style={sectionPanelStyle}>
+          <div style={summaryLabelStyle}>当前运行版本</div>
+          <div style={{ ...summaryValueStyle, fontFamily: 'var(--font-mono)' }}>
+            {status?.currentVersion || '-'}
+          </div>
+          <div style={fieldHintStyle}>以当前容器内运行版本为准。</div>
+        </div>
+        <div style={sectionPanelStyle}>
+          <div style={summaryLabelStyle}>Deploy Helper</div>
+          <div style={{ marginBottom: 6 }}>
+            <span className={helperBadge.className}>{helperBadge.label}</span>
+          </div>
+          <div style={{ ...fieldHintStyle, fontFamily: config.helperBaseUrl ? 'var(--font-mono)' : 'inherit' }}>
+            {config.helperBaseUrl || '尚未配置 Helper URL'}
+          </div>
+        </div>
+        <div style={sectionPanelStyle}>
+          <div style={summaryLabelStyle}>默认部署来源</div>
+          <div style={summaryValueStyle}>
+            {DEPLOY_SOURCE_OPTIONS.find((item) => item.value === config.defaultDeploySource)?.label || 'GitHub Releases'}
+          </div>
+          <div style={fieldHintStyle}>保存配置后，手动部署默认优先使用这里的来源。</div>
+        </div>
+        <div style={sectionPanelStyle}>
+          <div style={summaryLabelStyle}>最近任务</div>
+          <div style={{ marginBottom: 6 }}>
+            <span className={status?.runningTask ? runningTaskBadge.className : lastFinishedTaskBadge.className}>
+              {status?.runningTask ? `运行中 · ${runningTaskBadge.label}` : lastFinishedTaskBadge.label}
+            </span>
+          </div>
+          <div style={fieldHintStyle}>
+            {status?.runningTask?.id
+              ? `任务 ID: ${status.runningTask.id}`
+              : formatTaskTime(status?.lastFinishedTask?.finishedAt)}
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <label style={{ ...sectionPanelStyle, display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            onChange={(e) => setConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+            style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--color-primary)' }}
+          />
+          <span style={{ display: 'grid', gap: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>启用更新中心</span>
+            <span style={fieldHintStyle}>允许系统检查版本，并在配置齐全时触发 K3s 部署。</span>
+          </span>
+        </label>
+        <label style={{ ...sectionPanelStyle, display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={config.githubReleasesEnabled}
+            onChange={(e) => setConfig((prev) => ({ ...prev, githubReleasesEnabled: e.target.checked }))}
+            style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--color-primary)' }}
+          />
+          <span style={{ display: 'grid', gap: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>GitHub Releases</span>
+            <span style={fieldHintStyle}>从仓库稳定版 release 提取 SemVer 版本号并提供部署入口。</span>
+          </span>
+        </label>
+        <label style={{ ...sectionPanelStyle, display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={config.dockerHubTagsEnabled}
+            onChange={(e) => setConfig((prev) => ({ ...prev, dockerHubTagsEnabled: e.target.checked }))}
+            style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--color-primary)' }}
+          />
+          <span style={{ display: 'grid', gap: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>Docker Hub</span>
+            <span style={fieldHintStyle}>从镜像标签中找出最新稳定版本，适合镜像优先的发布链路。</span>
+          </span>
+        </label>
+      </div>
+
+      <div style={{ ...sectionPanelStyle, marginBottom: 12 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>部署配置</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+          和现有 Settings 区块保持同一套表单密度。这里保存的是 helper 和目标 release 的持久化配置。
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <label>
+            <div style={fieldLabelStyle}>Deploy Helper URL</div>
+            <input
+              value={config.helperBaseUrl}
+              onChange={(e) => setConfig((prev) => ({ ...prev, helperBaseUrl: e.target.value }))}
+              style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+              placeholder="http://metapi-deploy-helper.namespace.svc.cluster.local:9850"
+            />
+          </label>
+          <label>
+            <div style={fieldLabelStyle}>默认部署来源</div>
+            <ModernSelect
+              value={config.defaultDeploySource}
+              onChange={(value) => setConfig((prev) => ({
+                ...prev,
+                defaultDeploySource: value === 'docker-hub-tag' ? 'docker-hub-tag' : 'github-release',
+              }))}
+              options={DEPLOY_SOURCE_OPTIONS.map((item) => ({ ...item }))}
+            />
+          </label>
+          <label>
+            <div style={fieldLabelStyle}>Namespace</div>
+            <input
+              value={config.namespace}
+              onChange={(e) => setConfig((prev) => ({ ...prev, namespace: e.target.value }))}
+              style={inputStyle}
+              placeholder="default"
+            />
+          </label>
+          <label>
+            <div style={fieldLabelStyle}>Release Name</div>
+            <input
+              value={config.releaseName}
+              onChange={(e) => setConfig((prev) => ({ ...prev, releaseName: e.target.value }))}
+              style={inputStyle}
+              placeholder="metapi"
+            />
+          </label>
+          <label>
+            <div style={fieldLabelStyle}>Chart Ref</div>
+            <input
+              value={config.chartRef}
+              onChange={(e) => setConfig((prev) => ({ ...prev, chartRef: e.target.value }))}
+              style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+              placeholder="oci://ghcr.io/cita-777/charts/metapi"
+            />
+          </label>
+          <label>
+            <div style={fieldLabelStyle}>Image Repository</div>
+            <input
+              value={config.imageRepository}
+              onChange={(e) => setConfig((prev) => ({ ...prev, imageRepository: e.target.value }))}
+              style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+              placeholder="1467078763/metapi"
+            />
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" onClick={saveConfig} disabled={saving} className="btn btn-primary">
+            {saving ? '保存中...' : '保存更新中心配置'}
+          </button>
+          <button
+            type="button"
+            onClick={checkNow}
+            disabled={checking}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {checking ? '检查中...' : '检查更新'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ ...sectionPanelStyle, marginBottom: 12 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>可部署版本</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+          默认来源会用主按钮强调。Helper 未就绪时，部署入口会自动禁用，避免触发无效任务。
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <div style={sectionPanelStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>GitHub Releases</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <span className={getSourceBadge(config.githubReleasesEnabled, status?.githubRelease?.normalizedVersion).className}>
+                  {getSourceBadge(config.githubReleasesEnabled, status?.githubRelease?.normalizedVersion).label}
+                </span>
+                {config.defaultDeploySource === 'github-release' ? (
+                  <span className="badge badge-info">默认来源</span>
+                ) : null}
+              </div>
+            </div>
+            <div style={{ ...fieldHintStyle, marginBottom: 10 }}>优先使用仓库稳定版 release，适合保留语义化版本节奏。</div>
+            <div style={{ ...summaryValueStyle, fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
+              {status?.githubRelease?.normalizedVersion || '未发现'}
+            </div>
+            <div style={{ ...fieldHintStyle, marginBottom: 12 }}>
+              {renderDeployReason(config.githubReleasesEnabled, status?.githubRelease?.normalizedVersion, status?.helper?.error)}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!helperHealthy) return;
+                void runDeploy('github-release', status?.githubRelease?.normalizedVersion || '');
+              }}
+              disabled={!canDeployGithub}
+              className={config.defaultDeploySource === 'github-release' ? 'btn btn-primary' : 'btn btn-ghost'}
+              style={config.defaultDeploySource === 'github-release' ? undefined : { border: '1px solid var(--color-border)' }}
+            >
+              部署 GitHub 稳定版
+            </button>
+          </div>
+
+          <div style={sectionPanelStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Docker Hub</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <span className={getSourceBadge(config.dockerHubTagsEnabled, status?.dockerHubTag?.normalizedVersion).className}>
+                  {getSourceBadge(config.dockerHubTagsEnabled, status?.dockerHubTag?.normalizedVersion).label}
+                </span>
+                {config.defaultDeploySource === 'docker-hub-tag' ? (
+                  <span className="badge badge-info">默认来源</span>
+                ) : null}
+              </div>
+            </div>
+            <div style={{ ...fieldHintStyle, marginBottom: 10 }}>适合镜像标签领先于 release 的场景，直接跟随容器分发节奏。</div>
+            <div style={{ ...summaryValueStyle, fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
+              {status?.dockerHubTag?.normalizedVersion || '未发现'}
+            </div>
+            <div style={{ ...fieldHintStyle, marginBottom: 12 }}>
+              {renderDeployReason(config.dockerHubTagsEnabled, status?.dockerHubTag?.normalizedVersion, status?.helper?.error)}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!helperHealthy) return;
+                void runDeploy('docker-hub-tag', status?.dockerHubTag?.normalizedVersion || '');
+              }}
+              disabled={!canDeployDocker}
+              className={config.defaultDeploySource === 'docker-hub-tag' ? 'btn btn-primary' : 'btn btn-ghost'}
+              style={config.defaultDeploySource === 'docker-hub-tag' ? undefined : { border: '1px solid var(--color-border)' }}
+            >
+              部署 Docker Hub 标签
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+            gap: 12,
+          }}
+        >
+          <div style={sectionPanelStyle}>
+            <div style={fieldLabelStyle}>Helper 健康摘要</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+              <span className={helperBadge.className}>{helperBadge.label}</span>
+              <span className={runningTaskBadge.className}>当前任务 · {runningTaskBadge.label}</span>
+            </div>
+            <div style={fieldHintStyle}>
+              {status?.helper?.error || 'Helper 正常时会先执行 helm upgrade，再等待 kubectl rollout status。'}
+            </div>
+          </div>
+
+          <div style={sectionPanelStyle}>
+            <div style={fieldLabelStyle}>任务快照</div>
+            <div style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--color-text-primary)' }}>
+              <div>
+                运行中任务：
+                <span style={{ marginLeft: 6, color: 'var(--color-text-secondary)' }}>
+                  {status?.runningTask?.id ? `${status.runningTask.id} · ${status.runningTask.status || '-'}` : '无'}
+                </span>
+              </div>
+              <div>
+                最近完成：
+                <span style={{ marginLeft: 6, color: 'var(--color-text-secondary)' }}>
+                  {status?.lastFinishedTask?.id
+                    ? `${status.lastFinishedTask.id} · ${status.lastFinishedTask.status || '-'}`
+                    : '无'}
+                </span>
+              </div>
+              <div style={fieldHintStyle}>
+                完成时间：{formatTaskTime(status?.lastFinishedTask?.finishedAt)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={sectionPanelStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>部署日志</div>
+          <span className={getTaskBadge(visibleTaskStatus).className}>
+            任务状态 · {getTaskBadge(visibleTaskStatus).label}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+          日志流断开时会自动回退到任务快照。这里只保留最近 200 条输出，方便直接判断 Helm 与 rollout 卡在哪一步。
+        </div>
+        <div
+          style={{
+            border: '1px solid var(--color-border-light)',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--color-bg-card)',
+            padding: 12,
+            minHeight: 120,
+          }}
+        >
+          {logs.length > 0 ? (
+            <pre
+              style={{
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontSize: 12,
+                lineHeight: 1.65,
+                color: 'var(--color-text-secondary)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {logs.join('\n')}
+            </pre>
+          ) : (
+            <div style={{ ...fieldHintStyle, minHeight: 94, display: 'flex', alignItems: 'center' }}>
+              部署开始后，这里会实时显示 helm upgrade、kubectl rollout status 和回滚日志。
+            </div>
+          )}
+        </div>
+      </div>
+      {status?.helper?.error ? (
+        <div style={{ fontSize: 12, color: 'var(--color-danger)', marginTop: 10 }}>
+          Helper 错误：{status.helper.error}
+        </div>
+      ) : null}
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 10 }}>
+        最近状态：{visibleTaskStatus}
+      </div>
+    </div>
+  );
+}

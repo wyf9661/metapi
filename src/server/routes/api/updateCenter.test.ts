@@ -1,0 +1,356 @@
+import Fastify, { type FastifyInstance } from 'fastify';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { eq } from 'drizzle-orm';
+
+const {
+  fetchLatestStableGitHubReleaseMock,
+  fetchLatestDockerHubTagMock,
+  getUpdateCenterHelperStatusMock,
+  streamUpdateCenterDeployMock,
+} = vi.hoisted(() => ({
+  fetchLatestStableGitHubReleaseMock: vi.fn(),
+  fetchLatestDockerHubTagMock: vi.fn(),
+  getUpdateCenterHelperStatusMock: vi.fn(),
+  streamUpdateCenterDeployMock: vi.fn(),
+}));
+
+vi.mock('../../services/updateCenterVersionService.js', async () => {
+  const actual = await vi.importActual<typeof import('../../services/updateCenterVersionService.js')>('../../services/updateCenterVersionService.js');
+  return {
+    ...actual,
+    fetchLatestStableGitHubRelease: (...args: unknown[]) => fetchLatestStableGitHubReleaseMock(...args),
+    fetchLatestDockerHubTag: (...args: unknown[]) => fetchLatestDockerHubTagMock(...args),
+  };
+});
+
+vi.mock('../../services/updateCenterHelperClient.js', () => ({
+  getUpdateCenterHelperStatus: (...args: unknown[]) => getUpdateCenterHelperStatusMock(...args),
+  streamUpdateCenterDeploy: (...args: unknown[]) => streamUpdateCenterDeployMock(...args),
+}));
+
+type DbModule = typeof import('../../db/index.js');
+
+describe('update center routes', () => {
+  let app: FastifyInstance;
+  let db: DbModule['db'];
+  let schema: DbModule['schema'];
+  let dataDir = '';
+  let resetBackgroundTasks: (() => void) | null = null;
+  let getBackgroundTask: ((taskId: string) => { status: string; logs?: Array<{ message: string }> } | null) | null = null;
+
+  async function saveValidConfig() {
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/update-center/config',
+      payload: {
+        enabled: true,
+        helperBaseUrl: 'http://metapi-deploy-helper.ai.svc.cluster.local:9850',
+        namespace: 'ai',
+        releaseName: 'metapi',
+        chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
+        imageRepository: '1467078763/metapi',
+        githubReleasesEnabled: true,
+        dockerHubTagsEnabled: true,
+        defaultDeploySource: 'github-release',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+  }
+
+  beforeAll(async () => {
+    dataDir = mkdtempSync(join(tmpdir(), 'metapi-update-center-'));
+    process.env.DATA_DIR = dataDir;
+    process.env.DEPLOY_HELPER_TOKEN = 'helper-token';
+
+    await import('../../db/migrate.js');
+    const dbModule = await import('../../db/index.js');
+    const routesModule = await import('./updateCenter.js');
+    const backgroundTaskModule = await import('../../services/backgroundTaskService.js');
+
+    db = dbModule.db;
+    schema = dbModule.schema;
+    resetBackgroundTasks = backgroundTaskModule.__resetBackgroundTasksForTests;
+    getBackgroundTask = backgroundTaskModule.getBackgroundTask;
+
+    app = Fastify();
+    await app.register(routesModule.updateCenterRoutes);
+  });
+
+  beforeEach(async () => {
+    fetchLatestStableGitHubReleaseMock.mockReset();
+    fetchLatestDockerHubTagMock.mockReset();
+    getUpdateCenterHelperStatusMock.mockReset();
+    streamUpdateCenterDeployMock.mockReset();
+    resetBackgroundTasks?.();
+
+    await db.delete(schema.events).run();
+    await db.delete(schema.settings).run();
+  });
+
+  afterAll(async () => {
+    if (app) {
+      await app.close();
+    }
+    delete process.env.DATA_DIR;
+    delete process.env.DEPLOY_HELPER_TOKEN;
+  });
+
+  it('persists config and returns status with both version channels and helper summary', async () => {
+    fetchLatestStableGitHubReleaseMock.mockResolvedValue({
+      source: 'github-release',
+      rawVersion: 'v1.3.0',
+      normalizedVersion: '1.3.0',
+      url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
+    });
+    fetchLatestDockerHubTagMock.mockResolvedValue({
+      source: 'docker-hub-tag',
+      rawVersion: '1.3.1',
+      normalizedVersion: '1.3.1',
+      url: null,
+    });
+    getUpdateCenterHelperStatusMock.mockResolvedValue({
+      ok: true,
+      releaseName: 'metapi',
+      namespace: 'ai',
+      revision: '12',
+      imageRepository: '1467078763/metapi',
+      imageTag: '1.2.3',
+      healthy: true,
+    });
+
+    const saveResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/update-center/config',
+      payload: {
+        enabled: true,
+        helperBaseUrl: 'http://metapi-deploy-helper.ai.svc.cluster.local:9850',
+        namespace: 'ai',
+        releaseName: 'metapi',
+        chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
+        imageRepository: '1467078763/metapi',
+        githubReleasesEnabled: true,
+        dockerHubTagsEnabled: true,
+        defaultDeploySource: 'github-release',
+      },
+    });
+
+    expect(saveResponse.statusCode).toBe(200);
+    const savedRow = await db.select().from(schema.settings).where(eq(schema.settings.key, 'update_center_k3s_config_v1')).get();
+    expect(savedRow?.value).toContain('metapi-deploy-helper.ai.svc.cluster.local');
+
+    const statusResponse = await app.inject({
+      method: 'GET',
+      url: '/api/update-center/status',
+    });
+
+    expect(statusResponse.statusCode).toBe(200);
+    expect(statusResponse.json()).toMatchObject({
+      currentVersion: '1.2.3',
+      config: {
+        enabled: true,
+        namespace: 'ai',
+        releaseName: 'metapi',
+        defaultDeploySource: 'github-release',
+      },
+      githubRelease: {
+        normalizedVersion: '1.3.0',
+      },
+      dockerHubTag: {
+        normalizedVersion: '1.3.1',
+      },
+      helper: {
+        ok: true,
+        healthy: true,
+        releaseName: 'metapi',
+      },
+    });
+  });
+
+  it('returns partial status when a single version source lookup fails', async () => {
+    fetchLatestStableGitHubReleaseMock.mockRejectedValue(new Error('GitHub releases lookup timed out'));
+    fetchLatestDockerHubTagMock.mockResolvedValue({
+      source: 'docker-hub-tag',
+      rawVersion: '1.3.1',
+      normalizedVersion: '1.3.1',
+      url: null,
+    });
+    getUpdateCenterHelperStatusMock.mockResolvedValue({
+      ok: true,
+      releaseName: 'metapi',
+      namespace: 'ai',
+      revision: '12',
+      imageRepository: '1467078763/metapi',
+      imageTag: '1.2.3',
+      healthy: true,
+    });
+
+    await saveValidConfig();
+
+    const statusResponse = await app.inject({
+      method: 'GET',
+      url: '/api/update-center/status',
+    });
+
+    expect(statusResponse.statusCode).toBe(200);
+    expect(statusResponse.json()).toMatchObject({
+      githubRelease: null,
+      dockerHubTag: {
+        normalizedVersion: '1.3.1',
+      },
+      helper: {
+        ok: true,
+        healthy: true,
+      },
+    });
+  });
+
+  it('dedupes deploy requests while a task is already running', async () => {
+    await saveValidConfig();
+
+    let releaseDeploy: (() => void) | null = null;
+    const deployGate = new Promise<void>((resolve) => {
+      releaseDeploy = resolve;
+    });
+
+    streamUpdateCenterDeployMock.mockImplementation(async (_input: unknown, onLog?: (message: string) => void) => {
+      onLog?.('Running helm upgrade');
+      await deployGate;
+      onLog?.('Deployment complete');
+      return {
+        success: true,
+        targetSource: 'github-release',
+        targetTag: '1.3.0',
+        previousRevision: '12',
+        finalRevision: '13',
+        rolledBack: false,
+        logLines: ['Running helm upgrade', 'Deployment complete'],
+      };
+    });
+
+    const firstResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'github-release',
+        targetVersion: '1.3.0',
+      },
+    });
+
+    const secondResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'github-release',
+        targetVersion: '1.3.0',
+      },
+    });
+
+    expect(firstResponse.statusCode).toBe(202);
+    expect(secondResponse.statusCode).toBe(202);
+
+    const firstBody = firstResponse.json() as { task?: { id: string }; reused?: boolean };
+    const secondBody = secondResponse.json() as { task?: { id: string }; reused?: boolean };
+    expect(firstBody.task?.id).toBeTruthy();
+    expect(secondBody.task?.id).toBe(firstBody.task?.id);
+    expect(secondBody.reused).toBe(true);
+
+    releaseDeploy?.();
+  });
+
+  it('rejects deploy requests when the update center is disabled', async () => {
+    const saveResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/update-center/config',
+      payload: {
+        enabled: false,
+        helperBaseUrl: 'http://metapi-deploy-helper.ai.svc.cluster.local:9850',
+        namespace: 'ai',
+        releaseName: 'metapi',
+        chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
+        imageRepository: '1467078763/metapi',
+        githubReleasesEnabled: true,
+        dockerHubTagsEnabled: true,
+        defaultDeploySource: 'github-release',
+      },
+    });
+    expect(saveResponse.statusCode).toBe(200);
+
+    const deployResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'github-release',
+        targetVersion: '1.3.0',
+      },
+    });
+
+    expect(deployResponse.statusCode).toBe(400);
+    expect(deployResponse.json()).toMatchObject({
+      success: false,
+      message: 'update center is disabled',
+    });
+  });
+
+  it('streams deployment logs for known tasks and rejects unknown task ids', async () => {
+    await saveValidConfig();
+
+    const missingResponse = await app.inject({
+      method: 'GET',
+      url: '/api/update-center/tasks/missing-task/stream',
+    });
+
+    expect(missingResponse.statusCode).toBe(404);
+
+    streamUpdateCenterDeployMock.mockImplementation(async (_input: unknown, onLog?: (message: string) => void) => {
+      onLog?.('Resolving target version');
+      onLog?.('Waiting for rollout');
+      return {
+        success: true,
+        targetSource: 'docker-hub-tag',
+        targetTag: '1.3.1',
+        previousRevision: '13',
+        finalRevision: '14',
+        rolledBack: false,
+        logLines: ['Resolving target version', 'Waiting for rollout'],
+      };
+    });
+
+    const deployResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'docker-hub-tag',
+        targetVersion: '1.3.1',
+      },
+    });
+
+    const deployBody = deployResponse.json() as { task: { id: string } };
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const task = getBackgroundTask?.(deployBody.task.id);
+      if (task?.status === 'succeeded') break;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(getBackgroundTask?.(deployBody.task.id)?.logs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: 'Resolving target version' }),
+      expect.objectContaining({ message: 'Waiting for rollout' }),
+    ]));
+
+    const streamResponse = await app.inject({
+      method: 'GET',
+      url: `/api/update-center/tasks/${deployBody.task.id}/stream`,
+    });
+
+    expect(streamResponse.statusCode).toBe(200);
+    expect(streamResponse.headers['content-type']).toContain('text/event-stream');
+    expect(streamResponse.body).toContain('event: log');
+    expect(streamResponse.body).toContain('Resolving target version');
+    expect(streamResponse.body).toContain('Waiting for rollout');
+    expect(streamResponse.body).toContain('event: done');
+  });
+});

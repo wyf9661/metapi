@@ -9,6 +9,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import DownstreamApiKeyModal from './settings/DownstreamApiKeyModal.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
 import RouteSelectorModal from './settings/RouteSelectorModal.js';
+import UpdateCenterSection from './settings/UpdateCenterSection.js';
 import {
   applyRoutingProfilePreset,
   resolveRoutingProfilePreset,
@@ -1758,6 +1759,8 @@ export default function Settings() {
             </div>
           )}
         </div>
+
+        <UpdateCenterSection />
 
         <div className="card animate-slide-up stagger-6" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>维护工具</div>

@@ -136,6 +136,80 @@ async function request(url: string, options: RequestOptions = {}) {
   return res.json();
 }
 
+async function streamSse(
+  url: string,
+  handlers: {
+    onLog?: (entry: any) => void;
+    onDone?: (payload: any) => void;
+    signal?: AbortSignal;
+  },
+) {
+  const response = await fetchAuthenticatedResponse(url, {
+    method: 'GET',
+    signal: handlers.signal,
+    headers: {
+      Accept: 'text/event-stream',
+    },
+    timeoutMs: 120_000,
+  });
+
+  if (!response.ok) {
+    throw new Error(await extractResponseErrorMessage(response));
+  }
+  if (!response.body) {
+    throw new Error('响应未返回流式内容');
+  }
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = '';
+
+  const flushBuffer = (final = false) => {
+    const chunks = final ? [...buffer.split('\n\n'), ''] : buffer.split('\n\n');
+    if (!final) buffer = chunks.pop() || '';
+    else buffer = '';
+
+    for (const chunk of chunks) {
+      const lines = chunk.split('\n');
+      let eventName = 'message';
+      const dataLines: string[] = [];
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventName = line.slice('event:'.length).trim() || 'message';
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice('data:'.length).trim());
+        }
+      }
+
+      if (dataLines.length <= 0) continue;
+      let payload: any = dataLines.join('\n');
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        // keep string payload
+      }
+
+      if (eventName === 'log') {
+        handlers.onLog?.(payload);
+      } else if (eventName === 'done') {
+        handlers.onDone?.(payload);
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    flushBuffer(false);
+  }
+
+  if (buffer.trim()) {
+    flushBuffer(true);
+  }
+}
+
 function buildQueryString(params?: Record<string, string | number | boolean | null | undefined>) {
   if (!params) return '';
   const searchParams = new URLSearchParams();
@@ -677,6 +751,27 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(data),
   }),
+  getUpdateCenterStatus: () => request('/api/update-center/status'),
+  saveUpdateCenterConfig: (data: any) => request('/api/update-center/config', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  checkUpdateCenter: () => request('/api/update-center/check', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+  deployUpdateCenter: (data: { source: 'github-release' | 'docker-hub-tag'; targetVersion: string }) => request('/api/update-center/deploy', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  streamUpdateCenterTaskLogs: (
+    taskId: string,
+    handlers: {
+      onLog?: (entry: any) => void;
+      onDone?: (payload: any) => void;
+      signal?: AbortSignal;
+    },
+  ) => streamSse(`/api/update-center/tasks/${encodeURIComponent(taskId)}/stream`, handlers),
   testSystemProxy: (data: SystemProxyTestRequest) => request('/api/settings/system-proxy/test', {
     method: 'POST',
     body: JSON.stringify(data),

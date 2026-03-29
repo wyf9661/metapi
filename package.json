@@ -47,6 +47,7 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs --host 0.0.0.0 --port 4173",
     "start": "node dist/server/index.js",
+    "start:deploy-helper": "node dist/server/update-helper/index.js",
     "start:desktop": "electron dist/desktop/main.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/server/db/migrate.ts",

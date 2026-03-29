@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+
+import { api } from '../api.js';
 import { tr } from '../i18n.js';
 import { SITE_DOCS_URL } from '../docsLink.js';
 
@@ -30,6 +34,37 @@ const LINKS = [
 ];
 
 export default function About() {
+  const [currentVersion, setCurrentVersion] = useState(`v${VERSION}`);
+  const [latestGitHubVersion, setLatestGitHubVersion] = useState('');
+  const [latestDockerHubVersion, setLatestDockerHubVersion] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStatus = async () => {
+      try {
+        const status = await api.getUpdateCenterStatus() as {
+          currentVersion?: string;
+          githubRelease?: { normalizedVersion?: string } | null;
+          dockerHubTag?: { normalizedVersion?: string } | null;
+        };
+        if (cancelled) return;
+        if (status.currentVersion) {
+          setCurrentVersion(`v${status.currentVersion}`);
+        }
+        setLatestGitHubVersion(String(status.githubRelease?.normalizedVersion || ''));
+        setLatestDockerHubVersion(String(status.dockerHubTag?.normalizedVersion || ''));
+      } catch {
+        // ignore update-center lookup failures on about page
+      }
+    };
+
+    void loadStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="animate-fade-in" style={{ maxWidth: 860 }}>
       {/* Header */}
@@ -47,11 +82,24 @@ export default function About() {
           />
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Metapi</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>v{VERSION}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>{currentVersion}</div>
           </div>
         </div>
         <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
           {tr('中转站的中转站 — 将你在各处注册的 New API / One API / OneHub 等 AI 中转站聚合为一个统一网关。一个 API Key、一个入口，自动发现模型、智能路由、成本最优。')}
+        </div>
+      </div>
+
+      <div className="card animate-slide-up stagger-1" style={{ padding: 22, marginBottom: 14 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>更新提醒</h3>
+        <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+          <div>GitHub 稳定版：{latestGitHubVersion || '暂无数据'}</div>
+          <div>Docker Hub：{latestDockerHubVersion || '暂无数据'}</div>
+          <div>
+            <Link to="/settings" style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}>
+              前往更新中心
+            </Link>
+          </div>
         </div>
       </div>
 

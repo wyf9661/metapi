@@ -30,6 +30,7 @@ npm run docs:build
 | 新用户部署与首条请求 | [快速上手](./getting-started.md) | 新安装流程、默认端口、首次调用步骤变化时 |
 | 上游平台选择与接法 | [上游接入](./upstream-integration.md) | 平台支持范围、默认连接分段、自动识别规则变化时 |
 | 生产部署与回滚 | [部署指南](./deployment.md) | Docker Compose、反向代理、升级回滚策略变更时 |
+| K3s / Helm 高级升级面板 | [K3s 更新中心（高级）](./k3s-update-center.md) | 需要说明谁适合使用更新中心、helper 怎么配、K3s/Helm 发布链路怎么接入时 |
 | 环境变量、参数和配置项 | [配置说明](./configuration.md) | 新增配置、默认值变化、兼容行为变化时 |
 | 客户端与工具接入 | [客户端接入](./client-integration.md) | Open WebUI、Cherry Studio、Cursor 等接入方式变化时 |
 | 运维排障与日常维护 | [运维手册](./operations.md) / [常见问题](./faq.md) | 新排障案例、备份恢复、健康检查、典型报错变化时 |
