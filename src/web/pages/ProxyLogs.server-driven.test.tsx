@@ -323,6 +323,42 @@ describe('ProxyLogs server-driven page', () => {
     }
   });
 
+  it('opens debug trace detail on demand instead of preloading the first trace inline', async () => {
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/logs']}>
+            <ToastProvider>
+              <ProxyLogs />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.getProxyDebugTraceDetail).not.toHaveBeenCalled();
+
+      const viewDetailButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '查看详情'
+      ));
+
+      await act(async () => {
+        viewDetailButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.getProxyDebugTraceDetail).toHaveBeenCalledWith(701);
+      expect(collectText(root.root)).toContain('原始下游请求头');
+      expect(collectText(root.root)).toContain('Attempt 记录');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('polls debug traces after tracing is enabled so new results are not hidden behind the settings modal', async () => {
     vi.useFakeTimers();
     apiMock.getRuntimeSettings.mockResolvedValue({
@@ -359,6 +395,95 @@ describe('ProxyLogs server-driven page', () => {
       await flushMicrotasks();
 
       expect(apiMock.getProxyDebugTraces.mock.calls.length).toBeGreaterThan(initialCalls);
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps debug trace detail visible during polling refresh instead of flashing back to loading', async () => {
+    vi.useFakeTimers();
+    apiMock.getRuntimeSettings.mockResolvedValue({
+      proxyDebugTraceEnabled: true,
+      proxyDebugCaptureHeaders: true,
+      proxyDebugCaptureBodies: false,
+      proxyDebugCaptureStreamChunks: false,
+      proxyDebugTargetSessionId: '',
+      proxyDebugTargetClientKind: '',
+      proxyDebugTargetModel: '',
+      proxyDebugRetentionHours: 24,
+      proxyDebugMaxBodyBytes: 262144,
+    });
+
+    let resolveDetail!: (value: any) => void;
+    apiMock.getProxyDebugTraceDetail
+      .mockResolvedValueOnce({
+        trace: {
+          id: 701,
+          requestedModel: 'gpt-4o',
+          sessionId: 'sess-debug-1',
+          requestHeadersJson: '{\"before\":true}',
+        },
+        attempts: [],
+      })
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveDetail = resolve;
+      }));
+
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/logs']}>
+            <ToastProvider>
+              <ProxyLogs />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const viewDetailButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '查看详情'
+      ));
+
+      await act(async () => {
+        viewDetailButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root.root)).toContain('原始下游请求头');
+      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
+
+      await act(async () => {
+        vi.advanceTimersByTime(2100);
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root.root)).toContain('原始下游请求头');
+      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
+
+      await act(async () => {
+        resolveDetail({
+          trace: {
+            id: 701,
+            requestedModel: 'gpt-4o',
+            sessionId: 'sess-debug-1',
+            requestHeadersJson: '{\"after\":true}',
+          },
+          attempts: [],
+        });
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root.root)).toContain('原始下游请求头');
+      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
     } finally {
       await act(async () => {
         root?.unmount();

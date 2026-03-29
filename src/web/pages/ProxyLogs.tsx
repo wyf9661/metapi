@@ -63,8 +63,11 @@ type ProxyDebugTraceDetailState = {
   error?: string;
 };
 
+type ProxyDebugTraceAttempt = ProxyDebugTraceDetail['attempts'][number];
+
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
+const TRACE_TABLE_LIMIT = 20;
 const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
   codex: 'Codex',
   claude_code: 'Claude Code',
@@ -90,7 +93,7 @@ const DEFAULT_PROXY_DEBUG_SETTINGS: ProxyDebugSettingsState = {
   proxyDebugMaxBodyBytes: 262144,
 };
 const DEBUG_REFRESH_INTERVAL_MS = 2000;
-const debugInputStyle: React.CSSProperties = {
+const formInputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 14px',
   border: '1px solid var(--color-border)',
@@ -100,7 +103,7 @@ const debugInputStyle: React.CSSProperties = {
   background: 'var(--color-bg)',
   color: 'var(--color-text-primary)',
 };
-const debugSectionCardStyle: React.CSSProperties = {
+const formSectionStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
@@ -109,29 +112,22 @@ const debugSectionCardStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-md)',
   background: 'var(--color-bg-card)',
 };
-const debugSectionLabelStyle: React.CSSProperties = {
+const formSectionLabelStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
   color: 'var(--color-text-secondary)',
   letterSpacing: '0.02em',
 };
-const debugToggleCardStyle: React.CSSProperties = {
+const debugCheckboxRowStyle: React.CSSProperties = {
   display: 'flex',
-  alignItems: 'flex-start',
-  gap: 10,
-  padding: '12px 14px',
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--color-bg)',
+  alignItems: 'center',
+  gap: 8,
   color: 'var(--color-text-primary)',
 };
-const debugSummaryItemStyle: React.CSSProperties = {
+const compactSummaryMetricStyle: React.CSSProperties = {
   display: 'grid',
-  gap: 6,
-  padding: 14,
-  border: '1px solid var(--color-border-light)',
-  borderRadius: 'var(--radius-md)',
-  background: 'var(--color-bg-card)',
+  gap: 4,
+  minWidth: 112,
 };
 const debugCodeBlockStyle: React.CSSProperties = {
   whiteSpace: 'pre-wrap',
@@ -141,9 +137,52 @@ const debugCodeBlockStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   border: '1px solid var(--color-border-light)',
   background: 'var(--color-bg)',
+  fontFamily: 'var(--font-mono)',
   fontSize: 12,
   lineHeight: 1.5,
   overflowX: 'auto',
+};
+const detailInfoGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+  gap: 12,
+};
+const detailInfoItemStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 4,
+  minWidth: 0,
+};
+const detailInfoLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: 'var(--color-text-muted)',
+};
+const detailInfoValueStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: 'var(--color-text-primary)',
+  fontWeight: 600,
+  minWidth: 0,
+  wordBreak: 'break-word',
+};
+const detailSectionTitleStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--color-text-primary)',
+};
+const detailExpandableCardStyle: React.CSSProperties = {
+  border: '1px solid var(--color-border-light)',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--color-bg-card)',
+  overflow: 'hidden',
+};
+const detailExpandableSummaryStyle: React.CSSProperties = {
+  cursor: 'pointer',
+  listStyle: 'none',
+  padding: '10px 12px',
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--color-text-primary)',
+  borderBottom: '1px solid var(--color-border-light)',
+  background: 'color-mix(in srgb, var(--color-bg-card) 86%, var(--color-bg) 14%)',
 };
 
 function formatLatency(ms: number) {
@@ -426,6 +465,21 @@ function formatProxyDebugTargetSummary(settings: ProxyDebugSettingsState) {
   return parts.length > 0 ? parts.join('，') : '不过滤，记录所有命中的新请求';
 }
 
+function CompactSummaryMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div style={compactSummaryMetricStyle}>
+      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{label}</span>
+      <strong style={{ fontSize: 14, color: 'var(--color-text-primary)', fontWeight: 700 }}>{value}</strong>
+    </div>
+  );
+}
+
 export default function ProxyLogs() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -456,12 +510,14 @@ export default function ProxyLogs() {
   const [debugDraftSettings, setDebugDraftSettings] = useState<ProxyDebugSettingsState>(DEFAULT_PROXY_DEBUG_SETTINGS);
   const [debugTraces, setDebugTraces] = useState<ProxyDebugTraceListItem[]>([]);
   const [selectedDebugTraceId, setSelectedDebugTraceId] = useState<number | null>(null);
+  const [showDebugTraceDetailModal, setShowDebugTraceDetailModal] = useState(false);
   const [debugDetailById, setDebugDetailById] = useState<Record<number, ProxyDebugTraceDetailState>>({});
   const isMobile = useIsMobile(768);
   const toast = useToast();
   const loadSeq = useRef(0);
   const selectedDebugTraceIdRef = useRef<number | null>(null);
   const debugDetailByIdRef = useRef<Record<number, ProxyDebugTraceDetailState>>({});
+  const debugDetailInFlightRef = useRef<Set<number>>(new Set());
   const fromApiBoundary = toApiTimeBoundary(fromInput);
   const toApiBoundaryValue = toApiTimeBoundary(toInput);
   const hasInvalidTimeRange = Boolean(
@@ -689,15 +745,20 @@ export default function ProxyLogs() {
 
   const loadDebugTraceDetail = useCallback(async (
     id: number,
-    options?: { force?: boolean; suppressToast?: boolean },
+    options?: { force?: boolean; suppressToast?: boolean; preserveVisibleData?: boolean },
   ) => {
     const existing = debugDetailByIdRef.current[id];
+    if (debugDetailInFlightRef.current.has(id)) return;
     if (!options?.force && (existing?.loading || existing?.data)) return;
 
-    setDebugDetailById((current) => ({
-      ...current,
-      [id]: { loading: true },
-    }));
+    debugDetailInFlightRef.current.add(id);
+
+    if (!options?.preserveVisibleData || !existing?.data) {
+      setDebugDetailById((current) => ({
+        ...current,
+        [id]: { loading: true },
+      }));
+    }
 
     try {
       const data = await api.getProxyDebugTraceDetail(id);
@@ -714,6 +775,8 @@ export default function ProxyLogs() {
       if (!options?.suppressToast) {
         toast.error(message);
       }
+    } finally {
+      debugDetailInFlightRef.current.delete(id);
     }
   }, [toast]);
 
@@ -726,7 +789,7 @@ export default function ProxyLogs() {
     const nextSelectedDebugTraceId = (
       currentSelectedDebugTraceId && items.some((item) => item.id === currentSelectedDebugTraceId)
         ? currentSelectedDebugTraceId
-        : items[0]?.id ?? null
+        : null
     );
     selectedDebugTraceIdRef.current = nextSelectedDebugTraceId;
     setSelectedDebugTraceId(nextSelectedDebugTraceId);
@@ -734,16 +797,17 @@ export default function ProxyLogs() {
       await loadDebugTraceDetail(nextSelectedDebugTraceId, {
         force: true,
         suppressToast: true,
+        preserveVisibleData: showDebugTraceDetailModal,
       });
     }
-  }, [loadDebugTraceDetail]);
+  }, [loadDebugTraceDetail, showDebugTraceDetailModal]);
 
   const loadDebugTraceList = useCallback(async (
     options?: { silent?: boolean; refreshSelectedDetail?: boolean; suppressToast?: boolean },
   ) => {
     if (!options?.silent) setDebugPanelLoading(true);
     try {
-      const traceResponse = await api.getProxyDebugTraces({ limit: 20 });
+      const traceResponse = await api.getProxyDebugTraces({ limit: TRACE_TABLE_LIMIT });
       const items = Array.isArray(traceResponse?.items) ? traceResponse.items : [];
       await syncDebugTraceItems(items, { refreshSelectedDetail: options?.refreshSelectedDetail });
     } catch (error: any) {
@@ -760,7 +824,7 @@ export default function ProxyLogs() {
     try {
       const [runtimeSettings, traceResponse] = await Promise.all([
         api.getRuntimeSettings(),
-        api.getProxyDebugTraces({ limit: 20 }),
+        api.getProxyDebugTraces({ limit: TRACE_TABLE_LIMIT }),
       ]);
       applyLoadedDebugSettings(normalizeProxyDebugSettings(runtimeSettings), { syncDraft: true });
       const items = Array.isArray(traceResponse?.items) ? traceResponse.items : [];
@@ -777,9 +841,9 @@ export default function ProxyLogs() {
   }, [loadDebugState]);
 
   useEffect(() => {
-    if (!selectedDebugTraceId) return;
+    if (!selectedDebugTraceId || !showDebugTraceDetailModal) return;
     void loadDebugTraceDetail(selectedDebugTraceId);
-  }, [loadDebugTraceDetail, selectedDebugTraceId]);
+  }, [loadDebugTraceDetail, selectedDebugTraceId, showDebugTraceDetailModal]);
 
   useEffect(() => {
     if (!debugSettings.proxyDebugTraceEnabled) return;
@@ -846,6 +910,170 @@ export default function ProxyLogs() {
     }
   }, [expanded, loadDetail]);
   const selectedDebugTraceDetail = selectedDebugTraceId ? debugDetailById[selectedDebugTraceId] : undefined;
+  const selectedDebugTraceListItem = selectedDebugTraceId
+    ? debugTraces.find((trace) => trace.id === selectedDebugTraceId) || null
+    : null;
+  const closeDebugTraceDetailModal = useCallback(() => {
+    setShowDebugTraceDetailModal(false);
+  }, []);
+  const openDebugTraceDetailModal = useCallback((traceId: number) => {
+    selectedDebugTraceIdRef.current = traceId;
+    setSelectedDebugTraceId(traceId);
+    setShowDebugTraceDetailModal(true);
+  }, []);
+
+  function renderTraceStatusBadge(trace: ProxyDebugTraceListItem) {
+    const failed = trace.finalStatus === 'failed';
+    return (
+      <span className={`badge ${failed ? 'badge-error' : 'badge-success'}`} style={{ fontSize: 11 }}>
+        {failed ? '失败' : '成功'}
+      </span>
+    );
+  }
+
+  function renderAttemptDetail(attempt: ProxyDebugTraceAttempt) {
+    return (
+      <details key={attempt.id} style={detailExpandableCardStyle}>
+        <summary style={detailExpandableSummaryStyle}>
+          #{attempt.attemptIndex + 1} · {attempt.endpoint} · {attempt.responseStatus ?? '-'} · {attempt.requestPath}
+        </summary>
+        <div style={{ padding: 12, display: 'grid', gap: 12 }}>
+          <div style={detailInfoGridStyle}>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>目标地址</div>
+              <div style={{ ...detailInfoValueStyle, fontFamily: 'var(--font-mono)', fontSize: 12 }}>{attempt.targetUrl || '-'}</div>
+            </div>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>执行器</div>
+              <div style={detailInfoValueStyle}>{attempt.runtimeExecutor || '-'}</div>
+            </div>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>恢复逻辑</div>
+              <div style={detailInfoValueStyle}>{attempt.recoverApplied ? '已应用' : '未应用'}</div>
+            </div>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>降级决策</div>
+              <div style={detailInfoValueStyle}>{attempt.downgradeDecision ? '已触发' : '未触发'}</div>
+            </div>
+          </div>
+          {attempt.downgradeReason ? (
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              降级原因：{attempt.downgradeReason}
+            </div>
+          ) : null}
+          <pre style={debugCodeBlockStyle}>
+{`targetUrl: ${attempt.targetUrl}
+runtimeExecutor: ${attempt.runtimeExecutor || '-'}
+recoverApplied: ${attempt.recoverApplied ? 'true' : 'false'}
+downgradeDecision: ${attempt.downgradeDecision ? 'true' : 'false'}
+downgradeReason: ${attempt.downgradeReason || '-'}
+
+requestHeaders:
+${attempt.requestHeadersJson || '-'}
+
+requestBody:
+${attempt.requestBodyJson || '-'}
+
+responseHeaders:
+${attempt.responseHeadersJson || '-'}
+
+responseBody:
+${attempt.responseBodyJson || '-'}
+
+rawErrorText:
+${attempt.rawErrorText || '-'}
+
+memoryWrite:
+${attempt.memoryWriteJson || '-'}`}
+          </pre>
+        </div>
+      </details>
+    );
+  }
+
+  function renderDebugTraceDetailContent() {
+    if (!selectedDebugTraceId) {
+      return (
+        <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
+          暂无追踪详情。请选择一条最近追踪后再查看。
+        </div>
+      );
+    }
+
+    if (selectedDebugTraceDetail?.loading) {
+      return <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>加载追踪详情中...</div>;
+    }
+
+    if (selectedDebugTraceDetail?.error) {
+      return <div style={{ color: 'var(--color-danger)', fontSize: 13 }}>{selectedDebugTraceDetail.error}</div>;
+    }
+
+    if (!selectedDebugTraceDetail?.data) {
+      return <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>暂无追踪详情。</div>;
+    }
+
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ ...formSectionStyle, gap: 10 }}>
+          <div style={detailSectionTitleStyle}>基础信息</div>
+          <div style={detailInfoGridStyle}>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>下游路径</div>
+              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.downstreamPath || '-'}</div>
+            </div>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>Session</div>
+              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.sessionId || '-'}</div>
+            </div>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>模型</div>
+              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.requestedModel || '-'}</div>
+            </div>
+            <div style={detailInfoItemStyle}>
+              <div style={detailInfoLabelStyle}>最终上游路径</div>
+              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.finalUpstreamPath || '-'}</div>
+            </div>
+            <div style={{ ...detailInfoItemStyle, gridColumn: '1 / -1' }}>
+              <div style={detailInfoLabelStyle}>候选 endpoint</div>
+              <code style={{ ...debugCodeBlockStyle, margin: 0, fontSize: 11 }}>
+                {selectedDebugTraceDetail.data.trace.endpointCandidatesJson || '-'}
+              </code>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          <details open style={detailExpandableCardStyle}>
+            <summary style={detailExpandableSummaryStyle}>原始下游请求头</summary>
+            <div style={{ padding: 12 }}>
+              <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.requestHeadersJson || '-'}</pre>
+            </div>
+          </details>
+          <details style={detailExpandableCardStyle}>
+            <summary style={detailExpandableSummaryStyle}>原始下游请求体</summary>
+            <div style={{ padding: 12 }}>
+              <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.requestBodyJson || '-'}</pre>
+            </div>
+          </details>
+          <details style={detailExpandableCardStyle}>
+            <summary style={detailExpandableSummaryStyle}>最终响应</summary>
+            <div style={{ padding: 12 }}>
+              <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.finalResponseBodyJson || '-'}</pre>
+            </div>
+          </details>
+        </div>
+
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={detailSectionTitleStyle}>Attempt 记录</div>
+          {selectedDebugTraceDetail.data.attempts.length === 0 ? (
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>暂无 attempt 记录</div>
+          ) : (
+            selectedDebugTraceDetail.data.attempts.map(renderAttemptDetail)
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const filterControls = (
     <>
@@ -947,20 +1175,6 @@ export default function ProxyLogs() {
   );
 
   const latestDebugTrace = debugTraces[0] || null;
-  const debugStatusBadgeStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '4px 10px',
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600,
-    border: '1px solid var(--color-border-light)',
-    color: debugSettings.proxyDebugTraceEnabled ? 'var(--color-success)' : 'var(--color-text-secondary)',
-    background: debugSettings.proxyDebugTraceEnabled
-      ? 'color-mix(in srgb, var(--color-success) 10%, transparent)'
-      : 'var(--color-bg-card)',
-  };
   const debugSettingsFooter = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
       <button
@@ -981,76 +1195,68 @@ export default function ProxyLogs() {
     </div>
   );
   const debugSettingsForm = (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div
-        style={{
-          padding: '12px 14px',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--color-border-light)',
-          background: 'color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-card))',
-          color: 'var(--color-text-secondary)',
-          fontSize: 13,
-          lineHeight: 1.6,
-        }}
-      >
-        这里只会显示开启后产生的新请求。开启后可记录路由选择、上游 endpoint 尝试、原始请求头/响应头，以及你勾选的请求体和响应体。
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div className="info-tip" style={{ marginBottom: 0 }}>
+        只记录开启后的新请求。需要更精确定位时，再按 Session、客户端或模型定向过滤。
+      </div>
+
+      <div style={formSectionStyle}>
+        <div style={formSectionLabelStyle}>记录内容</div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <label style={debugCheckboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={debugDraftSettings.proxyDebugTraceEnabled}
+                data-debug-setting="trace-enabled"
+                onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugTraceEnabled: !!e.target.checked }))}
+              />
+              开启调试追踪
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 24 }}>后续新请求会写入调试追踪，不会回补旧请求。</div>
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <label style={debugCheckboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={debugDraftSettings.proxyDebugCaptureHeaders}
+                data-debug-setting="capture-headers"
+                onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugCaptureHeaders: !!e.target.checked }))}
+              />
+              采集原始请求/响应头
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 24 }}>保留下游原始头和上游响应头，方便直接对照。</div>
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <label style={debugCheckboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={debugDraftSettings.proxyDebugCaptureBodies}
+                data-debug-setting="capture-bodies"
+                onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugCaptureBodies: !!e.target.checked }))}
+              />
+              采集请求体和响应体
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 24 }}>默认不抓 body，只有显式开启后才记录。</div>
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <label style={debugCheckboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={debugDraftSettings.proxyDebugCaptureStreamChunks}
+                data-debug-setting="capture-stream-chunks"
+                onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugCaptureStreamChunks: !!e.target.checked }))}
+              />
+              采集流式原始分片
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 24 }}>适合定位 SSE / streaming 过程中的兼容问题。</div>
+          </div>
+        </div>
       </div>
 
       <ResponsiveFormGrid columns={2}>
-        <div style={debugSectionCardStyle}>
-          <div style={debugSectionLabelStyle}>记录内容</div>
-          <label style={debugToggleCardStyle}>
-            <input
-              type="checkbox"
-              checked={debugDraftSettings.proxyDebugTraceEnabled}
-              data-debug-setting="trace-enabled"
-              onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugTraceEnabled: !!e.target.checked }))}
-            />
-            <div style={{ display: 'grid', gap: 4 }}>
-              <span>开启调试追踪</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>后续新请求会写入调试追踪，不会回补旧请求。</span>
-            </div>
-          </label>
-          <label style={debugToggleCardStyle}>
-            <input
-              type="checkbox"
-              checked={debugDraftSettings.proxyDebugCaptureHeaders}
-              data-debug-setting="capture-headers"
-              onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugCaptureHeaders: !!e.target.checked }))}
-            />
-            <div style={{ display: 'grid', gap: 4 }}>
-              <span>采集原始请求/响应头</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>保留下游原始头和上游响应头，方便直接对照。</span>
-            </div>
-          </label>
-          <label style={debugToggleCardStyle}>
-            <input
-              type="checkbox"
-              checked={debugDraftSettings.proxyDebugCaptureBodies}
-              data-debug-setting="capture-bodies"
-              onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugCaptureBodies: !!e.target.checked }))}
-            />
-            <div style={{ display: 'grid', gap: 4 }}>
-              <span>采集请求体和响应体</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>默认不抓 body，只有显式开启后才记录。</span>
-            </div>
-          </label>
-          <label style={debugToggleCardStyle}>
-            <input
-              type="checkbox"
-              checked={debugDraftSettings.proxyDebugCaptureStreamChunks}
-              data-debug-setting="capture-stream-chunks"
-              onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugCaptureStreamChunks: !!e.target.checked }))}
-            />
-            <div style={{ display: 'grid', gap: 4 }}>
-              <span>采集流式原始分片</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>适合定位 SSE / streaming 过程中的兼容问题。</span>
-            </div>
-          </label>
-        </div>
-
-        <div style={debugSectionCardStyle}>
-          <div style={debugSectionLabelStyle}>定向过滤</div>
+        <div style={formSectionStyle}>
+          <div style={formSectionLabelStyle}>定向过滤</div>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>目标 Session ID</span>
             <input
@@ -1059,7 +1265,7 @@ export default function ProxyLogs() {
               data-debug-setting="target-session-id"
               onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugTargetSessionId: e.target.value }))}
               placeholder="留空表示不过滤"
-              style={debugInputStyle}
+              style={formInputStyle}
             />
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
@@ -1070,7 +1276,7 @@ export default function ProxyLogs() {
               data-debug-setting="target-client-kind"
               onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugTargetClientKind: e.target.value }))}
               placeholder="如 codex / claude_code"
-              style={debugInputStyle}
+              style={formInputStyle}
             />
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
@@ -1081,13 +1287,13 @@ export default function ProxyLogs() {
               data-debug-setting="target-model"
               onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugTargetModel: e.target.value }))}
               placeholder="如 gpt-4o"
-              style={debugInputStyle}
+              style={formInputStyle}
             />
           </label>
         </div>
 
-        <div style={debugSectionCardStyle}>
-          <div style={debugSectionLabelStyle}>保留策略</div>
+        <div style={formSectionStyle}>
+          <div style={formSectionLabelStyle}>保留策略</div>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>保留时长（小时）</span>
             <input
@@ -1096,7 +1302,7 @@ export default function ProxyLogs() {
               value={debugDraftSettings.proxyDebugRetentionHours}
               data-debug-setting="retention-hours"
               onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugRetentionHours: Number(e.target.value || 1) }))}
-              style={debugInputStyle}
+              style={formInputStyle}
             />
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
@@ -1107,19 +1313,9 @@ export default function ProxyLogs() {
               value={debugDraftSettings.proxyDebugMaxBodyBytes}
               data-debug-setting="max-body-bytes"
               onChange={(e) => setDebugDraftSettings((current) => ({ ...current, proxyDebugMaxBodyBytes: Number(e.target.value || 1024) }))}
-              style={debugInputStyle}
+              style={formInputStyle}
             />
           </label>
-        </div>
-
-        <div style={debugSectionCardStyle}>
-          <div style={debugSectionLabelStyle}>当前摘要</div>
-          <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
-            <div>状态：{debugSettings.proxyDebugTraceEnabled ? '已开启' : '未开启'}</div>
-            <div>记录内容：{formatProxyDebugCaptureSummary(debugDraftSettings)}</div>
-            <div>过滤范围：{formatProxyDebugTargetSummary(debugDraftSettings)}</div>
-            <div>最近追踪：{latestDebugTrace ? formatDateTimeLocal(latestDebugTrace.createdAt) : '暂无'}</div>
-          </div>
         </div>
       </ResponsiveFormGrid>
 
@@ -1130,19 +1326,14 @@ export default function ProxyLogs() {
   return (
     <div className="animate-fade-in">
       <div className="page-header" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div>
           <h2 className="page-title">{tr('使用日志')}</h2>
-          <span className="kpi-chip">
-            {activeSiteLabel}
-          </span>
-          <span className="kpi-chip kpi-chip-success">
-            消耗总额 ${summary.totalCost.toFixed(4)}
-          </span>
-          <span className="kpi-chip kpi-chip-warning">
-            {summary.totalTokensAll.toLocaleString()} tokens
-          </span>
+          <div className="page-subtitle">按站点、客户端和时间筛选代理请求，并在需要时查看最近调试追踪。</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div className="page-actions" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span className="kpi-chip">{activeSiteLabel}</span>
+          <span className="kpi-chip kpi-chip-success">消耗总额 ${summary.totalCost.toFixed(4)}</span>
+          <span className="kpi-chip kpi-chip-warning">{summary.totalTokensAll.toLocaleString()} tokens</span>
           <button
             onClick={() => setAutoRefresh((v) => !v)}
             className={`btn btn-ghost${autoRefresh ? ' btn-ghost-active' : ''}`}
@@ -1177,23 +1368,19 @@ export default function ProxyLogs() {
         )}
       />
 
-      <div className="card" style={{ marginBottom: 12, display: 'grid', gap: 16 }}>
+      <div className="card" style={{ marginBottom: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>代理调试追踪</div>
-              <span style={debugStatusBadgeStyle}>
-                {debugSettings.proxyDebugTraceEnabled ? '已开启' : '未开启'}
-              </span>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              当前只显示开启后产生的新请求。页内会持续刷新最近追踪结果，调试设置已收进弹窗。
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>代理调试追踪</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+              未开启时不记录新追踪；追踪详情通过弹窗按需查看。
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
-              className={debugSettings.proxyDebugTraceEnabled ? 'btn btn-ghost btn-ghost-active' : 'btn btn-primary'}
+              className={debugSettings.proxyDebugTraceEnabled ? 'btn btn-ghost btn-ghost-active' : 'btn btn-ghost'}
+              style={{ border: '1px solid var(--color-border)' }}
               onClick={() => void handleQuickToggleDebugTrace()}
               disabled={debugPanelSaving}
             >
@@ -1202,6 +1389,7 @@ export default function ProxyLogs() {
             <button
               type="button"
               className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
               onClick={() => {
                 setDebugDraftSettings(debugSettings);
                 setShowDebugSettingsModal(true);
@@ -1212,6 +1400,7 @@ export default function ProxyLogs() {
             <button
               type="button"
               className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
               onClick={() => void loadDebugState()}
               disabled={debugPanelLoading}
             >
@@ -1220,204 +1409,115 @@ export default function ProxyLogs() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, minmax(0, 1fr))' }}>
-          <div style={debugSummaryItemStyle}>
-            <div style={debugSectionLabelStyle}>记录内容</div>
-            <div style={{ fontSize: 13, color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-              {formatProxyDebugCaptureSummary(debugSettings)}
-            </div>
-          </div>
-          <div style={debugSummaryItemStyle}>
-            <div style={debugSectionLabelStyle}>过滤范围</div>
-            <div style={{ fontSize: 13, color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-              {formatProxyDebugTargetSummary(debugSettings)}
-            </div>
-          </div>
-          <div style={debugSummaryItemStyle}>
-            <div style={debugSectionLabelStyle}>最近追踪数</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {debugTraces.length}
-            </div>
-          </div>
-          <div style={debugSummaryItemStyle}>
-            <div style={debugSectionLabelStyle}>最新一条</div>
-            <div style={{ fontSize: 13, color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-              {latestDebugTrace ? formatDateTimeLocal(latestDebugTrace.createdAt) : '暂无追踪'}
-            </div>
-          </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 18px', alignItems: 'center' }}>
+          <CompactSummaryMetric label="状态" value={debugSettings.proxyDebugTraceEnabled ? '已开启' : '未开启'} />
+          <CompactSummaryMetric label="最近追踪" value={`${debugTraces.length} 条`} />
+          <CompactSummaryMetric label="最新时间" value={latestDebugTrace ? formatDateTimeLocal(latestDebugTrace.createdAt) : '暂无'} />
+        </div>
+
+        <div style={{ display: 'grid', gap: 4 }}>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>记录内容：{formatProxyDebugCaptureSummary(debugSettings)}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>过滤范围：{formatProxyDebugTargetSummary(debugSettings)}</div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: isMobile ? '1fr' : 'minmax(300px, 360px) minmax(0, 1fr)' }}>
-        <div className="card" style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontWeight: 600 }}>最近调试追踪</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              {debugSettings.proxyDebugTraceEnabled ? '开启中，结果会自动刷新' : '尚未开启'}
+      <div className="card" style={{ marginBottom: 12, padding: 12, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>最近调试追踪</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+              按最新 20 条展示，点击查看详情会打开完整请求与 attempt 链路。
             </div>
           </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            {debugSettings.proxyDebugTraceEnabled ? '开启中，结果会自动刷新' : '尚未开启'}
+          </div>
+        </div>
 
-          {debugPanelLoading && debugTraces.length === 0 ? (
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>加载调试追踪中...</div>
-          ) : debugTraces.length === 0 ? (
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 'var(--radius-md)',
-                border: '1px dashed var(--color-border)',
-                color: 'var(--color-text-muted)',
-                fontSize: 13,
-                lineHeight: 1.7,
-              }}
-            >
-              {debugSettings.proxyDebugTraceEnabled
-                ? '暂时还没有新追踪。这里只显示开启后产生的新请求，等下一次代理请求进入就会出现在这里。'
-                : '调试追踪尚未开启。点击上方“开启调试”或“调试设置”后，新的代理请求会出现在这里。'}
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
-              {debugTraces.map((trace) => (
-                <button
-                  key={trace.id}
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{
-                    justifyContent: 'flex-start',
-                    textAlign: 'left',
-                    padding: 0,
-                    border: 'none',
-                    background: 'transparent',
-                  }}
-                  onClick={() => {
-                    selectedDebugTraceIdRef.current = trace.id;
-                    setSelectedDebugTraceId(trace.id);
-                    void loadDebugTraceDetail(trace.id);
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '100%',
-                      display: 'grid',
-                      gap: 6,
-                      padding: 14,
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border-light)',
-                      background: selectedDebugTraceId === trace.id
-                        ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-card))'
-                        : 'var(--color-bg-card)',
-                    }}
+        {debugPanelLoading && debugTraces.length === 0 ? (
+          <div style={{ color: 'var(--color-text-muted)', fontSize: 13, paddingBottom: 12 }}>加载调试追踪中...</div>
+        ) : debugTraces.length === 0 ? (
+          <div
+            style={{
+              padding: 14,
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--color-border-light)',
+              background: 'var(--color-bg)',
+              color: 'var(--color-text-muted)',
+              fontSize: 12,
+              lineHeight: 1.6,
+            }}
+          >
+            {debugSettings.proxyDebugTraceEnabled
+              ? '暂时还没有新追踪。这里只显示开启后产生的新请求，等下一次代理请求进入就会出现在这里。'
+              : '调试追踪尚未开启。点击上方“开启调试”或“调试设置”后，新的代理请求会出现在这里。'}
+          </div>
+        ) : isMobile ? (
+          <div className="mobile-card-list">
+            {debugTraces.map((trace) => (
+              <MobileCard
+                key={trace.id}
+                title={trace.sessionId || `trace-${trace.id}`}
+                subtitle={formatDateTimeLocal(trace.createdAt)}
+                compact
+                headerActions={renderTraceStatusBadge(trace)}
+                footerActions={(
+                  <button
+                    type="button"
+                    className="btn btn-link"
+                    onClick={() => openDebugTraceDetailModal(trace.id)}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                        {trace.sessionId || `trace-${trace.id}`}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                        {formatDateTimeLocal(trace.createdAt)}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                      {trace.requestedModel || '-'} · {trace.downstreamPath}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                      {trace.finalStatus || 'pending'} · {trace.finalUpstreamPath || '-'}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="card" style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <div style={{ fontWeight: 600 }}>追踪详情</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              选择左侧一条追踪后查看完整请求与 attempt 链路
-            </div>
-          </div>
-
-          {!selectedDebugTraceId ? (
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-              暂无追踪详情。开启调试后等待新请求，或从左侧选择一条最近追踪。
-            </div>
-          ) : selectedDebugTraceDetail?.loading ? (
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>加载追踪详情中...</div>
-          ) : selectedDebugTraceDetail?.error ? (
-            <div style={{ color: 'var(--color-danger)', fontSize: 13 }}>{selectedDebugTraceDetail.error}</div>
-          ) : selectedDebugTraceDetail?.data ? (
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ ...debugSectionCardStyle, gap: 8 }}>
-                <div style={debugSectionLabelStyle}>基础信息</div>
-                <div style={{ display: 'grid', gap: 6, fontSize: 13 }}>
-                  <div>下游路径：{selectedDebugTraceDetail.data.trace.downstreamPath || '-'}</div>
-                  <div>Session：{selectedDebugTraceDetail.data.trace.sessionId || '-'}</div>
-                  <div>模型：{selectedDebugTraceDetail.data.trace.requestedModel || '-'}</div>
-                  <div>候选 endpoint：{selectedDebugTraceDetail.data.trace.endpointCandidatesJson || '-'}</div>
-                  <div>最终上游路径：{selectedDebugTraceDetail.data.trace.finalUpstreamPath || '-'}</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gap: 10 }}>
-                <details open>
-                  <summary>原始下游请求头</summary>
-                  <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.requestHeadersJson || '-'}</pre>
-                </details>
-                <details>
-                  <summary>原始下游请求体</summary>
-                  <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.requestBodyJson || '-'}</pre>
-                </details>
-                <details>
-                  <summary>最终响应</summary>
-                  <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.finalResponseBodyJson || '-'}</pre>
-                </details>
-              </div>
-
-              <div style={{ display: 'grid', gap: 8 }}>
-                <div style={{ fontWeight: 600 }}>Attempt 记录</div>
-                {selectedDebugTraceDetail.data.attempts.length === 0 ? (
-                  <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>暂无 attempt 记录</div>
-                ) : (
-                  selectedDebugTraceDetail.data.attempts.map((attempt) => (
-                    <details key={attempt.id}>
-                      <summary>
-                        #{attempt.attemptIndex + 1} · {attempt.endpoint} · {attempt.responseStatus ?? '-'} · {attempt.requestPath}
-                      </summary>
-                      <pre style={debugCodeBlockStyle}>
-{`targetUrl: ${attempt.targetUrl}
-runtimeExecutor: ${attempt.runtimeExecutor || '-'}
-recoverApplied: ${attempt.recoverApplied ? 'true' : 'false'}
-downgradeDecision: ${attempt.downgradeDecision ? 'true' : 'false'}
-downgradeReason: ${attempt.downgradeReason || '-'}
-
-requestHeaders:
-${attempt.requestHeadersJson || '-'}
-
-requestBody:
-${attempt.requestBodyJson || '-'}
-
-responseHeaders:
-${attempt.responseHeadersJson || '-'}
-
-responseBody:
-${attempt.responseBodyJson || '-'}
-
-rawErrorText:
-${attempt.rawErrorText || '-'}
-
-memoryWrite:
-${attempt.memoryWriteJson || '-'}`}
-                      </pre>
-                    </details>
-                  ))
+                    查看详情
+                  </button>
                 )}
-              </div>
-            </div>
-          ) : (
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-              暂无追踪详情。
-            </div>
-          )}
-        </div>
+              >
+                <MobileField label="模型" value={trace.requestedModel || '-'} />
+                <MobileField label="下游路径" value={trace.downstreamPath || '-'} />
+                <MobileField label="上游路径" value={trace.finalUpstreamPath || '-'} />
+                <MobileField label="客户端" value={trace.clientKind || '-'} />
+              </MobileCard>
+            ))}
+          </div>
+        ) : (
+          <table className="data-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>Session</th>
+                <th>模型</th>
+                <th>下游路径</th>
+                <th>上游路径</th>
+                <th>客户端</th>
+                <th>{tr('状态')}</th>
+                <th style={{ textAlign: 'right' }}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {debugTraces.map((trace) => (
+                <tr key={trace.id}>
+                  <td style={{ fontSize: 12, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
+                    {formatDateTimeLocal(trace.createdAt)}
+                  </td>
+                  <td style={{ fontSize: 12, fontWeight: 600 }}>{trace.sessionId || `trace-${trace.id}`}</td>
+                  <td style={{ fontSize: 12 }}>{trace.requestedModel || '-'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{trace.downstreamPath || '-'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{trace.finalUpstreamPath || '-'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{trace.clientKind || '-'}</td>
+                  <td>{renderTraceStatusBadge(trace)}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      type="button"
+                      className="btn btn-link"
+                      onClick={() => openDebugTraceDetailModal(trace.id)}
+                    >
+                      查看详情
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {isMobile ? (
@@ -1449,6 +1549,31 @@ ${attempt.memoryWriteJson || '-'}`}
           closeOnEscape
         >
           {debugSettingsForm}
+        </CenteredModal>
+      )}
+
+      {isMobile ? (
+        <MobileDrawer
+          open={showDebugTraceDetailModal}
+          onClose={closeDebugTraceDetailModal}
+          title={selectedDebugTraceListItem?.sessionId || '追踪详情'}
+          closeLabel="关闭追踪详情"
+          side="right"
+        >
+          <div style={{ padding: 16, display: 'grid', gap: 16 }}>
+            {renderDebugTraceDetailContent()}
+          </div>
+        </MobileDrawer>
+      ) : (
+        <CenteredModal
+          open={showDebugTraceDetailModal}
+          onClose={closeDebugTraceDetailModal}
+          title={selectedDebugTraceListItem?.sessionId || '追踪详情'}
+          maxWidth={920}
+          closeOnBackdrop
+          closeOnEscape
+        >
+          {renderDebugTraceDetailContent()}
         </CenteredModal>
       )}
 
