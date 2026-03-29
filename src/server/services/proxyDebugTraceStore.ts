@@ -25,6 +25,24 @@ export type ProxyDebugTraceSession = {
 let lastPruneAtMs = 0;
 const PRUNE_INTERVAL_MS = 5 * 60 * 1000;
 
+type TruncatedDebugPreview = {
+  __metapiTruncated: true;
+  preview: string;
+  originalBytes: number;
+  storedBytes: number;
+};
+
+function buildTruncatedDebugPreview(text: string, maxBytes: number, originalBytes: number): string {
+  const truncated = Buffer.from(text, 'utf8').subarray(0, Math.max(0, maxBytes)).toString('utf8');
+  const payload: TruncatedDebugPreview = {
+    __metapiTruncated: true,
+    preview: truncated,
+    originalBytes,
+    storedBytes: maxBytes,
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
 function stringifyDebugValue(value: unknown, maxBytes: number): string | null {
   if (value == null) return null;
 
@@ -45,8 +63,7 @@ function stringifyDebugValue(value: unknown, maxBytes: number): string | null {
     return text;
   }
 
-  const truncated = buffer.subarray(0, Math.max(0, maxBytes)).toString('utf8');
-  return `${truncated}\n...[truncated ${buffer.length - maxBytes} bytes]`;
+  return buildTruncatedDebugPreview(text, maxBytes, buffer.length);
 }
 
 function normalizeHeadersValue(value: HeadersLike): Record<string, unknown> | null {

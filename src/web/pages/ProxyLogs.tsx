@@ -64,6 +64,12 @@ type ProxyDebugTraceDetailState = {
 };
 
 type ProxyDebugTraceAttempt = ProxyDebugTraceDetail['attempts'][number];
+type StoredDebugPreviewPayload = {
+  __metapiTruncated?: boolean;
+  preview?: string;
+  originalBytes?: number;
+  storedBytes?: number;
+};
 
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
@@ -184,6 +190,24 @@ const detailExpandableSummaryStyle: React.CSSProperties = {
   borderBottom: '1px solid var(--color-border-light)',
   background: 'color-mix(in srgb, var(--color-bg-card) 86%, var(--color-bg) 14%)',
 };
+
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
 
 function formatLatency(ms: number) {
   if (ms >= 1000) {
@@ -463,6 +487,67 @@ function formatProxyDebugTargetSummary(settings: ProxyDebugSettingsState) {
     settings.proxyDebugTargetModel ? `模型 ${settings.proxyDebugTargetModel}` : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join('，') : '不过滤，记录所有命中的新请求';
+}
+
+function stringifyStoredDebugValue(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function parseStoredDebugPreview(value: unknown): {
+  raw: string | null;
+  displayText: string;
+  truncated: boolean;
+  note: string | null;
+} {
+  const raw = stringifyStoredDebugValue(value);
+  if (!raw) {
+    return {
+      raw: null,
+      displayText: '-',
+      truncated: false,
+      note: null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as StoredDebugPreviewPayload | string;
+    if (typeof parsed === 'string') {
+      return {
+        raw,
+        displayText: parsed || '-',
+        truncated: false,
+        note: null,
+      };
+    }
+
+    if (parsed && typeof parsed === 'object' && parsed.__metapiTruncated && typeof parsed.preview === 'string') {
+      const originalBytes = Number(parsed.originalBytes || 0);
+      const storedBytes = Number(parsed.storedBytes || 0);
+      return {
+        raw,
+        displayText: parsed.preview || '-',
+        truncated: true,
+        note: originalBytes > 0 && storedBytes > 0
+          ? `内容已截断展示，原始 ${originalBytes} bytes，当前保留 ${storedBytes} bytes。复制按钮会复制当前数据库里保存的内容。`
+          : '内容已截断展示。复制按钮会复制当前数据库里保存的内容。',
+      };
+    }
+  } catch {
+    // Fall through to display the saved raw value directly.
+  }
+
+  return {
+    raw,
+    displayText: raw,
+    truncated: false,
+    note: null,
+  };
 }
 
 function CompactSummaryMetric({
@@ -921,6 +1006,19 @@ export default function ProxyLogs() {
     setSelectedDebugTraceId(traceId);
     setShowDebugTraceDetailModal(true);
   }, []);
+  const handleCopyStoredDebugValue = useCallback(async (label: string, value: unknown) => {
+    const normalized = parseStoredDebugPreview(value);
+    if (!normalized.raw) {
+      toast.error(`${label}为空，无法复制`);
+      return;
+    }
+    try {
+      await copyTextToClipboard(normalized.raw);
+      toast.success(`已复制${label}`);
+    } catch (error: any) {
+      toast.error(error?.message || `复制${label}失败`);
+    }
+  }, [toast]);
 
   function renderTraceStatusBadge(trace: ProxyDebugTraceListItem) {
     const failed = trace.finalStatus === 'failed';
@@ -932,6 +1030,32 @@ export default function ProxyLogs() {
   }
 
   function renderAttemptDetail(attempt: ProxyDebugTraceAttempt) {
+    const serializedAttempt = [
+      `targetUrl: ${attempt.targetUrl}`,
+      `runtimeExecutor: ${attempt.runtimeExecutor || '-'}`,
+      `recoverApplied: ${attempt.recoverApplied ? 'true' : 'false'}`,
+      `downgradeDecision: ${attempt.downgradeDecision ? 'true' : 'false'}`,
+      `downgradeReason: ${attempt.downgradeReason || '-'}`,
+      '',
+      'requestHeaders:',
+      stringifyStoredDebugValue(attempt.requestHeadersJson) || '-',
+      '',
+      'requestBody:',
+      stringifyStoredDebugValue(attempt.requestBodyJson) || '-',
+      '',
+      'responseHeaders:',
+      stringifyStoredDebugValue(attempt.responseHeadersJson) || '-',
+      '',
+      'responseBody:',
+      stringifyStoredDebugValue(attempt.responseBodyJson) || '-',
+      '',
+      'rawErrorText:',
+      attempt.rawErrorText || '-',
+      '',
+      'memoryWrite:',
+      stringifyStoredDebugValue(attempt.memoryWriteJson) || '-',
+    ].join('\n');
+
     return (
       <details key={attempt.id} style={detailExpandableCardStyle}>
         <summary style={detailExpandableSummaryStyle}>
@@ -961,31 +1085,41 @@ export default function ProxyLogs() {
               降级原因：{attempt.downgradeReason}
             </div>
           ) : null}
-          <pre style={debugCodeBlockStyle}>
-{`targetUrl: ${attempt.targetUrl}
-runtimeExecutor: ${attempt.runtimeExecutor || '-'}
-recoverApplied: ${attempt.recoverApplied ? 'true' : 'false'}
-downgradeDecision: ${attempt.downgradeDecision ? 'true' : 'false'}
-downgradeReason: ${attempt.downgradeReason || '-'}
+          <pre style={debugCodeBlockStyle}>{serializedAttempt}</pre>
+        </div>
+      </details>
+    );
+  }
 
-requestHeaders:
-${attempt.requestHeadersJson || '-'}
+  function renderStoredDebugDetails(title: string, value: unknown, options?: { defaultOpen?: boolean; copyLabel?: string }) {
+    const normalized = parseStoredDebugPreview(value);
+    const copyLabel = options?.copyLabel || title;
 
-requestBody:
-${attempt.requestBodyJson || '-'}
-
-responseHeaders:
-${attempt.responseHeadersJson || '-'}
-
-responseBody:
-${attempt.responseBodyJson || '-'}
-
-rawErrorText:
-${attempt.rawErrorText || '-'}
-
-memoryWrite:
-${attempt.memoryWriteJson || '-'}`}
-          </pre>
+    return (
+      <details open={options?.defaultOpen} style={detailExpandableCardStyle}>
+        <summary style={detailExpandableSummaryStyle}>
+          <span>{title}</span>
+        </summary>
+        <div style={{ padding: 12, display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)', padding: '6px 12px' }}
+              aria-label={`复制${copyLabel}`}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                void handleCopyStoredDebugValue(copyLabel, value);
+              }}
+            >
+              复制当前保存内容
+            </button>
+          </div>
+          {normalized.note ? (
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{normalized.note}</div>
+          ) : null}
+          <pre style={debugCodeBlockStyle}>{normalized.displayText}</pre>
         </div>
       </details>
     );
@@ -1012,6 +1146,8 @@ ${attempt.memoryWriteJson || '-'}`}
       return <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>暂无追踪详情。</div>;
     }
 
+    const traceDetail = selectedDebugTraceDetail.data.trace;
+
     return (
       <div style={{ display: 'grid', gap: 12 }}>
         <div style={{ ...formSectionStyle, gap: 10 }}>
@@ -1019,48 +1155,53 @@ ${attempt.memoryWriteJson || '-'}`}
           <div style={detailInfoGridStyle}>
             <div style={detailInfoItemStyle}>
               <div style={detailInfoLabelStyle}>下游路径</div>
-              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.downstreamPath || '-'}</div>
+              <div style={detailInfoValueStyle}>{traceDetail.downstreamPath || '-'}</div>
             </div>
             <div style={detailInfoItemStyle}>
               <div style={detailInfoLabelStyle}>Session</div>
-              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.sessionId || '-'}</div>
+              <div style={detailInfoValueStyle}>{traceDetail.sessionId || '-'}</div>
             </div>
             <div style={detailInfoItemStyle}>
               <div style={detailInfoLabelStyle}>模型</div>
-              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.requestedModel || '-'}</div>
+              <div style={detailInfoValueStyle}>{traceDetail.requestedModel || '-'}</div>
             </div>
             <div style={detailInfoItemStyle}>
               <div style={detailInfoLabelStyle}>最终上游路径</div>
-              <div style={detailInfoValueStyle}>{selectedDebugTraceDetail.data.trace.finalUpstreamPath || '-'}</div>
+              <div style={detailInfoValueStyle}>{traceDetail.finalUpstreamPath || '-'}</div>
             </div>
             <div style={{ ...detailInfoItemStyle, gridColumn: '1 / -1' }}>
               <div style={detailInfoLabelStyle}>候选 endpoint</div>
-              <code style={{ ...debugCodeBlockStyle, margin: 0, fontSize: 11 }}>
-                {selectedDebugTraceDetail.data.trace.endpointCandidatesJson || '-'}
-              </code>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ border: '1px solid var(--color-border)', padding: '6px 12px' }}
+                    aria-label="复制候选 endpoint"
+                    onClick={() => void handleCopyStoredDebugValue('候选 endpoint', traceDetail.endpointCandidatesJson)}
+                  >
+                    复制当前保存内容
+                  </button>
+                </div>
+                <code style={{ ...debugCodeBlockStyle, margin: 0, fontSize: 11 }}>
+                  {parseStoredDebugPreview(traceDetail.endpointCandidatesJson).displayText}
+                </code>
+              </div>
             </div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: 10 }}>
-          <details open style={detailExpandableCardStyle}>
-            <summary style={detailExpandableSummaryStyle}>原始下游请求头</summary>
-            <div style={{ padding: 12 }}>
-              <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.requestHeadersJson || '-'}</pre>
-            </div>
-          </details>
-          <details style={detailExpandableCardStyle}>
-            <summary style={detailExpandableSummaryStyle}>原始下游请求体</summary>
-            <div style={{ padding: 12 }}>
-              <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.requestBodyJson || '-'}</pre>
-            </div>
-          </details>
-          <details style={detailExpandableCardStyle}>
-            <summary style={detailExpandableSummaryStyle}>最终响应</summary>
-            <div style={{ padding: 12 }}>
-              <pre style={debugCodeBlockStyle}>{selectedDebugTraceDetail.data.trace.finalResponseBodyJson || '-'}</pre>
-            </div>
-          </details>
+          {renderStoredDebugDetails('原始下游请求头', traceDetail.requestHeadersJson, {
+            defaultOpen: true,
+            copyLabel: '原始下游请求头',
+          })}
+          {renderStoredDebugDetails('原始下游请求体', traceDetail.requestBodyJson, {
+            copyLabel: '原始下游请求体',
+          })}
+          {renderStoredDebugDetails('最终响应', traceDetail.finalResponseBodyJson, {
+            copyLabel: '最终响应',
+          })}
         </div>
 
         <div style={{ display: 'grid', gap: 8 }}>

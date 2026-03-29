@@ -150,4 +150,37 @@ describe('proxyDebugTraceStore', () => {
       downgradeDecision: true,
     });
   });
+
+  it('stores truncated debug payload previews as valid JSON text for json-capable databases', async () => {
+    const trace = await store.createProxyDebugTrace({
+      downstreamPath: '/v1/responses',
+      clientKind: 'codex',
+      requestedModel: 'gpt-5.4',
+      requestHeaders: {
+        authorization: `Bearer ${'x'.repeat(5000)}`,
+        'x-client': 'Codex Desktop',
+      },
+      requestBody: {
+        model: 'gpt-5.4',
+        input: [{ role: 'user', content: 'hello '.repeat(2000) }],
+      },
+      maxBodyBytes: 1024,
+    });
+
+    const detail = await store.getProxyDebugTraceDetail(trace.id);
+    const headersPayload = JSON.parse(detail?.trace.requestHeadersJson || 'null');
+    const bodyPayload = JSON.parse(detail?.trace.requestBodyJson || 'null');
+
+    expect(headersPayload).toMatchObject({
+      __metapiTruncated: true,
+    });
+    expect(typeof headersPayload.preview).toBe('string');
+    expect(headersPayload.preview).toContain('authorization');
+
+    expect(bodyPayload).toMatchObject({
+      __metapiTruncated: true,
+    });
+    expect(typeof bodyPayload.preview).toBe('string');
+    expect(bodyPayload.preview).toContain('"model": "gpt-5.4"');
+  });
 });

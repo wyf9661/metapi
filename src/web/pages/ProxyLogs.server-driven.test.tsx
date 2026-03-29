@@ -97,6 +97,15 @@ function buildListResponse(overrides?: Partial<{
 describe('ProxyLogs server-driven page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        clipboard: {
+          writeText: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
     apiMock.getSites.mockResolvedValue([
       { id: 9, name: 'main-site', status: 'active' },
       { id: 12, name: 'backup-site', status: 'active' },
@@ -185,6 +194,7 @@ describe('ProxyLogs server-driven page', () => {
         id: 701,
         requestedModel: 'gpt-4o',
         sessionId: 'sess-debug-1',
+        requestHeadersJson: '{\n  "authorization": "Bearer demo"\n}',
       },
       attempts: [],
     });
@@ -490,6 +500,49 @@ describe('ProxyLogs server-driven page', () => {
       });
       vi.runOnlyPendingTimers();
       vi.useRealTimers();
+    }
+  });
+
+  it('copies the saved request headers content from the trace detail modal', async () => {
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/logs']}>
+            <ToastProvider>
+              <ProxyLogs />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const viewDetailButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '查看详情'
+      ));
+
+      await act(async () => {
+        viewDetailButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const copyButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && node.props['aria-label'] === '复制原始下游请求头'
+      ));
+
+      await act(async () => {
+        copyButton.props.onClick({ stopPropagation: () => undefined, preventDefault: () => undefined });
+      });
+      await flushMicrotasks();
+
+      expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledWith('{\n  "authorization": "Bearer demo"\n}');
+    } finally {
+      root?.unmount();
     }
   });
 
