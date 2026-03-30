@@ -1,5 +1,11 @@
 import { clearAuthSession, getAuthToken } from './authSession.js';
 
+type BufferLike = {
+  from(data: ArrayBuffer): { toString(encoding: 'base64'): string };
+};
+
+const nodeBuffer = (globalThis as typeof globalThis & { Buffer?: BufferLike }).Buffer;
+
 type RequestOptions = RequestInit & {
   timeoutMs?: number;
 };
@@ -58,8 +64,8 @@ function parseContentDispositionFilename(headerValue: string | null): string | n
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(buffer).toString('base64');
+  if (nodeBuffer) {
+    return nodeBuffer.from(buffer).toString('base64');
   }
 
   let binary = '';

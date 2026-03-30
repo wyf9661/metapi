@@ -19,8 +19,10 @@ describe('docker workflows', () => {
   it('uses an armv7-capable node base image in the Dockerfile', () => {
     const dockerfile = readFileSync(resolve(process.cwd(), 'docker/Dockerfile'), 'utf8');
 
-    expect(dockerfile).toContain('FROM node:22-bookworm-slim AS builder');
-    expect(dockerfile).toContain('FROM node:22-bookworm-slim');
+    const fromMatches = [...dockerfile.matchAll(/^FROM node:(\d+)-bookworm-slim(?: AS builder)?$/gm)];
+
+    expect(fromMatches).toHaveLength(2);
+    expect(fromMatches[0]?.[1]).toBe(fromMatches[1]?.[1]);
   });
 
   it('keeps server docker builds isolated from desktop packaging dependencies', () => {
