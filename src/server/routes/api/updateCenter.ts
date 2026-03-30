@@ -16,6 +16,10 @@ import {
   type UpdateCenterVersionSource,
 } from '../../services/updateCenterVersionService.js';
 import {
+  getUpdateCenterDeployBlockMessage,
+  normalizeUpdateCenterTargetDigest,
+} from '../../services/updateCenterDeployGuardService.js';
+import {
   getDefaultUpdateCenterConfig,
   loadUpdateCenterConfig,
   normalizeUpdateCenterConfig,
@@ -168,6 +172,7 @@ export async function updateCenterRoutes(app: FastifyInstance) {
         message: summarizeHelperError(error),
       });
     }
+    const helperToken = getUpdateCenterHelperToken();
 
     const source = request.body?.source === 'docker-hub-tag'
       ? 'docker-hub-tag'
@@ -175,11 +180,24 @@ export async function updateCenterRoutes(app: FastifyInstance) {
         ? 'github-release'
         : config.defaultDeploySource;
     const targetTag = String(request.body?.targetTag || request.body?.targetVersion || '').trim();
-    const targetDigest = String(request.body?.targetDigest || '').trim() || null;
+    const targetDigest = normalizeUpdateCenterTargetDigest(request.body?.targetDigest);
     if (!targetTag) {
       return reply.code(400).send({
         success: false,
         message: 'targetTag is required',
+      });
+    }
+
+    const deployBlockMessage = await getUpdateCenterDeployBlockMessage({
+      config,
+      helperToken,
+      targetTag,
+      targetDigest,
+    });
+    if (deployBlockMessage) {
+      return reply.code(409).send({
+        success: false,
+        message: deployBlockMessage,
       });
     }
 
@@ -200,7 +218,7 @@ export async function updateCenterRoutes(app: FastifyInstance) {
         const result = await streamUpdateCenterDeploy(
           {
             config,
-            helperToken: getUpdateCenterHelperToken(),
+            helperToken,
             source,
             targetTag,
             targetDigest,

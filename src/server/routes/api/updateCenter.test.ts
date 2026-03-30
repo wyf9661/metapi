@@ -409,6 +409,110 @@ describe('update center routes', () => {
     }), expect.any(Function));
   });
 
+  it('rejects deploy requests when the target image is already running', async () => {
+    await saveValidConfig();
+
+    getUpdateCenterHelperStatusMock.mockResolvedValue({
+      ok: true,
+      releaseName: 'metapi',
+      namespace: 'ai',
+      revision: '17',
+      imageRepository: '1467078763/metapi',
+      imageTag: 'latest',
+      imageDigest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+      healthy: true,
+    });
+
+    const deployResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'docker-hub-tag',
+        targetTag: 'latest',
+        targetDigest: 'sha256:efb2ee6553866bd3268dcc54c02fa5f9789728c51ed4af63328aaba6da67df35',
+      },
+    });
+
+    expect(deployResponse.statusCode).toBe(409);
+    expect(deployResponse.json()).toMatchObject({
+      success: false,
+      message: 'target image is already running',
+    });
+    expect(streamUpdateCenterDeployMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reject a same-version deploy when the requested digest differs from the running image', async () => {
+    await saveValidConfig();
+
+    getUpdateCenterHelperStatusMock.mockResolvedValue({
+      ok: true,
+      releaseName: 'metapi',
+      namespace: 'ai',
+      revision: '17',
+      imageRepository: '1467078763/metapi',
+      imageTag: '1.2.3',
+      imageDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      healthy: true,
+    });
+    streamUpdateCenterDeployMock.mockResolvedValue({
+      success: true,
+      targetSource: 'docker-hub-tag',
+      targetTag: '1.2.3',
+      targetDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      previousRevision: '17',
+      finalRevision: '18',
+      rolledBack: false,
+      logLines: ['Running helm upgrade'],
+    });
+
+    const deployResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'docker-hub-tag',
+        targetTag: '1.2.3',
+        targetDigest: 'sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+      },
+    });
+
+    expect(deployResponse.statusCode).toBe(202);
+    expect(streamUpdateCenterDeployMock).toHaveBeenCalledWith(expect.objectContaining({
+      targetTag: '1.2.3',
+      targetDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    }), expect.any(Function));
+  });
+
+  it('normalizes invalid target digests to null before forwarding the deploy request', async () => {
+    await saveValidConfig();
+
+    streamUpdateCenterDeployMock.mockResolvedValue({
+      success: true,
+      targetSource: 'docker-hub-tag',
+      targetTag: 'latest',
+      targetDigest: null,
+      previousRevision: '13',
+      finalRevision: '14',
+      rolledBack: false,
+      logLines: ['Running helm upgrade'],
+    });
+
+    const deployResponse = await app.inject({
+      method: 'POST',
+      url: '/api/update-center/deploy',
+      payload: {
+        source: 'docker-hub-tag',
+        targetTag: 'latest',
+        targetDigest: 'not-a-real-digest',
+      },
+    });
+
+    expect(deployResponse.statusCode).toBe(202);
+    expect(streamUpdateCenterDeployMock).toHaveBeenCalledWith(expect.objectContaining({
+      targetTag: 'latest',
+      targetDigest: null,
+    }), expect.any(Function));
+  });
+
   it('starts rollback tasks for explicit revision requests', async () => {
     await saveValidConfig();
 
