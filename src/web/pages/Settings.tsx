@@ -62,6 +62,7 @@ type RuntimeSettings = {
   adminIpAllowlist?: string[];
   currentAdminIp?: string;
   globalBlockedBrands?: string[];
+  globalAllowedModels?: string[];
 };
 
 type SystemProxyTestState =
@@ -220,6 +221,10 @@ export default function Settings() {
   const [allBrandNames, setAllBrandNames] = useState<string[] | null>(null);
   const [blockedBrands, setBlockedBrands] = useState<string[]>([]);
   const [savingBrandFilter, setSavingBrandFilter] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[] | null>(null);
+  const [allowedModels, setAllowedModels] = useState<string[]>([]);
+  const [allowedModelsInput, setAllowedModelsInput] = useState('');
+  const [savingAllowedModels, setSavingAllowedModels] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
   const [adminIpAllowlistText, setAdminIpAllowlistText] = useState('');
   const [clearingCache, setClearingCache] = useState(false);
@@ -445,8 +450,10 @@ export default function Settings() {
           : [],
         currentAdminIp: typeof runtimeInfo.currentAdminIp === 'string' ? runtimeInfo.currentAdminIp : '',
         globalBlockedBrands: Array.isArray(runtimeInfo.globalBlockedBrands) ? runtimeInfo.globalBlockedBrands : [],
+        globalAllowedModels: Array.isArray(runtimeInfo.globalAllowedModels) ? runtimeInfo.globalAllowedModels : [],
       });
       setBlockedBrands(Array.isArray(runtimeInfo.globalBlockedBrands) ? runtimeInfo.globalBlockedBrands : []);
+      setAllowedModels(Array.isArray(runtimeInfo.globalAllowedModels) ? runtimeInfo.globalAllowedModels : []);
       setProxyErrorKeywordsText(
         Array.isArray(runtimeInfo.proxyErrorKeywords)
           ? runtimeInfo.proxyErrorKeywords.filter((item: unknown) => typeof item === 'string').join('\n')
@@ -493,6 +500,14 @@ export default function Settings() {
     api.getBrandList()
       .then((res: any) => setAllBrandNames(Array.isArray(res?.brands) ? res.brands : []))
       .catch(() => setAllBrandNames([]));
+    // Load available models in background (non-blocking, best-effort)
+    api.getModelTokenCandidates()
+      .then((res: any) => {
+        const models = res?.models || {};
+        const modelNames = Object.keys(models);
+        setAvailableModels(modelNames.sort());
+      })
+      .catch(() => setAvailableModels([]));
   };
 
   useEffect(() => {
@@ -861,6 +876,27 @@ export default function Settings() {
       toast.error(err?.message || '保存品牌屏蔽设置失败');
     } finally {
       setSavingBrandFilter(false);
+    }
+  };
+
+  const handleSaveAllowedModels = async () => {
+    setSavingAllowedModels(true);
+    try {
+      const res = await api.updateRuntimeSettings({ globalAllowedModels: allowedModels });
+      const resolved = Array.isArray(res?.globalAllowedModels) ? res.globalAllowedModels : allowedModels;
+      setRuntime((prev) => ({ ...prev, globalAllowedModels: resolved }));
+      setAllowedModels(resolved);
+      toast.success('模型白名单设置已保存');
+      try {
+        await api.rebuildRoutes(false);
+        toast.success('路由已重建');
+      } catch {
+        toast.error('模型白名单已保存，但路由重建失败，请手动重建');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || '保存模型白名单设置失败');
+    } finally {
+      setSavingAllowedModels(false);
     }
   };
 
@@ -1589,7 +1625,118 @@ export default function Settings() {
           </button>
         </div>
 
+        {/* Global Allowed Models Whitelist */}
         <div className="card animate-slide-up stagger-7" style={{ padding: 20 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>全局模型白名单</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+            配置白名单后，路由重建和候选生成将只针对白名单中的模型。留空表示允许所有模型（向后兼容）。保存后自动触发路由重建。
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="输入模型名称，如：gpt-4"
+                value={allowedModelsInput}
+                onChange={(e) => setAllowedModelsInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && allowedModelsInput.trim()) {
+                    const model = allowedModelsInput.trim();
+                    if (!allowedModels.includes(model)) {
+                      setAllowedModels((prev) => [...prev, model]);
+                    }
+                    setAllowedModelsInput('');
+                  }
+                }}
+                style={{ flex: 1, ...inputStyle }}
+              />
+              <button
+                onClick={() => {
+                  if (allowedModelsInput.trim()) {
+                    const model = allowedModelsInput.trim();
+                    if (!allowedModels.includes(model)) {
+                      setAllowedModels((prev) => [...prev, model]);
+                    }
+                    setAllowedModelsInput('');
+                  }
+                }}
+                className="btn btn-ghost"
+                style={{ border: '1px solid var(--color-border)', fontSize: 12, padding: '6px 12px' }}
+              >
+                添加
+              </button>
+            </div>
+            {availableModels && availableModels.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                  或从当前可用模型中选择：
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 120, overflowY: 'auto', border: '1px solid var(--color-border)', padding: 8, borderRadius: 4 }}>
+                  {availableModels.map((model) => {
+                    const isAllowed = allowedModels.includes(model);
+                    return (
+                      <button
+                        key={model}
+                        type="button"
+                        onClick={() => {
+                          if (isAllowed) {
+                            setAllowedModels((prev) => prev.filter((m) => m !== model));
+                          } else {
+                            setAllowedModels((prev) => [...prev, model]);
+                          }
+                        }}
+                        className={`badge ${isAllowed ? 'badge-success' : 'badge-muted'}`}
+                        style={{
+                          fontSize: 11, cursor: 'pointer', border: 'none', padding: '4px 10px',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {model}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {allowedModels.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                  已选择 {allowedModels.length} 个模型：
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {allowedModels.map((model) => (
+                    <div
+                      key={model}
+                      className="badge badge-success"
+                      style={{ fontSize: 11, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                    >
+                      {model}
+                      <button
+                        onClick={() => setAllowedModels((prev) => prev.filter((m) => m !== model))}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'inherit',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: 14,
+                          lineHeight: 1,
+                        }}
+                        title="移除"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <button onClick={handleSaveAllowedModels} disabled={savingAllowedModels} className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }}>
+            {savingAllowedModels ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存模型白名单'}
+          </button>
+        </div>
+
+        <div className="card animate-slide-up stagger-8" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>数据库迁移（SQLite / MySQL / PostgreSQL）</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             可先测试连接，再迁移数据；迁移完成后可保存为运行数据库配置（重启容器后生效）。

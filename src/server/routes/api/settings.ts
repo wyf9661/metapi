@@ -85,6 +85,7 @@ interface RuntimeSettingsBody {
   proxyErrorKeywords?: string[] | string;
   proxyEmptyContentFailEnabled?: boolean;
   globalBlockedBrands?: string[];
+  globalAllowedModels?: string[];
 }
 
 interface DatabaseMigrationBody {
@@ -505,6 +506,29 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       }
       return;
     }
+    case 'global_allowed_models': {
+      try {
+        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        if (Array.isArray(parsed)) {
+          const nextModels = parsed.filter((m): m is string => typeof m === 'string').map((m) => m.trim()).filter(Boolean);
+          const prev = JSON.stringify(config.globalAllowedModels);
+          config.globalAllowedModels = nextModels;
+          if (prev !== JSON.stringify(nextModels)) {
+            startBackgroundTask(
+              {
+                type: 'maintenance',
+                title: '模型白名单变更后重建路由',
+                dedupeKey: 'refresh-models-and-rebuild-routes',
+              },
+              async () => routeRefreshWorkflow.refreshModelsAndRebuildRoutes(),
+            );
+          }
+        }
+      } catch {
+        return;
+      }
+      return;
+    }
     case 'webhook_url': {
       if (typeof value !== 'string') return;
       config.webhookUrl = value.trim();
@@ -685,6 +709,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     proxyEmptyContentFailEnabled: config.proxyEmptyContentFailEnabled,
     proxyTokenMasked: maskSecret(config.proxyToken),
     globalBlockedBrands: config.globalBlockedBrands,
+    globalAllowedModels: config.globalAllowedModels,
   };
 }
 
@@ -1256,6 +1281,31 @@ export async function settingsRoutes(app: FastifyInstance) {
           {
             type: 'maintenance',
             title: '品牌屏蔽变更后重建路由',
+            dedupeKey: 'refresh-models-and-rebuild-routes',
+          },
+          async () => routeRefreshWorkflow.refreshModelsAndRebuildRoutes(),
+        );
+      }
+    }
+
+    if (body.globalAllowedModels !== undefined) {
+      if (!Array.isArray(body.globalAllowedModels)) {
+        return reply.code(400).send({ error: 'globalAllowedModels must be an array of strings' });
+      }
+      const nextModels = body.globalAllowedModels.filter((m): m is string => typeof m === 'string').map((m) => m.trim()).filter(Boolean);
+      const uniqueModels = Array.from(new Set(nextModels));
+      const prev = JSON.stringify(config.globalAllowedModels);
+      const next = JSON.stringify(uniqueModels);
+      if (prev !== next) {
+        changedLabels.push('全局模型白名单');
+      }
+      config.globalAllowedModels = uniqueModels;
+      upsertSetting('global_allowed_models', JSON.stringify(uniqueModels));
+      if (prev !== next) {
+        startBackgroundTask(
+          {
+            type: 'maintenance',
+            title: '模型白名单变更后重建路由',
             dedupeKey: 'refresh-models-and-rebuild-routes',
           },
           async () => routeRefreshWorkflow.refreshModelsAndRebuildRoutes(),
