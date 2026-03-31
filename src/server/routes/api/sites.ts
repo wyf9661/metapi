@@ -7,6 +7,8 @@ import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
 import { getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
+import { getSiteInitializationPreset } from '../../../shared/siteInitializationPresets.js';
+import { stripTrailingSlashes } from '../../services/urlNormalization.js';
 
 function normalizeSiteStatus(input: unknown): 'active' | 'disabled' | null {
   if (input === undefined || input === null) return null;
@@ -83,7 +85,14 @@ type ErrorLike = {
 };
 
 function normalizeSiteUrl(url: string): string {
-  return url.replace(/\/+$/, '');
+  const trimmed = url.trim();
+  const withScheme = trimmed.includes('://') ? trimmed : `https://${trimmed}`;
+  return stripTrailingSlashes(withScheme);
+}
+
+function normalizeSitePlatform(platform?: string): string | undefined {
+  if (platform === undefined) return undefined;
+  return platform.trim().toLowerCase();
 }
 
 function getErrorChain(error: unknown): ErrorLike[] {
@@ -280,6 +289,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     name: string;
     url: string;
     platform?: string;
+    initializationPresetId?: string | null;
     proxyUrl?: string | null;
     useSystemProxy?: boolean;
     customHeaders?: string | null;
@@ -289,7 +299,32 @@ export async function sitesRoutes(app: FastifyInstance) {
     sortOrder?: number;
     globalWeight?: number;
   } }>('/api/sites', async (request, reply) => {
-    const { name, url, platform, proxyUrl, useSystemProxy, customHeaders, externalCheckinUrl, status, isPinned, sortOrder, globalWeight } = request.body;
+    if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) {
+      return reply.code(400).send({ error: 'Invalid site payload. Expected object.' });
+    }
+    const {
+      name,
+      url,
+      platform,
+      initializationPresetId,
+      proxyUrl,
+      useSystemProxy,
+      customHeaders,
+      externalCheckinUrl,
+      status,
+      isPinned,
+      sortOrder,
+      globalWeight,
+    } = request.body;
+    if (typeof name !== 'string' || !name.trim()) {
+      return reply.code(400).send({ error: 'Invalid name. Expected non-empty string.' });
+    }
+    if (typeof url !== 'string' || !url.trim()) {
+      return reply.code(400).send({ error: 'Invalid url. Expected non-empty string.' });
+    }
+    if (platform !== undefined && typeof platform !== 'string') {
+      return reply.code(400).send({ error: 'Invalid platform. Expected string.' });
+    }
     const normalizedStatus = normalizeSiteStatus(status);
     if (status !== undefined && !normalizedStatus) {
       return reply.code(400).send({ error: 'Invalid site status. Expected active or disabled.' });
@@ -322,29 +357,45 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (!normalizedCustomHeaders.valid) {
       return reply.code(400).send({ error: normalizedCustomHeaders.error || 'Invalid customHeaders.' });
     }
+    const explicitInitializationPreset = initializationPresetId == null || initializationPresetId === ''
+      ? null
+      : getSiteInitializationPreset(initializationPresetId);
+    if (initializationPresetId != null && initializationPresetId !== '' && !explicitInitializationPreset) {
+      return reply.code(400).send({ error: 'Invalid initializationPresetId.' });
+    }
 
     const existingSites = await db.select().from(schema.sites).all();
     const maxSortOrder = existingSites.reduce((max, site) => Math.max(max, site.sortOrder || 0), -1);
-    const normalizedUrl = normalizeSiteUrl(url);
+    const canonicalUrl = normalizeSiteUrl(url);
+    const canonicalPlatform = normalizeSitePlatform(platform);
 
-    let detectedPlatform = platform;
+    let detectedPlatform = canonicalPlatform;
+    let responseInitializationPresetId: string | null = explicitInitializationPreset?.id || null;
     if (!detectedPlatform) {
-      const detected = await detectSite(url);
-      detectedPlatform = detected?.platform;
+      if (explicitInitializationPreset) {
+        detectedPlatform = explicitInitializationPreset.platform;
+      } else {
+        const detected = await detectSite(canonicalUrl);
+        detectedPlatform = detected?.platform;
+        responseInitializationPresetId = detected?.initializationPresetId || null;
+      }
+    }
+    if (explicitInitializationPreset && explicitInitializationPreset.platform !== detectedPlatform) {
+      return reply.code(400).send({ error: 'initializationPresetId does not match the selected platform.' });
     }
     if (!detectedPlatform) {
       return { error: 'Could not detect platform. Please specify manually.' };
     }
-    const conflictingSite = findExistingSiteBinding(existingSites, detectedPlatform, normalizedUrl);
+    const conflictingSite = findExistingSiteBinding(existingSites, detectedPlatform, canonicalUrl);
     if (conflictingSite) {
-      return sendSiteBindingConflict(reply, detectedPlatform, normalizedUrl);
+      return sendSiteBindingConflict(reply, detectedPlatform, canonicalUrl);
     }
 
     let inserted;
     try {
       inserted = await db.insert(schema.sites).values({
         name,
-        url: normalizedUrl,
+        url: canonicalUrl,
         platform: detectedPlatform,
         proxyUrl: normalizedProxyUrl.proxyUrl,
         useSystemProxy: normalizedUseSystemProxy ?? false,
@@ -357,7 +408,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       }).run();
     } catch (error) {
       if (isSitesPlatformUrlConflict(error)) {
-        return sendSiteBindingConflict(reply, detectedPlatform, normalizedUrl);
+        return sendSiteBindingConflict(reply, detectedPlatform, canonicalUrl);
       }
       throw error;
     }
@@ -370,7 +421,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: 'Create site failed' });
     }
     invalidateSiteCaches();
-    return result;
+    return {
+      ...result,
+      ...(responseInitializationPresetId ? { initializationPresetId: responseInitializationPresetId } : {}),
+    };
   });
 
   // Update a site
@@ -398,7 +452,19 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const updates: any = {};
+    if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) {
+      return reply.code(400).send({ error: 'Invalid site payload. Expected object.' });
+    }
     const body = request.body;
+    if (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim())) {
+      return reply.code(400).send({ error: 'Invalid name. Expected non-empty string.' });
+    }
+    if (body.url !== undefined && (typeof body.url !== 'string' || !body.url.trim())) {
+      return reply.code(400).send({ error: 'Invalid url. Expected non-empty string.' });
+    }
+    if (body.platform !== undefined && typeof body.platform !== 'string') {
+      return reply.code(400).send({ error: 'Invalid platform. Expected string.' });
+    }
     const normalizedStatus = normalizeSiteStatus(body.status);
     if (body.status !== undefined && !normalizedStatus) {
       return reply.code(400).send({ error: 'Invalid site status. Expected active or disabled.' });
@@ -432,8 +498,9 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: normalizedCustomHeaders.error || 'Invalid customHeaders.' });
     }
 
+    const canonicalPlatform = body.platform !== undefined ? normalizeSitePlatform(body.platform) : undefined;
     const nextUrl = body.url !== undefined ? normalizeSiteUrl(body.url) : existingSite.url;
-    const nextPlatform = body.platform !== undefined ? body.platform : existingSite.platform;
+    const nextPlatform = canonicalPlatform !== undefined ? canonicalPlatform : existingSite.platform;
     const siteIdentityChanged = nextUrl !== existingSite.url || nextPlatform !== existingSite.platform;
     if (siteIdentityChanged) {
       const siteRows = await db.select({
@@ -449,7 +516,7 @@ export async function sitesRoutes(app: FastifyInstance) {
 
     if (body.name !== undefined) updates.name = body.name;
     if (body.url !== undefined) updates.url = nextUrl;
-    if (body.platform !== undefined) updates.platform = body.platform;
+    if (body.platform !== undefined) updates.platform = canonicalPlatform;
     if (normalizedProxyUrl.present) updates.proxyUrl = normalizedProxyUrl.proxyUrl;
     if (body.useSystemProxy !== undefined) updates.useSystemProxy = normalizedUseSystemProxy;
     if (normalizedCustomHeaders.present) updates.customHeaders = normalizedCustomHeaders.customHeaders;
