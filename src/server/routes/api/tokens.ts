@@ -20,6 +20,7 @@ import {
   parseRouteDecisionSnapshot,
   saveRouteDecisionSnapshots,
 } from '../../services/routeDecisionSnapshotStore.js';
+import { clearRouteCooldown } from '../../services/routeCooldownService.js';
 import { normalizeTokenRouteMode, type RouteMode } from '../../../shared/tokenRouteContract.js';
 import {
   parseRouteChannelBatchCreatePayload,
@@ -767,6 +768,15 @@ export async function tokensRoutes(app: FastifyInstance) {
     }
     const channelsByRoute = await fetchChannelsForRouteRows([route]);
     return channelsByRoute.get(routeId) || [];
+  });
+
+  app.post<{ Params: { id: string } }>('/api/routes/:id/cooldown/clear', async (request, reply) => {
+    const routeId = parseInt(request.params.id, 10);
+    const result = await clearRouteCooldown(routeId);
+    if (!result) {
+      return reply.code(404).send({ success: false, message: '路由不存在' });
+    }
+    return result;
   });
 
   // Batch add channels to a route

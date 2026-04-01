@@ -1,7 +1,11 @@
 ﻿import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
-import { config } from '../config.js';
+import {
+  config,
+  normalizeTokenRouterFailureCooldownMaxSec,
+  TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING,
+} from '../config.js';
 import { getCachedModelRoutingReferenceCost, refreshModelPricingCatalog } from './modelPricingService.js';
 import { RETRYABLE_TIMEOUT_PATTERNS } from './proxyRetryPolicy.js';
 import {
@@ -201,6 +205,21 @@ function fibonacciNumber(index: number): number {
 function resolveFailureBackoffSec(failCount?: number | null): number {
   const normalizedFailCount = Math.max(1, Math.trunc(failCount ?? 0));
   return Math.min(FAILURE_BACKOFF_BASE_SEC * fibonacciNumber(normalizedFailCount), MAX_FAILURE_BACKOFF_SEC);
+}
+
+function resolveConfiguredFailureCooldownMaxMs(): number {
+  const normalized = normalizeTokenRouterFailureCooldownMaxSec(config.tokenRouterFailureCooldownMaxSec)
+    ?? TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING;
+  return Math.max(1_000, normalized * 1000);
+}
+
+function clampFailureCooldownMs(cooldownMs: number): number {
+  const normalized = Math.max(0, Math.trunc(cooldownMs));
+  return Math.min(normalized, resolveConfiguredFailureCooldownMaxMs());
+}
+
+function resolveEffectiveFailureCooldownMs(failCount?: number | null): number {
+  return clampFailureCooldownMs(resolveFailureBackoffSec(failCount) * 1000);
 }
 
 function resolveRoundRobinCooldownSec(level: number): number {
@@ -695,6 +714,45 @@ export async function flushSiteRuntimeHealthPersistence(): Promise<void> {
   }
 }
 
+function clearRuntimeHealthStatesForChannels(rows: Array<{
+  siteId: number;
+  sourceModel: string | null;
+  routeModelPattern: string;
+}>): boolean {
+  let changed = false;
+  const modelKeysBySiteId = new Map<number, Set<string>>();
+
+  for (const row of rows) {
+    if (siteRuntimeHealthStates.delete(row.siteId)) {
+      changed = true;
+    }
+
+    const resolvedModelName = normalizeChannelSourceModel(row.sourceModel)
+      || (isExactRouteModelPattern(row.routeModelPattern) ? row.routeModelPattern.trim() : '');
+    const modelKey = normalizeModelAlias(resolvedModelName);
+    if (!modelKey) continue;
+    if (!modelKeysBySiteId.has(row.siteId)) {
+      modelKeysBySiteId.set(row.siteId, new Set());
+    }
+    modelKeysBySiteId.get(row.siteId)!.add(modelKey);
+  }
+
+  for (const [siteId, modelKeys] of modelKeysBySiteId.entries()) {
+    const modelStates = siteModelRuntimeHealthStates.get(siteId);
+    if (!modelStates) continue;
+    for (const modelKey of modelKeys) {
+      if (modelStates.delete(modelKey)) {
+        changed = true;
+      }
+    }
+    if (modelStates.size === 0) {
+      siteModelRuntimeHealthStates.delete(siteId);
+    }
+  }
+
+  return changed;
+}
+
 export function getSiteRuntimeHealthMultiplier(siteId: number, nowMs = Date.now()): number {
   const state = siteRuntimeHealthStates.get(siteId);
   return getRuntimeHealthMultiplier(state, nowMs);
@@ -919,14 +977,15 @@ export function isChannelRecentlyFailed(
   nowMs = Date.now(),
   avoidSec = resolveFailureBackoffSec(channel.failCount),
 ): boolean {
-  if (avoidSec <= 0) return false;
+  const avoidMs = clampFailureCooldownMs(avoidSec * 1000);
+  if (avoidMs <= 0) return false;
   if ((channel.failCount ?? 0) <= 0) return false;
   if (!channel.lastFailAt) return false;
 
   const failTs = Date.parse(channel.lastFailAt);
   if (Number.isNaN(failTs)) return false;
 
-  return nowMs - failTs < avoidSec * 1000;
+  return nowMs - failTs < avoidMs;
 }
 
 export function filterRecentlyFailedCandidates<T extends { channel: FailureAwareChannel }>(
@@ -1772,6 +1831,44 @@ export class TokenRouter {
   }
 
   /**
+   * Clear persisted failure and cooldown state for the given channels.
+   */
+  async clearChannelFailureState(channelIds: number[]): Promise<number> {
+    const normalizedChannelIds = Array.from(new Set(
+      channelIds
+        .filter((channelId): channelId is number => Number.isFinite(channelId) && channelId > 0)
+        .map((channelId) => Math.trunc(channelId)),
+    ));
+    if (normalizedChannelIds.length === 0) return 0;
+
+    await ensureSiteRuntimeHealthStateLoaded();
+    const runtimeHealthRows = await db.select({
+      siteId: schema.accounts.siteId,
+      sourceModel: schema.routeChannels.sourceModel,
+      routeModelPattern: schema.tokenRoutes.modelPattern,
+    }).from(schema.routeChannels)
+      .innerJoin(schema.accounts, eq(schema.routeChannels.accountId, schema.accounts.id))
+      .innerJoin(schema.tokenRoutes, eq(schema.routeChannels.routeId, schema.tokenRoutes.id))
+      .where(inArray(schema.routeChannels.id, normalizedChannelIds))
+      .all();
+
+    const result = await db.update(schema.routeChannels).set({
+      failCount: 0,
+      lastFailAt: null,
+      consecutiveFailCount: 0,
+      cooldownLevel: 0,
+      cooldownUntil: null,
+    }).where(inArray(schema.routeChannels.id, normalizedChannelIds)).run();
+
+    if (clearRuntimeHealthStatesForChannels(runtimeHealthRows)) {
+      await persistSiteRuntimeHealthState();
+    }
+
+    invalidateTokenRouterCache();
+    return Number(result?.changes || normalizedChannelIds.length);
+  }
+
+  /**
    * Record failure and set cooldown.
    */
   async recordFailure(channelId: number, context: SiteRuntimeFailureContext | string | null = {}) {
@@ -1810,12 +1907,13 @@ export class TokenRouter {
       if (consecutiveFailCount >= ROUND_ROBIN_FAILURE_THRESHOLD) {
         cooldownLevel = Math.min(cooldownLevel + 1, ROUND_ROBIN_COOLDOWN_LEVELS_SEC.length - 1);
         const cooldownSec = resolveRoundRobinCooldownSec(cooldownLevel);
-        cooldownUntil = cooldownSec > 0 ? new Date(nowMs + cooldownSec * 1000).toISOString() : null;
+        cooldownUntil = cooldownSec > 0
+          ? new Date(nowMs + clampFailureCooldownMs(cooldownSec * 1000)).toISOString()
+          : null;
         consecutiveFailCount = 0;
       }
     } else {
-      const cooldownSec = resolveFailureBackoffSec(failCount);
-      cooldownUntil = new Date(nowMs + cooldownSec * 1000).toISOString();
+      cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount)).toISOString();
       consecutiveFailCount = 0;
       cooldownLevel = 0;
     }
