@@ -16,6 +16,8 @@ const COOKIE_SESSION_TOKEN = 'cookie-session-token';
 const COOKIE_REQUIRES_USER_TOKEN = 'cookie-requires-user';
 const CHECKIN_ALREADY_TOKEN = 'checkin-already-token';
 const CHECKIN_INVALID_URL_TOKEN = 'checkin-invalid-url-token';
+const CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN = 'checkin-invalid-url-expired-session-token';
+const CHECKIN_INVALID_URL_FORBIDDEN_SESSION_TOKEN = 'checkin-invalid-url-forbidden-session-token';
 const CHECKIN_CLOUDFLARE_530_TOKEN = 'checkin-cloudflare-530-token';
 const BALANCE_FAIL_TOKEN = 'balance-fail-token';
 const GROUP_EXPIRED_TOKEN = 'group-expired-token';
@@ -354,6 +356,28 @@ describe('NewApiAdapter', () => {
           return;
         }
 
+        if (
+          typeof req.headers.cookie === 'string'
+          && (
+            req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_TOKEN}`)
+            || req.headers.cookie.includes(`token=${CHECKIN_INVALID_URL_TOKEN}`)
+          )
+        ) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, message: 'temporary self probe failure' }));
+          return;
+        }
+        if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN}`)) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, message: '无权进行此操作，未登录且未提供 access token' }));
+          return;
+        }
+        if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_FORBIDDEN_SESSION_TOKEN}`)) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, message: 'forbidden' }));
+          return;
+        }
+
         res.writeHead(401, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, message: 'unauthorized' }));
         return;
@@ -371,6 +395,26 @@ describe('NewApiAdapter', () => {
           return;
         }
         if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_TOKEN}`)) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Invalid URL (POST /api/user/checkin)' } }));
+          return;
+        }
+        if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN}`) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Invalid URL (POST /api/user/checkin)' } }));
+          return;
+        }
+        if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN}`)) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Invalid URL (POST /api/user/checkin)' } }));
+          return;
+        }
+        if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${CHECKIN_INVALID_URL_FORBIDDEN_SESSION_TOKEN}`) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Invalid URL (POST /api/user/checkin)' } }));
+          return;
+        }
+        if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_FORBIDDEN_SESSION_TOKEN}`)) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: { message: 'Invalid URL (POST /api/user/checkin)' } }));
           return;
@@ -421,6 +465,16 @@ describe('NewApiAdapter', () => {
       }
 
       if (req.url === '/api/user/sign_in') {
+        if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN}`)) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({}));
+          return;
+        }
+        if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_FORBIDDEN_SESSION_TOKEN}`)) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({}));
+          return;
+        }
         if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_ALREADY_TOKEN}`)) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, message: '无权进行此操作，未登录且未提供 access token' }));
@@ -615,6 +669,24 @@ describe('NewApiAdapter', () => {
 
     expect(result.success).toBe(false);
     expect(result.message).toContain('Invalid URL');
+  });
+
+  it('prefers cookie session auth failure over invalid-url fallback when cookie session is expired', async () => {
+    const adapter = new NewApiAdapter();
+    const result = await adapter.checkin(baseUrl, CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN, 131936);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('access token');
+    expect(result.message).not.toContain('Invalid URL');
+  });
+
+  it('treats forbidden self probe responses as cookie session auth failures', async () => {
+    const adapter = new NewApiAdapter();
+    const result = await adapter.checkin(baseUrl, CHECKIN_INVALID_URL_FORBIDDEN_SESSION_TOKEN, 131936);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('forbidden');
+    expect(result.message).not.toContain('Invalid URL');
   });
 
   it('summarizes cloudflare tunnel HTML failures to concise checkin error', async () => {
