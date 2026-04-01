@@ -42,6 +42,7 @@ import {
   parseAccountUpdatePayload,
   parseAccountVerifyTokenPayload,
 } from '../../contracts/accountsRoutePayloads.js';
+import { requireSiteApiBaseUrl, runWithSiteApiEndpointPool } from '../../services/siteApiEndpointService.js';
 
 type AccountWithSiteRow = {
   accounts: typeof schema.accounts.$inferSelect;
@@ -312,6 +313,31 @@ function isVerificationTimeoutError(error: unknown): boolean {
     : String(error || '');
   const lowered = `${name} ${message}`.toLowerCase();
   return lowered.includes('timeout') || lowered.includes('timed out') || lowered.includes('abort');
+}
+
+function buildAccountVerifyTimeoutMessage(): string {
+  return `Token verification timed out (${Math.max(1, Math.round(ACCOUNT_VERIFY_TIMEOUT_MS / 1000))}s)`;
+}
+
+async function getModelsWithSiteApiEndpointPool(
+  site: typeof schema.sites.$inferSelect,
+  adapter: NonNullable<ReturnType<typeof getAdapter>>,
+  accessToken: string,
+  platformUserId?: number,
+): Promise<string[]> {
+  const timeoutMessage = buildAccountVerifyTimeoutMessage();
+  const deadline = Date.now() + ACCOUNT_VERIFY_TIMEOUT_MS;
+  return runWithSiteApiEndpointPool(site, (target) => {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(timeoutMessage);
+    }
+    return withTimeout(
+      () => adapter.getModels(target.baseUrl, accessToken, platformUserId),
+      remainingMs,
+      timeoutMessage,
+    );
+  });
 }
 
 function resolveUserIdFailureReason(message: string, hasProvidedUserId: boolean): VerifyFailureReason {
@@ -671,7 +697,9 @@ export async function accountsRoutes(app: FastifyInstance) {
       : undefined;
     const hasProvidedUserId = parsedPlatformUserId !== undefined;
     const skipRawShieldDetection = normalizedPlatform === 'new-api' || normalizedPlatform === 'anyrouter';
-    const diagnoseVerificationFailure = async (): Promise<VerifyFailureReason> => {
+    const diagnoseVerificationFailure = async (
+      options: { useApiEndpointPool?: boolean } = {},
+    ): Promise<VerifyFailureReason> => {
       const parseFailureReason = (bodyText: string, contentType: string): VerifyFailureReason => {
         const text = bodyText || '';
         const ct = (contentType || '').toLowerCase();
@@ -720,21 +748,39 @@ export async function accountsRoutes(app: FastifyInstance) {
           });
         }
 
-        for (const headers of headerVariants) {
-          try {
-            const testRes = await fetch(
-              `${site.url}/api/user/self`,
-              withSiteRecordProxyRequestInit(site, {
-                headers,
-                signal: AbortSignal.timeout(ACCOUNT_VERIFY_DIAG_TIMEOUT_MS),
-              }),
-            );
-            const bodyText = await testRes.text();
-            const contentType = testRes.headers.get('content-type') || '';
-            const reason = parseFailureReason(bodyText, contentType);
-            if (reason) return reason;
-          } catch { }
+        const tryBaseUrl = async (baseUrl: string): Promise<VerifyFailureReason> => {
+          let sawNetworkError = false;
+          let sawResponse = false;
+          for (const headers of headerVariants) {
+            try {
+              const testRes = await fetch(
+                `${baseUrl.replace(/\/+$/, '')}/api/user/self`,
+                withSiteRecordProxyRequestInit(site, {
+                  headers,
+                  signal: AbortSignal.timeout(ACCOUNT_VERIFY_DIAG_TIMEOUT_MS),
+                }),
+              );
+              sawResponse = true;
+              const bodyText = await testRes.text();
+              const contentType = testRes.headers.get('content-type') || '';
+              const reason = parseFailureReason(bodyText, contentType);
+              if (reason) return reason;
+            } catch {
+              sawNetworkError = true;
+            }
+          }
+          if (sawNetworkError && !sawResponse) {
+            throw new Error(`diagnostic request timed out for ${baseUrl}`);
+          }
+          return null;
+        };
+
+        if (options.useApiEndpointPool) {
+          const diagnosticBaseUrl = await requireSiteApiBaseUrl(site);
+          return await tryBaseUrl(diagnosticBaseUrl);
         }
+
+        return await tryBaseUrl(site.url);
       } catch { }
 
       return null;
@@ -768,7 +814,9 @@ export async function accountsRoutes(app: FastifyInstance) {
     };
 
     if (!hasProvidedUserId && (normalizedPlatform === 'new-api' || normalizedPlatform === 'anyrouter')) {
-      const preflightReason = await diagnoseVerificationFailure();
+      const preflightReason = await diagnoseVerificationFailure({
+        useApiEndpointPool: credentialMode === 'apikey',
+      });
       if (preflightReason === 'needs-user-id') {
         return buildVerificationFailureResponse(preflightReason);
       }
@@ -776,10 +824,11 @@ export async function accountsRoutes(app: FastifyInstance) {
 
     if (credentialMode === 'apikey') {
       try {
-        const models = await withTimeout(
-          () => adapter.getModels(site.url, accessToken, parsedPlatformUserId),
-          ACCOUNT_VERIFY_TIMEOUT_MS,
-          `Token verification timed out (${Math.max(1, Math.round(ACCOUNT_VERIFY_TIMEOUT_MS / 1000))}s)`,
+        const models = await getModelsWithSiteApiEndpointPool(
+          site,
+          adapter,
+          accessToken,
+          parsedPlatformUserId,
         );
         const availableModels = Array.isArray(models) ? models.filter((item) => typeof item === 'string' && item.trim().length > 0) : [];
         if (availableModels.length === 0) {
@@ -796,7 +845,9 @@ export async function accountsRoutes(app: FastifyInstance) {
         };
       } catch (err: any) {
         if (isVerificationTimeoutError(err)) {
-          const failure = buildVerificationFailureResponse(await diagnoseVerificationFailure());
+          const failure = buildVerificationFailureResponse(await diagnoseVerificationFailure({
+            useApiEndpointPool: true,
+          }));
           if (failure) return failure;
         }
         return {
@@ -1114,7 +1165,12 @@ export async function accountsRoutes(app: FastifyInstance) {
         if (!apiToken) apiToken = rawAccessToken;
       } else {
         try {
-          const models = await adapter.getModels(site.url, rawAccessToken, body.platformUserId);
+          const models = await getModelsWithSiteApiEndpointPool(
+            site,
+            adapter,
+            rawAccessToken,
+            body.platformUserId,
+          );
           verifiedModels = Array.isArray(models)
             ? models.filter((item) => typeof item === 'string' && item.trim().length > 0)
             : [];
