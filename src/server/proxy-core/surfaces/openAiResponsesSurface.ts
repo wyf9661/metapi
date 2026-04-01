@@ -70,6 +70,11 @@ import {
   safeUpdateSurfaceProxyDebugSelection,
   startSurfaceProxyDebugTrace,
 } from '../../services/proxyDebugTraceRuntime.js';
+import {
+  buildForcedChannelUnavailableMessage,
+  canRetryChannelSelection,
+  getTesterForcedChannelId,
+} from '../channelSelection.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -166,6 +171,32 @@ function carriesResponsesFileUrlInput(value: unknown): boolean {
   return Object.values(value).some((entry) => carriesResponsesFileUrlInput(entry));
 }
 
+function finalizeRetryAsUpstreamFailure(status: number, message: string) {
+  return {
+    action: 'respond' as const,
+    status,
+    payload: {
+      error: {
+        message,
+        type: 'upstream_error' as const,
+      },
+    },
+  };
+}
+
+function finalizeRetryAsExecutionFailure(message: string) {
+  return {
+    action: 'respond' as const,
+    status: 502,
+    payload: {
+      error: {
+        message: `Upstream error: ${message}`,
+        type: 'upstream_error' as const,
+      },
+    },
+  };
+}
+
 function shouldRefreshOauthResponsesRequest(input: {
   oauthProvider?: string;
   status: number;
@@ -215,6 +246,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
     }
     if (!await ensureModelAllowedForDownstreamKey(request, reply, requestedModel)) return;
     const downstreamPolicy = getDownstreamRoutingPolicy(request);
+    const forcedChannelId = getTesterForcedChannelId({
+      headers: request.headers as Record<string, unknown>,
+      clientIp: request.ip,
+    });
     const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
     const maxRetries = getProxyMaxChannelRetries();
     const failureToolkit = createSurfaceFailureToolkit({
@@ -273,19 +308,21 @@ export async function handleOpenAiResponsesSurfaceRequest(
         excludeChannelIds,
         retryCount,
         stickySessionKey,
+        forcedChannelId,
       });
 
       if (!selected) {
+        const noChannelMessage = buildForcedChannelUnavailableMessage(forcedChannelId);
         await reportProxyAllFailed({
           model: requestedModel,
-          reason: 'No available channels after retries',
+          reason: forcedChannelId ? noChannelMessage : 'No available channels after retries',
         });
         const payload = {
-          error: { message: 'No available channels for this model', type: 'server_error' as const },
+          error: { message: noChannelMessage, type: 'server_error' as const },
         };
         await finalizeDebugFailure(503, payload, null);
         return reply.code(503).send({
-          error: { message: 'No available channels for this model', type: 'server_error' },
+          error: { message: noChannelMessage, type: 'server_error' },
         });
       }
 
@@ -479,8 +516,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
           errorMessage: busyMessage,
           retryCount,
         });
-        retryCount += 1;
-        if (retryCount <= maxRetries) {
+        if (retryCount < maxRetries && canRetryChannelSelection(retryCount, forcedChannelId)) {
+          retryCount += 1;
           continue;
         }
         await finalizeDebugFailure(503, {
@@ -590,16 +627,21 @@ export async function handleOpenAiResponsesSurfaceRequest(
             latencyMs: Date.now() - startTime,
             retryCount,
           });
-          if (failureOutcome.action === 'retry') {
+          const terminalFailureOutcome = failureOutcome.action === 'retry'
+            ? (canRetryChannelSelection(retryCount, forcedChannelId)
+              ? null
+              : finalizeRetryAsUpstreamFailure(endpointResult.status || 502, endpointResult.errText || 'unknown error'))
+            : failureOutcome;
+          if (!terminalFailureOutcome) {
             retryCount += 1;
             continue;
           }
           await finalizeDebugFailure(
-            failureOutcome.status,
-            failureOutcome.payload,
+            terminalFailureOutcome.status,
+            terminalFailureOutcome.payload,
             null,
           );
-          return reply.code(failureOutcome.status).send(failureOutcome.payload);
+          return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
         }
 
       const upstream = endpointResult.upstream;
@@ -748,7 +790,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	              const failureOutcome = await failureToolkit.handleDetectedFailure({
 	                selected,
 	                requestedModel,
-                modelName,
+	                modelName,
                 failure,
                 latencyMs: latency,
                 retryCount,
@@ -756,17 +798,22 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 completionTokens: parsedUsage.completionTokens,
                 totalTokens: parsedUsage.totalTokens,
                 upstreamPath: successfulUpstreamPath,
-              });
-              if (failureOutcome.action === 'retry') {
-                retryCount += 1;
-                continue;
-              }
-              await finalizeDebugFailure(
-                failureOutcome.status,
-                failureOutcome.payload,
-                successfulUpstreamPath,
-              );
-              return reply.code(failureOutcome.status).send(failureOutcome.payload);
+	              });
+	              const terminalFailureOutcome = failureOutcome.action === 'retry'
+	                ? (canRetryChannelSelection(retryCount, forcedChannelId)
+	                  ? null
+	                  : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
+	                : failureOutcome;
+	              if (!terminalFailureOutcome) {
+	                retryCount += 1;
+	                continue;
+	              }
+	              await finalizeDebugFailure(
+	                terminalFailureOutcome.status,
+	                terminalFailureOutcome.payload,
+	                successfulUpstreamPath,
+	              );
+	              return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
             }
 
             startSseResponse();
@@ -1005,7 +1052,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	          const failureOutcome = await failureToolkit.handleDetectedFailure({
 	            selected,
 	            requestedModel,
-            modelName,
+	            modelName,
             failure,
             latencyMs: latency,
             retryCount,
@@ -1013,17 +1060,22 @@ export async function handleOpenAiResponsesSurfaceRequest(
             completionTokens: parsedUsage.completionTokens,
             totalTokens: parsedUsage.totalTokens,
             upstreamPath: successfulUpstreamPath,
-          });
-          if (failureOutcome.action === 'retry') {
-            retryCount += 1;
-            continue;
-          }
-          await finalizeDebugFailure(
-            failureOutcome.status,
-            failureOutcome.payload,
-            successfulUpstreamPath,
-          );
-          return reply.code(failureOutcome.status).send(failureOutcome.payload);
+	          });
+	          const terminalFailureOutcome = failureOutcome.action === 'retry'
+	            ? (canRetryChannelSelection(retryCount, forcedChannelId)
+	              ? null
+	              : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
+	            : failureOutcome;
+	          if (!terminalFailureOutcome) {
+	            retryCount += 1;
+	            continue;
+	          }
+	          await finalizeDebugFailure(
+	            terminalFailureOutcome.status,
+	            terminalFailureOutcome.payload,
+	            successfulUpstreamPath,
+	          );
+	          return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
         }
         const normalized = openAiResponsesTransformer.transformFinalResponse(
           upstreamData,
@@ -1077,21 +1129,26 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	        const failureOutcome = await failureToolkit.handleExecutionError({
 	          selected,
 	          requestedModel,
-          modelName,
-          errorMessage: err?.message || 'network failure',
-          latencyMs: Date.now() - startTime,
-          retryCount,
-        });
-        if (failureOutcome.action === 'retry') {
-          retryCount += 1;
-          continue;
+	          modelName,
+	          errorMessage: err?.message || 'network failure',
+	          latencyMs: Date.now() - startTime,
+	          retryCount,
+	        });
+	        const terminalFailureOutcome = failureOutcome.action === 'retry'
+	          ? (canRetryChannelSelection(retryCount, forcedChannelId)
+	            ? null
+	            : finalizeRetryAsExecutionFailure(err?.message || 'network failure'))
+	          : failureOutcome;
+	        if (!terminalFailureOutcome) {
+	          retryCount += 1;
+	          continue;
 	        }
-	        await finalizeDebugFailure(
-            failureOutcome.status,
-            failureOutcome.payload,
-            null,
-          );
-	        return reply.code(failureOutcome.status).send(failureOutcome.payload);
+		        await finalizeDebugFailure(
+	            terminalFailureOutcome.status,
+	            terminalFailureOutcome.payload,
+	            null,
+	          );
+		        return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
 	      } finally {
 	        channelLease.release();
 	      }

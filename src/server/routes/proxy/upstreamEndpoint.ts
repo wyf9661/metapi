@@ -34,6 +34,7 @@ import {
 import {
   buildClaudeRuntimeHeaders,
   buildGeminiCliUserAgent,
+  getInputHeader,
   headerValueToString,
 } from '../../proxy-core/providers/headerUtils.js';
 export {
@@ -112,11 +113,20 @@ const BLOCKED_PASSTHROUGH_HEADERS = new Set([
   'sec-websocket-version',
   'sec-websocket-extensions',
 ]);
+const METAPI_INTERNAL_HEADER_BLOCKLIST = new Set([
+  'x-metapi-tester-request',
+  'x-metapi-tester-forced-channel-id',
+  'x-metapi-responses-websocket-mode',
+  'x-metapi-responses-websocket-transport',
+]);
 
 const ANTIGRAVITY_RUNTIME_USER_AGENT = 'antigravity/1.19.6 darwin/arm64';
 
 function shouldSkipPassthroughHeader(key: string): boolean {
-  return HOP_BY_HOP_HEADERS.has(key) || BLOCKED_PASSTHROUGH_HEADERS.has(key);
+  if (HOP_BY_HOP_HEADERS.has(key) || BLOCKED_PASSTHROUGH_HEADERS.has(key)) return true;
+  if (METAPI_INTERNAL_HEADER_BLOCKLIST.has(key)) return true;
+  if (key.startsWith('x-metapi-')) return true;
+  return false;
 }
 
 function extractSafePassthroughHeaders(
@@ -911,6 +921,10 @@ export function buildUpstreamEndpointRequest(input: {
   }
 
   if (input.endpoint === 'responses') {
+    const responsesWebsocketTransport = getInputHeader(
+      input.downstreamHeaders,
+      'x-metapi-responses-websocket-transport',
+    ) === '1';
     const websocketMode = Object.entries(input.downstreamHeaders || {}).find(([rawKey]) => rawKey.trim().toLowerCase() === 'x-metapi-responses-websocket-mode');
     const preserveWebsocketIncrementalMode = asTrimmedString(websocketMode?.[1]).toLowerCase() === 'incremental';
     const responsesHeaders = input.downstreamFormat === 'responses'
@@ -963,6 +977,7 @@ export function buildUpstreamEndpointRequest(input: {
         providerHeaders: input.providerHeaders,
         codexSessionCacheKey: input.codexSessionCacheKey,
         codexExplicitSessionId: input.codexExplicitSessionId,
+        responsesWebsocketTransport,
         body: configuredResponsesBody,
       });
     }
