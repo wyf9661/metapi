@@ -105,9 +105,9 @@ function resolveStoredCredentialMode(account: typeof schema.accounts.$inferSelec
 function buildCapabilitiesFromCredentialMode(
   credentialMode: AccountCredentialMode,
   hasSessionToken: boolean,
-  extraConfig?: string | null,
+  oauthIdentity?: string | null | Pick<typeof schema.accounts.$inferSelect, 'extraConfig' | 'oauthProvider'>,
 ): AccountCapabilities {
-  if (hasOauthProvider(extraConfig)) {
+  if (hasOauthProvider(oauthIdentity)) {
     return {
       canCheckin: false,
       canRefreshBalance: false,
@@ -126,7 +126,7 @@ function buildCapabilitiesFromCredentialMode(
 
 function buildCapabilitiesForAccount(account: typeof schema.accounts.$inferSelect): AccountCapabilities {
   const credentialMode = resolveStoredCredentialMode(account);
-  return buildCapabilitiesFromCredentialMode(credentialMode, hasSessionTokenValue(account.accessToken), account.extraConfig);
+  return buildCapabilitiesFromCredentialMode(credentialMode, hasSessionTokenValue(account.accessToken), account);
 }
 
 function normalizeBatchIds(input: unknown): number[] {
@@ -498,15 +498,12 @@ export async function accountsRoutes(app: FastifyInstance) {
 
     return rows.map((r) => {
       const credentialMode = resolveStoredCredentialMode(r.accounts);
+      const capabilities = buildCapabilitiesForAccount(r.accounts);
       return {
         ...r.accounts,
         site: r.sites,
         credentialMode,
-        capabilities: buildCapabilitiesFromCredentialMode(
-          credentialMode,
-          hasSessionTokenValue(r.accounts.accessToken),
-          r.accounts.extraConfig,
-        ),
+        capabilities,
         todaySpend: Math.round((spendByAccount[r.accounts.id] || 0) * 1_000_000) / 1_000_000,
         todayReward: Math.round(estimateRewardWithTodayIncomeFallback({
           day: localDay,
@@ -519,11 +516,7 @@ export async function accountsRoutes(app: FastifyInstance) {
           accountStatus: r.accounts.status,
           siteStatus: r.sites.status,
           extraConfig: r.accounts.extraConfig,
-          sessionCapable: buildCapabilitiesFromCredentialMode(
-            credentialMode,
-            hasSessionTokenValue(r.accounts.accessToken),
-            r.accounts.extraConfig,
-          ).canRefreshBalance,
+          sessionCapable: capabilities.canRefreshBalance,
           hasDiscoveredModels: (modelCountByAccount[r.accounts.id] || 0) > 0,
         }),
       };
