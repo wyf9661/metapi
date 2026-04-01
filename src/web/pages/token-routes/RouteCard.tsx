@@ -21,6 +21,7 @@ import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/Br
 import ModernSelect from '../../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../../components/useAnimatedVisibility.js';
 import { tr } from '../../i18n.js';
+import { formatDateTimeMinuteLocal } from '../helpers/checkinLogTime.js';
 import type {
   RouteSummaryRow,
   RouteChannel,
@@ -240,6 +241,10 @@ function RouteCardInner({
   const channelManagementDisabled = explicitGroupRoute;
   const title = resolveRouteTitle(route);
   const routingStrategy = normalizeRouteRoutingStrategyValue(route.routingStrategy);
+  const hasCachedDecisionSnapshot = !!route.decisionSnapshot;
+  const cachedDecisionTooltip = route.decisionRefreshedAt
+    ? `${tr('最近刷新')}: ${formatDateTimeMinuteLocal(route.decisionRefreshedAt)}`
+    : undefined;
   const routingStrategyOptions = [
     {
       value: 'weighted',
@@ -384,6 +389,15 @@ function RouteCardInner({
               {route.channelCount} {tr('通道')}
             </span>
           )}
+          {hasCachedDecisionSnapshot ? (
+            <span
+              className="badge badge-success"
+              data-tooltip={cachedDecisionTooltip}
+              style={{ fontSize: 10, flexShrink: 0 }}
+            >
+              {tr('已缓存')}
+            </span>
+          ) : null}
 
           {readOnlyRoute ? (
             <span className="badge badge-warning" style={{ fontSize: 10, flexShrink: 0 }}>
@@ -458,6 +472,15 @@ function RouteCardInner({
                 {route.channelCount} {tr('通道')}
               </span>
             )}
+            {hasCachedDecisionSnapshot ? (
+              <span
+                className="badge badge-success"
+                data-tooltip={cachedDecisionTooltip}
+                style={{ fontSize: 10 }}
+              >
+                {tr('已缓存')}
+              </span>
+            ) : null}
             {readOnlyRoute && (
               <span className="badge badge-warning" style={{ fontSize: 10 }}>
                 {tr('0 通道')}
@@ -523,6 +546,15 @@ function RouteCardInner({
             <span className="badge badge-info" style={{ fontSize: 10 }}>
               {route.channelCount} {tr('通道')}
             </span>
+            {hasCachedDecisionSnapshot ? (
+              <span
+                className="badge badge-success"
+                data-tooltip={cachedDecisionTooltip}
+                style={{ fontSize: 10 }}
+              >
+                {tr('已缓存')}
+              </span>
+            ) : null}
             {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
               <span className="badge badge-muted" style={{ fontSize: 10 }}>
                 {explicitGroupSourceCount} {tr('来源模型')}
