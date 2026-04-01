@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { db, schema, runtimeDbDialect } from '../../db/index.js';
+import { getInsertedRowId, insertAndGetById } from '../../db/insertHelpers.js';
 import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { refreshBalance } from '../../services/balanceService.js';
 import { getAdapter } from '../../services/platforms/index.js';
@@ -602,18 +603,23 @@ export async function accountsRoutes(app: FastifyInstance) {
         updatedAt: new Date().toISOString(),
       }).where(eq(schema.accounts.id, existing.id)).run();
     } else {
-      const inserted = await db.insert(schema.accounts).values({
-        siteId,
-        username,
-        accessToken: loginResult.accessToken,
-        apiToken: preferredApiToken || undefined,
-        checkinEnabled: true,
-        extraConfig,
-        isPinned: false,
-        sortOrder: await getNextAccountSortOrder(),
-      }).run();
-      const insertedId = Number(inserted.lastInsertRowid || 0);
-      accountId = insertedId > 0 ? insertedId : undefined;
+      const created = await insertAndGetById<typeof schema.accounts.$inferSelect>({
+        table: schema.accounts,
+        idColumn: schema.accounts.id,
+        values: {
+          siteId,
+          username,
+          accessToken: loginResult.accessToken,
+          apiToken: preferredApiToken || undefined,
+          checkinEnabled: true,
+          extraConfig,
+          isPinned: false,
+          sortOrder: await getNextAccountSortOrder(),
+        },
+        insertErrorMessage: 'account create failed',
+        loadErrorMessage: 'account create failed',
+      });
+      accountId = created.id;
     }
 
     const result = await db.select().from(schema.accounts).where(eq(schema.accounts.id, accountId!)).get();
@@ -1196,24 +1202,22 @@ export async function accountsRoutes(app: FastifyInstance) {
     }
     const extraConfig = mergeAccountExtraConfig(undefined, extraConfigPatch);
 
-    const inserted = await db.insert(schema.accounts).values({
-      siteId: body.siteId,
-      username: username || undefined,
-      accessToken,
-      apiToken: apiToken || undefined,
-      checkinEnabled: tokenType === 'session' ? (body.checkinEnabled ?? true) : false,
-      extraConfig,
-      isPinned: false,
-      sortOrder: await getNextAccountSortOrder(),
-    }).run();
-    const insertedId = Number(inserted.lastInsertRowid || 0);
-    if (insertedId <= 0) {
-      return reply.code(500).send({ success: false, message: '创建账号失败' });
-    }
-    const result = await db.select().from(schema.accounts).where(eq(schema.accounts.id, insertedId)).get();
-    if (!result) {
-      return reply.code(500).send({ success: false, message: '创建账号失败' });
-    }
+    const result = await insertAndGetById<typeof schema.accounts.$inferSelect>({
+      table: schema.accounts,
+      idColumn: schema.accounts.id,
+      values: {
+        siteId: body.siteId,
+        username: username || undefined,
+        accessToken,
+        apiToken: apiToken || undefined,
+        checkinEnabled: tokenType === 'session' ? (body.checkinEnabled ?? true) : false,
+        extraConfig,
+        isPinned: false,
+        sortOrder: await getNextAccountSortOrder(),
+      },
+      insertErrorMessage: '创建账号失败',
+      loadErrorMessage: '创建账号失败',
+    });
 
     const shouldQueueInitialization = tokenType === 'session' || body.skipModelFetch !== true;
     let queuedTaskId: string | undefined;
