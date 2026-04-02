@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -25,5 +26,14 @@ describe('desktop icon assets', () => {
     const config = await readFile(configPath, 'utf8');
 
     expect(config).toContain('icon: build/desktop-icon.png');
+  });
+
+  it('builds Linux desktop packages for AppImage, deb, and rpm distributions', async () => {
+    const configPath = join(process.cwd(), 'electron-builder.yml');
+    const require = createRequire(import.meta.url);
+    const { load } = require('js-yaml') as { load: (source: string) => { linux?: { target?: string[] } } };
+    const config = load(await readFile(configPath, 'utf8'));
+
+    expect(config.linux?.target).toEqual(expect.arrayContaining(['AppImage', 'deb', 'rpm']));
   });
 });
