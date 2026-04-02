@@ -45,6 +45,7 @@ import {
   unwrapGeminiCliPayload,
 } from '../../routes/proxy/geminiCliCompat.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
+import { getObservedResponseMeta } from '../firstByteTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
 import { detectDownstreamClientContext } from '../../routes/proxy/downstreamClientContext.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
@@ -394,6 +395,7 @@ export async function handleChatSurfaceRequest(
       return executeEndpointFlow({
         siteUrl: siteApiBaseUrl,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
+        firstByteTimeoutMs: Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000)),
         endpointCandidates,
         buildRequest: (endpoint) => buildEndpointRequest(endpoint),
         dispatchRequest,
@@ -525,6 +527,7 @@ export async function handleChatSurfaceRequest(
 
       const upstream = endpointResult.upstream;
       const successfulUpstreamPath = endpointResult.upstreamPath;
+      const firstByteLatencyMs = getObservedResponseMeta(upstream)?.firstByteLatencyMs ?? null;
 
       if (isStream) {
         const upstreamContentType = (upstream.headers.get('content-type') || '').toLowerCase();
@@ -557,6 +560,8 @@ export async function handleChatSurfaceRequest(
             parsedUsage,
             upstreamUsagePresent,
             requestStartedAtMs: startTime,
+            isStream: true,
+            firstByteLatencyMs,
             latencyMs,
             retryCount,
             upstreamPath: successfulUpstreamPath,
@@ -918,6 +923,8 @@ export async function handleChatSurfaceRequest(
         parsedUsage,
         upstreamUsagePresent,
         requestStartedAtMs: startTime,
+        isStream: false,
+        firstByteLatencyMs,
         latencyMs: latency,
         retryCount,
         upstreamPath: successfulUpstreamPath,
@@ -961,6 +968,7 @@ export async function handleChatSurfaceRequest(
           status: endpointFailureStatus || 502,
           errText: err.message || 'unknown error',
           rawErrText: err.rawErrText || err.message || 'unknown error',
+          isStream,
           latencyMs: Date.now() - startTime,
           retryCount,
         });
@@ -985,6 +993,7 @@ export async function handleChatSurfaceRequest(
         requestedModel,
         modelName,
         errorMessage: err?.message || 'network failure',
+        isStream,
         latencyMs: Date.now() - startTime,
         retryCount,
       });
@@ -1387,6 +1396,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
           status: endpointFailureStatus || 502,
           errText: error.message || 'unknown error',
           rawErrText: error.rawErrText || error.message || 'unknown error',
+          isStream: false,
           latencyMs: Date.now() - startTime,
           retryCount,
         });
@@ -1407,6 +1417,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         requestedModel,
         modelName,
         errorMessage: error?.message || 'network failure',
+        isStream: false,
         latencyMs: Date.now() - startTime,
         retryCount,
       });

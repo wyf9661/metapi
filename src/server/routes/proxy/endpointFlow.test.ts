@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetch } from 'undici';
 import type { BuiltEndpointRequest } from './endpointFlow.js';
 
-vi.mock('undici', () => ({
-  fetch: vi.fn(),
-}));
+vi.mock('undici', async () => {
+  const actual = await vi.importActual<typeof import('undici')>('undici');
+  return {
+    ...actual,
+    fetch: vi.fn(),
+  };
+});
 
 vi.mock('../../services/siteProxy.js', () => ({
   withSiteProxyRequestInit: async (_targetUrl: string, init: RequestInit) => init,
