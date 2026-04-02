@@ -50,6 +50,8 @@ function recordAppliedMigrations(
   }
 }
 
+const STALE_JOURNAL_TIMESTAMP_DRIFT_MS = 4_196_930;
+
 describe('sqlite migrate bootstrap', () => {
   afterEach(() => {
     delete process.env.DATA_DIR;
@@ -204,6 +206,43 @@ describe('sqlite migrate bootstrap', () => {
 
     expect(applied).toHaveLength(1);
     expect(Number(applied[0].created_at)).toBe(1772500000001);
+
+    sqlite.close();
+  });
+
+  it('updates only the latest matching migration record when reconciling stale timestamps', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'metapi-migrate-rowid-reconcile-'));
+    process.env.DATA_DIR = dataDir;
+    vi.resetModules();
+
+    const migrateModule = await import('./migrate.js');
+    const { __migrateTestUtils } = migrateModule;
+
+    const sqlite = new Database(':memory:');
+    sqlite.exec(`
+      CREATE TABLE "__drizzle_migrations" (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at numeric
+      );
+    `);
+    sqlite.prepare('INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)').run('same-hash', 10);
+    sqlite.prepare('INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)').run('same-hash', 20);
+
+    const changed = __migrateTestUtils.markMigrationRecordIfMissing(sqlite, {
+      hash: 'same-hash',
+      createdAt: 30,
+    });
+
+    const records = sqlite
+      .prepare('SELECT rowid, hash, created_at FROM "__drizzle_migrations" ORDER BY rowid ASC')
+      .all() as Array<{ rowid: number; hash: string; created_at: number }>;
+
+    expect(changed).toBe(true);
+    expect(records).toEqual([
+      { rowid: 1, hash: 'same-hash', created_at: 10 },
+      { rowid: 2, hash: 'same-hash', created_at: 30 },
+    ]);
 
     sqlite.close();
   });
@@ -381,6 +420,87 @@ describe('sqlite migrate bootstrap', () => {
     expect(appliedRows.map((row) => Number(row.created_at))).toEqual(
       journalEntries.map((entry) => entry.when),
     );
+
+    verified.close();
+  });
+
+  it('recovers sequential duplicate-column migrations when a legacy sqlite schema predates the drizzle journal', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'metapi-migrate-legacy-schema-'));
+    const dbPath = join(dataDir, 'hub.db');
+    const sqlite = new Database(dbPath);
+    const journalEntries = readMigrationJournalEntries();
+    const appliedEntries = journalEntries.filter((entry) => entry.tag !== '0019_proxy_logs_stream_timing');
+
+    for (const entry of appliedEntries) {
+      const sqlText = readFileSync(join(migrationsDir, `${entry.tag}.sql`), 'utf8');
+      applyMigrationSql(sqlite, sqlText);
+    }
+
+    // Simulate SQLite legacy compatibility code partially adding the latest proxy log columns
+    // before drizzle creates its own migration journal.
+    sqlite.exec('ALTER TABLE proxy_logs ADD COLUMN is_stream integer;');
+    sqlite.close();
+
+    process.env.DATA_DIR = dataDir;
+    vi.resetModules();
+
+    await expect(import('./migrate.js')).resolves.toMatchObject({
+      runSqliteMigrations: expect.any(Function),
+    });
+
+    const verified = new Database(dbPath, { readonly: true });
+    const appliedRows = verified
+      .prepare('SELECT created_at FROM __drizzle_migrations ORDER BY created_at ASC')
+      .all() as Array<{ created_at: number }>;
+    const proxyLogColumns = verified
+      .prepare('PRAGMA table_info("proxy_logs")')
+      .all() as Array<{ name: string }>;
+
+    expect(appliedRows.map((row) => Number(row.created_at))).toEqual(
+      journalEntries.map((entry) => entry.when),
+    );
+    expect(proxyLogColumns.some((column) => column.name === 'is_stream')).toBe(true);
+    expect(proxyLogColumns.some((column) => column.name === 'first_byte_latency_ms')).toBe(true);
+
+    verified.close();
+  });
+
+  it('reconciles stale migration timestamps when the latest migration hash already exists', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'metapi-migrate-stale-timestamp-'));
+    const dbPath = join(dataDir, 'hub.db');
+    const sqlite = new Database(dbPath);
+    const journalEntries = readMigrationJournalEntries();
+
+    for (const entry of journalEntries) {
+      const sqlText = readFileSync(join(migrationsDir, `${entry.tag}.sql`), 'utf8');
+      applyMigrationSql(sqlite, sqlText);
+    }
+    recordAppliedMigrations(sqlite, journalEntries);
+
+    const latestEntry = journalEntries.at(-1);
+    const latestSqlText = latestEntry
+      ? readFileSync(join(migrationsDir, `${latestEntry.tag}.sql`), 'utf8')
+      : '';
+    const latestHash = createHash('sha256').update(latestSqlText).digest('hex');
+    // Introduce about 70 minutes of timestamp drift so journal reconciliation has work to do.
+    sqlite
+      .prepare('UPDATE __drizzle_migrations SET created_at = ? WHERE hash = ?')
+      .run((latestEntry?.when ?? 0) - STALE_JOURNAL_TIMESTAMP_DRIFT_MS, latestHash);
+    sqlite.close();
+
+    process.env.DATA_DIR = dataDir;
+    vi.resetModules();
+
+    await expect(import('./migrate.js')).resolves.toMatchObject({
+      runSqliteMigrations: expect.any(Function),
+    });
+
+    const verified = new Database(dbPath, { readonly: true });
+    const latestApplied = verified
+      .prepare('SELECT created_at FROM __drizzle_migrations WHERE hash = ? LIMIT 1')
+      .get(latestHash) as { created_at: number } | undefined;
+
+    expect(Number(latestApplied?.created_at)).toBe(latestEntry?.when);
 
     verified.close();
   });
