@@ -597,6 +597,13 @@ export default function Accounts() {
   };
 
   const resolveRuntimeHealth = (account: any) => {
+    if (account.status === 'expired') {
+      return {
+        ...runtimeHealthMap.unhealthy,
+        label: '已过期',
+        reason: account.runtimeHealth?.reason || '连接凭证已过期，请更新凭证',
+      };
+    }
     const capabilities = resolveAccountCapabilities(account);
     const fallbackState = account.status === 'disabled' || account.site?.status === 'disabled'
       ? 'disabled'

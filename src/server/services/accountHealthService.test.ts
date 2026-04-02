@@ -24,15 +24,59 @@ describe('accountHealthService', () => {
     const health = buildRuntimeHealthForAccount({
       accountStatus: 'expired',
       siteStatus: 'active',
-      extraConfig: null,
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
       sessionCapable: false,
     });
 
     expect(health).toMatchObject({
-      state: 'unknown',
-      source: 'none',
+      state: 'unhealthy',
+      source: 'auth',
     });
+    expect(health.reason).toContain('连接已过期');
     expect(health.reason).not.toContain('访问令牌已过期');
+  });
+
+  it('does not show proxy-only expired accounts as healthy just because models were discovered before expiry', () => {
+    const health = buildRuntimeHealthForAccount({
+      accountStatus: 'expired',
+      siteStatus: 'active',
+      extraConfig: JSON.stringify({
+        credentialMode: 'apikey',
+        runtimeHealth: {
+          state: 'healthy',
+          reason: '模型探测成功',
+          source: 'model-discovery',
+          checkedAt: '2026-04-01T10:00:00.000Z',
+        },
+      }),
+      sessionCapable: false,
+      hasDiscoveredModels: true,
+    });
+
+    expect(health).toMatchObject({
+      state: 'unhealthy',
+      source: 'auth',
+    });
+    expect(health.reason).toContain('连接已过期');
+  });
+
+  it('uses a generic expired-credential message for oauth-backed accounts', () => {
+    const health = buildRuntimeHealthForAccount({
+      accountStatus: 'expired',
+      siteStatus: 'active',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+        },
+      }),
+      sessionCapable: false,
+    });
+
+    expect(health).toMatchObject({
+      state: 'unhealthy',
+      source: 'auth',
+      reason: '连接凭证已过期，请更新凭证',
+    });
   });
 
   it('ignores stored auth failures for proxy-only accounts', () => {

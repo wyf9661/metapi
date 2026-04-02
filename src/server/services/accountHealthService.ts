@@ -1,6 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { mergeAccountExtraConfig } from './accountExtraConfig.js';
+import {
+  getCredentialModeFromExtraConfig,
+  hasOauthProvider,
+  mergeAccountExtraConfig,
+} from './accountExtraConfig.js';
 
 export type RuntimeHealthState = 'healthy' | 'unhealthy' | 'degraded' | 'unknown' | 'disabled';
 
@@ -115,10 +119,18 @@ export function buildRuntimeHealthForAccount(input: {
     };
   }
 
-  if (accountStatus === 'expired' && input.sessionCapable !== false) {
+  if (accountStatus === 'expired') {
+    const credentialMode = getCredentialModeFromExtraConfig(input.extraConfig);
+    const usesOauthCredential = hasOauthProvider({ extraConfig: input.extraConfig });
     return {
       state: 'unhealthy',
-      reason: '访问令牌已过期',
+      reason: usesOauthCredential
+        ? '连接凭证已过期，请更新凭证'
+        : credentialMode === 'apikey'
+          ? '连接已过期，请更新 API Key'
+          : (credentialMode === 'session'
+            ? '访问令牌已过期'
+            : '连接凭证已过期，请更新凭证'),
       source: 'auth',
       checkedAt: null,
     };
