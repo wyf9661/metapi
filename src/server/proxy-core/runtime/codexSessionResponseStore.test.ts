@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCodexSessionResponseStoreKey,
+  clearCodexSessionResponseId,
   getCodexSessionResponseId,
   resetCodexSessionResponseStore,
   setCodexSessionResponseId,
@@ -42,6 +43,86 @@ describe('codexSessionResponseStore', () => {
 
     expect(getCodexSessionResponseId(keyA)).toBe('resp-a');
     expect(getCodexSessionResponseId(keyB)).toBe('resp-b');
+
+    resetCodexSessionResponseStore();
+  });
+
+  it('falls back to the bare downstream session id across channel scope drift', () => {
+    resetCodexSessionResponseStore();
+
+    const originalScopedKey = buildCodexSessionResponseStoreKey({
+      sessionId: 'session-drift',
+      siteId: 10,
+      accountId: 20,
+      channelId: 30,
+    });
+    const driftedScopedKey = buildCodexSessionResponseStoreKey({
+      sessionId: 'session-drift',
+      siteId: 10,
+      accountId: 21,
+      channelId: 31,
+    });
+
+    setCodexSessionResponseId(originalScopedKey, 'resp-drift');
+
+    expect(getCodexSessionResponseId(originalScopedKey)).toBe('resp-drift');
+    expect(getCodexSessionResponseId(driftedScopedKey)).toBe('resp-drift');
+
+    resetCodexSessionResponseStore();
+  });
+
+  it('does not collapse distinct downstream sessions when scoped session ids contain delimiters', () => {
+    resetCodexSessionResponseStore();
+
+    const delimitedScopedKey = buildCodexSessionResponseStoreKey({
+      sessionId: 'session-delimited|tail',
+      siteId: 10,
+      accountId: 20,
+      channelId: 30,
+    });
+    const delimitedDriftedScopedKey = buildCodexSessionResponseStoreKey({
+      sessionId: 'session-delimited|tail',
+      siteId: 10,
+      accountId: 21,
+      channelId: 31,
+    });
+    const plainScopedKey = buildCodexSessionResponseStoreKey({
+      sessionId: 'session-delimited',
+      siteId: 10,
+      accountId: 22,
+      channelId: 32,
+    });
+
+    setCodexSessionResponseId(delimitedScopedKey, 'resp-delimited');
+    setCodexSessionResponseId(plainScopedKey, 'resp-plain');
+
+    expect(getCodexSessionResponseId(delimitedDriftedScopedKey)).toBe('resp-delimited');
+    expect(getCodexSessionResponseId(plainScopedKey)).toBe('resp-plain');
+
+    resetCodexSessionResponseStore();
+  });
+
+  it('clears the bare downstream session fallback when removing a scoped continuation id', () => {
+    resetCodexSessionResponseStore();
+
+    const originalScopedKey = buildCodexSessionResponseStoreKey({
+      sessionId: 'session-clear',
+      siteId: 10,
+      accountId: 20,
+      channelId: 30,
+    });
+    const driftedScopedKey = buildCodexSessionResponseStoreKey({
+      sessionId: 'session-clear',
+      siteId: 10,
+      accountId: 21,
+      channelId: 31,
+    });
+
+    setCodexSessionResponseId(originalScopedKey, 'resp-clear');
+    clearCodexSessionResponseId(originalScopedKey);
+
+    expect(getCodexSessionResponseId(originalScopedKey)).toBeNull();
+    expect(getCodexSessionResponseId(driftedScopedKey)).toBeNull();
 
     resetCodexSessionResponseStore();
   });
