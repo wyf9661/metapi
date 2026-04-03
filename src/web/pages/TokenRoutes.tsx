@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { api } from '../api.js';
@@ -93,6 +93,7 @@ const EMPTY_ROUTE_FORM: RouteEditorForm = {
   sourceRouteIds: [],
   advancedOpen: false,
 };
+const DESKTOP_DETAIL_COLLAPSE_MS = 180;
 
 function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): string {
   if (value === 'round_robin') return '已切换为轮询策略';
@@ -102,6 +103,61 @@ function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): str
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function DesktopDetailPanelPresence({
+  open,
+  children,
+}: {
+  open: boolean;
+  children: (closing: boolean) => JSX.Element;
+}) {
+  const [shouldRender, setShouldRender] = useState(open);
+  const [isOpen, setIsOpen] = useState(open);
+  const [isClosing, setIsClosing] = useState(false);
+  const hasEverOpenedRef = useRef(open);
+
+  useEffect(() => {
+    if (open) {
+      hasEverOpenedRef.current = true;
+      setShouldRender(true);
+      setIsClosing(false);
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        const rafId = window.requestAnimationFrame(() => setIsOpen(true));
+        return () => window.cancelAnimationFrame(rafId);
+      }
+      setIsOpen(true);
+      return undefined;
+    }
+
+    if (!hasEverOpenedRef.current) {
+      setShouldRender(false);
+      setIsOpen(false);
+      setIsClosing(false);
+      return undefined;
+    }
+
+    setIsOpen(false);
+    setIsClosing(true);
+    const timerId = globalThis.setTimeout(() => {
+      setShouldRender(false);
+      setIsClosing(false);
+    }, DESKTOP_DETAIL_COLLAPSE_MS);
+
+    return () => globalThis.clearTimeout(timerId);
+  }, [open]);
+
+  if (!shouldRender) return null;
+  return (
+    <div
+      className={`route-detail-panel-presence anim-collapse route-panel-collapse ${isOpen ? 'is-open' : ''} ${isClosing ? 'is-closing' : ''}`.trim()}
+      style={{ gridColumn: '1 / -1' }}
+    >
+      <div className="anim-collapse-inner">
+        {children(isClosing)}
+      </div>
+    </div>
+  );
 }
 
 export default function TokenRoutes() {
@@ -145,8 +201,10 @@ export default function TokenRoutes() {
   const [visibleRouteCount, setVisibleRouteCount] = useState(ROUTE_RENDER_CHUNK);
   const [expandedSourceGroupMap, setExpandedSourceGroupMap] = useState<Record<string, boolean>>({});
   const [expandedRouteIds, setExpandedRouteIds] = useState<number[]>([]);
+  const [closingDesktopDetailRouteIds, setClosingDesktopDetailRouteIds] = useState<number[]>([]);
   const [addChannelModalRouteId, setAddChannelModalRouteId] = useState<number | null>(null);
   const isMobile = useIsMobile();
+  const desktopDetailCloseTimersRef = useRef<Record<number, ReturnType<typeof globalThis.setTimeout>>>({});
 
   const {
     channelsByRouteId,
@@ -914,6 +972,14 @@ export default function TokenRoutes() {
     return hints;
   };
 
+  const missingTokenSiteItemsCacheRef = useRef<{ key: string; cache: Map<number, MissingTokenRouteSiteActionItem[]> }>({
+    key: '',
+    cache: new Map(),
+  });
+  if (missingTokenSiteItemsCacheRef.current.key !== missingTokenCacheKey) {
+    missingTokenSiteItemsCacheRef.current = { key: missingTokenCacheKey, cache: new Map() };
+  }
+
   // Lazy per-route missing token group index
   const missingTokenGroupCacheRef = useRef<{ key: string; cache: Map<number, RouteMissingTokenHint[]> }>({ key: '', cache: new Map() });
   const missingTokenGroupCacheKey = `${routePatternsKey}|${Object.keys(missingTokenGroupModelsByName).length}|${candidatesVersionRef.current}`;
@@ -932,6 +998,14 @@ export default function TokenRoutes() {
     cache.set(routeId, hints);
     return hints;
   };
+
+  const missingTokenGroupItemsCacheRef = useRef<{ key: string; cache: Map<number, MissingTokenGroupRouteSiteActionItem[]> }>({
+    key: '',
+    cache: new Map(),
+  });
+  if (missingTokenGroupItemsCacheRef.current.key !== missingTokenGroupCacheKey) {
+    missingTokenGroupItemsCacheRef.current = { key: missingTokenGroupCacheKey, cache: new Map() };
+  }
 
   const routeById = useMemo(
     () => new Map(visibleRouteRows.map((route) => [route.id, route])),
@@ -1207,8 +1281,25 @@ export default function TokenRoutes() {
   const toggleExpand = async (routeId: number) => {
     const isCurrentlyExpanded = expandedRouteIds.includes(routeId);
     if (isCurrentlyExpanded) {
+      if (!isMobile) {
+        setClosingDesktopDetailRouteIds((prev) => (prev.includes(routeId) ? prev : [...prev, routeId]));
+        const existingTimer = desktopDetailCloseTimersRef.current[routeId];
+        if (existingTimer) {
+          globalThis.clearTimeout(existingTimer);
+        }
+        desktopDetailCloseTimersRef.current[routeId] = globalThis.setTimeout(() => {
+          setClosingDesktopDetailRouteIds((prev) => prev.filter((id) => id !== routeId));
+          delete desktopDetailCloseTimersRef.current[routeId];
+        }, DESKTOP_DETAIL_COLLAPSE_MS);
+      }
       setExpandedRouteIds((prev) => prev.filter((id) => id !== routeId));
     } else {
+      const existingTimer = desktopDetailCloseTimersRef.current[routeId];
+      if (existingTimer) {
+        globalThis.clearTimeout(existingTimer);
+        delete desktopDetailCloseTimersRef.current[routeId];
+      }
+      setClosingDesktopDetailRouteIds((prev) => prev.filter((id) => id !== routeId));
       loadCandidates();
       setExpandedRouteIds((prev) => [...prev, routeId]);
       // Load channels on demand
@@ -1224,7 +1315,16 @@ export default function TokenRoutes() {
     }
   };
 
+  useEffect(() => () => {
+    Object.values(desktopDetailCloseTimersRef.current).forEach((timerId) => {
+      globalThis.clearTimeout(timerId);
+    });
+    desktopDetailCloseTimersRef.current = {};
+  }, []);
+
   const getMissingTokenSiteItems = (routeId: number): MissingTokenRouteSiteActionItem[] => {
+    const cached = missingTokenSiteItemsCacheRef.current.cache.get(routeId);
+    if (cached) return cached;
     const missingTokenHints = getRouteMissingTokenHints(routeId);
     if (missingTokenHints.length === 0) return EMPTY_MISSING_ITEMS;
     const siteMap = new Map<string, MissingTokenRouteSiteActionItem>();
@@ -1245,12 +1345,16 @@ export default function TokenRoutes() {
         }
       }
     }
-    return Array.from(siteMap.values()).sort((a, b) => (
+    const items = Array.from(siteMap.values()).sort((a, b) => (
       a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
     ));
+    missingTokenSiteItemsCacheRef.current.cache.set(routeId, items);
+    return items;
   };
 
   const getMissingTokenGroupItems = (routeId: number): MissingTokenGroupRouteSiteActionItem[] => {
+    const cached = missingTokenGroupItemsCacheRef.current.cache.get(routeId);
+    if (cached) return cached;
     const missingGroupHints = getRouteMissingTokenGroupHints(routeId);
     if (missingGroupHints.length === 0) return EMPTY_MISSING_GROUP_ITEMS;
     const siteMap = new Map<string, MissingTokenGroupRouteSiteActionItem>();
@@ -1292,9 +1396,11 @@ export default function TokenRoutes() {
         }
       }
     }
-    return Array.from(siteMap.values()).sort((a, b) => (
+    const items = Array.from(siteMap.values()).sort((a, b) => (
       a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
     ));
+    missingTokenGroupItemsCacheRef.current.cache.set(routeId, items);
+    return items;
   };
 
   // Stable callbacks for RouteCard memo (use refs to avoid dependency on closure variables)
@@ -1386,7 +1492,7 @@ export default function TokenRoutes() {
   return (
     <div className="animate-fade-in" style={{ minHeight: 400 }}>
       {/* Toolbar: search + sort + actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <div className="toolbar-search" style={{ minWidth: 220, flex: 1, maxWidth: 360 }}>
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -1422,7 +1528,7 @@ export default function TokenRoutes() {
           </div>
           <button
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '8px 12px', fontSize: 12 }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 11px', fontSize: 12 }}
             onClick={() => setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
             data-tooltip={tr('切换排序方向')}
             aria-label={tr('切换排序方向')}
@@ -1436,7 +1542,7 @@ export default function TokenRoutes() {
             onClick={handleRefreshRouteDecisions}
             disabled={loadingDecision}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
           >
             {loadingDecision ? (
               <><span className="spinner spinner-sm" /> {tr('刷新中...')}</>
@@ -1449,7 +1555,7 @@ export default function TokenRoutes() {
             onClick={handleRebuild}
             disabled={rebuilding}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
           >
             {rebuilding ? (
               <><span className="spinner spinner-sm" /> {tr('重建中...')}</>
@@ -1465,7 +1571,7 @@ export default function TokenRoutes() {
               setShowManual(true);
             }}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
           >
             {tr('新建群组')}
           </button>
@@ -1473,7 +1579,7 @@ export default function TokenRoutes() {
           <button
             onClick={toggleBatchSelectMode}
             className={`btn ${batchSelectMode ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
           >
             {batchSelectMode ? tr('退出批量') : tr('批量操作')}
           </button>
@@ -1486,7 +1592,7 @@ export default function TokenRoutes() {
               setShowZeroChannelRoutes((prev) => !prev);
             }}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
           >
             {showZeroChannelRoutes ? tr('隐藏 0 通道路由') : tr('显示 0 通道路由')}
           </button>
@@ -1507,7 +1613,7 @@ export default function TokenRoutes() {
         mobileTrigger={(
           <button
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '8px 14px', marginBottom: 12 }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px', marginBottom: 8 }}
             onClick={() => {
               loadCandidates();
               setShowFilters(true);
@@ -1565,16 +1671,6 @@ export default function TokenRoutes() {
         )}
       />
 
-      {/* Info tip */}
-      <div className="info-tip" style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div>{tr('系统会根据模型可用性自动生成路由。优先级按 P0/P1 等桶管理，同一桶内可有多个通道；拖动通道或灰色分隔线即可调整。精确模型路由会自动过滤只支持该模型的账号和令牌。群组路由中的优先级调整会直接回写来源通道。选中概率表示请求到达时该通道被选中的概率。成本来源优先级为：实测成本 → 账号配置成本 → 目录参考价 → 默认回退单价。')}</div>
-        <div>{`${getRouteRoutingStrategyLabel('weighted')}：${getRouteRoutingStrategyDescription('weighted')}`}</div>
-        <div>{`${getRouteRoutingStrategyLabel('round_robin')}：${getRouteRoutingStrategyDescription('round_robin')}`}</div>
-        <div>{`${getRouteRoutingStrategyLabel('stable_first')}：${getRouteRoutingStrategyDescription('stable_first')}`}</div>
-        <div>{tr('选中概率用于解释当前策略下这一次请求更可能落到哪里；轮询和稳定优先更适合把它当作顺序参考。')}</div>
-        <div>{tr('成本来源优先级：实测成本 → 账号配置成本 → 目录参考价 → 默认回退单价。')}</div>
-      </div>
-
       {/* Manual route panel */}
       <ManualRoutePanel
         show={showManual}
@@ -1594,15 +1690,7 @@ export default function TokenRoutes() {
       {/* Route card grid */}
       {/* Batch selection floating bar */}
       {batchSelectMode && (
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 50,
-          background: 'var(--color-bg-card, #fff)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 8, padding: '10px 16px',
-          marginBottom: 12,
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-        }}>
+        <div className="route-batch-bar">
           <span style={{ fontSize: 13, fontWeight: 500 }}>
             {tr('已选择')} <b>{selectedRouteIds.size}</b> / {selectableRouteIds.size} {tr('条路由')}
           </span>
@@ -1632,6 +1720,7 @@ export default function TokenRoutes() {
       <div className={isMobile ? 'mobile-card-list' : 'route-card-grid'}>
         {visibleRoutes.map((route) => {
           const isExpanded = expandedRouteIds.includes(route.id);
+          const isDesktopDetailClosing = closingDesktopDetailRouteIds.includes(route.id);
           const isReadOnlyRoute = route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true;
           const exactRoute = isRouteExactModel(route);
           const explicitGroupRoute = isExplicitGroupRoute(route);
@@ -1758,12 +1847,12 @@ export default function TokenRoutes() {
             );
           }
 
-          const routeCard = (
+          const summaryCard = (
             <RouteCard
-              key={route.id}
               route={route}
               brand={routeBrandById.get(route.id) || null}
-              expanded={isExpanded}
+              expanded={false}
+              summaryExpanded={isExpanded || isDesktopDetailClosing}
               onToggleExpand={stableToggleExpand}
               onEdit={stableEditRoute}
               onDelete={stableDeleteRoute}
@@ -1776,7 +1865,7 @@ export default function TokenRoutes() {
               loadingChannels={!!loadingChannelsByRouteId[route.id]}
               routeDecision={decisionByRoute[route.id] || null}
               loadingDecision={loadingDecision}
-              candidateView={getRouteCandidateView(route.id)}
+              candidateView={EMPTY_ROUTE_CANDIDATE_VIEW}
               channelTokenDraft={channelTokenDraft}
               updatingChannel={updatingChannel}
               savingPriority={!!savingPriorityByRoute[route.id]}
@@ -1785,8 +1874,8 @@ export default function TokenRoutes() {
               onDeleteChannel={stableDeleteChannel}
               onToggleChannelEnabled={stableToggleChannelEnabled}
               onChannelDragEnd={stableChannelDragEnd}
-              missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
-              missingTokenGroupItems={getMissingTokenGroupItems(route.id)}
+              missingTokenSiteItems={EMPTY_MISSING_ITEMS}
+              missingTokenGroupItems={EMPTY_MISSING_GROUP_ITEMS}
               onCreateTokenForMissing={stableCreateTokenForMissing}
               onAddChannel={stableAddChannel}
               onSiteBlockModel={stableSiteBlockModel}
@@ -1794,40 +1883,89 @@ export default function TokenRoutes() {
               onToggleSourceGroup={stableToggleSourceGroup}
             />
           );
+          const detailPanel = (
+            <DesktopDetailPanelPresence open={isExpanded}>
+              {() => (
+                <RouteCard
+                  route={route}
+                  brand={routeBrandById.get(route.id) || null}
+                  expanded
+                  compact
+                  detailPanel
+                  onToggleExpand={stableToggleExpand}
+                  onEdit={stableEditRoute}
+                  onDelete={stableDeleteRoute}
+                  onToggleEnabled={stableToggleEnabled}
+                  onClearCooldown={stableClearRouteCooldown}
+                  clearingCooldown={!!clearingCooldownByRoute[route.id]}
+                  onRoutingStrategyChange={stableRoutingStrategyChange}
+                  updatingRoutingStrategy={!!updatingRoutingStrategyByRoute[route.id]}
+                  channels={channelsByRouteId[route.id]}
+                  loadingChannels={!!loadingChannelsByRouteId[route.id]}
+                  routeDecision={decisionByRoute[route.id] || null}
+                  loadingDecision={loadingDecision}
+                  candidateView={getRouteCandidateView(route.id)}
+                  channelTokenDraft={channelTokenDraft}
+                  updatingChannel={updatingChannel}
+                  savingPriority={!!savingPriorityByRoute[route.id]}
+                  onTokenDraftChange={stableTokenDraftChange}
+                  onSaveToken={stableChannelTokenSave}
+                  onDeleteChannel={stableDeleteChannel}
+                  onToggleChannelEnabled={stableToggleChannelEnabled}
+                  onChannelDragEnd={stableChannelDragEnd}
+                  missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
+                  missingTokenGroupItems={getMissingTokenGroupItems(route.id)}
+                  onCreateTokenForMissing={stableCreateTokenForMissing}
+                  onAddChannel={stableAddChannel}
+                  onSiteBlockModel={stableSiteBlockModel}
+                  expandedSourceGroupMap={expandedSourceGroupMap}
+                  onToggleSourceGroup={stableToggleSourceGroup}
+                />
+              )}
+            </DesktopDetailPanelPresence>
+          );
 
           if (batchSelectMode && isSelectable) {
             return (
-              <div key={route.id} style={{ display: 'flex', gap: 0, alignItems: 'stretch', ...(isExpanded ? { gridColumn: '1 / -1' } : {}) }}>
-                <div
-                  onClick={() => toggleRouteSelection(route.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    width: 36, minHeight: '100%', cursor: 'pointer',
-                    borderRadius: '8px 0 0 8px',
-                    background: isSelected ? 'var(--color-primary, #4f46e5)' : 'var(--color-bg-card, #fff)',
-                    border: '1px solid var(--color-border)',
-                    borderRight: 'none',
-                    transition: 'background 0.15s',
-                  }}
-                >
-                  <input
-                    data-testid={`route-select-${route.id}`}
-                    aria-label={`选择路由 ${routeTitle}`}
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleRouteSelection(route.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #4f46e5)' }}
-                  />
+              <Fragment key={route.id}>
+                <div style={{ display: 'flex', gap: 0, alignItems: 'stretch' }}>
+                  <div
+                    onClick={() => toggleRouteSelection(route.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 36, minHeight: '100%', cursor: 'pointer',
+                      borderRadius: '8px 0 0 8px',
+                      background: isSelected ? 'var(--color-primary, #4f46e5)' : 'var(--color-bg-card, #fff)',
+                      border: '1px solid var(--color-border)',
+                      borderRight: 'none',
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    <input
+                      data-testid={`route-select-${route.id}`}
+                      aria-label={`选择路由 ${routeTitle}`}
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleRouteSelection(route.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #4f46e5)' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {summaryCard}
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {routeCard}
-                </div>
-              </div>
+                {detailPanel}
+              </Fragment>
             );
           }
 
-          return routeCard;
+          return (
+            <Fragment key={route.id}>
+              {summaryCard}
+              {detailPanel}
+            </Fragment>
+          );
         })}
       </div>
 
