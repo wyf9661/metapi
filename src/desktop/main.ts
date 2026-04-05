@@ -22,6 +22,7 @@ import {
   waitForServerReady,
 } from './runtime.js';
 import { getDesktopRuntimeIconPath, getDesktopTrayIconPath } from './iconAssets.js';
+import { attachDesktopNavigationGuard, createSafeOpenExternal } from './navigationGuard.js';
 
 const { autoUpdater } = electronUpdater;
 
@@ -138,6 +139,7 @@ function setupTray() {
 
 async function createMainWindow() {
   if (mainWindow) return mainWindow;
+  const frontendUrl = resolveFrontendUrl();
 
   mainWindow = new BrowserWindow({
     width: 1480,
@@ -153,6 +155,17 @@ async function createMainWindow() {
     },
   });
 
+  attachDesktopNavigationGuard({
+    appUrl: frontendUrl,
+    openExternal: createSafeOpenExternal({
+      openExternal: (url) => shell.openExternal(url),
+      onError: (url, error) => {
+        log.error('Failed to open external URL', { url, error });
+      },
+    }),
+    webContents: mainWindow.webContents,
+  });
+
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
@@ -164,7 +177,7 @@ async function createMainWindow() {
     mainWindow?.show();
   });
 
-  await mainWindow.loadURL(resolveFrontendUrl());
+  await mainWindow.loadURL(frontendUrl);
   return mainWindow;
 }
 
