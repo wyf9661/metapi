@@ -155,7 +155,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
         logProxy(
           selected, requestedModel, 'success', upstream.status, latency, null, retryCount, downstreamApiKeyId,
           resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails, clientContext, downstreamPath,
-          false, firstByteLatencyMs,
+          resolvedUsage.usageSource, false, firstByteLatencyMs,
         );
         return reply.code(upstream.status).send(data);
       } catch (err: any) {
@@ -183,6 +183,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
           null,
           clientContext,
           downstreamPath,
+          null,
           false,
           firstByteLatencyMs,
         );
@@ -229,6 +230,7 @@ async function logProxy(
   billingDetails: unknown = null,
   clientContext: DownstreamClientContext | null = null,
   downstreamPath = '/v1/embeddings',
+  usageSource: 'upstream' | 'self-log' | 'unknown' | null = null,
   isStream = false,
   firstByteLatencyMs: number | null = null,
 ) {
@@ -241,6 +243,7 @@ async function logProxy(
       sessionId: clientContext?.sessionId || null,
       traceHint: clientContext?.traceHint || null,
       downstreamPath,
+      usageSource,
       errorMessage,
     });
     await insertProxyLog({
