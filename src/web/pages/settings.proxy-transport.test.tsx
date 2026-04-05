@@ -100,12 +100,20 @@ describe('Settings proxy transport', () => {
       });
       await flushMicrotasks();
 
+      const proxyTransportCard = root.root.find((node) => (
+        node.type === 'div'
+        && node.props['data-settings-card'] === 'proxy-transport'
+      ));
+      expect(collectText(proxyTransportCard)).toContain('HTTP 优先');
+      expect(collectText(proxyTransportCard)).toContain('会话池 4 并发 / 3200ms');
+
       const websocketToggleLabel = root.root.find((node) => (
         node.type === 'label'
         && collectText(node).includes('允许 metapi 到 Codex 上游使用 WebSocket')
       ));
       const websocketToggle = websocketToggleLabel.findByType('input');
       expect(websocketToggle.props.checked).toBe(false);
+
       const compactFallbackToggleLabel = root.root.find((node) => (
         node.type === 'label'
         && collectText(node).includes('Compact 明确不支持时回退到普通 Responses')
@@ -130,6 +138,9 @@ describe('Settings proxy transport', () => {
         concurrencyInput.props.onChange({ target: { value: '6' } });
         queueWaitInput.props.onChange({ target: { value: '4200' } });
       });
+
+      expect(collectText(proxyTransportCard)).toContain('上游 WebSocket 已启用');
+      expect(collectText(proxyTransportCard)).toContain('会话池 6 并发 / 4200ms');
 
       const saveButton = root.root.find((node) => (
         node.type === 'button'
