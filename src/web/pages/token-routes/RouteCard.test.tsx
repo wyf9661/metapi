@@ -1,6 +1,27 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { SortableContext } from '@dnd-kit/sortable';
+
+const sortableState = vi.hoisted(() => ({
+  activeId: null as number | string | null,
+}));
+
+vi.mock('@dnd-kit/sortable', async () => {
+  const actual = await vi.importActual<typeof import('@dnd-kit/sortable')>('@dnd-kit/sortable');
+  return {
+    ...actual,
+    useSortable: ({ id }: { id: number | string }) => ({
+      attributes: {},
+      listeners: {},
+      setNodeRef: vi.fn(),
+      setActivatorNodeRef: vi.fn(),
+      transform: null,
+      transition: null,
+      isDragging: sortableState.activeId === id,
+    }),
+  };
+});
+
 import RouteCard from './RouteCard.js';
 import type { RouteChannel, RouteSummaryRow } from './types.js';
 import { getRouteRoutingStrategyDescription } from './routingStrategy.js';
@@ -12,6 +33,10 @@ function collectText(node: ReactTestInstance): string {
     return collectText(child);
   }).join('');
 }
+
+afterEach(() => {
+  sortableState.activeId = null;
+});
 
 const LONG_REGEX_PATTERN = 're:(?:.*|.*/)(minimax-m2.1)$';
 
@@ -388,6 +413,141 @@ describe('RouteCard', () => {
 
     const sortableContext = root.root.findByType(SortableContext);
     expect(sortableContext.props.strategy).toBe(translateOnlyRectSortingStrategy);
+  });
+
+  it('shows a new-layer drop target while dragging inside compact desktop detail panels', () => {
+    const renderCard = () => (
+      <RouteCard
+        route={buildRoute()}
+        brand={null}
+        expanded
+        compact
+        detailPanel
+        onToggleExpand={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleEnabled={vi.fn()}
+        onClearCooldown={vi.fn()}
+        clearingCooldown={false}
+        onRoutingStrategyChange={vi.fn()}
+        updatingRoutingStrategy={false}
+        channels={[
+          buildChannel({ id: 11, priority: 0 }),
+          buildChannel({ id: 12, accountId: 102, tokenId: 1002, priority: 0 }),
+        ]}
+        loadingChannels={false}
+        routeDecision={null}
+        loadingDecision={false}
+        candidateView={{ routeCandidates: [], accountOptions: [], tokenOptionsByAccountId: {} }}
+        channelTokenDraft={{}}
+        updatingChannel={{}}
+        savingPriority={false}
+        onTokenDraftChange={vi.fn()}
+        onSaveToken={vi.fn()}
+        onDeleteChannel={vi.fn()}
+        onToggleChannelEnabled={vi.fn()}
+        onChannelDragEnd={vi.fn()}
+        missingTokenSiteItems={[]}
+        missingTokenGroupItems={[]}
+        onCreateTokenForMissing={vi.fn()}
+        onAddChannel={vi.fn()}
+        onSiteBlockModel={vi.fn()}
+        expandedSourceGroupMap={{}}
+        onToggleSourceGroup={vi.fn()}
+      />
+    );
+    const root = create(renderCard());
+
+    const dndContext = root.root.find((node) => (
+      typeof node.props.onDragStart === 'function'
+      && typeof node.props.onDragEnd === 'function'
+      && typeof node.props.onDragCancel === 'function'
+    ));
+
+    act(() => {
+      sortableState.activeId = 12;
+      dndContext.props.onDragStart?.({
+        active: { id: 12 },
+      });
+      root.update(renderCard());
+    });
+
+    expect(collectText(root.root)).toContain('放到新档位');
+    const shells = root.root.findAll((node) => (
+      node.type === 'div'
+      && node.props['data-testid'] === 'route-channel-shell'
+    ));
+    const activeShell = shells.find((node) => node.props['data-channel-id'] === 12);
+    expect(activeShell).toBeDefined();
+    expect(activeShell?.props.style.visibility).toBe('hidden');
+
+    const newLayerTarget = root.root.find((node) => (
+      node.type === 'div'
+      && node.props['data-testid'] === 'route-priority-new-layer-target'
+    ));
+    expect(newLayerTarget.props.style.display).toBe('flex');
+    expect(newLayerTarget.props.style.minHeight).toBe(34);
+  });
+
+  it('keeps compact desktop detail bucket headers outside draggable channel shells', () => {
+    const root = create(
+      <RouteCard
+        route={buildRoute()}
+        brand={null}
+        expanded
+        compact
+        detailPanel
+        onToggleExpand={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleEnabled={vi.fn()}
+        onClearCooldown={vi.fn()}
+        clearingCooldown={false}
+        onRoutingStrategyChange={vi.fn()}
+        updatingRoutingStrategy={false}
+        channels={[
+          buildChannel({ id: 11, priority: 0 }),
+          buildChannel({ id: 12, accountId: 102, tokenId: 1002, priority: 0 }),
+          buildChannel({ id: 21, accountId: 103, tokenId: 1003, priority: 1 }),
+        ]}
+        loadingChannels={false}
+        routeDecision={null}
+        loadingDecision={false}
+        candidateView={{ routeCandidates: [], accountOptions: [], tokenOptionsByAccountId: {} }}
+        channelTokenDraft={{}}
+        updatingChannel={{}}
+        savingPriority={false}
+        onTokenDraftChange={vi.fn()}
+        onSaveToken={vi.fn()}
+        onDeleteChannel={vi.fn()}
+        onToggleChannelEnabled={vi.fn()}
+        onChannelDragEnd={vi.fn()}
+        missingTokenSiteItems={[]}
+        missingTokenGroupItems={[]}
+        onCreateTokenForMissing={vi.fn()}
+        onAddChannel={vi.fn()}
+        onSiteBlockModel={vi.fn()}
+        expandedSourceGroupMap={{}}
+        onToggleSourceGroup={vi.fn()}
+      />,
+    );
+
+    const bucketHeaders = root.root.findAll((node) => (
+      node.type === 'div'
+      && node.props['data-testid'] === 'route-priority-bucket-header'
+    ));
+    const shells = root.root.findAll((node) => (
+      node.type === 'div'
+      && node.props['data-testid'] === 'route-channel-shell'
+    ));
+
+    expect(bucketHeaders.map((node) => collectText(node))).toEqual([
+      'P0 · 2 通道',
+      'P1 · 1 通道',
+    ]);
+    expect(shells).toHaveLength(3);
+    expect(collectText(shells[0]!)).not.toContain('P0 · 2 通道');
+    expect(collectText(shells[2]!)).not.toContain('P1 · 1 通道');
   });
 
   it('renders desktop channel rows in sortable shell order within a single sortable list', () => {
