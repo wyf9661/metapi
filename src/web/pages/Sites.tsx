@@ -35,6 +35,7 @@ import {
   getSiteInitializationPreset,
   listSiteInitializationPresets,
 } from '../../shared/siteInitializationPresets.js';
+import { analyzePrimarySiteUrl } from '../../shared/sitePrimaryUrl.js';
 
 type SiteSubscriptionSummary = {
   activeCount: number;
@@ -294,6 +295,22 @@ export default function Sites() {
     () => getSiteInitializationPreset(selectedInitializationPresetId),
     [selectedInitializationPresetId],
   );
+  const primarySiteUrlAnalysis = useMemo(() => analyzePrimarySiteUrl(form.url), [form.url]);
+  const latestPrimarySiteUrlRef = useRef(form.url);
+  const latestPlatformRef = useRef(form.platform);
+  const latestInitializationPresetIdRef = useRef(selectedInitializationPresetId);
+
+  useEffect(() => {
+    latestPrimarySiteUrlRef.current = form.url;
+  }, [form.url]);
+
+  useEffect(() => {
+    latestPlatformRef.current = form.platform;
+  }, [form.platform]);
+
+  useEffect(() => {
+    latestInitializationPresetIdRef.current = selectedInitializationPresetId;
+  }, [selectedInitializationPresetId]);
 
   const disabledModelSet = useMemo(() => new Set(disabledModels), [disabledModels]);
 
@@ -529,7 +546,7 @@ export default function Sites() {
 
     const payload = {
       name: form.name.trim(),
-      url: form.url.trim(),
+      url: primarySiteUrlAnalysis.persistedUrl || form.url.trim(),
       externalCheckinUrl: form.externalCheckinUrl.trim(),
       platform: form.platform.trim(),
       initializationPresetId: selectedInitializationPresetId,
@@ -550,6 +567,13 @@ export default function Sites() {
       if (action.kind === 'add') {
         const created = await api.addSite(action.payload);
         toast.success(`站点 "${payload.name}" 已添加`);
+        if (
+          primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix'
+          && typeof created?.url === 'string'
+          && created.url.trim()
+        ) {
+          toast.info(`已自动规范化主站点 URL 为 ${created.url.trim()}`);
+        }
         const createdSiteId = Number(created?.id) || 0;
         if (createdSiteId > 0) {
           const createdPlatform = typeof created?.platform === 'string' && created.platform.trim()
@@ -567,8 +591,15 @@ export default function Sites() {
           });
         }
       } else {
-        await api.updateSite(action.id, action.payload);
+        const updated = await api.updateSite(action.id, action.payload);
         toast.success(`站点 "${payload.name}" 已更新`);
+        if (
+          primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix'
+          && typeof updated?.url === 'string'
+          && updated.url.trim()
+        ) {
+          toast.info(`已自动规范化主站点 URL 为 ${updated.url.trim()}`);
+        }
       }
       closeEditor();
       await load();
@@ -684,22 +715,48 @@ export default function Sites() {
   };
 
   const handleDetect = async () => {
-    if (!form.url.trim()) {
+    const requestedUrl = form.url.trim();
+    const requestedPlatform = form.platform.trim();
+    const requestedInitializationPresetId = selectedInitializationPresetId;
+    if (!requestedUrl) {
       toast.error('请先输入 URL');
       return;
     }
+    const requestedPrimarySiteUrl = analyzePrimarySiteUrl(requestedUrl);
     setDetecting(true);
     try {
-      const result = await api.detectSite(form.url.trim());
+      const result = await api.detectSite(requestedUrl);
+      if (
+        latestPrimarySiteUrlRef.current.trim() !== requestedUrl
+        || latestPlatformRef.current.trim() !== requestedPlatform
+        || latestInitializationPresetIdRef.current !== requestedInitializationPresetId
+      ) {
+        return;
+      }
       if (result?.platform) {
         const detectedPreset = getSiteInitializationPreset(result?.initializationPresetId);
-        setForm((prev) => ({ ...prev, platform: result.platform }));
+        setForm((prev) => ({
+          ...prev,
+          platform: result.platform,
+          url: requestedPrimarySiteUrl.action === 'auto_strip_known_api_suffix'
+            && typeof result?.url === 'string'
+            && result.url.trim()
+            ? result.url.trim()
+            : prev.url,
+        }));
         setSelectedInitializationPresetId((current) => {
           if (detectedPreset) return detectedPreset.id;
           const activePreset = getSiteInitializationPreset(current);
           if (activePreset && activePreset.platform !== result.platform) return null;
           return current;
         });
+        if (
+          requestedPrimarySiteUrl.action === 'auto_strip_known_api_suffix'
+          && typeof result?.url === 'string'
+          && result.url.trim()
+        ) {
+          toast.info(`已自动规范化主站点 URL 为 ${result.url.trim()}`);
+        }
         toast.success(
           detectedPreset
             ? `检测到平台: ${result.platform}（${detectedPreset.label}）`
@@ -1035,7 +1092,7 @@ export default function Sites() {
             <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row' }}>
               <input
                 data-testid="site-primary-url-input"
-                placeholder="站点 URL（面板/登录/签到地址，如 https://console.example.com）"
+                placeholder="准确主站点 URL（面板/登录/签到地址，如 https://nih.cc）"
                 value={form.url}
                 onChange={(e) => setForm((prev) => ({ ...prev, url: e.target.value }))}
                 onBlur={() => {
@@ -1064,6 +1121,7 @@ export default function Sites() {
               }}
             >
               <ModernSelect
+                data-testid="site-platform-select"
                 value={platformSelectValue}
                 onChange={(value) => {
                   if (value.startsWith('preset:')) {
@@ -1109,8 +1167,32 @@ export default function Sites() {
             </div>
           )}
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-            主站点 URL 用于登录、签到、面板接口和系统访问令牌管理；如果 API 请求地址和主站点不同，请在下面的 API 请求地址池里填写。
+            请填写准确的主站点 URL。这里填写主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径直接填到主站点 URL；如果 API 请求地址和主站点不同，请在下面的 API 请求地址池里填写。
           </div>
+          {primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix' && primarySiteUrlAnalysis.persistedUrl ? (
+            <div className="alert alert-info animate-scale-in">
+              <div className="alert-title">检测到常见 API 路径后缀</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+                保存或自动检测时会将主站点 URL 规范化为 {primarySiteUrlAnalysis.persistedUrl}。
+              </div>
+            </div>
+          ) : null}
+          {primarySiteUrlAnalysis.action === 'preserve_api_path' && primarySiteUrlAnalysis.persistedUrl ? (
+            <div className="alert alert-warning animate-scale-in">
+              <div className="alert-title">请确认主站点 URL</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+                当前 URL 含 /api 路径，将原样保留。请确认这就是准确的主站点 URL；如果这是 API 请求地址，请填到下方的 API 请求地址池。
+              </div>
+            </div>
+          ) : null}
+          {primarySiteUrlAnalysis.action === 'preserve_unknown_path' && primarySiteUrlAnalysis.persistedUrl ? (
+            <div className="alert alert-warning animate-scale-in">
+              <div className="alert-title">请确认主站点 URL</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+                当前 URL 含额外路径，将原样保留。请确认这就是准确的主站点 URL；如果这是 API 请求地址，请填到下方的 API 请求地址池。
+              </div>
+            </div>
+          ) : null}
           <div
             style={{
               display: 'flex',
@@ -1153,7 +1235,7 @@ export default function Sites() {
               >
                 <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center' }}>
                   <input
-                    placeholder="API 请求地址（如 https://api.example.com）"
+                    placeholder="API 请求地址（如 https://api.nih.cc）"
                     value={endpoint.url}
                     onChange={(e) => updateApiEndpointRow(index, { url: e.target.value })}
                     style={{ ...formInputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}

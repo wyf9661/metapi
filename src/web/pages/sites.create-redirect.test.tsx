@@ -40,6 +40,15 @@ function findPrimarySiteUrlInput(root: ReactTestRenderer) {
   ));
 }
 
+function findClickableButtonByText(root: ReactTestRenderer, label: string) {
+  return root.root.find((node) => (
+    node.type === 'button'
+    && typeof node.props.onClick === 'function'
+    && node.props['aria-label'] !== '关闭弹框'
+    && collectText(node).includes(label)
+  ));
+}
+
 function LocationProbe() {
   const location = useLocation();
   return <div>{`${location.pathname}${location.search}`}</div>;
@@ -106,34 +115,14 @@ async function createSiteAndClickModalChoice(
     });
     await flushMicrotasks();
 
-    // Find the created-site modal and click the appropriate button
-    const modalContent = root.root.find((node) => (
-      typeof node.props.className === 'string'
-      && node.props.className.includes('modal-content')
-      && collectText(node).includes('站点创建成功')
-    ));
-    const modalButtons = modalContent.findAll((node) => (
-      node.type === 'button'
-      && typeof node.props.onClick === 'function'
-      && node.props['aria-label'] !== '关闭弹框'
-    ));
+    const targetButton = choice === 'session'
+      ? findClickableButtonByText(root, createdSite.platform === 'codex' ? '添加 OAuth 连接' : '添加账号（用户名密码登录）')
+      : choice === 'apikey'
+        ? findClickableButtonByText(root, '添加 API Key')
+        : findClickableButtonByText(root, '稍后配置');
 
-    // Find the button based on choice
-    let targetButton;
-    if (choice === 'session') {
-      const expectedSessionLabel = createdSite.platform === 'codex'
-        ? '添加 OAuth 连接'
-        : '添加账号（用户名密码登录）';
-      targetButton = modalButtons.find((btn) => collectText(btn).includes(expectedSessionLabel));
-    } else if (choice === 'apikey') {
-      targetButton = modalButtons.find((btn) => collectText(btn).includes('添加 API Key'));
-    } else {
-      targetButton = modalButtons.find((btn) => collectText(btn).includes('稍后配置'));
-    }
-
-    expect(targetButton).toBeTruthy();
     await act(async () => {
-      targetButton!.props.onClick();
+      targetButton.props.onClick();
     });
     await flushMicrotasks();
 
@@ -574,7 +563,7 @@ describe('Sites create redirect', () => {
       {
         id: 36,
         name: 'DeepSeek Official',
-        url: 'https://api.deepseek.com/v1',
+        url: 'https://api.deepseek.com',
         platform: 'openai',
         status: 'active',
       },
