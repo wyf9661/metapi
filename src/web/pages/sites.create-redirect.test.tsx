@@ -106,26 +106,36 @@ async function createSiteAndClickModalChoice(
     });
     await flushMicrotasks();
 
-    // Find the modal dialog and click the appropriate button
-    const modalDialog = root.root.find((node) => node.type === 'dialog');
-    const modalButtons = modalDialog.findAll((node) => node.type === 'button');
+    // Find the created-site modal and click the appropriate button
+    const modalContent = root.root.find((node) => (
+      typeof node.props.className === 'string'
+      && node.props.className.includes('modal-content')
+      && collectText(node).includes('站点创建成功')
+    ));
+    const modalButtons = modalContent.findAll((node) => (
+      node.type === 'button'
+      && typeof node.props.onClick === 'function'
+      && node.props['aria-label'] !== '关闭弹框'
+    ));
 
     // Find the button based on choice
     let targetButton;
     if (choice === 'session') {
-      targetButton = modalButtons.find((btn) => collectText(btn).includes('添加账号（用户名密码登录）'));
+      const expectedSessionLabel = createdSite.platform === 'codex'
+        ? '添加 OAuth 连接'
+        : '添加账号（用户名密码登录）';
+      targetButton = modalButtons.find((btn) => collectText(btn).includes(expectedSessionLabel));
     } else if (choice === 'apikey') {
       targetButton = modalButtons.find((btn) => collectText(btn).includes('添加 API Key'));
     } else {
       targetButton = modalButtons.find((btn) => collectText(btn).includes('稍后配置'));
     }
 
-    if (targetButton) {
-      await act(async () => {
-        targetButton.props.onClick();
-      });
-      await flushMicrotasks();
-    }
+    expect(targetButton).toBeTruthy();
+    await act(async () => {
+      targetButton!.props.onClick();
+    });
+    await flushMicrotasks();
 
     return JSON.stringify(root.toJSON());
   } finally {
