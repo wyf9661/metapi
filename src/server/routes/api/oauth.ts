@@ -1,11 +1,15 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { createRateLimitGuard } from '../../middleware/requestRateLimit.js';
 import {
   deleteOauthConnection,
+  importOauthConnectionsFromNativeJson,
   getOauthSessionStatus,
   handleOauthCallback,
   listOauthConnections,
   listOauthProviders,
+  OauthImportValidationError,
+  refreshOauthConnectionQuotaBatch,
   refreshOauthConnectionQuota,
   startOauthProviderFlow,
   startOauthRebindFlow,
@@ -14,7 +18,9 @@ import {
 import { parseSiteProxyUrlInput } from '../../services/siteProxy.js';
 import {
   parseOauthConnectionRebindPayload,
+  parseOauthImportPayload,
   parseOauthManualCallbackPayload,
+  parseOauthQuotaBatchRefreshPayload,
   parseOauthStartPayload,
 } from '../../contracts/supportRoutePayloads.js';
 
@@ -53,6 +59,24 @@ const limitOauthConnectionMutate = createRateLimitGuard({
   max: 20,
   windowMs: 60_000,
 });
+
+const oauthSensitiveRouteLimiter = new RateLimiterMemory({
+  keyPrefix: 'oauth-connection-sensitive',
+  points: 20,
+  duration: 60,
+});
+const MAX_OAUTH_QUOTA_BATCH_SIZE = 100;
+
+async function limitOauthSensitiveRoute(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    await oauthSensitiveRouteLimiter.consume(request.ip);
+  } catch (error) {
+    const retryState = error instanceof RateLimiterRes ? error : null;
+    const retryAfterSec = Math.max(1, Math.ceil((retryState?.msBeforeNext ?? 60_000) / 1000));
+    reply.code(429).header('retry-after', String(retryAfterSec))
+      .send({ message: '请求过于频繁，请稍后再试' });
+  }
+}
 
 const limitOauthCallback = createRateLimitGuard({
   bucket: 'oauth-callback',
@@ -147,6 +171,7 @@ export async function oauthRoutes(app: FastifyInstance) {
           rebindAccountId: rebindAccountId ?? undefined,
           projectId: projectId ?? undefined,
           proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
+          useSystemProxy: body.useSystemProxy,
           requestOrigin: resolveRequestOrigin(request),
         });
       } catch (error: any) {
@@ -248,6 +273,7 @@ export async function oauthRoutes(app: FastifyInstance) {
           {
             requestOrigin: resolveRequestOrigin(request),
             proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
+            useSystemProxy: parsedBody.data.useSystemProxy,
           },
         );
       } catch (error: any) {
@@ -284,6 +310,52 @@ export async function oauthRoutes(app: FastifyInstance) {
         return await refreshOauthConnectionQuota(accountId);
       } catch (error: any) {
         return reply.code(404).send({ message: error?.message || 'oauth account not found' });
+      }
+    },
+  );
+
+  app.post<{ Body: unknown }>(
+    '/api/oauth/connections/quota/refresh-batch',
+    { preHandler: [limitOauthConnectionMutate, limitOauthSensitiveRoute] },
+    async (request, reply) => {
+      const parsedBody = parseOauthQuotaBatchRefreshPayload(request.body);
+      if (!parsedBody.success) {
+        return reply.code(400).send({ message: parsedBody.error });
+      }
+      const accountIds = Array.isArray(parsedBody.data.accountIds) ? parsedBody.data.accountIds : [];
+      if (accountIds.length === 0) {
+        return reply.code(400).send({ message: 'accountIds is required' });
+      }
+      if (accountIds.length > MAX_OAUTH_QUOTA_BATCH_SIZE) {
+        return reply.code(400).send({
+          message: `accountIds must contain at most ${MAX_OAUTH_QUOTA_BATCH_SIZE} items`,
+        });
+      }
+      return refreshOauthConnectionQuotaBatch(accountIds);
+    },
+  );
+
+  app.post<{ Body: unknown }>(
+    '/api/oauth/import',
+    { preHandler: [limitOauthConnectionMutate, limitOauthSensitiveRoute] },
+    async (request, reply) => {
+      const parsedBody = parseOauthImportPayload(request.body);
+      if (!parsedBody.success) {
+        return reply.code(400).send({ message: parsedBody.error });
+      }
+      const data = parsedBody.data.data;
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return reply.code(400).send({ message: 'data must be a native oauth json object' });
+      }
+      try {
+        return await importOauthConnectionsFromNativeJson(data);
+      } catch (error: any) {
+        const message = error?.message || 'oauth import failed';
+        if (error instanceof OauthImportValidationError) {
+          return reply.code(400).send({ message });
+        }
+        request.log.error({ err: error }, 'oauth import failed');
+        return reply.code(500).send({ message });
       }
     },
   );

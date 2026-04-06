@@ -54,7 +54,6 @@ export function resetRequestRateLimitStore(): void {
 
 export function createRateLimitGuard(options: RateLimitOptions) {
   const message = options.message || DEFAULT_MESSAGE;
-
   return async function rateLimitGuard(request: FastifyRequest, reply: FastifyReply) {
     const nowMs = Date.now();
     pruneExpiredEntries(nowMs);

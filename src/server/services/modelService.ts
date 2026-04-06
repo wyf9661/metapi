@@ -11,8 +11,8 @@ import {
 } from './accountTokenService.js';
 import {
   getCredentialModeFromExtraConfig,
-  getProxyUrlFromExtraConfig,
   mergeAccountExtraConfig,
+  resolveProxyUrlFromExtraConfig,
   requiresManagedAccountTokens,
   resolvePlatformUserId,
   supportsDirectAccountRoutingConnection,
@@ -109,9 +109,32 @@ export type ModelRefreshResult =
   | ModelRefreshSuccessResult;
 
 type ModelDiscoveryAccountRow = typeof schema.accounts.$inferSelect;
-type ModelDiscoveryRetryError = {
-  refreshedAccount?: ModelDiscoveryAccountRow;
-};
+const REFRESHED_OAUTH_ACCOUNT = Symbol('refreshedOauthAccount');
+
+function throwWithRefreshedOauthAccount(error: unknown, account: ModelDiscoveryAccountRow): never {
+  if (error && typeof error === 'object') {
+    Object.defineProperty(error, REFRESHED_OAUTH_ACCOUNT, {
+      value: account,
+      configurable: true,
+    });
+    throw error;
+  }
+
+  const wrapped = new Error(String(error || 'oauth model discovery failed'));
+  Object.defineProperty(wrapped, REFRESHED_OAUTH_ACCOUNT, {
+    value: account,
+    configurable: true,
+  });
+  throw wrapped;
+}
+
+function getRefreshedOauthAccountFromError(error: unknown): ModelDiscoveryAccountRow | null {
+  if (!error || typeof error !== 'object') return null;
+  return (
+    (error as Record<symbol, ModelDiscoveryAccountRow | undefined>)[REFRESHED_OAUTH_ACCOUNT]
+    || null
+  );
+}
 
 function looksLikeHtmlJsonParseError(message: string): boolean {
   const lowered = String(message || '').trim().toLowerCase();
@@ -339,21 +362,9 @@ async function retryOauthModelDiscoveryWithRefresh<T>(input: {
         account: discoveryAccount,
       };
     } catch (retryError) {
-      if (retryError && typeof retryError === 'object') {
-        (retryError as ModelDiscoveryRetryError).refreshedAccount = discoveryAccount;
-        throw retryError;
-      }
-      const wrappedError = new Error(String(retryError || 'model discovery retry failed')) as Error & ModelDiscoveryRetryError;
-      wrappedError.refreshedAccount = discoveryAccount;
-      throw wrappedError;
+      throwWithRefreshedOauthAccount(retryError, discoveryAccount);
     }
   }
-}
-
-function extractRefreshedDiscoveryAccount(error: unknown): ModelDiscoveryAccountRow | null {
-  if (!error || typeof error !== 'object') return null;
-  const refreshedAccount = (error as ModelDiscoveryRetryError).refreshedAccount;
-  return refreshedAccount ?? null;
 }
 
 export async function refreshModelsForAccount(
@@ -373,7 +384,7 @@ export async function refreshModelsForAccount(
   const site = row.sites;
   const oauth = getOauthInfoFromAccount(account);
   const adapter = getAdapter(site.platform);
-  const accountProxyUrl = getProxyUrlFromExtraConfig(account.extraConfig);
+  const accountProxyUrl = resolveProxyUrlFromExtraConfig(account.extraConfig);
 
   const restoreAvailabilityOnFailure = options?.allowInactive === true;
   const previousAccountTokens = restoreAvailabilityOnFailure
@@ -507,7 +518,7 @@ export async function refreshModelsForAccount(
         discoveredApiToken: false,
       });
     } catch (err) {
-      discoveryAccount = extractRefreshedDiscoveryAccount(err) ?? discoveryAccount;
+      discoveryAccount = getRefreshedOauthAccountFromError(err) || discoveryAccount;
       const rawMessage = (err as { message?: string })?.message || 'codex model discovery failed';
       const errorCode = classifyModelDiscoveryError(rawMessage);
       const errorMessage = `Codex 模型获取失败（${rawMessage}）`;
@@ -587,7 +598,7 @@ export async function refreshModelsForAccount(
         discoveredApiToken: false,
       });
     } catch (err) {
-      discoveryAccount = extractRefreshedDiscoveryAccount(err) ?? discoveryAccount;
+      discoveryAccount = getRefreshedOauthAccountFromError(err) || discoveryAccount;
       const rawMessage = (err as { message?: string })?.message || 'claude oauth model discovery failed';
       const errorCode = classifyModelDiscoveryError(rawMessage);
       const errorMessage = `Claude OAuth 模型获取失败（${rawMessage}）`;
@@ -761,7 +772,7 @@ export async function refreshModelsForAccount(
         discoveredApiToken: false,
       });
     } catch (err) {
-      discoveryAccount = extractRefreshedDiscoveryAccount(err) ?? discoveryAccount;
+      discoveryAccount = getRefreshedOauthAccountFromError(err) || discoveryAccount;
       const rawMessage = (err as { message?: string })?.message || 'antigravity model discovery failed';
       const errorCode = classifyModelDiscoveryError(rawMessage);
       const errorMessage = `Antigravity 模型获取失败（${rawMessage}）`;

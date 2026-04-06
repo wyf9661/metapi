@@ -650,6 +650,7 @@ export type OAuthConnectionInfo = {
   lastModelSyncAt?: string | null;
   lastModelSyncError?: string | null;
   proxyUrl?: string | null;
+  useSystemProxy?: boolean;
   site?: { id: number; name: string; url: string; platform: string } | null;
 };
 
@@ -831,7 +832,7 @@ export const api = {
 
   // OAuth
   getOAuthProviders: () => request('/api/oauth/providers') as Promise<{ providers: OAuthProviderInfo[] }>,
-  startOAuthProvider: (provider: string, data?: { accountId?: number; projectId?: string; proxyUrl?: string | null }) => request(`/api/oauth/providers/${encodeURIComponent(provider)}/start`, {
+  startOAuthProvider: (provider: string, data?: { accountId?: number; projectId?: string; proxyUrl?: string | null; useSystemProxy?: boolean }) => request(`/api/oauth/providers/${encodeURIComponent(provider)}/start`, {
     method: 'POST',
     body: JSON.stringify(data || {}),
   }) as Promise<OAuthStartResponse>,
@@ -850,7 +851,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ accountIds }),
   }) as Promise<OAuthQuotaBatchRefreshResponse>,
-  rebindOAuthConnection: (accountId: number, data?: { proxyUrl?: string | null }) => request(`/api/oauth/connections/${accountId}/rebind`, {
+  rebindOAuthConnection: (accountId: number, data?: { proxyUrl?: string | null; useSystemProxy?: boolean }) => request(`/api/oauth/connections/${accountId}/rebind`, {
     method: 'POST',
     body: JSON.stringify(data || {}),
   }) as Promise<OAuthStartResponse>,

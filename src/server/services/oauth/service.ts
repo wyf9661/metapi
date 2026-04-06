@@ -1,7 +1,12 @@
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
-import { getProxyUrlFromExtraConfig, mergeAccountExtraConfig } from '../accountExtraConfig.js';
+import {
+  getProxyUrlFromExtraConfig,
+  getUseSystemProxyFromExtraConfig,
+  mergeAccountExtraConfig,
+  resolveProxyUrlFromExtraConfig,
+} from '../accountExtraConfig.js';
 import { refreshModelsForAccount } from '../modelService.js';
 import * as routeRefreshWorkflow from '../routeRefreshWorkflow.js';
 import {
@@ -14,6 +19,7 @@ import { getOAuthLoopbackCallbackServerState } from './localCallbackServer.js';
 import {
   getOAuthProviderDefinition,
   listOAuthProviderDefinitions,
+  type OAuthProviderId,
   type OAuthProviderDefinition,
 } from './providers.js';
 import { ensureOauthProviderSite } from './oauthSiteRegistry.js';
@@ -36,6 +42,7 @@ import { buildQuotaSnapshotFromOauthInfo, refreshOauthQuotaSnapshot } from './qu
 
 type OAuthProviderMetadata = ReturnType<typeof listOauthProviders>[number];
 const MANUAL_CALLBACK_DELAY_MS = 15_000;
+const OAUTH_QUOTA_BATCH_REFRESH_CONCURRENCY = 4;
 type OauthProviderHeaderAccountInput = OauthIdentityCarrierLike & {
   extraConfig?: OauthExtraConfigInput;
 };
@@ -48,6 +55,30 @@ type OAuthStartInstructions = {
   sshTunnelCommand?: string;
   sshTunnelKeyCommand?: string;
 };
+
+type ImportedNativeOauthJson = {
+  type?: unknown;
+  access_token?: unknown;
+  refresh_token?: unknown;
+  id_token?: unknown;
+  email?: unknown;
+  account_id?: unknown;
+  account_key?: unknown;
+  expired?: unknown;
+  disabled?: unknown;
+  last_refresh?: unknown;
+};
+
+export class OauthImportValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OauthImportValidationError';
+  }
+}
+
+function throwOauthImportValidationError(message: string): never {
+  throw new OauthImportValidationError(message);
+}
 
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase();
@@ -128,6 +159,193 @@ function asNonEmptyString(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function asPositiveInteger(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value.trim(), 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+}
+
+function decodeJwtPayload(token?: string): Record<string, unknown> | null {
+  const raw = asNonEmptyString(token);
+  if (!raw) return null;
+  const parts = raw.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(parts[1] || '', 'base64url').toString('utf8')) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function mapImportedOauthProvider(platform: string): OAuthProviderId | null {
+  const normalized = platform.trim().toLowerCase();
+  if (normalized === 'codex') return 'codex';
+  if (normalized === 'claude') return 'claude';
+  if (normalized === 'gemini-cli') return 'gemini-cli';
+  if (normalized === 'antigravity') return 'antigravity';
+  if (normalized === 'openai') return 'codex';
+  if (normalized === 'anthropic' || normalized === 'claude') return 'claude';
+  if (normalized === 'gemini' || normalized === 'gemini-cli') return 'gemini-cli';
+  if (normalized === 'antigravity') return 'antigravity';
+  return null;
+}
+
+function resolveImportedOauthIdentity(
+  provider: OAuthProviderId,
+  credentials: Record<string, unknown>,
+): {
+  accessToken: string;
+  refreshToken?: string;
+  tokenExpiresAt?: number;
+  idToken?: string;
+  email?: string;
+  accountKey?: string;
+  accountId?: string;
+  planType?: string;
+  projectId?: string;
+  providerData?: Record<string, unknown>;
+} {
+  const idToken = asNonEmptyString(credentials.id_token);
+  const claims = decodeJwtPayload(idToken);
+  const openAiAuth = isRecord(claims?.['https://api.openai.com/auth'])
+    ? claims?.['https://api.openai.com/auth'] as Record<string, unknown>
+    : null;
+  const accessToken = asNonEmptyString(credentials.access_token)
+    || asNonEmptyString(credentials.session_token);
+  if (!accessToken) {
+    throwOauthImportValidationError('oauth credentials missing access_token/session_token');
+  }
+
+  const email = asNonEmptyString(credentials.email)
+    || asNonEmptyString(claims?.email);
+  const accountKey = asNonEmptyString(credentials.chatgpt_account_id)
+    || asNonEmptyString(credentials.account_key)
+    || asNonEmptyString(credentials.account_id)
+    || asNonEmptyString(openAiAuth?.chatgpt_account_id)
+    || email;
+  const planType = asNonEmptyString(credentials.plan_type)
+    || asNonEmptyString(openAiAuth?.chatgpt_plan_type);
+  const tokenExpiresAt = asPositiveInteger(credentials.expires_at)
+    || asPositiveInteger(credentials.token_expires_at);
+  const providerData = isRecord(credentials.provider_data)
+    ? credentials.provider_data as Record<string, unknown>
+    : undefined;
+  const projectId = asNonEmptyString(credentials.project_id)
+    || asNonEmptyString(credentials.cloudaicompanionProject);
+
+  return {
+    accessToken,
+    ...(asNonEmptyString(credentials.refresh_token) ? { refreshToken: asNonEmptyString(credentials.refresh_token) } : {}),
+    ...(tokenExpiresAt ? { tokenExpiresAt } : {}),
+    ...(idToken ? { idToken } : {}),
+    ...(email ? { email } : {}),
+    ...(accountKey ? { accountKey, accountId: accountKey } : {}),
+    ...(planType ? { planType } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(providerData ? { providerData } : {}),
+  };
+}
+
+function parseImportedOauthExpiry(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+  if (typeof value !== 'string') {
+    throwOauthImportValidationError('invalid oauth expired timestamp');
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (/^\d+$/.test(trimmed)) {
+    const parsedNumeric = Number.parseInt(trimmed, 10);
+    if (Number.isFinite(parsedNumeric) && parsedNumeric > 0) {
+      return parsedNumeric;
+    }
+  }
+  const parsed = Date.parse(trimmed);
+  if (Number.isNaN(parsed)) {
+    throwOauthImportValidationError('invalid oauth expired timestamp');
+  }
+  return parsed;
+}
+
+function resolveImportedNativeOauthIdentity(
+  payload: ImportedNativeOauthJson,
+): {
+  provider: OAuthProviderId;
+  disabled: boolean;
+  exchange: {
+    accessToken: string;
+    refreshToken?: string;
+    tokenExpiresAt?: number;
+    email?: string;
+    accountKey?: string;
+    accountId?: string;
+    planType?: string;
+    idToken?: string;
+    providerData?: Record<string, unknown>;
+  };
+  name: string;
+} {
+  const rawType = asNonEmptyString(payload.type);
+  const payloadRecord = payload as Record<string, unknown>;
+  if (rawType === 'sub2api-data' || rawType === 'sub2api-bundle' || Array.isArray(payloadRecord.accounts)) {
+    throwOauthImportValidationError('native oauth json expected; sub2api envelopes are no longer supported');
+  }
+  if ('accounts' in payloadRecord || 'proxies' in payloadRecord || 'version' in payloadRecord || 'exported_at' in payloadRecord) {
+    throwOauthImportValidationError('native oauth json expected; sub2api envelopes are no longer supported');
+  }
+  const provider = rawType ? mapImportedOauthProvider(rawType) : null;
+  if (!provider) {
+    throwOauthImportValidationError(`unsupported oauth import type: ${rawType || 'unknown'}`);
+  }
+
+  const accessToken = asNonEmptyString(payload.access_token);
+  if (!accessToken) {
+    throwOauthImportValidationError('oauth credentials missing access_token');
+  }
+
+  const derived = resolveImportedOauthIdentity(provider, payload as Record<string, unknown>);
+  const explicitEmail = asNonEmptyString(payload.email);
+  const explicitAccountId = asNonEmptyString(payload.account_id);
+  const explicitAccountKey = asNonEmptyString(payload.account_key);
+  const tokenExpiresAt = parseImportedOauthExpiry(payload.expired);
+
+  const exchange = {
+    ...derived,
+    accessToken,
+    ...(asNonEmptyString(payload.refresh_token) ? { refreshToken: asNonEmptyString(payload.refresh_token) } : {}),
+    ...(tokenExpiresAt ? { tokenExpiresAt } : {}),
+    ...(explicitEmail ? { email: explicitEmail } : {}),
+    ...(explicitAccountId ? { accountId: explicitAccountId } : {}),
+    ...(explicitAccountKey ? { accountKey: explicitAccountKey } : {}),
+  };
+
+  if (!exchange.accountKey && exchange.accountId) {
+    exchange.accountKey = exchange.accountId;
+  }
+  if (!exchange.accountId && exchange.accountKey) {
+    exchange.accountId = exchange.accountKey;
+  }
+
+  return {
+    provider,
+    disabled: payload.disabled === true,
+    exchange,
+    name: explicitEmail || explicitAccountKey || explicitAccountId || derived.email || derived.accountKey || derived.accountId || provider,
+  };
+}
+
 function buildUsername(input: {
   email?: string;
   accountKey?: string;
@@ -141,6 +359,55 @@ async function getNextAccountSortOrder(): Promise<number> {
     maxSortOrder: sql<number>`COALESCE(MAX(${schema.accounts.sortOrder}), -1)`,
   }).from(schema.accounts).get();
   return (row?.maxSortOrder ?? -1) + 1;
+}
+
+async function revertPersistedOauthAccount(input: {
+  accountId: number;
+  created: boolean;
+  previousAccount: typeof schema.accounts.$inferSelect | null;
+}) {
+  if (input.created) {
+    await db.delete(schema.accounts).where(eq(schema.accounts.id, input.accountId)).run();
+    return;
+  }
+
+  if (!input.previousAccount) return;
+  await db.update(schema.accounts).set({
+    siteId: input.previousAccount.siteId,
+    username: input.previousAccount.username,
+    accessToken: input.previousAccount.accessToken,
+    apiToken: input.previousAccount.apiToken,
+    checkinEnabled: input.previousAccount.checkinEnabled,
+    status: input.previousAccount.status,
+    oauthProvider: input.previousAccount.oauthProvider,
+    oauthAccountKey: input.previousAccount.oauthAccountKey,
+    oauthProjectId: input.previousAccount.oauthProjectId,
+    extraConfig: input.previousAccount.extraConfig,
+    updatedAt: input.previousAccount.updatedAt,
+  }).where(eq(schema.accounts.id, input.previousAccount.id)).run();
+}
+
+async function mapWithConcurrency<T, TResult>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<TResult>,
+): Promise<TResult[]> {
+  if (items.length === 0) return [];
+
+  const results = new Array<TResult>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(Math.trunc(concurrency), items.length));
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= items.length) return;
+      results[currentIndex] = await mapper(items[currentIndex]!, currentIndex);
+    }
+  }));
+
+  return results;
 }
 
 async function ensureOauthSite(definition: OAuthProviderDefinition) {
@@ -202,6 +469,8 @@ async function upsertOauthAccount(input: {
   };
   rebindAccountId?: number;
   proxyUrl?: string | null;
+  useSystemProxy?: boolean;
+  persistedStatus?: 'active' | 'disabled';
 }) {
   const site = await ensureOauthSite(input.definition);
   const existing = await findExistingOauthAccount({
@@ -231,6 +500,7 @@ async function upsertOauthAccount(input: {
   const extraConfig = mergeAccountExtraConfig(existing?.extraConfig, {
     credentialMode: 'session',
     ...(input.proxyUrl !== undefined ? { proxyUrl: input.proxyUrl } : {}),
+    ...(input.useSystemProxy !== undefined ? { useSystemProxy: input.useSystemProxy } : {}),
     oauth: buildStoredOauthState(oauth),
   });
 
@@ -241,7 +511,7 @@ async function upsertOauthAccount(input: {
       accessToken: input.exchange.accessToken,
       apiToken: null,
       checkinEnabled: false,
-      status: 'disabled',
+      status: input.persistedStatus ?? 'disabled',
       oauthProvider: input.definition.metadata.provider,
       oauthAccountKey: oauth.accountKey || oauth.accountId || null,
       oauthProjectId: oauth.projectId || null,
@@ -265,7 +535,7 @@ async function upsertOauthAccount(input: {
       accessToken: input.exchange.accessToken,
       apiToken: null,
       checkinEnabled: false,
-      status: 'active',
+      status: input.persistedStatus ?? 'active',
       oauthProvider: input.definition.metadata.provider,
       oauthAccountKey: oauth.accountKey || oauth.accountId || null,
       oauthProjectId: oauth.projectId || null,
@@ -294,6 +564,7 @@ export async function startOauthProviderFlow(input: {
   rebindAccountId?: number;
   projectId?: string;
   proxyUrl?: string | null;
+  useSystemProxy?: boolean;
   requestOrigin?: string;
 }) {
   const definition = getOAuthProviderDefinition(input.provider);
@@ -311,6 +582,7 @@ export async function startOauthProviderFlow(input: {
     rebindAccountId: input.rebindAccountId,
     projectId: input.projectId,
     proxyUrl: input.proxyUrl,
+    useSystemProxy: input.useSystemProxy,
   });
   return {
     provider: input.provider,
@@ -366,9 +638,11 @@ export async function handleOauthCallback(input: {
   }
 
   try {
-    const resolvedProxyUrl = session.proxyUrl == null
-      ? await resolveOauthProviderProxyUrl(input.provider)
-      : session.proxyUrl;
+    const resolvedProxyUrl = session.proxyUrl
+      ? session.proxyUrl
+      : session.useSystemProxy
+        ? resolveProxyUrlFromExtraConfig({ useSystemProxy: true })
+        : await resolveOauthProviderProxyUrl(input.provider);
     const exchange = await definition.exchangeAuthorizationCode({
       code,
       state: input.state,
@@ -382,6 +656,7 @@ export async function handleOauthCallback(input: {
       exchange,
       rebindAccountId: session.rebindAccountId,
       proxyUrl: session.proxyUrl,
+      useSystemProxy: session.useSystemProxy,
     });
     if (!account) {
       markOauthSessionError(input.state, 'failed to persist oauth account');
@@ -393,23 +668,11 @@ export async function handleOauthCallback(input: {
       previousAccount ? { allowInactive: true } : undefined,
     );
     if (refreshResult.status !== 'success') {
-      if (created) {
-        await db.delete(schema.accounts).where(eq(schema.accounts.id, account.id)).run();
-      } else if (previousAccount) {
-        await db.update(schema.accounts).set({
-          siteId: previousAccount.siteId,
-          username: previousAccount.username,
-          accessToken: previousAccount.accessToken,
-          apiToken: previousAccount.apiToken,
-          checkinEnabled: previousAccount.checkinEnabled,
-          status: previousAccount.status,
-          oauthProvider: previousAccount.oauthProvider,
-          oauthAccountKey: previousAccount.oauthAccountKey,
-          oauthProjectId: previousAccount.oauthProjectId,
-          extraConfig: previousAccount.extraConfig,
-          updatedAt: previousAccount.updatedAt,
-        }).where(eq(schema.accounts.id, previousAccount.id)).run();
-      }
+      await revertPersistedOauthAccount({
+        accountId: account.id,
+        created,
+        previousAccount,
+      });
       await routeRefreshWorkflow.rebuildRoutesOnly();
       const errorMessage = refreshResult.errorMessage || `${input.provider} model discovery failed`;
       markOauthSessionError(input.state, errorMessage);
@@ -549,6 +812,7 @@ export async function listOauthConnections(options: {
       lastModelSyncAt: oauth.lastModelSyncAt,
       lastModelSyncError: oauth.lastModelSyncError,
       proxyUrl: getProxyUrlFromExtraConfig(row.accounts.extraConfig),
+      useSystemProxy: getUseSystemProxyFromExtraConfig(row.accounts.extraConfig),
       site: {
         id: row.sites.id,
         name: row.sites.name,
@@ -582,11 +846,121 @@ export async function refreshOauthConnectionQuota(accountId: number) {
   return { success: true, quota };
 }
 
+export async function refreshOauthConnectionQuotaBatch(accountIds: number[]) {
+  const uniqueIds = Array.from(new Set(accountIds.filter((id) => Number.isFinite(id) && id > 0)));
+  const items = await mapWithConcurrency(uniqueIds, OAUTH_QUOTA_BATCH_REFRESH_CONCURRENCY, async (accountId) => {
+    try {
+      const { quota } = await refreshOauthConnectionQuota(accountId);
+      return {
+        accountId,
+        success: true,
+        quota,
+      };
+    } catch (error: any) {
+      return {
+        accountId,
+        success: false,
+        error: error?.message || 'oauth quota refresh failed',
+      };
+    }
+  }) satisfies Array<{
+    accountId: number;
+    success: boolean;
+    quota?: ReturnType<typeof buildQuotaSnapshotFromOauthInfo>;
+    error?: string;
+  }>;
+
+  const refreshed = items.filter((item) => item.success).length;
+  const failed = items.length - refreshed;
+  return {
+    success: failed === 0,
+    refreshed,
+    failed,
+    items,
+  };
+}
+
+export async function importOauthConnectionsFromNativeJson(data: unknown) {
+  if (!isRecord(data)) {
+    throwOauthImportValidationError('data must be a native oauth json object');
+  }
+
+  const payload = data as ImportedNativeOauthJson;
+
+  const items: Array<{
+    name: string;
+    status: 'imported' | 'skipped' | 'failed';
+    accountId?: number;
+    provider?: string;
+    message?: string;
+  }> = [];
+  const changedAccountIds: number[] = [];
+  let resolvedProvider: OAuthProviderId | null = null;
+  let persistedAccount: Awaited<ReturnType<typeof upsertOauthAccount>> | null = null;
+  try {
+    const resolved = resolveImportedNativeOauthIdentity(payload);
+    resolvedProvider = resolved.provider;
+    const definition = getOAuthProviderDefinition(resolved.provider);
+    if (!definition) {
+      throw new Error(`unsupported oauth provider: ${resolved.provider}`);
+    }
+    const persisted = await upsertOauthAccount({
+      definition,
+      exchange: resolved.exchange,
+      persistedStatus: resolved.disabled ? 'disabled' : 'active',
+    });
+    persistedAccount = persisted;
+    changedAccountIds.push(persisted.account.id);
+    items.push({
+      name: resolved.name,
+      status: 'imported',
+      provider: resolved.provider,
+      accountId: persisted.account.id,
+    });
+  } catch (error: any) {
+    items.push({
+      name: asNonEmptyString(payload.email) || asNonEmptyString(payload.account_key) || asNonEmptyString(payload.account_id) || asNonEmptyString(payload.type) || 'unknown',
+      status: 'failed',
+      provider: asNonEmptyString(payload.type) || undefined,
+      message: error?.message || 'oauth import failed',
+    });
+    throw error;
+  }
+
+  if (changedAccountIds.length > 0) {
+    const importedAccountId = changedAccountIds[0]!;
+    if (persistedAccount && (persistedAccount.account.status || 'active') === 'active') {
+      const refreshResult = await refreshModelsForAccount(
+        importedAccountId,
+        persistedAccount.previousAccount ? { allowInactive: true } : undefined,
+      );
+      if (refreshResult.status !== 'success') {
+        await revertPersistedOauthAccount({
+          accountId: importedAccountId,
+          created: persistedAccount.created,
+          previousAccount: persistedAccount.previousAccount,
+        });
+        await routeRefreshWorkflow.rebuildRoutesOnly();
+        throw new Error(refreshResult.errorMessage || `${resolvedProvider || 'oauth'} model discovery failed`);
+      }
+    }
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+  }
+
+  return {
+    success: true,
+    imported: 1,
+    skipped: 0,
+    failed: 0,
+    items,
+  };
+}
+
 export async function startOauthRebindFlow(
   accountId: number,
-  options?: { requestOrigin?: string; proxyUrl?: string | null },
+  options?: { requestOrigin?: string; proxyUrl?: string | null; useSystemProxy?: boolean },
 ) {
-  const { requestOrigin, proxyUrl } = options ?? {};
+  const { requestOrigin, proxyUrl, useSystemProxy } = options ?? {};
   const account = await db.select().from(schema.accounts)
     .where(eq(schema.accounts.id, accountId))
     .get();
@@ -604,6 +978,9 @@ export async function startOauthRebindFlow(
     proxyUrl: proxyUrl !== undefined
       ? proxyUrl
       : (getProxyUrlFromExtraConfig(account.extraConfig) ?? undefined),
+    useSystemProxy: useSystemProxy !== undefined
+      ? useSystemProxy
+      : (getUseSystemProxyFromExtraConfig(account.extraConfig) || undefined),
     requestOrigin,
   });
 }
