@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { eq } from 'drizzle-orm';
+import { resolveUpdateReminderCandidate } from '../../shared/updateCenterReminder.js';
 import { waitForBackgroundTaskToReachTerminalState } from '../../test-fixtures/backgroundTaskTestUtils.js';
 
 const {
@@ -38,6 +39,12 @@ vi.mock('../../services/updateCenterHelperClient.js', () => ({
 type DbModule = typeof import('../../db/index.js');
 type ConfigModule = typeof import('../../config.js');
 type RuntimeStateModule = typeof import('../../services/updateCenterRuntimeStateService.js');
+
+function getNextPatchVersion(version: string) {
+  const match = String(version).trim().match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) return '999.0.0';
+  return `${match[1]}.${match[2]}.${Number.parseInt(match[3], 10) + 1}`;
+}
 
 describe('update center routes', () => {
   let app: FastifyInstance;
@@ -115,13 +122,14 @@ describe('update center routes', () => {
   });
 
   it('persists config and returns status with both version channels and helper summary', async () => {
-    fetchLatestStableGitHubReleaseMock.mockResolvedValue({
+    const currentVersion = (await import('../../services/updateCenterVersionService.js')).getCurrentRuntimeVersion();
+    const githubRelease = {
       source: 'github-release',
       rawVersion: 'v1.3.0',
       normalizedVersion: '1.3.0',
       url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
-    });
-    fetchLatestDockerHubTagMock.mockResolvedValue({
+    } as const;
+    const dockerHubTag = {
       source: 'docker-hub-tag',
       rawVersion: 'latest',
       normalizedVersion: 'latest',
@@ -130,8 +138,8 @@ describe('update center routes', () => {
       displayVersion: 'latest @ sha256:efb2ee655386',
       publishedAt: '2026-03-29T11:54:35.591877Z',
       url: null,
-    });
-    getUpdateCenterHelperStatusMock.mockResolvedValue({
+    } as const;
+    const helperStatus = {
       ok: true,
       releaseName: 'metapi',
       namespace: 'ai',
@@ -151,7 +159,10 @@ describe('update center routes', () => {
           imageDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         },
       ],
-    });
+    } as const;
+    fetchLatestStableGitHubReleaseMock.mockResolvedValue(githubRelease);
+    fetchLatestDockerHubTagMock.mockResolvedValue(dockerHubTag);
+    getUpdateCenterHelperStatusMock.mockResolvedValue(helperStatus);
 
     const saveResponse = await app.inject({
       method: 'PUT',
@@ -179,8 +190,18 @@ describe('update center routes', () => {
     });
 
     expect(statusResponse.statusCode).toBe(200);
+    const expectedReminder = resolveUpdateReminderCandidate({
+      currentVersion,
+      helper: {
+        imageTag: helperStatus.imageTag,
+        imageDigest: helperStatus.imageDigest,
+      },
+      githubRelease,
+      dockerHubTag,
+    });
+    expect(expectedReminder).toBeTruthy();
     expect(statusResponse.json()).toMatchObject({
-      currentVersion: '1.2.3',
+      currentVersion,
       config: {
         enabled: true,
         namespace: 'ai',
@@ -210,9 +231,9 @@ describe('update center routes', () => {
       runtime: {
         lastCheckedAt: expect.any(String),
         lastCheckError: null,
-        lastResolvedSource: 'github-release',
-        lastResolvedDisplayVersion: '1.3.0',
-        lastResolvedCandidateKey: 'github-release:1.3.0',
+        lastResolvedSource: expectedReminder?.source,
+        lastResolvedDisplayVersion: expectedReminder?.displayVersion,
+        lastResolvedCandidateKey: expectedReminder?.candidateKey,
         lastNotifiedCandidateKey: null,
         lastNotifiedAt: null,
       },
@@ -519,6 +540,8 @@ describe('update center routes', () => {
   });
 
   it('dedupes deploy requests while a task is already running', async () => {
+    const currentVersion = (await import('../../services/updateCenterVersionService.js')).getCurrentRuntimeVersion();
+    const targetVersion = getNextPatchVersion(currentVersion);
     await saveValidConfig();
 
     let releaseDeploy: (() => void) | null = null;
@@ -533,7 +556,7 @@ describe('update center routes', () => {
       return {
         success: true,
         targetSource: 'github-release',
-        targetTag: '1.3.0',
+        targetTag: targetVersion,
         targetDigest: null,
         previousRevision: '12',
         finalRevision: '13',
@@ -547,7 +570,7 @@ describe('update center routes', () => {
       url: '/api/update-center/deploy',
       payload: {
         source: 'github-release',
-        targetVersion: '1.3.0',
+        targetVersion,
       },
     });
 
@@ -556,7 +579,7 @@ describe('update center routes', () => {
       url: '/api/update-center/deploy',
       payload: {
         source: 'github-release',
-        targetVersion: '1.3.0',
+        targetVersion,
       },
     });
 
