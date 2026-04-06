@@ -25,6 +25,7 @@ vi.mock('undici', () => ({
 }));
 
 type DbModule = typeof import('../../db/index.js');
+type RouteRefreshWorkflowModule = typeof import('../../services/routeRefreshWorkflow.js');
 
 function buildJwt(payload: Record<string, unknown>) {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value))
@@ -63,6 +64,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   let app: FastifyInstance;
   let db: DbModule['db'];
   let schema: DbModule['schema'];
+  let rebuildRoutesOnly: RouteRefreshWorkflowModule['rebuildRoutesOnly'];
   let dataDir = '';
 
   beforeAll(async () => {
@@ -72,8 +74,10 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     await import('../../db/migrate.js');
     const dbModule = await import('../../db/index.js');
     const routesModule = await import('./oauth.js');
+    const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
     db = dbModule.db;
     schema = dbModule.schema;
+    rebuildRoutesOnly = routeRefreshWorkflow.rebuildRoutesOnly;
 
     app = Fastify();
     await app.register(routesModule.oauthRoutes);
@@ -85,7 +89,9 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     undiciProxyAgentCtorMock.mockReset();
     config.systemProxyUrl = '';
     const { resetRequestRateLimitStore } = await import('../../middleware/requestRateLimit.js');
+    const { resetOauthSensitiveRouteLimiterForTests } = await import('./oauth.js');
     resetRequestRateLimitStore();
+    resetOauthSensitiveRouteLimiterForTests();
     await db.delete(schema.routeChannels).run();
     await db.delete(schema.tokenRoutes).run();
     await db.delete(schema.tokenModelAvailability).run();
@@ -111,6 +117,9 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
+      defaults: {
+        systemProxyConfigured: false,
+      },
       providers: expect.arrayContaining([
         expect.objectContaining({
           provider: 'codex',
@@ -139,6 +148,54 @@ describe('oauth routes', { timeout: 15_000 }, () => {
           requiresProjectId: false,
         }),
       ]),
+    });
+  });
+
+  it('exposes system proxy defaults in oauth provider metadata when configured', async () => {
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/providers',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      defaults: {
+        systemProxyConfigured: true,
+      },
+    });
+  });
+
+  it('reports when runtime system proxy is configured in oauth provider defaults', async () => {
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/providers',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      defaults: {
+        systemProxyConfigured: true,
+      },
+    });
+  });
+
+  it('reports when the runtime system proxy is configured', async () => {
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/providers',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      defaults: {
+        systemProxyConfigured: true,
+      },
     });
   });
 
@@ -199,6 +256,18 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
     expect(invalidUseSystemProxyResponse.statusCode).toBe(400);
     expect(invalidUseSystemProxyResponse.json()).toMatchObject({
+      message: 'Invalid useSystemProxy. Expected boolean.',
+    });
+
+    const invalidProxyPatchResponse = await app.inject({
+      method: 'PATCH',
+      url: '/api/oauth/connections/1/proxy',
+      payload: {
+        useSystemProxy: 'yes',
+      },
+    });
+    expect(invalidProxyPatchResponse.statusCode).toBe(400);
+    expect(invalidProxyPatchResponse.json()).toMatchObject({
       message: 'Invalid useSystemProxy. Expected boolean.',
     });
   });
@@ -572,7 +641,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         },
       }),
     }).returning().get();
-
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -854,6 +922,172 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
   });
 
+  it('updates oauth account proxy settings without starting reauthorization and refreshes route coverage', async () => {
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [{ id: 'gpt-5.4' }],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'proxy-save@example.com',
+      accessToken: 'oauth-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'proxy-save-account',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'proxy-save-account',
+          accountKey: 'proxy-save-account',
+          email: 'proxy-save@example.com',
+          planType: 'plus',
+          refreshToken: 'oauth-refresh-token',
+        },
+      }),
+    }).returning().get();
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/oauth/connections/${account.id}/proxy`,
+      payload: {
+        proxyUrl: null,
+        useSystemProxy: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({
+      success: true,
+    });
+    expect(body).not.toHaveProperty('state');
+    expect(body).not.toHaveProperty('authorizationUrl');
+
+    const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(JSON.parse(stored?.extraConfig || '{}')).toMatchObject({
+      useSystemProxy: true,
+      proxyUrl: null,
+    });
+
+    const modelRows = await db.select().from(schema.modelAvailability).all();
+    expect(modelRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        accountId: account.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      }),
+    ]));
+
+    const routeRows = await db.select().from(schema.routeChannels).all();
+    expect(routeRows).toHaveLength(1);
+
+    const connectionsResponse = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/connections',
+    });
+    expect(connectionsResponse.statusCode).toBe(200);
+    expect(connectionsResponse.json()).toMatchObject({
+      items: [
+        expect.objectContaining({
+          accountId: account.id,
+          useSystemProxy: true,
+          routeChannelCount: 1,
+        }),
+      ],
+    });
+  });
+
+  it('updates oauth account proxy settings without creating a new oauth session and rebuilds routes', async () => {
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [{ id: 'gpt-5.4' }],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'proxy-update@example.com',
+      accessToken: 'oauth-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'chatgpt-proxy-update',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'chatgpt-proxy-update',
+          accountKey: 'chatgpt-proxy-update',
+          email: 'proxy-update@example.com',
+          refreshToken: 'oauth-refresh-token',
+        },
+      }),
+    }).returning().get();
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/oauth/connections/${account.id}/proxy`,
+      payload: {
+        proxyUrl: null,
+        useSystemProxy: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({
+      success: true,
+      accountId: account.id,
+      useSystemProxy: true,
+      proxyUrl: null,
+    });
+    expect(body).not.toHaveProperty('state');
+    expect(body).not.toHaveProperty('authorizationUrl');
+
+    const updated = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(JSON.parse(updated?.extraConfig || '{}')).toMatchObject({
+      useSystemProxy: true,
+      proxyUrl: null,
+      oauth: {
+        email: 'proxy-update@example.com',
+      },
+    });
+
+    const routes = await db.select().from(schema.tokenRoutes).all();
+    const channels = await db.select().from(schema.routeChannels).all();
+    expect(routes).toHaveLength(1);
+    expect(channels).toHaveLength(1);
+    expect(channels[0]).toMatchObject({
+      accountId: account.id,
+    });
+  });
+
   it('marks oauth session as error and avoids creating a connection when manual codex callback model discovery fails', async () => {
     const jwt = buildJwt({
       email: 'codex-fail@example.com',
@@ -966,7 +1200,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         },
       }),
     }).returning().get();
-
     const reboundJwt = buildJwt({
       email: 'codex-existing@example.com',
       'https://api.openai.com/auth': {
@@ -1071,7 +1304,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         },
       }),
     }).returning().get();
-
     const reboundJwt = buildJwt({
       email: 'codex-existing@example.com',
       'https://api.openai.com/auth': {
@@ -1142,6 +1374,143 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       accessToken: 'rebound-access-token',
       oauthAccountKey: 'chatgpt-account-rebound',
     });
+  });
+
+  it('rolls back a codex rebind when route rebuild fails after model discovery succeeds', async () => {
+    const originalJwt = buildJwt({
+      email: 'codex-existing@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'chatgpt-account-existing',
+        chatgpt_plan_type: 'team',
+      },
+    });
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+    const existing = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'codex-existing@example.com',
+      accessToken: 'stable-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'chatgpt-account-existing',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'chatgpt-account-existing',
+          accountKey: 'chatgpt-account-existing',
+          email: 'codex-existing@example.com',
+          planType: 'team',
+          refreshToken: 'stable-refresh-token',
+          idToken: originalJwt,
+        },
+      }),
+    }).returning().get();
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: existing.id,
+        modelName: 'gpt-4.1',
+        available: true,
+        isManual: false,
+      },
+      {
+        accountId: existing.id,
+        modelName: 'manual-kept',
+        available: true,
+        isManual: true,
+      },
+    ]).run();
+
+    const reboundJwt = buildJwt({
+      email: 'codex-existing@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'chatgpt-account-rebound',
+        chatgpt_plan_type: 'plus',
+      },
+    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'rebound-access-token',
+          refresh_token: 'rebound-refresh-token',
+          id_token: reboundJwt,
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [{ id: 'gpt-5.4' }],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      });
+
+    const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    const rebuildSpy = vi.spyOn(routeRefreshWorkflow, 'rebuildRoutesOnly');
+    rebuildSpy.mockImplementationOnce(async () => {
+      throw new Error('route rebuild failed');
+    });
+
+    try {
+      const startResponse = await app.inject({
+        method: 'POST',
+        url: '/api/oauth/providers/codex/start',
+        headers: {
+          host: 'metapi.example',
+          'x-forwarded-proto': 'https',
+        },
+        payload: {
+          accountId: existing.id,
+        },
+      });
+      const startBody = startResponse.json() as { state: string };
+
+      const callbackResponse = await app.inject({
+        method: 'POST',
+        url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
+        payload: {
+          callbackUrl: `http://localhost:1455/auth/callback?state=${encodeURIComponent(startBody.state)}&code=oauth-code-rebind-route-rebuild-fail`,
+        },
+      });
+
+      expect(callbackResponse.statusCode).toBe(500);
+
+      const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, existing.id)).get();
+      expect(stored).toMatchObject({
+        id: existing.id,
+        status: 'active',
+        accessToken: 'stable-access-token',
+        oauthAccountKey: 'chatgpt-account-existing',
+      });
+      expect(JSON.parse(stored?.extraConfig || '{}')).toMatchObject({
+        oauth: {
+          refreshToken: 'stable-refresh-token',
+          idToken: originalJwt,
+        },
+      });
+      const restoredModels = await db.select({
+        modelName: schema.modelAvailability.modelName,
+        isManual: schema.modelAvailability.isManual,
+      }).from(schema.modelAvailability)
+        .where(eq(schema.modelAvailability.accountId, existing.id))
+        .all();
+      expect(restoredModels).toEqual(expect.arrayContaining([
+        expect.objectContaining({ modelName: 'gpt-4.1', isManual: false }),
+        expect.objectContaining({ modelName: 'manual-kept', isManual: true }),
+      ]));
+    } finally {
+      rebuildSpy.mockRestore();
+    }
   });
 
   it('fails codex oauth onboarding when token exchange does not expose chatgpt_account_id', async () => {
@@ -2227,6 +2596,83 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         available: true,
       }),
     ]));
+    const routeRows = await db.select().from(schema.routeChannels).all();
+    expect(routeRows).toHaveLength(1);
+    expect(routeRows[0]).toMatchObject({
+      accountId: accounts[0]?.id,
+    });
+  });
+
+  it('imports multiple native oauth json objects with shared proxy settings in one request', async () => {
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [{ id: 'gpt-5.4' }],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [{ id: 'gpt-5.4-mini' }],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/import',
+      payload: {
+        items: [
+          {
+            type: 'codex',
+            access_token: 'imported-access-token-a',
+            refresh_token: 'imported-refresh-token-a',
+            email: 'imported-batch-a@example.com',
+            account_id: 'chatgpt-imported-a',
+          },
+          {
+            type: 'codex',
+            access_token: 'imported-access-token-b',
+            refresh_token: 'imported-refresh-token-b',
+            email: 'imported-batch-b@example.com',
+            account_id: 'chatgpt-imported-b',
+          },
+        ],
+        useSystemProxy: true,
+        proxyUrl: null,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      imported: 2,
+      failed: 0,
+      skipped: 0,
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(2);
+    expect(accounts.map((row) => JSON.parse(row.extraConfig || '{}'))).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        useSystemProxy: true,
+        proxyUrl: null,
+      }),
+      expect.objectContaining({
+        useSystemProxy: true,
+        proxyUrl: null,
+      }),
+    ]));
+
+    const modelRows = await db.select().from(schema.modelAvailability).all();
+    expect(modelRows).toHaveLength(2);
+    const routeRows = await db.select().from(schema.routeChannels).all();
+    expect(routeRows).toHaveLength(2);
   });
 
   it('prefers explicit identity fields from native oauth json and preserves disabled status', async () => {
@@ -2381,6 +2827,1028 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
     expect(await db.select().from(schema.accounts).all()).toHaveLength(0);
     expect(await db.select().from(schema.modelAvailability).all()).toHaveLength(0);
+  });
+
+  it('continues batch oauth import after one item fails and returns a full summary', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [{ id: 'gpt-5.4' }],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: 'unavailable' }),
+        text: async () => 'unavailable',
+      });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/import',
+      payload: {
+        items: [
+          {
+            type: 'codex',
+            access_token: 'batch-success-access-token',
+            refresh_token: 'batch-success-refresh-token',
+            id_token: buildJwt({
+              email: 'batch-success@example.com',
+              'https://api.openai.com/auth': {
+                chatgpt_account_id: 'batch-success-account',
+                chatgpt_plan_type: 'plus',
+              },
+            }),
+          },
+          {
+            type: 'codex',
+            access_token: 'batch-failed-access-token',
+            refresh_token: 'batch-failed-refresh-token',
+            id_token: buildJwt({
+              email: 'batch-failed@example.com',
+              'https://api.openai.com/auth': {
+                chatgpt_account_id: 'batch-failed-account',
+                chatgpt_plan_type: 'plus',
+              },
+            }),
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: false,
+      imported: 1,
+      failed: 1,
+      items: [
+        expect.objectContaining({
+          name: 'batch-success@example.com',
+          status: 'imported',
+        }),
+        expect.objectContaining({
+          name: 'batch-failed@example.com',
+          status: 'failed',
+          message: 'Codex 模型获取失败（HTTP 503: unavailable）',
+        }),
+      ],
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]?.username).toBe('batch-success@example.com');
+    expect(await db.select().from(schema.modelAvailability).all()).toHaveLength(1);
+  });
+
+  it('rate limits repeated oauth import requests', async () => {
+    const { resetOauthSensitiveRouteLimiterForTests } = await import('./oauth.js');
+    resetOauthSensitiveRouteLimiterForTests({ points: 1 });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [{ id: 'gpt-5.4' }],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const payload = {
+      data: {
+        type: 'codex',
+        access_token: 'limited-access-token',
+        refresh_token: 'limited-refresh-token',
+        id_token: buildJwt({
+          email: 'limited@example.com',
+          'https://api.openai.com/auth': {
+            chatgpt_account_id: 'limited-account',
+            chatgpt_plan_type: 'plus',
+          },
+        }),
+      },
+    };
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/import',
+      payload,
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/import',
+      payload,
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(429);
+    expect(second.json()).toMatchObject({
+      message: '请求过于频繁，请稍后再试',
+    });
+  });
+
+  it('creates and deletes an oauth route unit, collapsing grouped accounts into one route channel', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const accountA = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'pool-a@example.com',
+      accessToken: 'oauth-access-token-a',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'chatgpt-pool-a',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'chatgpt-pool-a',
+          accountKey: 'chatgpt-pool-a',
+          email: 'pool-a@example.com',
+        },
+      }),
+    }).returning().get();
+    const accountB = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'pool-b@example.com',
+      accessToken: 'oauth-access-token-b',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'chatgpt-pool-b',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'chatgpt-pool-b',
+          accountKey: 'chatgpt-pool-b',
+          email: 'pool-b@example.com',
+        },
+      }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: accountA.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+      {
+        accountId: accountB.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+    ]).run();
+
+    const { rebuildRoutesOnly } = await import('../../services/routeRefreshWorkflow.js');
+    await rebuildRoutesOnly();
+    expect(await db.select().from(schema.routeChannels).all()).toHaveLength(2);
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/route-units',
+      payload: {
+        accountIds: [accountA.id, accountB.id],
+        name: 'Codex Pool',
+        strategy: 'round_robin',
+      },
+    });
+
+    expect(createResponse.statusCode).toBe(200);
+    expect(createResponse.json()).toMatchObject({
+      success: true,
+      routeUnit: expect.objectContaining({
+        name: 'Codex Pool',
+        strategy: 'round_robin',
+        memberCount: 2,
+      }),
+    });
+
+    const groupedChannels = await db.select().from(schema.routeChannels).all();
+    expect(groupedChannels).toHaveLength(1);
+    expect(groupedChannels[0]).toMatchObject({
+      oauthRouteUnitId: expect.any(Number),
+    });
+
+    const listResponse = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/connections',
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          accountId: accountA.id,
+          routeUnit: expect.objectContaining({
+            name: 'Codex Pool',
+            strategy: 'round_robin',
+            memberCount: 2,
+          }),
+        }),
+        expect.objectContaining({
+          accountId: accountB.id,
+          routeUnit: expect.objectContaining({
+            name: 'Codex Pool',
+            strategy: 'round_robin',
+            memberCount: 2,
+          }),
+        }),
+      ]),
+    });
+
+    const deleteResponse = await app.inject({
+      method: 'DELETE',
+      url: `/api/oauth/route-units/${groupedChannels[0]?.oauthRouteUnitId}`,
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toMatchObject({ success: true });
+
+    const splitChannels = await db.select().from(schema.routeChannels).all();
+    expect(splitChannels).toHaveLength(2);
+    expect(splitChannels.every((row) => row.oauthRouteUnitId == null)).toBe(true);
+  });
+
+  it('rolls back oauth route unit creation when route rebuild fails', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const first = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'rollback-create-a@example.com',
+      accessToken: 'rollback-create-access-a',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'rollback-create-a',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'rollback-create-a',
+          accountKey: 'rollback-create-a',
+          email: 'rollback-create-a@example.com',
+          refreshToken: 'rollback-create-refresh-a',
+        },
+      }),
+    }).returning().get();
+    const second = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'rollback-create-b@example.com',
+      accessToken: 'rollback-create-access-b',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'rollback-create-b',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'rollback-create-b',
+          accountKey: 'rollback-create-b',
+          email: 'rollback-create-b@example.com',
+          refreshToken: 'rollback-create-refresh-b',
+        },
+      }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      { accountId: first.id, modelName: 'gpt-5.4', available: true },
+      { accountId: second.id, modelName: 'gpt-5.4', available: true },
+    ]).run();
+
+    const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+    const rebuildSpy = vi.spyOn(routeRefreshWorkflow, 'rebuildRoutesOnly');
+    rebuildSpy.mockImplementationOnce(async () => {
+      throw new Error('route rebuild failed');
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/oauth/route-units',
+        payload: {
+          accountIds: [first.id, second.id],
+          name: 'Rollback Pool',
+          strategy: 'round_robin',
+        },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({
+        message: 'route rebuild failed',
+      });
+      expect(await db.select().from(schema.oauthRouteUnits).all()).toHaveLength(0);
+      expect(await db.select().from(schema.oauthRouteUnitMembers).all()).toHaveLength(0);
+      const routeChannels = await db.select().from(schema.routeChannels).all();
+      expect(routeChannels).toHaveLength(2);
+      expect(routeChannels.every((row) => row.oauthRouteUnitId == null)).toBe(true);
+    } finally {
+      rebuildSpy.mockRestore();
+    }
+  });
+
+  it('rolls back oauth route unit deletion when route rebuild fails', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const first = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'rollback-delete-a@example.com',
+      accessToken: 'rollback-delete-access-a',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'rollback-delete-a',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'rollback-delete-a',
+          accountKey: 'rollback-delete-a',
+          email: 'rollback-delete-a@example.com',
+          refreshToken: 'rollback-delete-refresh-a',
+        },
+      }),
+    }).returning().get();
+    const second = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'rollback-delete-b@example.com',
+      accessToken: 'rollback-delete-access-b',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'rollback-delete-b',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'rollback-delete-b',
+          accountKey: 'rollback-delete-b',
+          email: 'rollback-delete-b@example.com',
+          refreshToken: 'rollback-delete-refresh-b',
+        },
+      }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      { accountId: first.id, modelName: 'gpt-5.4', available: true },
+      { accountId: second.id, modelName: 'gpt-5.4', available: true },
+    ]).run();
+
+    const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/route-units',
+      payload: {
+        accountIds: [first.id, second.id],
+        name: 'Rollback Delete Pool',
+        strategy: 'round_robin',
+      },
+    });
+    expect(createResponse.statusCode).toBe(200);
+    const routeUnitId = createResponse.json().routeUnit?.id as number;
+
+    const rebuildSpy = vi.spyOn(routeRefreshWorkflow, 'rebuildRoutesOnly');
+    rebuildSpy.mockImplementationOnce(async () => {
+      throw new Error('route rebuild failed');
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/oauth/route-units/${routeUnitId}`,
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({
+        message: 'route rebuild failed',
+      });
+
+      const routeUnits = await db.select().from(schema.oauthRouteUnits).all();
+      expect(routeUnits).toHaveLength(1);
+      const members = await db.select().from(schema.oauthRouteUnitMembers).all();
+      expect(members).toHaveLength(2);
+      const routeChannels = await db.select().from(schema.routeChannels).all();
+      expect(routeChannels).toHaveLength(1);
+      expect(routeChannels[0]?.oauthRouteUnitId).toBe(routeUnitId);
+    } finally {
+      rebuildSpy.mockRestore();
+    }
+  });
+
+  it('accepts normalized route unit strategy values from the HTTP payload', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const first = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'normalized-strategy-a@example.com',
+      accessToken: 'normalized-strategy-access-a',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'normalized-strategy-a',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'normalized-strategy-a',
+          accountKey: 'normalized-strategy-a',
+          email: 'normalized-strategy-a@example.com',
+          refreshToken: 'normalized-strategy-refresh-a',
+        },
+      }),
+    }).returning().get();
+    const second = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'normalized-strategy-b@example.com',
+      accessToken: 'normalized-strategy-access-b',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'normalized-strategy-b',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'normalized-strategy-b',
+          accountKey: 'normalized-strategy-b',
+          email: 'normalized-strategy-b@example.com',
+          refreshToken: 'normalized-strategy-refresh-b',
+        },
+      }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      { accountId: first.id, modelName: 'gpt-5.4', available: true },
+      { accountId: second.id, modelName: 'gpt-5.4', available: true },
+    ]).run();
+
+    const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/route-units',
+      payload: {
+        accountIds: [first.id, second.id],
+        name: 'Normalized Strategy Pool',
+        strategy: '  STICK_UNTIL_UNAVAILABLE  ',
+      },
+    });
+
+    expect(createResponse.statusCode).toBe(200);
+    expect(createResponse.json()).toMatchObject({
+      success: true,
+      routeUnit: expect.objectContaining({
+        strategy: 'stick_until_unavailable',
+      }),
+    });
+  });
+
+  it('imports multiple oauth json objects in one batch and applies the explicit system proxy setting', async () => {
+    config.systemProxyUrl = 'http://127.0.0.1:7890';
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [{ id: 'gpt-5.4' }],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/import',
+      payload: {
+        items: [
+          {
+            type: 'codex',
+            access_token: 'batch-active-access-token',
+            refresh_token: 'batch-active-refresh-token',
+            email: 'batch-active@example.com',
+            account_id: 'batch-active-account',
+          },
+          {
+            type: 'codex',
+            access_token: 'batch-disabled-access-token',
+            refresh_token: 'batch-disabled-refresh-token',
+            email: 'batch-disabled@example.com',
+            account_id: 'batch-disabled-account',
+            disabled: true,
+          },
+        ],
+        useSystemProxy: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      imported: 2,
+      failed: 0,
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(2);
+    expect(accounts.map((account) => JSON.parse(account.extraConfig || '{}'))).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        useSystemProxy: true,
+      }),
+    ]));
+
+    const routeRows = await db.select().from(schema.routeChannels).all();
+    expect(routeRows).toHaveLength(1);
+  });
+
+  it('creates and deletes an oauth route unit, collapsing and restoring route channels', async () => {
+    const buildOauthExtraConfig = (email: string, accountKey: string) => JSON.stringify({
+      credentialMode: 'session',
+      oauth: {
+        provider: 'codex',
+        accountId: accountKey,
+        accountKey,
+        email,
+        planType: 'plus',
+        refreshToken: `refresh-${accountKey}`,
+      },
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const first = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'pool-a@example.com',
+      accessToken: 'access-a',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'pool-a',
+      extraConfig: buildOauthExtraConfig('pool-a@example.com', 'pool-a'),
+    }).returning().get();
+    const second = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'pool-b@example.com',
+      accessToken: 'access-b',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'pool-b',
+      extraConfig: buildOauthExtraConfig('pool-b@example.com', 'pool-b'),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: first.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+      {
+        accountId: second.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+    ]).run();
+
+    const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+
+    expect(await db.select().from(schema.routeChannels).all()).toHaveLength(2);
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/route-units',
+      payload: {
+        accountIds: [first.id, second.id],
+        name: 'Codex Pool',
+        strategy: 'round_robin',
+      },
+    });
+
+    expect(createResponse.statusCode).toBe(200);
+    const createBody = createResponse.json() as { success?: boolean; routeUnit?: { id?: number } };
+    expect(createBody).toMatchObject({
+      success: true,
+      routeUnit: {
+        name: 'Codex Pool',
+        strategy: 'round_robin',
+      },
+    });
+
+    const routeRows = await db.select().from(schema.routeChannels).all();
+    expect(routeRows).toHaveLength(1);
+
+    const connectionsResponse = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/connections',
+    });
+    expect(connectionsResponse.statusCode).toBe(200);
+    expect(connectionsResponse.json()).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          accountId: first.id,
+          routeUnit: expect.objectContaining({
+            name: 'Codex Pool',
+            strategy: 'round_robin',
+            memberCount: 2,
+          }),
+        }),
+        expect.objectContaining({
+          accountId: second.id,
+          routeUnit: expect.objectContaining({
+            name: 'Codex Pool',
+            strategy: 'round_robin',
+            memberCount: 2,
+          }),
+        }),
+      ]),
+    });
+
+    const deleteResponse = await app.inject({
+      method: 'DELETE',
+      url: `/api/oauth/route-units/${createBody.routeUnit?.id}`,
+    });
+
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toMatchObject({
+      success: true,
+    });
+    expect(await db.select().from(schema.routeChannels).all()).toHaveLength(2);
+  });
+
+  it('updates oauth account proxy settings without starting a new oauth session and refreshes routes', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        models: [{ id: 'gpt-5.4' }],
+      }),
+      text: async () => JSON.stringify({ ok: true }),
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'codex-save-proxy@example.com',
+      accessToken: 'oauth-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'codex-save-proxy-account',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'codex-save-proxy-account',
+          accountKey: 'codex-save-proxy-account',
+          email: 'codex-save-proxy@example.com',
+        },
+      }),
+    }).returning().get();
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/oauth/connections/${account.id}/proxy`,
+      payload: {
+        useSystemProxy: true,
+        proxyUrl: null,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      useSystemProxy: true,
+      proxyUrl: null,
+      refreshedRoutes: true,
+    });
+
+    const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(JSON.parse(stored?.extraConfig || '{}')).toMatchObject({
+      useSystemProxy: true,
+      proxyUrl: null,
+    });
+
+    const modelRows = await db.select().from(schema.modelAvailability).all();
+    expect(modelRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        accountId: account.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      }),
+    ]));
+
+    const routeRows = await db.select().from(schema.tokenRoutes).all();
+    expect(routeRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        modelPattern: 'gpt-5.4',
+      }),
+    ]));
+    const routeChannels = await db.select().from(schema.routeChannels).all();
+    expect(routeChannels).toHaveLength(1);
+  });
+
+  it('imports multiple native oauth json objects in one batch request and applies shared system proxy settings', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [{ id: 'gpt-5.4' }],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [{ id: 'gpt-5.4-mini' }],
+        }),
+        text: async () => JSON.stringify({ ok: true }),
+      });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/import',
+      payload: {
+        items: [
+          {
+            type: 'codex',
+            access_token: 'batch-import-access-a',
+            refresh_token: 'batch-import-refresh-a',
+            id_token: buildJwt({
+              email: 'batch-a@example.com',
+              'https://api.openai.com/auth': {
+                chatgpt_account_id: 'batch-account-a',
+                chatgpt_plan_type: 'plus',
+              },
+            }),
+          },
+          {
+            type: 'codex',
+            access_token: 'batch-import-access-b',
+            refresh_token: 'batch-import-refresh-b',
+            id_token: buildJwt({
+              email: 'batch-b@example.com',
+              'https://api.openai.com/auth': {
+                chatgpt_account_id: 'batch-account-b',
+                chatgpt_plan_type: 'team',
+              },
+            }),
+          },
+        ],
+        useSystemProxy: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      imported: 2,
+      failed: 0,
+    });
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(2);
+    expect(accounts.map((row) => JSON.parse(row.extraConfig || '{}').useSystemProxy)).toEqual([true, true]);
+
+    const modelRows = await db.select().from(schema.modelAvailability).all();
+    expect(modelRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ modelName: 'gpt-5.4', available: true }),
+      expect.objectContaining({ modelName: 'gpt-5.4-mini', available: true }),
+    ]));
+
+    const routeRows = await db.select().from(schema.tokenRoutes).all();
+    expect(routeRows.map((row) => row.modelPattern).sort()).toEqual(['gpt-5.4', 'gpt-5.4-mini']);
+    const routeChannels = await db.select().from(schema.routeChannels).all();
+    expect(routeChannels).toHaveLength(2);
+  });
+
+  it('creates an oauth route unit and collapses multiple oauth accounts into one route channel', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const accountA = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'pool-a@example.com',
+      accessToken: 'oauth-access-pool-a',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'pool-account-a',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'pool-account-a',
+          accountKey: 'pool-account-a',
+          email: 'pool-a@example.com',
+        },
+      }),
+    }).returning().get();
+    const accountB = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'pool-b@example.com',
+      accessToken: 'oauth-access-pool-b',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'pool-account-b',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'pool-account-b',
+          accountKey: 'pool-account-b',
+          email: 'pool-b@example.com',
+        },
+      }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: accountA.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+      {
+        accountId: accountB.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+    ]).run();
+    await rebuildRoutesOnly();
+
+    expect(await db.select().from(schema.routeChannels).all()).toHaveLength(2);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/route-units',
+      payload: {
+        accountIds: [accountA.id, accountB.id],
+        name: 'Codex Pool',
+        strategy: 'round_robin',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      routeUnit: {
+        name: 'Codex Pool',
+        strategy: 'round_robin',
+        memberCount: 2,
+      },
+    });
+
+    const routeChannels = await db.select().from(schema.routeChannels).all();
+    expect(routeChannels).toHaveLength(1);
+
+    const connectionsResponse = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/connections',
+    });
+    expect(connectionsResponse.statusCode).toBe(200);
+    expect(connectionsResponse.json()).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          accountId: accountA.id,
+          routeParticipation: expect.objectContaining({
+            kind: 'route_unit',
+            routeUnitId: expect.any(Number),
+            name: 'Codex Pool',
+            strategy: 'round_robin',
+            memberCount: 2,
+          }),
+        }),
+        expect.objectContaining({
+          accountId: accountB.id,
+          routeParticipation: expect.objectContaining({
+            kind: 'route_unit',
+            routeUnitId: expect.any(Number),
+            name: 'Codex Pool',
+            strategy: 'round_robin',
+            memberCount: 2,
+          }),
+        }),
+      ]),
+    });
+  });
+
+  it('deletes an oauth route unit and restores single-account route channels', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const accountA = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'split-a@example.com',
+      accessToken: 'oauth-access-split-a',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'split-account-a',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'split-account-a',
+          accountKey: 'split-account-a',
+          email: 'split-a@example.com',
+        },
+      }),
+    }).returning().get();
+    const accountB = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'split-b@example.com',
+      accessToken: 'oauth-access-split-b',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'split-account-b',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'codex',
+          accountId: 'split-account-b',
+          accountKey: 'split-account-b',
+          email: 'split-b@example.com',
+        },
+      }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: accountA.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+      {
+        accountId: accountB.id,
+        modelName: 'gpt-5.4',
+        available: true,
+      },
+    ]).run();
+    await rebuildRoutesOnly();
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/route-units',
+      payload: {
+        accountIds: [accountA.id, accountB.id],
+        name: 'Codex Split Pool',
+        strategy: 'stick_until_unavailable',
+      },
+    });
+    const routeUnitId = (created.json() as { routeUnit?: { id?: number } }).routeUnit?.id;
+    expect(typeof routeUnitId).toBe('number');
+
+    const deleteResponse = await app.inject({
+      method: 'DELETE',
+      url: `/api/oauth/route-units/${routeUnitId}`,
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toMatchObject({
+      success: true,
+    });
+
+    const routeChannels = await db.select().from(schema.routeChannels).all();
+    expect(routeChannels).toHaveLength(2);
+
+    const connectionsResponse = await app.inject({
+      method: 'GET',
+      url: '/api/oauth/connections',
+    });
+    expect(connectionsResponse.statusCode).toBe(200);
+    const items = (connectionsResponse.json() as { items: Array<{ routeParticipation?: { kind?: string } | null }> }).items;
+    expect(items.every((item) => item.routeParticipation?.kind !== 'route_unit')).toBe(true);
   });
 
   it('keeps multiple codex team workspaces with the same email as separate oauth connections', async () => {

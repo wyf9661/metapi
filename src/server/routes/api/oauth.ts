@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { createRateLimitGuard } from '../../middleware/requestRateLimit.js';
 import {
+  getOauthProviderDefaults,
   deleteOauthConnection,
   importOauthConnectionsFromNativeJson,
   getOauthSessionStatus,
@@ -14,13 +15,22 @@ import {
   startOauthProviderFlow,
   startOauthRebindFlow,
   submitOauthManualCallback,
+  updateOauthConnectionProxySettings,
 } from '../../services/oauth/service.js';
+import {
+  createOauthRouteUnit,
+  deleteOauthRouteUnit,
+  updateOauthRouteUnit,
+} from '../../services/oauth/routeUnitService.js';
 import { parseSiteProxyUrlInput } from '../../services/siteProxy.js';
 import {
   parseOauthConnectionRebindPayload,
+  parseOauthConnectionProxyUpdatePayload,
   parseOauthImportPayload,
   parseOauthManualCallbackPayload,
   parseOauthQuotaBatchRefreshPayload,
+  parseOauthRouteUnitCreatePayload,
+  parseOauthRouteUnitUpdatePayload,
   parseOauthStartPayload,
 } from '../../contracts/supportRoutePayloads.js';
 
@@ -60,21 +70,47 @@ const limitOauthConnectionMutate = createRateLimitGuard({
   windowMs: 60_000,
 });
 
-const oauthSensitiveRouteLimiter = new RateLimiterMemory({
-  keyPrefix: 'oauth-connection-sensitive',
-  points: 20,
-  duration: 60,
-});
+function createOauthSensitiveRouteLimiter(keyPrefix: string, points = 20) {
+  return new RateLimiterMemory({
+    keyPrefix,
+    points,
+    duration: 60,
+  });
+}
+
+let oauthQuotaBatchRefreshLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-quota-batch');
+let oauthProxyUpdateLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-proxy');
+let oauthImportLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-import');
+let oauthRouteUnitCreateLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-route-unit-create');
+let oauthRouteUnitUpdateLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-route-unit-update');
+let oauthRouteUnitDeleteLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-route-unit-delete');
 const MAX_OAUTH_QUOTA_BATCH_SIZE = 100;
+
+export function resetOauthSensitiveRouteLimiterForTests(options: {
+  points?: number;
+} = {}): void {
+  const points = options.points ?? 20;
+  oauthQuotaBatchRefreshLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-quota-batch', points);
+  oauthProxyUpdateLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-proxy', points);
+  oauthImportLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-import', points);
+  oauthRouteUnitCreateLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-route-unit-create', points);
+  oauthRouteUnitUpdateLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-route-unit-update', points);
+  oauthRouteUnitDeleteLimiter = createOauthSensitiveRouteLimiter('oauth-connection-sensitive-route-unit-delete', points);
+}
+
+function sendOauthSensitiveRateLimit(reply: FastifyReply, error: unknown): void {
+  const retryState = error instanceof RateLimiterRes ? error : null;
+  const retryAfterSec = Math.max(1, Math.ceil((retryState?.msBeforeNext ?? 60_000) / 1000));
+  reply.code(429).header('retry-after', String(retryAfterSec))
+    .send({ message: '请求过于频繁，请稍后再试' });
+}
 
 async function limitOauthSensitiveRoute(request: FastifyRequest, reply: FastifyReply) {
   try {
-    await oauthSensitiveRouteLimiter.consume(request.ip);
+    await oauthQuotaBatchRefreshLimiter.consume(request.ip);
   } catch (error) {
-    const retryState = error instanceof RateLimiterRes ? error : null;
-    const retryAfterSec = Math.max(1, Math.ceil((retryState?.msBeforeNext ?? 60_000) / 1000));
-    reply.code(429).header('retry-after', String(retryAfterSec))
-      .send({ message: '请求过于频繁，请稍后再试' });
+    sendOauthSensitiveRateLimit(reply, error);
+    return reply;
   }
 }
 
@@ -137,6 +173,7 @@ function resolveRequestOrigin(request: FastifyRequest): string | undefined {
 
 export async function oauthRoutes(app: FastifyInstance) {
   app.get('/api/oauth/providers', { preHandler: [limitOauthProviderRead] }, async () => ({
+    defaults: getOauthProviderDefaults(),
     providers: listOauthProviders(),
   }));
 
@@ -282,6 +319,46 @@ export async function oauthRoutes(app: FastifyInstance) {
     },
   );
 
+  app.patch<{ Params: { accountId: string }; Body: unknown }>(
+    '/api/oauth/connections/:accountId/proxy',
+    { preHandler: [limitOauthConnectionMutate] },
+    async (request, reply) => {
+      try {
+        await oauthProxyUpdateLimiter.consume(request.ip);
+      } catch (error) {
+        sendOauthSensitiveRateLimit(reply, error);
+        return;
+      }
+      const parsedBody = parseOauthConnectionProxyUpdatePayload(request.body);
+      if (!parsedBody.success) {
+        return reply.code(400).send({ message: parsedBody.error });
+      }
+
+      const accountId = parsePositiveInteger(request.params.accountId);
+      if (accountId === null) {
+        return reply.code(400).send({ message: 'invalid account id' });
+      }
+      const normalizedProxyUrl = parseSiteProxyUrlInput(parsedBody.data.proxyUrl);
+      if (normalizedProxyUrl.present && !normalizedProxyUrl.valid) {
+        return reply.code(400).send({ message: 'invalid proxy url' });
+      }
+      try {
+        return await updateOauthConnectionProxySettings({
+          accountId,
+          proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
+          useSystemProxy: parsedBody.data.useSystemProxy,
+        });
+      } catch (error: any) {
+        const message = error?.message || 'oauth account not found';
+        if (message === 'oauth account not found' || message === 'account is not managed by oauth') {
+          return reply.code(404).send({ message });
+        }
+        request.log.error({ err: error }, 'oauth proxy update failed');
+        return reply.code(500).send({ message });
+      }
+    },
+  );
+
   app.delete<{ Params: { accountId: string } }>(
     '/api/oauth/connections/:accountId',
     { preHandler: [limitOauthConnectionMutate] },
@@ -337,24 +414,147 @@ export async function oauthRoutes(app: FastifyInstance) {
 
   app.post<{ Body: unknown }>(
     '/api/oauth/import',
-    { preHandler: [limitOauthConnectionMutate, limitOauthSensitiveRoute] },
+    { preHandler: [limitOauthConnectionMutate] },
     async (request, reply) => {
+      try {
+        await oauthImportLimiter.consume(request.ip);
+      } catch (error) {
+        sendOauthSensitiveRateLimit(reply, error);
+        return;
+      }
       const parsedBody = parseOauthImportPayload(request.body);
       if (!parsedBody.success) {
         return reply.code(400).send({ message: parsedBody.error });
       }
+      const hasBatchItems = Array.isArray(parsedBody.data.items) && parsedBody.data.items.length > 0;
       const data = parsedBody.data.data;
-      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      if (!hasBatchItems && (!data || typeof data !== 'object' || Array.isArray(data))) {
         return reply.code(400).send({ message: 'data must be a native oauth json object' });
       }
+      const normalizedProxyUrl = parseSiteProxyUrlInput(parsedBody.data.proxyUrl);
+      if (normalizedProxyUrl.present && !normalizedProxyUrl.valid) {
+        return reply.code(400).send({ message: 'invalid proxy url' });
+      }
       try {
-        return await importOauthConnectionsFromNativeJson(data);
+        return await importOauthConnectionsFromNativeJson({
+          data,
+          items: hasBatchItems ? parsedBody.data.items : undefined,
+          proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
+          useSystemProxy: parsedBody.data.useSystemProxy,
+        });
       } catch (error: any) {
         const message = error?.message || 'oauth import failed';
         if (error instanceof OauthImportValidationError) {
           return reply.code(400).send({ message });
         }
         request.log.error({ err: error }, 'oauth import failed');
+        return reply.code(500).send({ message });
+      }
+    },
+  );
+
+  app.post<{ Body: unknown }>(
+    '/api/oauth/route-units',
+    { preHandler: [limitOauthConnectionMutate] },
+    async (request, reply) => {
+      try {
+        await oauthRouteUnitCreateLimiter.consume(request.ip);
+      } catch (error) {
+        sendOauthSensitiveRateLimit(reply, error);
+        return;
+      }
+      const parsedBody = parseOauthRouteUnitCreatePayload(request.body);
+      if (!parsedBody.success) {
+        return reply.code(400).send({ message: parsedBody.error });
+      }
+      try {
+        return await createOauthRouteUnit({
+          accountIds: Array.isArray(parsedBody.data.accountIds) ? parsedBody.data.accountIds : [],
+          name: parsedBody.data.name || '',
+          strategy: parsedBody.data.strategy || 'round_robin',
+        });
+      } catch (error: any) {
+        const message = error?.message || 'oauth route unit creation failed';
+        if (message === 'oauth route unit accounts not found' || message === 'oauth route unit not found') {
+          return reply.code(404).send({ message });
+        }
+        if (
+          message === 'oauth route unit requires at least 2 accounts'
+          || message === 'oauth route unit name is required'
+          || message === 'invalid oauth route unit strategy'
+          || message === 'oauth route unit accounts already grouped'
+          || message === 'oauth route unit only supports oauth accounts'
+          || message === 'oauth route unit accounts must belong to the same site'
+          || message === 'oauth route unit accounts must share the same provider'
+        ) {
+          return reply.code(400).send({ message });
+        }
+        request.log.error({ err: error }, 'oauth route unit creation failed');
+        return reply.code(500).send({ message });
+      }
+    },
+  );
+
+  app.patch<{ Params: { routeUnitId: string }; Body: unknown }>(
+    '/api/oauth/route-units/:routeUnitId',
+    { preHandler: [limitOauthConnectionMutate] },
+    async (request, reply) => {
+      try {
+        await oauthRouteUnitUpdateLimiter.consume(request.ip);
+      } catch (error) {
+        sendOauthSensitiveRateLimit(reply, error);
+        return;
+      }
+      const parsedBody = parseOauthRouteUnitUpdatePayload(request.body);
+      if (!parsedBody.success) {
+        return reply.code(400).send({ message: parsedBody.error });
+      }
+      const routeUnitId = parsePositiveInteger(request.params.routeUnitId);
+      if (routeUnitId === null) {
+        return reply.code(400).send({ message: 'invalid route unit id' });
+      }
+      try {
+        return await updateOauthRouteUnit({
+          routeUnitId,
+          name: parsedBody.data.name,
+          strategy: parsedBody.data.strategy,
+        });
+      } catch (error: any) {
+        const message = error?.message || 'oauth route unit update failed';
+        if (message === 'oauth route unit not found') {
+          return reply.code(404).send({ message });
+        }
+        if (message === 'oauth route unit name is required' || message === 'invalid oauth route unit strategy') {
+          return reply.code(400).send({ message });
+        }
+        request.log.error({ err: error }, 'oauth route unit update failed');
+        return reply.code(500).send({ message });
+      }
+    },
+  );
+
+  app.delete<{ Params: { routeUnitId: string } }>(
+    '/api/oauth/route-units/:routeUnitId',
+    { preHandler: [limitOauthConnectionMutate] },
+    async (request, reply) => {
+      try {
+        await oauthRouteUnitDeleteLimiter.consume(request.ip);
+      } catch (error) {
+        sendOauthSensitiveRateLimit(reply, error);
+        return;
+      }
+      const routeUnitId = parsePositiveInteger(request.params.routeUnitId);
+      if (routeUnitId === null) {
+        return reply.code(400).send({ message: 'invalid route unit id' });
+      }
+      try {
+        return await deleteOauthRouteUnit(routeUnitId);
+      } catch (error: any) {
+        const message = error?.message || 'oauth route unit not found';
+        if (message === 'oauth route unit not found') {
+          return reply.code(404).send({ message });
+        }
+        request.log.error({ err: error }, 'oauth route unit deletion failed');
         return reply.code(500).send({ message });
       }
     },

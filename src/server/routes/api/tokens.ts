@@ -1,5 +1,6 @@
-﻿import { FastifyInstance } from 'fastify';
+﻿import { FastifyInstance, type FastifyReply } from 'fastify';
 import { and, eq, inArray } from 'drizzle-orm';
+import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { db, schema } from '../../db/index.js';
 import { requireInsertedRowId } from '../../db/insertHelpers.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
@@ -26,6 +27,10 @@ import {
   ROUTE_DECISION_REFRESH_DEDUPE_KEY,
   ROUTE_DECISION_REFRESH_TASK_TYPE,
 } from '../../services/routeDecisionRefreshService.js';
+import {
+  listOauthRouteUnitMembersByUnitIds,
+  loadOauthRouteUnitSummariesByIds,
+} from '../../services/oauth/routeUnitService.js';
 import { normalizeTokenRouteMode, type RouteMode } from '../../../shared/tokenRouteContract.js';
 import {
   parseRouteChannelBatchCreatePayload,
@@ -36,6 +41,32 @@ import {
   parseTokenRouteCreatePayload,
   parseTokenRouteUpdatePayload,
 } from '../../contracts/tokenRoutePayloads.js';
+
+function createTokenRouteReadLimiter(keyPrefix: string, points = 60) {
+  return new RateLimiterMemory({
+    keyPrefix,
+    points,
+    duration: 60,
+  });
+}
+
+let routeSummaryReadLimiter = createTokenRouteReadLimiter('token-routes-summary-read');
+let routeListReadLimiter = createTokenRouteReadLimiter('token-routes-list-read');
+
+export function resetTokenRouteReadLimitersForTests(options: {
+  summaryPoints?: number;
+  listPoints?: number;
+} = {}): void {
+  routeSummaryReadLimiter = createTokenRouteReadLimiter('token-routes-summary-read', options.summaryPoints ?? 60);
+  routeListReadLimiter = createTokenRouteReadLimiter('token-routes-list-read', options.listPoints ?? 60);
+}
+
+function sendTokenRouteRateLimit(reply: FastifyReply, error: unknown): void {
+  const retryState = error instanceof RateLimiterRes ? error : null;
+  const retryAfterSec = Math.max(1, Math.ceil((retryState?.msBeforeNext ?? 60_000) / 1000));
+  reply.code(429).header('retry-after', String(retryAfterSec))
+    .send({ success: false, message: '请求过于频繁，请稍后再试' });
+}
 
 function isExactModelPattern(modelPattern: string): boolean {
   const normalized = modelPattern.trim();
@@ -610,8 +641,14 @@ type RouteChannelSummary = {
   siteNames: Set<string>;
 };
 
-async function fetchChannelsForRouteRows(routes: RouteRow[]): Promise<Map<number, any[]>> {
+async function fetchChannelsForRouteRows(
+  routes: RouteRow[],
+  options: {
+    includeRouteUnitDetails?: boolean;
+  } = {},
+): Promise<Map<number, any[]>> {
   if (routes.length === 0) return new Map();
+  const includeRouteUnitDetails = options.includeRouteUnitDetails !== false;
 
   const explicitSourceRouteIds = Array.from(new Set(routes
     .filter((route) => isExplicitGroupRoute(route))
@@ -652,6 +689,18 @@ async function fetchChannelsForRouteRows(routes: RouteRow[]): Promise<Map<number
     .where(inArray(schema.routeChannels.routeId, actualRouteIds))
     .all();
 
+  const oauthRouteUnitIds: number[] = Array.from(new Set<number>(
+    channelRows
+      .map((row) => Number(row.route_channels.oauthRouteUnitId))
+      .filter((id): id is number => Number.isFinite(id) && id > 0),
+  ));
+  const routeUnitSummaries = includeRouteUnitDetails
+    ? await loadOauthRouteUnitSummariesByIds(oauthRouteUnitIds)
+    : new Map();
+  const routeUnitMembersByUnitId = includeRouteUnitDetails
+    ? await listOauthRouteUnitMembersByUnitIds(oauthRouteUnitIds)
+    : new Map();
+
   const channelsByActualRouteId = new Map<number, any[]>();
 
   for (const row of channelRows) {
@@ -662,6 +711,9 @@ async function fetchChannelsForRouteRows(routes: RouteRow[]): Promise<Map<number
       : null;
     const resolvedSourceModel = (row.route_channels.sourceModel || fallbackSourceModel || '').trim();
     if (!channelsByActualRouteId.has(routeId)) channelsByActualRouteId.set(routeId, []);
+    const routeUnit = row.route_channels.oauthRouteUnitId
+      ? routeUnitSummaries.get(row.route_channels.oauthRouteUnitId) || null
+      : null;
     channelsByActualRouteId.get(routeId)!.push({
       ...row.route_channels,
       sourceModel: resolvedSourceModel || null,
@@ -674,6 +726,19 @@ async function fetchChannelsForRouteRows(routes: RouteRow[]): Promise<Map<number
           accountId: row.account_tokens.accountId,
           enabled: row.account_tokens.enabled,
           isDefault: row.account_tokens.isDefault,
+        }
+        : null,
+      routeUnit: includeRouteUnitDetails && routeUnit
+        ? {
+          id: routeUnit.id,
+          name: routeUnit.name,
+          strategy: routeUnit.strategy,
+          memberCount: routeUnit.memberCount,
+          members: (routeUnitMembersByUnitId.get(routeUnit.id) || []).map((member) => ({
+            accountId: member.account.id,
+            username: member.account.username,
+            siteName: member.site.name,
+          })),
         }
         : null,
     });
@@ -703,7 +768,7 @@ async function fetchChannelsForRoutes(routeIds: number[]): Promise<Map<number, a
 }
 
 async function buildRouteChannelSummaryMap(routes: RouteRow[]): Promise<Map<number, RouteChannelSummary>> {
-  const channelsByRoute = await fetchChannelsForRouteRows(routes);
+  const channelsByRoute = await fetchChannelsForRouteRows(routes, { includeRouteUnitDetails: false });
   const summaryByRoute = new Map<number, RouteChannelSummary>();
   for (const route of routes) {
     const channels = channelsByRoute.get(route.id) || [];
@@ -738,7 +803,13 @@ export async function tokensRoutes(app: FastifyInstance) {
   });
 
   // Route summary (no channel details) for first-screen rendering
-  app.get('/api/routes/summary', async () => {
+  app.get('/api/routes/summary', async (request, reply) => {
+    try {
+      await routeSummaryReadLimiter.consume(request.ip);
+    } catch (error) {
+      sendTokenRouteRateLimit(reply, error);
+      return;
+    }
     const routes = await listRoutesWithSources();
     if (routes.length === 0) return [];
     const aggByRoute = await buildRouteChannelSummaryMap(routes);
@@ -862,7 +933,13 @@ export async function tokensRoutes(app: FastifyInstance) {
   });
 
   // List all routes
-  app.get('/api/routes', async () => {
+  app.get('/api/routes', async (request, reply) => {
+    try {
+      await routeListReadLimiter.consume(request.ip);
+    } catch (error) {
+      sendTokenRouteRateLimit(reply, error);
+      return;
+    }
     const routes = await listRoutesWithSources();
     if (routes.length === 0) return [];
 

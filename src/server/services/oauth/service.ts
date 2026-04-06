@@ -39,10 +39,14 @@ import {
 import { resolveOauthAccountProxyUrl, resolveOauthProviderProxyUrl } from './requestProxy.js';
 import { ensureOauthIdentityBackfill } from './oauthIdentityBackfill.js';
 import { buildQuotaSnapshotFromOauthInfo, refreshOauthQuotaSnapshot } from './quota.js';
+import {
+  listOauthRouteUnitsByAccountIds,
+} from './routeUnitService.js';
 
 type OAuthProviderMetadata = ReturnType<typeof listOauthProviders>[number];
 const MANUAL_CALLBACK_DELAY_MS = 15_000;
 const OAUTH_QUOTA_BATCH_REFRESH_CONCURRENCY = 4;
+const MAX_OAUTH_IMPORT_BATCH_SIZE = 100;
 type OauthProviderHeaderAccountInput = OauthIdentityCarrierLike & {
   extraConfig?: OauthExtraConfigInput;
 };
@@ -365,6 +369,7 @@ async function revertPersistedOauthAccount(input: {
   accountId: number;
   created: boolean;
   previousAccount: typeof schema.accounts.$inferSelect | null;
+  previousModelAvailability?: Array<typeof schema.modelAvailability.$inferSelect>;
 }) {
   if (input.created) {
     await db.delete(schema.accounts).where(eq(schema.accounts.id, input.accountId)).run();
@@ -372,19 +377,37 @@ async function revertPersistedOauthAccount(input: {
   }
 
   if (!input.previousAccount) return;
-  await db.update(schema.accounts).set({
-    siteId: input.previousAccount.siteId,
-    username: input.previousAccount.username,
-    accessToken: input.previousAccount.accessToken,
-    apiToken: input.previousAccount.apiToken,
-    checkinEnabled: input.previousAccount.checkinEnabled,
-    status: input.previousAccount.status,
-    oauthProvider: input.previousAccount.oauthProvider,
-    oauthAccountKey: input.previousAccount.oauthAccountKey,
-    oauthProjectId: input.previousAccount.oauthProjectId,
-    extraConfig: input.previousAccount.extraConfig,
-    updatedAt: input.previousAccount.updatedAt,
-  }).where(eq(schema.accounts.id, input.previousAccount.id)).run();
+  await db.transaction(async (tx) => {
+    await tx.update(schema.accounts).set({
+      siteId: input.previousAccount!.siteId,
+      username: input.previousAccount!.username,
+      accessToken: input.previousAccount!.accessToken,
+      apiToken: input.previousAccount!.apiToken,
+      checkinEnabled: input.previousAccount!.checkinEnabled,
+      status: input.previousAccount!.status,
+      oauthProvider: input.previousAccount!.oauthProvider,
+      oauthAccountKey: input.previousAccount!.oauthAccountKey,
+      oauthProjectId: input.previousAccount!.oauthProjectId,
+      extraConfig: input.previousAccount!.extraConfig,
+      updatedAt: input.previousAccount!.updatedAt,
+    }).where(eq(schema.accounts.id, input.previousAccount!.id)).run();
+
+    if (input.previousModelAvailability) {
+      await tx.delete(schema.modelAvailability)
+        .where(eq(schema.modelAvailability.accountId, input.accountId))
+        .run();
+      if (input.previousModelAvailability.length > 0) {
+        await tx.insert(schema.modelAvailability).values(input.previousModelAvailability.map((row) => ({
+          accountId: input.previousAccount!.id,
+          modelName: row.modelName,
+          available: row.available,
+          isManual: row.isManual,
+          latencyMs: row.latencyMs,
+          checkedAt: row.checkedAt,
+        }))).run();
+      }
+    }
+  });
 }
 
 async function mapWithConcurrency<T, TResult>(
@@ -408,6 +431,112 @@ async function mapWithConcurrency<T, TResult>(
   }));
 
   return results;
+}
+
+function normalizeImportedOauthJsonItems(input: {
+  data?: unknown;
+  items?: unknown[];
+}): unknown[] {
+  const batchItems = Array.isArray(input.items)
+    ? input.items
+    : [];
+  if (batchItems.length > 0) {
+    return batchItems;
+  }
+  if (input.data === undefined) {
+    return [];
+  }
+  return [input.data];
+}
+
+async function activatePersistedOauthAccount(input: {
+  definition: OAuthProviderDefinition;
+  exchange: {
+    accessToken: string;
+    refreshToken?: string;
+    tokenExpiresAt?: number;
+    email?: string;
+    accountKey?: string;
+    accountId?: string;
+    planType?: string;
+    projectId?: string;
+    idToken?: string;
+    providerData?: Record<string, unknown>;
+  };
+  rebindAccountId?: number;
+  proxyUrl?: string | null;
+  useSystemProxy?: boolean;
+  persistedStatus?: 'active' | 'disabled';
+  activateExistingAfterRefresh?: boolean;
+}) {
+  const rollbackSnapshotByRebindAccountId = typeof input.rebindAccountId === 'number' && input.rebindAccountId > 0
+    ? await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, input.rebindAccountId))
+      .all()
+    : [];
+  const persisted = await upsertOauthAccount({
+    definition: input.definition,
+    exchange: input.exchange,
+    rebindAccountId: input.rebindAccountId,
+    proxyUrl: input.proxyUrl,
+    useSystemProxy: input.useSystemProxy,
+    persistedStatus: input.persistedStatus,
+  });
+
+  if (!persisted.account) {
+    throw new Error('failed to persist oauth account');
+  }
+
+  const previousModelAvailability = rollbackSnapshotByRebindAccountId.length > 0
+    ? rollbackSnapshotByRebindAccountId
+    : persisted.created
+      ? []
+      : await db.select().from(schema.modelAvailability)
+        .where(eq(schema.modelAvailability.accountId, persisted.previousAccount?.id ?? persisted.account.id))
+        .all();
+
+  const shouldRefreshModels = input.activateExistingAfterRefresh === true
+    || (persisted.account.status || 'active') === 'active';
+  if (shouldRefreshModels) {
+    const refreshResult = await refreshModelsForAccount(
+      persisted.account.id,
+      persisted.previousAccount ? { allowInactive: true } : undefined,
+    );
+    if (refreshResult.status !== 'success') {
+      await revertPersistedOauthAccount({
+        accountId: persisted.account.id,
+        created: persisted.created,
+        previousAccount: persisted.previousAccount,
+        previousModelAvailability,
+      });
+      await routeRefreshWorkflow.rebuildRoutesOnly();
+      throw new Error(refreshResult.errorMessage || `${input.definition.metadata.provider} model discovery failed`);
+    }
+  }
+
+  try {
+    if (input.activateExistingAfterRefresh && persisted.previousAccount) {
+      await db.update(schema.accounts).set({
+        status: 'active',
+        updatedAt: new Date().toISOString(),
+      }).where(eq(schema.accounts.id, persisted.account.id)).run();
+      persisted.account = await db.select().from(schema.accounts)
+        .where(eq(schema.accounts.id, persisted.account.id))
+        .get();
+    }
+
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+    return persisted;
+  } catch (error) {
+    await revertPersistedOauthAccount({
+      accountId: persisted.account.id,
+      created: persisted.created,
+      previousAccount: persisted.previousAccount,
+      previousModelAvailability,
+    });
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+    throw error;
+  }
 }
 
 async function ensureOauthSite(definition: OAuthProviderDefinition) {
@@ -559,6 +688,12 @@ export function listOauthProviders() {
   });
 }
 
+export function getOauthProviderDefaults() {
+  return {
+    systemProxyConfigured: !!resolveProxyUrlFromExtraConfig({ useSystemProxy: true }),
+  };
+}
+
 export async function startOauthProviderFlow(input: {
   provider: string;
   rebindAccountId?: number;
@@ -651,42 +786,18 @@ export async function handleOauthCallback(input: {
       projectId: session.projectId,
       proxyUrl: resolvedProxyUrl,
     });
-    const { account, site, created, previousAccount } = await upsertOauthAccount({
+    const { account, site } = await activatePersistedOauthAccount({
       definition,
       exchange,
       rebindAccountId: session.rebindAccountId,
       proxyUrl: session.proxyUrl,
       useSystemProxy: session.useSystemProxy,
+      activateExistingAfterRefresh: true,
     });
     if (!account) {
       markOauthSessionError(input.state, 'failed to persist oauth account');
       throw new Error('failed to persist oauth account');
     }
-
-    const refreshResult = await refreshModelsForAccount(
-      account.id,
-      previousAccount ? { allowInactive: true } : undefined,
-    );
-    if (refreshResult.status !== 'success') {
-      await revertPersistedOauthAccount({
-        accountId: account.id,
-        created,
-        previousAccount,
-      });
-      await routeRefreshWorkflow.rebuildRoutesOnly();
-      const errorMessage = refreshResult.errorMessage || `${input.provider} model discovery failed`;
-      markOauthSessionError(input.state, errorMessage);
-      throw new Error(errorMessage);
-    }
-
-    if (previousAccount) {
-      await db.update(schema.accounts).set({
-        status: 'active',
-        updatedAt: new Date().toISOString(),
-      }).where(eq(schema.accounts.id, account.id)).run();
-    }
-
-    await routeRefreshWorkflow.rebuildRoutesOnly();
     markOauthSessionSuccess(input.state, {
       accountId: account.id,
       siteId: site.id,
@@ -774,16 +885,35 @@ export async function listOauthConnections(options: {
     modelMap.set(row.accountId, list);
   }
 
+  const routeParticipationByAccount = await listOauthRouteUnitsByAccountIds(accountIds);
+  const routeUnitIds = Array.from(new Set(
+    Array.from(routeParticipationByAccount.values())
+      .map((item) => item.id)
+      .filter((id): id is number => Number.isFinite(id) && id > 0),
+  ));
+
   const routeChannelRows = await db.select({
     accountId: schema.routeChannels.accountId,
+    oauthRouteUnitId: schema.routeChannels.oauthRouteUnitId,
     count: sql<number>`COUNT(*)`,
   }).from(schema.routeChannels)
-    .where(inArray(schema.routeChannels.accountId, accountIds))
-    .groupBy(schema.routeChannels.accountId)
+    .where(routeUnitIds.length > 0
+      ? or(
+        inArray(schema.routeChannels.accountId, accountIds),
+        inArray(schema.routeChannels.oauthRouteUnitId, routeUnitIds),
+      )
+      : inArray(schema.routeChannels.accountId, accountIds))
+    .groupBy(schema.routeChannels.accountId, schema.routeChannels.oauthRouteUnitId)
     .all();
   const routeChannelCountByAccount = new Map<number, number>();
+  const routeChannelCountByRouteUnit = new Map<number, number>();
   for (const row of routeChannelRows) {
-    routeChannelCountByAccount.set(row.accountId, row.count ?? 0);
+    if (typeof row.accountId === 'number' && row.accountId > 0) {
+      routeChannelCountByAccount.set(row.accountId, row.count ?? 0);
+    }
+    if (typeof row.oauthRouteUnitId === 'number' && row.oauthRouteUnitId > 0) {
+      routeChannelCountByRouteUnit.set(row.oauthRouteUnitId, row.count ?? 0);
+    }
   }
 
   const items = rows.flatMap((row) => {
@@ -795,6 +925,17 @@ export async function listOauthConnections(options: {
       || row.accounts.status !== 'active'
       || row.sites.status !== 'active'
     ) ? 'abnormal' : 'healthy';
+    const routeUnit = routeParticipationByAccount.get(row.accounts.id) || null;
+    const routeParticipation = routeUnit
+      ? {
+        kind: routeUnit.kind,
+        id: routeUnit.id,
+        routeUnitId: routeUnit.id,
+        name: routeUnit.name,
+        strategy: routeUnit.strategy,
+        memberCount: routeUnit.memberCount,
+      }
+      : null;
     return [{
       accountId: row.accounts.id,
       siteId: row.sites.id,
@@ -808,11 +949,15 @@ export async function listOauthConnections(options: {
       modelsPreview: models.slice(0, 10),
       quota: buildQuotaSnapshotFromOauthInfo(oauth),
       status,
-      routeChannelCount: routeChannelCountByAccount.get(row.accounts.id) || 0,
+      routeChannelCount: routeUnit?.kind === 'route_unit'
+        ? (routeChannelCountByRouteUnit.get(routeUnit.id) || 0)
+        : (routeChannelCountByAccount.get(row.accounts.id) || 0),
       lastModelSyncAt: oauth.lastModelSyncAt,
       lastModelSyncError: oauth.lastModelSyncError,
       proxyUrl: getProxyUrlFromExtraConfig(row.accounts.extraConfig),
       useSystemProxy: getUseSystemProxyFromExtraConfig(row.accounts.extraConfig),
+      routeParticipation,
+      routeUnit,
       site: {
         id: row.sites.id,
         name: row.sites.name,
@@ -880,13 +1025,20 @@ export async function refreshOauthConnectionQuotaBatch(accountIds: number[]) {
   };
 }
 
-export async function importOauthConnectionsFromNativeJson(data: unknown) {
-  if (!isRecord(data)) {
+export async function importOauthConnectionsFromNativeJson(input: {
+  data?: unknown;
+  items?: unknown[];
+  proxyUrl?: string | null;
+  useSystemProxy?: boolean;
+}) {
+  const payloadItems = normalizeImportedOauthJsonItems(input);
+  const continueOnItemFailure = Array.isArray(input.items);
+  if (payloadItems.length <= 0) {
     throwOauthImportValidationError('data must be a native oauth json object');
   }
-
-  const payload = data as ImportedNativeOauthJson;
-
+  if (payloadItems.length > MAX_OAUTH_IMPORT_BATCH_SIZE) {
+    throwOauthImportValidationError(`oauth import supports at most ${MAX_OAUTH_IMPORT_BATCH_SIZE} items`);
+  }
   const items: Array<{
     name: string;
     status: 'imported' | 'skipped' | 'failed';
@@ -894,65 +1046,106 @@ export async function importOauthConnectionsFromNativeJson(data: unknown) {
     provider?: string;
     message?: string;
   }> = [];
-  const changedAccountIds: number[] = [];
-  let resolvedProvider: OAuthProviderId | null = null;
-  let persistedAccount: Awaited<ReturnType<typeof upsertOauthAccount>> | null = null;
-  try {
-    const resolved = resolveImportedNativeOauthIdentity(payload);
-    resolvedProvider = resolved.provider;
-    const definition = getOAuthProviderDefinition(resolved.provider);
-    if (!definition) {
-      throw new Error(`unsupported oauth provider: ${resolved.provider}`);
-    }
-    const persisted = await upsertOauthAccount({
-      definition,
-      exchange: resolved.exchange,
-      persistedStatus: resolved.disabled ? 'disabled' : 'active',
-    });
-    persistedAccount = persisted;
-    changedAccountIds.push(persisted.account.id);
-    items.push({
-      name: resolved.name,
-      status: 'imported',
-      provider: resolved.provider,
-      accountId: persisted.account.id,
-    });
-  } catch (error: any) {
-    items.push({
-      name: asNonEmptyString(payload.email) || asNonEmptyString(payload.account_key) || asNonEmptyString(payload.account_id) || asNonEmptyString(payload.type) || 'unknown',
-      status: 'failed',
-      provider: asNonEmptyString(payload.type) || undefined,
-      message: error?.message || 'oauth import failed',
-    });
-    throw error;
-  }
+  let imported = 0;
 
-  if (changedAccountIds.length > 0) {
-    const importedAccountId = changedAccountIds[0]!;
-    if (persistedAccount && (persistedAccount.account.status || 'active') === 'active') {
-      const refreshResult = await refreshModelsForAccount(
-        importedAccountId,
-        persistedAccount.previousAccount ? { allowInactive: true } : undefined,
-      );
-      if (refreshResult.status !== 'success') {
-        await revertPersistedOauthAccount({
-          accountId: importedAccountId,
-          created: persistedAccount.created,
-          previousAccount: persistedAccount.previousAccount,
-        });
-        await routeRefreshWorkflow.rebuildRoutesOnly();
-        throw new Error(refreshResult.errorMessage || `${resolvedProvider || 'oauth'} model discovery failed`);
+  for (const rawPayload of payloadItems) {
+    if (!isRecord(rawPayload)) {
+      throwOauthImportValidationError('data must be a native oauth json object');
+    }
+    const payload = rawPayload as ImportedNativeOauthJson;
+    let resolvedIdentity: ReturnType<typeof resolveImportedNativeOauthIdentity> | null = null;
+    try {
+      resolvedIdentity = resolveImportedNativeOauthIdentity(payload);
+      const definition = getOAuthProviderDefinition(resolvedIdentity.provider);
+      if (!definition) {
+        throw new Error(`unsupported oauth provider: ${resolvedIdentity.provider}`);
+      }
+      const persisted = await activatePersistedOauthAccount({
+        definition,
+        exchange: resolvedIdentity.exchange,
+        proxyUrl: input.proxyUrl,
+        useSystemProxy: input.useSystemProxy,
+        persistedStatus: resolvedIdentity.disabled ? 'disabled' : 'active',
+      });
+      imported += 1;
+      items.push({
+        name: resolvedIdentity.name,
+        status: 'imported',
+        provider: resolvedIdentity.provider,
+        accountId: persisted.account?.id,
+      });
+    } catch (error: any) {
+      items.push({
+        name: resolvedIdentity?.name
+          || asNonEmptyString(payload.email)
+          || asNonEmptyString(payload.account_key)
+          || asNonEmptyString(payload.account_id)
+          || asNonEmptyString(payload.type)
+          || 'unknown',
+        status: 'failed',
+        provider: resolvedIdentity?.provider || asNonEmptyString(payload.type) || undefined,
+        message: error?.message || 'oauth import failed',
+      });
+      if (!continueOnItemFailure) {
+        throw error;
       }
     }
-    await routeRefreshWorkflow.rebuildRoutesOnly();
   }
 
+  const failed = items.filter((item) => item.status === 'failed').length;
+
   return {
-    success: true,
-    imported: 1,
+    success: failed === 0,
+    imported,
     skipped: 0,
-    failed: 0,
+    failed,
     items,
+  };
+}
+
+export async function updateOauthConnectionProxySettings(input: {
+  accountId: number;
+  proxyUrl?: string | null;
+  useSystemProxy?: boolean;
+}) {
+  const account = await db.select().from(schema.accounts)
+    .where(eq(schema.accounts.id, input.accountId))
+    .get();
+  if (!account) {
+    throw new Error('oauth account not found');
+  }
+  const oauth = getOauthInfoFromAccount(account);
+  if (!oauth) {
+    throw new Error('account is not managed by oauth');
+  }
+
+  const extraConfig = mergeAccountExtraConfig(account.extraConfig, {
+    ...(input.proxyUrl !== undefined ? { proxyUrl: input.proxyUrl } : {}),
+    ...(input.useSystemProxy !== undefined ? { useSystemProxy: input.useSystemProxy } : {}),
+  });
+  const updatedAt = new Date().toISOString();
+
+  await db.update(schema.accounts).set({
+    extraConfig,
+    updatedAt,
+  }).where(eq(schema.accounts.id, input.accountId)).run();
+
+  const refreshResult = await refreshModelsForAccount(input.accountId, { allowInactive: true });
+  await routeRefreshWorkflow.rebuildRoutesOnly();
+
+  return {
+    success: true as const,
+    accountId: input.accountId,
+    proxyUrl: getProxyUrlFromExtraConfig(extraConfig),
+    useSystemProxy: getUseSystemProxyFromExtraConfig(extraConfig),
+    refreshedRoutes: true,
+    modelRefresh: {
+      success: refreshResult.status === 'success',
+      status: refreshResult.status,
+      errorMessage: refreshResult.status === 'success'
+        ? null
+        : (refreshResult.errorMessage || '模型刷新失败'),
+    },
   };
 }
 
