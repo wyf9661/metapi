@@ -189,12 +189,11 @@ describe('TokenRouter patterns and model mapping', () => {
     expect(exposedModels).toContain('claude-opus-4-6');
   });
 
-  it('prefers an exact route over a colliding group display-name alias', async () => {
-    await createRouteWithSingleChannel(
-      're:^claude-(opus|sonnet)-4-5$',
+  it('prefers a group display-name alias over a colliding exact route', async () => {
+    const source = await createRouteWithSingleChannel(
+      'claude-opus-4-5',
       undefined,
       {
-        displayName: 'claude-opus-4-6',
         sourceModel: 'claude-opus-4-5',
       },
     );
@@ -205,15 +204,18 @@ describe('TokenRouter patterns and model mapping', () => {
         sourceModel: 'claude-opus-4-6',
       },
     );
+    const grouped = await createExplicitGroupRoute('claude-opus-4-6', [source.route.id]);
     const router = new TokenRouter();
 
     const selected = await router.selectChannel('claude-opus-4-6');
     const decision = await router.explainSelection('claude-opus-4-6');
 
     expect(selected).toBeTruthy();
-    expect(selected?.channel.id).toBe(exact.channel.id);
-    expect(selected?.actualModel).toBe('claude-opus-4-6');
-    expect(decision.actualModel).toBe('claude-opus-4-6');
+    expect(selected?.channel.routeId).toBe(source.route.id);
+    expect(selected?.channel.id).not.toBe(exact.channel.id);
+    expect(selected?.actualModel).toBe('claude-opus-4-5');
+    expect(decision.routeId).toBe(grouped.id);
+    expect(decision.actualModel).toBe('claude-opus-4-5');
   });
 
   it('falls back to the source exact-route model when explicit-group channels omit sourceModel', async () => {
