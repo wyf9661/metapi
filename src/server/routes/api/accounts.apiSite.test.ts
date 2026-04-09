@@ -268,4 +268,97 @@ describe('accounts api endpoint host selection', { timeout: 15_000 }, () => {
     expect(getModelsMock).toHaveBeenNthCalledWith(1, 'https://api-create-a.example.com', 'sk-nihao-create-rotate', undefined);
     expect(getModelsMock).toHaveBeenNthCalledWith(2, 'https://api-create-b.example.com', 'sk-nihao-create-rotate', undefined);
   });
+
+  it('supports batch creating multiple API key connections for one site', async () => {
+    getModelsMock
+      .mockResolvedValueOnce(['gpt-4o-mini'])
+      .mockResolvedValueOnce(['gpt-4.1-mini']);
+
+    const site = await db.insert(schema.sites).values({
+      name: 'Nihao Batch Pool',
+      url: 'https://console.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    await db.insert(schema.siteApiEndpoints).values({
+      siteId: site.id,
+      url: 'https://api.example.com',
+      enabled: true,
+      sortOrder: 0,
+    }).run();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: {
+        siteId: site.id,
+        username: 'batch-key',
+        accessToken: 'sk-batch-a\nsk-batch-b',
+        credentialMode: 'apikey',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      batch: true,
+      totalCount: 2,
+      createdCount: 2,
+      failedCount: 0,
+    });
+    expect(getModelsMock).toHaveBeenNthCalledWith(1, 'https://api.example.com', 'sk-batch-a', undefined);
+    expect(getModelsMock).toHaveBeenNthCalledWith(2, 'https://api.example.com', 'sk-batch-b', undefined);
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(2);
+    expect(accounts.map((item) => item.apiToken)).toEqual(['sk-batch-a', 'sk-batch-b']);
+    expect(accounts.map((item) => item.username)).toEqual(['batch-key #1', 'batch-key #2']);
+  });
+
+  it('treats accessTokens payloads as batch API key creation even without credentialMode', async () => {
+    getModelsMock
+      .mockResolvedValueOnce(['gpt-4o-mini'])
+      .mockResolvedValueOnce(['gpt-4.1-mini']);
+
+    const site = await db.insert(schema.sites).values({
+      name: 'Nihao Batch Array',
+      url: 'https://console.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    await db.insert(schema.siteApiEndpoints).values({
+      siteId: site.id,
+      url: 'https://api.example.com',
+      enabled: true,
+      sortOrder: 0,
+    }).run();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: {
+        siteId: site.id,
+        username: 'array-key',
+        accessTokens: ['sk-array-a', 'sk-array-b'],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      batch: true,
+      totalCount: 2,
+      createdCount: 2,
+      failedCount: 0,
+    });
+    expect(getModelsMock).toHaveBeenNthCalledWith(1, 'https://api.example.com', 'sk-array-a', undefined);
+    expect(getModelsMock).toHaveBeenNthCalledWith(2, 'https://api.example.com', 'sk-array-b', undefined);
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(2);
+    expect(accounts.map((item) => item.apiToken)).toEqual(['sk-array-a', 'sk-array-b']);
+    expect(accounts.map((item) => item.username)).toEqual(['array-key #1', 'array-key #2']);
+  });
 });

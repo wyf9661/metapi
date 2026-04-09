@@ -5,7 +5,8 @@ const accountCredentialModeSchema = z.enum(['auto', 'session', 'apikey']);
 const accountCreatePayloadSchema = z.object({
   siteId: z.number().int().positive(),
   username: z.string().optional(),
-  accessToken: z.string(),
+  accessToken: z.string().optional(),
+  accessTokens: z.array(z.string()).optional(),
   apiToken: z.string().optional(),
   platformUserId: z.number().int().positive().optional(),
   checkinEnabled: z.boolean().optional(),
@@ -94,6 +95,9 @@ function formatAccountsPayloadError(error: z.ZodError): string {
   }
   if (firstPath === 'apiToken') {
     return 'Invalid apiToken. Expected string or null.';
+  }
+  if (firstPath === 'accessTokens') {
+    return 'Invalid accessTokens. Expected string[].';
   }
   if (firstPath === 'checkinEnabled') {
     return 'Invalid checkinEnabled. Expected boolean.';

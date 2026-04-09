@@ -16,6 +16,17 @@ describe('docker workflows', () => {
     expect(releaseWorkflow).toContain('"${tag}-armv7"');
   });
 
+  it('derives Docker Hub image names from the configured username secret', () => {
+    const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+    const releaseWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/release.yml'), 'utf8');
+
+    expect(ciWorkflow).toContain('DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/metapi');
+    expect(ciWorkflow).not.toContain('images: 1467078763/metapi');
+
+    expect(releaseWorkflow).toContain('DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/metapi');
+    expect(releaseWorkflow).not.toContain('1467078763/metapi');
+  });
+
   it('uses an armv7-capable node base image in the Dockerfile', () => {
     const dockerfile = readFileSync(resolve(process.cwd(), 'docker/Dockerfile'), 'utf8');
 

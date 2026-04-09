@@ -3041,12 +3041,12 @@ export class TokenRouter {
       routes = routes.filter((route) => allowSet.has(route.id));
     }
 
-    const matchedRoute = routes.find((route) => (
-      !isExplicitGroupRoute(route)
-      && isExactRouteModelPattern(route.modelPattern)
-      && (route.modelPattern || '').trim() === model
-    ))
-      || routes.find((route) => isExplicitGroupRoute(route) && isRouteDisplayNameMatch(model, route.displayName))
+    const matchedRoute = routes.find((route) => isExplicitGroupRoute(route) && isRouteDisplayNameMatch(model, route.displayName))
+      || routes.find((route) => (
+        !isExplicitGroupRoute(route)
+        && isExactRouteModelPattern(route.modelPattern)
+        && (route.modelPattern || '').trim() === model
+      ))
       || routes.find((route) => !isExplicitGroupRoute(route) && isRouteDisplayNameMatch(model, route.displayName))
       || routes.find((route) => !isExplicitGroupRoute(route) && matchesModelPattern(model, route.modelPattern));
 

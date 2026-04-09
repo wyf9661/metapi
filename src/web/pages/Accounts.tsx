@@ -29,6 +29,7 @@ import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from '.
 import { shouldIgnoreRowSelectionClick } from './helpers/rowSelection.js';
 import { SITE_DOCS_URL } from '../docsLink.js';
 import { getSiteInitializationPreset } from '../../shared/siteInitializationPresets.js';
+import { parseBatchApiKeys } from '../../shared/apiKeyBatch.js';
 
 type ConnectionsSegment = 'session' | 'apikey' | 'tokens';
 
@@ -177,6 +178,11 @@ export default function Accounts() {
     () => sites.find((item) => item.id === tokenForm.siteId) || null,
     [sites, tokenForm.siteId],
   );
+  const parsedApiKeys = useMemo(
+    () => activeSegment === 'apikey' ? parseBatchApiKeys(tokenForm.accessToken) : [],
+    [activeSegment, tokenForm.accessToken],
+  );
+  const isBatchApiKeyInput = activeSegment === 'apikey' && parsedApiKeys.length > 1;
   const siteSelectOptions = useMemo(
     () => [
       { value: '0', label: '选择站点' },
@@ -322,6 +328,10 @@ export default function Accounts() {
 
   const handleVerifyToken = async () => {
     if (!tokenForm.siteId || !tokenForm.accessToken) return;
+    if (isBatchApiKeyInput) {
+      toast.info(`检测到 ${parsedApiKeys.length} 个 API Key，批量模式会在添加时逐条校验`);
+      return;
+    }
     const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
     setVerifying(true);
     setVerifyResult(null);
@@ -352,7 +362,7 @@ export default function Accounts() {
 
   const handleTokenAdd = async () => {
     if (!tokenForm.siteId || !tokenForm.accessToken) return;
-    if (!verifyResult?.success && !tokenForm.skipModelFetch) {
+    if (!isBatchApiKeyInput && !verifyResult?.success && !tokenForm.skipModelFetch) {
       toast.error('请先验证 Token 成功后再添加账号');
       return;
     }
@@ -364,6 +374,7 @@ export default function Accounts() {
         siteId: tokenForm.siteId,
         username: tokenForm.username.trim() || undefined,
         accessToken: tokenForm.accessToken,
+        accessTokens: isBatchApiKeyInput ? parsedApiKeys : undefined,
         platformUserId: tokenForm.platformUserId ? parseInt(tokenForm.platformUserId) : undefined,
         refreshToken: isSub2ApiSelected && tokenForm.refreshToken.trim()
           ? tokenForm.refreshToken.trim()
@@ -374,6 +385,23 @@ export default function Accounts() {
         credentialMode,
         skipModelFetch: tokenForm.skipModelFetch,
       });
+      if (result?.batch) {
+        closeAddPanel();
+        const createdCount = Number(result.createdCount) || 0;
+        const failedCount = Number(result.failedCount) || 0;
+        if (createdCount > 0) {
+          toast.success(`批量添加完成：成功 ${createdCount}，失败 ${failedCount}`);
+        }
+        const failedItems = Array.isArray(result.items)
+          ? result.items.filter((item: any) => item?.status === 'failed')
+          : [];
+        if (failedItems.length > 0) {
+          const firstMessage = failedItems[0]?.message || '创建失败';
+          toast.error(`失败 ${failedItems.length} 条：${firstMessage}`);
+        }
+        load();
+        return;
+      }
       let seededRecommendedModels = false;
       const recommendedModels = initializationPreset?.recommendedModels || [];
       const createdAccountId = Number(result?.id) || 0;
@@ -951,6 +979,9 @@ export default function Accounts() {
       || (activeSegment === 'session' && verifyResult.tokenType === 'session')
     ),
   );
+  const canSubmitApiKeyConnection = activeSegment === 'apikey'
+    ? (isBatchApiKeyInput || canAddVerifiedConnection || !!tokenForm.skipModelFetch)
+    : canAddVerifiedConnection;
 
   return (
     <div className="animate-fade-in">
@@ -1421,9 +1452,18 @@ export default function Accounts() {
                 <textarea
                   placeholder="粘贴 API Key"
                   value={tokenForm.accessToken}
-                  onChange={(e) => { setTokenForm((f) => ({ ...f, accessToken: e.target.value.trim(), credentialMode: 'apikey' })); setVerifyResult(null); }}
+                  onChange={(e) => { setTokenForm((f) => ({ ...f, accessToken: e.target.value, credentialMode: 'apikey' })); setVerifyResult(null); }}
                   style={{ ...inputStyle, fontFamily: 'var(--font-mono)', height: 72, resize: 'none' as const }}
                 />
+                {parsedApiKeys.length > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    已识别 {parsedApiKeys.length} 个 API Key
+                    {isBatchApiKeyInput ? '，添加时会逐条创建同站点连接并参与轮询' : ''}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  支持换行、空格、逗号批量粘贴多个 API Key。
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <input
                     placeholder="用户 ID（可选）"
@@ -1479,23 +1519,25 @@ export default function Accounts() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     onClick={handleVerifyToken}
-                    disabled={verifying || !tokenForm.siteId || !tokenForm.accessToken}
+                    disabled={verifying || !tokenForm.siteId || !tokenForm.accessToken || isBatchApiKeyInput}
                     className="btn btn-ghost"
                     style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
                   >
-                    {verifying ? <><span className="spinner spinner-sm" />验证中...</> : '验证 API Key'}
+                    {verifying ? <><span className="spinner spinner-sm" />验证中...</> : (isBatchApiKeyInput ? '批量添加时校验' : '验证 API Key')}
                   </button>
                   <button
                     onClick={handleTokenAdd}
-                    disabled={saving || !tokenForm.siteId || !tokenForm.accessToken || (!canAddVerifiedConnection && !tokenForm.skipModelFetch)}
+                    disabled={saving || !tokenForm.siteId || !tokenForm.accessToken || !canSubmitApiKeyConnection}
                     className="btn btn-success"
                   >
-                    {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />添加中...</> : '添加连接'}
+                    {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />添加中...</> : (isBatchApiKeyInput ? '批量添加连接' : '添加连接')}
                   </button>
                 </div>
                 {!verifyResult?.success && (
                   <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    {addAccountPrereqHint}
+                    {isBatchApiKeyInput
+                      ? '批量模式下无需先点验证，提交后会逐条校验并创建。'
+                      : addAccountPrereqHint}
                   </div>
                 )}
               </div>

@@ -153,6 +153,7 @@ async function rollbackCreatedOauthRouteUnit(routeUnitId: number): Promise<void>
 async function restoreDeletedOauthRouteUnit(snapshot: {
   unit: typeof schema.oauthRouteUnits.$inferSelect;
   members: Array<typeof schema.oauthRouteUnitMembers.$inferSelect>;
+  channels: Array<typeof schema.routeChannels.$inferSelect>;
 }): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.insert(schema.oauthRouteUnits).values({
@@ -174,6 +175,31 @@ async function restoreDeletedOauthRouteUnit(snapshot: {
         sortOrder: member.sortOrder,
         createdAt: member.createdAt,
         updatedAt: member.updatedAt,
+      }))).run();
+    }
+
+    if (snapshot.channels.length > 0) {
+      await tx.insert(schema.routeChannels).values(snapshot.channels.map((channel) => ({
+        id: channel.id,
+        routeId: channel.routeId,
+        accountId: channel.accountId,
+        tokenId: channel.tokenId,
+        oauthRouteUnitId: channel.oauthRouteUnitId,
+        sourceModel: channel.sourceModel,
+        priority: channel.priority,
+        weight: channel.weight,
+        enabled: channel.enabled,
+        manualOverride: channel.manualOverride,
+        successCount: channel.successCount,
+        failCount: channel.failCount,
+        totalLatencyMs: channel.totalLatencyMs,
+        totalCost: channel.totalCost,
+        lastUsedAt: channel.lastUsedAt,
+        lastSelectedAt: channel.lastSelectedAt,
+        lastFailAt: channel.lastFailAt,
+        consecutiveFailCount: channel.consecutiveFailCount,
+        cooldownLevel: channel.cooldownLevel,
+        cooldownUntil: channel.cooldownUntil,
       }))).run();
     }
   });
@@ -373,6 +399,9 @@ export async function deleteOauthRouteUnit(routeUnitId: number) {
   const existingMembers = await db.select().from(schema.oauthRouteUnitMembers)
     .where(eq(schema.oauthRouteUnitMembers.unitId, routeUnitId))
     .all();
+  const existingChannels = await db.select().from(schema.routeChannels)
+    .where(eq(schema.routeChannels.oauthRouteUnitId, routeUnitId))
+    .all();
 
   await db.delete(schema.routeChannels)
     .where(eq(schema.routeChannels.oauthRouteUnitId, routeUnitId))
@@ -390,6 +419,7 @@ export async function deleteOauthRouteUnit(routeUnitId: number) {
     await restoreDeletedOauthRouteUnit({
       unit: existing,
       members: existingMembers,
+      channels: existingChannels,
     });
     try {
       await routeRefreshWorkflow.rebuildRoutesOnly();

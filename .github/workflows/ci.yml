@@ -342,6 +342,8 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    env:
+      DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/metapi
     strategy:
       fail-fast: false
       matrix:
@@ -384,7 +386,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: 1467078763/metapi
+          images: ${{ env.DOCKERHUB_IMAGE }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -424,6 +426,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: publish-docker-arch
     timeout-minutes: 15
+    env:
+      DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/metapi
 
     steps:
       - name: Checkout
@@ -449,7 +453,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: 1467078763/metapi
+          images: ${{ env.DOCKERHUB_IMAGE }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch

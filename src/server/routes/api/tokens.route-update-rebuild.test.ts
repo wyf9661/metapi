@@ -658,7 +658,7 @@ describe('PUT /api/routes/:id route rebuild', () => {
     expect(updated?.tokenId).toBe(seeded.token.id);
   });
 
-  it('prefers an exact route over a colliding explicit-group display name', async () => {
+  it('prefers an explicit-group display name over a colliding exact route', async () => {
     const exactCandidate = await seedAccountWithToken('claude-opus-4-6');
     const groupedCandidate = await seedAccountWithToken('claude-opus-4-5');
 
@@ -716,9 +716,8 @@ describe('PUT /api/routes/:id route rebuild', () => {
       success: true,
       decision: {
         matched: true,
-        routeId: exactRoute.id,
-        modelPattern: 'claude-opus-4-6',
-        actualModel: 'claude-opus-4-6',
+        routeId: groupResponse.json().id,
+        actualModel: 'claude-opus-4-5',
       },
     });
   });
