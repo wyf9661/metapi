@@ -195,6 +195,214 @@ describe('Models marketplace text', () => {
     }
   });
 
+  it('shows newly added provider fallback brands without losing vendor brands in the filter panel', async () => {
+    apiMock.getModelsMarketplace.mockResolvedValue({
+      models: [
+        {
+          name: 'openrouter/openrouter-auto',
+          accountCount: 1,
+          tokenCount: 1,
+          avgLatency: 180,
+          successRate: 99,
+          description: null,
+          tags: [],
+          supportedEndpointTypes: [],
+          pricingSources: [],
+          accounts: [
+            {
+              id: 1,
+              site: '平台站 A',
+              username: 'tester',
+              latency: 180,
+              balance: 9.9,
+              tokens: [{ id: 1, name: 'default', isDefault: true }],
+            },
+          ],
+        },
+        {
+          name: 'deepinfra/meta-llama/llama-3.3-70b-instruct',
+          accountCount: 1,
+          tokenCount: 1,
+          avgLatency: 240,
+          successRate: 98,
+          description: null,
+          tags: [],
+          supportedEndpointTypes: [],
+          pricingSources: [],
+          accounts: [
+            {
+              id: 2,
+              site: '平台站 B',
+              username: 'tester',
+              latency: 240,
+              balance: 7.2,
+              tokens: [{ id: 2, name: 'default', isDefault: true }],
+            },
+          ],
+        },
+        {
+          name: 'groq/compound-beta',
+          accountCount: 1,
+          tokenCount: 1,
+          avgLatency: 95,
+          successRate: 99,
+          description: null,
+          tags: [],
+          supportedEndpointTypes: [],
+          pricingSources: [],
+          accounts: [
+            {
+              id: 3,
+              site: '平台站 C',
+              username: 'tester',
+              latency: 95,
+              balance: 5.1,
+              tokens: [{ id: 3, name: 'default', isDefault: true }],
+            },
+          ],
+        },
+      ],
+    });
+
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/models']}>
+            <ToastProvider>
+              <Models />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const text = collectText(root!.root);
+      expect(text).toContain('OpenRouter');
+      expect(text).toContain('Meta');
+      expect(text).toContain('Groq');
+      expect(text).not.toContain('其他未归类的模型');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('shows user-reported recognizable brands in the marketplace filter panel', async () => {
+    apiMock.getModelsMarketplace.mockResolvedValue({
+      models: [
+        {
+          name: 'xiaomi/mimo-v2-pro',
+          accountCount: 1,
+          tokenCount: 1,
+          avgLatency: 180,
+          successRate: 99,
+          description: null,
+          tags: [],
+          supportedEndpointTypes: [],
+          pricingSources: [],
+          accounts: [
+            {
+              id: 1,
+              site: '平台站 A',
+              username: 'tester',
+              latency: 180,
+              balance: 9.9,
+              tokens: [{ id: 1, name: 'default', isDefault: true }],
+            },
+          ],
+        },
+        {
+          name: 'arcee-ai/trinity-mini',
+          accountCount: 1,
+          tokenCount: 1,
+          avgLatency: 240,
+          successRate: 98,
+          description: null,
+          tags: [],
+          supportedEndpointTypes: [],
+          pricingSources: [],
+          accounts: [
+            {
+              id: 2,
+              site: '平台站 B',
+              username: 'tester',
+              latency: 240,
+              balance: 7.2,
+              tokens: [{ id: 2, name: 'default', isDefault: true }],
+            },
+          ],
+        },
+        {
+          name: 'amazon/nova-premier-v1',
+          accountCount: 1,
+          tokenCount: 1,
+          avgLatency: 95,
+          successRate: 99,
+          description: null,
+          tags: [],
+          supportedEndpointTypes: [],
+          pricingSources: [],
+          accounts: [
+            {
+              id: 3,
+              site: '平台站 C',
+              username: 'tester',
+              latency: 95,
+              balance: 5.1,
+              tokens: [{ id: 3, name: 'default', isDefault: true }],
+            },
+          ],
+        },
+        {
+          name: 'LongCat-Flash-Lite',
+          accountCount: 1,
+          tokenCount: 1,
+          avgLatency: 95,
+          successRate: 99,
+          description: null,
+          tags: [],
+          supportedEndpointTypes: [],
+          pricingSources: [],
+          accounts: [
+            {
+              id: 4,
+              site: '平台站 D',
+              username: 'tester',
+              latency: 95,
+              balance: 5.1,
+              tokens: [{ id: 4, name: 'default', isDefault: true }],
+            },
+          ],
+        },
+      ],
+    });
+
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/models']}>
+            <ToastProvider>
+              <Models />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const text = collectText(root!.root);
+      expect(text).toContain('Xiaomi MiMo');
+      expect(text).toContain('Arcee');
+      expect(text).toContain('Amazon Nova');
+      expect(text).toContain('LongCat');
+      expect(text).not.toContain('其他未归类的模型');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('keeps a visible mobile filter entry on small screens', async () => {
     const nextWindow = (originalWindow ? { ...originalWindow } : {}) as Window & typeof globalThis;
     nextWindow.innerWidth = 768;
