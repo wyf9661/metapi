@@ -3246,6 +3246,97 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     }
   });
 
+  it('restores oauth route unit route channels when delete rebuild keeps failing', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'ChatGPT Codex OAuth',
+      url: 'https://chatgpt.com/backend-api/codex',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+
+    const first = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'rollback-delete-double-fail-a@example.com',
+      accessToken: 'rollback-delete-double-fail-access-a',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'rollback-delete-double-fail-a',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'rollback-delete-double-fail-a',
+          accountKey: 'rollback-delete-double-fail-a',
+          email: 'rollback-delete-double-fail-a@example.com',
+          refreshToken: 'rollback-delete-double-fail-refresh-a',
+        },
+      }),
+    }).returning().get();
+    const second = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'rollback-delete-double-fail-b@example.com',
+      accessToken: 'rollback-delete-double-fail-access-b',
+      status: 'active',
+      oauthProvider: 'codex',
+      oauthAccountKey: 'rollback-delete-double-fail-b',
+      extraConfig: JSON.stringify({
+        oauth: {
+          provider: 'codex',
+          accountId: 'rollback-delete-double-fail-b',
+          accountKey: 'rollback-delete-double-fail-b',
+          email: 'rollback-delete-double-fail-b@example.com',
+          refreshToken: 'rollback-delete-double-fail-refresh-b',
+        },
+      }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      { accountId: first.id, modelName: 'gpt-5.4', available: true },
+      { accountId: second.id, modelName: 'gpt-5.4', available: true },
+    ]).run();
+
+    const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    await routeRefreshWorkflow.rebuildRoutesOnly();
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/oauth/route-units',
+      payload: {
+        accountIds: [first.id, second.id],
+        name: 'Rollback Delete Double Fail Pool',
+        strategy: 'round_robin',
+      },
+    });
+    expect(createResponse.statusCode).toBe(200);
+    const routeUnitId = createResponse.json().routeUnit?.id as number;
+
+    const rebuildSpy = vi.spyOn(routeRefreshWorkflow, 'rebuildRoutesOnly');
+    rebuildSpy.mockImplementation(async () => {
+      throw new Error('route rebuild failed');
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/oauth/route-units/${routeUnitId}`,
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({
+        message: 'route rebuild failed',
+      });
+
+      const routeUnits = await db.select().from(schema.oauthRouteUnits).all();
+      expect(routeUnits).toHaveLength(1);
+      const members = await db.select().from(schema.oauthRouteUnitMembers).all();
+      expect(members).toHaveLength(2);
+      const routeChannels = await db.select().from(schema.routeChannels).all();
+      expect(routeChannels).toHaveLength(1);
+      expect(routeChannels[0]?.oauthRouteUnitId).toBe(routeUnitId);
+    } finally {
+      rebuildSpy.mockRestore();
+    }
+  });
+
   it('accepts normalized route unit strategy values from the HTTP payload', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'ChatGPT Codex OAuth',
