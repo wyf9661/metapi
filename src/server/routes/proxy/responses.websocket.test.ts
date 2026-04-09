@@ -96,6 +96,7 @@ vi.mock('../../services/proxyUsageFallbackService.js', () => ({
 }));
 
 vi.mock('../../services/oauth/quota.js', () => ({
+  recordOauthQuotaHeadersSnapshot: async () => undefined,
   recordOauthQuotaResetHint: async () => undefined,
 }));
 

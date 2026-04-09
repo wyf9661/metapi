@@ -3,10 +3,14 @@ import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Dashboard from './Dashboard.js';
+import { installDashboardSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getDashboard: vi.fn(),
+    getDashboardSnapshot: vi.fn(),
+    getDashboardInsights: vi.fn(),
+    getSiteSnapshot: vi.fn(),
     getSiteDistribution: vi.fn(),
     getSiteTrend: vi.fn(),
     getSites: vi.fn(),
@@ -36,6 +40,7 @@ describe('Dashboard site observability panel', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    installDashboardSnapshotCompat(apiMock);
     apiMock.getDashboard.mockResolvedValue({
       totalBalance: 0,
       totalUsed: 0,

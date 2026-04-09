@@ -49,6 +49,14 @@ import {
   stopSub2ApiManagedRefreshScheduler,
 } from './services/sub2apiRefreshScheduler.js';
 import { startUpdateCenterPolling, stopUpdateCenterPolling } from './services/updateCenterPollingService.js';
+import {
+  startAdminSnapshotWarmScheduler,
+  stopAdminSnapshotWarmScheduler,
+} from './services/adminSnapshotWarmService.js';
+import {
+  startUsageAggregationProjectorScheduler,
+  stopUsageAggregationProjectorScheduler,
+} from './services/usageAggregationService.js';
 import { reloadBackupWebdavScheduler } from './services/backupService.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
 import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
@@ -260,6 +268,8 @@ startModelAvailabilityProbeScheduler();
 startChannelRecoveryProbeScheduler();
 startSub2ApiManagedRefreshScheduler();
 startUpdateCenterPolling();
+startUsageAggregationProjectorScheduler();
+startAdminSnapshotWarmScheduler();
 try {
   await startOAuthLoopbackCallbackServers();
 } catch (error) {
@@ -274,6 +284,8 @@ app.addHook('onClose', async () => {
   stopProxyLogRetentionService();
   stopModelAvailabilityProbeScheduler();
   stopChannelRecoveryProbeScheduler();
+  await stopUsageAggregationProjectorScheduler();
+  await stopAdminSnapshotWarmScheduler();
   await stopSub2ApiManagedRefreshScheduler();
   await stopOAuthLoopbackCallbackServers();
 });

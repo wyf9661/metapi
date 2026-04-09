@@ -39,9 +39,17 @@ vi.mock('../../services/tokenRouter.js', () => ({
   invalidateTokenRouterCache: vi.fn(),
 }));
 
-vi.mock('../../services/routeRefreshWorkflow.js', () => ({
-  refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
-}));
+vi.mock('../../services/routeRefreshWorkflow.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../services/routeRefreshWorkflow.js')>(
+      '../../services/routeRefreshWorkflow.js',
+    );
+  return {
+    ...actual,
+    refreshModelsAndRebuildRoutes: (...args: unknown[]) =>
+      refreshModelsAndRebuildRoutesMock(...args),
+  };
+});
 
 vi.mock('../../services/alertService.js', () => ({
   reportProxyAllFailed: (...args: unknown[]) => reportProxyAllFailedMock(...args),

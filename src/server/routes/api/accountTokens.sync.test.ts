@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, expect, it, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { and, eq, sql } from 'drizzle-orm';
 import { mergeAccountExtraConfig } from '../../services/accountExtraConfig.js';
 
@@ -32,6 +32,7 @@ describe('account tokens sync routes with site status', () => {
   let schema: DbModule['schema'];
   let maskToken: AccountTokenServiceModule['maskToken'];
   let dataDir = '';
+  let previousDataDir: string | undefined;
   let seedId = 0;
 
   const nextSeed = () => {
@@ -61,7 +62,9 @@ describe('account tokens sync routes with site status', () => {
   };
 
   beforeAll(async () => {
+    previousDataDir = process.env.DATA_DIR;
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-account-tokens-sync-'));
+    vi.resetModules();
     process.env.DATA_DIR = dataDir;
 
     await import('../../db/migrate.js');
@@ -96,7 +99,12 @@ describe('account tokens sync routes with site status', () => {
 
   afterAll(async () => {
     await app.close();
-    delete process.env.DATA_DIR;
+    if (previousDataDir === undefined) {
+      delete process.env.DATA_DIR;
+    } else {
+      process.env.DATA_DIR = previousDataDir;
+    }
+    rmSync(dataDir, { recursive: true, force: true });
   });
 
   it('returns skipped for single-account sync when site is disabled', async () => {

@@ -4,10 +4,12 @@ import { MemoryRouter } from 'react-router-dom';
 import ModernSelect from '../components/ModernSelect.js';
 import { ToastProvider } from '../components/Toast.js';
 import Accounts from './Accounts.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getSites: vi.fn(),
     getAccountTokens: vi.fn(),
   },
@@ -51,6 +53,7 @@ async function renderAccounts(
 describe('Accounts create intent handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installAccountsSnapshotCompat(apiMock);
   });
 
   afterEach(() => {

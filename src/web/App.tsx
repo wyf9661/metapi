@@ -152,7 +152,7 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/stats/dashboard', {
+      const res = await fetch('/api/settings/auth/info', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {

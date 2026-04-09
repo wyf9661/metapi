@@ -3,11 +3,13 @@ import { act, create } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import { TokensPanel } from './Tokens.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getAccountTokens: vi.fn(),
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getAccountTokenGroups: vi.fn(),
     batchUpdateAccountTokens: vi.fn(),
   },
@@ -27,6 +29,7 @@ async function flushMicrotasks() {
 describe('Tokens batch actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installAccountsSnapshotCompat(apiMock);
     apiMock.getAccountTokens.mockResolvedValue([
       {
         id: 1,

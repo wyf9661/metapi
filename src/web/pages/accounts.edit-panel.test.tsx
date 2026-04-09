@@ -4,10 +4,12 @@ import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Accounts from './Accounts.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock, toastMock } = vi.hoisted(() => ({
   apiMock: {
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getSites: vi.fn(),
     updateAccount: vi.fn(),
     updateSiteDisabledModels: vi.fn(),
@@ -60,6 +62,7 @@ function deferred<T>() {
 describe('Accounts edit panel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installAccountsSnapshotCompat(apiMock);
     apiMock.getSites.mockResolvedValue([
       { id: 1, name: 'Site A', platform: 'new-api', status: 'active' },
     ]);

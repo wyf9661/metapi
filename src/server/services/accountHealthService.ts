@@ -8,7 +8,7 @@ import {
 
 export type RuntimeHealthState = 'healthy' | 'unhealthy' | 'degraded' | 'unknown' | 'disabled';
 
-type RuntimeHealthInfo = {
+export type RuntimeHealthInfo = {
   state: RuntimeHealthState;
   reason: string;
   source: string;

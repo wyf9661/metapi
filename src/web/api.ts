@@ -1,10 +1,11 @@
-import { clearAuthSession, getAuthToken } from './authSession.js';
+import { clearAuthSession, getAuthToken } from "./authSession.js";
 
 type BufferLike = {
-  from(data: ArrayBuffer): { toString(encoding: 'base64'): string };
+  from(data: ArrayBuffer): { toString(encoding: "base64"): string };
 };
 
-const nodeBuffer = (globalThis as typeof globalThis & { Buffer?: BufferLike }).Buffer;
+const nodeBuffer = (globalThis as typeof globalThis & { Buffer?: BufferLike })
+  .Buffer;
 
 type RequestOptions = RequestInit & {
   timeoutMs?: number;
@@ -13,12 +14,16 @@ type RequestOptions = RequestInit & {
 function requireAuthToken(): string {
   const token = getAuthToken(localStorage);
   if (!token) {
-    const hadToken = !!localStorage.getItem('auth_token');
+    const hadToken = !!localStorage.getItem("auth_token");
     clearAuthSession(localStorage);
-    if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+    if (
+      hadToken &&
+      typeof window !== "undefined" &&
+      typeof window.location?.reload === "function"
+    ) {
       window.location.reload();
     }
-    throw new Error('Session expired');
+    throw new Error("Session expired");
   }
   return token;
 }
@@ -30,11 +35,14 @@ async function extractResponseErrorMessage(res: Response): Promise<string> {
     if (text) {
       try {
         const json = JSON.parse(text);
-        if (json?.message && typeof json.message === 'string') {
+        if (json?.message && typeof json.message === "string") {
           message = json.message;
-        } else if (json?.error && typeof json.error === 'string') {
+        } else if (json?.error && typeof json.error === "string") {
           message = json.error;
-        } else if (json?.error?.message && typeof json.error.message === 'string') {
+        } else if (
+          json?.error?.message &&
+          typeof json.error.message === "string"
+        ) {
           message = json.error.message;
         } else {
           message = `${message}: ${text.slice(0, 120)}`;
@@ -43,11 +51,13 @@ async function extractResponseErrorMessage(res: Response): Promise<string> {
         message = `${message}: ${text.slice(0, 120)}`;
       }
     }
-  } catch { }
+  } catch {}
   return message;
 }
 
-function parseContentDispositionFilename(headerValue: string | null): string | null {
+function parseContentDispositionFilename(
+  headerValue: string | null,
+): string | null {
   if (!headerValue) return null;
   const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(headerValue);
   if (utf8Match?.[1]) {
@@ -65,10 +75,10 @@ function parseContentDispositionFilename(headerValue: string | null): string | n
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   if (nodeBuffer) {
-    return nodeBuffer.from(buffer).toString('base64');
+    return nodeBuffer.from(buffer).toString("base64");
   }
 
-  let binary = '';
+  let binary = "";
   const bytes = new Uint8Array(buffer);
   const chunkSize = 0x8000;
   for (let index = 0; index < bytes.length; index += chunkSize) {
@@ -77,52 +87,64 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function fetchAuthenticatedResponse(url: string, options: RequestOptions = {}): Promise<Response> {
-  const { timeoutMs = 30_000, signal: externalSignal, ...fetchOptions } = options;
+async function fetchAuthenticatedResponse(
+  url: string,
+  options: RequestOptions = {},
+): Promise<Response> {
+  const {
+    timeoutMs = 30_000,
+    signal: externalSignal,
+    ...fetchOptions
+  } = options;
   const controller = new AbortController();
   let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
-  let cleanupExternalSignal = () => { };
+  let cleanupExternalSignal = () => {};
 
   if (externalSignal) {
     if (externalSignal.aborted) {
       controller.abort();
     } else {
       const abortHandler = () => controller.abort();
-      externalSignal.addEventListener('abort', abortHandler, { once: true });
-      cleanupExternalSignal = () => externalSignal.removeEventListener('abort', abortHandler);
+      externalSignal.addEventListener("abort", abortHandler, { once: true });
+      cleanupExternalSignal = () =>
+        externalSignal.removeEventListener("abort", abortHandler);
     }
   }
 
   const token = requireAuthToken();
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${token}`,
-  };
-  if (fetchOptions.body) headers['Content-Type'] = 'application/json';
+  const headers = new Headers(fetchOptions.headers ?? {});
+  headers.set("Authorization", `Bearer ${token}`);
+  if (fetchOptions.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   try {
     const res = await fetch(url, {
       ...fetchOptions,
       signal: controller.signal,
-      headers: {
-        ...headers,
-        ...fetchOptions.headers as Record<string, string>,
-      },
+      headers,
     });
     if (res.status === 401 || res.status === 403) {
       const hadToken = !!getAuthToken(localStorage);
       clearAuthSession(localStorage);
-      if (hadToken && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+      if (
+        hadToken &&
+        typeof window !== "undefined" &&
+        typeof window.location?.reload === "function"
+      ) {
         window.location.reload();
       }
-      throw new Error('Session expired');
+      throw new Error("Session expired");
     }
     return res;
   } catch (error: any) {
-    if (error?.name === 'AbortError') {
+    if (error?.name === "AbortError") {
       if (externalSignal?.aborted) throw error;
-      throw new Error(`请求超时（${Math.max(1, Math.round(timeoutMs / 1000))}s）`);
+      throw new Error(
+        `请求超时（${Math.max(1, Math.round(timeoutMs / 1000))}s）`,
+      );
     }
     throw error;
   } finally {
@@ -134,7 +156,10 @@ async function fetchAuthenticatedResponse(url: string, options: RequestOptions =
   }
 }
 
-async function request<T = any>(url: string, options: RequestOptions = {}): Promise<T> {
+async function request<T = any>(
+  url: string,
+  options: RequestOptions = {},
+): Promise<T> {
   const res = await fetchAuthenticatedResponse(url, options);
   if (!res.ok) {
     throw new Error(await extractResponseErrorMessage(res));
@@ -151,10 +176,10 @@ async function streamSse(
   },
 ) {
   const response = await fetchAuthenticatedResponse(url, {
-    method: 'GET',
+    method: "GET",
     signal: handlers.signal,
     headers: {
-      Accept: 'text/event-stream',
+      Accept: "text/event-stream",
     },
     timeoutMs: 120_000,
   });
@@ -163,42 +188,42 @@ async function streamSse(
     throw new Error(await extractResponseErrorMessage(response));
   }
   if (!response.body) {
-    throw new Error('响应未返回流式内容');
+    throw new Error("响应未返回流式内容");
   }
 
   const decoder = new TextDecoder();
   const reader = response.body.getReader();
-  let buffer = '';
+  let buffer = "";
 
   const flushBuffer = (final = false) => {
-    const chunks = final ? [...buffer.split('\n\n'), ''] : buffer.split('\n\n');
-    if (!final) buffer = chunks.pop() || '';
-    else buffer = '';
+    const chunks = final ? [...buffer.split("\n\n"), ""] : buffer.split("\n\n");
+    if (!final) buffer = chunks.pop() || "";
+    else buffer = "";
 
     for (const chunk of chunks) {
-      const lines = chunk.split('\n');
-      let eventName = 'message';
+      const lines = chunk.split("\n");
+      let eventName = "message";
       const dataLines: string[] = [];
 
       for (const line of lines) {
-        if (line.startsWith('event:')) {
-          eventName = line.slice('event:'.length).trim() || 'message';
-        } else if (line.startsWith('data:')) {
-          dataLines.push(line.slice('data:'.length).trim());
+        if (line.startsWith("event:")) {
+          eventName = line.slice("event:".length).trim() || "message";
+        } else if (line.startsWith("data:")) {
+          dataLines.push(line.slice("data:".length).trim());
         }
       }
 
       if (dataLines.length <= 0) continue;
-      let payload: any = dataLines.join('\n');
+      let payload: any = dataLines.join("\n");
       try {
         payload = JSON.parse(payload);
       } catch {
         // keep string payload
       }
 
-      if (eventName === 'log') {
+      if (eventName === "log") {
         handlers.onLog?.(payload);
-      } else if (eventName === 'done') {
+      } else if (eventName === "done") {
         handlers.onDone?.(payload);
       }
     }
@@ -216,21 +241,23 @@ async function streamSse(
   }
 }
 
-function buildQueryString(params?: Record<string, string | number | boolean | null | undefined>) {
-  if (!params) return '';
+function buildQueryString(
+  params?: Record<string, string | number | boolean | null | undefined>,
+) {
+  if (!params) return "";
   const searchParams = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') continue;
+    if (value === undefined || value === null || value === "") continue;
     searchParams.set(key, String(value));
   }
   const serialized = searchParams.toString();
-  return serialized ? `?${serialized}` : '';
+  return serialized ? `?${serialized}` : "";
 }
 
 type TestChatRequestPayload = {
   model: string;
   messages: Array<{ role: string; content: string }>;
-  targetFormat?: 'openai' | 'claude' | 'responses' | 'gemini';
+  targetFormat?: "openai" | "claude" | "responses" | "gemini";
   stream?: boolean;
   forcedChannelId?: number | null;
   temperature?: number;
@@ -241,8 +268,8 @@ type TestChatRequestPayload = {
   seed?: number;
 };
 
-export type ProxyTestMethod = 'POST' | 'GET' | 'DELETE';
-export type ProxyTestRequestKind = 'json' | 'multipart' | 'empty';
+export type ProxyTestMethod = "POST" | "GET" | "DELETE";
+export type ProxyTestRequestKind = "json" | "multipart" | "empty";
 
 export type ProxyTestMultipartFile = {
   field: string;
@@ -270,45 +297,38 @@ const LONG_RUNNING_PROXY_TEST_TIMEOUT_MS = 150_000;
 
 function resolveProxyTestTimeoutMs(data: ProxyTestRequestEnvelope) {
   if (data.jobMode) return LONG_RUNNING_PROXY_TEST_TIMEOUT_MS;
-  if (data.path === '/v1/images/generations') return LONG_RUNNING_PROXY_TEST_TIMEOUT_MS;
-  if (data.path === '/v1/images/edits') return LONG_RUNNING_PROXY_TEST_TIMEOUT_MS;
-  if (data.path === '/v1/videos' && data.method === 'POST') return LONG_RUNNING_PROXY_TEST_TIMEOUT_MS;
+  if (data.path === "/v1/images/generations")
+    return LONG_RUNNING_PROXY_TEST_TIMEOUT_MS;
+  if (data.path === "/v1/images/edits")
+    return LONG_RUNNING_PROXY_TEST_TIMEOUT_MS;
+  if (data.path === "/v1/videos" && data.method === "POST")
+    return LONG_RUNNING_PROXY_TEST_TIMEOUT_MS;
   return DEFAULT_PROXY_TEST_TIMEOUT_MS;
 }
 
 function proxyTestRequest(data: ProxyTestRequestEnvelope) {
-  return request('/api/test/proxy', {
-    method: 'POST',
+  return request("/api/test/proxy", {
+    method: "POST",
     body: JSON.stringify(data),
     timeoutMs: resolveProxyTestTimeoutMs(data),
   });
 }
 
-async function proxyTestStreamRequest(data: ProxyTestRequestEnvelope, signal?: AbortSignal) {
-  const token = getAuthToken(localStorage);
-  if (!token) {
-    clearAuthSession(localStorage);
-    throw new Error('Session expired');
-  }
-  const response = await fetch('/api/test/proxy/stream', {
-    method: 'POST',
+async function proxyTestStreamRequest(
+  data: ProxyTestRequestEnvelope,
+  signal?: AbortSignal,
+) {
+  return fetchAuthenticatedResponse("/api/test/proxy/stream", {
+    method: "POST",
     signal,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify(data),
+    timeoutMs: resolveProxyTestTimeoutMs(data),
   });
-  if (response.status === 401 || response.status === 403) {
-    clearAuthSession(localStorage);
-    throw new Error('Session expired');
-  }
-  return response;
 }
 
 export type ProxyTestJobResponse = {
   jobId: string;
-  status: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+  status: "pending" | "succeeded" | "failed" | "cancelled";
   result?: unknown;
   error?: unknown;
   createdAt?: string;
@@ -358,7 +378,7 @@ export type RuntimeSettingsPayload = {
   proxyDebugRetentionHours?: number;
   proxyDebugMaxBodyBytes?: number;
   checkinCron?: string;
-  checkinScheduleMode?: 'cron' | 'interval';
+  checkinScheduleMode?: "cron" | "interval";
   checkinIntervalHours?: number;
   balanceRefreshCron?: string;
   logCleanupCron?: string;
@@ -397,9 +417,9 @@ export type RuntimeSettingsPayload = {
   globalAllowedModels?: string[];
 };
 
-export type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
-export type ProxyLogClientConfidence = 'exact' | 'heuristic' | 'unknown' | null;
-export type ProxyLogUsageSource = 'upstream' | 'self-log' | 'unknown' | null;
+export type ProxyLogStatusFilter = "all" | "success" | "failed";
+export type ProxyLogClientConfidence = "exact" | "heuristic" | "unknown" | null;
+export type ProxyLogUsageSource = "upstream" | "self-log" | "unknown" | null;
 
 export type ProxyLogBillingDetails = {
   quotaType: number;
@@ -574,7 +594,7 @@ export type OAuthProviderInfo = {
   label: string;
   platform: string;
   enabled: boolean;
-  loginType: 'oauth';
+  loginType: "oauth";
   requiresProjectId: boolean;
   supportsDirectAccountRouting: boolean;
   supportsCloudValidation: boolean;
@@ -588,7 +608,7 @@ export type OAuthProvidersResponse = {
   };
 };
 
-export type OAuthRouteUnitStrategy = 'round_robin' | 'stick_until_unavailable';
+export type OAuthRouteUnitStrategy = "round_robin" | "stick_until_unavailable";
 
 export type OAuthRouteUnitSummary = {
   id?: number;
@@ -600,11 +620,11 @@ export type OAuthRouteUnitSummary = {
 
 export type OAuthRouteParticipation =
   | {
-    kind: 'single';
-  }
+      kind: "single";
+    }
   | ({
-    kind: 'route_unit';
-  } & OAuthRouteUnitSummary);
+      kind: "route_unit";
+    } & OAuthRouteUnitSummary);
 
 export type OAuthStartInstructions = {
   redirectUri: string;
@@ -625,7 +645,7 @@ export type OAuthStartResponse = {
 export type OAuthSessionInfo = {
   provider: string;
   state: string;
-  status: 'pending' | 'success' | 'error';
+  status: "pending" | "success" | "error";
   accountId?: number;
   siteId?: number;
   error?: string;
@@ -641,8 +661,8 @@ export type OAuthQuotaWindowInfo = {
 };
 
 export type OAuthQuotaInfo = {
-  status: 'supported' | 'unsupported' | 'error';
-  source: 'official' | 'reverse_engineered';
+  status: "supported" | "unsupported" | "error";
+  source: "official" | "reverse_engineered";
   lastSyncAt?: string | null;
   lastError?: string | null;
   providerMessage?: string | null;
@@ -669,7 +689,7 @@ export type OAuthConnectionInfo = {
   projectId?: string | null;
   modelCount: number;
   modelsPreview: string[];
-  status: 'healthy' | 'abnormal';
+  status: "healthy" | "abnormal";
   quota?: OAuthQuotaInfo | null;
   routeChannelCount?: number;
   lastModelSyncAt?: string | null;
@@ -707,7 +727,7 @@ export type OAuthImportResponse = {
   failed: number;
   items: Array<{
     name: string;
-    status: 'imported' | 'skipped' | 'failed';
+    status: "imported" | "skipped" | "failed";
     accountId?: number;
     provider?: string;
     message?: string;
@@ -731,7 +751,7 @@ export type DownstreamApiKeyTrendBucket = {
 
 export type DownstreamApiKeyTrendResponse = {
   success: boolean;
-  range: '24h' | '7d' | 'all';
+  range: "24h" | "7d" | "all";
   item: {
     id: number;
     name: string;
@@ -743,218 +763,506 @@ export type DownstreamApiKeyTrendResponse = {
 
 export const api = {
   // Sites
-  getSites: () => request('/api/sites'),
-  addSite: (data: any) => request('/api/sites', { method: 'POST', body: JSON.stringify(data) }),
-  updateSite: (id: number, data: any) => request(`/api/sites/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteSite: (id: number) => request(`/api/sites/${id}`, { method: 'DELETE' }),
-  batchUpdateSites: (data: any) => request('/api/sites/batch', { method: 'POST', body: JSON.stringify(data) }),
-  detectSite: (url: string) => request('/api/sites/detect', { method: 'POST', body: JSON.stringify({ url }) }),
-  getSiteDisabledModels: (siteId: number) => request(`/api/sites/${siteId}/disabled-models`),
-  updateSiteDisabledModels: (siteId: number, models: string[]) => request(`/api/sites/${siteId}/disabled-models`, { method: 'PUT', body: JSON.stringify({ models }) }),
-  getSiteAvailableModels: (siteId: number) => request(`/api/sites/${siteId}/available-models`),
+  getSites: () => request("/api/sites"),
+  addSite: (data: any) =>
+    request("/api/sites", { method: "POST", body: JSON.stringify(data) }),
+  updateSite: (id: number, data: any) =>
+    request(`/api/sites/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteSite: (id: number) => request(`/api/sites/${id}`, { method: "DELETE" }),
+  batchUpdateSites: (data: any) =>
+    request("/api/sites/batch", { method: "POST", body: JSON.stringify(data) }),
+  detectSite: (url: string) =>
+    request("/api/sites/detect", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
+  getSiteDisabledModels: (siteId: number) =>
+    request(`/api/sites/${siteId}/disabled-models`),
+  updateSiteDisabledModels: (siteId: number, models: string[]) =>
+    request(`/api/sites/${siteId}/disabled-models`, {
+      method: "PUT",
+      body: JSON.stringify({ models }),
+    }),
+  getSiteAvailableModels: (siteId: number) =>
+    request(`/api/sites/${siteId}/available-models`),
 
   // Accounts
-  getAccounts: (params?: { includeOauth?: boolean }) => request(`/api/accounts${buildQueryString(params)}`),
-  addAccount: (data: any) => request('/api/accounts', { method: 'POST', body: JSON.stringify(data) }),
-  loginAccount: (data: { siteId: number; username: string; password: string }) => request('/api/accounts/login', { method: 'POST', body: JSON.stringify(data) }),
-  verifyToken: (data: { siteId: number; accessToken: string; platformUserId?: number; credentialMode?: 'auto' | 'session' | 'apikey' }) => request('/api/accounts/verify-token', { method: 'POST', body: JSON.stringify(data) }),
-  rebindAccountSession: (id: number, data: { accessToken: string; platformUserId?: number; refreshToken?: string; tokenExpiresAt?: number }) =>
-    request(`/api/accounts/${id}/rebind-session`, { method: 'POST', body: JSON.stringify(data) }),
-  updateAccount: (id: number, data: any) => request(`/api/accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteAccount: (id: number) => request(`/api/accounts/${id}`, { method: 'DELETE' }),
-  batchUpdateAccounts: (data: any) => request('/api/accounts/batch', { method: 'POST', body: JSON.stringify(data) }),
-  refreshBalance: (id: number) => request(`/api/accounts/${id}/balance`, { method: 'POST' }),
+  getAccounts: async (params?: { includeOauth?: boolean }) => {
+    const result = await request<any>(`/api/accounts${buildQueryString(params)}`);
+    return Array.isArray(result?.accounts) ? result.accounts : result;
+  },
+  getAccountsSnapshot: (options?: { refresh?: boolean }) =>
+    request(
+      `/api/accounts${buildQueryString(options?.refresh ? { refresh: 1 } : undefined)}`,
+    ) as Promise<{
+      generatedAt: string;
+      accounts: any[];
+      sites: any[];
+    }>,
+  addAccount: (data: any) =>
+    request("/api/accounts", { method: "POST", body: JSON.stringify(data) }),
+  loginAccount: (data: {
+    siteId: number;
+    username: string;
+    password: string;
+  }) =>
+    request("/api/accounts/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  verifyToken: (data: {
+    siteId: number;
+    accessToken: string;
+    platformUserId?: number;
+    credentialMode?: "auto" | "session" | "apikey";
+  }) =>
+    request("/api/accounts/verify-token", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  rebindAccountSession: (
+    id: number,
+    data: {
+      accessToken: string;
+      platformUserId?: number;
+      refreshToken?: string;
+      tokenExpiresAt?: number;
+    },
+  ) =>
+    request(`/api/accounts/${id}/rebind-session`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateAccount: (id: number, data: any) =>
+    request(`/api/accounts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteAccount: (id: number) =>
+    request(`/api/accounts/${id}`, { method: "DELETE" }),
+  batchUpdateAccounts: (data: any) =>
+    request("/api/accounts/batch", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  refreshBalance: (id: number) =>
+    request(`/api/accounts/${id}/balance`, { method: "POST" }),
   getAccountModels: (id: number) => request(`/api/accounts/${id}/models`),
-  addAccountAvailableModels: (accountId: number, models: string[]) => request(`/api/accounts/${accountId}/models/manual`, { method: 'POST', body: JSON.stringify({ models }) }),
-  refreshAccountHealth: (data?: { accountId?: number; wait?: boolean }) => request('/api/accounts/health/refresh', {
-    method: 'POST',
-    body: JSON.stringify(data || {}),
-    timeoutMs: data?.wait ? 150_000 : 30_000,
-  }),
+  addAccountAvailableModels: (accountId: number, models: string[]) =>
+    request(`/api/accounts/${accountId}/models/manual`, {
+      method: "POST",
+      body: JSON.stringify({ models }),
+    }),
+  refreshAccountHealth: (data?: { accountId?: number; wait?: boolean }) =>
+    request("/api/accounts/health/refresh", {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+      timeoutMs: data?.wait ? 150_000 : 30_000,
+    }),
 
   // Account tokens
-  getAccountTokens: (accountId?: number) => request(`/api/account-tokens${accountId ? `?accountId=${accountId}` : ''}`),
-  addAccountToken: (data: any) => request('/api/account-tokens', { method: 'POST', body: JSON.stringify(data) }),
-  updateAccountToken: (id: number, data: any) => request(`/api/account-tokens/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteAccountToken: (id: number) => request(`/api/account-tokens/${id}`, { method: 'DELETE' }),
-  batchUpdateAccountTokens: (data: any) => request('/api/account-tokens/batch', { method: 'POST', body: JSON.stringify(data) }),
-  getAccountTokenGroups: (accountId: number) => request(`/api/account-tokens/groups/${accountId}`),
-  setDefaultAccountToken: (id: number) => request(`/api/account-tokens/${id}/default`, { method: 'POST' }),
-  getAccountTokenValue: (id: number) => request(`/api/account-tokens/${id}/value`),
-  syncAccountTokens: (accountId: number) => request(`/api/account-tokens/sync/${accountId}`, { method: 'POST', timeoutMs: 45_000 }),
-  syncAllAccountTokens: (wait = false) => request('/api/account-tokens/sync-all', {
-    method: 'POST',
-    body: JSON.stringify(wait ? { wait: true } : {}),
-    timeoutMs: wait ? 150_000 : 30_000,
-  }),
+  getAccountTokens: (accountId?: number) =>
+    request(`/api/account-tokens${accountId ? `?accountId=${accountId}` : ""}`),
+  addAccountToken: (data: any) =>
+    request("/api/account-tokens", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateAccountToken: (id: number, data: any) =>
+    request(`/api/account-tokens/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteAccountToken: (id: number) =>
+    request(`/api/account-tokens/${id}`, { method: "DELETE" }),
+  batchUpdateAccountTokens: (data: any) =>
+    request("/api/account-tokens/batch", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getAccountTokenGroups: (accountId: number) =>
+    request(`/api/account-tokens/groups/${accountId}`),
+  setDefaultAccountToken: (id: number) =>
+    request(`/api/account-tokens/${id}/default`, { method: "POST" }),
+  getAccountTokenValue: (id: number) =>
+    request(`/api/account-tokens/${id}/value`),
+  syncAccountTokens: (accountId: number) =>
+    request(`/api/account-tokens/sync/${accountId}`, {
+      method: "POST",
+      timeoutMs: 45_000,
+    }),
+  syncAllAccountTokens: (wait = false) =>
+    request("/api/account-tokens/sync-all", {
+      method: "POST",
+      body: JSON.stringify(wait ? { wait: true } : {}),
+      timeoutMs: wait ? 150_000 : 30_000,
+    }),
 
   // Check-in
-  triggerCheckinAll: () => request('/api/checkin/trigger', { method: 'POST' }),
-  triggerCheckin: (id: number) => request(`/api/checkin/trigger/${id}`, { method: 'POST' }),
-  getCheckinLogs: (params?: string) => request(`/api/checkin/logs${params ? '?' + params : ''}`),
-  updateCheckinSchedule: (cron: string) => request('/api/checkin/schedule', { method: 'PUT', body: JSON.stringify({ cron }) }),
+  triggerCheckinAll: () => request("/api/checkin/trigger", { method: "POST" }),
+  triggerCheckin: (id: number) =>
+    request(`/api/checkin/trigger/${id}`, { method: "POST" }),
+  getCheckinLogs: (params?: string) =>
+    request(`/api/checkin/logs${params ? "?" + params : ""}`),
+  updateCheckinSchedule: (cron: string) =>
+    request("/api/checkin/schedule", {
+      method: "PUT",
+      body: JSON.stringify({ cron }),
+    }),
 
   // Routes
-  getRoutes: () => request('/api/routes'),
-  getRoutesLite: () => request('/api/routes/lite'),
-  getRoutesSummary: () => request('/api/routes/summary'),
-  getRouteChannels: (routeId: number) => request(`/api/routes/${routeId}/channels`),
-  batchAddChannels: (routeId: number, channels: Array<{ accountId: number; tokenId?: number; sourceModel?: string }>) =>
-    request(`/api/routes/${routeId}/channels/batch`, { method: 'POST', body: JSON.stringify({ channels }) }),
-  addRoute: (data: any) => request('/api/routes', { method: 'POST', body: JSON.stringify(data) }),
-  updateRoute: (id: number, data: any) => request(`/api/routes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteRoute: (id: number) => request(`/api/routes/${id}`, { method: 'DELETE' }),
-  clearRouteCooldown: (id: number) => request(`/api/routes/${id}/cooldown/clear`, { method: 'POST' }),
-  batchUpdateRoutes: (data: { ids: number[]; action: 'enable' | 'disable' }) =>
-    request('/api/routes/batch', { method: 'POST', body: JSON.stringify(data) }),
-  addChannel: (routeId: number, data: any) => request(`/api/routes/${routeId}/channels`, { method: 'POST', body: JSON.stringify(data) }),
-  updateChannel: (id: number, data: any) => request(`/api/channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getRoutes: () => request("/api/routes"),
+  getRoutesLite: () => request("/api/routes/lite"),
+  getRoutesSummary: () => request("/api/routes/summary"),
+  getRouteChannels: (routeId: number) =>
+    request(`/api/routes/${routeId}/channels`),
+  batchAddChannels: (
+    routeId: number,
+    channels: Array<{
+      accountId: number;
+      tokenId?: number;
+      sourceModel?: string;
+    }>,
+  ) =>
+    request(`/api/routes/${routeId}/channels/batch`, {
+      method: "POST",
+      body: JSON.stringify({ channels }),
+    }),
+  addRoute: (data: any) =>
+    request("/api/routes", { method: "POST", body: JSON.stringify(data) }),
+  updateRoute: (id: number, data: any) =>
+    request(`/api/routes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteRoute: (id: number) =>
+    request(`/api/routes/${id}`, { method: "DELETE" }),
+  clearRouteCooldown: (id: number) =>
+    request(`/api/routes/${id}/cooldown/clear`, { method: "POST" }),
+  batchUpdateRoutes: (data: { ids: number[]; action: "enable" | "disable" }) =>
+    request("/api/routes/batch", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  addChannel: (routeId: number, data: any) =>
+    request(`/api/routes/${routeId}/channels`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateChannel: (id: number, data: any) =>
+    request(`/api/channels/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   batchUpdateChannels: (updates: Array<{ id: number; priority: number }>) =>
-    request('/api/channels/batch', { method: 'PUT', body: JSON.stringify({ updates }) }),
-  deleteChannel: (id: number) => request(`/api/channels/${id}`, { method: 'DELETE' }),
-  rebuildRoutes: (refreshModels = true, wait = false) => request('/api/routes/rebuild', {
-    method: 'POST',
-    body: JSON.stringify({ refreshModels, ...(wait ? { wait: true } : {}) }),
-    timeoutMs: wait ? 150_000 : 30_000,
-  }),
-  refreshRouteDecisionSnapshots: () => request('/api/routes/decision/refresh', {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
-  getRouteDecision: (model: string) => request(`/api/routes/decision?model=${encodeURIComponent(model)}`),
-  getRouteDecisionsBatch: (models: string[], options?: { refreshPricingCatalog?: boolean; persistSnapshots?: boolean }) => request('/api/routes/decision/batch', {
-    method: 'POST',
-    body: JSON.stringify({
-      models,
-      ...(options?.refreshPricingCatalog ? { refreshPricingCatalog: true } : {}),
-      ...(options?.persistSnapshots ? { persistSnapshots: true } : {}),
+    request("/api/channels/batch", {
+      method: "PUT",
+      body: JSON.stringify({ updates }),
     }),
-  }),
-  getRouteDecisionsByRouteBatch: (items: Array<{ routeId: number; model: string }>, options?: { refreshPricingCatalog?: boolean; persistSnapshots?: boolean }) => request('/api/routes/decision/by-route/batch', {
-    method: 'POST',
-    body: JSON.stringify({
-      items,
-      ...(options?.refreshPricingCatalog ? { refreshPricingCatalog: true } : {}),
-      ...(options?.persistSnapshots ? { persistSnapshots: true } : {}),
+  deleteChannel: (id: number) =>
+    request(`/api/channels/${id}`, { method: "DELETE" }),
+  rebuildRoutes: (refreshModels = true, wait = false) =>
+    request("/api/routes/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ refreshModels, ...(wait ? { wait: true } : {}) }),
+      timeoutMs: wait ? 150_000 : 30_000,
     }),
-  }),
-  getRouteWideDecisionsBatch: (routeIds: number[], options?: { refreshPricingCatalog?: boolean; persistSnapshots?: boolean }) => request('/api/routes/decision/route-wide/batch', {
-    method: 'POST',
-    body: JSON.stringify({
-      routeIds,
-      ...(options?.refreshPricingCatalog ? { refreshPricingCatalog: true } : {}),
-      ...(options?.persistSnapshots ? { persistSnapshots: true } : {}),
+  refreshRouteDecisionSnapshots: () =>
+    request("/api/routes/decision/refresh", {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
-  }),
+  getRouteDecision: (model: string) =>
+    request(`/api/routes/decision?model=${encodeURIComponent(model)}`),
+  getRouteDecisionsBatch: (
+    models: string[],
+    options?: { refreshPricingCatalog?: boolean; persistSnapshots?: boolean },
+  ) =>
+    request("/api/routes/decision/batch", {
+      method: "POST",
+      body: JSON.stringify({
+        models,
+        ...(options?.refreshPricingCatalog
+          ? { refreshPricingCatalog: true }
+          : {}),
+        ...(options?.persistSnapshots ? { persistSnapshots: true } : {}),
+      }),
+    }),
+  getRouteDecisionsByRouteBatch: (
+    items: Array<{ routeId: number; model: string }>,
+    options?: { refreshPricingCatalog?: boolean; persistSnapshots?: boolean },
+  ) =>
+    request("/api/routes/decision/by-route/batch", {
+      method: "POST",
+      body: JSON.stringify({
+        items,
+        ...(options?.refreshPricingCatalog
+          ? { refreshPricingCatalog: true }
+          : {}),
+        ...(options?.persistSnapshots ? { persistSnapshots: true } : {}),
+      }),
+    }),
+  getRouteWideDecisionsBatch: (
+    routeIds: number[],
+    options?: { refreshPricingCatalog?: boolean; persistSnapshots?: boolean },
+  ) =>
+    request("/api/routes/decision/route-wide/batch", {
+      method: "POST",
+      body: JSON.stringify({
+        routeIds,
+        ...(options?.refreshPricingCatalog
+          ? { refreshPricingCatalog: true }
+          : {}),
+        ...(options?.persistSnapshots ? { persistSnapshots: true } : {}),
+      }),
+    }),
 
   // Stats
-  getDashboard: () => request('/api/stats/dashboard'),
-  getProxyLogs: (params?: ProxyLogsQuery) => request(`/api/stats/proxy-logs${buildQueryString(params)}`) as Promise<ProxyLogsResponse>,
-  getProxyLogDetail: (id: number) => request(`/api/stats/proxy-logs/${id}`) as Promise<ProxyLogDetail>,
-  getProxyDebugTraces: (params?: { limit?: number }) => request(`/api/stats/proxy-debug/traces${buildQueryString(params)}`) as Promise<ProxyDebugTracesResponse>,
-  getProxyDebugTraceDetail: (id: number) => request(`/api/stats/proxy-debug/traces/${id}`) as Promise<ProxyDebugTraceDetail>,
-  checkModels: (accountId: number) => request(`/api/models/check/${accountId}`, { method: 'POST' }),
-  getSiteDistribution: () => request('/api/stats/site-distribution'),
+  getDashboard: () => request("/api/stats/dashboard"),
+  getDashboardSnapshot: (options?: { refresh?: boolean }) =>
+    request(
+      `/api/stats/dashboard${buildQueryString({
+        view: "summary",
+        ...(options?.refresh ? { refresh: 1 } : {}),
+      })}`,
+    ),
+  getDashboardInsights: (options?: { refresh?: boolean }) =>
+    request(
+      `/api/stats/dashboard${buildQueryString({
+        view: "insights",
+        ...(options?.refresh ? { refresh: 1 } : {}),
+      })}`,
+    ),
+  getProxyLogs: (params?: ProxyLogsQuery) =>
+    request(
+      `/api/stats/proxy-logs${buildQueryString(params)}`,
+    ) as Promise<ProxyLogsResponse>,
+  getProxyLogsQuery: (params?: ProxyLogsQuery) =>
+    request(
+      `/api/stats/proxy-logs${buildQueryString({
+        ...params,
+        view: "query",
+      })}`,
+    ) as Promise<{
+      items: ProxyLogsResponse["items"];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>,
+  getProxyLogsMeta: (
+    params?: Omit<ProxyLogsQuery, "limit" | "offset"> & {
+      refresh?: number | boolean;
+    },
+  ) => {
+    const refresh =
+      params?.refresh === true
+        ? 1
+        : typeof params?.refresh === "number"
+          ? params.refresh
+          : undefined;
+    const queryParams = {
+      ...params,
+      view: "meta",
+      ...(refresh !== undefined ? { refresh } : {}),
+    } as Record<string, string | number | boolean | null | undefined>;
+    if (refresh === undefined) delete queryParams.refresh;
+    return request(
+      `/api/stats/proxy-logs${buildQueryString(queryParams)}`,
+    ) as Promise<{
+      clientOptions: ProxyLogsResponse["clientOptions"];
+      summary: ProxyLogsResponse["summary"];
+      sites: Array<{ id: number; name: string; status?: string | null }>;
+    }>;
+  },
+  getProxyLogDetail: (id: number) =>
+    request(`/api/stats/proxy-logs/${id}`) as Promise<ProxyLogDetail>,
+  getProxyDebugTraces: (params?: { limit?: number }) =>
+    request(
+      `/api/stats/proxy-debug/traces${buildQueryString(params)}`,
+    ) as Promise<ProxyDebugTracesResponse>,
+  getProxyDebugTraceDetail: (id: number) =>
+    request(
+      `/api/stats/proxy-debug/traces/${id}`,
+    ) as Promise<ProxyDebugTraceDetail>,
+  checkModels: (accountId: number) =>
+    request(`/api/models/check/${accountId}`, { method: "POST" }),
+  getSiteDistribution: () => request("/api/stats/site-distribution"),
   getSiteTrend: (days = 7) => request(`/api/stats/site-trend?days=${days}`),
+  getSiteSnapshot: async (days = 7, options?: { refresh?: boolean }) => {
+    const query = buildQueryString({
+      days,
+      ...(options?.refresh ? { refresh: 1 } : {}),
+    });
+    const [distribution, trend, sites] = await Promise.all([
+      request<{ distribution: any[] }>(`/api/stats/site-distribution${query}`),
+      request<{ trend: any[] }>(`/api/stats/site-trend${query}`),
+      request<any[]>("/api/sites"),
+    ]);
+    return {
+      generatedAt: new Date().toISOString(),
+      distribution: Array.isArray(distribution?.distribution)
+        ? distribution.distribution
+        : [],
+      trend: Array.isArray(trend?.trend) ? trend.trend : [],
+      sites: Array.isArray(sites) ? sites : [],
+    };
+  },
   getModelBySite: (siteId?: number, days = 7) =>
-    request(`/api/stats/model-by-site?${siteId ? `siteId=${siteId}&` : ''}days=${days}`),
+    request(
+      `/api/stats/model-by-site?${siteId ? `siteId=${siteId}&` : ""}days=${days}`,
+    ),
 
   // Search
-  search: (query: string) => request('/api/search', { method: 'POST', body: JSON.stringify({ query, limit: 20 }) }),
+  search: (query: string) =>
+    request("/api/search", {
+      method: "POST",
+      body: JSON.stringify({ query, limit: 20 }),
+    }),
 
   // OAuth
-  getOAuthProviders: () => request('/api/oauth/providers') as Promise<OAuthProvidersResponse>,
-  startOAuthProvider: (provider: string, data?: { accountId?: number; projectId?: string; proxyUrl?: string | null; useSystemProxy?: boolean }) => request(`/api/oauth/providers/${encodeURIComponent(provider)}/start`, {
-    method: 'POST',
-    body: JSON.stringify(data || {}),
-  }) as Promise<OAuthStartResponse>,
-  getOAuthSession: (state: string) => request(`/api/oauth/sessions/${encodeURIComponent(state)}`) as Promise<OAuthSessionInfo>,
-  submitOAuthManualCallback: (state: string, callbackUrl: string) => request(`/api/oauth/sessions/${encodeURIComponent(state)}/manual-callback`, {
-    method: 'POST',
-    body: JSON.stringify({ callbackUrl }),
-  }) as Promise<{ success: true }>,
+  getOAuthProviders: () =>
+    request("/api/oauth/providers") as Promise<OAuthProvidersResponse>,
+  startOAuthProvider: (
+    provider: string,
+    data?: {
+      accountId?: number;
+      projectId?: string;
+      proxyUrl?: string | null;
+      useSystemProxy?: boolean;
+    },
+  ) =>
+    request(`/api/oauth/providers/${encodeURIComponent(provider)}/start`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    }) as Promise<OAuthStartResponse>,
+  getOAuthSession: (state: string) =>
+    request(
+      `/api/oauth/sessions/${encodeURIComponent(state)}`,
+    ) as Promise<OAuthSessionInfo>,
+  submitOAuthManualCallback: (state: string, callbackUrl: string) =>
+    request(
+      `/api/oauth/sessions/${encodeURIComponent(state)}/manual-callback`,
+      {
+        method: "POST",
+        body: JSON.stringify({ callbackUrl }),
+      },
+    ) as Promise<{ success: true }>,
   getOAuthConnections: (params?: { limit?: number; offset?: number }) =>
-    request(`/api/oauth/connections${buildQueryString(params)}`) as Promise<OAuthConnectionsResponse>,
-  refreshOAuthConnectionQuota: (accountId: number) => request(`/api/oauth/connections/${accountId}/quota/refresh`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }) as Promise<{ success: true; quota: OAuthQuotaInfo }>,
-  refreshOAuthConnectionQuotaBatch: (accountIds: number[]) => request('/api/oauth/connections/quota/refresh-batch', {
-    method: 'POST',
-    body: JSON.stringify({ accountIds }),
-  }) as Promise<OAuthQuotaBatchRefreshResponse>,
-  updateOAuthConnectionProxy: (accountId: number, data: { proxyUrl?: string | null; useSystemProxy?: boolean }) => request(`/api/oauth/connections/${accountId}/proxy`, {
-    method: 'PATCH',
-    body: JSON.stringify(data || {}),
-  }) as Promise<{ success: true }>,
-  rebindOAuthConnection: (accountId: number, data?: { proxyUrl?: string | null; useSystemProxy?: boolean }) => request(`/api/oauth/connections/${accountId}/rebind`, {
-    method: 'POST',
-    body: JSON.stringify(data || {}),
-  }) as Promise<OAuthStartResponse>,
-  deleteOAuthConnection: (accountId: number) => request(`/api/oauth/connections/${accountId}`, {
-    method: 'DELETE',
-  }) as Promise<{ success: true }>,
-  importOAuthConnections: (data: Record<string, unknown>) => request('/api/oauth/import', {
-    method: 'POST',
-    body: JSON.stringify(Array.isArray(data.items) ? data : { data }),
-  }) as Promise<OAuthImportResponse>,
-  createOAuthRouteUnit: (data: { accountIds: number[]; name: string; strategy: OAuthRouteUnitStrategy }) => request('/api/oauth/route-units', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }) as Promise<OAuthRouteUnitMutationResponse>,
-  deleteOAuthRouteUnit: (routeUnitId: number) => request(`/api/oauth/route-units/${routeUnitId}`, {
-    method: 'DELETE',
-  }) as Promise<{ success: true }>,
+    request(
+      `/api/oauth/connections${buildQueryString(params)}`,
+    ) as Promise<OAuthConnectionsResponse>,
+  refreshOAuthConnectionQuota: (accountId: number) =>
+    request(`/api/oauth/connections/${accountId}/quota/refresh`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }) as Promise<{ success: true; quota: OAuthQuotaInfo }>,
+  refreshOAuthConnectionQuotaBatch: (accountIds: number[]) =>
+    request("/api/oauth/connections/quota/refresh-batch", {
+      method: "POST",
+      body: JSON.stringify({ accountIds }),
+    }) as Promise<OAuthQuotaBatchRefreshResponse>,
+  updateOAuthConnectionProxy: (
+    accountId: number,
+    data: { proxyUrl?: string | null; useSystemProxy?: boolean },
+  ) =>
+    request(`/api/oauth/connections/${accountId}/proxy`, {
+      method: "PATCH",
+      body: JSON.stringify(data || {}),
+    }) as Promise<{ success: true }>,
+  rebindOAuthConnection: (
+    accountId: number,
+    data?: { proxyUrl?: string | null; useSystemProxy?: boolean },
+  ) =>
+    request(`/api/oauth/connections/${accountId}/rebind`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    }) as Promise<OAuthStartResponse>,
+  deleteOAuthConnection: (accountId: number) =>
+    request(`/api/oauth/connections/${accountId}`, {
+      method: "DELETE",
+    }) as Promise<{ success: true }>,
+  importOAuthConnections: (data: Record<string, unknown>) =>
+    request("/api/oauth/import", {
+      method: "POST",
+      body: JSON.stringify(Array.isArray(data.items) ? data : { data }),
+    }) as Promise<OAuthImportResponse>,
+  createOAuthRouteUnit: (data: {
+    accountIds: number[];
+    name: string;
+    strategy: OAuthRouteUnitStrategy;
+  }) =>
+    request("/api/oauth/route-units", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }) as Promise<OAuthRouteUnitMutationResponse>,
+  deleteOAuthRouteUnit: (routeUnitId: number) =>
+    request(`/api/oauth/route-units/${routeUnitId}`, {
+      method: "DELETE",
+    }) as Promise<{ success: true }>,
 
   // Events
-  getEvents: (params?: string) => request(`/api/events${params ? '?' + params : ''}`),
-  getEventCount: () => request('/api/events/count'),
-  markEventRead: (id: number) => request(`/api/events/${id}/read`, { method: 'POST' }),
-  markAllEventsRead: () => request('/api/events/read-all', { method: 'POST' }),
-  clearEvents: () => request('/api/events', { method: 'DELETE' }),
-  getSiteAnnouncements: (params?: string) => request(`/api/site-announcements${params ? '?' + params : ''}`),
-  markSiteAnnouncementRead: (id: number) => request(`/api/site-announcements/${id}/read`, { method: 'POST' }),
-  markAllSiteAnnouncementsRead: () => request('/api/site-announcements/read-all', { method: 'POST' }),
-  clearSiteAnnouncements: () => request('/api/site-announcements', { method: 'DELETE' }),
-  syncSiteAnnouncements: (payload?: { siteId?: number }) => request('/api/site-announcements/sync', {
-    method: 'POST',
-    body: JSON.stringify(payload || {}),
-  }),
-  getTasks: (limit = 50) => request(`/api/tasks?limit=${Math.max(1, Math.min(200, Math.trunc(limit)))}`),
+  getEvents: (params?: string) =>
+    request(`/api/events${params ? "?" + params : ""}`),
+  getEventCount: () => request("/api/events/count"),
+  markEventRead: (id: number) =>
+    request(`/api/events/${id}/read`, { method: "POST" }),
+  markAllEventsRead: () => request("/api/events/read-all", { method: "POST" }),
+  clearEvents: () => request("/api/events", { method: "DELETE" }),
+  getSiteAnnouncements: (params?: string) =>
+    request(`/api/site-announcements${params ? "?" + params : ""}`),
+  markSiteAnnouncementRead: (id: number) =>
+    request(`/api/site-announcements/${id}/read`, { method: "POST" }),
+  markAllSiteAnnouncementsRead: () =>
+    request("/api/site-announcements/read-all", { method: "POST" }),
+  clearSiteAnnouncements: () =>
+    request("/api/site-announcements", { method: "DELETE" }),
+  syncSiteAnnouncements: (payload?: { siteId?: number }) =>
+    request("/api/site-announcements/sync", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    }),
+  getTasks: (limit = 50) =>
+    request(
+      `/api/tasks?limit=${Math.max(1, Math.min(200, Math.trunc(limit)))}`,
+    ),
   getTask: (id: string) => request(`/api/tasks/${encodeURIComponent(id)}`),
 
   // Auth management
-  getAuthInfo: () => request('/api/settings/auth/info'),
-  changeAuthToken: (oldToken: string, newToken: string) => request('/api/settings/auth/change', {
-    method: 'POST', body: JSON.stringify({ oldToken, newToken }),
-  }),
-  getRuntimeSettings: () => request('/api/settings/runtime'),
-  getBrandList: () => request('/api/settings/brand-list'),
-  updateRuntimeSettings: (data: RuntimeSettingsPayload) => request('/api/settings/runtime', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  getUpdateCenterStatus: () => request('/api/update-center/status'),
-  saveUpdateCenterConfig: (data: any) => request('/api/update-center/config', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  checkUpdateCenter: () => request('/api/update-center/check', {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
+  getAuthInfo: () => request("/api/settings/auth/info"),
+  changeAuthToken: (oldToken: string, newToken: string) =>
+    request("/api/settings/auth/change", {
+      method: "POST",
+      body: JSON.stringify({ oldToken, newToken }),
+    }),
+  getRuntimeSettings: () => request("/api/settings/runtime"),
+  getBrandList: () => request("/api/settings/brand-list"),
+  updateRuntimeSettings: (data: RuntimeSettingsPayload) =>
+    request("/api/settings/runtime", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  getUpdateCenterStatus: () => request("/api/update-center/status"),
+  saveUpdateCenterConfig: (data: any) =>
+    request("/api/update-center/config", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  checkUpdateCenter: () =>
+    request("/api/update-center/check", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   deployUpdateCenter: (data: {
-    source: 'github-release' | 'docker-hub-tag';
+    source: "github-release" | "docker-hub-tag";
     targetTag: string;
     targetDigest?: string | null;
-  }) => request('/api/update-center/deploy', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  rollbackUpdateCenter: (data: { targetRevision: string }) => request('/api/update-center/rollback', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  }) =>
+    request("/api/update-center/deploy", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  rollbackUpdateCenter: (data: { targetRevision: string }) =>
+    request("/api/update-center/rollback", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   streamUpdateCenterTaskLogs: (
     taskId: string,
     handlers: {
@@ -962,147 +1270,205 @@ export const api = {
       onDone?: (payload: any) => void;
       signal?: AbortSignal;
     },
-  ) => streamSse(`/api/update-center/tasks/${encodeURIComponent(taskId)}/stream`, handlers),
-  testSystemProxy: (data: SystemProxyTestRequest) => request('/api/settings/system-proxy/test', {
-    method: 'POST',
-    body: JSON.stringify(data),
-    timeoutMs: 20_000,
-  }),
-  getRuntimeDatabaseConfig: () => request('/api/settings/database/runtime'),
-  updateRuntimeDatabaseConfig: (data: { dialect: 'sqlite' | 'mysql' | 'postgres'; connectionString: string; ssl?: boolean }) =>
-    request('/api/settings/database/runtime', {
-      method: 'PUT',
+  ) =>
+    streamSse(
+      `/api/update-center/tasks/${encodeURIComponent(taskId)}/stream`,
+      handlers,
+    ),
+  testSystemProxy: (data: SystemProxyTestRequest) =>
+    request("/api/settings/system-proxy/test", {
+      method: "POST",
+      body: JSON.stringify(data),
+      timeoutMs: 20_000,
+    }),
+  getRuntimeDatabaseConfig: () => request("/api/settings/database/runtime"),
+  updateRuntimeDatabaseConfig: (data: {
+    dialect: "sqlite" | "mysql" | "postgres";
+    connectionString: string;
+    ssl?: boolean;
+  }) =>
+    request("/api/settings/database/runtime", {
+      method: "PUT",
       body: JSON.stringify(data),
     }),
-  testExternalDatabaseConnection: (data: { dialect: 'sqlite' | 'mysql' | 'postgres'; connectionString: string; ssl?: boolean }) =>
-    request('/api/settings/database/test-connection', {
-      method: 'POST',
+  testExternalDatabaseConnection: (data: {
+    dialect: "sqlite" | "mysql" | "postgres";
+    connectionString: string;
+    ssl?: boolean;
+  }) =>
+    request("/api/settings/database/test-connection", {
+      method: "POST",
       body: JSON.stringify(data),
     }),
-  migrateExternalDatabase: (data: { dialect: 'sqlite' | 'mysql' | 'postgres'; connectionString: string; overwrite?: boolean; ssl?: boolean }) =>
-    request('/api/settings/database/migrate', {
-      method: 'POST',
+  migrateExternalDatabase: (data: {
+    dialect: "sqlite" | "mysql" | "postgres";
+    connectionString: string;
+    overwrite?: boolean;
+    ssl?: boolean;
+  }) =>
+    request("/api/settings/database/migrate", {
+      method: "POST",
       body: JSON.stringify(data),
       timeoutMs: 120_000,
     }),
-  getDownstreamApiKeys: () => request('/api/downstream-keys'),
-  createDownstreamApiKey: (data: any) => request('/api/downstream-keys', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  updateDownstreamApiKey: (id: number, data: any) => request(`/api/downstream-keys/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  deleteDownstreamApiKey: (id: number) => request(`/api/downstream-keys/${id}`, {
-    method: 'DELETE',
-  }),
-  batchDownstreamApiKeys: (data: {
-    ids: number[];
-    action: 'enable' | 'disable' | 'delete' | 'resetUsage' | 'updateMetadata';
-    groupOperation?: 'keep' | 'set' | 'clear';
-    groupName?: string;
-    tagOperation?: 'keep' | 'append';
-    tags?: string[];
-  }) =>
-    request('/api/downstream-keys/batch', {
-      method: 'POST',
+  getDownstreamApiKeys: () => request("/api/downstream-keys"),
+  createDownstreamApiKey: (data: any) =>
+    request("/api/downstream-keys", {
+      method: "POST",
       body: JSON.stringify(data),
     }),
-  resetDownstreamApiKeyUsage: (id: number) => request(`/api/downstream-keys/${id}/reset-usage`, {
-    method: 'POST',
-  }),
-  getDownstreamApiKeysSummary: (params?: { range?: '24h' | '7d' | 'all'; status?: 'all' | 'enabled' | 'disabled'; search?: string }) =>
-    request(`/api/downstream-keys/summary${buildQueryString(params)}`),
-  getDownstreamApiKeyOverview: (id: number) => request(`/api/downstream-keys/${id}/overview`),
-  getDownstreamApiKeyTrend: (id: number, params?: { range?: '24h' | '7d' | 'all'; timeZone?: string }) =>
-    request<DownstreamApiKeyTrendResponse>(`/api/downstream-keys/${id}/trend${buildQueryString(params)}`),
-  exportBackup: (type: 'all' | 'accounts' | 'preferences' = 'all') =>
+  updateDownstreamApiKey: (id: number, data: any) =>
+    request(`/api/downstream-keys/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteDownstreamApiKey: (id: number) =>
+    request(`/api/downstream-keys/${id}`, {
+      method: "DELETE",
+    }),
+  batchDownstreamApiKeys: (data: {
+    ids: number[];
+    action: "enable" | "disable" | "delete" | "resetUsage" | "updateMetadata";
+    groupOperation?: "keep" | "set" | "clear";
+    groupName?: string;
+    tagOperation?: "keep" | "append";
+    tags?: string[];
+  }) =>
+    request("/api/downstream-keys/batch", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  resetDownstreamApiKeyUsage: (id: number) =>
+    request(`/api/downstream-keys/${id}/reset-usage`, {
+      method: "POST",
+    }),
+  getDownstreamApiKeysSummary: (params?: {
+    range?: "24h" | "7d" | "all";
+    status?: "all" | "enabled" | "disabled";
+    search?: string;
+  }) => request(`/api/downstream-keys/summary${buildQueryString(params)}`),
+  getDownstreamApiKeyOverview: (id: number) =>
+    request(`/api/downstream-keys/${id}/overview`),
+  getDownstreamApiKeyTrend: (
+    id: number,
+    params?: { range?: "24h" | "7d" | "all"; timeZone?: string },
+  ) =>
+    request<DownstreamApiKeyTrendResponse>(
+      `/api/downstream-keys/${id}/trend${buildQueryString(params)}`,
+    ),
+  exportBackup: (type: "all" | "accounts" | "preferences" = "all") =>
     request(`/api/settings/backup/export?type=${encodeURIComponent(type)}`),
   importBackup: (data: any) =>
-    request('/api/settings/backup/import', {
-      method: 'POST',
+    request("/api/settings/backup/import", {
+      method: "POST",
       body: JSON.stringify({ data }),
     }),
-  getBackupWebdavConfig: () => request('/api/settings/backup/webdav'),
+  getBackupWebdavConfig: () => request("/api/settings/backup/webdav"),
   saveBackupWebdavConfig: (data: {
     enabled: boolean;
     fileUrl: string;
     username: string;
     password?: string;
     clearPassword?: boolean;
-    exportType: 'all' | 'accounts' | 'preferences';
+    exportType: "all" | "accounts" | "preferences";
     autoSyncEnabled: boolean;
     autoSyncCron: string;
   }) =>
-    request('/api/settings/backup/webdav', {
-      method: 'PUT',
+    request("/api/settings/backup/webdav", {
+      method: "PUT",
       body: JSON.stringify(data),
     }),
-  exportBackupToWebdav: (type?: 'all' | 'accounts' | 'preferences') =>
-    request('/api/settings/backup/webdav/export', {
-      method: 'POST',
+  exportBackupToWebdav: (type?: "all" | "accounts" | "preferences") =>
+    request("/api/settings/backup/webdav/export", {
+      method: "POST",
       body: JSON.stringify(type ? { type } : {}),
       timeoutMs: 60_000,
     }),
   importBackupFromWebdav: () =>
-    request('/api/settings/backup/webdav/import', {
-      method: 'POST',
+    request("/api/settings/backup/webdav/import", {
+      method: "POST",
       body: JSON.stringify({}),
       timeoutMs: 60_000,
     }),
-  clearRuntimeCache: () => request('/api/settings/maintenance/clear-cache', { method: 'POST' }),
-  clearUsageData: () => request('/api/settings/maintenance/clear-usage', { method: 'POST' }),
-  factoryReset: () => request('/api/settings/maintenance/factory-reset', { method: 'POST' }),
-  testNotification: () => request('/api/settings/notify/test', { method: 'POST' }),
+  clearRuntimeCache: () =>
+    request("/api/settings/maintenance/clear-cache", { method: "POST" }),
+  clearUsageData: () =>
+    request("/api/settings/maintenance/clear-usage", { method: "POST" }),
+  factoryReset: () =>
+    request("/api/settings/maintenance/factory-reset", { method: "POST" }),
+  testNotification: () =>
+    request("/api/settings/notify/test", { method: "POST" }),
 
   // Monitor embed
-  getMonitorConfig: () => request('/api/monitor/config'),
-  updateMonitorConfig: (data: { ldohCookie?: string | null }) => request('/api/monitor/config', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  initMonitorSession: () => request('/api/monitor/session', { method: 'POST' }),
+  getMonitorConfig: () => request("/api/monitor/config"),
+  updateMonitorConfig: (data: { ldohCookie?: string | null }) =>
+    request("/api/monitor/config", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  initMonitorSession: () => request("/api/monitor/session", { method: "POST" }),
 
   // Models marketplace
-  getModelsMarketplace: (options?: { refresh?: boolean; includePricing?: boolean }) => {
+  getModelsMarketplace: (options?: {
+    refresh?: boolean;
+    includePricing?: boolean;
+  }) => {
     const params = new URLSearchParams();
-    if (options?.refresh) params.set('refresh', '1');
-    if (options?.includePricing) params.set('includePricing', '1');
+    if (options?.refresh) params.set("refresh", "1");
+    if (options?.includePricing) params.set("includePricing", "1");
     const query = params.toString();
-    return request(`/api/models/marketplace${query ? `?${query}` : ''}`, { timeoutMs: options?.refresh ? 45_000 : 15_000 });
+    return request(`/api/models/marketplace${query ? `?${query}` : ""}`, {
+      timeoutMs: options?.refresh ? 45_000 : 15_000,
+    });
   },
-  getModelTokenCandidates: () => request('/api/models/token-candidates'),
+  getModelTokenCandidates: () => request("/api/models/token-candidates"),
 
   // Simple chat test from admin panel
   startTestChatJob: (data: TestChatRequestPayload) =>
-    request('/api/test/chat/jobs', { method: 'POST', body: JSON.stringify(data) }),
-  getTestChatJob: (jobId: string) => request(`/api/test/chat/jobs/${encodeURIComponent(jobId)}`),
-  deleteTestChatJob: (jobId: string) => request(`/api/test/chat/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }),
+    request("/api/test/chat/jobs", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getTestChatJob: (jobId: string) =>
+    request(`/api/test/chat/jobs/${encodeURIComponent(jobId)}`),
+  deleteTestChatJob: (jobId: string) =>
+    request(`/api/test/chat/jobs/${encodeURIComponent(jobId)}`, {
+      method: "DELETE",
+    }),
   startProxyTestJob: (data: ProxyTestRequestEnvelope) =>
-    request('/api/test/proxy/jobs', {
-      method: 'POST',
+    request("/api/test/proxy/jobs", {
+      method: "POST",
       body: JSON.stringify(data),
       timeoutMs: resolveProxyTestTimeoutMs(data),
     }),
-  getProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`),
-  deleteProxyTestJob: (jobId: string) => request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }),
+  getProxyTestJob: (jobId: string) =>
+    request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`),
+  deleteProxyTestJob: (jobId: string) =>
+    request(`/api/test/proxy/jobs/${encodeURIComponent(jobId)}`, {
+      method: "DELETE",
+    }),
   getProxyFileContentDataUrl: async (
     fileId: string,
-    options: Pick<RequestOptions, 'signal' | 'timeoutMs'> = {},
+    options: Pick<RequestOptions, "signal" | "timeoutMs"> = {},
   ) => {
-    const response = await fetchAuthenticatedResponse(`/v1/files/${encodeURIComponent(fileId)}/content`, {
-      method: 'GET',
-      ...options,
-    });
+    const response = await fetchAuthenticatedResponse(
+      `/v1/files/${encodeURIComponent(fileId)}/content`,
+      {
+        method: "GET",
+        ...options,
+      },
+    );
     if (!response.ok) {
       throw new Error(await extractResponseErrorMessage(response));
     }
 
-    const mimeType = (response.headers.get('content-type') || 'application/octet-stream')
-      .split(';')[0]
-      .trim() || 'application/octet-stream';
-    const filename = parseContentDispositionFilename(response.headers.get('content-disposition'));
+    const mimeType =
+      (response.headers.get("content-type") || "application/octet-stream")
+        .split(";")[0]
+        .trim() || "application/octet-stream";
+    const filename = parseContentDispositionFilename(
+      response.headers.get("content-disposition"),
+    );
     const base64 = arrayBufferToBase64(await response.arrayBuffer());
     return {
       filename,
@@ -1113,21 +1479,24 @@ export const api = {
   testProxy: proxyTestRequest,
   proxyTest: proxyTestRequest,
   testChat: (data: TestChatRequestPayload) =>
-    request('/api/test/chat', { method: 'POST', body: JSON.stringify(data) }),
+    request("/api/test/chat", { method: "POST", body: JSON.stringify(data) }),
   testProxyStream: proxyTestStreamRequest,
   proxyTestStream: proxyTestStreamRequest,
-  testChatStream: async (data: TestChatRequestPayload, signal?: AbortSignal) => {
+  testChatStream: async (
+    data: TestChatRequestPayload,
+    signal?: AbortSignal,
+  ) => {
     const token = getAuthToken(localStorage);
     if (!token) {
       clearAuthSession(localStorage);
-      throw new Error('Session expired');
+      throw new Error("Session expired");
     }
-    return fetch('/api/test/chat/stream', {
-      method: 'POST',
+    return fetch("/api/test/chat/stream", {
+      method: "POST",
       signal,
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(data),
     });

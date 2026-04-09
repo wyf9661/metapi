@@ -518,12 +518,14 @@ export default function DownstreamKeys() {
     if (exclusionSourceLoading || exclusionSourceLoaded) return;
     setExclusionSourceLoading(true);
     try {
-      const [accountsRes, tokensRes] = await Promise.all([
-        api.getAccounts(),
+      const [accountsSnapshotRes, tokensRes] = await Promise.all([
+        api.getAccountsSnapshot(),
         api.getAccountTokens(),
       ]);
 
-      const accountRows = Array.isArray(accountsRes) ? accountsRes : [];
+      const accountRows = Array.isArray(accountsSnapshotRes?.accounts)
+        ? accountsSnapshotRes.accounts
+        : [];
       const tokenRows = Array.isArray(tokensRes) ? tokensRes : [];
 
       const siteMap = new Map<number, { siteId: number; siteName: string; accountIds: Set<number> }>();

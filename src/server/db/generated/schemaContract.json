@@ -206,6 +206,170 @@
         }
       }
     },
+    "admin_snapshots": {
+      "columns": {
+        "id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true
+        },
+        "namespace": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "snapshot_key": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "payload": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "generated_at": {
+          "logicalType": "datetime",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "expires_at": {
+          "logicalType": "datetime",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "stale_until": {
+          "logicalType": "datetime",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "updated_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        }
+      }
+    },
+    "analytics_projection_checkpoints": {
+      "columns": {
+        "projector_key": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true
+        },
+        "time_zone": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": "'Local'",
+          "primaryKey": false
+        },
+        "last_proxy_log_id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "watermark_created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "recompute_from_id": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "recompute_requested_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "recompute_reason": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "recompute_started_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "recompute_completed_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "last_projected_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "last_successful_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "last_error": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "updated_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "lease_owner": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "lease_token": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "lease_expires_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        }
+      }
+    },
     "checkin_logs": {
       "columns": {
         "id": {
@@ -470,6 +634,88 @@
           "logicalType": "boolean",
           "notNull": false,
           "defaultValue": "false",
+          "primaryKey": false
+        }
+      }
+    },
+    "model_day_usage": {
+      "columns": {
+        "id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true
+        },
+        "local_day": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "site_id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "model": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "total_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "success_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "failed_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_tokens": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_spend": {
+          "logicalType": "real",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_latency_ms": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "latency_count": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "updated_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
           "primaryKey": false
         }
       }
@@ -1560,6 +1806,88 @@
         }
       }
     },
+    "site_day_usage": {
+      "columns": {
+        "id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true
+        },
+        "local_day": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "site_id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "total_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "success_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "failed_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_tokens": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_summary_spend": {
+          "logicalType": "real",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_site_spend": {
+          "logicalType": "real",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_latency_ms": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "latency_count": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "updated_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        }
+      }
+    },
     "site_disabled_models": {
       "columns": {
         "id": {
@@ -1581,6 +1909,88 @@
           "primaryKey": false
         },
         "created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        }
+      }
+    },
+    "site_hour_usage": {
+      "columns": {
+        "id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true
+        },
+        "bucket_start_utc": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "site_id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "total_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "success_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "failed_calls": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_tokens": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_summary_spend": {
+          "logicalType": "real",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_site_spend": {
+          "logicalType": "real",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "total_latency_ms": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "latency_count": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "updated_at": {
           "logicalType": "datetime",
           "notNull": false,
           "defaultValue": "datetime('now')",
@@ -1869,6 +2279,47 @@
       "unique": false
     },
     {
+      "name": "admin_snapshots_expires_at_idx",
+      "table": "admin_snapshots",
+      "columns": [
+        "expires_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "admin_snapshots_namespace_key_unique",
+      "table": "admin_snapshots",
+      "columns": [
+        "namespace",
+        "snapshot_key"
+      ],
+      "unique": true
+    },
+    {
+      "name": "admin_snapshots_stale_until_idx",
+      "table": "admin_snapshots",
+      "columns": [
+        "stale_until"
+      ],
+      "unique": false
+    },
+    {
+      "name": "analytics_projection_checkpoints_lease_expires_at_idx",
+      "table": "analytics_projection_checkpoints",
+      "columns": [
+        "lease_expires_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "analytics_projection_checkpoints_recompute_from_id_idx",
+      "table": "analytics_projection_checkpoints",
+      "columns": [
+        "recompute_from_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "checkin_logs_account_created_at_idx",
       "table": "checkin_logs",
       "columns": [
@@ -1974,6 +2425,40 @@
       "table": "model_availability",
       "columns": [
         "model_name"
+      ],
+      "unique": false
+    },
+    {
+      "name": "model_day_usage_day_idx",
+      "table": "model_day_usage",
+      "columns": [
+        "local_day"
+      ],
+      "unique": false
+    },
+    {
+      "name": "model_day_usage_day_site_model_unique",
+      "table": "model_day_usage",
+      "columns": [
+        "local_day",
+        "site_id",
+        "model"
+      ],
+      "unique": true
+    },
+    {
+      "name": "model_day_usage_model_idx",
+      "table": "model_day_usage",
+      "columns": [
+        "model"
+      ],
+      "unique": false
+    },
+    {
+      "name": "model_day_usage_site_id_idx",
+      "table": "model_day_usage",
+      "columns": [
+        "site_id"
       ],
       "unique": false
     },
@@ -2308,6 +2793,31 @@
       "unique": true
     },
     {
+      "name": "site_day_usage_day_idx",
+      "table": "site_day_usage",
+      "columns": [
+        "local_day"
+      ],
+      "unique": false
+    },
+    {
+      "name": "site_day_usage_day_site_unique",
+      "table": "site_day_usage",
+      "columns": [
+        "local_day",
+        "site_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "site_day_usage_site_id_idx",
+      "table": "site_day_usage",
+      "columns": [
+        "site_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "site_disabled_models_site_id_idx",
       "table": "site_disabled_models",
       "columns": [
@@ -2323,6 +2833,31 @@
         "model_name"
       ],
       "unique": true
+    },
+    {
+      "name": "site_hour_usage_hour_idx",
+      "table": "site_hour_usage",
+      "columns": [
+        "bucket_start_utc"
+      ],
+      "unique": false
+    },
+    {
+      "name": "site_hour_usage_hour_site_unique",
+      "table": "site_hour_usage",
+      "columns": [
+        "bucket_start_utc",
+        "site_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "site_hour_usage_site_id_idx",
+      "table": "site_hour_usage",
+      "columns": [
+        "site_id"
+      ],
+      "unique": false
     },
     {
       "name": "sites_platform_url_unique",
@@ -2394,6 +2929,14 @@
   ],
   "uniques": [
     {
+      "name": "admin_snapshots_namespace_key_unique",
+      "table": "admin_snapshots",
+      "columns": [
+        "namespace",
+        "snapshot_key"
+      ]
+    },
+    {
       "name": "downstream_api_keys_key_unique",
       "table": "downstream_api_keys",
       "columns": [
@@ -2406,6 +2949,15 @@
       "columns": [
         "account_id",
         "model_name"
+      ]
+    },
+    {
+      "name": "model_day_usage_day_site_model_unique",
+      "table": "model_day_usage",
+      "columns": [
+        "local_day",
+        "site_id",
+        "model"
       ]
     },
     {
@@ -2470,11 +3022,27 @@
       ]
     },
     {
+      "name": "site_day_usage_day_site_unique",
+      "table": "site_day_usage",
+      "columns": [
+        "local_day",
+        "site_id"
+      ]
+    },
+    {
       "name": "site_disabled_models_site_model_unique",
       "table": "site_disabled_models",
       "columns": [
         "site_id",
         "model_name"
+      ]
+    },
+    {
+      "name": "site_hour_usage_hour_site_unique",
+      "table": "site_hour_usage",
+      "columns": [
+        "bucket_start_utc",
+        "site_id"
       ]
     },
     {
@@ -2534,6 +3102,17 @@
         "account_id"
       ],
       "referencedTable": "accounts",
+      "referencedColumns": [
+        "id"
+      ],
+      "onDelete": "CASCADE"
+    },
+    {
+      "table": "model_day_usage",
+      "columns": [
+        "site_id"
+      ],
+      "referencedTable": "sites",
       "referencedColumns": [
         "id"
       ],
@@ -2661,7 +3240,29 @@
       "onDelete": "CASCADE"
     },
     {
+      "table": "site_day_usage",
+      "columns": [
+        "site_id"
+      ],
+      "referencedTable": "sites",
+      "referencedColumns": [
+        "id"
+      ],
+      "onDelete": "CASCADE"
+    },
+    {
       "table": "site_disabled_models",
+      "columns": [
+        "site_id"
+      ],
+      "referencedTable": "sites",
+      "referencedColumns": [
+        "id"
+      ],
+      "onDelete": "CASCADE"
+    },
+    {
+      "table": "site_hour_usage",
       "columns": [
         "site_id"
       ],

@@ -89,7 +89,12 @@ describe('accounts api today reward fallback', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const rows = response.json() as Array<{ id: number; todayReward: number }>;
+    const body = response.json() as {
+      generatedAt: string;
+      accounts: Array<{ id: number; todayReward: number }>;
+      sites: any[];
+    };
+    const rows = body.accounts;
     const target = rows.find((row) => row.id === account.id);
     expect(target?.todayReward).toBe(12.5);
   });
@@ -122,7 +127,12 @@ describe('accounts api today reward fallback', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const rows = response.json() as Array<{ id: number; todayReward: number }>;
+    const body = response.json() as {
+      generatedAt: string;
+      accounts: Array<{ id: number; todayReward: number }>;
+      sites: any[];
+    };
+    const rows = body.accounts;
     const target = rows.find((row) => row.id === account.id);
     expect(target?.todayReward).toBe(1.8);
   });
@@ -163,7 +173,12 @@ describe('accounts api today reward fallback', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const rows = response.json() as Array<{ id: number; todayReward: number }>;
+    const body = response.json() as {
+      generatedAt: string;
+      accounts: Array<{ id: number; todayReward: number }>;
+      sites: any[];
+    };
+    const rows = body.accounts;
     const target = rows.find((row) => row.id === account.id);
     expect(target?.todayReward).toBe(1.2);
   });
@@ -215,7 +230,12 @@ describe('accounts api today reward fallback', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const rows = response.json() as Array<{ id: number; todaySpend: number }>;
+    const body = response.json() as {
+      generatedAt: string;
+      accounts: Array<{ id: number; todaySpend: number }>;
+      sites: any[];
+    };
+    const rows = body.accounts;
     const target = rows.find((row) => row.id === account.id);
     expect(target?.todaySpend).toBe(2);
   });
@@ -251,7 +271,12 @@ describe('accounts api today reward fallback', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const rows = response.json() as Array<{ id: number; todaySpend: number }>;
+    const body = response.json() as {
+      generatedAt: string;
+      accounts: Array<{ id: number; todaySpend: number }>;
+      sites: any[];
+    };
+    const rows = body.accounts;
     const target = rows.find((row) => row.id === account.id);
     expect(target?.todaySpend).toBe(2.25);
   });

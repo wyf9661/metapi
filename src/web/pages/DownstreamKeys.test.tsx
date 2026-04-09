@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import DownstreamKeys from './DownstreamKeys.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -10,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     getDownstreamApiKeys: vi.fn(),
     getRoutesLite: vi.fn(),
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getAccountTokens: vi.fn(),
     getDownstreamApiKeyOverview: vi.fn(),
     getDownstreamApiKeyTrend: vi.fn(),
@@ -126,6 +128,7 @@ function buildRawItem(overrides?: Partial<any>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installAccountsSnapshotCompat(apiMock);
   (globalThis as any).document = {
     body: { style: {} },
     addEventListener: vi.fn(),
@@ -837,7 +840,7 @@ describe('DownstreamKeys page', () => {
       });
       await flushMicrotasks();
 
-      expect(apiMock.getAccounts).not.toHaveBeenCalled();
+      expect(apiMock.getAccountsSnapshot).not.toHaveBeenCalled();
       expect(apiMock.getAccountTokens).not.toHaveBeenCalled();
 
       const createBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
@@ -846,7 +849,7 @@ describe('DownstreamKeys page', () => {
       });
       await flushMicrotasks();
 
-      expect(apiMock.getAccounts).toHaveBeenCalledTimes(1);
+      expect(apiMock.getAccountsSnapshot).toHaveBeenCalledTimes(1);
       expect(apiMock.getAccountTokens).toHaveBeenCalledTimes(1);
 
       const advancedBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('高级配置'))[0];

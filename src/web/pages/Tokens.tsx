@@ -175,11 +175,16 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [tokenRows, accountRows] = await Promise.all([api.getAccountTokens(), api.getAccounts()]);
+      const [tokenRows, accountSnapshot] = await Promise.all([
+        api.getAccountTokens(),
+        api.getAccountsSnapshot(),
+      ]);
       const nextTokens = tokenRows || [];
       setTokens(nextTokens);
       setSelectedTokenIds((current) => current.filter((id) => nextTokens.some((token: any) => token.id === id)));
-      const latestAccounts: SyncableAccount[] = Array.isArray(accountRows) ? accountRows : [];
+      const latestAccounts: SyncableAccount[] = Array.isArray(accountSnapshot?.accounts)
+        ? accountSnapshot.accounts
+        : [];
       setAccounts(latestAccounts);
 
       const syncableAccounts = latestAccounts.filter(isAccountSyncable);

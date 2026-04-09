@@ -19,6 +19,11 @@ describe('schema contract generation', () => {
     expect(contract.tables.site_disabled_models).toBeDefined();
     expect(contract.tables.downstream_api_keys).toBeDefined();
     expect(contract.tables.proxy_files).toBeDefined();
+    expect(contract.tables.admin_snapshots.columns.snapshot_key).toMatchObject({
+      logicalType: 'text',
+      notNull: true,
+      primaryKey: false,
+    });
     expect(contract.tables.proxy_video_tasks).toBeDefined();
     expect(contract.tables.route_channels.columns.source_model).toBeDefined();
     expect(contract.tables.route_channels.columns.last_selected_at).toBeDefined();

@@ -5,10 +5,12 @@ import ModernSelect from '../components/ModernSelect.js';
 import { ToastProvider } from '../components/Toast.js';
 import Accounts from './Accounts.js';
 import { TokensPanel } from './Tokens.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getSites: vi.fn(),
     getAccountTokens: vi.fn(),
     getAccountTokenValue: vi.fn(),
@@ -82,6 +84,7 @@ function buildTokensRoot() {
 describe('Tokens edit modal and row selection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installAccountsSnapshotCompat(apiMock);
     Object.defineProperty(globalThis, 'navigator', {
       value: {
         clipboard: {

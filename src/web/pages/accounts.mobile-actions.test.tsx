@@ -3,10 +3,12 @@ import { act, create } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Accounts from './Accounts.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getSites: vi.fn(),
     batchUpdateAccounts: vi.fn(),
     refreshAccountHealth: vi.fn(),
@@ -46,6 +48,7 @@ function findButtonByText(root: any, text: string) {
 describe('Accounts mobile actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installAccountsSnapshotCompat(apiMock);
     apiMock.getSites.mockResolvedValue([
       { id: 1, name: 'Site A', platform: 'new-api', status: 'active' },
     ]);

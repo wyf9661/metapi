@@ -297,7 +297,11 @@ curl -sS "${METAPI_ADMIN_BASE_URL}/api/sites" \
 
 `GET /api/accounts`
 
-返回当前全部账号，以及关联站点、凭证模式、能力信息、今日花费、运行健康状态等聚合字段。
+返回账号快照对象，而不是裸数组。响应里包含：
+
+- `generatedAt`：快照生成时间
+- `accounts`：当前全部账号，以及关联站点、凭证模式、能力信息、今日花费、运行健康状态等聚合字段
+- `sites`：前端常用的站点列表快照
 
 示例：
 
@@ -309,26 +313,37 @@ curl -sS "${METAPI_ADMIN_BASE_URL}/api/accounts" \
 示例响应：
 
 ```json
-[
-  {
-    "id": 1,
-    "siteId": 1,
-    "username": "alice",
-    "status": "active",
-    "credentialMode": "apikey",
-    "capabilities": {
-      "canCheckin": false,
-      "canRefreshBalance": false,
-      "proxyOnly": true
-    },
-    "site": {
+{
+  "generatedAt": "2026-04-09T06:00:00.000Z",
+  "accounts": [
+    {
+      "id": 1,
+      "siteId": 1,
+      "username": "alice",
+      "status": "active",
+      "credentialMode": "apikey",
+      "capabilities": {
+        "canCheckin": false,
+        "canRefreshBalance": false,
+        "proxyOnly": true
+      },
+      "site": {
+        "id": 1,
+        "name": "My New API",
+        "url": "https://api.example.com",
+        "platform": "new-api"
+      }
+    }
+  ],
+  "sites": [
+    {
       "id": 1,
       "name": "My New API",
       "url": "https://api.example.com",
       "platform": "new-api"
     }
-  }
-]
+  ]
+}
 ```
 
 ### 2. 验证凭证

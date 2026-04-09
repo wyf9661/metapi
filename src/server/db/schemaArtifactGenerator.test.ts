@@ -29,6 +29,8 @@ describe('schema artifact generator', () => {
     expect(artifacts.mysqlBootstrap).toContain('CREATE TABLE IF NOT EXISTS `sites`');
     expect(artifacts.mysqlBootstrap).toContain('CREATE TABLE IF NOT EXISTS `site_disabled_models`');
     expect(artifacts.postgresBootstrap).toContain('CREATE TABLE IF NOT EXISTS "account_tokens"');
+    expect(artifacts.mysqlBootstrap).toContain('`snapshot_key` TEXT NOT NULL');
+    expect(artifacts.postgresBootstrap).toContain('"snapshot_key" TEXT NOT NULL');
     expect(artifacts.postgresBootstrap).toContain('"token_group"');
   });
 

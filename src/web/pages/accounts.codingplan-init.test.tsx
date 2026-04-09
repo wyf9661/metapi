@@ -3,10 +3,12 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Accounts from './Accounts.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getSites: vi.fn(),
     getAccountTokens: vi.fn(),
     addAccount: vi.fn(),
@@ -36,6 +38,7 @@ async function flushMicrotasks() {
 describe('Accounts CodingPlan initialization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installAccountsSnapshotCompat(apiMock);
     apiMock.getAccounts.mockResolvedValue([]);
     apiMock.getSites.mockResolvedValue([
       { id: 10, name: 'Aliyun CodingPlan', url: 'https://coding.dashscope.aliyuncs.com/v1', platform: 'openai', status: 'active' },

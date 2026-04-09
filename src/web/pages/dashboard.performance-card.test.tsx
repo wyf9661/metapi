@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { ToastProvider } from '../components/Toast.js';
 import Dashboard from './Dashboard.js';
+import { installDashboardSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getDashboard: vi.fn(),
+    getDashboardSnapshot: vi.fn(),
+    getDashboardInsights: vi.fn(),
+    getSiteSnapshot: vi.fn(),
     getSiteDistribution: vi.fn(),
     getSiteTrend: vi.fn(),
     getSites: vi.fn(),
@@ -40,6 +44,7 @@ describe('Dashboard performance stat card', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    installDashboardSnapshotCompat(apiMock);
     apiMock.getSiteDistribution.mockResolvedValue({ distribution: [] });
     apiMock.getSiteTrend.mockResolvedValue({ trend: [] });
     apiMock.getSites.mockResolvedValue([]);

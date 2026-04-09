@@ -8,6 +8,8 @@ import ProxyLogs from './ProxyLogs.js';
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getProxyLogs: vi.fn(),
+    getProxyLogsQuery: vi.fn(),
+    getProxyLogsMeta: vi.fn(),
     getProxyLogDetail: vi.fn(),
     getProxyDebugTraces: vi.fn(),
     getProxyDebugTraceDetail: vi.fn(),
@@ -141,6 +143,17 @@ describe('ProxyLogs server-driven page', () => {
       proxyDebugMaxBodyBytes: 262144,
     });
     apiMock.getProxyLogs.mockResolvedValue(buildListResponse());
+    apiMock.getProxyLogsQuery.mockImplementation((params: any) =>
+      apiMock.getProxyLogs(params),
+    );
+    apiMock.getProxyLogsMeta.mockResolvedValue({
+      summary: buildListResponse().summary,
+      clientOptions: buildListResponse().clientOptions,
+      sites: [
+        { id: 1, name: 'main-site', status: 'active' },
+        { id: 2, name: 'backup-site', status: 'active' },
+      ],
+    });
     apiMock.getProxyLogDetail.mockResolvedValue({
       id: 101,
       createdAt: '2026-03-09 16:00:00',

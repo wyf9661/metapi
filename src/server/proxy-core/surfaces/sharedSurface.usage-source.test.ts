@@ -58,6 +58,7 @@ vi.mock('../orchestration/upstreamRequest.js', () => ({
 }));
 
 vi.mock('../../services/oauth/quota.js', () => ({
+  recordOauthQuotaHeadersSnapshot: vi.fn(),
   recordOauthQuotaResetHint: vi.fn(),
 }));
 

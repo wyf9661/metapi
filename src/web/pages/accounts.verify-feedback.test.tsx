@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import Accounts from './Accounts.js';
+import { installAccountsSnapshotCompat } from './testApiCompat.js';
 import {
   buildAddAccountPrereqHint,
   buildVerifyFailureHint,
@@ -13,6 +14,7 @@ import {
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getAccounts: vi.fn(),
+    getAccountsSnapshot: vi.fn(),
     getSites: vi.fn(),
     verifyToken: vi.fn(),
   },
@@ -40,6 +42,7 @@ async function flushMicrotasks() {
 describe('Accounts verify feedback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installAccountsSnapshotCompat(apiMock);
   });
 
   afterEach(() => {

@@ -87,6 +87,7 @@ vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
 }));
 
 vi.mock('../../services/oauth/quota.js', () => ({
+  recordOauthQuotaHeadersSnapshot: async () => undefined,
   recordOauthQuotaResetHint: (...args: unknown[]) => recordOauthQuotaResetHintMock(...args),
 }));
 

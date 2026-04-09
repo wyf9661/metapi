@@ -1,122 +1,162 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api.js';
-import CenteredModal from '../components/CenteredModal.js';
-import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
-import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
-import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
-import { useToast } from '../components/Toast.js';
-import ModernSelect from '../components/ModernSelect.js';
-import { MobileCard, MobileField } from '../components/MobileCard.js';
-import { useIsMobile } from '../components/useIsMobile.js';
-import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
-import SiteBadgeLink from '../components/SiteBadgeLink.js';
-import AccountModelsModal from './accounts/AccountModelsModal.js';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { api } from "../api.js";
+import CenteredModal from "../components/CenteredModal.js";
+import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";
+import ResponsiveFormGrid from "../components/ResponsiveFormGrid.js";
+import ResponsiveBatchActionBar from "../components/ResponsiveBatchActionBar.js";
+import { useToast } from "../components/Toast.js";
+import ModernSelect from "../components/ModernSelect.js";
+import { MobileCard, MobileField } from "../components/MobileCard.js";
+import { useIsMobile } from "../components/useIsMobile.js";
+import DeleteConfirmModal from "../components/DeleteConfirmModal.js";
+import SiteBadgeLink from "../components/SiteBadgeLink.js";
+import AccountModelsModal from "./accounts/AccountModelsModal.js";
 import {
   buildAddAccountPrereqHint,
   buildVerifyFailureHint,
   normalizeVerifyFailureMessage,
-} from './helpers/accountVerifyFeedback.js';
+} from "./helpers/accountVerifyFeedback.js";
 import {
   isTruthyFlag,
   parsePositiveInt,
   resolveAccountCredentialMode,
-} from './helpers/accountConnection.js';
-import { clearFocusParams, readFocusAccountIntent } from './helpers/navigationFocus.js';
-import { TokensPanel } from './Tokens.js';
-import { tr } from '../i18n.js';
-import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
-import { shouldIgnoreRowSelectionClick } from './helpers/rowSelection.js';
-import { SITE_DOCS_URL } from '../docsLink.js';
-import { getSiteInitializationPreset } from '../../shared/siteInitializationPresets.js';
-import { parseBatchApiKeys } from '../../shared/apiKeyBatch.js';
+} from "./helpers/accountConnection.js";
+import {
+  clearFocusParams,
+  readFocusAccountIntent,
+} from "./helpers/navigationFocus.js";
+import { TokensPanel } from "./Tokens.js";
+import { tr } from "../i18n.js";
+import {
+  buildCustomReorderUpdates,
+  sortItemsForDisplay,
+  type SortMode,
+} from "./helpers/listSorting.js";
+import { shouldIgnoreRowSelectionClick } from "./helpers/rowSelection.js";
+import { SITE_DOCS_URL } from "../docsLink.js";
+import { getSiteInitializationPreset } from "../../shared/siteInitializationPresets.js";
+import { parseBatchApiKeys } from "../../shared/apiKeyBatch.js";
 
-type ConnectionsSegment = 'session' | 'apikey' | 'tokens';
+type ConnectionsSegment = "session" | "apikey" | "tokens";
 
 const ACCOUNT_SEGMENTS: Array<{
   value: ConnectionsSegment;
   label: string;
   tooltip: string;
-  tooltipSide: 'top' | 'bottom';
-  tooltipAlign: 'start' | 'center' | 'end';
+  tooltipSide: "top" | "bottom";
+  tooltipAlign: "start" | "center" | "end";
 }> = [
-    { value: 'session', label: '账号管理', tooltip: '用于签到、余额、状态维护', tooltipSide: 'bottom', tooltipAlign: 'start' },
-    { value: 'apikey', label: 'API Key管理', tooltip: '只有 Base URL + Key 时使用，只负责代理调用', tooltipSide: 'bottom', tooltipAlign: 'center' },
-    { value: 'tokens', label: '账号令牌管理', tooltip: '从账号同步或手动维护，供路由实际调用', tooltipSide: 'bottom', tooltipAlign: 'end' },
-  ];
+  {
+    value: "session",
+    label: "账号管理",
+    tooltip: "用于签到、余额、状态维护",
+    tooltipSide: "bottom",
+    tooltipAlign: "start",
+  },
+  {
+    value: "apikey",
+    label: "API Key管理",
+    tooltip: "只有 Base URL + Key 时使用，只负责代理调用",
+    tooltipSide: "bottom",
+    tooltipAlign: "center",
+  },
+  {
+    value: "tokens",
+    label: "账号令牌管理",
+    tooltip: "从账号同步或手动维护，供路由实际调用",
+    tooltipSide: "bottom",
+    tooltipAlign: "end",
+  },
+];
 
-const SITE_SELECT_SEARCH_PLACEHOLDER = '筛选站点（名称 / 平台 / URL）';
+const SITE_SELECT_SEARCH_PLACEHOLDER = "筛选站点（名称 / 平台 / URL）";
 
 function createLoginForm() {
-  return { siteId: 0, username: '', password: '' };
+  return { siteId: 0, username: "", password: "" };
 }
 
-function createTokenForm(credentialMode: 'session' | 'apikey' = 'session') {
+function createTokenForm(credentialMode: "session" | "apikey" = "session") {
   return {
     siteId: 0,
-    username: '',
-    accessToken: '',
-    platformUserId: '',
-    refreshToken: '',
-    tokenExpiresAt: '',
+    username: "",
+    accessToken: "",
+    platformUserId: "",
+    refreshToken: "",
+    tokenExpiresAt: "",
     credentialMode,
     skipModelFetch: false,
   };
 }
 
-function createRebindForm(platformUserId = '') {
-  return { accessToken: '', platformUserId, refreshToken: '', tokenExpiresAt: '' };
+function createRebindForm(platformUserId = "") {
+  return {
+    accessToken: "",
+    platformUserId,
+    refreshToken: "",
+    tokenExpiresAt: "",
+  };
 }
 
 function resolveConnectionsSegment(search: string): ConnectionsSegment {
-  const rawSegment = new URLSearchParams(search).get('segment');
-  if (rawSegment === 'apikey' || rawSegment === 'tokens') return rawSegment;
-  return 'session';
+  const rawSegment = new URLSearchParams(search).get("segment");
+  if (rawSegment === "apikey" || rawSegment === "tokens") return rawSegment;
+  return "session";
 }
 
 export default function Accounts() {
   const location = useLocation();
   const navigate = useNavigate();
-  const activeSegment = useMemo(() => resolveConnectionsSegment(location.search), [location.search]);
+  const activeSegment = useMemo(
+    () => resolveConnectionsSegment(location.search),
+    [location.search],
+  );
   const [accounts, setAccounts] = useState<any[]>([]);
   const [sites, setSites] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>('custom');
-  const [highlightAccountId, setHighlightAccountId] = useState<number | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("custom");
+  const [highlightAccountId, setHighlightAccountId] = useState<number | null>(
+    null,
+  );
   const [expandedAccountIds, setExpandedAccountIds] = useState<number[]>([]);
   const isMobile = useIsMobile();
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [addMode, setAddMode] = useState<'token' | 'login'>('token');
+  const [addMode, setAddMode] = useState<"token" | "login">("token");
   const [loginForm, setLoginForm] = useState(createLoginForm);
-  const [tokenForm, setTokenForm] = useState(() => createTokenForm('session'));
-  const [createIntentPresetId, setCreateIntentPresetId] = useState<string | null>(null);
+  const [tokenForm, setTokenForm] = useState(() => createTokenForm("session"));
+  const [createIntentPresetId, setCreateIntentPresetId] = useState<
+    string | null
+  >(null);
   const [applyCreatePresetModels, setApplyCreatePresetModels] = useState(false);
   const [verifyResult, setVerifyResult] = useState<any>(null);
   const [verifying, setVerifying] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
-  const [embeddedTokenActions, setEmbeddedTokenActions] = useState<React.ReactNode>(null);
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [embeddedTokenActions, setEmbeddedTokenActions] =
+    useState<React.ReactNode>(null);
   const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([]);
   const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
-    mode: 'single' | 'batch';
+    mode: "single" | "batch";
     accountId?: number;
     accountName?: string;
     count?: number;
   }>(null);
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({
-    username: '',
-    status: 'active',
+    username: "",
+    status: "active",
     checkinEnabled: true,
-    unitCost: '',
-    accessToken: '',
-    apiToken: '',
+    unitCost: "",
+    accessToken: "",
+    apiToken: "",
     isPinned: false,
-    refreshToken: '',
-    tokenExpiresAt: '',
-    proxyUrl: '',
+    refreshToken: "",
+    tokenExpiresAt: "",
+    proxyUrl: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [rebindTarget, setRebindTarget] = useState<any | null>(null);
@@ -127,7 +167,12 @@ export default function Accounts() {
   const [modelModal, setModelModal] = useState<{
     open: boolean;
     account: any | null;
-    models: Array<{ name: string; latencyMs: number | null; disabled: boolean; isManual?: boolean }>;
+    models: Array<{
+      name: string;
+      latencyMs: number | null;
+      disabled: boolean;
+      isManual?: boolean;
+    }>;
     pendingDisabled: Set<string>;
     loading: boolean;
     saving: boolean;
@@ -141,8 +186,8 @@ export default function Accounts() {
     pendingDisabled: new Set(),
     loading: false,
     saving: false,
-    siteName: '',
-    manualModelsInput: '',
+    siteName: "",
+    manualModelsInput: "",
     addingManualModels: false,
   });
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
@@ -152,40 +197,51 @@ export default function Accounts() {
   const toast = useToast();
   if (rebindTarget) lastRebindTargetRef.current = rebindTarget;
   const activeRebindTarget = rebindTarget || lastRebindTargetRef.current;
-  const isRebindSub2Api = ((activeRebindTarget?.site?.platform || '').toLowerCase() === 'sub2api');
+  const isRebindSub2Api =
+    (activeRebindTarget?.site?.platform || "").toLowerCase() === "sub2api";
 
-  const load = async () => {
-    const [accountsResult, sitesResult] = await Promise.allSettled([
-      api.getAccounts(),
-      api.getSites(),
-    ]);
-    if (accountsResult.status === 'fulfilled') {
-      const nextAccounts = accountsResult.value || [];
+  const load = async (forceRefresh = false) => {
+    try {
+      const snapshot = await api.getAccountsSnapshot(
+        forceRefresh ? { refresh: true } : undefined,
+      );
+      const nextAccounts = Array.isArray(snapshot?.accounts)
+        ? snapshot.accounts
+        : [];
+      const nextSites = Array.isArray(snapshot?.sites) ? snapshot.sites : [];
       setAccounts(nextAccounts);
-      setSelectedAccountIds((current) => current.filter((id) => nextAccounts.some((account: any) => account.id === id)));
-    } else {
-      const reason = (accountsResult as PromiseRejectedResult).reason as any;
-      toast.error(reason?.message || '加载账号列表失败');
+      setSites(nextSites);
+      setSelectedAccountIds((current) =>
+        current.filter((id) =>
+          nextAccounts.some((account: any) => account.id === id),
+        ),
+      );
+    } catch (error: any) {
+      toast.error(error?.message || "加载账号列表失败");
+    } finally {
+      setLoaded(true);
     }
-    if (sitesResult.status === 'fulfilled') {
-      setSites(sitesResult.value || []);
-    }
-    setLoaded(true);
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   const selectedTokenSite = useMemo(
     () => sites.find((item) => item.id === tokenForm.siteId) || null,
     [sites, tokenForm.siteId],
   );
   const parsedApiKeys = useMemo(
-    () => activeSegment === 'apikey' ? parseBatchApiKeys(tokenForm.accessToken) : [],
+    () =>
+      activeSegment === "apikey"
+        ? parseBatchApiKeys(tokenForm.accessToken)
+        : [],
     [activeSegment, tokenForm.accessToken],
   );
-  const isBatchApiKeyInput = activeSegment === 'apikey' && parsedApiKeys.length > 1;
+  const isBatchApiKeyInput =
+    activeSegment === "apikey" && parsedApiKeys.length > 1;
   const siteSelectOptions = useMemo(
     () => [
-      { value: '0', label: '选择站点' },
+      { value: "0", label: "选择站点" },
       ...sites.map((site: any) => ({
         value: String(site.id),
         label: `${site.name} (${site.platform})`,
@@ -194,15 +250,19 @@ export default function Accounts() {
     ],
     [sites],
   );
-  const isSub2ApiSelected = (selectedTokenSite?.platform || '').toLowerCase() === 'sub2api';
-  const activeAddCredentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
+  const isSub2ApiSelected =
+    (selectedTokenSite?.platform || "").toLowerCase() === "sub2api";
+  const activeAddCredentialMode =
+    activeSegment === "apikey" ? "apikey" : "session";
   const createIntentPreset = useMemo(
     () => getSiteInitializationPreset(createIntentPresetId),
     [createIntentPresetId],
   );
 
-  const resetAddForms = (credentialMode: 'session' | 'apikey' = activeAddCredentialMode) => {
-    setAddMode('token');
+  const resetAddForms = (
+    credentialMode: "session" | "apikey" = activeAddCredentialMode,
+  ) => {
+    setAddMode("token");
     setLoginForm(createLoginForm());
     setTokenForm(createTokenForm(credentialMode));
     setCreateIntentPresetId(null);
@@ -218,79 +278,97 @@ export default function Accounts() {
   };
 
   const resolveAccountDisplayName = (account: any) => {
-    const username = typeof account?.username === 'string' ? account.username.trim() : '';
+    const username =
+      typeof account?.username === "string" ? account.username.trim() : "";
     if (username) return username;
-    return resolveAccountCredentialMode(account) === 'apikey' ? 'API Key 连接' : '未命名';
+    return resolveAccountCredentialMode(account) === "apikey"
+      ? "API Key 连接"
+      : "未命名";
   };
 
   const sortedAccounts = useMemo(
-    () => sortItemsForDisplay(accounts, sortMode, (account) => account.balance || 0),
+    () =>
+      sortItemsForDisplay(
+        accounts,
+        sortMode,
+        (account) => account.balance || 0,
+      ),
     [accounts, sortMode],
   );
   const visibleAccounts = useMemo(() => {
-    if (activeSegment === 'tokens') return [];
-    return sortedAccounts.filter((account) => resolveAccountCredentialMode(account) === activeSegment);
+    if (activeSegment === "tokens") return [];
+    return sortedAccounts.filter(
+      (account) => resolveAccountCredentialMode(account) === activeSegment,
+    );
   }, [activeSegment, sortedAccounts]);
-  const allVisibleAccountsSelected = visibleAccounts.length > 0 && visibleAccounts.every((account) => selectedAccountIds.includes(account.id));
+  const allVisibleAccountsSelected =
+    visibleAccounts.length > 0 &&
+    visibleAccounts.every((account) => selectedAccountIds.includes(account.id));
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
 
   const setSegment = (nextSegment: ConnectionsSegment) => {
     const params = new URLSearchParams(location.search);
-    if (nextSegment === 'session') params.delete('segment');
-    else params.set('segment', nextSegment);
+    if (nextSegment === "session") params.delete("segment");
+    else params.set("segment", nextSegment);
     const nextSearch = params.toString();
     navigate(
       {
         pathname: location.pathname,
-        search: nextSearch ? `?${nextSearch}` : '',
+        search: nextSearch ? `?${nextSearch}` : "",
       },
       { replace: false },
     );
   };
 
   useEffect(() => {
-    if (activeSegment !== 'tokens') return;
+    if (activeSegment !== "tokens") return;
     closeAddPanel();
     if (rebindTarget) closeRebindPanel();
     setEditingAccount(null);
   }, [activeSegment]);
 
   useEffect(() => {
-    if (activeSegment === 'tokens') return;
+    if (activeSegment === "tokens") return;
     setEmbeddedTokenActions(null);
   }, [activeSegment]);
 
   useEffect(() => {
-    if (activeSegment === 'tokens' || !loaded) return;
+    if (activeSegment === "tokens" || !loaded) return;
     const params = new URLSearchParams(location.search);
-    const shouldOpenCreate = isTruthyFlag(params.get('create'));
-    const requestedSiteId = parsePositiveInt(params.get('siteId'));
+    const shouldOpenCreate = isTruthyFlag(params.get("create"));
+    const requestedSiteId = parsePositiveInt(params.get("siteId"));
     if (!shouldOpenCreate || !requestedSiteId) return;
 
-    const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
-    const initializationPreset = getSiteInitializationPreset(params.get('initPreset'));
+    const credentialMode = activeSegment === "apikey" ? "apikey" : "session";
+    const initializationPreset = getSiteInitializationPreset(
+      params.get("initPreset"),
+    );
     setShowAdd(true);
-    setAddMode('token');
+    setAddMode("token");
     setVerifyResult(null);
     setCreateIntentPresetId(initializationPreset?.id || null);
-    setApplyCreatePresetModels(Boolean(initializationPreset?.recommendedModels?.length));
+    setApplyCreatePresetModels(
+      Boolean(initializationPreset?.recommendedModels?.length),
+    );
     setLoginForm(createLoginForm());
     setTokenForm({
       ...createTokenForm(credentialMode),
       siteId: requestedSiteId,
-      skipModelFetch: credentialMode === 'apikey' && initializationPreset?.recommendedSkipModelFetch === true,
+      skipModelFetch:
+        credentialMode === "apikey" &&
+        initializationPreset?.recommendedSkipModelFetch === true,
     });
 
-    params.delete('create');
-    params.delete('siteId');
-    params.delete('from');
-    params.delete('initPreset');
+    params.delete("create");
+    params.delete("siteId");
+    params.delete("from");
+    params.delete("initPreset");
     const nextSearch = params.toString();
     navigate(
       {
         pathname: location.pathname,
-        search: nextSearch ? `?${nextSearch}` : '',
+        search: nextSearch ? `?${nextSearch}` : "",
       },
       { replace: true },
     );
@@ -315,12 +393,12 @@ export default function Accounts() {
           ? `账号 "${loginForm.username}" 已添加，API Key 已自动获取`
           : `账号 "${loginForm.username}" 已添加（未找到 API Key，请手动设置）`;
         toast.success(msg);
-        load();
+        load(true);
       } else {
-        toast.error(result.message || '登录失败');
+        toast.error(result.message || "登录失败");
       }
     } catch (e: any) {
-      toast.error(e.message || '登录请求失败');
+      toast.error(e.message || "登录请求失败");
     } finally {
       setSaving(false);
     }
@@ -329,28 +407,38 @@ export default function Accounts() {
   const handleVerifyToken = async () => {
     if (!tokenForm.siteId || !tokenForm.accessToken) return;
     if (isBatchApiKeyInput) {
-      toast.info(`检测到 ${parsedApiKeys.length} 个 API Key，批量模式会在添加时逐条校验`);
+      toast.info(
+        `检测到 ${parsedApiKeys.length} 个 API Key，批量模式会在添加时逐条校验`,
+      );
       return;
     }
-    const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
+    const credentialMode = activeSegment === "apikey" ? "apikey" : "session";
     setVerifying(true);
     setVerifyResult(null);
     try {
       const result = await api.verifyToken({
         siteId: tokenForm.siteId,
         accessToken: tokenForm.accessToken,
-        platformUserId: tokenForm.platformUserId ? parseInt(tokenForm.platformUserId) : undefined,
+        platformUserId: tokenForm.platformUserId
+          ? parseInt(tokenForm.platformUserId)
+          : undefined,
         credentialMode,
       });
       setVerifyResult(result);
       if (result.success) {
-        if (result.tokenType === 'apikey') {
-          toast.success(`API Key 验证成功（可用模型 ${result.modelCount || 0} 个）`);
+        if (result.tokenType === "apikey") {
+          toast.success(
+            `API Key 验证成功（可用模型 ${result.modelCount || 0} 个）`,
+          );
         } else {
-          toast.success(`Session 验证成功: ${result.userInfo?.username || '未知用户'}`);
+          toast.success(
+            `Session 验证成功: ${result.userInfo?.username || "未知用户"}`,
+          );
         }
       } else {
-        toast.error(normalizeVerifyFailureMessage(result.message || 'Token 无效'));
+        toast.error(
+          normalizeVerifyFailureMessage(result.message || "Token 无效"),
+        );
       }
     } catch (e: any) {
       toast.error(normalizeVerifyFailureMessage(e?.message));
@@ -362,11 +450,15 @@ export default function Accounts() {
 
   const handleTokenAdd = async () => {
     if (!tokenForm.siteId || !tokenForm.accessToken) return;
-    if (!isBatchApiKeyInput && !verifyResult?.success && !tokenForm.skipModelFetch) {
-      toast.error('请先验证 Token 成功后再添加账号');
+    if (
+      !isBatchApiKeyInput &&
+      !verifyResult?.success &&
+      !tokenForm.skipModelFetch
+    ) {
+      toast.error("请先验证 Token 成功后再添加账号");
       return;
     }
-    const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
+    const credentialMode = activeSegment === "apikey" ? "apikey" : "session";
     const initializationPreset = createIntentPreset;
     setSaving(true);
     try {
@@ -375,13 +467,17 @@ export default function Accounts() {
         username: tokenForm.username.trim() || undefined,
         accessToken: tokenForm.accessToken,
         accessTokens: isBatchApiKeyInput ? parsedApiKeys : undefined,
-        platformUserId: tokenForm.platformUserId ? parseInt(tokenForm.platformUserId) : undefined,
-        refreshToken: isSub2ApiSelected && tokenForm.refreshToken.trim()
-          ? tokenForm.refreshToken.trim()
+        platformUserId: tokenForm.platformUserId
+          ? parseInt(tokenForm.platformUserId)
           : undefined,
-        tokenExpiresAt: isSub2ApiSelected && tokenForm.tokenExpiresAt.trim()
-          ? Number.parseInt(tokenForm.tokenExpiresAt.trim(), 10)
-          : undefined,
+        refreshToken:
+          isSub2ApiSelected && tokenForm.refreshToken.trim()
+            ? tokenForm.refreshToken.trim()
+            : undefined,
+        tokenExpiresAt:
+          isSub2ApiSelected && tokenForm.tokenExpiresAt.trim()
+            ? Number.parseInt(tokenForm.tokenExpiresAt.trim(), 10)
+            : undefined,
         credentialMode,
         skipModelFetch: tokenForm.skipModelFetch,
       });
@@ -390,109 +486,128 @@ export default function Accounts() {
         const createdCount = Number(result.createdCount) || 0;
         const failedCount = Number(result.failedCount) || 0;
         if (createdCount > 0) {
-          toast.success(`批量添加完成：成功 ${createdCount}，失败 ${failedCount}`);
+          toast.success(
+            `批量添加完成：成功 ${createdCount}，失败 ${failedCount}`,
+          );
         }
         const failedItems = Array.isArray(result.items)
-          ? result.items.filter((item: any) => item?.status === 'failed')
+          ? result.items.filter((item: any) => item?.status === "failed")
           : [];
         if (failedItems.length > 0) {
-          const firstMessage = failedItems[0]?.message || '创建失败';
+          const firstMessage = failedItems[0]?.message || "创建失败";
           toast.error(`失败 ${failedItems.length} 条：${firstMessage}`);
         }
-        load();
+        load(true);
         return;
       }
       let seededRecommendedModels = false;
       const recommendedModels = initializationPreset?.recommendedModels || [];
       const createdAccountId = Number(result?.id) || 0;
-      const shouldSeedRecommendedModels = (
-        credentialMode === 'apikey'
-        && tokenForm.skipModelFetch
-        && applyCreatePresetModels
-        && recommendedModels.length > 0
-        && createdAccountId > 0
-      );
+      const shouldSeedRecommendedModels =
+        credentialMode === "apikey" &&
+        tokenForm.skipModelFetch &&
+        applyCreatePresetModels &&
+        recommendedModels.length > 0 &&
+        createdAccountId > 0;
       if (shouldSeedRecommendedModels) {
         try {
-          await api.addAccountAvailableModels(createdAccountId, recommendedModels);
+          await api.addAccountAvailableModels(
+            createdAccountId,
+            recommendedModels,
+          );
           seededRecommendedModels = true;
         } catch (seedErr: any) {
-          toast.error(seedErr?.message || '连接已添加，但推荐模型补录失败');
+          toast.error(seedErr?.message || "连接已添加，但推荐模型补录失败");
         }
       }
       closeAddPanel();
       if (result.queued) {
-        toast.info(result.message || '账号已添加，后台正在同步初始化信息。');
-      } else if (result.tokenType === 'apikey') {
-        toast.success('已添加为 API Key 账号（可用于代理转发）');
+        toast.info(result.message || "账号已添加，后台正在同步初始化信息。");
+      } else if (result.tokenType === "apikey") {
+        toast.success("已添加为 API Key 账号（可用于代理转发）");
       } else {
         const parts: string[] = [];
-        if (result.usernameDetected) parts.push('用户名已自动识别');
-        if (result.apiTokenFound) parts.push('API Key 已自动获取');
-        const extra = parts.length ? `（${parts.join('，')}）` : '';
+        if (result.usernameDetected) parts.push("用户名已自动识别");
+        if (result.apiTokenFound) parts.push("API Key 已自动获取");
+        const extra = parts.length ? `（${parts.join("，")}）` : "";
         toast.success(`账号已添加${extra}`);
       }
       if (seededRecommendedModels) {
-        toast.success(`已补入 ${recommendedModels.length} 个推荐模型并重建路由`);
+        toast.success(
+          `已补入 ${recommendedModels.length} 个推荐模型并重建路由`,
+        );
       }
-      load();
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '添加失败');
+      toast.error(e.message || "添加失败");
     } finally {
       setSaving(false);
     }
   };
 
-  const withLoading = async (key: string, fn: () => Promise<any>, successMsg?: string) => {
-    setActionLoading(s => ({ ...s, [key]: true }));
-    try { await fn(); if (successMsg) toast.success(successMsg); }
-    catch (e: any) { toast.error(e.message || '操作失败'); }
-    finally {
-      setActionLoading(s => ({ ...s, [key]: false }));
-      void load();
+  const withLoading = async (
+    key: string,
+    fn: () => Promise<any>,
+    successMsg?: string,
+  ) => {
+    setActionLoading((s) => ({ ...s, [key]: true }));
+    try {
+      await fn();
+      if (successMsg) toast.success(successMsg);
+    } catch (e: any) {
+      toast.error(e.message || "操作失败");
+    } finally {
+      setActionLoading((s) => ({ ...s, [key]: false }));
+      void load(true);
     }
   };
 
   const formatModelSuccess = (refresh: any) => {
-    const models = Array.isArray(refresh?.modelsPreview) ? refresh.modelsPreview : [];
-    const count = Number.isFinite(refresh?.modelCount) ? refresh.modelCount : models.length;
+    const models = Array.isArray(refresh?.modelsPreview)
+      ? refresh.modelsPreview
+      : [];
+    const count = Number.isFinite(refresh?.modelCount)
+      ? refresh.modelCount
+      : models.length;
     if (models.length === 0) return `已获取到模型（共 ${count} 个）`;
-    const preview = models.slice(0, 6).join('、');
+    const preview = models.slice(0, 6).join("、");
     const suffix = `（共 ${count} 个）`;
     return `已获取到模型：${preview}${suffix}`;
   };
 
   const formatModelFailure = (refresh: any, messageFallback?: string) => {
     const code = refresh?.errorCode;
-    if (code === 'timeout') return '模型获取失败（请求超时）';
-    if (code === 'unauthorized') return '模型获取失败，API Key 已无效';
-    if (code === 'empty_models') return '模型获取失败：未获取到可用模型';
-    return messageFallback || refresh?.errorMessage || '模型获取失败';
+    if (code === "timeout") return "模型获取失败（请求超时）";
+    if (code === "unauthorized") return "模型获取失败，API Key 已无效";
+    if (code === "empty_models") return "模型获取失败：未获取到可用模型";
+    return messageFallback || refresh?.errorMessage || "模型获取失败";
   };
 
   const handleCheckModels = async (accountId: number) => {
     const key = `models-${accountId}`;
-    setActionLoading(s => ({ ...s, [key]: true }));
+    setActionLoading((s) => ({ ...s, [key]: true }));
     try {
       const result = await api.checkModels(accountId);
       const refresh = result?.refresh;
-      if (!refresh || refresh.status !== 'success') {
+      if (!refresh || refresh.status !== "success") {
         toast.error(formatModelFailure(refresh, result?.message));
       } else {
         toast.success(formatModelSuccess(refresh));
       }
     } catch (e: any) {
-      toast.error(e.message || '模型获取失败');
+      toast.error(e.message || "模型获取失败");
     } finally {
-      setActionLoading(s => ({ ...s, [key]: false }));
-      void load();
+      setActionLoading((s) => ({ ...s, [key]: false }));
+      void load(true);
     }
   };
 
   const applyLoadedModelModal = (account: any, result: any) => {
     const models = Array.isArray(result?.models) ? result.models : [];
-    const disabledSet = new Set<string>(models.filter((m: any) => m.disabled).map((m: any) => m.name as string));
-    setModelModal(s => ({
+    const disabledSet = new Set<string>(
+      models.filter((m: any) => m.disabled).map((m: any) => m.name as string),
+    );
+    setModelModal((s) => ({
       ...s,
       loading: false,
       models,
@@ -512,12 +627,19 @@ export default function Accounts() {
     } = {},
   ) => {
     const requestId = ++modelModalRequestSeqRef.current;
-    setModelModal(s => ({
+    setModelModal((s) => ({
       ...s,
       open: true,
       account,
       loading: true,
-      ...(options.resetBeforeLoad ? { models: [], pendingDisabled: new Set<string>(), siteName: '', manualModelsInput: '' } : {}),
+      ...(options.resetBeforeLoad
+        ? {
+            models: [],
+            pendingDisabled: new Set<string>(),
+            siteName: "",
+            manualModelsInput: "",
+          }
+        : {}),
     }));
     try {
       if (options.refreshUpstream) {
@@ -531,12 +653,12 @@ export default function Accounts() {
       }
     } catch (e: any) {
       if (modelModalRequestSeqRef.current !== requestId) return;
-      toast.error(e.message || options.errorMessage || '加载模型列表失败');
-      setModelModal(s => (
+      toast.error(e.message || options.errorMessage || "加载模型列表失败");
+      setModelModal((s) =>
         options.closeOnError
           ? { ...s, open: false, account: null, loading: false }
-          : { ...s, loading: false }
-      ));
+          : { ...s, loading: false },
+      );
     }
   };
 
@@ -544,17 +666,23 @@ export default function Accounts() {
     await loadModelModalModels(account, {
       resetBeforeLoad: true,
       closeOnError: true,
-      errorMessage: '加载模型列表失败',
+      errorMessage: "加载模型列表失败",
     });
   };
 
   const closeModelModal = () => {
     modelModalRequestSeqRef.current += 1;
-    setModelModal(s => ({ ...s, open: false, account: null, manualModelsInput: '', addingManualModels: false }));
+    setModelModal((s) => ({
+      ...s,
+      open: false,
+      account: null,
+      manualModelsInput: "",
+      addingManualModels: false,
+    }));
   };
 
   const toggleModelDisabled = (modelName: string) => {
-    setModelModal(s => {
+    setModelModal((s) => {
       const next = new Set(s.pendingDisabled);
       if (next.has(modelName)) next.delete(modelName);
       else next.add(modelName);
@@ -565,96 +693,147 @@ export default function Accounts() {
   const saveModelDisabled = async () => {
     if (!modelModal.account) return;
     const siteId = modelModal.account.siteId;
-    setModelModal(s => ({ ...s, saving: true }));
+    setModelModal((s) => ({ ...s, saving: true }));
     try {
-      await api.updateSiteDisabledModels(siteId, Array.from(modelModal.pendingDisabled));
+      await api.updateSiteDisabledModels(
+        siteId,
+        Array.from(modelModal.pendingDisabled),
+      );
       try {
         await api.rebuildRoutes(false, false);
-        toast.success('模型禁用设置已保存，路由已重建');
+        toast.success("模型禁用设置已保存，路由已重建");
       } catch {
-        toast.error('模型禁用设置已保存，但路由重建失败，请手动刷新路由');
+        toast.error("模型禁用设置已保存，但路由重建失败，请手动刷新路由");
       }
       closeModelModal();
     } catch (e: any) {
-      toast.error(e.message || '保存失败');
+      toast.error(e.message || "保存失败");
     } finally {
-      setModelModal(s => ({ ...s, saving: false }));
+      setModelModal((s) => ({ ...s, saving: false }));
     }
   };
 
   const handleAddManualModels = async () => {
     if (!modelModal.account || !modelModal.manualModelsInput.trim()) return;
-    const modelsToAdd = modelModal.manualModelsInput.split(',').map((m) => m.trim()).filter(Boolean);
+    const modelsToAdd = modelModal.manualModelsInput
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean);
     if (modelsToAdd.length === 0) return;
 
-    setModelModal(s => ({ ...s, addingManualModels: true }));
+    setModelModal((s) => ({ ...s, addingManualModels: true }));
     try {
-      const res = await api.addAccountAvailableModels(modelModal.account.id, modelsToAdd);
+      const res = await api.addAccountAvailableModels(
+        modelModal.account.id,
+        modelsToAdd,
+      );
       if (res.success) {
-        toast.success('模型已手动添加');
-        setModelModal(s => ({ ...s, manualModelsInput: '' }));
-        await loadModelModalModels(modelModal.account, { refreshUpstream: false });
+        toast.success("模型已手动添加");
+        setModelModal((s) => ({ ...s, manualModelsInput: "" }));
+        await loadModelModalModels(modelModal.account, {
+          refreshUpstream: false,
+        });
       } else {
-        toast.error(res.message || '手动添加模型失败');
+        toast.error(res.message || "手动添加模型失败");
       }
     } catch (e: any) {
-      toast.error(e.message || '手动添加模型失败');
+      toast.error(e.message || "手动添加模型失败");
     } finally {
-      setModelModal(s => ({ ...s, addingManualModels: false }));
+      setModelModal((s) => ({ ...s, addingManualModels: false }));
     }
   };
 
-
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)', fontSize: 13, outline: 'none',
-    background: 'var(--color-bg)', color: 'var(--color-text-primary)',
+    width: "100%",
+    padding: "10px 14px",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)",
+    fontSize: 13,
+    outline: "none",
+    background: "var(--color-bg)",
+    color: "var(--color-text-primary)",
   };
 
-  const runtimeHealthMap: Record<string, {
-    label: string;
-    cls: string;
-    dotClass: string;
-    pulse: boolean;
-  }> = {
-    healthy: { label: '健康', cls: 'badge-success', dotClass: 'status-dot-success', pulse: true },
-    unhealthy: { label: '异常', cls: 'badge-error', dotClass: 'status-dot-error', pulse: true },
-    degraded: { label: '降级', cls: 'badge-warning', dotClass: 'status-dot-pending', pulse: true },
-    disabled: { label: '已禁用', cls: 'badge-muted', dotClass: 'status-dot-muted', pulse: false },
-    unknown: { label: '未知', cls: 'badge-muted', dotClass: 'status-dot-pending', pulse: false },
+  const runtimeHealthMap: Record<
+    string,
+    {
+      label: string;
+      cls: string;
+      dotClass: string;
+      pulse: boolean;
+    }
+  > = {
+    healthy: {
+      label: "健康",
+      cls: "badge-success",
+      dotClass: "status-dot-success",
+      pulse: true,
+    },
+    unhealthy: {
+      label: "异常",
+      cls: "badge-error",
+      dotClass: "status-dot-error",
+      pulse: true,
+    },
+    degraded: {
+      label: "降级",
+      cls: "badge-warning",
+      dotClass: "status-dot-pending",
+      pulse: true,
+    },
+    disabled: {
+      label: "已禁用",
+      cls: "badge-muted",
+      dotClass: "status-dot-muted",
+      pulse: false,
+    },
+    unknown: {
+      label: "未知",
+      cls: "badge-muted",
+      dotClass: "status-dot-pending",
+      pulse: false,
+    },
   };
 
   const resolveRuntimeHealth = (account: any) => {
-    if (account.status === 'expired') {
+    if (account.status === "expired") {
       return {
         ...runtimeHealthMap.unhealthy,
-        label: '已过期',
-        reason: account.runtimeHealth?.reason || '连接凭证已过期，请更新凭证',
+        label: "已过期",
+        reason: account.runtimeHealth?.reason || "连接凭证已过期，请更新凭证",
       };
     }
     const capabilities = resolveAccountCapabilities(account);
-    const fallbackState = account.status === 'disabled' || account.site?.status === 'disabled'
-      ? 'disabled'
-      : (!capabilities.proxyOnly && account.status === 'expired' ? 'unhealthy' : 'unknown');
+    const fallbackState =
+      account.status === "disabled" || account.site?.status === "disabled"
+        ? "disabled"
+        : !capabilities.proxyOnly && account.status === "expired"
+          ? "unhealthy"
+          : "unknown";
     const state = account.runtimeHealth?.state || fallbackState;
     const cfg = runtimeHealthMap[state] || runtimeHealthMap.unknown;
-    const reason = account.runtimeHealth?.reason
-      || (state === 'disabled'
-        ? '账号或站点已禁用'
-        : (state === 'unhealthy' ? '最近健康检查失败' : '尚未获取运行健康信息'));
+    const reason =
+      account.runtimeHealth?.reason ||
+      (state === "disabled"
+        ? "账号或站点已禁用"
+        : state === "unhealthy"
+          ? "最近健康检查失败"
+          : "尚未获取运行健康信息");
     return { state, reason, ...cfg };
   };
 
   const resolveAccountCapabilities = (account: any) => {
     const fromServer = account?.capabilities;
-    if (fromServer && typeof fromServer === 'object') {
+    if (fromServer && typeof fromServer === "object") {
       return {
         canCheckin: !!fromServer.canCheckin,
         canRefreshBalance: !!fromServer.canRefreshBalance,
         proxyOnly: !!fromServer.proxyOnly,
       };
     }
-    const hasSession = typeof account?.accessToken === 'string' && account.accessToken.trim().length > 0;
+    const hasSession =
+      typeof account?.accessToken === "string" &&
+      account.accessToken.trim().length > 0;
     return {
       canCheckin: hasSession,
       canRefreshBalance: hasSession,
@@ -663,19 +842,19 @@ export default function Accounts() {
   };
 
   const handleRefreshRuntimeHealth = async () => {
-    setActionLoading((s) => ({ ...s, 'health-refresh': true }));
+    setActionLoading((s) => ({ ...s, "health-refresh": true }));
     try {
       const res = await api.refreshAccountHealth();
       if (res?.queued) {
-        toast.info(res.message || '账号状态刷新任务已提交，完成后会自动更新。');
+        toast.info(res.message || "账号状态刷新任务已提交，完成后会自动更新。");
       } else {
-        toast.success(res?.message || '账号状态已刷新');
+        toast.success(res?.message || "账号状态已刷新");
       }
-      load();
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '刷新账号状态失败');
+      toast.error(e.message || "刷新账号状态失败");
     } finally {
-      setActionLoading((s) => ({ ...s, 'health-refresh': false }));
+      setActionLoading((s) => ({ ...s, "health-refresh": false }));
     }
   };
 
@@ -685,10 +864,12 @@ export default function Accounts() {
     setActionLoading((s) => ({ ...s, [key]: true }));
     try {
       await api.updateAccount(account.id, { checkinEnabled: nextEnabled });
-      toast.success(nextEnabled ? '已开启签到' : '已关闭签到（全部签到会忽略此账号）');
-      load();
+      toast.success(
+        nextEnabled ? "已开启签到" : "已关闭签到（全部签到会忽略此账号）",
+      );
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '切换签到状态失败');
+      toast.error(e.message || "切换签到状态失败");
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
@@ -700,58 +881,72 @@ export default function Accounts() {
     setActionLoading((s) => ({ ...s, [key]: true }));
     try {
       await api.updateAccount(account.id, { isPinned: nextPinned });
-      toast.success(nextPinned ? '账号已置顶' : '账号已取消置顶');
-      load();
+      toast.success(nextPinned ? "账号已置顶" : "账号已取消置顶");
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '切换账号置顶失败');
+      toast.error(e.message || "切换账号置顶失败");
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
   };
 
-  const handleMoveCustomOrder = async (account: any, direction: 'up' | 'down') => {
+  const handleMoveCustomOrder = async (
+    account: any,
+    direction: "up" | "down",
+  ) => {
     const key = `reorder-${account.id}`;
     const updates = buildCustomReorderUpdates(accounts, account.id, direction);
     if (updates.length === 0) return;
 
     setActionLoading((s) => ({ ...s, [key]: true }));
     try {
-      await Promise.all(updates.map((update) => api.updateAccount(update.id, { sortOrder: update.sortOrder })));
-      load();
+      await Promise.all(
+        updates.map((update) =>
+          api.updateAccount(update.id, { sortOrder: update.sortOrder }),
+        ),
+      );
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '更新账号排序失败');
+      toast.error(e.message || "更新账号排序失败");
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
   };
 
   const parseAccountExtraConfig = (account: any): Record<string, any> => {
-    try { return JSON.parse(account?.extraConfig || '{}') || {}; }
-    catch { return {}; }
+    try {
+      return JSON.parse(account?.extraConfig || "{}") || {};
+    } catch {
+      return {};
+    }
   };
 
   const extractManagedSub2ApiAuth = (account: any) => {
     const parsed = parseAccountExtraConfig(account);
     const auth = parsed?.sub2apiAuth || {};
     return {
-      refreshToken: typeof auth.refreshToken === 'string' ? auth.refreshToken : '',
-      tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : '',
+      refreshToken:
+        typeof auth.refreshToken === "string" ? auth.refreshToken : "",
+      tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : "",
     };
   };
 
   const openEditPanel = (account: any) => {
     const managedAuth = extractManagedSub2ApiAuth(account);
-    const proxyUrl = parseAccountExtraConfig(account)?.proxyUrl || '';
+    const proxyUrl = parseAccountExtraConfig(account)?.proxyUrl || "";
     closeAddPanel();
     setRebindTarget(null);
     setEditingAccount(account);
     setEditForm({
-      username: account?.username || '',
-      status: account?.status || 'active',
+      username: account?.username || "",
+      status: account?.status || "active",
       checkinEnabled: account?.checkinEnabled !== false,
-      unitCost: account?.unitCost === null || account?.unitCost === undefined ? '' : String(account.unitCost),
-      accessToken: account?.accessToken || '',
-      apiToken: account?.apiToken || '',
+      unitCost:
+        account?.unitCost === null || account?.unitCost === undefined
+          ? ""
+          : String(account.unitCost),
+      accessToken: account?.accessToken || "",
+      apiToken: account?.apiToken || "",
       isPinned: !!account?.isPinned,
       refreshToken: managedAuth.refreshToken,
       tokenExpiresAt: managedAuth.tokenExpiresAt,
@@ -772,52 +967,67 @@ export default function Accounts() {
         username: editForm.username.trim() || undefined,
         status: editForm.status,
         checkinEnabled: editForm.checkinEnabled,
-        unitCost: editForm.unitCost.trim() ? Number(editForm.unitCost.trim()) : null,
+        unitCost: editForm.unitCost.trim()
+          ? Number(editForm.unitCost.trim())
+          : null,
         accessToken: editForm.accessToken.trim(),
         apiToken: editForm.apiToken.trim() || null,
         isPinned: editForm.isPinned,
         refreshToken: editForm.refreshToken.trim() || null,
-        tokenExpiresAt: editForm.tokenExpiresAt.trim() ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10) : null,
+        tokenExpiresAt: editForm.tokenExpiresAt.trim()
+          ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
+          : null,
         proxyUrl: editForm.proxyUrl.trim() || null,
       });
-      toast.success('账号已更新');
+      toast.success("账号已更新");
       closeEditPanel();
-      load();
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '更新账号失败');
+      toast.error(e.message || "更新账号失败");
     } finally {
       setSavingEdit(false);
     }
   };
 
   const toggleAccountSelection = (accountId: number, checked: boolean) => {
-    setSelectedAccountIds((current) => (
+    setSelectedAccountIds((current) =>
       checked
         ? Array.from(new Set([...current, accountId]))
-        : current.filter((id) => id !== accountId)
-    ));
+        : current.filter((id) => id !== accountId),
+    );
   };
 
   const toggleSelectAllVisibleAccounts = (checked: boolean) => {
     if (!checked) {
-      setSelectedAccountIds((current) => current.filter((id) => !visibleAccounts.some((account) => account.id === id)));
+      setSelectedAccountIds((current) =>
+        current.filter(
+          (id) => !visibleAccounts.some((account) => account.id === id),
+        ),
+      );
       return;
     }
-    setSelectedAccountIds((current) => Array.from(new Set([...current, ...visibleAccounts.map((account) => account.id)])));
+    setSelectedAccountIds((current) =>
+      Array.from(
+        new Set([...current, ...visibleAccounts.map((account) => account.id)]),
+      ),
+    );
   };
 
   const toggleAccountDetails = (accountId: number) => {
-    setExpandedAccountIds((current) => (
+    setExpandedAccountIds((current) =>
       current.includes(accountId)
         ? current.filter((id) => id !== accountId)
-        : [...current, accountId]
-    ));
+        : [...current, accountId],
+    );
   };
 
-  const runBatchAccountAction = async (action: 'enable' | 'disable' | 'delete' | 'refreshBalance', skipDeleteConfirm = false) => {
+  const runBatchAccountAction = async (
+    action: "enable" | "disable" | "delete" | "refreshBalance",
+    skipDeleteConfirm = false,
+  ) => {
     if (selectedAccountIds.length === 0) return;
-    if (action === 'delete' && !skipDeleteConfirm) {
-      setDeleteConfirm({ mode: 'batch', count: selectedAccountIds.length });
+    if (action === "delete" && !skipDeleteConfirm) {
+      setDeleteConfirm({ mode: "batch", count: selectedAccountIds.length });
       return;
     }
 
@@ -827,17 +1037,27 @@ export default function Accounts() {
         ids: selectedAccountIds,
         action,
       });
-      const successIds = Array.isArray(result?.successIds) ? result.successIds.map((id: unknown) => Number(id)) : [];
-      const failedItems = Array.isArray(result?.failedItems) ? result.failedItems : [];
+      const successIds = Array.isArray(result?.successIds)
+        ? result.successIds.map((id: unknown) => Number(id))
+        : [];
+      const failedItems = Array.isArray(result?.failedItems)
+        ? result.failedItems
+        : [];
       if (failedItems.length > 0) {
-        toast.info(`批量操作完成：成功 ${successIds.length}，失败 ${failedItems.length}`);
+        toast.info(
+          `批量操作完成：成功 ${successIds.length}，失败 ${failedItems.length}`,
+        );
       } else {
         toast.success(`批量操作完成：成功 ${successIds.length}`);
       }
-      setSelectedAccountIds(failedItems.map((item: any) => Number(item.id)).filter((id: number) => Number.isFinite(id) && id > 0));
-      load();
+      setSelectedAccountIds(
+        failedItems
+          .map((item: any) => Number(item.id))
+          .filter((id: number) => Number.isFinite(id) && id > 0),
+      );
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '批量操作失败');
+      toast.error(e.message || "批量操作失败");
     } finally {
       setBatchActionLoading(false);
     }
@@ -848,15 +1068,22 @@ export default function Accounts() {
     if (!target) return;
 
     setDeleteConfirm(null);
-    if (target.mode === 'single' && target.accountId) {
-      await withLoading(`delete-${target.accountId}`, () => api.deleteAccount(target.accountId!), '已删除');
+    if (target.mode === "single" && target.accountId) {
+      await withLoading(
+        `delete-${target.accountId}`,
+        () => api.deleteAccount(target.accountId!),
+        "已删除",
+      );
       return;
     }
 
-    await runBatchAccountAction('delete', true);
+    await runBatchAccountAction("delete", true);
   };
 
-  const handleAccountRowClick = (accountId: number, event: React.MouseEvent<HTMLTableRowElement>) => {
+  const handleAccountRowClick = (
+    accountId: number,
+    event: React.MouseEvent<HTMLTableRowElement>,
+  ) => {
     if (shouldIgnoreRowSelectionClick(event.target)) return;
     const isSelected = selectedAccountIds.includes(accountId);
     toggleAccountSelection(accountId, !isSelected);
@@ -865,10 +1092,13 @@ export default function Accounts() {
   const extractPlatformUserId = (account: any): string => {
     const parsed = parseAccountExtraConfig(account);
     const raw = parsed?.platformUserId;
-    const value = Number.parseInt(String(raw ?? ''), 10);
+    const value = Number.parseInt(String(raw ?? ""), 10);
     if (Number.isFinite(value) && value > 0) return String(value);
-    const guessed = Number.parseInt(String(account?.username || '').match(/(\d{3,8})$/)?.[1] || '', 10);
-    return Number.isFinite(guessed) && guessed > 0 ? String(guessed) : '';
+    const guessed = Number.parseInt(
+      String(account?.username || "").match(/(\d{3,8})$/)?.[1] || "",
+      10,
+    );
+    return Number.isFinite(guessed) && guessed > 0 ? String(guessed) : "";
   };
 
   const openRebindPanel = (account: any) => {
@@ -895,16 +1125,20 @@ export default function Accounts() {
       const result = await api.verifyToken({
         siteId: rebindTarget.siteId,
         accessToken: rebindForm.accessToken.trim(),
-        platformUserId: rebindForm.platformUserId ? Number.parseInt(rebindForm.platformUserId, 10) : undefined,
-        credentialMode: 'session',
+        platformUserId: rebindForm.platformUserId
+          ? Number.parseInt(rebindForm.platformUserId, 10)
+          : undefined,
+        credentialMode: "session",
       });
       setRebindVerifyResult(result);
-      if (result.success && result.tokenType === 'session') {
-        toast.success('Session Token 验证成功，可以重新绑定');
-      } else if (result.success && result.tokenType !== 'session') {
-        toast.error('当前是 API Key，不是 Session Token');
+      if (result.success && result.tokenType === "session") {
+        toast.success("Session Token 验证成功，可以重新绑定");
+      } else if (result.success && result.tokenType !== "session") {
+        toast.error("当前是 API Key，不是 Session Token");
       } else {
-        toast.error(normalizeVerifyFailureMessage(result.message || 'Token 无效'));
+        toast.error(
+          normalizeVerifyFailureMessage(result.message || "Token 无效"),
+        );
       }
     } catch (e: any) {
       toast.error(normalizeVerifyFailureMessage(e?.message));
@@ -916,28 +1150,38 @@ export default function Accounts() {
 
   const handleSubmitRebind = async () => {
     if (!rebindTarget || !rebindForm.accessToken.trim()) return;
-    if (!(rebindVerifyResult?.success && rebindVerifyResult?.tokenType === 'session')) {
-      toast.error('请先验证新的 Session Token 成功');
+    if (
+      !(
+        rebindVerifyResult?.success &&
+        rebindVerifyResult?.tokenType === "session"
+      )
+    ) {
+      toast.error("请先验证新的 Session Token 成功");
       return;
     }
-    const isSub2ApiRebindTarget = ((rebindTarget?.site?.platform || '').toLowerCase() === 'sub2api');
+    const isSub2ApiRebindTarget =
+      (rebindTarget?.site?.platform || "").toLowerCase() === "sub2api";
     setRebindSaving(true);
     try {
       await api.rebindAccountSession(rebindTarget.id, {
         accessToken: rebindForm.accessToken.trim(),
-        platformUserId: rebindForm.platformUserId ? Number.parseInt(rebindForm.platformUserId, 10) : undefined,
-        refreshToken: isSub2ApiRebindTarget && rebindForm.refreshToken.trim()
-          ? rebindForm.refreshToken.trim()
+        platformUserId: rebindForm.platformUserId
+          ? Number.parseInt(rebindForm.platformUserId, 10)
           : undefined,
-        tokenExpiresAt: isSub2ApiRebindTarget && rebindForm.tokenExpiresAt.trim()
-          ? Number.parseInt(rebindForm.tokenExpiresAt, 10)
-          : undefined,
+        refreshToken:
+          isSub2ApiRebindTarget && rebindForm.refreshToken.trim()
+            ? rebindForm.refreshToken.trim()
+            : undefined,
+        tokenExpiresAt:
+          isSub2ApiRebindTarget && rebindForm.tokenExpiresAt.trim()
+            ? Number.parseInt(rebindForm.tokenExpiresAt, 10)
+            : undefined,
       });
-      toast.success('账号重新绑定成功，状态已恢复');
+      toast.success("账号重新绑定成功，状态已恢复");
       closeRebindPanel();
-      load();
+      load(true);
     } catch (e: any) {
-      toast.error(e.message || '重新绑定失败');
+      toast.error(e.message || "重新绑定失败");
     } finally {
       setRebindSaving(false);
     }
@@ -945,49 +1189,71 @@ export default function Accounts() {
 
   useEffect(() => {
     const { accountId, openRebind } = readFocusAccountIntent(location.search);
-    if (!accountId || !loaded || activeSegment === 'tokens') return;
+    if (!accountId || !loaded || activeSegment === "tokens") return;
 
     const target = visibleAccounts.find((account) => account.id === accountId);
     const row = rowRefs.current.get(accountId);
     const cleanedSearch = clearFocusParams(location.search);
     if (!target || !row) {
-      navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
+      navigate(
+        { pathname: location.pathname, search: cleanedSearch },
+        { replace: true },
+      );
       return;
     }
 
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
     setHighlightAccountId(accountId);
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     highlightTimerRef.current = setTimeout(() => {
-      setHighlightAccountId((current) => (current === accountId ? null : current));
+      setHighlightAccountId((current) =>
+        current === accountId ? null : current,
+      );
     }, 2200);
 
-    if (openRebind && target.status === 'expired' && !resolveAccountCapabilities(target).proxyOnly) {
+    if (
+      openRebind &&
+      target.status === "expired" &&
+      !resolveAccountCapabilities(target).proxyOnly
+    ) {
       setShowAdd(false);
       if (!rebindTarget || rebindTarget.id !== target.id) {
         openRebindPanel(target);
       }
     }
 
-    navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
-  }, [activeSegment, loaded, location.pathname, location.search, navigate, openRebindPanel, rebindTarget, visibleAccounts]);
+    navigate(
+      { pathname: location.pathname, search: cleanedSearch },
+      { replace: true },
+    );
+  }, [
+    activeSegment,
+    loaded,
+    location.pathname,
+    location.search,
+    navigate,
+    openRebindPanel,
+    rebindTarget,
+    visibleAccounts,
+  ]);
 
   const canAddVerifiedConnection = Boolean(
-    verifyResult?.success
-    && (
-      (activeSegment === 'apikey' && verifyResult.tokenType === 'apikey')
-      || (activeSegment === 'session' && verifyResult.tokenType === 'session')
-    ),
+    verifyResult?.success &&
+    ((activeSegment === "apikey" && verifyResult.tokenType === "apikey") ||
+      (activeSegment === "session" && verifyResult.tokenType === "session")),
   );
-  const canSubmitApiKeyConnection = activeSegment === 'apikey'
-    ? (isBatchApiKeyInput || canAddVerifiedConnection || !!tokenForm.skipModelFetch)
-    : canAddVerifiedConnection;
+  const canSubmitApiKeyConnection =
+    activeSegment === "apikey"
+      ? isBatchApiKeyInput ||
+        canAddVerifiedConnection ||
+        !!tokenForm.skipModelFetch
+      : canAddVerifiedConnection;
 
   return (
     <div className="animate-fade-in">
       <div className="page-header">
-        <h2 className="page-title">{tr('连接管理')}</h2>
-        {activeSegment !== 'tokens' && (
+        <h2 className="page-title">{tr("连接管理")}</h2>
+        {activeSegment !== "tokens" && (
           <div className="page-actions accounts-page-actions">
             {isMobile ? (
               <>
@@ -995,50 +1261,75 @@ export default function Accounts() {
                   type="button"
                   onClick={() => setShowMobileTools(true)}
                   className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  style={{ border: "1px solid var(--color-border)" }}
                 >
                   排序与操作
                 </button>
                 <button
                   type="button"
                   data-testid="accounts-mobile-select-all"
-                  onClick={() => toggleSelectAllVisibleAccounts(!allVisibleAccountsSelected)}
+                  onClick={() =>
+                    toggleSelectAllVisibleAccounts(!allVisibleAccountsSelected)
+                  }
                   className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  style={{ border: "1px solid var(--color-border)" }}
                 >
-                  {allVisibleAccountsSelected ? '取消全选' : '全选可见项'}
+                  {allVisibleAccountsSelected ? "取消全选" : "全选可见项"}
                 </button>
               </>
             ) : (
               <>
-                <div className="accounts-sort-select" style={{ minWidth: 156, position: 'relative', zIndex: 20 }}>
+                <div
+                  className="accounts-sort-select"
+                  style={{ minWidth: 156, position: "relative", zIndex: 20 }}
+                >
                   <ModernSelect
                     size="sm"
                     value={sortMode}
                     onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                     options={[
-                      { value: 'custom', label: '自定义排序' },
-                      { value: 'balance-desc', label: '余额高到低' },
-                      { value: 'balance-asc', label: '余额低到高' },
+                      { value: "custom", label: "自定义排序" },
+                      { value: "balance-desc", label: "余额高到低" },
+                      { value: "balance-asc", label: "余额低到高" },
                     ]}
                     placeholder="自定义排序"
                   />
                 </div>
-                {activeSegment === 'session' && (
+                {activeSegment === "session" && (
                   <button
-                    onClick={() => withLoading('checkin-all', () => api.triggerCheckinAll(), '已触发全部签到')}
-                    disabled={actionLoading['checkin-all']}
+                    onClick={() =>
+                      withLoading(
+                        "checkin-all",
+                        () => api.triggerCheckinAll(),
+                        "已触发全部签到",
+                      )
+                    }
+                    disabled={actionLoading["checkin-all"]}
                     className="btn btn-soft-primary"
                   >
-                    {actionLoading['checkin-all'] ? <><span className="spinner spinner-sm" />{tr('签到中...')}</> : tr('全部签到')}
+                    {actionLoading["checkin-all"] ? (
+                      <>
+                        <span className="spinner spinner-sm" />
+                        {tr("签到中...")}
+                      </>
+                    ) : (
+                      tr("全部签到")
+                    )}
                   </button>
                 )}
                 <button
                   onClick={handleRefreshRuntimeHealth}
-                  disabled={actionLoading['health-refresh']}
+                  disabled={actionLoading["health-refresh"]}
                   className="btn btn-soft-primary"
                 >
-                  {actionLoading['health-refresh'] ? <><span className="spinner spinner-sm" />{tr('刷新状态中...')}</> : tr('刷新账户状态')}
+                  {actionLoading["health-refresh"] ? (
+                    <>
+                      <span className="spinner spinner-sm" />
+                      {tr("刷新状态中...")}
+                    </>
+                  ) : (
+                    tr("刷新账户状态")
+                  )}
                 </button>
               </>
             )}
@@ -1056,11 +1347,11 @@ export default function Accounts() {
               }}
               className="btn btn-primary"
             >
-              {showAdd ? tr('取消') : tr('+ 添加连接')}
+              {showAdd ? tr("取消") : tr("+ 添加连接")}
             </button>
           </div>
         )}
-        {activeSegment === 'tokens' && embeddedTokenActions}
+        {activeSegment === "tokens" && embeddedTokenActions}
       </div>
 
       <ResponsiveFilterPanel
@@ -1068,32 +1359,45 @@ export default function Accounts() {
         mobileOpen={showMobileTools}
         onMobileClose={() => setShowMobileTools(false)}
         mobileTitle="连接排序与操作"
-        mobileContent={(
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>排序方式</div>
+        mobileContent={
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+                排序方式
+              </div>
               <ModernSelect
                 value={sortMode}
                 onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                 options={[
-                  { value: 'custom', label: '自定义排序' },
-                  { value: 'balance-desc', label: '余额高到低' },
-                  { value: 'balance-asc', label: '余额低到高' },
+                  { value: "custom", label: "自定义排序" },
+                  { value: "balance-desc", label: "余额高到低" },
+                  { value: "balance-asc", label: "余额低到高" },
                 ]}
                 placeholder="自定义排序"
               />
             </div>
-            {activeSegment === 'session' && (
+            {activeSegment === "session" && (
               <button
                 onClick={async () => {
                   setShowMobileTools(false);
-                  await withLoading('checkin-all', () => api.triggerCheckinAll(), '已触发全部签到');
+                  await withLoading(
+                    "checkin-all",
+                    () => api.triggerCheckinAll(),
+                    "已触发全部签到",
+                  );
                 }}
-                disabled={actionLoading['checkin-all']}
+                disabled={actionLoading["checkin-all"]}
                 className="btn btn-ghost"
-                style={{ border: '1px solid var(--color-border)' }}
+                style={{ border: "1px solid var(--color-border)" }}
               >
-                {actionLoading['checkin-all'] ? <><span className="spinner spinner-sm" />{tr('签到中...')}</> : tr('全部签到')}
+                {actionLoading["checkin-all"] ? (
+                  <>
+                    <span className="spinner spinner-sm" />
+                    {tr("签到中...")}
+                  </>
+                ) : (
+                  tr("全部签到")
+                )}
               </button>
             )}
             <button
@@ -1101,25 +1405,32 @@ export default function Accounts() {
                 setShowMobileTools(false);
                 await handleRefreshRuntimeHealth();
               }}
-              disabled={actionLoading['health-refresh']}
+              disabled={actionLoading["health-refresh"]}
               className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              style={{ border: "1px solid var(--color-border)" }}
             >
-              {actionLoading['health-refresh'] ? <><span className="spinner spinner-sm" />{tr('刷新状态中...')}</> : tr('刷新账户状态')}
+              {actionLoading["health-refresh"] ? (
+                <>
+                  <span className="spinner spinner-sm" />
+                  {tr("刷新状态中...")}
+                </>
+              ) : (
+                tr("刷新账户状态")
+              )}
             </button>
           </div>
-        )}
+        }
       />
 
       <div
         style={{
-          display: 'inline-flex',
+          display: "inline-flex",
           gap: 4,
           padding: 4,
           marginBottom: 16,
-          background: 'var(--color-bg-card)',
-          border: '1px solid var(--color-border-light)',
-          borderRadius: 'var(--radius-md)',
+          background: "var(--color-bg-card)",
+          border: "1px solid var(--color-border-light)",
+          borderRadius: "var(--radius-md)",
         }}
       >
         {ACCOUNT_SEGMENTS.map((segment) => (
@@ -1131,16 +1442,23 @@ export default function Accounts() {
             data-tooltip-side={segment.tooltipSide}
             data-tooltip-align={segment.tooltipAlign}
             style={{
-              padding: '8px 12px',
+              padding: "8px 12px",
               borderRadius: 8,
-              border: 'none',
-              cursor: 'pointer',
+              border: "none",
+              cursor: "pointer",
               fontSize: 13,
               fontWeight: 600,
-              background: activeSegment === segment.value ? 'var(--color-bg)' : 'transparent',
-              color: activeSegment === segment.value ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-              boxShadow: activeSegment === segment.value ? 'var(--shadow-sm)' : 'none',
-              transition: 'all 0.2s ease',
+              background:
+                activeSegment === segment.value
+                  ? "var(--color-bg)"
+                  : "transparent",
+              color:
+                activeSegment === segment.value
+                  ? "var(--color-primary)"
+                  : "var(--color-text-secondary)",
+              boxShadow:
+                activeSegment === segment.value ? "var(--shadow-sm)" : "none",
+              transition: "all 0.2s ease",
             }}
           >
             {segment.label}
@@ -1154,102 +1472,218 @@ export default function Accounts() {
         onConfirm={confirmDelete}
         title="确认删除连接"
         confirmText="确认删除"
-        loading={batchActionLoading || (deleteConfirm?.mode === 'single' && !!actionLoading[`delete-${deleteConfirm?.accountId}`])}
-        description={deleteConfirm?.mode === 'single'
-          ? <>确定要删除连接 <strong>{deleteConfirm.accountName || `#${deleteConfirm.accountId}`}</strong> 吗？</>
-          : <>确定要删除选中的 <strong>{deleteConfirm?.count || 0}</strong> 个连接吗？</>}
+        loading={
+          batchActionLoading ||
+          (deleteConfirm?.mode === "single" &&
+            !!actionLoading[`delete-${deleteConfirm?.accountId}`])
+        }
+        description={
+          deleteConfirm?.mode === "single" ? (
+            <>
+              确定要删除连接{" "}
+              <strong>
+                {deleteConfirm.accountName || `#${deleteConfirm.accountId}`}
+              </strong>{" "}
+              吗？
+            </>
+          ) : (
+            <>
+              确定要删除选中的 <strong>{deleteConfirm?.count || 0}</strong>{" "}
+              个连接吗？
+            </>
+          )
+        }
       />
 
-      {activeSegment !== 'tokens' && selectedAccountIds.length > 0 && (
+      {activeSegment !== "tokens" && selectedAccountIds.length > 0 && (
         <ResponsiveBatchActionBar
           isMobile={isMobile}
           info={`已选 ${selectedAccountIds.length} 项`}
           desktopStyle={{ marginBottom: 12 }}
         >
-          <button data-testid="accounts-batch-refresh-balance" onClick={() => runBatchAccountAction('refreshBalance')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
+          <button
+            data-testid="accounts-batch-refresh-balance"
+            onClick={() => runBatchAccountAction("refreshBalance")}
+            disabled={batchActionLoading}
+            className="btn btn-ghost"
+            style={{ border: "1px solid var(--color-border)" }}
+          >
             批量刷新余额
           </button>
-          <button onClick={() => runBatchAccountAction('enable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
+          <button
+            onClick={() => runBatchAccountAction("enable")}
+            disabled={batchActionLoading}
+            className="btn btn-ghost"
+            style={{ border: "1px solid var(--color-border)" }}
+          >
             批量启用
           </button>
-          <button onClick={() => runBatchAccountAction('disable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
+          <button
+            onClick={() => runBatchAccountAction("disable")}
+            disabled={batchActionLoading}
+            className="btn btn-ghost"
+            style={{ border: "1px solid var(--color-border)" }}
+          >
             批量禁用
           </button>
-          <button onClick={() => runBatchAccountAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
+          <button
+            onClick={() => runBatchAccountAction("delete")}
+            disabled={batchActionLoading}
+            className="btn btn-link btn-link-danger"
+          >
             批量删除
           </button>
         </ResponsiveBatchActionBar>
       )}
 
-      {activeSegment === 'tokens' ? (
-        <TokensPanel embedded onEmbeddedActionsChange={setEmbeddedTokenActions} />
+      {activeSegment === "tokens" ? (
+        <TokensPanel
+          embedded
+          onEmbeddedActionsChange={setEmbeddedTokenActions}
+        />
       ) : (
         <>
           <CenteredModal
             open={showAdd}
             onClose={closeAddPanel}
-            title={activeSegment === 'apikey' ? '添加 API Key 连接' : (addMode === 'login' ? '账号密码登录' : '添加 Session 连接')}
+            title={
+              activeSegment === "apikey"
+                ? "添加 API Key 连接"
+                : addMode === "login"
+                  ? "账号密码登录"
+                  : "添加 Session 连接"
+            }
             maxWidth={860}
-            bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-            footer={<button onClick={closeAddPanel} className="btn btn-ghost">取消</button>}
+            bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+            footer={
+              <button onClick={closeAddPanel} className="btn btn-ghost">
+                取消
+              </button>
+            }
           >
-            {activeSegment === 'session' ? (
+            {activeSegment === "session" ? (
               <>
-                <div style={{ display: 'flex', gap: 0, background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', padding: 3, marginBottom: 16 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 0,
+                    background: "var(--color-bg)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: 3,
+                    marginBottom: 16,
+                  }}
+                >
                   <button
-                    onClick={() => { setAddMode('token'); setVerifyResult(null); }}
+                    onClick={() => {
+                      setAddMode("token");
+                      setVerifyResult(null);
+                    }}
                     style={{
                       flex: 1,
-                      padding: '8px 0',
+                      padding: "8px 0",
                       borderRadius: 6,
                       fontSize: 13,
                       fontWeight: 500,
-                      border: 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      background: addMode === 'token' ? 'var(--color-bg-card)' : 'transparent',
-                      color: addMode === 'token' ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                      boxShadow: addMode === 'token' ? 'var(--shadow-sm)' : 'none',
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                      background:
+                        addMode === "token"
+                          ? "var(--color-bg-card)"
+                          : "transparent",
+                      color:
+                        addMode === "token"
+                          ? "var(--color-primary)"
+                          : "var(--color-text-muted)",
+                      boxShadow:
+                        addMode === "token" ? "var(--shadow-sm)" : "none",
                     }}
                   >
                     Session Token / Cookie
                   </button>
                   <button
-                    onClick={() => { setAddMode('login'); setVerifyResult(null); }}
+                    onClick={() => {
+                      setAddMode("login");
+                      setVerifyResult(null);
+                    }}
                     style={{
                       flex: 1,
-                      padding: '8px 0',
+                      padding: "8px 0",
                       borderRadius: 6,
                       fontSize: 13,
                       fontWeight: 500,
-                      border: 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      background: addMode === 'login' ? 'var(--color-bg-card)' : 'transparent',
-                      color: addMode === 'login' ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                      boxShadow: addMode === 'login' ? 'var(--shadow-sm)' : 'none',
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                      background:
+                        addMode === "login"
+                          ? "var(--color-bg-card)"
+                          : "transparent",
+                      color:
+                        addMode === "login"
+                          ? "var(--color-primary)"
+                          : "var(--color-text-muted)",
+                      boxShadow:
+                        addMode === "login" ? "var(--shadow-sm)" : "none",
                     }}
                   >
                     账号密码登录
                   </button>
                 </div>
 
-                {addMode === 'token' ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {addMode === "token" ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}
+                  >
                     <div className="info-tip">
                       <div>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>当前分段仅创建 Session 连接</div>
-                        <div><strong>推荐</strong> 使用系统访问令牌（Access Token）；浏览器 Cookie 仅用于兼容场景。</div>
-                        <div style={{ marginTop: 2 }}>以 NewAPI 为例：控制台 → 个人设置 → 安全设置 → 生成「系统访问令牌」</div>
-                        <div style={{ opacity: 0.7, borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: 6, marginTop: 6 }}>
-                          获取 Cookie: <kbd style={{ padding: '1px 5px', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 3, fontSize: 11 }}>F12</kbd> → Application → Cookie
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                          当前分段仅创建 Session 连接
+                        </div>
+                        <div>
+                          <strong>推荐</strong> 使用系统访问令牌（Access
+                          Token）；浏览器 Cookie 仅用于兼容场景。
+                        </div>
+                        <div style={{ marginTop: 2 }}>
+                          以 NewAPI 为例：控制台 → 个人设置 → 安全设置 →
+                          生成「系统访问令牌」
+                        </div>
+                        <div
+                          style={{
+                            opacity: 0.7,
+                            borderTop: "1px solid rgba(0,0,0,0.1)",
+                            paddingTop: 6,
+                            marginTop: 6,
+                          }}
+                        >
+                          获取 Cookie:{" "}
+                          <kbd
+                            style={{
+                              padding: "1px 5px",
+                              background: "var(--color-bg-card)",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 3,
+                              fontSize: 11,
+                            }}
+                          >
+                            F12
+                          </kbd>{" "}
+                          → Application → Cookie
                         </div>
                         <div style={{ marginTop: 6 }}>
                           <a
                             href={SITE_DOCS_URL}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ fontSize: 12, color: 'var(--color-primary)', textDecoration: 'underline' }}
+                            style={{
+                              fontSize: 12,
+                              color: "var(--color-primary)",
+                              textDecoration: "underline",
+                            }}
                           >
                             查看认证方式与特殊站点说明文档
                           </a>
@@ -1271,112 +1705,299 @@ export default function Accounts() {
                     <input
                       placeholder="连接名称（可选）"
                       value={tokenForm.username}
-                      onChange={(e) => setTokenForm((f) => ({ ...f, username: e.target.value }))}
+                      onChange={(e) =>
+                        setTokenForm((f) => ({
+                          ...f,
+                          username: e.target.value,
+                        }))
+                      }
                       style={inputStyle}
                     />
                     <textarea
                       placeholder="粘贴 Session Access Token 或浏览器 Cookie"
                       value={tokenForm.accessToken}
-                      onChange={(e) => { setTokenForm((f) => ({ ...f, accessToken: e.target.value.trim() })); setVerifyResult(null); }}
-                      style={{ ...inputStyle, fontFamily: 'var(--font-mono)', height: 72, resize: 'none' as const }}
+                      onChange={(e) => {
+                        setTokenForm((f) => ({
+                          ...f,
+                          accessToken: e.target.value.trim(),
+                        }));
+                        setVerifyResult(null);
+                      }}
+                      style={{
+                        ...inputStyle,
+                        fontFamily: "var(--font-mono)",
+                        height: 72,
+                        resize: "none" as const,
+                      }}
                     />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
                       <input
                         placeholder="用户 ID（可选）"
                         value={tokenForm.platformUserId}
-                        onChange={(e) => { setTokenForm((f) => ({ ...f, platformUserId: e.target.value.replace(/\D/g, '') })); setVerifyResult(null); }}
+                        onChange={(e) => {
+                          setTokenForm((f) => ({
+                            ...f,
+                            platformUserId: e.target.value.replace(/\D/g, ""),
+                          }));
+                          setVerifyResult(null);
+                        }}
                         style={inputStyle}
                       />
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--color-text-muted)",
+                        }}
+                      >
                         若站点要求 New-Api-User / User-ID，请在这里提前填写。
                       </div>
                     </div>
                     {isSub2ApiSelected && (
                       <>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                          }}
+                        >
                           <input
                             placeholder="Sub2API refresh_token（可选，用于托管自动续期）"
                             value={tokenForm.refreshToken}
-                            onChange={(e) => setTokenForm((f) => ({ ...f, refreshToken: e.target.value.trim() }))}
-                            style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                            onChange={(e) =>
+                              setTokenForm((f) => ({
+                                ...f,
+                                refreshToken: e.target.value.trim(),
+                              }))
+                            }
+                            style={{
+                              ...inputStyle,
+                              fontFamily: "var(--font-mono)",
+                            }}
                           />
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                            可在浏览器控制台执行 <code style={{ fontFamily: 'var(--font-mono)' }}>localStorage.getItem('refresh_token')</code> 获取。
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "var(--color-text-muted)",
+                            }}
+                          >
+                            可在浏览器控制台执行{" "}
+                            <code style={{ fontFamily: "var(--font-mono)" }}>
+                              localStorage.getItem('refresh_token')
+                            </code>{" "}
+                            获取。
                           </div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                          }}
+                        >
                           <input
                             placeholder="token_expires_at（可选，毫秒时间戳）"
                             value={tokenForm.tokenExpiresAt}
-                            onChange={(e) => setTokenForm((f) => ({ ...f, tokenExpiresAt: e.target.value.replace(/\D/g, '') }))}
+                            onChange={(e) =>
+                              setTokenForm((f) => ({
+                                ...f,
+                                tokenExpiresAt: e.target.value.replace(
+                                  /\D/g,
+                                  "",
+                                ),
+                              }))
+                            }
                             style={inputStyle}
                           />
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                            配置 refresh_token 后，metapi 会在 JWT 临近过期或 401 时自动续期并回写新 token。
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "var(--color-text-muted)",
+                            }}
+                          >
+                            配置 refresh_token 后，metapi 会在 JWT 临近过期或
+                            401 时自动续期并回写新 token。
                           </div>
                         </div>
                       </>
                     )}
-                    {verifyResult && verifyResult.success && verifyResult.tokenType === 'session' && (
-                      <div className="alert alert-success animate-scale-in">
-                        <div className="alert-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          Session 凭证有效（Access Token / Cookie）
+                    {verifyResult &&
+                      verifyResult.success &&
+                      verifyResult.tokenType === "session" && (
+                        <div className="alert alert-success animate-scale-in">
+                          <div
+                            className="alert-title"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            Session 凭证有效（Access Token / Cookie）
+                          </div>
+                          <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                            <div>
+                              用户名:{" "}
+                              <strong>
+                                {verifyResult.userInfo?.username || "未知"}
+                              </strong>
+                            </div>
+                            {verifyResult.balance && (
+                              <div>
+                                余额:{" "}
+                                <strong>
+                                  $
+                                  {(verifyResult.balance.balance || 0).toFixed(
+                                    2,
+                                  )}
+                                </strong>
+                              </div>
+                            )}
+                            <div>
+                              API Key:{" "}
+                              <span
+                                style={{
+                                  fontWeight: 500,
+                                  color: verifyResult.apiToken
+                                    ? "var(--color-success)"
+                                    : "var(--color-text-muted)",
+                                }}
+                              >
+                                {verifyResult.apiToken
+                                  ? `已找到 (${verifyResult.apiToken.substring(0, 8)}...)`
+                                  : "未找到"}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                          <div>用户名: <strong>{verifyResult.userInfo?.username || '未知'}</strong></div>
-                          {verifyResult.balance && <div>余额: <strong>${(verifyResult.balance.balance || 0).toFixed(2)}</strong></div>}
-                          <div>API Key: <span style={{ fontWeight: 500, color: verifyResult.apiToken ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                            {verifyResult.apiToken ? `已找到 (${verifyResult.apiToken.substring(0, 8)}...)` : '未找到'}
-                          </span></div>
+                      )}
+                    {verifyResult &&
+                      verifyResult.success &&
+                      verifyResult.tokenType === "apikey" && (
+                        <div className="alert alert-warning animate-scale-in">
+                          <div className="alert-title">
+                            当前分段仅接受 Session 凭证，请切到「API Key
+                            连接」分段创建。
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {verifyResult && verifyResult.success && verifyResult.tokenType === 'apikey' && (
-                      <div className="alert alert-warning animate-scale-in">
-                        <div className="alert-title">当前分段仅接受 Session 凭证，请切到「API Key 连接」分段创建。</div>
-                      </div>
-                    )}
-                    {verifyResult && !verifyResult.success && verifyResult.needsUserId && (
-                      <div className="alert alert-warning animate-scale-in">
-                        <div className="alert-title">此站点要求用户 ID，请补充后重新验证</div>
-                      </div>
-                    )}
-                    {verifyResult && !verifyResult.success && !verifyResult.needsUserId && (
-                      <div className="alert alert-error animate-scale-in">
-                        <div className="alert-title">
-                          {normalizeVerifyFailureMessage(verifyResult.message) || 'Token 无效或已过期'}
+                      )}
+                    {verifyResult &&
+                      !verifyResult.success &&
+                      verifyResult.needsUserId && (
+                        <div className="alert alert-warning animate-scale-in">
+                          <div className="alert-title">
+                            此站点要求用户 ID，请补充后重新验证
+                          </div>
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                          {verifyFailureHint || '请检查 Token 是否正确'}
+                      )}
+                    {verifyResult &&
+                      !verifyResult.success &&
+                      !verifyResult.needsUserId && (
+                        <div className="alert alert-error animate-scale-in">
+                          <div className="alert-title">
+                            {normalizeVerifyFailureMessage(
+                              verifyResult.message,
+                            ) || "Token 无效或已过期"}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "var(--color-text-muted)",
+                              marginTop: 4,
+                            }}
+                          >
+                            {verifyFailureHint || "请检查 Token 是否正确"}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
+                      )}
+                    <div style={{ display: "flex", gap: 8 }}>
                       <button
                         onClick={handleVerifyToken}
-                        disabled={verifying || !tokenForm.siteId || !tokenForm.accessToken}
+                        disabled={
+                          verifying ||
+                          !tokenForm.siteId ||
+                          !tokenForm.accessToken
+                        }
                         className="btn btn-ghost"
-                        style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+                        style={{
+                          border: "1px solid var(--color-border)",
+                          padding: "8px 14px",
+                        }}
                       >
-                        {verifying ? <><span className="spinner spinner-sm" />验证中...</> : '验证 Token'}
+                        {verifying ? (
+                          <>
+                            <span className="spinner spinner-sm" />
+                            验证中...
+                          </>
+                        ) : (
+                          "验证 Token"
+                        )}
                       </button>
                       <button
                         onClick={handleTokenAdd}
-                        disabled={saving || !tokenForm.siteId || !tokenForm.accessToken || !canAddVerifiedConnection}
+                        disabled={
+                          saving ||
+                          !tokenForm.siteId ||
+                          !tokenForm.accessToken ||
+                          !canAddVerifiedConnection
+                        }
                         className="btn btn-success"
                       >
-                        {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />添加中...</> : '添加连接'}
+                        {saving ? (
+                          <>
+                            <span
+                              className="spinner spinner-sm"
+                              style={{
+                                borderTopColor: "white",
+                                borderColor: "rgba(255,255,255,0.3)",
+                              }}
+                            />
+                            添加中...
+                          </>
+                        ) : (
+                          "添加连接"
+                        )}
                       </button>
                     </div>
                     {!verifyResult?.success && (
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--color-text-muted)",
+                        }}
+                      >
                         {addAccountPrereqHint}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}
+                  >
                     <div className="info-tip">
                       输入目标站点的账号密码，将自动登录并获取访问令牌和 API Key
                     </div>
@@ -1391,35 +2012,110 @@ export default function Accounts() {
                       searchable
                       searchPlaceholder={SITE_SELECT_SEARCH_PLACEHOLDER}
                     />
-                    <input placeholder="用户名" value={loginForm.username} onChange={(e) => setLoginForm((f) => ({ ...f, username: e.target.value }))} style={inputStyle} />
-                    <input type="password" placeholder="密码" value={loginForm.password} onChange={(e) => setLoginForm((f) => ({ ...f, password: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && handleLoginAdd()} style={inputStyle} />
-                    <button onClick={handleLoginAdd} disabled={saving || !loginForm.siteId || !loginForm.username || !loginForm.password} className="btn btn-success" style={{ alignSelf: 'flex-start' }}>
-                      {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />登录并添加...</> : '登录并添加'}
+                    <input
+                      placeholder="用户名"
+                      value={loginForm.username}
+                      onChange={(e) =>
+                        setLoginForm((f) => ({
+                          ...f,
+                          username: e.target.value,
+                        }))
+                      }
+                      style={inputStyle}
+                    />
+                    <input
+                      type="password"
+                      placeholder="密码"
+                      value={loginForm.password}
+                      onChange={(e) =>
+                        setLoginForm((f) => ({
+                          ...f,
+                          password: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && handleLoginAdd()}
+                      style={inputStyle}
+                    />
+                    <button
+                      onClick={handleLoginAdd}
+                      disabled={
+                        saving ||
+                        !loginForm.siteId ||
+                        !loginForm.username ||
+                        !loginForm.password
+                      }
+                      className="btn btn-success"
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      {saving ? (
+                        <>
+                          <span
+                            className="spinner spinner-sm"
+                            style={{
+                              borderTopColor: "white",
+                              borderColor: "rgba(255,255,255,0.3)",
+                            }}
+                          />
+                          登录并添加...
+                        </>
+                      ) : (
+                        "登录并添加"
+                      )}
                     </button>
                   </div>
                 )}
               </>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+              >
                 <div className="info-tip">
-                  API Key 连接只用于代理转发，不会自动派生账号令牌。系统会按站点平台能力自动引导到 Session 或 API Key 创建流程。
+                  API Key
+                  连接只用于代理转发，不会自动派生账号令牌。系统会按站点平台能力自动引导到
+                  Session 或 API Key 创建流程。
                 </div>
                 {createIntentPreset && (
                   <div className="alert alert-info animate-scale-in">
-                    <div className="alert-title">{createIntentPreset.label}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.8 }}>
+                    <div className="alert-title">
+                      {createIntentPreset.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--color-text-muted)",
+                        marginTop: 4,
+                        lineHeight: 1.8,
+                      }}
+                    >
                       <div>{createIntentPreset.description}</div>
-                      <div>推荐模型：{createIntentPreset.recommendedModels.join(' / ')}</div>
+                      <div>
+                        推荐模型：
+                        {createIntentPreset.recommendedModels.join(" / ")}
+                      </div>
                       {createIntentPreset.recommendedSkipModelFetch && (
-                        <div>建议直接跳过模型验证，先保存 Base URL + Key，再补入推荐模型完成初始化。</div>
+                        <div>
+                          建议直接跳过模型验证，先保存 Base URL +
+                          Key，再补入推荐模型完成初始化。
+                        </div>
                       )}
                     </div>
                     {createIntentPreset.recommendedModels.length > 0 && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', marginTop: 8 }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12,
+                          cursor: "pointer",
+                          marginTop: 8,
+                        }}
+                      >
                         <input
                           type="checkbox"
                           checked={applyCreatePresetModels}
-                          onChange={(e) => setApplyCreatePresetModels(e.target.checked)}
+                          onChange={(e) =>
+                            setApplyCreatePresetModels(e.target.checked)
+                          }
                           style={{ width: 14, height: 14 }}
                         />
                         <span>添加后自动补入推荐模型并重建路由</span>
@@ -1431,9 +2127,16 @@ export default function Accounts() {
                   value={String(tokenForm.siteId || 0)}
                   onChange={(nextValue) => {
                     const nextSiteId = Number.parseInt(nextValue, 10) || 0;
-                    setTokenForm((f) => ({ ...f, siteId: nextSiteId, credentialMode: 'apikey' }));
+                    setTokenForm((f) => ({
+                      ...f,
+                      siteId: nextSiteId,
+                      credentialMode: "apikey",
+                    }));
                     setVerifyResult(null);
-                    if (createIntentPresetId && nextSiteId !== tokenForm.siteId) {
+                    if (
+                      createIntentPresetId &&
+                      nextSiteId !== tokenForm.siteId
+                    ) {
                       setCreateIntentPresetId(null);
                       setApplyCreatePresetModels(false);
                     }
@@ -1446,97 +2149,230 @@ export default function Accounts() {
                 <input
                   placeholder="连接名称（可选）"
                   value={tokenForm.username}
-                  onChange={(e) => setTokenForm((f) => ({ ...f, username: e.target.value, credentialMode: 'apikey' }))}
+                  onChange={(e) =>
+                    setTokenForm((f) => ({
+                      ...f,
+                      username: e.target.value,
+                      credentialMode: "apikey",
+                    }))
+                  }
                   style={inputStyle}
                 />
                 <textarea
                   placeholder="粘贴 API Key"
                   value={tokenForm.accessToken}
-                  onChange={(e) => { setTokenForm((f) => ({ ...f, accessToken: e.target.value, credentialMode: 'apikey' })); setVerifyResult(null); }}
-                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)', height: 72, resize: 'none' as const }}
+                  onChange={(e) => {
+                    setTokenForm((f) => ({
+                      ...f,
+                      accessToken: e.target.value,
+                      credentialMode: "apikey",
+                    }));
+                    setVerifyResult(null);
+                  }}
+                  style={{
+                    ...inputStyle,
+                    fontFamily: "var(--font-mono)",
+                    height: 72,
+                    resize: "none" as const,
+                  }}
                 />
                 {parsedApiKeys.length > 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  <div
+                    style={{ fontSize: 12, color: "var(--color-text-muted)" }}
+                  >
                     已识别 {parsedApiKeys.length} 个 API Key
-                    {isBatchApiKeyInput ? '，添加时会逐条创建同站点连接并参与轮询' : ''}
+                    {isBatchApiKeyInput
+                      ? "，添加时会逐条创建同站点连接并参与轮询"
+                      : ""}
                   </div>
                 )}
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
                   支持换行、空格、逗号批量粘贴多个 API Key。
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                >
                   <input
                     placeholder="用户 ID（可选）"
                     value={tokenForm.platformUserId}
-                    onChange={(e) => { setTokenForm((f) => ({ ...f, platformUserId: e.target.value.replace(/\D/g, ''), credentialMode: 'apikey' })); setVerifyResult(null); }}
+                    onChange={(e) => {
+                      setTokenForm((f) => ({
+                        ...f,
+                        platformUserId: e.target.value.replace(/\D/g, ""),
+                        credentialMode: "apikey",
+                      }));
+                      setVerifyResult(null);
+                    }}
                     style={inputStyle}
                   />
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  <div
+                    style={{ fontSize: 12, color: "var(--color-text-muted)" }}
+                  >
                     若站点要求 New-Api-User / User-ID，请在这里提前填写。
                   </div>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start' }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    alignSelf: "flex-start",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={!!tokenForm.skipModelFetch}
-                    onChange={(e) => setTokenForm((f) => ({ ...f, skipModelFetch: e.target.checked }))}
+                    onChange={(e) =>
+                      setTokenForm((f) => ({
+                        ...f,
+                        skipModelFetch: e.target.checked,
+                      }))
+                    }
                     style={{ width: 14, height: 14 }}
                   />
                   <span>跳过模型验证（直接添加 API Key）</span>
                 </label>
-                {verifyResult && verifyResult.success && verifyResult.tokenType === 'apikey' && (
-                  <div className="alert alert-info animate-scale-in">
-                    <div className="alert-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
-                      API Key 验证成功
+                {verifyResult &&
+                  verifyResult.success &&
+                  verifyResult.tokenType === "apikey" && (
+                    <div className="alert alert-info animate-scale-in">
+                      <div
+                        className="alert-title"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                          />
+                        </svg>
+                        API Key 验证成功
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                        <div>
+                          可用模型:{" "}
+                          <strong>{verifyResult.modelCount} 个</strong>
+                        </div>
+                        {verifyResult.models && (
+                          <div style={{ color: "var(--color-text-muted)" }}>
+                            包含: {verifyResult.models.join(", ")}
+                            {verifyResult.modelCount > 10 ? " ..." : ""}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                      <div>可用模型: <strong>{verifyResult.modelCount} 个</strong></div>
-                      {verifyResult.models && <div style={{ color: 'var(--color-text-muted)' }}>包含: {verifyResult.models.join(', ')}{verifyResult.modelCount > 10 ? ' ...' : ''}</div>}
+                  )}
+                {verifyResult &&
+                  verifyResult.success &&
+                  verifyResult.tokenType === "session" && (
+                    <div className="alert alert-warning animate-scale-in">
+                      <div className="alert-title">
+                        当前分段仅接受 API Key，请切到「Session 连接」分段创建。
+                      </div>
                     </div>
-                  </div>
-                )}
-                {verifyResult && verifyResult.success && verifyResult.tokenType === 'session' && (
-                  <div className="alert alert-warning animate-scale-in">
-                    <div className="alert-title">当前分段仅接受 API Key，请切到「Session 连接」分段创建。</div>
-                  </div>
-                )}
-                {verifyResult && !verifyResult.success && verifyResult.needsUserId && (
-                  <div className="alert alert-warning animate-scale-in">
-                    <div className="alert-title">此站点要求用户 ID，请补充后重新验证</div>
-                  </div>
-                )}
-                {verifyResult && !verifyResult.success && !verifyResult.needsUserId && (
-                  <div className="alert alert-error animate-scale-in">
-                    <div className="alert-title">
-                      {normalizeVerifyFailureMessage(verifyResult.message) || 'Token 无效或已过期'}
+                  )}
+                {verifyResult &&
+                  !verifyResult.success &&
+                  verifyResult.needsUserId && (
+                    <div className="alert alert-warning animate-scale-in">
+                      <div className="alert-title">
+                        此站点要求用户 ID，请补充后重新验证
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                      {verifyFailureHint || '请检查 Token 是否正确'}
+                  )}
+                {verifyResult &&
+                  !verifyResult.success &&
+                  !verifyResult.needsUserId && (
+                    <div className="alert alert-error animate-scale-in">
+                      <div className="alert-title">
+                        {normalizeVerifyFailureMessage(verifyResult.message) ||
+                          "Token 无效或已过期"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--color-text-muted)",
+                          marginTop: 4,
+                        }}
+                      >
+                        {verifyFailureHint || "请检查 Token 是否正确"}
+                      </div>
                     </div>
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8 }}>
+                  )}
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={handleVerifyToken}
-                    disabled={verifying || !tokenForm.siteId || !tokenForm.accessToken || isBatchApiKeyInput}
+                    disabled={
+                      verifying ||
+                      !tokenForm.siteId ||
+                      !tokenForm.accessToken ||
+                      isBatchApiKeyInput
+                    }
                     className="btn btn-ghost"
-                    style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+                    style={{
+                      border: "1px solid var(--color-border)",
+                      padding: "8px 14px",
+                    }}
                   >
-                    {verifying ? <><span className="spinner spinner-sm" />验证中...</> : (isBatchApiKeyInput ? '批量添加时校验' : '验证 API Key')}
+                    {verifying ? (
+                      <>
+                        <span className="spinner spinner-sm" />
+                        验证中...
+                      </>
+                    ) : isBatchApiKeyInput ? (
+                      "批量添加时校验"
+                    ) : (
+                      "验证 API Key"
+                    )}
                   </button>
                   <button
                     onClick={handleTokenAdd}
-                    disabled={saving || !tokenForm.siteId || !tokenForm.accessToken || !canSubmitApiKeyConnection}
+                    disabled={
+                      saving ||
+                      !tokenForm.siteId ||
+                      !tokenForm.accessToken ||
+                      !canSubmitApiKeyConnection
+                    }
                     className="btn btn-success"
                   >
-                    {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />添加中...</> : (isBatchApiKeyInput ? '批量添加连接' : '添加连接')}
+                    {saving ? (
+                      <>
+                        <span
+                          className="spinner spinner-sm"
+                          style={{
+                            borderTopColor: "white",
+                            borderColor: "rgba(255,255,255,0.3)",
+                          }}
+                        />
+                        添加中...
+                      </>
+                    ) : isBatchApiKeyInput ? (
+                      "批量添加连接"
+                    ) : (
+                      "添加连接"
+                    )}
                   </button>
                 </div>
                 {!verifyResult?.success && (
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  <div
+                    style={{ fontSize: 12, color: "var(--color-text-muted)" }}
+                  >
                     {isBatchApiKeyInput
-                      ? '批量模式下无需先点验证，提交后会逐条校验并创建。'
+                      ? "批量模式下无需先点验证，提交后会逐条校验并创建。"
                       : addAccountPrereqHint}
                   </div>
                 )}
@@ -1544,36 +2380,66 @@ export default function Accounts() {
             )}
           </CenteredModal>
 
-          {activeSegment === 'session' && (
+          {activeSegment === "session" && (
             <CenteredModal
               open={Boolean(rebindTarget)}
               onClose={closeRebindPanel}
               title="重新绑定 Session Token"
               maxWidth={820}
-              bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-              footer={<button onClick={closeRebindPanel} className="btn btn-ghost">取消</button>}
+              bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+              footer={
+                <button onClick={closeRebindPanel} className="btn btn-ghost">
+                  取消
+                </button>
+              }
             >
               {activeRebindTarget ? (
                 <>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-                    连接: {resolveAccountDisplayName(activeRebindTarget)} @ {activeRebindTarget.site?.name || '-'}。请粘贴新的 Session Token，验证成功后再绑定。
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--color-text-muted)",
+                      marginBottom: 12,
+                    }}
+                  >
+                    连接: {resolveAccountDisplayName(activeRebindTarget)} @{" "}
+                    {activeRebindTarget.site?.name || "-"}。请粘贴新的 Session
+                    Token，验证成功后再绑定。
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: 10, marginBottom: 10 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1fr) 220px",
+                      gap: 10,
+                      marginBottom: 10,
+                    }}
+                  >
                     <textarea
                       placeholder="粘贴新的 Session Token"
                       value={rebindForm.accessToken}
                       onChange={(e) => {
-                        setRebindForm((prev) => ({ ...prev, accessToken: e.target.value.trim() }));
+                        setRebindForm((prev) => ({
+                          ...prev,
+                          accessToken: e.target.value.trim(),
+                        }));
                         setRebindVerifyResult(null);
                       }}
-                      style={{ ...inputStyle, fontFamily: 'var(--font-mono)', height: 74, resize: 'none' as const }}
+                      style={{
+                        ...inputStyle,
+                        fontFamily: "var(--font-mono)",
+                        height: 74,
+                        resize: "none" as const,
+                      }}
                     />
                     <input
                       placeholder="用户 ID（可选）"
                       value={rebindForm.platformUserId}
                       onChange={(e) => {
-                        setRebindForm((prev) => ({ ...prev, platformUserId: e.target.value.replace(/\D/g, '') }));
+                        setRebindForm((prev) => ({
+                          ...prev,
+                          platformUserId: e.target.value.replace(/\D/g, ""),
+                        }));
                         setRebindVerifyResult(null);
                       }}
                       style={inputStyle}
@@ -1581,60 +2447,127 @@ export default function Accounts() {
                   </div>
                   {isRebindSub2Api && (
                     <>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: 10, marginBottom: 4 }}>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "minmax(0, 1fr) 220px",
+                          gap: 10,
+                          marginBottom: 4,
+                        }}
+                      >
                         <input
                           placeholder="Sub2API refresh_token（可选）"
                           value={rebindForm.refreshToken}
-                          onChange={(e) => setRebindForm((prev) => ({ ...prev, refreshToken: e.target.value.trim() }))}
-                          style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                          onChange={(e) =>
+                            setRebindForm((prev) => ({
+                              ...prev,
+                              refreshToken: e.target.value.trim(),
+                            }))
+                          }
+                          style={{
+                            ...inputStyle,
+                            fontFamily: "var(--font-mono)",
+                          }}
                         />
                         <input
                           placeholder="token_expires_at（可选）"
                           value={rebindForm.tokenExpiresAt}
-                          onChange={(e) => setRebindForm((prev) => ({ ...prev, tokenExpiresAt: e.target.value.replace(/\D/g, '') }))}
+                          onChange={(e) =>
+                            setRebindForm((prev) => ({
+                              ...prev,
+                              tokenExpiresAt: e.target.value.replace(/\D/g, ""),
+                            }))
+                          }
                           style={inputStyle}
                         />
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                        留空将保持原有 refresh_token 不变。配置后可用于托管自动续期。
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--color-text-muted)",
+                          marginBottom: 10,
+                        }}
+                      >
+                        留空将保持原有 refresh_token
+                        不变。配置后可用于托管自动续期。
                       </div>
                     </>
                   )}
 
-                  {rebindVerifyResult && rebindVerifyResult.success && rebindVerifyResult.tokenType === 'session' && (
-                    <div className="alert alert-success animate-scale-in" style={{ marginBottom: 10 }}>
-                      <div className="alert-title">Session Token 有效</div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>
-                        用户: {rebindVerifyResult.userInfo?.username || '未知'}
-                        {rebindVerifyResult.apiToken ? `，已识别 API Key (${String(rebindVerifyResult.apiToken).slice(0, 8)}...)` : ''}
+                  {rebindVerifyResult &&
+                    rebindVerifyResult.success &&
+                    rebindVerifyResult.tokenType === "session" && (
+                      <div
+                        className="alert alert-success animate-scale-in"
+                        style={{ marginBottom: 10 }}
+                      >
+                        <div className="alert-title">Session Token 有效</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                          用户:{" "}
+                          {rebindVerifyResult.userInfo?.username || "未知"}
+                          {rebindVerifyResult.apiToken
+                            ? `，已识别 API Key (${String(rebindVerifyResult.apiToken).slice(0, 8)}...)`
+                            : ""}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {rebindVerifyResult && (!rebindVerifyResult.success || rebindVerifyResult.tokenType !== 'session') && (
-                    <div className="alert alert-error animate-scale-in" style={{ marginBottom: 10 }}>
-                      <div className="alert-title">
-                        {rebindVerifyResult.message || 'Token 无效或类型不正确'}
+                    )}
+                  {rebindVerifyResult &&
+                    (!rebindVerifyResult.success ||
+                      rebindVerifyResult.tokenType !== "session") && (
+                      <div
+                        className="alert alert-error animate-scale-in"
+                        style={{ marginBottom: 10 }}
+                      >
+                        <div className="alert-title">
+                          {rebindVerifyResult.message ||
+                            "Token 无效或类型不正确"}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8 }}>
                     <button
                       onClick={handleVerifyRebindToken}
-                      disabled={rebindVerifying || !rebindForm.accessToken.trim()}
+                      disabled={
+                        rebindVerifying || !rebindForm.accessToken.trim()
+                      }
                       className="btn btn-ghost"
-                      style={{ border: '1px solid var(--color-border)' }}
+                      style={{ border: "1px solid var(--color-border)" }}
                     >
-                      {rebindVerifying ? <><span className="spinner spinner-sm" />验证中...</> : '验证 Token'}
+                      {rebindVerifying ? (
+                        <>
+                          <span className="spinner spinner-sm" />
+                          验证中...
+                        </>
+                      ) : (
+                        "验证 Token"
+                      )}
                     </button>
                     <button
                       onClick={handleSubmitRebind}
-                      disabled={rebindSaving || !(rebindVerifyResult?.success && rebindVerifyResult?.tokenType === 'session')}
+                      disabled={
+                        rebindSaving ||
+                        !(
+                          rebindVerifyResult?.success &&
+                          rebindVerifyResult?.tokenType === "session"
+                        )
+                      }
                       className="btn btn-success"
                     >
-                      {rebindSaving
-                        ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />绑定中...</>
-                        : '确认重新绑定'}
+                      {rebindSaving ? (
+                        <>
+                          <span
+                            className="spinner spinner-sm"
+                            style={{
+                              borderTopColor: "white",
+                              borderColor: "rgba(255,255,255,0.3)",
+                            }}
+                          />
+                          绑定中...
+                        </>
+                      ) : (
+                        "确认重新绑定"
+                      )}
                     </button>
                   </div>
                 </>
@@ -1647,81 +2580,157 @@ export default function Accounts() {
             onClose={closeEditPanel}
             title="编辑账号"
             maxWidth={860}
-            bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-            footer={(
+            bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+            footer={
               <>
-                <button onClick={closeEditPanel} className="btn btn-ghost">取消</button>
-                <button onClick={saveEditPanel} disabled={savingEdit} className="btn btn-primary">
-                  {savingEdit ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存修改'}
+                <button onClick={closeEditPanel} className="btn btn-ghost">
+                  取消
+                </button>
+                <button
+                  onClick={saveEditPanel}
+                  disabled={savingEdit}
+                  className="btn btn-primary"
+                >
+                  {savingEdit ? (
+                    <>
+                      <span
+                        className="spinner spinner-sm"
+                        style={{
+                          borderTopColor: "white",
+                          borderColor: "rgba(255,255,255,0.3)",
+                        }}
+                      />{" "}
+                      保存中...
+                    </>
+                  ) : (
+                    "保存修改"
+                  )}
                 </button>
               </>
-            )}
+            }
           >
             {editingAccount ? (
               <ResponsiveFormGrid>
                 <input
                   placeholder="账号名称"
                   value={editForm.username}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, username: e.target.value }))}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      username: e.target.value,
+                    }))
+                  }
                   style={inputStyle}
                 />
                 <ModernSelect
                   value={editForm.status}
-                  onChange={(value) => setEditForm((prev) => ({ ...prev, status: value }))}
+                  onChange={(value) =>
+                    setEditForm((prev) => ({ ...prev, status: value }))
+                  }
                   options={[
-                    { value: 'active', label: 'active' },
-                    { value: 'disabled', label: 'disabled' },
-                    { value: 'expired', label: 'expired' },
+                    { value: "active", label: "active" },
+                    { value: "disabled", label: "disabled" },
+                    { value: "expired", label: "expired" },
                   ]}
                   placeholder="状态"
                 />
                 <input
                   placeholder="单位成本（可选）"
                   value={editForm.unitCost}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, unitCost: e.target.value }))}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      unitCost: e.target.value,
+                    }))
+                  }
                   style={inputStyle}
                 />
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, ...inputStyle }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    ...inputStyle,
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={editForm.checkinEnabled}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, checkinEnabled: e.target.checked }))}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        checkinEnabled: e.target.checked,
+                      }))
+                    }
                   />
                   启用签到
                 </label>
                 <input
                   placeholder="Access Token"
                   value={editForm.accessToken}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, accessToken: e.target.value }))}
-                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      accessToken: e.target.value,
+                    }))
+                  }
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
                 />
                 <input
                   placeholder="API Token（可选）"
                   value={editForm.apiToken}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, apiToken: e.target.value }))}
-                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      apiToken: e.target.value,
+                    }))
+                  }
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
                 />
                 <input
                   placeholder="代理地址（可选，如 http://127.0.0.1:7890）"
                   value={editForm.proxyUrl}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      proxyUrl: e.target.value,
+                    }))
+                  }
                   style={inputStyle}
                 />
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -4 }}>
-                  覆盖站点和系统代理，留空则使用站点设置。支持 http/https/socks5 协议。
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--color-text-muted)",
+                    marginTop: -4,
+                  }}
+                >
+                  覆盖站点和系统代理，留空则使用站点设置。支持 http/https/socks5
+                  协议。
                 </div>
-                {((editingAccount?.site?.platform || '').toLowerCase() === 'sub2api') && (
+                {(editingAccount?.site?.platform || "").toLowerCase() ===
+                  "sub2api" && (
                   <>
                     <input
                       placeholder="Sub2API refresh_token（可选）"
                       value={editForm.refreshToken}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, refreshToken: e.target.value }))}
-                      style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          refreshToken: e.target.value,
+                        }))
+                      }
+                      style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
                     />
                     <input
                       placeholder="token_expires_at（可选）"
                       value={editForm.tokenExpiresAt}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, tokenExpiresAt: e.target.value.replace(/\D/g, '') }))}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          tokenExpiresAt: e.target.value.replace(/\D/g, ""),
+                        }))
+                      }
                       style={inputStyle}
                     />
                   </>
@@ -1739,39 +2748,64 @@ export default function Accounts() {
                     const connectionMode = resolveAccountCredentialMode(a);
                     const health = resolveRuntimeHealth(a);
                     const isExpanded = expandedAccountIds.includes(a.id);
-                    const hintMessage = (a.status === 'expired' && !capabilities.proxyOnly)
-                      ? '账号已过期，请重新绑定'
-                      : (health.reason || '-');
+                    const hintMessage =
+                      a.status === "expired" && !capabilities.proxyOnly
+                        ? "账号已过期，请重新绑定"
+                        : health.reason || "-";
                     return (
                       <MobileCard
                         key={a.id}
                         title={resolveAccountDisplayName(a)}
-                        headerActions={(
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        headerActions={
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
                             <input
                               type="checkbox"
                               aria-label={`选择账号 ${resolveAccountDisplayName(a)}`}
                               checked={selectedAccountIds.includes(a.id)}
-                              onChange={(event) => toggleAccountSelection(a.id, event.target.checked)}
+                              onChange={(event) =>
+                                toggleAccountSelection(
+                                  a.id,
+                                  event.target.checked,
+                                )
+                              }
                             />
-                            <span className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 10 }}>
-                              {connectionMode === 'apikey' ? 'API Key' : 'Session'}
+                            <span
+                              className={`badge ${connectionMode === "apikey" ? "badge-warning" : "badge-info"}`}
+                              style={{ fontSize: 10 }}
+                            >
+                              {connectionMode === "apikey"
+                                ? "API Key"
+                                : "Session"}
                             </span>
                             {parseAccountExtraConfig(a)?.proxyUrl && (
-                              <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
+                              <span
+                                className="badge badge-purple"
+                                style={{ fontSize: 10 }}
+                              >
+                                代理
+                              </span>
                             )}
                           </div>
-                        )}
-                        footerActions={(
+                        }
+                        footerActions={
                           <>
                             <button
                               type="button"
                               onClick={() => toggleAccountDetails(a.id)}
                               className="btn btn-link"
                             >
-                              {isExpanded ? '收起' : '详情'}
+                              {isExpanded ? "收起" : "详情"}
                             </button>
-                            <button onClick={() => openEditPanel(a)} className="btn btn-link btn-link-info">
+                            <button
+                              onClick={() => openEditPanel(a)}
+                              className="btn btn-link btn-link-info"
+                            >
                               编辑
                             </button>
                             <button
@@ -1782,90 +2816,156 @@ export default function Accounts() {
                               模型
                             </button>
                           </>
-                        )}
+                        }
                       >
                         <MobileField
                           label="运行健康状态"
-                          value={(
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <span className={`badge ${health.cls}`} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4, width: 'fit-content' }}>
-                                <span className={`status-dot ${health.dotClass} ${health.pulse ? 'animate-pulse-dot' : ''}`} style={{ marginRight: 0 }} />
+                          value={
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 4,
+                              }}
+                            >
+                              <span
+                                className={`badge ${health.cls}`}
+                                style={{
+                                  fontSize: 11,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  width: "fit-content",
+                                }}
+                              >
+                                <span
+                                  className={`status-dot ${health.dotClass} ${health.pulse ? "animate-pulse-dot" : ""}`}
+                                  style={{ marginRight: 0 }}
+                                />
                                 {health.label}
                               </span>
                               <span
                                 style={{
                                   fontSize: 11,
-                                  color: 'var(--color-text-muted)',
+                                  color: "var(--color-text-muted)",
                                   maxWidth: 240,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
                                 }}
                                 data-tooltip={health.reason}
                               >
                                 {health.reason}
                               </span>
                             </div>
-                          )}
+                          }
                         />
                         <MobileField
                           label="余额"
-                          value={(
+                          value={
                             <div>
-                              <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>${(a.balance || 0).toFixed(2)}</div>
-                              <div style={{ fontSize: 11, color: (a.todayReward || 0) > 0 ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 500 }}>
+                              <div
+                                style={{
+                                  fontWeight: 600,
+                                  color: "var(--color-text-primary)",
+                                }}
+                              >
+                                ${(a.balance || 0).toFixed(2)}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color:
+                                    (a.todayReward || 0) > 0
+                                      ? "var(--color-success)"
+                                      : "var(--color-text-muted)",
+                                  fontWeight: 500,
+                                }}
+                              >
                                 +{(a.todayReward || 0).toFixed(2)}
                               </div>
                             </div>
-                          )}
+                          }
                         />
                         <MobileField
                           label="已用"
-                          value={(
+                          value={
                             <div>
                               <div>${(a.balanceUsed || 0).toFixed(2)}</div>
-                              <div style={{ fontSize: 11, color: (a.todaySpend || 0) > 0 ? 'var(--color-danger)' : 'var(--color-text-muted)', fontWeight: 500 }}>
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color:
+                                    (a.todaySpend || 0) > 0
+                                      ? "var(--color-danger)"
+                                      : "var(--color-text-muted)",
+                                  fontWeight: 500,
+                                }}
+                              >
                                 -{(a.todaySpend || 0).toFixed(2)}
                               </div>
                             </div>
-                          )}
+                          }
                         />
                         {isExpanded ? (
                           <div className="mobile-card-extra">
                             <MobileField
                               label="站点"
-                              value={(
+                              value={
                                 <SiteBadgeLink
                                   siteId={a.site?.id}
                                   siteName={a.site?.name}
                                   badgeStyle={{ fontSize: 11 }}
                                 />
-                              )}
+                              }
                             />
                             <MobileField
                               label="签到"
-                              value={capabilities.canCheckin ? (
-                                <button
-                                  type="button"
-                                  className={`checkin-toggle-badge ${a.checkinEnabled ? 'is-on' : 'is-off'}`}
-                                  onClick={() => handleToggleCheckin(a)}
-                                  disabled={!!actionLoading[`checkin-toggle-${a.id}`]}
-                                  data-tooltip={a.checkinEnabled ? '点击关闭签到，全部签到会忽略此账号' : '点击开启签到'}
-                                  aria-label={a.checkinEnabled ? '点击关闭签到，全部签到会忽略此账号' : '点击开启签到'}
-                                >
-                                  {actionLoading[`checkin-toggle-${a.id}`]
-                                    ? <span className="spinner spinner-sm" />
-                                    : (a.checkinEnabled ? '开启' : '关闭')}
-                                </button>
-                              ) : (
-                                <span className="badge badge-muted" style={{ fontSize: 11 }}>
-                                  不支持
-                                </span>
-                              )}
+                              value={
+                                capabilities.canCheckin ? (
+                                  <button
+                                    type="button"
+                                    className={`checkin-toggle-badge ${a.checkinEnabled ? "is-on" : "is-off"}`}
+                                    onClick={() => handleToggleCheckin(a)}
+                                    disabled={
+                                      !!actionLoading[`checkin-toggle-${a.id}`]
+                                    }
+                                    data-tooltip={
+                                      a.checkinEnabled
+                                        ? "点击关闭签到，全部签到会忽略此账号"
+                                        : "点击开启签到"
+                                    }
+                                    aria-label={
+                                      a.checkinEnabled
+                                        ? "点击关闭签到，全部签到会忽略此账号"
+                                        : "点击开启签到"
+                                    }
+                                  >
+                                    {actionLoading[`checkin-toggle-${a.id}`] ? (
+                                      <span className="spinner spinner-sm" />
+                                    ) : a.checkinEnabled ? (
+                                      "开启"
+                                    ) : (
+                                      "关闭"
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="badge badge-muted"
+                                    style={{ fontSize: 11 }}
+                                  >
+                                    不支持
+                                  </span>
+                                )
+                              }
                             />
                             <MobileField
                               label="账号状态"
-                              value={a.status === 'expired' ? '已过期' : (a.status || '-')}
+                              value={
+                                a.status === "expired"
+                                  ? "已过期"
+                                  : a.status || "-"
+                              }
                             />
                             <MobileField
                               label="提示"
@@ -1876,22 +2976,36 @@ export default function Accounts() {
                               <button
                                 onClick={() => handleTogglePin(a)}
                                 disabled={!!actionLoading[`pin-toggle-${a.id}`]}
-                                className={`btn btn-link ${a.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
+                                className={`btn btn-link ${a.isPinned ? "btn-link-warning" : "btn-link-primary"}`}
                               >
-                                {actionLoading[`pin-toggle-${a.id}`] ? <span className="spinner spinner-sm" /> : (a.isPinned ? '取消置顶' : '置顶')}
+                                {actionLoading[`pin-toggle-${a.id}`] ? (
+                                  <span className="spinner spinner-sm" />
+                                ) : a.isPinned ? (
+                                  "取消置顶"
+                                ) : (
+                                  "置顶"
+                                )}
                               </button>
-                              {sortMode === 'custom' && (
+                              {sortMode === "custom" && (
                                 <>
                                   <button
-                                    onClick={() => handleMoveCustomOrder(a, 'up')}
-                                    disabled={!!actionLoading[`reorder-${a.id}`]}
+                                    onClick={() =>
+                                      handleMoveCustomOrder(a, "up")
+                                    }
+                                    disabled={
+                                      !!actionLoading[`reorder-${a.id}`]
+                                    }
                                     className="btn btn-link btn-link-muted"
                                   >
                                     ↑ 上移
                                   </button>
                                   <button
-                                    onClick={() => handleMoveCustomOrder(a, 'down')}
-                                    disabled={!!actionLoading[`reorder-${a.id}`]}
+                                    onClick={() =>
+                                      handleMoveCustomOrder(a, "down")
+                                    }
+                                    disabled={
+                                      !!actionLoading[`reorder-${a.id}`]
+                                    }
                                     className="btn btn-link btn-link-muted"
                                   >
                                     ↓ 下移
@@ -1899,25 +3013,68 @@ export default function Accounts() {
                                 </>
                               )}
                               {capabilities.canRefreshBalance && (
-                                <button onClick={() => withLoading(`refresh-${a.id}`, () => api.refreshBalance(a.id), '余额已刷新')} disabled={actionLoading[`refresh-${a.id}`]} className="btn btn-link btn-link-primary">
-                                  {actionLoading[`refresh-${a.id}`] ? <span className="spinner spinner-sm" /> : '刷新'}
+                                <button
+                                  onClick={() =>
+                                    withLoading(
+                                      `refresh-${a.id}`,
+                                      () => api.refreshBalance(a.id),
+                                      "余额已刷新",
+                                    )
+                                  }
+                                  disabled={actionLoading[`refresh-${a.id}`]}
+                                  className="btn btn-link btn-link-primary"
+                                >
+                                  {actionLoading[`refresh-${a.id}`] ? (
+                                    <span className="spinner spinner-sm" />
+                                  ) : (
+                                    "刷新"
+                                  )}
                                 </button>
                               )}
                               {capabilities.canCheckin && (
-                                <button onClick={() => withLoading(`checkin-${a.id}`, () => api.triggerCheckin(a.id), '签到完成')} disabled={actionLoading[`checkin-${a.id}`]} className="btn btn-link btn-link-warning">
-                                  {actionLoading[`checkin-${a.id}`] ? <span className="spinner spinner-sm" /> : '签到'}
-                                </button>
-                              )}
-                              {a.status === 'expired' && !capabilities.proxyOnly && (
                                 <button
-                                  onClick={() => openRebindPanel(a)}
+                                  onClick={() =>
+                                    withLoading(
+                                      `checkin-${a.id}`,
+                                      () => api.triggerCheckin(a.id),
+                                      "签到完成",
+                                    )
+                                  }
+                                  disabled={actionLoading[`checkin-${a.id}`]}
                                   className="btn btn-link btn-link-warning"
                                 >
-                                  重新绑定
+                                  {actionLoading[`checkin-${a.id}`] ? (
+                                    <span className="spinner spinner-sm" />
+                                  ) : (
+                                    "签到"
+                                  )}
                                 </button>
                               )}
-                              <button onClick={() => setDeleteConfirm({ mode: 'single', accountId: a.id, accountName: resolveAccountDisplayName(a) })} disabled={actionLoading[`delete-${a.id}`]} className="btn btn-link btn-link-danger">
-                                {actionLoading[`delete-${a.id}`] ? <span className="spinner spinner-sm" /> : '删除'}
+                              {a.status === "expired" &&
+                                !capabilities.proxyOnly && (
+                                  <button
+                                    onClick={() => openRebindPanel(a)}
+                                    className="btn btn-link btn-link-warning"
+                                  >
+                                    重新绑定
+                                  </button>
+                                )}
+                              <button
+                                onClick={() =>
+                                  setDeleteConfirm({
+                                    mode: "single",
+                                    accountId: a.id,
+                                    accountName: resolveAccountDisplayName(a),
+                                  })
+                                }
+                                disabled={actionLoading[`delete-${a.id}`]}
+                                className="btn btn-link btn-link-danger"
+                              >
+                                {actionLoading[`delete-${a.id}`] ? (
+                                  <span className="spinner spinner-sm" />
+                                ) : (
+                                  "删除"
+                                )}
                               </button>
                             </div>
                           </div>
@@ -1928,197 +3085,370 @@ export default function Accounts() {
                 </div>
               ) : (
                 <table className="data-table accounts-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 44 }}>
-                      <input
-                        type="checkbox"
-                        checked={allVisibleAccountsSelected}
-                        onChange={(e) => toggleSelectAllVisibleAccounts(e.target.checked)}
-                      />
-                    </th>
-                    <th>连接名称</th>
-                    <th>站点</th>
-                    <th>运行健康状态</th>
-                    <th>余额</th>
-                    <th>已用</th>
-                    <th>签到</th>
-                    <th className="accounts-actions-col" style={{ textAlign: 'right' }}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleAccounts.map((a: any, i: number) => {
-                    const capabilities = resolveAccountCapabilities(a);
-                    const connectionMode = resolveAccountCredentialMode(a);
-                    return (
-                      <tr
-                        key={a.id}
-                        data-testid={`account-row-${a.id}`}
-                        ref={(node) => {
-                          if (node) rowRefs.current.set(a.id, node);
-                          else rowRefs.current.delete(a.id);
-                        }}
-                        onClick={(event) => handleAccountRowClick(a.id, event)}
-                        className={`animate-slide-up stagger-${Math.min(i + 1, 5)} row-selectable ${selectedAccountIds.includes(a.id) ? 'row-selected' : ''} ${highlightAccountId === a.id ? 'row-focus-highlight' : ''}`.trim()}
+                  <thead>
+                    <tr>
+                      <th style={{ width: 44 }}>
+                        <input
+                          type="checkbox"
+                          checked={allVisibleAccountsSelected}
+                          onChange={(e) =>
+                            toggleSelectAllVisibleAccounts(e.target.checked)
+                          }
+                        />
+                      </th>
+                      <th>连接名称</th>
+                      <th>站点</th>
+                      <th>运行健康状态</th>
+                      <th>余额</th>
+                      <th>已用</th>
+                      <th>签到</th>
+                      <th
+                        className="accounts-actions-col"
+                        style={{ textAlign: "right" }}
                       >
-                        <td>
-                          <input
-                            data-testid={`account-select-${a.id}`}
-                            type="checkbox"
-                            checked={selectedAccountIds.includes(a.id)}
-                            onChange={(e) => toggleAccountSelection(a.id, e.target.checked)}
-                          />
-                        </td>
-                        <td style={{ color: 'var(--color-text-primary)' }}>
-                          <div style={{ fontWeight: 600 }}>{resolveAccountDisplayName(a)}</div>
-                          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                            <span className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 10 }}>
-                              {connectionMode === 'apikey' ? 'API Key' : 'Session'}
-                            </span>
-                            {parseAccountExtraConfig(a)?.proxyUrl && (
-                              <span className="badge badge-purple" style={{ fontSize: 10 }}>代理</span>
-                            )}
-                          </div>
-                        </td>
-                        <td>
-                          <SiteBadgeLink
-                            siteId={a.site?.id}
-                            siteName={a.site?.name}
-                            badgeStyle={{ fontSize: 11 }}
-                          />
-                        </td>
-                        <td>
-                          {(() => {
-                            const health = resolveRuntimeHealth(a);
-                            return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <span className={`badge ${health.cls}`} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4, width: 'fit-content' }}>
-                                  <span className={`status-dot ${health.dotClass} ${health.pulse ? 'animate-pulse-dot' : ''}`} style={{ marginRight: 0 }} />
-                                  {health.label}
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    color: 'var(--color-text-muted)',
-                                    maxWidth: 200,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  data-tooltip={health.reason}
-                                >
-                                  {health.reason}
-                                </span>
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                          <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>${(a.balance || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: 11, color: (a.todayReward || 0) > 0 ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 500 }}>
-                            +{(a.todayReward || 0).toFixed(2)}
-                          </div>
-                        </td>
-                        <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
-                          <div>${(a.balanceUsed || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: 11, color: (a.todaySpend || 0) > 0 ? 'var(--color-danger)' : 'var(--color-text-muted)', fontWeight: 500 }}>
-                            -{(a.todaySpend || 0).toFixed(2)}
-                          </div>
-                        </td>
-                        <td>
-                          {capabilities.canCheckin ? (
-                            <button
-                              type="button"
-                              className={`checkin-toggle-badge ${a.checkinEnabled ? 'is-on' : 'is-off'}`}
-                              onClick={() => handleToggleCheckin(a)}
-                              disabled={!!actionLoading[`checkin-toggle-${a.id}`]}
-                              data-tooltip={a.checkinEnabled ? '点击关闭签到，全部签到会忽略此账号' : '点击开启签到'}
-                              aria-label={a.checkinEnabled ? '点击关闭签到，全部签到会忽略此账号' : '点击开启签到'}
+                        操作
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleAccounts.map((a: any, i: number) => {
+                      const capabilities = resolveAccountCapabilities(a);
+                      const connectionMode = resolveAccountCredentialMode(a);
+                      return (
+                        <tr
+                          key={a.id}
+                          data-testid={`account-row-${a.id}`}
+                          ref={(node) => {
+                            if (node) rowRefs.current.set(a.id, node);
+                            else rowRefs.current.delete(a.id);
+                          }}
+                          onClick={(event) =>
+                            handleAccountRowClick(a.id, event)
+                          }
+                          className={`animate-slide-up stagger-${Math.min(i + 1, 5)} row-selectable ${selectedAccountIds.includes(a.id) ? "row-selected" : ""} ${highlightAccountId === a.id ? "row-focus-highlight" : ""}`.trim()}
+                        >
+                          <td>
+                            <input
+                              data-testid={`account-select-${a.id}`}
+                              type="checkbox"
+                              checked={selectedAccountIds.includes(a.id)}
+                              onChange={(e) =>
+                                toggleAccountSelection(a.id, e.target.checked)
+                              }
+                            />
+                          </td>
+                          <td style={{ color: "var(--color-text-primary)" }}>
+                            <div style={{ fontWeight: 600 }}>
+                              {resolveAccountDisplayName(a)}
+                            </div>
+                            <div
+                              style={{ display: "flex", gap: 4, marginTop: 4 }}
                             >
-                              {actionLoading[`checkin-toggle-${a.id}`]
-                                ? <span className="spinner spinner-sm" />
-                                : (a.checkinEnabled ? '开启' : '关闭')}
-                            </button>
-                          ) : (
-                            <span className="badge badge-muted" style={{ fontSize: 11 }}>
-                              不支持
-                            </span>
-                          )}
-                        </td>
-                        <td className="accounts-actions-cell" style={{ textAlign: 'right' }}>
-                          <div className="accounts-row-actions">
-                            <button
-                              onClick={() => handleTogglePin(a)}
-                              disabled={!!actionLoading[`pin-toggle-${a.id}`]}
-                              className={`btn btn-link ${a.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
-                            >
-                              {actionLoading[`pin-toggle-${a.id}`] ? <span className="spinner spinner-sm" /> : (a.isPinned ? '取消置顶' : '置顶')}
-                            </button>
-                            {sortMode === 'custom' && (
-                              <>
-                                <button
-                                  onClick={() => handleMoveCustomOrder(a, 'up')}
-                                  disabled={!!actionLoading[`reorder-${a.id}`]}
-                                  className="btn btn-link btn-link-muted"
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  onClick={() => handleMoveCustomOrder(a, 'down')}
-                                  disabled={!!actionLoading[`reorder-${a.id}`]}
-                                  className="btn btn-link btn-link-muted"
-                                >
-                                  ↓
-                                </button>
-                              </>
-                            )}
-                            {capabilities.canRefreshBalance && (
-                              <button onClick={() => withLoading(`refresh-${a.id}`, () => api.refreshBalance(a.id), '余额已刷新')} disabled={actionLoading[`refresh-${a.id}`]} className="btn btn-link btn-link-primary">
-                                {actionLoading[`refresh-${a.id}`] ? <span className="spinner spinner-sm" /> : '刷新'}
-                              </button>
-                            )}
-                            <button
-                              onClick={() => openModelModal(a)}
-                              disabled={actionLoading[`models-${a.id}`]}
-                              className="btn btn-link btn-link-info"
-                            >
-                              模型
-                            </button>
-                            {capabilities.canCheckin && (
-                              <button onClick={() => withLoading(`checkin-${a.id}`, () => api.triggerCheckin(a.id), '签到完成')} disabled={actionLoading[`checkin-${a.id}`]} className="btn btn-link btn-link-warning">
-                                {actionLoading[`checkin-${a.id}`] ? <span className="spinner spinner-sm" /> : '签到'}
-                              </button>
-                            )}
-                            {a.status === 'expired' && !capabilities.proxyOnly && (
-                              <button
-                                onClick={() => openRebindPanel(a)}
-                                className="btn btn-link btn-link-warning"
+                              <span
+                                className={`badge ${connectionMode === "apikey" ? "badge-warning" : "badge-info"}`}
+                                style={{ fontSize: 10 }}
                               >
-                                重新绑定
+                                {connectionMode === "apikey"
+                                  ? "API Key"
+                                  : "Session"}
+                              </span>
+                              {parseAccountExtraConfig(a)?.proxyUrl && (
+                                <span
+                                  className="badge badge-purple"
+                                  style={{ fontSize: 10 }}
+                                >
+                                  代理
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <SiteBadgeLink
+                              siteId={a.site?.id}
+                              siteName={a.site?.name}
+                              badgeStyle={{ fontSize: 11 }}
+                            />
+                          </td>
+                          <td>
+                            {(() => {
+                              const health = resolveRuntimeHealth(a);
+                              return (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 4,
+                                  }}
+                                >
+                                  <span
+                                    className={`badge ${health.cls}`}
+                                    style={{
+                                      fontSize: 11,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                      width: "fit-content",
+                                    }}
+                                  >
+                                    <span
+                                      className={`status-dot ${health.dotClass} ${health.pulse ? "animate-pulse-dot" : ""}`}
+                                      style={{ marginRight: 0 }}
+                                    />
+                                    {health.label}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: "var(--color-text-muted)",
+                                      maxWidth: 200,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                    data-tooltip={health.reason}
+                                  >
+                                    {health.reason}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td style={{ fontVariantNumeric: "tabular-nums" }}>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                color: "var(--color-text-primary)",
+                              }}
+                            >
+                              ${(a.balance || 0).toFixed(2)}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color:
+                                  (a.todayReward || 0) > 0
+                                    ? "var(--color-success)"
+                                    : "var(--color-text-muted)",
+                                fontWeight: 500,
+                              }}
+                            >
+                              +{(a.todayReward || 0).toFixed(2)}
+                            </div>
+                          </td>
+                          <td
+                            style={{
+                              fontVariantNumeric: "tabular-nums",
+                              fontSize: 12,
+                            }}
+                          >
+                            <div>${(a.balanceUsed || 0).toFixed(2)}</div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color:
+                                  (a.todaySpend || 0) > 0
+                                    ? "var(--color-danger)"
+                                    : "var(--color-text-muted)",
+                                fontWeight: 500,
+                              }}
+                            >
+                              -{(a.todaySpend || 0).toFixed(2)}
+                            </div>
+                          </td>
+                          <td>
+                            {capabilities.canCheckin ? (
+                              <button
+                                type="button"
+                                className={`checkin-toggle-badge ${a.checkinEnabled ? "is-on" : "is-off"}`}
+                                onClick={() => handleToggleCheckin(a)}
+                                disabled={
+                                  !!actionLoading[`checkin-toggle-${a.id}`]
+                                }
+                                data-tooltip={
+                                  a.checkinEnabled
+                                    ? "点击关闭签到，全部签到会忽略此账号"
+                                    : "点击开启签到"
+                                }
+                                aria-label={
+                                  a.checkinEnabled
+                                    ? "点击关闭签到，全部签到会忽略此账号"
+                                    : "点击开启签到"
+                                }
+                              >
+                                {actionLoading[`checkin-toggle-${a.id}`] ? (
+                                  <span className="spinner spinner-sm" />
+                                ) : a.checkinEnabled ? (
+                                  "开启"
+                                ) : (
+                                  "关闭"
+                                )}
                               </button>
+                            ) : (
+                              <span
+                                className="badge badge-muted"
+                                style={{ fontSize: 11 }}
+                              >
+                                不支持
+                              </span>
                             )}
-                            <button onClick={() => openEditPanel(a)} className="btn btn-link btn-link-info">
-                              编辑
-                            </button>
-                            <button onClick={() => setDeleteConfirm({ mode: 'single', accountId: a.id, accountName: resolveAccountDisplayName(a) })} disabled={actionLoading[`delete-${a.id}`]} className="btn btn-link btn-link-danger">
-                              {actionLoading[`delete-${a.id}`] ? <span className="spinner spinner-sm" /> : '删除'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td
+                            className="accounts-actions-cell"
+                            style={{ textAlign: "right" }}
+                          >
+                            <div className="accounts-row-actions">
+                              <button
+                                onClick={() => handleTogglePin(a)}
+                                disabled={!!actionLoading[`pin-toggle-${a.id}`]}
+                                className={`btn btn-link ${a.isPinned ? "btn-link-warning" : "btn-link-primary"}`}
+                              >
+                                {actionLoading[`pin-toggle-${a.id}`] ? (
+                                  <span className="spinner spinner-sm" />
+                                ) : a.isPinned ? (
+                                  "取消置顶"
+                                ) : (
+                                  "置顶"
+                                )}
+                              </button>
+                              {sortMode === "custom" && (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      handleMoveCustomOrder(a, "up")
+                                    }
+                                    disabled={
+                                      !!actionLoading[`reorder-${a.id}`]
+                                    }
+                                    className="btn btn-link btn-link-muted"
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleMoveCustomOrder(a, "down")
+                                    }
+                                    disabled={
+                                      !!actionLoading[`reorder-${a.id}`]
+                                    }
+                                    className="btn btn-link btn-link-muted"
+                                  >
+                                    ↓
+                                  </button>
+                                </>
+                              )}
+                              {capabilities.canRefreshBalance && (
+                                <button
+                                  onClick={() =>
+                                    withLoading(
+                                      `refresh-${a.id}`,
+                                      () => api.refreshBalance(a.id),
+                                      "余额已刷新",
+                                    )
+                                  }
+                                  disabled={actionLoading[`refresh-${a.id}`]}
+                                  className="btn btn-link btn-link-primary"
+                                >
+                                  {actionLoading[`refresh-${a.id}`] ? (
+                                    <span className="spinner spinner-sm" />
+                                  ) : (
+                                    "刷新"
+                                  )}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => openModelModal(a)}
+                                disabled={actionLoading[`models-${a.id}`]}
+                                className="btn btn-link btn-link-info"
+                              >
+                                模型
+                              </button>
+                              {capabilities.canCheckin && (
+                                <button
+                                  onClick={() =>
+                                    withLoading(
+                                      `checkin-${a.id}`,
+                                      () => api.triggerCheckin(a.id),
+                                      "签到完成",
+                                    )
+                                  }
+                                  disabled={actionLoading[`checkin-${a.id}`]}
+                                  className="btn btn-link btn-link-warning"
+                                >
+                                  {actionLoading[`checkin-${a.id}`] ? (
+                                    <span className="spinner spinner-sm" />
+                                  ) : (
+                                    "签到"
+                                  )}
+                                </button>
+                              )}
+                              {a.status === "expired" &&
+                                !capabilities.proxyOnly && (
+                                  <button
+                                    onClick={() => openRebindPanel(a)}
+                                    className="btn btn-link btn-link-warning"
+                                  >
+                                    重新绑定
+                                  </button>
+                                )}
+                              <button
+                                onClick={() => openEditPanel(a)}
+                                className="btn btn-link btn-link-info"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setDeleteConfirm({
+                                    mode: "single",
+                                    accountId: a.id,
+                                    accountName: resolveAccountDisplayName(a),
+                                  })
+                                }
+                                disabled={actionLoading[`delete-${a.id}`]}
+                                className="btn btn-link btn-link-danger"
+                              >
+                                {actionLoading[`delete-${a.id}`] ? (
+                                  <span className="spinner spinner-sm" />
+                                ) : (
+                                  "删除"
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )
             ) : (
               <div className="empty-state">
-                <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                <div className="empty-state-title">{activeSegment === 'apikey' ? '暂无 API Key 连接' : '暂无 Session 连接'}</div>
+                <svg
+                  className="empty-state-icon"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+                <div className="empty-state-title">
+                  {activeSegment === "apikey"
+                    ? "暂无 API Key 连接"
+                    : "暂无 Session 连接"}
+                </div>
                 <div className="empty-state-desc">
-                  {activeSegment === 'apikey'
-                    ? (sites.length > 0 ? '请为现有站点补充 API Key 连接' : '请先添加站点，然后为站点补充 API Key 连接')
-                    : (sites.length > 0 ? '请为现有站点添加 Session 连接' : '请先添加站点，然后添加 Session 连接')}
+                  {activeSegment === "apikey"
+                    ? sites.length > 0
+                      ? "请为现有站点补充 API Key 连接"
+                      : "请先添加站点，然后为站点补充 API Key 连接"
+                    : sites.length > 0
+                      ? "请为现有站点添加 Session 连接"
+                      : "请先添加站点，然后添加 Session 连接"}
                 </div>
               </div>
             )}
@@ -2135,13 +3465,17 @@ export default function Accounts() {
           if (!modelModal.account) return;
           await loadModelModalModels(modelModal.account, {
             refreshUpstream: true,
-            successMessage: '模型列表已刷新',
-            errorMessage: '刷新失败',
+            successMessage: "模型列表已刷新",
+            errorMessage: "刷新失败",
           });
         }}
         onToggleModelDisabled={toggleModelDisabled}
-        onSetPendingDisabled={(pendingDisabled) => setModelModal((state) => ({ ...state, pendingDisabled }))}
-        onManualInputChange={(value) => setModelModal((state) => ({ ...state, manualModelsInput: value }))}
+        onSetPendingDisabled={(pendingDisabled) =>
+          setModelModal((state) => ({ ...state, pendingDisabled }))
+        }
+        onManualInputChange={(value) =>
+          setModelModal((state) => ({ ...state, manualModelsInput: value }))
+        }
         onAddManualModels={handleAddManualModels}
       />
     </div>

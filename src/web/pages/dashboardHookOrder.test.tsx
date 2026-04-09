@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create } from 'react-test-renderer';
 import { ToastProvider } from '../components/Toast.js';
 import Dashboard from './Dashboard.js';
+import { installDashboardSnapshotCompat } from './testApiCompat.js';
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getDashboard: vi.fn(),
+    getDashboardSnapshot: vi.fn(),
+    getDashboardInsights: vi.fn(),
+    getSiteSnapshot: vi.fn(),
     getSiteDistribution: vi.fn(),
     getSiteTrend: vi.fn(),
     getSites: vi.fn(),
@@ -37,6 +41,7 @@ describe('Dashboard hook order', () => {
   afterEach(() => {
     consoleErrorSpy.mockRestore();
     vi.clearAllMocks();
+    installDashboardSnapshotCompat(apiMock);
   });
 
   it('keeps hook order stable when switching from loading to loaded render', async () => {

@@ -207,11 +207,16 @@ describe('accounts credential mode', { timeout: 15_000 }, () => {
     });
     expect(listResponse.statusCode).toBe(200);
 
-    const list = listResponse.json() as Array<{
-      id: number;
-      runtimeHealth?: { state?: string; reason?: string };
-      capabilities?: { proxyOnly?: boolean };
-    }>;
+    const body = listResponse.json() as {
+      generatedAt: string;
+      accounts: Array<{
+        id: number;
+        runtimeHealth?: { state?: string; reason?: string };
+        capabilities?: { proxyOnly?: boolean };
+      }>;
+      sites: any[];
+    };
+    const list = body.accounts;
     expect(list).toHaveLength(1);
     expect(list[0]?.capabilities?.proxyOnly).toBe(true);
     expect(list[0]?.runtimeHealth).toMatchObject({
@@ -258,23 +263,28 @@ describe('accounts credential mode', { timeout: 15_000 }, () => {
     });
     expect(listResponse.statusCode).toBe(200);
 
-    const list = listResponse.json() as Array<{
-      id: number;
-      credentialMode?: string;
-      capabilities?: {
-        canCheckin?: boolean;
-        canRefreshBalance?: boolean;
-        proxyOnly?: boolean;
-      };
-    }>;
+    const body = listResponse.json() as {
+      generatedAt: string;
+      accounts: Array<{
+        id: number;
+        credentialMode?: string;
+        capabilities?: {
+          canCheckin?: boolean;
+          canRefreshBalance?: boolean;
+          proxyOnly?: boolean;
+        };
+      }>;
+      sites: any[];
+    };
+    const list = body.accounts;
     const item = list.find((entry) => entry.id === account.id);
     expect(item?.credentialMode).toBe('session');
-      expect(item?.capabilities).toMatchObject({
-        canCheckin: false,
-        canRefreshBalance: false,
-        proxyOnly: true,
-      });
+    expect(item?.capabilities).toMatchObject({
+      canCheckin: false,
+      canRefreshBalance: false,
+      proxyOnly: true,
     });
+  });
 
   it('uses structured oauth columns when listing oauth account capabilities and runtime health', async () => {
     const site = await db.insert(schema.sites).values({
@@ -314,18 +324,23 @@ describe('accounts credential mode', { timeout: 15_000 }, () => {
     });
     expect(listResponse.statusCode).toBe(200);
 
-    const list = listResponse.json() as Array<{
-      id: number;
-      capabilities?: {
-        canCheckin?: boolean;
-        canRefreshBalance?: boolean;
-        proxyOnly?: boolean;
-      };
-      runtimeHealth?: {
-        state?: string;
-        reason?: string;
-      };
-    }>;
+    const body = listResponse.json() as {
+      generatedAt: string;
+      accounts: Array<{
+        id: number;
+        capabilities?: {
+          canCheckin?: boolean;
+          canRefreshBalance?: boolean;
+          proxyOnly?: boolean;
+        };
+        runtimeHealth?: {
+          state?: string;
+          reason?: string;
+        };
+      }>;
+      sites: any[];
+    };
+    const list = body.accounts;
     const item = list.find((entry) => entry.id === account.id);
     expect(item?.capabilities).toMatchObject({
       canCheckin: false,

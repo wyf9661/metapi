@@ -1,10 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { config } from '../../config.js';
 
 const fetchMock = vi.fn();
 const undiciAgentCtorMock = vi.fn();
@@ -26,6 +25,7 @@ vi.mock('undici', () => ({
 
 type DbModule = typeof import('../../db/index.js');
 type RouteRefreshWorkflowModule = typeof import('../../services/routeRefreshWorkflow.js');
+type ConfigModule = typeof import('../../config.js');
 
 function buildJwt(payload: Record<string, unknown>) {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value))
@@ -65,16 +65,22 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let rebuildRoutesOnly: RouteRefreshWorkflowModule['rebuildRoutesOnly'];
+  let config: ConfigModule['config'];
   let dataDir = '';
+  let previousDataDir: string | undefined;
 
   beforeAll(async () => {
+    previousDataDir = process.env.DATA_DIR;
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-oauth-routes-'));
+    vi.resetModules();
     process.env.DATA_DIR = dataDir;
 
     await import('../../db/migrate.js');
+    const configModule = await import('../../config.js');
     const dbModule = await import('../../db/index.js');
     const routesModule = await import('./oauth.js');
     const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    config = configModule.config;
     db = dbModule.db;
     schema = dbModule.schema;
     rebuildRoutesOnly = routeRefreshWorkflow.rebuildRoutesOnly;
@@ -106,7 +112,12 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
   afterAll(async () => {
     await app.close();
-    delete process.env.DATA_DIR;
+    if (previousDataDir === undefined) {
+      delete process.env.DATA_DIR;
+    } else {
+      process.env.DATA_DIR = previousDataDir;
+    }
+    rmSync(dataDir, { recursive: true, force: true });
   });
 
   it('lists multi-provider oauth metadata', async () => {

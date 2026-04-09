@@ -85,6 +85,7 @@ vi.mock('../../services/proxyDebugTraceRuntime.js', () => ({
 }));
 
 vi.mock('../../services/oauth/quota.js', () => ({
+  recordOauthQuotaHeadersSnapshot: async () => undefined,
   recordOauthQuotaResetHint: async () => undefined,
 }));
 

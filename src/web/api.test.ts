@@ -137,12 +137,12 @@ describe('api proxy test timeout handling', () => {
     const getProxyFileContentDataUrl = (api as Record<string, any>).getProxyFileContentDataUrl;
     const result = await getProxyFileContentDataUrl?.('file-metapi-123');
 
-    expect(fetchMock).toHaveBeenCalledWith('/v1/files/file-metapi-123/content', expect.objectContaining({
-      method: 'GET',
-      headers: expect.objectContaining({
-        Authorization: 'Bearer token-1',
-      }),
-    }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/v1/files/file-metapi-123/content');
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(init?.method).toBe('GET');
+    expect(init?.headers).toBeInstanceOf(Headers);
+    expect((init?.headers as Headers).get('Authorization')).toBe('Bearer token-1');
     expect(result).toEqual({
       filename: 'brief.pdf',
       mimeType: 'application/pdf',
