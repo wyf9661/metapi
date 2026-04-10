@@ -44,12 +44,14 @@ import {
   startModelAvailabilityProbeScheduler,
   stopModelAvailabilityProbeScheduler,
 } from '../../services/modelAvailabilityProbeService.js';
+import { parsePayloadRulesConfigInput } from '../../services/payloadRules.js';
 
 type RoutingWeights = typeof config.routingWeights;
 
 interface RuntimeSettingsBody {
   proxyToken?: string;
   systemProxyUrl?: string;
+  payloadRules?: unknown;
   modelAvailabilityProbeEnabled?: boolean;
   codexUpstreamWebsocketEnabled?: boolean;
   responsesCompactFallbackToResponsesEnabled?: boolean;
@@ -759,6 +761,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     currentAdminIp,
     serverTimeZone: getResolvedTimeZone(),
     systemProxyUrl: config.systemProxyUrl,
+    payloadRules: config.payloadRules,
     proxyErrorKeywords: config.proxyErrorKeywords,
     proxyEmptyContentFailEnabled: config.proxyEmptyContentFailEnabled,
     proxyTokenMasked: maskSecret(config.proxyToken),
@@ -902,6 +905,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const body = parsedBody.data as RuntimeSettingsBody;
     const changedLabels: string[] = [];
     const currentRequestIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
+    let pendingPayloadRules: typeof config.payloadRules | undefined;
 
     const webhookTouched = body.webhookUrl !== undefined || body.webhookEnabled !== undefined;
     const nextWebhookUrl = body.webhookUrl !== undefined
@@ -1130,6 +1134,23 @@ export async function settingsRoutes(app: FastifyInstance) {
       config.systemProxyUrl = normalizedSystemProxyUrl || '';
       upsertSetting('system_proxy_url', config.systemProxyUrl);
       invalidateSiteProxyCache();
+    }
+
+    if (body.payloadRules !== undefined) {
+      const parsedPayloadRules = parsePayloadRulesConfigInput(body.payloadRules);
+      if (!parsedPayloadRules.success) {
+        return reply.code(400).send({
+          success: false,
+          message: parsedPayloadRules.message,
+        });
+      }
+
+      const previousRules = JSON.stringify(config.payloadRules);
+      const nextRules = JSON.stringify(parsedPayloadRules.normalized);
+      if (previousRules !== nextRules) {
+        changedLabels.push('Payload 规则');
+      }
+      pendingPayloadRules = parsedPayloadRules.normalized;
     }
 
     if (body.modelAvailabilityProbeEnabled !== undefined) {
@@ -1695,6 +1716,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.tokenRouterFailureCooldownMaxSec = normalized;
       upsertSetting('token_router_failure_cooldown_max_sec', normalized);
+    }
+
+    if (pendingPayloadRules !== undefined) {
+      config.payloadRules = pendingPayloadRules;
+      await upsertSetting('payload_rules', pendingPayloadRules);
     }
 
     if (changedLabels.length > 0) {

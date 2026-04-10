@@ -8,6 +8,16 @@ import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
 import ModelAvailabilityProbeConfirmModal from './settings/ModelAvailabilityProbeConfirmModal.js';
+import {
+  createCodexDefaultHighReasoningVisualPreset,
+  createVisualPayloadRule,
+  isVisualPayloadRuleBlank,
+  payloadRulesToVisualRules,
+  type PayloadRuleAction,
+  type VisualPayloadRule,
+  type VisualPayloadRuleValueMode,
+  visualRulesToPayloadRules,
+} from './settings/payloadRulesVisual.js';
 import UpdateCenterSection from './settings/UpdateCenterSection.js';
 import {
   applyRoutingProfilePreset,
@@ -44,6 +54,8 @@ const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) => {
 type DbDialect = 'sqlite' | 'mysql' | 'postgres';
 type RouteCooldownUnit = typeof ROUTE_COOLDOWN_UNIT_OPTIONS[number]['value'];
 type SettingsPillTone = 'neutral' | 'primary' | 'danger' | 'warning';
+type PayloadRulesEditorSectionKey = PayloadRuleAction;
+type PayloadRulesEditorDrafts = Record<PayloadRulesEditorSectionKey, string>;
 
 type RuntimeSettings = {
   checkinCron: string;
@@ -117,6 +129,154 @@ type ShorthandConnection = {
   port: string;
   database: string;
 };
+
+const PAYLOAD_RULES_EDITOR_SECTIONS = [
+  {
+    key: 'default',
+    title: 'default',
+    description: '字段缺失时才注入，适合补默认参数。',
+    placeholder: `[
+  {
+    "models": [{ "name": "gpt-*", "protocol": "codex" }],
+    "params": {
+      "reasoning.effort": "high"
+    }
+  }
+]`,
+  },
+  {
+    key: 'default-raw',
+    title: 'default-raw',
+    description: '字段缺失时注入原始 JSON，适合 schema、复杂对象等值。',
+    placeholder: `[
+  {
+    "models": [{ "name": "gpt-*", "protocol": "codex" }],
+    "params": {
+      "response_format": "{\"type\":\"json_schema\"}"
+    }
+  }
+]`,
+  },
+  {
+    key: 'override',
+    title: 'override',
+    description: '无论原请求是否已有该字段，都强制覆盖。',
+    placeholder: `[
+  {
+    "models": [{ "name": "gpt-*", "protocol": "codex" }],
+    "params": {
+      "text.verbosity": "low"
+    }
+  }
+]`,
+  },
+  {
+    key: 'override-raw',
+    title: 'override-raw',
+    description: '无论原请求是否已有该字段，都强制覆盖为原始 JSON。',
+    placeholder: `[
+  {
+    "models": [{ "name": "gemini-*", "protocol": "gemini" }],
+    "params": {
+      "generationConfig.responseJsonSchema": "{\"type\":\"object\"}"
+    }
+  }
+]`,
+  },
+  {
+    key: 'filter',
+    title: 'filter',
+    description: '删除匹配请求中的字段。',
+    placeholder: `[
+  {
+    "models": [{ "name": "gpt-*", "protocol": "codex" }],
+    "params": ["safety_identifier"]
+  }
+]`,
+  },
+] as const satisfies ReadonlyArray<{
+  key: PayloadRulesEditorSectionKey;
+  title: string;
+  description: string;
+  placeholder: string;
+}>;
+
+const PAYLOAD_RULE_ACTION_OPTIONS: Array<{ value: PayloadRuleAction; label: string }> = [
+  { value: 'default', label: '默认注入' },
+  { value: 'default-raw', label: '默认注入 JSON' },
+  { value: 'override', label: '强制覆盖' },
+  { value: 'override-raw', label: '强制覆盖 JSON' },
+  { value: 'filter', label: '删除字段' },
+];
+
+const PAYLOAD_RULE_PROTOCOL_OPTIONS = [
+  { value: '', label: '全部协议' },
+  { value: 'codex', label: 'Codex' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'antigravity', label: 'Antigravity' },
+];
+
+const PAYLOAD_RULE_VALUE_MODE_OPTIONS: Array<{ value: VisualPayloadRuleValueMode; label: string }> = [
+  { value: 'text', label: '文本' },
+  { value: 'json', label: 'JSON' },
+];
+
+function createEmptyPayloadRuleDrafts(): PayloadRulesEditorDrafts {
+  return {
+    default: '',
+    'default-raw': '',
+    override: '',
+    'override-raw': '',
+    filter: '',
+  };
+}
+
+function formatPayloadRuleSectionForEditor(value: unknown): string {
+  if (value == null) return '';
+  if (Array.isArray(value) && value.length <= 0) return '';
+  return JSON.stringify(value, null, 2);
+}
+
+function normalizePayloadRulesForEditor(value: unknown): PayloadRulesEditorDrafts {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return createEmptyPayloadRuleDrafts();
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    default: formatPayloadRuleSectionForEditor(record.default),
+    'default-raw': formatPayloadRuleSectionForEditor(record.defaultRaw ?? record['default-raw']),
+    override: formatPayloadRuleSectionForEditor(record.override),
+    'override-raw': formatPayloadRuleSectionForEditor(record.overrideRaw ?? record['override-raw']),
+    filter: formatPayloadRuleSectionForEditor(record.filter),
+  };
+}
+
+function parsePayloadRulesFromDrafts(
+  drafts: PayloadRulesEditorDrafts,
+): { success: true; value: Record<string, unknown> } | { success: false; message: string } {
+  const next: Record<string, unknown> = {};
+
+  for (const section of PAYLOAD_RULES_EDITOR_SECTIONS) {
+    const raw = drafts[section.key].trim();
+    if (!raw) continue;
+    try {
+      next[section.key] = JSON.parse(raw);
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Payload 规则 ${section.title} 不是合法 JSON：${error?.message || '解析失败'}`,
+      };
+    }
+  }
+
+  return {
+    success: true,
+    value: next,
+  };
+}
 
 const defaultWeights: RoutingWeights = {
   baseWeightFactor: 0.5,
@@ -225,6 +385,11 @@ export default function Settings() {
   const [testingSystemProxy, setTestingSystemProxy] = useState(false);
   const [systemProxyTestState, setSystemProxyTestState] = useState<SystemProxyTestState>(null);
   const [savingProxyFailureRules, setSavingProxyFailureRules] = useState(false);
+  const [payloadVisualRules, setPayloadVisualRules] = useState<VisualPayloadRule[]>([]);
+  const [payloadRuleDrafts, setPayloadRuleDrafts] = useState<PayloadRulesEditorDrafts>(createEmptyPayloadRuleDrafts());
+  const [payloadAdvancedDirty, setPayloadAdvancedDirty] = useState(false);
+  const [savingPayloadRules, setSavingPayloadRules] = useState(false);
+  const [showPayloadRulesEditor, setShowPayloadRulesEditor] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [showAdvancedRouting, setShowAdvancedRouting] = useState(false);
   const [allBrandNames, setAllBrandNames] = useState<string[] | null>(null);
@@ -270,6 +435,11 @@ export default function Settings() {
   const activeRoutingProfile = useMemo(
     () => resolveRoutingProfilePreset(runtime.routingWeights),
     [runtime.routingWeights],
+  );
+
+  const configuredPayloadRuleCount = useMemo(
+    () => payloadVisualRules.filter((rule) => !isVisualPayloadRuleBlank(rule)).length,
+    [payloadVisualRules],
   );
 
   const generatedConnectionString = useMemo(() => (
@@ -465,6 +635,38 @@ export default function Settings() {
       ? '已启用'
       : '已关闭';
 
+  const syncPayloadRuleDraftsFromObject = (value: unknown) => {
+    setPayloadRuleDrafts(normalizePayloadRulesForEditor(value));
+    setPayloadAdvancedDirty(false);
+  };
+
+  const syncPayloadVisualRulesFromObject = (value: unknown) => {
+    setPayloadVisualRules(payloadRulesToVisualRules(value));
+  };
+
+  const applyVisualPayloadRules = (
+    nextRulesOrUpdater: VisualPayloadRule[] | ((current: VisualPayloadRule[]) => VisualPayloadRule[]),
+  ) => {
+    if (
+      payloadAdvancedDirty
+      && typeof globalThis.confirm === 'function'
+      && !globalThis.confirm('高级 JSON 有未同步修改，继续会覆盖这些内容。是否继续？')
+    ) {
+      return;
+    }
+
+    setPayloadVisualRules((currentRules) => {
+      const nextRules = typeof nextRulesOrUpdater === 'function'
+        ? nextRulesOrUpdater(currentRules)
+        : nextRulesOrUpdater;
+      const serialized = visualRulesToPayloadRules(nextRules);
+      if (serialized.success) {
+        syncPayloadRuleDraftsFromObject(serialized.value);
+      }
+      return nextRules;
+    });
+  };
+
   const loadSettings = async () => {
     setLoading(true);
     try {
@@ -531,6 +733,8 @@ export default function Settings() {
           ? runtimeInfo.proxyErrorKeywords.filter((item: unknown) => typeof item === 'string').join('\n')
           : '',
       );
+      syncPayloadRuleDraftsFromObject(runtimeInfo.payloadRules);
+      syncPayloadVisualRulesFromObject(runtimeInfo.payloadRules);
       setAdminIpAllowlistText(
         Array.isArray(runtimeInfo.adminIpAllowlist)
           ? runtimeInfo.adminIpAllowlist.join('\n')
@@ -781,6 +985,80 @@ export default function Settings() {
     } finally {
       setSavingProxyFailureRules(false);
     }
+  };
+
+  const savePayloadRules = async () => {
+    const nextPayloadRules = payloadAdvancedDirty
+      ? parsePayloadRulesFromDrafts(payloadRuleDrafts)
+      : visualRulesToPayloadRules(payloadVisualRules);
+    if (!nextPayloadRules.success) {
+      toast.error(nextPayloadRules.message);
+      return;
+    }
+
+    setSavingPayloadRules(true);
+    try {
+      const res = await api.updateRuntimeSettings({
+        payloadRules: nextPayloadRules.value,
+      });
+      syncPayloadRuleDraftsFromObject(res?.payloadRules);
+      syncPayloadVisualRulesFromObject(res?.payloadRules);
+      toast.success('Payload 规则已保存');
+    } catch (err: any) {
+      toast.error(err?.message || '保存 Payload 规则失败');
+    } finally {
+      setSavingPayloadRules(false);
+    }
+  };
+
+  const applyCodexDefaultHighReasoningPreset = () => {
+    applyVisualPayloadRules((currentRules) => [
+      ...currentRules.filter((rule) => !isVisualPayloadRuleBlank(rule)),
+      ...createCodexDefaultHighReasoningVisualPreset(),
+    ]);
+    setShowPayloadRulesEditor(true);
+    toast.success('已填入 Codex 默认高推理预设');
+  };
+
+  const addPayloadVisualRule = () => {
+    applyVisualPayloadRules((currentRules) => [
+      ...currentRules,
+      createVisualPayloadRule(),
+    ]);
+  };
+
+  const updatePayloadVisualRule = (ruleId: string, patch: Partial<VisualPayloadRule>) => {
+    applyVisualPayloadRules((currentRules) => currentRules.map((rule) => {
+      if (rule.id !== ruleId) return rule;
+      const nextAction = (patch.action ?? rule.action) as PayloadRuleAction;
+      const nextValueMode = patch.valueMode ?? (
+        nextAction === 'default-raw' || nextAction === 'override-raw'
+          ? 'json'
+          : rule.valueMode
+      );
+      return {
+        ...rule,
+        ...patch,
+        action: nextAction,
+        valueMode: nextAction === 'filter' ? 'text' : nextValueMode,
+        value: nextAction === 'filter' ? '' : (patch.value ?? rule.value),
+      };
+    }));
+  };
+
+  const removePayloadVisualRule = (ruleId: string) => {
+    applyVisualPayloadRules((currentRules) => currentRules.filter((rule) => rule.id !== ruleId));
+  };
+
+  const syncVisualRulesFromAdvancedJson = () => {
+    const parsedPayloadRules = parsePayloadRulesFromDrafts(payloadRuleDrafts);
+    if (!parsedPayloadRules.success) {
+      toast.error(parsedPayloadRules.message);
+      return;
+    }
+    syncPayloadVisualRulesFromObject(parsedPayloadRules.value);
+    setPayloadAdvancedDirty(false);
+    toast.success('已将高级 JSON 同步到可视化规则');
   };
 
   const saveRouting = async () => {
@@ -1260,6 +1538,256 @@ export default function Settings() {
           <div>
             <button onClick={saveProxyFailureRules} disabled={savingProxyFailureRules} className="btn btn-primary">
               {savingProxyFailureRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存失败规则'}
+            </button>
+          </div>
+        </div>
+
+        <div className="card animate-slide-up stagger-4" style={settingsModernCardStyle} data-settings-card="payload-rules">
+          <div style={settingsModernHeaderStyle}>
+            <div style={settingsModernTitleBlockStyle}>
+              <div style={settingsModernTitleStyle}>Payload 规则</div>
+              <div style={settingsModernDescriptionStyle}>
+                对匹配模型的上游请求做默认注入、强制覆盖或字段过滤。规则结构参考 CPA 的 payload 配置，常见场景可直接注入
+                {' '}
+                <code style={{ fontFamily: 'var(--font-mono)' }}>reasoning.effort</code>
+                {' '}
+                之类的参数。
+              </div>
+            </div>
+            <div style={settingsModernPillRowStyle}>
+              <span style={getSettingsPillStyle(configuredPayloadRuleCount > 0 ? 'primary' : 'neutral')}>
+                {configuredPayloadRuleCount > 0 ? `已配置 ${configuredPayloadRuleCount} 条` : '未配置'}
+              </span>
+              <span style={getSettingsPillStyle(payloadAdvancedDirty ? 'warning' : 'neutral')}>
+                {payloadAdvancedDirty ? '高级 JSON 待同步/保存' : '保存后立即生效'}
+              </span>
+            </div>
+          </div>
+          <div style={settingsModernFieldCardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>
+                <div style={settingsModernFieldLabelStyle}>常用预设</div>
+                <div style={settingsModernFieldHintStyle}>
+                  先用预设快速填充，再通过下面的可视化规则编辑器细调。复杂场景仍可回退到高级 JSON。
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                  onClick={applyCodexDefaultHighReasoningPreset}
+                >
+                  Codex 默认高推理
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                  onClick={addPayloadVisualRule}
+                >
+                  新增规则
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                  onClick={() => setShowPayloadRulesEditor((prev) => !prev)}
+                >
+                  {showPayloadRulesEditor ? '收起高级 JSON 编辑' : '展开高级 JSON 编辑'}
+                </button>
+              </div>
+            </div>
+          </div>
+          {payloadVisualRules.length <= 0 ? (
+            <div style={settingsModernFieldCardStyle}>
+              <div style={settingsModernFieldLabelStyle}>还没有可视化规则</div>
+              <div style={settingsModernFieldHintStyle}>
+                可以先点上面的预设，也可以直接新增一条规则：选择动作、协议、模型匹配、字段路径和值即可。
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {payloadVisualRules.map((rule, index) => (
+                <div
+                  key={rule.id}
+                  style={settingsModernFieldCardStyle}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={settingsModernFieldLabelStyle}>规则 {index + 1}</div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
+                      onClick={() => removePayloadVisualRule(rule.id)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                  <ResponsiveFormGrid columns={2}>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>动作</div>
+                      <ModernSelect
+                        size="sm"
+                        data-testid={`payload-rule-action-${index + 1}`}
+                        value={rule.action}
+                        onChange={(value) => updatePayloadVisualRule(rule.id, { action: value as PayloadRuleAction })}
+                        options={PAYLOAD_RULE_ACTION_OPTIONS}
+                        placeholder="选择动作"
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>协议</div>
+                      <ModernSelect
+                        size="sm"
+                        data-testid={`payload-rule-protocol-${index + 1}`}
+                        value={rule.protocol}
+                        onChange={(value) => updatePayloadVisualRule(rule.id, { protocol: String(value || '') })}
+                        options={PAYLOAD_RULE_PROTOCOL_OPTIONS}
+                        placeholder="全部协议"
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>模型匹配</div>
+                      <input
+                        type="text"
+                        aria-label={`Payload 规则可视化模型 ${index + 1}`}
+                        value={rule.modelPattern}
+                        onChange={(e) => updatePayloadVisualRule(rule.id, { modelPattern: e.target.value })}
+                        placeholder="例如 gpt-*"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>字段路径</div>
+                      <input
+                        type="text"
+                        aria-label={`Payload 规则可视化路径 ${index + 1}`}
+                        value={rule.path}
+                        onChange={(e) => updatePayloadVisualRule(rule.id, { path: e.target.value })}
+                        placeholder="例如 reasoning.effort"
+                        style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                      />
+                    </div>
+                  </ResponsiveFormGrid>
+                  {rule.action === 'filter' ? (
+                    <div style={settingsModernFieldHintStyle}>
+                      删除字段规则不需要填写值，命中后会从请求中移除这条路径。
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {(rule.action === 'default' || rule.action === 'override') && (
+                        <div style={{ width: isMobile ? '100%' : 180 }}>
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>值类型</div>
+                          <ModernSelect
+                            size="sm"
+                            data-testid={`payload-rule-value-mode-${index + 1}`}
+                            value={rule.valueMode}
+                            onChange={(value) => updatePayloadVisualRule(rule.id, {
+                              valueMode: value as VisualPayloadRuleValueMode,
+                              value: value === 'json' && rule.valueMode !== 'json'
+                                ? (rule.value ? JSON.stringify(rule.value) : '')
+                                : rule.value,
+                            })}
+                            options={PAYLOAD_RULE_VALUE_MODE_OPTIONS}
+                            placeholder="值类型"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                          {rule.action === 'default-raw' || rule.action === 'override-raw'
+                            ? '原始 JSON 值'
+                            : (rule.valueMode === 'json' ? 'JSON 值' : '文本值')}
+                        </div>
+                        {(rule.action === 'default-raw' || rule.action === 'override-raw' || rule.valueMode === 'json') ? (
+                          <textarea
+                            aria-label={`Payload 规则可视化值 ${index + 1}`}
+                            value={rule.value}
+                            onChange={(e) => updatePayloadVisualRule(rule.id, { value: e.target.value })}
+                            placeholder={rule.action === 'default-raw' || rule.action === 'override-raw'
+                              ? '{"type":"json_schema"}'
+                              : '{"effort":"high"}'}
+                            rows={3}
+                            style={{
+                              ...inputStyle,
+                              minHeight: 88,
+                              fontFamily: 'var(--font-mono)',
+                              lineHeight: 1.6,
+                              resize: 'vertical',
+                            }}
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            aria-label={`Payload 规则可视化值 ${index + 1}`}
+                            value={rule.value}
+                            onChange={(e) => updatePayloadVisualRule(rule.id, { value: e.target.value })}
+                            placeholder="例如 high"
+                            style={inputStyle}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className={`anim-collapse ${showPayloadRulesEditor ? 'is-open' : ''}`.trim()}>
+            <div className="anim-collapse-inner" style={{ paddingTop: 2 }}>
+              <div style={settingsModernFieldCardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <div style={settingsModernFieldLabelStyle}>高级 JSON 编辑</div>
+                    <div style={settingsModernFieldHintStyle}>
+                      适合直接粘贴 CPA 风格规则。手动改完后，可点击“同步到可视化规则”回到上面的低门槛编辑器。
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ border: '1px solid var(--color-border)' }}
+                    onClick={syncVisualRulesFromAdvancedJson}
+                  >
+                    同步到可视化规则
+                  </button>
+                </div>
+              </div>
+              <ResponsiveFormGrid columns={2}>
+                {PAYLOAD_RULES_EDITOR_SECTIONS.map((section) => (
+                  <div key={section.key} style={settingsModernFieldCardStyle}>
+                    <div style={settingsModernFieldLabelStyle}>{section.title}</div>
+                    <div style={settingsModernFieldHintStyle}>{section.description}</div>
+                    <textarea
+                      aria-label={`Payload 规则 ${section.key}`}
+                      value={payloadRuleDrafts[section.key]}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setPayloadRuleDrafts((prev) => ({
+                          ...prev,
+                          [section.key]: nextValue,
+                        }));
+                        setPayloadAdvancedDirty(true);
+                      }}
+                      placeholder={section.placeholder}
+                      rows={6}
+                      style={{
+                        ...inputStyle,
+                        minHeight: 144,
+                        fontFamily: 'var(--font-mono)',
+                        lineHeight: 1.6,
+                        resize: 'vertical',
+                      }}
+                    />
+                  </div>
+                ))}
+              </ResponsiveFormGrid>
+            </div>
+          </div>
+          <div style={settingsModernActionsStyle}>
+            <button onClick={savePayloadRules} disabled={savingPayloadRules} className="btn btn-primary">
+              {savingPayloadRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存 Payload 规则'}
             </button>
           </div>
         </div>
