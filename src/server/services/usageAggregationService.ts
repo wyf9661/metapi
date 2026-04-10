@@ -1,7 +1,7 @@
 import { and, asc, eq, gt, gte, isNull, lte, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
-import { db, schema } from '../db/index.js';
+import { db, runtimeDbDialect, schema } from '../db/index.js';
 import { fallbackTokenCost } from './modelPricingService.js';
 import {
   getLocalRangeStartDayKey,
@@ -229,13 +229,26 @@ async function readProjectionCheckpoint(): Promise<ProjectionCheckpointRow> {
 
 async function ensureProjectionCheckpointExists() {
   const nowIso = new Date().toISOString();
-  await (db.insert(schema.analyticsProjectionCheckpoints).values({
+  const values = {
     projectorKey: USAGE_PROJECTOR_KEY,
     timeZone: getResolvedTimeZone(),
     lastProxyLogId: 0,
     createdAt: nowIso,
     updatedAt: nowIso,
-  }) as any)
+  };
+
+  if (runtimeDbDialect === 'mysql') {
+    await (db.insert(schema.analyticsProjectionCheckpoints).values(values) as any)
+      .onDuplicateKeyUpdate({
+        set: {
+          projectorKey: sql`${schema.analyticsProjectionCheckpoints.projectorKey}`,
+        },
+      })
+      .run();
+    return;
+  }
+
+  await (db.insert(schema.analyticsProjectionCheckpoints).values(values) as any)
     .onConflictDoNothing({
       target: schema.analyticsProjectionCheckpoints.projectorKey,
     })
@@ -320,6 +333,31 @@ async function writeProjectionCheckpoint(
     createdAt: checkpoint.createdAt ?? nowIso,
     updatedAt: nowIso,
   };
+
+  if (runtimeDbDialect === 'mysql') {
+    await (tx.insert(schema.analyticsProjectionCheckpoints).values(values) as any)
+      .onDuplicateKeyUpdate({
+        set: {
+          timeZone: values.timeZone,
+          lastProxyLogId: values.lastProxyLogId,
+          watermarkCreatedAt: values.watermarkCreatedAt,
+          recomputeFromId: values.recomputeFromId,
+          recomputeRequestedAt: values.recomputeRequestedAt,
+          recomputeReason: values.recomputeReason,
+          recomputeStartedAt: values.recomputeStartedAt,
+          recomputeCompletedAt: values.recomputeCompletedAt,
+          leaseOwner: values.leaseOwner,
+          leaseToken: values.leaseToken,
+          leaseExpiresAt: values.leaseExpiresAt,
+          lastProjectedAt: values.lastProjectedAt,
+          lastSuccessfulAt: values.lastSuccessfulAt,
+          lastError: values.lastError,
+          updatedAt: values.updatedAt,
+        },
+      })
+      .run();
+    return;
+  }
 
   await (tx.insert(schema.analyticsProjectionCheckpoints).values(values) as any)
     .onConflictDoUpdate({
@@ -481,7 +519,7 @@ function buildProjectionBatchDelta(rows: ProxyLogProjectionRow[]): ProjectionBat
 }
 
 async function upsertSiteDayUsage(tx: typeof db, row: SiteDayUsageDeltaRow, updatedAt: string) {
-  await (tx.insert(schema.siteDayUsage).values({
+  const values = {
     localDay: row.localDay,
     siteId: row.siteId,
     totalCalls: row.totalCalls,
@@ -493,7 +531,28 @@ async function upsertSiteDayUsage(tx: typeof db, row: SiteDayUsageDeltaRow, upda
     totalLatencyMs: row.totalLatencyMs,
     latencyCount: row.latencyCount,
     updatedAt,
-  }) as any)
+  };
+
+  if (runtimeDbDialect === 'mysql') {
+    await (tx.insert(schema.siteDayUsage).values(values) as any)
+      .onDuplicateKeyUpdate({
+        set: {
+          totalCalls: sql`${schema.siteDayUsage.totalCalls} + ${row.totalCalls}`,
+          successCalls: sql`${schema.siteDayUsage.successCalls} + ${row.successCalls}`,
+          failedCalls: sql`${schema.siteDayUsage.failedCalls} + ${row.failedCalls}`,
+          totalTokens: sql`${schema.siteDayUsage.totalTokens} + ${row.totalTokens}`,
+          totalSummarySpend: sql`${schema.siteDayUsage.totalSummarySpend} + ${row.totalSummarySpend}`,
+          totalSiteSpend: sql`${schema.siteDayUsage.totalSiteSpend} + ${row.totalSiteSpend}`,
+          totalLatencyMs: sql`${schema.siteDayUsage.totalLatencyMs} + ${row.totalLatencyMs}`,
+          latencyCount: sql`${schema.siteDayUsage.latencyCount} + ${row.latencyCount}`,
+          updatedAt,
+        },
+      })
+      .run();
+    return;
+  }
+
+  await (tx.insert(schema.siteDayUsage).values(values) as any)
     .onConflictDoUpdate({
       target: [schema.siteDayUsage.localDay, schema.siteDayUsage.siteId],
       set: {
@@ -512,7 +571,7 @@ async function upsertSiteDayUsage(tx: typeof db, row: SiteDayUsageDeltaRow, upda
 }
 
 async function upsertSiteHourUsage(tx: typeof db, row: SiteHourUsageDeltaRow, updatedAt: string) {
-  await (tx.insert(schema.siteHourUsage).values({
+  const values = {
     bucketStartUtc: row.bucketStartUtc,
     siteId: row.siteId,
     totalCalls: row.totalCalls,
@@ -524,7 +583,28 @@ async function upsertSiteHourUsage(tx: typeof db, row: SiteHourUsageDeltaRow, up
     totalLatencyMs: row.totalLatencyMs,
     latencyCount: row.latencyCount,
     updatedAt,
-  }) as any)
+  };
+
+  if (runtimeDbDialect === 'mysql') {
+    await (tx.insert(schema.siteHourUsage).values(values) as any)
+      .onDuplicateKeyUpdate({
+        set: {
+          totalCalls: sql`${schema.siteHourUsage.totalCalls} + ${row.totalCalls}`,
+          successCalls: sql`${schema.siteHourUsage.successCalls} + ${row.successCalls}`,
+          failedCalls: sql`${schema.siteHourUsage.failedCalls} + ${row.failedCalls}`,
+          totalTokens: sql`${schema.siteHourUsage.totalTokens} + ${row.totalTokens}`,
+          totalSummarySpend: sql`${schema.siteHourUsage.totalSummarySpend} + ${row.totalSummarySpend}`,
+          totalSiteSpend: sql`${schema.siteHourUsage.totalSiteSpend} + ${row.totalSiteSpend}`,
+          totalLatencyMs: sql`${schema.siteHourUsage.totalLatencyMs} + ${row.totalLatencyMs}`,
+          latencyCount: sql`${schema.siteHourUsage.latencyCount} + ${row.latencyCount}`,
+          updatedAt,
+        },
+      })
+      .run();
+    return;
+  }
+
+  await (tx.insert(schema.siteHourUsage).values(values) as any)
     .onConflictDoUpdate({
       target: [schema.siteHourUsage.bucketStartUtc, schema.siteHourUsage.siteId],
       set: {
@@ -543,7 +623,7 @@ async function upsertSiteHourUsage(tx: typeof db, row: SiteHourUsageDeltaRow, up
 }
 
 async function upsertModelDayUsage(tx: typeof db, row: ModelDayUsageDeltaRow, updatedAt: string) {
-  await (tx.insert(schema.modelDayUsage).values({
+  const values = {
     localDay: row.localDay,
     siteId: row.siteId,
     model: row.model,
@@ -555,7 +635,27 @@ async function upsertModelDayUsage(tx: typeof db, row: ModelDayUsageDeltaRow, up
     totalLatencyMs: row.totalLatencyMs,
     latencyCount: row.latencyCount,
     updatedAt,
-  }) as any)
+  };
+
+  if (runtimeDbDialect === 'mysql') {
+    await (tx.insert(schema.modelDayUsage).values(values) as any)
+      .onDuplicateKeyUpdate({
+        set: {
+          totalCalls: sql`${schema.modelDayUsage.totalCalls} + ${row.totalCalls}`,
+          successCalls: sql`${schema.modelDayUsage.successCalls} + ${row.successCalls}`,
+          failedCalls: sql`${schema.modelDayUsage.failedCalls} + ${row.failedCalls}`,
+          totalTokens: sql`${schema.modelDayUsage.totalTokens} + ${row.totalTokens}`,
+          totalSpend: sql`${schema.modelDayUsage.totalSpend} + ${row.totalSpend}`,
+          totalLatencyMs: sql`${schema.modelDayUsage.totalLatencyMs} + ${row.totalLatencyMs}`,
+          latencyCount: sql`${schema.modelDayUsage.latencyCount} + ${row.latencyCount}`,
+          updatedAt,
+        },
+      })
+      .run();
+    return;
+  }
+
+  await (tx.insert(schema.modelDayUsage).values(values) as any)
     .onConflictDoUpdate({
       target: [schema.modelDayUsage.localDay, schema.modelDayUsage.siteId, schema.modelDayUsage.model],
       set: {
