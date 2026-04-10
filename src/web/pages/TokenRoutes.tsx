@@ -93,7 +93,13 @@ const EMPTY_ROUTE_FORM: RouteEditorForm = {
   sourceRouteIds: [],
   advancedOpen: false,
 };
-const DESKTOP_DETAIL_COLLAPSE_MS = 180;
+const DESKTOP_DETAIL_ENTER_MS = 260;
+const DESKTOP_DETAIL_COLLAPSE_MS = 200;
+
+function prefersReducedMotion(): boolean {
+  return typeof globalThis.matchMedia === 'function'
+    && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): string {
   if (value === 'round_robin') return '已切换为轮询策略';
@@ -114,30 +120,44 @@ export function DesktopDetailPanelPresence({
 }) {
   const [shouldRender, setShouldRender] = useState(open);
   const [isOpen, setIsOpen] = useState(open);
+  const [isEntering, setIsEntering] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const hasEverOpenedRef = useRef(open);
 
   useEffect(() => {
+    const reduceMotion = prefersReducedMotion();
+
     if (open) {
       hasEverOpenedRef.current = true;
       setShouldRender(true);
-      setIsClosing(false);
-      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-        const rafId = window.requestAnimationFrame(() => setIsOpen(true));
-        return () => window.cancelAnimationFrame(rafId);
-      }
       setIsOpen(true);
-      return undefined;
+      setIsClosing(false);
+      if (reduceMotion) {
+        setIsEntering(false);
+        return undefined;
+      }
+      setIsEntering(true);
+      const enterTimerId = globalThis.setTimeout(() => {
+        setIsEntering(false);
+      }, DESKTOP_DETAIL_ENTER_MS);
+      return () => globalThis.clearTimeout(enterTimerId);
     }
 
     if (!hasEverOpenedRef.current) {
       setShouldRender(false);
       setIsOpen(false);
+      setIsEntering(false);
       setIsClosing(false);
       return undefined;
     }
 
     setIsOpen(false);
+    setIsEntering(false);
+    if (reduceMotion) {
+      setShouldRender(false);
+      setIsClosing(false);
+      return undefined;
+    }
     setIsClosing(true);
     const timerId = globalThis.setTimeout(() => {
       setShouldRender(false);
@@ -150,12 +170,10 @@ export function DesktopDetailPanelPresence({
   if (!shouldRender) return null;
   return (
     <div
-      className={`route-detail-panel-presence anim-collapse route-panel-collapse ${isOpen ? 'is-open' : ''} ${isClosing ? 'is-closing' : ''}`.trim()}
+      className={`route-detail-panel-presence ${isOpen ? 'is-open' : ''} ${isEntering ? 'is-entering' : ''} ${isClosing ? 'is-closing' : ''}`.trim()}
       style={{ gridColumn: '1 / -1' }}
     >
-      <div className="anim-collapse-inner">
-        {children(isClosing)}
-      </div>
+      {children(isClosing)}
     </div>
   );
 }
@@ -1282,15 +1300,20 @@ export default function TokenRoutes() {
     const isCurrentlyExpanded = expandedRouteIds.includes(routeId);
     if (isCurrentlyExpanded) {
       if (!isMobile) {
-        setClosingDesktopDetailRouteIds((prev) => (prev.includes(routeId) ? prev : [...prev, routeId]));
-        const existingTimer = desktopDetailCloseTimersRef.current[routeId];
-        if (existingTimer) {
-          globalThis.clearTimeout(existingTimer);
-        }
-        desktopDetailCloseTimersRef.current[routeId] = globalThis.setTimeout(() => {
+        const reduceMotion = prefersReducedMotion();
+        if (reduceMotion) {
           setClosingDesktopDetailRouteIds((prev) => prev.filter((id) => id !== routeId));
-          delete desktopDetailCloseTimersRef.current[routeId];
-        }, DESKTOP_DETAIL_COLLAPSE_MS);
+        } else {
+          setClosingDesktopDetailRouteIds((prev) => (prev.includes(routeId) ? prev : [...prev, routeId]));
+          const existingTimer = desktopDetailCloseTimersRef.current[routeId];
+          if (existingTimer) {
+            globalThis.clearTimeout(existingTimer);
+          }
+          desktopDetailCloseTimersRef.current[routeId] = globalThis.setTimeout(() => {
+            setClosingDesktopDetailRouteIds((prev) => prev.filter((id) => id !== routeId));
+            delete desktopDetailCloseTimersRef.current[routeId];
+          }, DESKTOP_DETAIL_COLLAPSE_MS);
+        }
       }
       setExpandedRouteIds((prev) => prev.filter((id) => id !== routeId));
     } else {

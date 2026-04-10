@@ -62,6 +62,7 @@ async function flushMicrotasks() {
 
 describe('TokenRoutes desktop detail panel', () => {
   const originalIntersectionObserver = globalThis.IntersectionObserver;
+  const originalMatchMedia = globalThis.matchMedia;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -74,6 +75,20 @@ describe('TokenRoutes desktop detail panel', () => {
       readonly rootMargin = '0px';
       readonly thresholds = [];
     } as unknown as typeof IntersectionObserver;
+    const defaultMatchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    globalThis.matchMedia = defaultMatchMedia as unknown as typeof matchMedia;
+    if (typeof window !== 'undefined') {
+      window.matchMedia = defaultMatchMedia as unknown as typeof window.matchMedia;
+    }
     getBrandMock.mockReset();
     getBrandMock.mockReturnValue(null);
     apiMock.getRoutesSummary.mockResolvedValue([
@@ -136,6 +151,10 @@ describe('TokenRoutes desktop detail panel', () => {
   afterEach(() => {
     vi.clearAllMocks();
     globalThis.IntersectionObserver = originalIntersectionObserver;
+    globalThis.matchMedia = originalMatchMedia;
+    if (typeof window !== 'undefined') {
+      window.matchMedia = originalMatchMedia as typeof window.matchMedia;
+    }
   });
 
   it('keeps summary cards stable and opens a separate desktop detail panel', async () => {
@@ -230,7 +249,7 @@ describe('TokenRoutes desktop detail panel', () => {
         && String(node.props.className || '').includes('route-detail-panel-presence')
       ));
       expect(detailPanelPresence).toHaveLength(1);
-      expect(String(detailPanelPresence[0]!.props.className || '')).toContain('anim-collapse');
+      expect(String(detailPanelPresence[0]!.props.className || '')).not.toContain('anim-collapse');
       expect(String(detailPanelPresence[0]!.props.className || '')).not.toContain('is-open');
       expect(String(detailPanelPresence[0]!.props.className || '')).toContain('is-closing');
       const detailPanelsWhileClosing = root.root.findAll((node) => (
@@ -283,6 +302,78 @@ describe('TokenRoutes desktop detail panel', () => {
 
       expect(root.toJSON()).toBeNull();
       expect(setTimeoutSpy).not.toHaveBeenCalled();
+    } finally {
+      root?.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('closes the desktop detail panel immediately when reduced motion is preferred', async () => {
+    vi.useFakeTimers();
+    const reducedMotionMatchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    globalThis.matchMedia = reducedMotionMatchMedia as unknown as typeof matchMedia;
+    if (typeof window !== 'undefined') {
+      window.matchMedia = reducedMotionMatchMedia as unknown as typeof window.matchMedia;
+    }
+    let root!: ReactTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/routes']}>
+            <ToastProvider>
+              <TokenRoutes />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const firstSummaryCard = root.root.find((node) => (
+        node.type === 'div'
+        && String(node.props.className || '').includes('route-card-collapsed')
+        && collectText(node).includes('gpt-4o-mini')
+      ));
+
+      await act(async () => {
+        await firstSummaryCard.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const closeButton = root.root.find((node) => (
+        node.type === 'button'
+        && collectText(node).includes('收起详情')
+      ));
+
+      await act(async () => {
+        await closeButton.props.onClick();
+      });
+      await flushMicrotasks();
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      await flushMicrotasks();
+
+      const detailPanelPresence = root.root.findAll((node) => (
+        node.type === 'div'
+        && String(node.props.className || '').includes('route-detail-panel-presence')
+      ));
+      expect(detailPanelPresence).toHaveLength(0);
+      const summaryCardAfterClosing = root.root.find((node) => (
+        node.type === 'div'
+        && String(node.props.className || '').includes('route-card-collapsed')
+        && collectText(node).includes('gpt-4o-mini')
+      ));
+      expect(String(summaryCardAfterClosing.props.className || '')).not.toContain('is-active');
     } finally {
       root?.unmount();
       vi.useRealTimers();
