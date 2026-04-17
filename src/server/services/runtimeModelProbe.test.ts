@@ -5,19 +5,29 @@ const buildUpstreamEndpointRequestMock = vi.fn();
 const dispatchRuntimeRequestMock = vi.fn();
 const resolveChannelProxyUrlMock = vi.fn();
 const withSiteRecordProxyRequestInitMock = vi.fn();
+const getOauthInfoFromAccountMock = vi.fn();
+const buildOauthProviderHeadersMock = vi.fn();
 
-vi.mock('../routes/proxy/upstreamEndpoint.js', () => ({
+vi.mock('./upstreamEndpointRuntime.js', () => ({
   resolveUpstreamEndpointCandidates: (...args: unknown[]) => resolveUpstreamEndpointCandidatesMock(...args),
   buildUpstreamEndpointRequest: (...args: unknown[]) => buildUpstreamEndpointRequestMock(...args),
 }));
 
-vi.mock('../routes/proxy/runtimeExecutor.js', () => ({
+vi.mock('./runtimeDispatch.js', () => ({
   dispatchRuntimeRequest: (...args: unknown[]) => dispatchRuntimeRequestMock(...args),
 }));
 
 vi.mock('./siteProxy.js', () => ({
   resolveChannelProxyUrl: (...args: unknown[]) => resolveChannelProxyUrlMock(...args),
   withSiteRecordProxyRequestInit: (...args: unknown[]) => withSiteRecordProxyRequestInitMock(...args),
+}));
+
+vi.mock('./oauth/oauthAccount.js', () => ({
+  getOauthInfoFromAccount: (...args: unknown[]) => getOauthInfoFromAccountMock(...args),
+}));
+
+vi.mock('./oauth/service.js', () => ({
+  buildOauthProviderHeaders: (...args: unknown[]) => buildOauthProviderHeadersMock(...args),
 }));
 
 describe('probeRuntimeModel', () => {
@@ -46,7 +56,11 @@ describe('probeRuntimeModel', () => {
     dispatchRuntimeRequestMock.mockReset();
     resolveChannelProxyUrlMock.mockReset();
     withSiteRecordProxyRequestInitMock.mockReset();
+    getOauthInfoFromAccountMock.mockReset();
+    buildOauthProviderHeadersMock.mockReset();
 
+    getOauthInfoFromAccountMock.mockReturnValue(null);
+    buildOauthProviderHeadersMock.mockReturnValue({});
     buildUpstreamEndpointRequestMock.mockReturnValue({
       path: '/v1/chat/completions',
       headers: { 'content-type': 'application/json' },

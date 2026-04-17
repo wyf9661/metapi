@@ -375,6 +375,62 @@ describe('UpdateCenterSection', () => {
     }
   });
 
+  it('deploys manual Docker Hub tags so dev and branch images are reachable from the UI', async () => {
+    let root!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <UpdateCenterSection />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const manualTagInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.placeholder === 'dev / dev-20260417-f67ade2 / sha-f67ade2'
+      ));
+      const manualDigestInput = root.root.find((node) => (
+        node.type === 'input'
+        && node.props.placeholder === '可选 digest：sha256:...'
+      ));
+
+      await act(async () => {
+        manualTagInput.props.onChange({ target: { value: 'dev-20260417-f67ade2' } });
+        manualDigestInput.props.onChange({
+          target: {
+            value: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          },
+        });
+      });
+
+      const customDeployButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('部署自定义 Docker 标签')
+      ));
+
+      expect(customDeployButton.props.disabled).toBe(false);
+
+      await act(async () => {
+        await customDeployButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.deployUpdateCenter).toHaveBeenCalledWith({
+        source: 'docker-hub-tag',
+        targetTag: 'dev-20260417-f67ade2',
+        targetDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      });
+      expect(apiMock.streamUpdateCenterTaskLogs).toHaveBeenCalledWith('task-1', expect.any(Object));
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('keeps rollback history compact and opens the full revision list in a centered modal', async () => {
     let root!: ReactTestRenderer;
     try {

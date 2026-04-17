@@ -1,5 +1,6 @@
 import { fetch } from 'undici';
 import { config } from '../../config.js';
+import { inferCodexOfficialOriginator } from '../../shared/codexClientFamily.js';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
 import { createPkceChallenge } from './sessionStore.js';
 import type { OAuthProviderDefinition } from './providers.js';
@@ -234,7 +235,9 @@ export const codexOauthProvider: OAuthProviderDefinition = {
   },
   buildProxyHeaders: ({ oauth, downstreamHeaders }) => {
     const accountId = oauth.accountId || oauth.accountKey;
-    const originator = getHeaderValue(downstreamHeaders, 'originator') || 'codex_cli_rs';
+    const originator = inferCodexOfficialOriginator(downstreamHeaders)
+      || getHeaderValue(downstreamHeaders, 'originator')
+      || 'codex_cli_rs';
     const headers: Record<string, string> = {
       Originator: originator,
     };

@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import type { ConversationFileInputSummary } from '../proxy-core/capabilities/conversationFileCapabilities.js';
 import type { DownstreamFormat } from '../transformers/shared/normalized.js';
 import {
+  inferSuggestedEndpointFromUpstreamError,
+  inferRequiredEndpointFromProtocolError,
   isEndpointDispatchDeniedError,
+  isEndpointDowngradeError,
   isUnsupportedMediaTypeError,
 } from '../transformers/shared/endpointCompatibility.js';
 
@@ -200,38 +203,30 @@ function maybeDeleteEndpointRuntimeState(key: string, nowMs = Date.now()): void 
   }
 }
 
-function inferSuggestedEndpointFromError(errorText?: string | null): UpstreamEndpointRuntimeEndpoint | null {
-  const text = (errorText || '').toLowerCase();
-  if (!text) return null;
-  if (text.includes('/v1/responses')) return 'responses';
-  if (text.includes('/v1/messages')) return 'messages';
-  if (text.includes('/v1/chat/completions')) return 'chat';
-  return null;
+function inferSuggestedEndpointFromError(
+  endpoint: UpstreamEndpointRuntimeEndpoint,
+  errorText?: string | null,
+): UpstreamEndpointRuntimeEndpoint | null {
+  const suggestedEndpoint = inferSuggestedEndpointFromUpstreamError(errorText);
+  return suggestedEndpoint && endpoint !== suggestedEndpoint ? suggestedEndpoint : null;
 }
 
-function shouldBlockEndpointByError(status: number, errorText?: string | null): boolean {
+function shouldBlockEndpointByError(
+  endpoint: UpstreamEndpointRuntimeEndpoint,
+  status: number,
+  errorText?: string | null,
+): boolean {
   if (isEndpointDispatchDeniedError(status, errorText)) return true;
   if (status === 404 || status === 405 || status === 415 || status === 501) return true;
   if (isUnsupportedMediaTypeError(status, errorText)) return true;
 
-  const text = (errorText || '').toLowerCase();
-  return (
-    text.includes('convert_request_failed')
-    || text.includes('endpoint_not_found')
-    || text.includes('unknown_endpoint')
-    || text.includes('unsupported_endpoint')
-    || text.includes('unsupported_path')
-    || text.includes('not_found_error')
-    || text.includes('unsupported legacy protocol')
-    || text.includes('please use /v1/')
-    || text.includes('does not allow /v1/')
-    || text.includes('unknown endpoint')
-    || text.includes('unsupported endpoint')
-    || text.includes('unsupported path')
-    || text.includes('unrecognized request url')
-    || text.includes('no route matched')
-    || text.includes('does not exist')
-  );
+  const rawText = errorText || '';
+  const requiredEndpoint = inferRequiredEndpointFromProtocolError(rawText);
+  if (requiredEndpoint) {
+    return endpoint !== requiredEndpoint;
+  }
+
+  return isEndpointDowngradeError(status, errorText);
 }
 
 function shouldRememberSuccessfulEndpoint(input: {
@@ -405,7 +400,7 @@ export function recordUpstreamEndpointFailure(input: {
     requestCapabilities: input.requestCapabilities,
   });
   if (!shouldUseEndpointRuntimeMemory(capabilityProfile)) return null;
-  if (!shouldBlockEndpointByError(input.status, input.errorText)) return null;
+  if (!shouldBlockEndpointByError(input.endpoint, input.status, input.errorText)) return null;
 
   const nowMs = Date.now();
   const key = buildEndpointRuntimeStateKey({
@@ -416,7 +411,7 @@ export function recordUpstreamEndpointFailure(input: {
   const state = getOrCreateEndpointRuntimeState(key, nowMs);
   state.blockedUntilMsByEndpoint[input.endpoint] = nowMs + ENDPOINT_RUNTIME_BLOCK_TTL_MS;
 
-  const suggestedEndpoint = inferSuggestedEndpointFromError(input.errorText);
+  const suggestedEndpoint = inferSuggestedEndpointFromError(input.endpoint, input.errorText);
   if (suggestedEndpoint && suggestedEndpoint !== input.endpoint) {
     state.preferredEndpoint = suggestedEndpoint;
     state.preferredUpdatedAtMs = nowMs;

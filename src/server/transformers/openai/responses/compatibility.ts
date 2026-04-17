@@ -7,6 +7,10 @@ import {
   convertOpenAiBodyToResponsesBody,
   sanitizeResponsesBodyForProxy,
 } from './conversion.js';
+import {
+  hasEndpointMismatchHint,
+  inferRequiredEndpointFromProtocolError,
+} from '../../shared/endpointCompatibility.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -18,11 +22,17 @@ function asTrimmedString(value: unknown): string {
 
 export function buildResponsesCompatibilityBodies(
   body: Record<string, unknown>,
+  options?: {
+    sitePlatform?: string;
+  },
 ): Record<string, unknown>[] {
   const candidates: Record<string, unknown>[] = [];
   const seen = new Set<string>();
+  const useSemanticDedupe = asTrimmedString(options?.sitePlatform).toLowerCase() === 'sub2api';
   try {
-    const originalKey = JSON.stringify(body);
+    const originalKey = useSemanticDedupe
+      ? fingerprintCompatibilityValue(body)
+      : JSON.stringify(body);
     if (originalKey) seen.add(originalKey);
   } catch {
     // ignore non-serializable bodies
@@ -32,7 +42,9 @@ export function buildResponsesCompatibilityBodies(
     if (!next) return;
     let key = '';
     try {
-      key = JSON.stringify(next);
+      key = useSemanticDedupe
+        ? fingerprintCompatibilityValue(next)
+        : JSON.stringify(next);
     } catch {
       return;
     }
@@ -77,19 +89,28 @@ export function buildResponsesCompatibilityBodies(
       'background',
       'top_logprobs',
     ] as const;
+    const normalizedSitePlatform = asTrimmedString(options?.sitePlatform).toLowerCase();
+    if (normalizedSitePlatform === 'sub2api' && body.store !== undefined) {
+      richCandidate.store = cloneJsonValue(body.store);
+    }
     for (const key of passthroughFields) {
       if (body[key] === undefined) continue;
       richCandidate[key] = cloneJsonValue(body[key]);
     }
     push(richCandidate);
   }
-  push(buildStrictResponsesBody(body));
+  if (!shouldPreserveResponsesCompatibilitySemantics(options?.sitePlatform, body)) {
+    push(buildStrictResponsesBody(body));
+  }
   return candidates;
 }
 
 export function buildResponsesCompatibilityHeaderCandidates(
   headers: Record<string, string>,
   stream: boolean,
+  options?: {
+    sitePlatform?: string;
+  },
 ): Record<string, string>[] {
   const candidates: Record<string, string>[] = [];
   const seen = new Set<string>();
@@ -105,6 +126,12 @@ export function buildResponsesCompatibilityHeaderCandidates(
   };
 
   push(headers);
+
+  const normalizedSitePlatform = asTrimmedString(options?.sitePlatform).toLowerCase();
+  if (normalizedSitePlatform === 'sub2api') {
+    push(buildSub2ApiResponsesCompatibilityHeaders(headers, stream));
+    return candidates;
+  }
 
   const minimal: Record<string, string> = {};
   for (const [rawKey, rawValue] of Object.entries(headers)) {
@@ -129,6 +156,7 @@ export function shouldRetryResponsesCompatibility(input: {
   endpoint: string;
   status: number;
   rawErrText: string;
+  body: Record<string, unknown>;
 }): boolean {
   if (input.endpoint !== 'responses') return false;
   if (input.status !== 400) return false;
@@ -138,6 +166,7 @@ export function shouldRetryResponsesCompatibility(input: {
   const message = parsedError.message.trim().toLowerCase();
   const compact = `${type} ${code} ${message}`.trim();
   const rawCompact = (input.rawErrText || '').toLowerCase();
+  const requiredEndpoint = inferRequiredEndpointFromProtocolError(input.rawErrText);
 
   if (
     compact.includes('invalid_api_key')
@@ -150,11 +179,30 @@ export function shouldRetryResponsesCompatibility(input: {
     return false;
   }
 
-  if (type === 'upstream_error' || code === 'upstream_error') return true;
-  if (message === 'upstream_error' || message === 'upstream request failed') return true;
-  if (rawCompact.includes('upstream_error')) return true;
+  const hasCompatibilityHint = (
+    compact.includes('unsupported')
+    || compact.includes('not supported')
+    || compact.includes('application/json')
+    || compact.includes('content-type')
+    || compact.includes('request validation failed')
+    || requiredEndpoint !== null
+    || hasEndpointMismatchHint(input.rawErrText)
+    || compact.includes('invalid_request_error')
+    || compact.includes('bad_response_status_code')
+    || compact.includes('openai_error')
+    || compact.includes('unsupported legacy protocol')
+  );
+  if (hasCompatibilityHint) return true;
 
-  return true;
+  const compatibilityCandidates = buildResponsesCompatibilityBodies(input.body);
+  if (compatibilityCandidates.length > 0) {
+    if (type === 'upstream_error' || code === 'upstream_error') return true;
+    if (message === 'upstream_error' || message === 'upstream request failed') return true;
+    if (rawCompact.includes('upstream_error')) return true;
+    if (compact.length > 0) return true;
+  }
+
+  return false;
 }
 
 export function shouldDowngradeResponsesChatToMessages(
@@ -164,7 +212,7 @@ export function shouldDowngradeResponsesChatToMessages(
 ): boolean {
   if (!endpointPath.includes('/chat/completions')) return false;
   if (status < 400 || status >= 500) return false;
-  return /messages\s+is\s+required/i.test(upstreamErrorText);
+  return inferRequiredEndpointFromProtocolError(upstreamErrorText) === 'messages';
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -181,6 +229,20 @@ function cloneJsonValue<T>(value: T): T {
     ) as T;
   }
   return value;
+}
+
+function fingerprintCompatibilityValue(value: unknown): string {
+  if (value === undefined) return '__undefined__';
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => fingerprintCompatibilityValue(item)).join(',')}]`;
+  }
+  const entries = Object.entries(value)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, item]) => `${JSON.stringify(key)}:${fingerprintCompatibilityValue(item)}`);
+  return `{${entries.join(',')}}`;
 }
 
 function parseUpstreamErrorShape(rawText: string): {
@@ -206,6 +268,60 @@ function parseUpstreamErrorShape(rawText: string): {
 function getExplicitResponsesInstructions(body: Record<string, unknown>): string | null {
   if (!Object.prototype.hasOwnProperty.call(body, 'instructions')) return null;
   return typeof body.instructions === 'string' ? body.instructions.trim() : '';
+}
+
+function shouldPreserveResponsesCompatibilitySemantics(
+  sitePlatform: string | undefined,
+  body: Record<string, unknown>,
+): boolean {
+  if (asTrimmedString(sitePlatform).toLowerCase() !== 'sub2api') return false;
+  return [
+    'store',
+    'include',
+    'reasoning',
+    'previous_response_id',
+    'truncation',
+    'text',
+    'service_tier',
+    'safety_identifier',
+    'max_tool_calls',
+    'prompt_cache_key',
+    'prompt_cache_retention',
+    'background',
+    'top_logprobs',
+  ].some((key) => body[key] !== undefined);
+}
+
+const SUB2API_RESPONSES_COMPATIBILITY_HEADER_ALLOWLIST = new Set([
+  'accept',
+  'accept-language',
+  'authorization',
+  'content-type',
+  'conversation-id',
+  'conversation_id',
+  'openai-beta',
+  'originator',
+  'session-id',
+  'session_id',
+  'user-agent',
+  'x-api-key',
+  'x-codex-turn-metadata',
+  'x-codex-turn-state',
+]);
+
+function buildSub2ApiResponsesCompatibilityHeaders(
+  headers: Record<string, string>,
+  stream: boolean,
+): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const [rawKey, rawValue] of Object.entries(headers)) {
+    const key = rawKey.toLowerCase();
+    if (!SUB2API_RESPONSES_COMPATIBILITY_HEADER_ALLOWLIST.has(key)) continue;
+    next[key] = rawValue;
+  }
+  if (!next['content-type']) next['content-type'] = 'application/json';
+  if (stream && !next.accept) next.accept = 'text/event-stream';
+  return next;
 }
 
 function stripResponsesMetadata(

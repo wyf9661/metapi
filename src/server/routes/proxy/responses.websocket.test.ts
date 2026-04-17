@@ -195,6 +195,16 @@ function waitForSocketOpen(socket: WebSocket) {
   });
 }
 
+function waitForSocketClose(socket: WebSocket) {
+  return new Promise<void>((resolve) => {
+    if (socket.readyState === WebSocket.CLOSED) {
+      resolve();
+      return;
+    }
+    socket.once('close', () => resolve());
+  });
+}
+
 function waitForSocketUpgrade(socket: WebSocket) {
   return new Promise<{ headers: Record<string, string | string[] | undefined> }>((resolve, reject) => {
     socket.once('upgrade', (response) => resolve({ headers: response.headers as Record<string, string | string[] | undefined> }));
@@ -743,6 +753,131 @@ describe('responses websocket transport', () => {
           id: 'tool_out_ws_1',
           type: 'function_call_output',
           call_id: 'call_ws_1',
+          output: '{"ok":true}',
+        },
+      ],
+    });
+  });
+
+  it('infers previous_response_id for websocket tool-output follow-up turns when the client only sends conversation_id', async () => {
+    const selectedChannel = createSelectedChannel({
+      siteUrl: upstreamSiteUrl,
+    });
+    selectChannelMock.mockReturnValue(selectedChannel);
+    previewSelectedChannelMock.mockResolvedValue(selectedChannel);
+
+    const socket = createClientSocket(baseUrl, {
+      conversation_id: 'ws-conversation-prev-infer',
+    });
+    await waitForSocketOpen(socket);
+
+    const firstResponsePromise = waitForSocketMessageMatching(
+      socket,
+      (message) => message?.type === 'response.completed',
+    );
+    socket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-5.4',
+      input: [],
+    }));
+    const firstResponse = await firstResponsePromise;
+
+    const secondResponsePromise = waitForSocketMessageMatching(
+      socket,
+      (message) => message?.type === 'response.completed' && message?.response?.id === 'resp_upstream_2',
+    );
+    socket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-5.4',
+      input: [
+        {
+          id: 'tool_out_ws_conv_1',
+          type: 'function_call_output',
+          call_id: 'call_ws_conv_1',
+          output: '{"ok":true}',
+        },
+      ],
+    }));
+    await secondResponsePromise;
+    socket.close();
+
+    expect(firstResponse?.response?.id).toBe('resp_upstream_1');
+    expect(upstreamUpgradeHeaders.session_id).toBe('ws-conversation-prev-infer');
+    expect(upstreamUpgradeHeaders.conversation_id).toBe('ws-conversation-prev-infer');
+    expect(upstreamRequests).toHaveLength(2);
+    expect(upstreamRequests[1]).toMatchObject({
+      type: 'response.create',
+      previous_response_id: 'resp_upstream_1',
+      input: [
+        {
+          id: 'tool_out_ws_conv_1',
+          type: 'function_call_output',
+          call_id: 'call_ws_conv_1',
+          output: '{"ok":true}',
+        },
+      ],
+    });
+  });
+
+  it('preserves websocket continuation across downstream reconnects on the same conversation_id', async () => {
+    const selectedChannel = createSelectedChannel({
+      siteUrl: upstreamSiteUrl,
+    });
+    selectChannelMock.mockReturnValue(selectedChannel);
+    previewSelectedChannelMock.mockResolvedValue(selectedChannel);
+
+    const firstSocket = createClientSocket(baseUrl, {
+      conversation_id: 'ws-conversation-reconnect-1',
+    });
+    await waitForSocketOpen(firstSocket);
+
+    const firstResponsePromise = waitForSocketMessageMatching(
+      firstSocket,
+      (message) => message?.type === 'response.completed' && message?.response?.id === 'resp_upstream_1',
+    );
+    firstSocket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-5.4',
+      input: [],
+    }));
+    await firstResponsePromise;
+    firstSocket.close();
+    await waitForSocketClose(firstSocket);
+
+    const secondSocket = createClientSocket(baseUrl, {
+      conversation_id: 'ws-conversation-reconnect-1',
+    });
+    await waitForSocketOpen(secondSocket);
+
+    const secondResponsePromise = waitForSocketMessageMatching(
+      secondSocket,
+      (message) => message?.type === 'response.completed' && message?.response?.id === 'resp_upstream_2',
+    );
+    secondSocket.send(JSON.stringify({
+      type: 'response.create',
+      model: 'gpt-5.4',
+      input: [
+        {
+          id: 'tool_out_ws_reconnect_1',
+          type: 'function_call_output',
+          call_id: 'call_ws_reconnect_1',
+          output: '{"ok":true}',
+        },
+      ],
+    }));
+    await secondResponsePromise;
+    secondSocket.close();
+
+    expect(upstreamConnectionCount).toBe(2);
+    expect(upstreamRequests).toHaveLength(2);
+    expect(upstreamRequests[1]).toMatchObject({
+      type: 'response.create',
+      previous_response_id: 'resp_upstream_1',
+      input: [
+        {
+          id: 'tool_out_ws_reconnect_1',
+          type: 'function_call_output',
+          call_id: 'call_ws_reconnect_1',
           output: '{"ok":true}',
         },
       ],

@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,7 +25,6 @@ vi.mock('undici', () => ({
 
 type DbModule = typeof import('../../db/index.js');
 type RouteRefreshWorkflowModule = typeof import('../../services/routeRefreshWorkflow.js');
-type ConfigModule = typeof import('../../config.js');
 
 function buildJwt(payload: Record<string, unknown>) {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value))
@@ -65,25 +64,23 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let rebuildRoutesOnly: RouteRefreshWorkflowModule['rebuildRoutesOnly'];
-  let config: ConfigModule['config'];
+  let config: typeof import('../../config.js').config;
   let dataDir = '';
-  let previousDataDir: string | undefined;
 
   beforeAll(async () => {
-    previousDataDir = process.env.DATA_DIR;
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-oauth-routes-'));
-    vi.resetModules();
     process.env.DATA_DIR = dataDir;
+    vi.resetModules();
 
     await import('../../db/migrate.js');
-    const configModule = await import('../../config.js');
     const dbModule = await import('../../db/index.js');
     const routesModule = await import('./oauth.js');
     const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
-    config = configModule.config;
+    const configModule = await import('../../config.js');
     db = dbModule.db;
     schema = dbModule.schema;
     rebuildRoutesOnly = routeRefreshWorkflow.rebuildRoutesOnly;
+    config = configModule.config;
 
     app = Fastify();
     await app.register(routesModule.oauthRoutes);
@@ -112,12 +109,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
   afterAll(async () => {
     await app.close();
-    if (previousDataDir === undefined) {
-      delete process.env.DATA_DIR;
-    } else {
-      process.env.DATA_DIR = previousDataDir;
-    }
-    rmSync(dataDir, { recursive: true, force: true });
+    delete process.env.DATA_DIR;
   });
 
   it('lists multi-provider oauth metadata', async () => {

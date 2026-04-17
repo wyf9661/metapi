@@ -66,6 +66,7 @@ describe('account tokens sync routes with site status', () => {
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-account-tokens-sync-'));
     vi.resetModules();
     process.env.DATA_DIR = dataDir;
+    vi.resetModules();
 
     await import('../../db/migrate.js');
     const dbModule = await import('../../db/index.js');

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { config } from '../../config.js';
 import {
   buildCodexSessionResponseStoreKey,
   clearCodexSessionResponseId,
@@ -6,6 +7,10 @@ import {
   resetCodexSessionResponseStore,
   setCodexSessionResponseId,
 } from './codexSessionResponseStore.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('codexSessionResponseStore', () => {
   it('evicts the oldest session id when the store exceeds the cap', () => {
@@ -151,6 +156,41 @@ describe('codexSessionResponseStore', () => {
 
     expect(getCodexSessionResponseId(driftedScopedKey)).toBe('resp-roundtrip-2');
     expect(getCodexSessionResponseId(originalScopedKey)).toBe('resp-roundtrip-2');
+
+    resetCodexSessionResponseStore();
+  });
+
+  it('expires remembered continuation ids after the sticky-session TTL window', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-09T00:00:00Z'));
+    resetCodexSessionResponseStore();
+
+    setCodexSessionResponseId('session-expire', 'resp-expire');
+    expect(getCodexSessionResponseId('session-expire')).toBe('resp-expire');
+
+    vi.advanceTimersByTime(Math.max(5 * 60 * 1000, Math.trunc(config.proxyStickySessionTtlMs || 0)) + 1);
+
+    expect(getCodexSessionResponseId('session-expire')).toBeNull();
+
+    resetCodexSessionResponseStore();
+  });
+
+  it('refreshes the remembered continuation TTL when an active session reads it', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-09T00:00:00Z'));
+    resetCodexSessionResponseStore();
+
+    const ttlMs = Math.max(5 * 60 * 1000, Math.trunc(config.proxyStickySessionTtlMs || 0));
+    setCodexSessionResponseId('session-touch', 'resp-touch');
+
+    vi.advanceTimersByTime(ttlMs - 1_000);
+    expect(getCodexSessionResponseId('session-touch')).toBe('resp-touch');
+
+    vi.advanceTimersByTime(2_000);
+    expect(getCodexSessionResponseId('session-touch')).toBe('resp-touch');
+
+    vi.advanceTimersByTime(ttlMs + 1);
+    expect(getCodexSessionResponseId('session-touch')).toBeNull();
 
     resetCodexSessionResponseStore();
   });

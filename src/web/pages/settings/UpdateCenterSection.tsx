@@ -223,6 +223,10 @@ export default function UpdateCenterSection() {
   const [deploying, setDeploying] = useState(false);
   const [status, setStatus] = useState<UpdateCenterStatus | null>(null);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [manualDockerTarget, setManualDockerTarget] = useState({
+    tag: '',
+    digest: '',
+  });
   const [logs, setLogs] = useState<string[]>([]);
   const [taskStatus, setTaskStatus] = useState('');
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -426,6 +430,13 @@ export default function UpdateCenterSection() {
   });
   const canDeployGithub = !deploying && githubDeployState.canDeploy;
   const canDeployDocker = !deploying && dockerDeployState.canDeploy;
+  const manualDockerTag = String(manualDockerTarget.tag || '').trim();
+  const manualDockerDigest = String(manualDockerTarget.digest || '').trim();
+  const canDeployManualDocker = !deploying
+    && config.enabled
+    && config.dockerHubTagsEnabled
+    && helperHealthy
+    && !!manualDockerTag;
   const helperHistory = Array.isArray(status?.helper?.history) ? status.helper.history : [];
   const historyPreview = helperHistory.slice(0, 2);
   const currentRevision = String(status?.helper?.revision || '').trim();
@@ -559,7 +570,7 @@ export default function UpdateCenterSection() {
           />
           <span style={{ display: 'grid', gap: 4 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>Docker Hub</span>
-            <span style={fieldHintStyle}>从镜像标签中找出最新稳定版本，适合镜像优先的发布链路。</span>
+            <span style={fieldHintStyle}>自动发现优先稳定标签；dev / 分支 / 临时标签可在下方手动部署。</span>
           </span>
         </label>
       </div>
@@ -720,7 +731,7 @@ export default function UpdateCenterSection() {
                 ) : null}
               </div>
             </div>
-            <div style={{ ...fieldHintStyle, marginBottom: 10 }}>适合镜像标签领先于 release 的场景，直接跟随容器分发节奏。</div>
+            <div style={{ ...fieldHintStyle, marginBottom: 10 }}>自动候选优先 latest / main / 稳定 SemVer；dev / 分支 / sha 标签可手动填写部署。</div>
             <div className={dockerDeployState.highlight ? 'stat-value-glow' : ''} style={{ ...summaryValueStyle, fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
               {status?.dockerHubTag?.displayVersion || status?.dockerHubTag?.normalizedVersion || '未发现'}
             </div>
@@ -730,21 +741,87 @@ export default function UpdateCenterSection() {
             <div style={{ ...fieldHintStyle, marginBottom: 12 }}>
               最近推送：{formatTaskTime(status?.dockerHubTag?.publishedAt)}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (!helperHealthy) return;
-                void runDeploy('docker-hub-tag', {
-                  tag: status?.dockerHubTag?.tagName || status?.dockerHubTag?.normalizedVersion || '',
-                  digest: status?.dockerHubTag?.digest || null,
-                });
-              }}
-              disabled={!canDeployDocker}
-              className={config.defaultDeploySource === 'docker-hub-tag' ? 'btn btn-primary' : 'btn btn-ghost'}
-              style={config.defaultDeploySource === 'docker-hub-tag' ? undefined : { border: '1px solid var(--color-border)' }}
-            >
-              部署 Docker Hub 标签
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!helperHealthy) return;
+                  void runDeploy('docker-hub-tag', {
+                    tag: status?.dockerHubTag?.tagName || status?.dockerHubTag?.normalizedVersion || '',
+                    digest: status?.dockerHubTag?.digest || null,
+                  });
+                }}
+                disabled={!canDeployDocker}
+                className={config.defaultDeploySource === 'docker-hub-tag' ? 'btn btn-primary' : 'btn btn-ghost'}
+                style={config.defaultDeploySource === 'docker-hub-tag' ? undefined : { border: '1px solid var(--color-border)' }}
+              >
+                部署 Docker Hub 标签
+              </button>
+              {status?.dockerHubTag?.tagName ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                  onClick={() => {
+                    setManualDockerTarget({
+                      tag: status?.dockerHubTag?.tagName || '',
+                      digest: status?.dockerHubTag?.digest || '',
+                    });
+                  }}
+                >
+                  填入当前候选
+                </button>
+              ) : null}
+            </div>
+            <div style={{ borderTop: '1px dashed var(--color-border-light)', marginTop: 4, paddingTop: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 600, marginBottom: 6 }}>
+                手动部署 Docker Hub 标签
+              </div>
+              <div style={{ ...fieldHintStyle, marginBottom: 10 }}>
+                自动候选不会覆盖所有分支标签。若要切到 dev、feature、临时或 sha 标签，直接在这里填写。
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <input
+                  value={manualDockerTarget.tag}
+                  onChange={(e) => setManualDockerTarget((prev) => ({ ...prev, tag: e.target.value }))}
+                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                  placeholder="dev / dev-20260417-f67ade2 / sha-f67ade2"
+                />
+                <input
+                  value={manualDockerTarget.digest}
+                  onChange={(e) => setManualDockerTarget((prev) => ({ ...prev, digest: e.target.value }))}
+                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                  placeholder="可选 digest：sha256:..."
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ border: '1px solid var(--color-border)' }}
+                  disabled={!canDeployManualDocker}
+                  onClick={() => {
+                    if (!canDeployManualDocker) return;
+                    void runDeploy('docker-hub-tag', {
+                      tag: manualDockerTag,
+                      digest: manualDockerDigest || null,
+                    });
+                  }}
+                >
+                  部署自定义 Docker 标签
+                </button>
+                <span style={fieldHintStyle}>
+                  digest 选填；如果 chart 当前锁定了旧 digest，建议把 tag 和 digest 一起填写。
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 

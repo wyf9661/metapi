@@ -38,6 +38,7 @@ type UpstreamResponse = Exclude<EndpointRecoverResult, null>['upstream'];
 type CreateResponsesEndpointStrategyInput = {
   isStream: boolean;
   requiresNativeResponsesFileUrl: boolean;
+  sitePlatform?: string;
   dispatchRequest: (
     request: CompatibilityRequest,
     targetUrl?: string,
@@ -51,12 +52,47 @@ export function createResponsesEndpointStrategy(input: CreateResponsesEndpointSt
         endpoint: ctx.request.endpoint,
         status: ctx.response.status,
         rawErrText: ctx.rawErrText,
+        body: ctx.request.body,
       })) {
-        const compatibilityBodies = buildResponsesCompatibilityBodies(ctx.request.body);
+        const normalizedSitePlatform = String(input.sitePlatform || '').trim().toLowerCase();
+        const compatibilityBodies = buildResponsesCompatibilityBodies(ctx.request.body, {
+          sitePlatform: input.sitePlatform,
+        });
         const compatibilityHeaders = buildResponsesCompatibilityHeaderCandidates(
           ctx.request.headers,
           input.isStream,
+          {
+            sitePlatform: input.sitePlatform,
+          },
         );
+        const alternateCompatibilityHeaders = compatibilityHeaders.slice(1);
+
+        if (
+          normalizedSitePlatform === 'sub2api'
+          && compatibilityBodies.length === 0
+          && alternateCompatibilityHeaders.length > 0
+        ) {
+          for (const compatibilityHeadersCandidate of alternateCompatibilityHeaders) {
+            const compatibilityRequest = {
+              ...ctx.request,
+              headers: compatibilityHeadersCandidate,
+            };
+            const compatibilityResponse = await input.dispatchRequest(
+              compatibilityRequest,
+              ctx.targetUrl,
+            );
+            if (compatibilityResponse.ok) {
+              return {
+                upstream: compatibilityResponse,
+                upstreamPath: compatibilityRequest.path,
+              };
+            }
+
+            ctx.request = compatibilityRequest;
+            ctx.response = compatibilityResponse;
+            ctx.rawErrText = await compatibilityResponse.text().catch(() => 'unknown error');
+          }
+        }
 
         for (const compatibilityHeadersCandidate of compatibilityHeaders) {
           for (const compatibilityBody of compatibilityBodies) {

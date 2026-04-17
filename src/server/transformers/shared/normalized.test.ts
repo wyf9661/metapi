@@ -154,6 +154,9 @@ describe('shared normalized helpers', () => {
         id: 'resp_terminal_2',
         model: 'gpt-test',
         created: 456,
+        incomplete_details: {
+          reason: 'max_output_tokens',
+        },
         output: [
           {
             type: 'message',

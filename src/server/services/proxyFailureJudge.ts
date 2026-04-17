@@ -1,5 +1,5 @@
-import { config } from '../../config.js';
-import { pullSseDataEvents } from '../../services/proxyUsageParser.js';
+import { config } from '../config.js';
+import { pullSseDataEvents } from './proxyUsageParser.js';
 
 type FailureResult = {
   status: number;

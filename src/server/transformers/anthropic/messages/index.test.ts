@@ -15,6 +15,7 @@ describe('anthropicMessagesTransformer protocol contract', () => {
       ],
       metadata: {
         user_id: 'user_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_account__session_11111111-2222-3333-4444-555555555555',
+        metapi_turn_state: 'turn-state-claude-1',
       },
     });
 
@@ -25,6 +26,10 @@ describe('anthropicMessagesTransformer protocol contract', () => {
       cliProfile: 'generic',
       requestedModel: 'claude-sonnet-4-5',
       stream: false,
+      continuation: {
+        sessionId: 'user_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_account__session_11111111-2222-3333-4444-555555555555',
+        turnState: 'turn-state-claude-1',
+      },
       messages: [
         {
           role: 'user',
@@ -98,12 +103,20 @@ describe('anthropicMessagesTransformer protocol contract', () => {
           parts: [{ type: 'text', text: 'count these tokens' }],
         },
       ],
+      continuation: {
+        sessionId: 'session-claude-bridge-1',
+        turnState: 'turn-state-claude-bridge-1',
+      },
       tools: [{ name: 'lookup', inputSchema: { type: 'object' } }],
     });
 
     expect(body).toMatchObject({
       model: 'claude-sonnet-4-5',
       max_tokens: 4096,
+      metadata: {
+        user_id: 'session-claude-bridge-1',
+        metapi_turn_state: 'turn-state-claude-bridge-1',
+      },
       messages: [
         {
           role: 'user',

@@ -8,7 +8,6 @@ import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
 import ModelAvailabilityProbeConfirmModal from './settings/ModelAvailabilityProbeConfirmModal.js';
-import { PAYLOAD_RULE_PROTOCOL_OPTIONS } from './settings/payloadRuleProtocolOptions.js';
 import {
   createCodexDefaultHighReasoningVisualPreset,
   createVisualPayloadRule,
@@ -208,6 +207,15 @@ const PAYLOAD_RULE_ACTION_OPTIONS: Array<{ value: PayloadRuleAction; label: stri
   { value: 'override', label: '强制覆盖' },
   { value: 'override-raw', label: '强制覆盖 JSON' },
   { value: 'filter', label: '删除字段' },
+];
+
+const PAYLOAD_RULE_PROTOCOL_OPTIONS = [
+  { value: '', label: '全部协议' },
+  { value: 'codex', label: 'Codex' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'antigravity', label: 'Antigravity' },
 ];
 
 const PAYLOAD_RULE_VALUE_MODE_OPTIONS: Array<{ value: VisualPayloadRuleValueMode; label: string }> = [
@@ -639,14 +647,6 @@ export default function Settings() {
   const applyVisualPayloadRules = (
     nextRulesOrUpdater: VisualPayloadRule[] | ((current: VisualPayloadRule[]) => VisualPayloadRule[]),
   ) => {
-    if (
-      payloadAdvancedDirty
-      && typeof globalThis.confirm === 'function'
-      && !globalThis.confirm('高级 JSON 有未同步修改，继续会覆盖这些内容。是否继续？')
-    ) {
-      return;
-    }
-
     setPayloadVisualRules((currentRules) => {
       const nextRules = typeof nextRulesOrUpdater === 'function'
         ? nextRulesOrUpdater(currentRules)
@@ -1629,14 +1629,14 @@ export default function Settings() {
                       />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>上游类型</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>协议</div>
                       <ModernSelect
                         size="sm"
                         data-testid={`payload-rule-protocol-${index + 1}`}
                         value={rule.protocol}
                         onChange={(value) => updatePayloadVisualRule(rule.id, { protocol: String(value || '') })}
                         options={PAYLOAD_RULE_PROTOCOL_OPTIONS}
-                        placeholder="全部上游类型"
+                        placeholder="全部协议"
                       />
                     </div>
                     <div>

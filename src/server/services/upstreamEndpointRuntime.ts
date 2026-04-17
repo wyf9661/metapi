@@ -1,6 +1,10 @@
 export {
   buildClaudeCountTokensUpstreamRequest,
   buildUpstreamEndpointRequest,
+} from './upstreamRequestBuilder.js';
+export type { UpstreamEndpoint } from '../proxy-core/orchestration/upstreamRequest.js';
+export {
   resolveUpstreamEndpointCandidates,
-  type UpstreamEndpoint,
-} from '../routes/proxy/upstreamEndpoint.js';
+  type EndpointPreference,
+  type EndpointDerivationHints,
+} from './upstreamEndpointDerivation.js';

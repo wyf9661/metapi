@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { config } from '../../config.js';
+import { config } from '../config.js';
 import { detectProxyFailure } from './proxyFailureJudge.js';
 
 describe('detectProxyFailure (empty content)', () => {

@@ -5,6 +5,8 @@ import { tokenRouter } from '../../services/tokenRouter.js';
 import { reportProxyAllFailed } from '../../services/alertService.js';
 import { hasProxyUsagePayload, mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { type DownstreamFormat } from '../../transformers/shared/normalized.js';
+import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transformers/shared/endpointCompatibility.js';
+import { shouldForceResponsesUpstreamStream } from '../capabilities/responsesCompact.js';
 import {
   buildClaudeCountTokensUpstreamRequest,
   buildUpstreamEndpointRequest,
@@ -21,7 +23,7 @@ import {
   recordDownstreamCostUsage,
 } from '../../routes/proxy/downstreamPolicy.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
-import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
+import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
 import { anthropicMessagesTransformer } from '../../transformers/anthropic/messages/index.js';
 import { shouldPreferResponsesForAnthropicContinuation } from '../../transformers/anthropic/messages/compatibility.js';
@@ -39,11 +41,11 @@ import {
   collectResponsesFinalPayloadFromSseText,
   createSingleChunkStreamReader,
   looksLikeResponsesSseText,
-} from '../../routes/proxy/responsesSseFinal.js';
+} from '../runtime/responsesSseFinal.js';
 import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
-} from '../../routes/proxy/geminiCliCompat.js';
+} from '../../transformers/gemini/generate-content/cliBridge.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 import { getObservedResponseMeta } from '../firstByteTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
@@ -88,17 +90,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function prioritizeEndpointCandidate(
-  candidates: Array<'chat' | 'messages' | 'responses'>,
-  preferred: 'chat' | 'messages' | 'responses',
-): Array<'chat' | 'messages' | 'responses'> {
-  if (!candidates.includes(preferred)) return candidates;
-  return [
-    preferred,
-    ...candidates.filter((candidate) => candidate !== preferred),
-  ];
 }
 
 function finalizeRetryAsUpstreamFailure(status: number, message: string) {
@@ -292,11 +283,11 @@ export async function handleChatSurfaceRequest(
           conversationFileSummary,
           wantsContinuationAwareResponses,
         },
+        {
+          oauthProvider: oauth?.provider,
+        },
       ),
     ];
-    if (oauth?.provider === 'codex' && downstreamFormat === 'openai') {
-      endpointCandidates = prioritizeEndpointCandidate(endpointCandidates, 'responses');
-    }
     const endpointRuntimeContext = {
       siteId: selected.site.id,
       modelName,
@@ -328,11 +319,15 @@ export async function handleChatSurfaceRequest(
       })
     );
     const executeEndpointResultForSiteApiBaseUrl = async (siteApiBaseUrl: string) => {
+      const forceResponsesUpstreamStream = shouldForceResponsesUpstreamStream({
+        sitePlatform: selected.site.platform,
+        isCompactRequest: false,
+      });
       const buildEndpointRequest = (
         endpoint: 'chat' | 'messages' | 'responses',
         options: { forceNormalizeClaudeBody?: boolean } = {},
       ) => {
-        const upstreamStream = isStream || (isCodexSite && endpoint === 'responses');
+        const upstreamStream = isStream || (forceResponsesUpstreamStream && endpoint === 'responses');
         const endpointRequest = buildUpstreamEndpointRequest({
           endpoint,
           modelName,
@@ -369,7 +364,7 @@ export async function handleChatSurfaceRequest(
         modelName,
         requestedModelHint: requestedModel,
         sitePlatform: selected.site.platform,
-        isStream: isStream || isCodexSite,
+        isStream: isStream || forceResponsesUpstreamStream,
         buildRequest: ({ endpoint, forceNormalizeClaudeBody }) => buildEndpointRequest(
           endpoint,
           { forceNormalizeClaudeBody },
@@ -455,6 +450,10 @@ export async function handleChatSurfaceRequest(
         },
         shouldDowngrade: endpointStrategy.shouldDowngrade,
         onDowngrade: async (ctx) => {
+          promoteRequiredEndpointCandidateAfterProtocolError(endpointCandidates, {
+            currentEndpoint: ctx.request.endpoint,
+            upstreamErrorText: ctx.rawErrText,
+          });
           await safeUpdateSurfaceProxyDebugAttempt(debugTrace, debugAttemptBase + ctx.endpointIndex, {
             downgradeDecision: true,
             downgradeReason: ctx.errText,
@@ -1183,6 +1182,10 @@ export async function handleClaudeCountTokensSurfaceRequest(
       modelName,
       'claude',
       requestedModel,
+      undefined,
+      {
+        requestKind: 'claude-count-tokens',
+      },
     );
     await safeUpdateSurfaceProxyDebugCandidates(debugTrace, {
       endpointCandidates,
@@ -1194,7 +1197,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         countTokens: true,
       },
     });
-    if (!endpointCandidates.includes('messages')) {
+    if (endpointCandidates.length === 0) {
       if (canRetryChannelSelection(retryCount, forcedChannelId)) {
         retryCount += 1;
         continue;

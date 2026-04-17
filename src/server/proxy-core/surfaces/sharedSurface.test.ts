@@ -50,11 +50,11 @@ vi.mock('../../services/proxyChannelCoordinator.js', () => ({
   },
 }));
 
-vi.mock('../../services/modelService.js', () => ({
+vi.mock('../../services/routeRefreshWorkflow.js', () => ({
   refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
 }));
 
-vi.mock('../../routes/proxy/logPathMeta.js', () => ({
+vi.mock('../../services/proxyLogMessage.js', () => ({
   composeProxyLogMessage: (...args: unknown[]) => composeProxyLogMessageMock(...args),
 }));
 
@@ -71,7 +71,7 @@ vi.mock('../../services/siteProxy.js', () => ({
   withSiteRecordProxyRequestInit: (...args: unknown[]) => withSiteRecordProxyRequestInitMock(...args),
 }));
 
-vi.mock('../../routes/proxy/runtimeExecutor.js', () => ({
+vi.mock('../../services/runtimeDispatch.js', () => ({
   dispatchRuntimeRequest: (...args: unknown[]) => dispatchRuntimeRequestMock(...args),
 }));
 
@@ -98,7 +98,7 @@ vi.mock('../../services/proxyUsageFallbackService.js', () => ({
   resolveProxyUsageWithSelfLogFallback: (...args: unknown[]) => resolveProxyUsageWithSelfLogFallbackMock(...args),
 }));
 
-vi.mock('../../routes/proxy/proxyBilling.js', () => ({
+vi.mock('../../services/proxyBilling.js', () => ({
   resolveProxyLogBilling: (...args: unknown[]) => resolveProxyLogBillingMock(...args),
 }));
 
