@@ -867,7 +867,6 @@ describe('gemini native proxy routes', () => {
     expect(JSON.parse(String(requestInit.body))).toEqual({
       model: 'gpt-4.1',
       stream: false,
-      max_output_tokens: 4096,
       input: [
         {
           type: 'message',

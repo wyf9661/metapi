@@ -100,7 +100,7 @@ describe('proxy route architecture boundaries', () => {
 
   it('keeps codex responses normalization behind transformer helpers', () => {
     const source = readSource('./upstreamEndpoint.ts');
-    expect(source).toContain("from '../../transformers/openai/responses/codexCompatibility.js'");
+    expect(source).toContain("from '../../services/upstreamRequestBuilder.js'");
     expect(source).not.toContain('function ensureCodexResponsesInstructions(');
     expect(source).not.toContain('function ensureCodexResponsesStoreFalse(');
     expect(source).not.toContain('function stripCodexUnsupportedResponsesFields(');

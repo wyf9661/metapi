@@ -1,5 +1,5 @@
 import { existsSync, globSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import config from './config';
@@ -36,11 +36,21 @@ const getAlias = (aliasConfig: unknown, specifier: string): string | undefined =
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 const getExpectedEntry = (hoistedRelativePath: string, pnpmPattern: string) => {
-  const hoistedEntry = resolve(repoRoot, hoistedRelativePath);
-  if (existsSync(hoistedEntry)) return hoistedEntry;
+  let currentRoot = repoRoot;
 
-  const [pnpmEntry] = globSync(resolve(repoRoot, pnpmPattern));
-  return pnpmEntry;
+  while (true) {
+    const hoistedEntry = resolve(currentRoot, hoistedRelativePath);
+    if (existsSync(hoistedEntry)) return hoistedEntry;
+
+    const [pnpmEntry] = globSync(resolve(currentRoot, pnpmPattern));
+    if (pnpmEntry) return pnpmEntry;
+
+    const parentRoot = dirname(currentRoot);
+    if (parentRoot === currentRoot) break;
+    currentRoot = parentRoot;
+  }
+
+  return undefined;
 };
 
 describe('docs vitepress config', () => {

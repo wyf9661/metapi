@@ -4,7 +4,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { config } from '../../config.js';
 
 const fetchMock = vi.fn();
 const undiciAgentCtorMock = vi.fn();
@@ -65,19 +64,23 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let rebuildRoutesOnly: RouteRefreshWorkflowModule['rebuildRoutesOnly'];
+  let config: typeof import('../../config.js').config;
   let dataDir = '';
 
   beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-oauth-routes-'));
     process.env.DATA_DIR = dataDir;
+    vi.resetModules();
 
     await import('../../db/migrate.js');
     const dbModule = await import('../../db/index.js');
     const routesModule = await import('./oauth.js');
     const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
+    const configModule = await import('../../config.js');
     db = dbModule.db;
     schema = dbModule.schema;
     rebuildRoutesOnly = routeRefreshWorkflow.rebuildRoutesOnly;
+    config = configModule.config;
 
     app = Fastify();
     await app.register(routesModule.oauthRoutes);

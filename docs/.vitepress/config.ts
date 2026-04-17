@@ -1,17 +1,28 @@
 import { existsSync, globSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 import { withMermaid } from 'vitepress-plugin-mermaid';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
-const resolveDependencyEntry = (hoistedRelativePath: string, pnpmPattern: string) => {
-  const hoistedEntry = resolve(repoRoot, hoistedRelativePath);
-  if (existsSync(hoistedEntry)) return hoistedEntry;
 
-  const [pnpmEntry] = globSync(resolve(repoRoot, pnpmPattern));
-  return pnpmEntry;
-};
+function resolveDependencyEntry(hoistedRelativePath: string, pnpmPattern: string) {
+  let currentRoot = repoRoot;
+
+  while (true) {
+    const hoistedEntry = resolve(currentRoot, hoistedRelativePath);
+    if (existsSync(hoistedEntry)) return hoistedEntry;
+
+    const [pnpmEntry] = globSync(resolve(currentRoot, pnpmPattern));
+    if (pnpmEntry) return pnpmEntry;
+
+    const parentRoot = dirname(currentRoot);
+    if (parentRoot === currentRoot) break;
+    currentRoot = parentRoot;
+  }
+
+  return undefined;
+}
 
 const dayjsEsmEntry = resolveDependencyEntry(
   'node_modules/dayjs/esm/index.js',

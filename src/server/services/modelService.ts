@@ -818,7 +818,7 @@ export async function refreshModelsForAccount(
         `api token discovery timeout (${Math.round(API_TOKEN_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
       );
       if (discoveredApiToken && !isMaskedTokenValue(discoveredApiToken)) {
-        ensureDefaultTokenForAccount(account.id, discoveredApiToken, { name: 'default', source: 'sync' });
+        await ensureDefaultTokenForAccount(account.id, discoveredApiToken, { name: 'default', source: 'sync' });
         await db.update(schema.accounts).set({
           apiToken: discoveredApiToken,
           updatedAt: new Date().toISOString(),
@@ -846,7 +846,7 @@ export async function refreshModelsForAccount(
   if (usesManagedTokens && enabledTokens.length === 0) {
     const fallback = discoveredApiToken || account.apiToken || null;
     if (fallback) {
-      ensureDefaultTokenForAccount(account.id, fallback, { name: 'default', source: 'legacy' });
+      await ensureDefaultTokenForAccount(account.id, fallback, { name: 'default', source: 'legacy' });
       enabledTokens = await db.select()
         .from(schema.accountTokens)
         .where(and(
