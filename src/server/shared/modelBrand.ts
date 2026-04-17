@@ -777,30 +777,46 @@ export function getAllBrandNames(): string[] {
   return BRAND_DEFINITIONS.map((brand) => brand.name);
 }
 
-export function getBrand(modelName: string): BrandInfo | null {
+function toBrandInfo(brand: BrandDefinition): BrandInfo {
+  return {
+    name: brand.name,
+    icon: brand.icon,
+    color: brand.color,
+  };
+}
+
+export function getMatchingBrands(modelName: string): BrandInfo[] {
   const context = buildMatchContext(modelName);
+  const matches: BrandInfo[] = [];
+  const seen = new Set<string>();
+
+  const add = (brand: BrandDefinition) => {
+    if (seen.has(brand.name)) return;
+    seen.add(brand.name);
+    matches.push(toBrandInfo(brand));
+  };
 
   for (const definition of BRAND_DEFINITIONS) {
     if (definition.rules.some((rule) => matchesRule(context, rule))) {
-      return {
-        name: definition.name,
-        icon: definition.icon,
-        color: definition.color,
-      };
+      add(definition);
     }
   }
 
   for (const candidate of context.candidates) {
     for (const rule of BRAND_FALLBACK_BOUNDARY_RULES) {
       if (rule.boundaryRegex.test(candidate)) {
-        return {
-          name: rule.brand.name,
-          icon: rule.brand.icon,
-          color: rule.brand.color,
-        };
+        add(rule.brand);
       }
     }
   }
 
-  return null;
+  return matches;
+}
+
+export function getMatchingBrandNames(modelName: string): string[] {
+  return getMatchingBrands(modelName).map((brand) => brand.name);
+}
+
+export function getBrand(modelName: string): BrandInfo | null {
+  return getMatchingBrands(modelName)[0] || null;
 }
