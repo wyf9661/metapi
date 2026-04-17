@@ -319,7 +319,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Keep PR audit informational so build/test/schema remain the merge gate.
-    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -335,7 +334,15 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: |
+          set +e
+          npm audit --omit=dev --audit-level=high
+          status=$?
+          if [ "$status" -ne 0 ] && [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "::warning::npm audit reported production dependency vulnerabilities; PR audit stays informational."
+            exit 0
+          fi
+          exit "$status"
 
   publish-docker-arch:
     name: Publish Docker Image (${{ matrix.arch }})
