@@ -42,6 +42,29 @@ describe('detectCliProfile', () => {
     });
   });
 
+  it('treats conversation_id as a Codex continuation marker when session_id is absent', () => {
+    expect(detectCliProfile({
+      downstreamPath: '/v1/responses',
+      headers: {
+        conversation_id: 'codex-conversation-123',
+      },
+    })).toEqual({
+      id: 'codex',
+      sessionId: 'codex-conversation-123',
+      traceHint: 'codex-conversation-123',
+      clientAppId: 'codex',
+      clientAppName: 'Codex',
+      clientConfidence: 'heuristic',
+      capabilities: {
+        supportsResponsesCompact: true,
+        supportsResponsesWebsocketIncremental: true,
+        preservesContinuation: true,
+        supportsCountTokens: false,
+        echoesTurnState: true,
+      },
+    });
+  });
+
   it('detects broader Codex official-client headers from user-agent and originator prefixes', () => {
     expect(detectCliProfile({
       downstreamPath: '/v1/responses',

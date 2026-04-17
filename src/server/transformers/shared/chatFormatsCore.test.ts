@@ -4,6 +4,7 @@ import {
   convertClaudeRequestToOpenAiBody,
   createClaudeDownstreamContext,
   createStreamTransformContext,
+  normalizeUpstreamFinalResponse,
   normalizeUpstreamStreamEvent,
   serializeNormalizedStreamEvent,
 } from './chatFormatsCore.js';
@@ -338,6 +339,50 @@ describe('chatFormatsCore inline think parsing', () => {
     });
   });
 
+  it('maps response.incomplete to stop unless the incomplete reason is max_output_tokens', () => {
+    const context = createStreamTransformContext('gpt-test');
+
+    expect(normalizeUpstreamStreamEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'resp_incomplete_stop',
+        status: 'incomplete',
+      },
+    }, context, 'gpt-test')).toEqual({
+      finishReason: 'stop',
+      done: true,
+    });
+
+    expect(normalizeUpstreamStreamEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'resp_incomplete_length',
+        status: 'incomplete',
+        incomplete_details: {
+          reason: 'max_output_tokens',
+        },
+      },
+    }, context, 'gpt-test')).toEqual({
+      finishReason: 'length',
+      done: true,
+    });
+  });
+
+  it('maps response.failed to a stop finish reason instead of inventing a chat error finish reason', () => {
+    const context = createStreamTransformContext('gpt-test');
+
+    expect(normalizeUpstreamStreamEvent({
+      type: 'response.failed',
+      response: {
+        id: 'resp_failed_stop',
+        status: 'failed',
+      },
+    }, context, 'gpt-test')).toEqual({
+      finishReason: 'stop',
+      done: true,
+    });
+  });
+
   it('does not backfill historical tool identity into later arguments-only deltas', () => {
     const context = createStreamTransformContext('gpt-test');
     const claudeContext = createClaudeDownstreamContext();
@@ -569,6 +614,38 @@ describe('chatFormatsCore inline think parsing', () => {
         name: 'MyTool',
         argumentsDelta: '{"path":"README.md"}',
       }],
+    });
+  });
+
+  it('maps final Responses payload statuses to sub2api-like chat finish reasons', () => {
+    expect(normalizeUpstreamFinalResponse({
+      id: 'resp_final_stop',
+      object: 'response',
+      status: 'incomplete',
+      output: [],
+    }, 'gpt-test')).toMatchObject({
+      finishReason: 'stop',
+    });
+
+    expect(normalizeUpstreamFinalResponse({
+      id: 'resp_final_length',
+      object: 'response',
+      status: 'incomplete',
+      incomplete_details: {
+        reason: 'max_output_tokens',
+      },
+      output: [],
+    }, 'gpt-test')).toMatchObject({
+      finishReason: 'length',
+    });
+
+    expect(normalizeUpstreamFinalResponse({
+      id: 'resp_final_failed',
+      object: 'response',
+      status: 'failed',
+      output: [],
+    }, 'gpt-test')).toMatchObject({
+      finishReason: 'stop',
     });
   });
 });

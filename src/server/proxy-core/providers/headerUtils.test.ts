@@ -95,6 +95,7 @@ describe('provider header utils', () => {
 
     expect(headers['anthropic-version']).toBe('2023-06-01');
     expect(headers['anthropic-beta']).toContain('claude-code-20250219');
+    expect(headers['anthropic-beta']).toContain('fine-grained-tool-streaming-2025-05-14');
     expect(headers['anthropic-beta']).toContain('custom-beta');
     expect(headers.Authorization).toBe('Bearer oauth-token');
     expect(headers.authorization).toBeUndefined();

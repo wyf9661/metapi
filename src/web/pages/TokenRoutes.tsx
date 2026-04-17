@@ -93,7 +93,7 @@ const EMPTY_ROUTE_FORM: RouteEditorForm = {
   sourceRouteIds: [],
   advancedOpen: false,
 };
-const DESKTOP_DETAIL_COLLAPSE_MS = 180;
+const DESKTOP_DETAIL_COLLAPSE_MS = 200;
 
 function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): string {
   if (value === 'round_robin') return '已切换为轮询策略';
@@ -150,12 +150,10 @@ export function DesktopDetailPanelPresence({
   if (!shouldRender) return null;
   return (
     <div
-      className={`route-detail-panel-presence anim-collapse route-panel-collapse ${isOpen ? 'is-open' : ''} ${isClosing ? 'is-closing' : ''}`.trim()}
+      className={`route-detail-panel-presence ${isOpen ? 'is-open' : ''} ${isClosing ? 'is-closing' : ''}`.trim()}
       style={{ gridColumn: '1 / -1' }}
     >
-      <div className="anim-collapse-inner">
-        {children(isClosing)}
-      </div>
+      {children(isClosing)}
     </div>
   );
 }

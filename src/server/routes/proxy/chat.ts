@@ -7,6 +7,8 @@ import {
 export async function chatProxyRoute(app: FastifyInstance) {
   app.post('/v1/chat/completions', async (request: FastifyRequest, reply: FastifyReply) =>
     handleChatSurfaceRequest(request, reply, 'openai'));
+  app.post('/chat/completions', async (request: FastifyRequest, reply: FastifyReply) =>
+    handleChatSurfaceRequest(request, reply, 'openai'));
 }
 
 export async function claudeMessagesProxyRoute(app: FastifyInstance) {

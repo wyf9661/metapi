@@ -1,5 +1,5 @@
 import { type StreamTransformContext } from '../../shared/normalized.js';
-import type { OpenAiResponsesStreamEvent } from './stream.js';
+import type { OpenAiResponsesStreamEvent } from './streamBridge.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

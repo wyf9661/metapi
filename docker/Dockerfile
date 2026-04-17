@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # Keep the Docker base on Node 22 because the official Node 24/25 slim images
 # no longer publish linux/arm/v7 manifests, which breaks our armv7 Docker jobs.
 FROM node:22-bookworm-slim AS builder
@@ -12,12 +11,12 @@ RUN apt-get update \
 ENV PYTHON=/usr/bin/python3
 
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund
 RUN npm rebuild esbuild sharp better-sqlite3 --no-audit --no-fund
 
 COPY . .
 RUN npm run build:web && npm run build:server
-RUN --mount=type=cache,target=/root/.npm npm prune --omit=dev --no-audit --no-fund
+RUN npm prune --omit=dev --no-audit --no-fund
 
 FROM node:22-bookworm-slim
 

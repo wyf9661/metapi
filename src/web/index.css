@@ -6764,14 +6764,13 @@ textarea {
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
   contain: layout paint;
+  will-change: transform, opacity, clip-path;
+  backface-visibility: hidden;
+  transform-origin: top center;
 }
 
 .route-detail-panel-presence {
   overflow: clip;
-  contain: layout paint;
-  opacity: 1;
-  transform: none;
-  transition: grid-template-rows 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .route-detail-panel-presence.is-closing {
@@ -6779,18 +6778,44 @@ textarea {
 }
 
 .route-detail-panel-presence.is-open .route-card-detail-panel {
-  animation: route-detail-panel-in 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: route-detail-panel-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.route-detail-panel-presence.is-closing .route-card-detail-panel {
+  animation: route-detail-panel-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 @keyframes route-detail-panel-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    clip-path: inset(0 0 100% 0 round 16px);
+    transform: translateY(-8px) scale(0.992);
+  }
+
+  62% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 16px);
+    transform: translateY(0) scale(1.006);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    clip-path: inset(0 0 0 0 round 16px);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes route-detail-panel-out {
+  from {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 16px);
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0 round 16px);
+    transform: translateY(-6px) scale(0.994);
   }
 }
 

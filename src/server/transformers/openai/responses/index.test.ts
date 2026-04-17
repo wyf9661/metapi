@@ -72,6 +72,41 @@ describe('openAiResponsesTransformer.inbound', () => {
     });
   });
 
+  it('round-trips continuation turnState through responses metadata bridging', () => {
+    const built = openAiResponsesTransformer.buildProtocolRequest({
+      operation: 'generate',
+      surface: 'openai-responses',
+      cliProfile: 'codex',
+      requestedModel: 'gpt-5',
+      stream: false,
+      messages: [{ role: 'user', parts: [{ type: 'text', text: 'hello' }] }],
+      continuation: {
+        turnState: 'turn-state-responses-1',
+      },
+    });
+
+    expect(built).toMatchObject({
+      metadata: {
+        metapi_turn_state: 'turn-state-responses-1',
+      },
+    });
+
+    const parsed = openAiResponsesTransformer.parseRequest({
+      model: 'gpt-5',
+      input: 'hello',
+      metadata: {
+        metapi_turn_state: 'turn-state-responses-1',
+      },
+    });
+
+    expect(parsed.error).toBeUndefined();
+    expect(parsed.value).toMatchObject({
+      continuation: {
+        turnState: 'turn-state-responses-1',
+      },
+    });
+  });
+
   it('returns a protocol request envelope with a normalized responses body', () => {
     const result = openAiResponsesTransformer.transformRequest({
       model: 'gpt-5',

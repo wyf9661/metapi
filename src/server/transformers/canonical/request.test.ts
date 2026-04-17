@@ -103,6 +103,98 @@ describe('canonical request helpers', () => {
     });
   });
 
+  it('collects continuation session ids from OpenAI-compatible metadata and custom session fields', () => {
+    const request = canonicalRequestFromOpenAiBody({
+      body: {
+        model: 'gpt-5',
+        stream: false,
+        session_id: 'session-body-1',
+        conversation_id: 'conversation-body-1',
+        metadata: {
+          user_id: 'session-metadata-1',
+        },
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      surface: 'openai-chat',
+    });
+
+    expect(request).toMatchObject({
+      continuation: {
+        sessionId: 'session-metadata-1',
+      },
+    });
+  });
+
+  it('collects continuation turnState from OpenAI-compatible metadata namespace', () => {
+    const request = canonicalRequestFromOpenAiBody({
+      body: {
+        model: 'gpt-5',
+        stream: false,
+        metadata: {
+          metapi_turn_state: 'turn-state-1',
+        },
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      surface: 'openai-chat',
+    });
+
+    expect(request).toMatchObject({
+      continuation: {
+        turnState: 'turn-state-1',
+      },
+    });
+  });
+
+  it('materializes continuation session ids into metadata.user_id without overwriting explicit metadata', () => {
+    const body = canonicalRequestToOpenAiChatBody({
+      operation: 'generate',
+      surface: 'anthropic-messages',
+      cliProfile: 'claude_code',
+      requestedModel: 'claude-sonnet-4-5',
+      stream: false,
+      messages: [{ role: 'user', parts: [{ type: 'text', text: 'hello' }] }],
+      continuation: {
+        sessionId: 'session-bridge-1',
+        promptCacheKey: 'cache-1',
+      },
+      metadata: {
+        existing: true,
+      },
+    });
+
+    expect(body).toMatchObject({
+      metadata: {
+        existing: true,
+        user_id: 'session-bridge-1',
+      },
+      prompt_cache_key: 'cache-1',
+    });
+  });
+
+  it('materializes continuation turnState into metadata without overwriting explicit metadata', () => {
+    const body = canonicalRequestToOpenAiChatBody({
+      operation: 'generate',
+      surface: 'openai-chat',
+      cliProfile: 'codex',
+      requestedModel: 'gpt-5',
+      stream: true,
+      messages: [{ role: 'user', parts: [{ type: 'text', text: 'hello' }] }],
+      continuation: {
+        turnState: 'turn-state-2',
+      },
+      metadata: {
+        existing: true,
+      },
+    });
+
+    expect(body).toMatchObject({
+      metadata: {
+        existing: true,
+        metapi_turn_state: 'turn-state-2',
+      },
+    });
+  });
+
   it('parses anthropic-shaped tools from compatibility bodies', () => {
     const request = canonicalRequestFromOpenAiBody({
       body: {

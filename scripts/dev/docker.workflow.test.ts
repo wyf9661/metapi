@@ -34,6 +34,13 @@ describe('docker workflows', () => {
     expect(dockerfile).toContain('FROM node:22-bookworm-slim');
   });
 
+  it('avoids buildkit-only frontend syntax so managed docker builders can parse it reliably', () => {
+    const dockerfile = readFileSync(resolve(process.cwd(), 'docker/Dockerfile'), 'utf8');
+
+    expect(dockerfile).not.toContain('# syntax=docker/dockerfile:');
+    expect(dockerfile).not.toContain('RUN --mount=type=cache');
+  });
+
   it('keeps server docker builds isolated from desktop packaging dependencies', () => {
     const dockerfile = readFileSync(resolve(process.cwd(), 'docker/Dockerfile'), 'utf8');
 

@@ -71,6 +71,45 @@ describe('openAiChatTransformer.inbound', () => {
     });
   });
 
+  it('round-trips continuation turnState through chat metadata bridging', () => {
+    const built = openAiChatTransformer.buildProtocolRequest({
+      operation: 'generate',
+      surface: 'openai-chat',
+      cliProfile: 'codex',
+      requestedModel: 'gpt-5',
+      stream: false,
+      messages: [{ role: 'user', parts: [{ type: 'text', text: 'hello' }] }],
+      continuation: {
+        sessionId: 'chat-session-1',
+        turnState: 'turn-state-chat-1',
+      },
+    });
+
+    expect(built).toMatchObject({
+      metadata: {
+        user_id: 'chat-session-1',
+        metapi_turn_state: 'turn-state-chat-1',
+      },
+    });
+
+    const parsed = openAiChatTransformer.parseRequest({
+      model: 'gpt-5',
+      messages: [{ role: 'user', content: 'hello' }],
+      metadata: {
+        user_id: 'chat-session-1',
+        metapi_turn_state: 'turn-state-chat-1',
+      },
+    });
+
+    expect(parsed.error).toBeUndefined();
+    expect(parsed.value).toMatchObject({
+      continuation: {
+        sessionId: 'chat-session-1',
+        turnState: 'turn-state-chat-1',
+      },
+    });
+  });
+
   it('captures chat request metadata fields without changing upstream body', () => {
     const result = openAiChatTransformer.transformRequest({
       model: 'gpt-5',
@@ -277,6 +316,65 @@ describe('openAiChatTransformer.outbound', () => {
     expect((normalized as any).citations).toEqual(['https://shared.example/citation']);
   });
 
+  it('maps final Responses payload terminal statuses to sub2api-like chat finish reasons', () => {
+    const incompleteStop = openAiChatTransformer.transformFinalResponse({
+      id: 'resp_final_stop',
+      object: 'response',
+      model: 'gpt-5',
+      status: 'incomplete',
+      output: [],
+    }, 'gpt-5');
+
+    const incompleteLength = openAiChatTransformer.transformFinalResponse({
+      id: 'resp_final_length',
+      object: 'response',
+      model: 'gpt-5',
+      status: 'incomplete',
+      incomplete_details: {
+        reason: 'max_output_tokens',
+      },
+      output: [],
+    }, 'gpt-5');
+
+    const failedStop = openAiChatTransformer.transformFinalResponse({
+      id: 'resp_final_failed',
+      object: 'response',
+      model: 'gpt-5',
+      status: 'failed',
+      output: [],
+    }, 'gpt-5');
+
+    expect(openAiChatTransformer.serializeFinalResponse(incompleteStop, {
+      promptTokens: 1,
+      completionTokens: 1,
+      totalTokens: 2,
+    })).toMatchObject({
+      choices: [{
+        finish_reason: 'stop',
+      }],
+    });
+
+    expect(openAiChatTransformer.serializeFinalResponse(incompleteLength, {
+      promptTokens: 1,
+      completionTokens: 1,
+      totalTokens: 2,
+    })).toMatchObject({
+      choices: [{
+        finish_reason: 'length',
+      }],
+    });
+
+    expect(openAiChatTransformer.serializeFinalResponse(failedStop, {
+      promptTokens: 1,
+      completionTokens: 1,
+      totalTokens: 2,
+    })).toMatchObject({
+      choices: [{
+        finish_reason: 'stop',
+      }],
+    });
+  });
+
   it('serializes multi-choice chat responses with per-choice annotations, reasoning, tool calls, and shared citations', () => {
     const normalized = openAiChatTransformer.transformFinalResponse({
       id: 'chatcmpl-multi',
@@ -478,6 +576,67 @@ describe('openAiChatTransformer.stream', () => {
         prompt_tokens_details: { cached_tokens: 3 },
         completion_tokens_details: { reasoning_tokens: 2 },
       },
+    });
+  });
+
+  it('serializes response.incomplete terminal events with sub2api-like finish reasons', () => {
+    const context = openAiChatTransformer.createStreamContext('gpt-5');
+
+    const stopEvent = openAiChatTransformer.transformStreamEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'resp-incomplete-stop',
+        model: 'gpt-5',
+        status: 'incomplete',
+      },
+    }, context, 'gpt-5');
+
+    const stopPayloads = parseSsePayloads(
+      openAiChatTransformer.serializeStreamEvent(stopEvent, context, createClaudeDownstreamContext()),
+    );
+
+    expect((stopPayloads[0] as any).choices[0]).toMatchObject({
+      finish_reason: 'stop',
+    });
+
+    const lengthEvent = openAiChatTransformer.transformStreamEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'resp-incomplete-length',
+        model: 'gpt-5',
+        status: 'incomplete',
+        incomplete_details: {
+          reason: 'max_output_tokens',
+        },
+      },
+    }, context, 'gpt-5');
+
+    const lengthPayloads = parseSsePayloads(
+      openAiChatTransformer.serializeStreamEvent(lengthEvent, context, createClaudeDownstreamContext()),
+    );
+
+    expect((lengthPayloads[0] as any).choices[0]).toMatchObject({
+      finish_reason: 'length',
+    });
+  });
+
+  it('serializes response.failed terminal events with stop finish_reason instead of error', () => {
+    const context = openAiChatTransformer.createStreamContext('gpt-5');
+    const event = openAiChatTransformer.transformStreamEvent({
+      type: 'response.failed',
+      response: {
+        id: 'resp-failed-stop',
+        model: 'gpt-5',
+        status: 'failed',
+      },
+    }, context, 'gpt-5');
+
+    const payloads = parseSsePayloads(
+      openAiChatTransformer.serializeStreamEvent(event, context, createClaudeDownstreamContext()),
+    );
+
+    expect((payloads[0] as any).choices[0]).toMatchObject({
+      finish_reason: 'stop',
     });
   });
 

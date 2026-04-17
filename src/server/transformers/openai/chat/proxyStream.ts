@@ -2,8 +2,11 @@ import { anthropicMessagesTransformer } from '../../anthropic/messages/index.js'
 import { createProxyStreamLifecycle } from '../../shared/protocolLifecycle.js';
 import { type DownstreamFormat, type ParsedSseEvent } from '../../shared/normalized.js';
 import { createOpenAiChatAggregateState, applyOpenAiChatStreamEvent, finalizeOpenAiChatAggregate } from './aggregator.js';
-import { openAiChatOutbound } from './outbound.js';
-import { openAiChatStream } from './stream.js';
+import {
+  buildNormalizedFinalToOpenAiChatChunks,
+  normalizeOpenAiChatFinalToNormalized,
+} from './responseBridge.js';
+import { openAiChatStream } from './streamBridge.js';
 import { config } from '../../../config.js';
 
 type StreamReader = {
@@ -50,7 +53,7 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     status: 'completed',
     errorMessage: null,
   };
-  let terminalNormalizedFinal: ReturnType<typeof openAiChatOutbound.normalizeFinal> | null = null;
+  let terminalNormalizedFinal: ReturnType<typeof normalizeOpenAiChatFinalToNormalized> | null = null;
   let forwardedDownstreamOutput = false;
   const pendingWrites: string[] = [];
 
@@ -206,7 +209,7 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
       const needsTerminalFinishChunk = Array.from(chatAggregateState.choices.values())
         .some((choice) => !choice.finishReason);
       if (needsTerminalFinishChunk) {
-        const terminalChunk = openAiChatOutbound.buildSyntheticChunks(
+        const terminalChunk = buildNormalizedFinalToOpenAiChatChunks(
           finalizeOpenAiChatAggregate(chatAggregateState, {
             id: streamContext.id,
             model: streamContext.model,
@@ -306,14 +309,13 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
         }
       }
       if (input.downstreamFormat === 'openai') {
-        const normalizedFinal = openAiChatOutbound.normalizeFinal(payload, input.modelName, fallbackText);
+        const normalizedFinal = normalizeOpenAiChatFinalToNormalized(payload, input.modelName, fallbackText);
         terminalNormalizedFinal = normalizedFinal;
         streamContext.id = normalizedFinal.id;
         streamContext.model = normalizedFinal.model;
         streamContext.created = normalizedFinal.created;
         emitLines(
-          openAiChatOutbound
-            .buildSyntheticChunks(normalizedFinal)
+          buildNormalizedFinalToOpenAiChatChunks(normalizedFinal)
             .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`),
           { meaningful: true },
         );

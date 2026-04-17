@@ -230,7 +230,7 @@ describe('TokenRoutes desktop detail panel', () => {
         && String(node.props.className || '').includes('route-detail-panel-presence')
       ));
       expect(detailPanelPresence).toHaveLength(1);
-      expect(String(detailPanelPresence[0]!.props.className || '')).toContain('anim-collapse');
+      expect(String(detailPanelPresence[0]!.props.className || '')).not.toContain('anim-collapse');
       expect(String(detailPanelPresence[0]!.props.className || '')).not.toContain('is-open');
       expect(String(detailPanelPresence[0]!.props.className || '')).toContain('is-closing');
       const detailPanelsWhileClosing = root.root.findAll((node) => (

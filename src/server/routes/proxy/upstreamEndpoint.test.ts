@@ -25,6 +25,8 @@ import {
   MODEL_KEY_HASH_SUFFIX_LENGTH,
 } from '../../services/upstreamEndpointRuntimeMemory.js';
 
+const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful coding assistant.';
+
 const baseContext = {
   site: {
     id: 1,
@@ -146,7 +148,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'gpt-5.3',
       'openai',
     );
-    expect(openaiOrder).toEqual(['chat', 'responses', 'messages']);
+    expect(openaiOrder).toEqual(['responses', 'chat', 'messages']);
 
     const openaiResponsesOrder = await resolveUpstreamEndpointCandidates(
       {
@@ -166,7 +168,17 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'claude-opus-4-6',
       'openai',
     );
-    expect(openaiClaudeOrder).toEqual(['messages', 'chat', 'responses']);
+    expect(openaiClaudeOrder).toEqual(['responses', 'chat', 'messages']);
+
+    const antigravityOrder = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'antigravity' },
+      },
+      'claude-opus-4-6',
+      'openai',
+    );
+    expect(antigravityOrder).toEqual(['messages']);
 
     const claudeOrder = await resolveUpstreamEndpointCandidates(
       {
@@ -203,7 +215,63 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
-    expect(order).toEqual(['responses', 'messages', 'chat']);
+    expect(order).toEqual(['responses', 'chat', 'messages']);
+  });
+
+  it('derives responses-only candidates for compact requests before surface fallback logic', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'responses',
+      undefined,
+      undefined,
+      {
+        requestKind: 'responses-compact',
+      },
+    );
+
+    expect(order).toEqual(['responses']);
+  });
+
+  it('derives responses-only candidates when the request requires native responses file-url handling', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'responses',
+      undefined,
+      {
+        hasNonImageFileInput: true,
+      },
+      {
+        requiresNativeResponsesFileUrl: true,
+      },
+    );
+
+    expect(order).toEqual(['responses']);
+  });
+
+  it('derives responses-first candidates for codex oauth hints without surface-local reordering', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'openai',
+      undefined,
+      undefined,
+      {
+        oauthProvider: 'codex',
+      },
+    );
+
+    expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
   it('prefers document-capable endpoints when downstream content contains non-image files', async () => {
@@ -547,7 +615,63 @@ describe('resolveUpstreamEndpointCandidates', () => {
     expect(order).toEqual(['responses', 'messages']);
   });
 
-  it('keeps claude models messages-first even when openai platform catalog prefers chat', async () => {
+  it('learns to prefer /v1/messages after a chat endpoint says messages is required', async () => {
+    const memoryWrite = recordUpstreamEndpointFailure({
+      siteId: baseContext.site.id,
+      endpoint: 'chat',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+      status: 400,
+      errorText: '{"error":{"message":"messages is required","type":"upstream_error"}}',
+    });
+    expect(memoryWrite).toMatchObject({
+      action: 'failure',
+      endpoint: 'chat',
+      blockedEndpoint: 'chat',
+      preferredEndpoint: 'messages',
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'openai',
+    );
+
+    expect(order).toEqual(['messages', 'responses']);
+  });
+
+  it('learns to prefer /v1/responses after a non-responses endpoint says input is required', async () => {
+    const memoryWrite = recordUpstreamEndpointFailure({
+      siteId: baseContext.site.id,
+      endpoint: 'chat',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.3',
+      status: 400,
+      errorText: '{"error":{"message":"input is required","type":"invalid_request_error"}}',
+    });
+    expect(memoryWrite).toMatchObject({
+      action: 'failure',
+      endpoint: 'chat',
+      blockedEndpoint: 'chat',
+      preferredEndpoint: 'responses',
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'gpt-5.3',
+      'openai',
+    );
+
+    expect(order).toEqual(['responses', 'messages']);
+  });
+
+  it('keeps openai platform responses-first even when the catalog only advertises generic openai/chat support', async () => {
     fetchModelPricingCatalogMock.mockResolvedValue({
       models: [
         {
@@ -567,7 +691,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'openai',
     );
 
-    expect(order).toEqual(['messages', 'chat', 'responses']);
+    expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
   it('keeps anyrouter messages-first special case', async () => {
@@ -623,7 +747,8 @@ describe('resolveUpstreamEndpointCandidates', () => {
     expect(isEndpointDowngradeError(404, '{"error":{"message":"Not Found","type":"not_found_error"}}')).toBe(true);
     expect(isEndpointDowngradeError(405, '{"error":{"message":"Method Not Allowed"}}')).toBe(true);
     expect(isEndpointDowngradeError(400, '{"error":{"message":"unsupported endpoint","type":"invalid_request_error"}}')).toBe(true);
-    expect(isEndpointDowngradeError(400, '{"error":{"message":"","type":"upstream_error"}}')).toBe(true);
+    expect(isEndpointDowngradeError(400, '{"error":{"message":"","type":"upstream_error"}}')).toBe(false);
+    expect(isEndpointDowngradeError(400, '{"error":{"message":"upstream_error: unsupported endpoint /v1/responses","type":"upstream_error"}}')).toBe(true);
     expect(isEndpointDowngradeError(400, '{"error":{"message":"openai_error","type":"bad_response_status_code"}}')).toBe(true);
     expect(isEndpointDowngradeError(415, '{"error":{"message":"Unsupported Media Type: Only \\"application/json\\" is allowed"}}')).toBe(true);
   });
@@ -817,7 +942,7 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.headers['User-Agent']).toBe('codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464');
     expect(request.headers.Accept).toBe('application/json');
     expect(request.headers.Connection).toBe('Keep-Alive');
-    expect(request.body.instructions).toBe('');
+    expect(request.body.instructions).toBe(CODEX_DEFAULT_INSTRUCTIONS);
     expect(request.body.prompt_cache_key).toBeUndefined();
     expect(request.body.stream).toBe(false);
     expect(request.body.store).toBe(false);
@@ -956,7 +1081,7 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.headers.Session_id).toMatch(/^[0-9a-f-]{36}$/i);
     expect(request.headers.Conversation_id).toBe(request.headers.Session_id);
     expect(request.body.prompt_cache_key).toBeUndefined();
-    expect(request.body.instructions).toBe('');
+    expect(request.body.instructions).toBe(CODEX_DEFAULT_INSTRUCTIONS);
     expect(request.body.stream).toBe(false);
     expect(request.body.store).toBe(false);
     expect(request.body.parallel_tool_calls).toBe(false);
@@ -1300,7 +1425,7 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.headers['Accept-Encoding']).toBe('gzip, deflate, br, zstd');
   });
 
-  it('converts system roles to developer in native codex responses bodies', () => {
+  it('extracts system input into top-level instructions in native codex responses bodies', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'responses',
       modelName: 'gpt-5.4',
@@ -1312,6 +1437,7 @@ describe('buildUpstreamEndpointRequest', () => {
       downstreamFormat: 'responses',
       responsesOriginalBody: {
         model: 'gpt-5.4',
+        instructions: 'keep edits narrow',
         input: [
           {
             type: 'message',
@@ -1330,15 +1456,11 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.body.input).toEqual([
       {
         type: 'message',
-        role: 'developer',
-        content: [{ type: 'input_text', text: 'be careful' }],
-      },
-      {
-        type: 'message',
         role: 'user',
         content: [{ type: 'input_text', text: 'hello' }],
       },
     ]);
+    expect(request.body.instructions).toBe('be careful\n\nkeep edits narrow');
   });
 
   it('normalizes downstream responses input string before forwarding upstream', () => {

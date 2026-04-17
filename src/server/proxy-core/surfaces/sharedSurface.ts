@@ -7,8 +7,8 @@ import type { DownstreamRoutingPolicy } from '../../services/downstreamPolicyTyp
 import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
-import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
-import { resolveProxyLogBilling } from '../../routes/proxy/proxyBilling.js';
+import { composeProxyLogMessage } from '../../services/proxyLogMessage.js';
+import { resolveProxyLogBilling } from '../../services/proxyBilling.js';
 import type { DownstreamClientContext } from '../downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';
 import { dispatchRuntimeRequest } from '../../services/runtimeDispatch.js';

@@ -554,6 +554,8 @@ async function handleResponsesWebsocketConnection(
 ) {
   const websocketSessionId = headerValueToTrimmedString(request.headers['session_id'])
     || headerValueToTrimmedString(request.headers['session-id'])
+    || headerValueToTrimmedString(request.headers['conversation_id'])
+    || headerValueToTrimmedString(request.headers['conversation-id'])
     || randomUUID();
   const runtimeSessionKeys = new Set<string>();
   let lastRequest: Record<string, unknown> | null = null;

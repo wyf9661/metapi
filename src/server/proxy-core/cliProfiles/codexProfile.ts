@@ -1,70 +1,13 @@
 import type { CliProfileDefinition, DetectCliProfileInput } from './types.js';
+import {
+  detectCodexOfficialClientApp as detectCodexOfficialClientAppFromHeaders,
+  isCodexOfficialClientHeaders,
+} from '../../shared/codexClientFamily.js';
 
 type CodexOfficialClientApp = {
   clientAppId: string;
   clientAppName: string;
 };
-
-const CODEX_OFFICIAL_CLIENT_USER_AGENT_PREFIXES = [
-  'codex_cli_rs/',
-  'codex_vscode/',
-  'codex_app/',
-  'codex_chatgpt_desktop/',
-  'codex_atlas/',
-  'codex_exec/',
-  'codex_sdk_ts/',
-  'codex ',
-];
-
-const CODEX_OFFICIAL_CLIENT_ORIGINATOR_PREFIXES = [
-  'codex_',
-  'codex ',
-];
-
-const CODEX_OFFICIAL_CLIENT_APP_RULES = [
-  {
-    id: 'codex_cli_rs',
-    name: 'Codex CLI',
-    userAgentPrefixes: ['codex_cli_rs/'],
-    originatorPrefixes: ['codex_cli_rs'],
-  },
-  {
-    id: 'codex_vscode',
-    name: 'Codex VSCode',
-    userAgentPrefixes: ['codex_vscode/'],
-    originatorPrefixes: ['codex_vscode'],
-  },
-  {
-    id: 'codex_app',
-    name: 'Codex App',
-    userAgentPrefixes: ['codex_app/'],
-    originatorPrefixes: ['codex_app'],
-  },
-  {
-    id: 'codex_chatgpt_desktop',
-    name: 'Codex Desktop',
-    userAgentPrefixes: ['codex_chatgpt_desktop/', 'codex desktop/'],
-    originatorPrefixes: ['codex_chatgpt_desktop', 'codex desktop'],
-  },
-  {
-    id: 'codex_atlas',
-    name: 'Codex Atlas',
-    userAgentPrefixes: ['codex_atlas/'],
-    originatorPrefixes: ['codex_atlas'],
-  },
-  {
-    id: 'codex_exec',
-    name: 'Codex Exec',
-    userAgentPrefixes: ['codex_exec/'],
-    originatorPrefixes: ['codex_exec'],
-  },
-  {
-    id: 'codex_sdk_ts',
-    name: 'Codex SDK TS',
-    userAgentPrefixes: ['codex_sdk_ts/'],
-    originatorPrefixes: ['codex_sdk_ts'],
-  },
-] as const;
 
 function headerValueToStrings(value: unknown): string[] {
   if (typeof value === 'string') {
@@ -114,20 +57,6 @@ function hasHeaderPrefix(headers: Record<string, unknown> | undefined, prefix: s
   });
 }
 
-function matchesHeaderPrefixes(value: string | string[] | null, prefixes: readonly string[]): boolean {
-  const values = Array.isArray(value)
-    ? value.map((item) => item.trim().toLowerCase()).filter(Boolean)
-    : [value?.trim().toLowerCase() || ''].filter(Boolean);
-  if (values.length === 0) return false;
-
-  return values.some((normalizedValue) => prefixes.some((prefix) => {
-    const normalizedPrefix = prefix.trim().toLowerCase();
-    if (!normalizedPrefix) return false;
-    return normalizedValue.startsWith(normalizedPrefix)
-      || normalizedValue.includes(normalizedPrefix);
-  }));
-}
-
 function isCodexPath(path: string): boolean {
   const normalizedPath = path.trim().toLowerCase();
   return normalizedPath === '/v1/responses'
@@ -138,16 +67,13 @@ function isCodexPath(path: string): boolean {
 export function detectCodexOfficialClientApp(
   headers?: Record<string, unknown>,
 ): CodexOfficialClientApp | null {
-  for (const rule of CODEX_OFFICIAL_CLIENT_APP_RULES) {
-    const matchesOriginator = matchesHeaderPrefixes(getHeaderValues(headers, 'originator'), rule.originatorPrefixes);
-    const matchesUserAgent = matchesHeaderPrefixes(getHeaderValues(headers, 'user-agent'), rule.userAgentPrefixes);
-    if (!matchesOriginator && !matchesUserAgent) continue;
-    return {
-      clientAppId: rule.id,
-      clientAppName: rule.name,
-    };
-  }
-  return null;
+  const detected = detectCodexOfficialClientAppFromHeaders(headers);
+  return detected
+    ? {
+      clientAppId: detected.clientAppId,
+      clientAppName: detected.clientAppName,
+    }
+    : null;
 }
 
 export function isCodexResponsesSurface(headers?: Record<string, unknown>): boolean {
@@ -158,7 +84,10 @@ export function isCodexResponsesSurface(headers?: Record<string, unknown>): bool
 }
 
 export function getCodexSessionId(headers?: Record<string, unknown>): string | null {
-  return getHeaderValue(headers, 'session_id') || getHeaderValue(headers, 'session-id');
+  return getHeaderValue(headers, 'session_id')
+    || getHeaderValue(headers, 'session-id')
+    || getHeaderValue(headers, 'conversation_id')
+    || getHeaderValue(headers, 'conversation-id');
 }
 
 export function isCodexRequest(input: DetectCliProfileInput): boolean {
@@ -166,9 +95,7 @@ export function isCodexRequest(input: DetectCliProfileInput): boolean {
   const headers = input.headers;
   if (!headers) return false;
 
-  const originator = getHeaderValues(headers, 'originator');
-  if (matchesHeaderPrefixes(originator, CODEX_OFFICIAL_CLIENT_ORIGINATOR_PREFIXES)) return true;
-  if (matchesHeaderPrefixes(getHeaderValues(headers, 'user-agent'), CODEX_OFFICIAL_CLIENT_USER_AGENT_PREFIXES)) return true;
+  if (isCodexOfficialClientHeaders(headers)) return true;
   if (getHeaderValue(headers, 'openai-beta')) return true;
   if (hasHeaderPrefix(headers, 'x-stainless-')) return true;
   if (getCodexSessionId(headers)) return true;
