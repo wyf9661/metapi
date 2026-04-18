@@ -619,7 +619,7 @@ export function serializeAnthropicFinalAsStream(
           },
         },
       ));
-      const thinkingText = asTrimmedString(block.thinking);
+      const thinkingText = asUntouchedString(block.thinking);
       if (thinkingText) {
         lines.push(...anthropicMessagesStream.serializeEvent(
           { reasoningDelta: thinkingText },
@@ -655,7 +655,7 @@ export function serializeAnthropicFinalAsStream(
               kind: 'redacted_thinking',
               index,
             },
-            redactedThinkingData: asTrimmedString(block.data),
+            redactedThinkingData: asUntouchedString(block.data),
           },
         },
       ));
@@ -762,6 +762,10 @@ function toClaudeStopReason(finishReason: string | null | undefined): string {
   return 'end_turn';
 }
 
+function asUntouchedString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
 function normalizeAnthropicRawEvent(
   payload: AnthropicStreamPayload,
   context: StreamTransformContext,
@@ -812,7 +816,7 @@ function normalizeAnthropicRawEvent(
             kind: 'redacted_thinking',
             index,
           },
-          redactedThinkingData: asTrimmedString(contentBlock.data),
+          redactedThinkingData: asUntouchedString(contentBlock.data),
         },
       };
     }
@@ -841,7 +845,7 @@ function normalizeAnthropicRawEvent(
 
     if (deltaType === 'thinking_delta') {
       return {
-        reasoningDelta: asTrimmedString(delta.thinking ?? delta.text) || undefined,
+        reasoningDelta: asUntouchedString(delta.thinking ?? delta.text) || undefined,
       };
     }
 
@@ -855,7 +859,7 @@ function normalizeAnthropicRawEvent(
 
     if (deltaType === 'text_delta') {
       return {
-        contentDelta: asTrimmedString(delta.text) || undefined,
+        contentDelta: asUntouchedString(delta.text) || undefined,
       };
     }
 

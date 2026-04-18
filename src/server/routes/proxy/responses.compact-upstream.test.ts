@@ -179,7 +179,7 @@ describe('responses proxy compact upstream routing', () => {
     expect(targetUrl).toContain('/v1/responses/compact');
   });
 
-  it('automatically falls back from compact to ordinary responses for generic openai-compatible upstreams when compact is unsupported', async () => {
+  it('does not fall back from compact to ordinary responses for generic openai-compatible upstreams when the fallback toggle is off', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
       site: { id: 44, name: 'generic-openai-site', url: 'https://upstream.example.com', platform: 'openai' },
@@ -199,12 +199,12 @@ describe('responses proxy compact upstream routing', () => {
         headers: { 'content-type': 'application/json' },
       }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        id: 'resp_123',
-        object: 'response',
-        output_text: 'hello from fallback',
-        usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+        error: {
+          message: 'Invalid URL (POST /v1/responses/compact)',
+          type: 'invalid_request_error',
+        },
       }), {
-        status: 200,
+        status: 404,
         headers: { 'content-type': 'application/json' },
       }));
 
@@ -217,19 +217,9 @@ describe('responses proxy compact upstream routing', () => {
       },
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.statusCode).toBe(404);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0]?.[0] || '')).toContain('/v1/responses/compact');
-    expect(String(fetchMock.mock.calls[1]?.[0] || '')).toContain('/v1/responses');
-    expect(String(fetchMock.mock.calls[1]?.[0] || '')).not.toContain('/compact');
-    expect(response.json()).toMatchObject({
-      object: 'response.compaction',
-      usage: {
-        input_tokens: 10,
-        output_tokens: 5,
-        total_tokens: 15,
-      },
-    });
   });
 
   it('optionally falls back from compact to ordinary responses when compact is explicitly unsupported', async () => {
@@ -282,6 +272,7 @@ describe('responses proxy compact upstream routing', () => {
   });
 
   it('automatically falls back from compact when a generic upstream rejects the stream parameter on the compact endpoint', async () => {
+    config.responsesCompactFallbackToResponsesEnabled = true;
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
       site: { id: 44, name: 'generic-openai-site', url: 'https://upstream.example.com', platform: 'openai' },
@@ -331,6 +322,7 @@ describe('responses proxy compact upstream routing', () => {
   });
 
   it('rebuilds compact fallback as an SSE-capable non-compact /v1/responses request for sub2api', async () => {
+    config.responsesCompactFallbackToResponsesEnabled = true;
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
       site: { id: 44, name: 'sub2api-site', url: 'https://sub2api.example.com', platform: 'sub2api' },

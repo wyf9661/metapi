@@ -42,10 +42,11 @@ export function ensureCompactResponsesJsonAcceptHeader(
   },
 ): Record<string, string> {
   if (!shouldForceCompactResponsesJsonAccept(options?.sitePlatform)) return headers;
-  const existingAccept = asTrimmedString(headers.accept) || asTrimmedString(headers.Accept);
-  if (existingAccept) return headers;
+  const nextHeaders = { ...headers };
+  delete (nextHeaders as Record<string, unknown>).Accept;
+  delete (nextHeaders as Record<string, unknown>).accept;
   return {
-    ...headers,
+    ...nextHeaders,
     accept: 'application/json',
   };
 }

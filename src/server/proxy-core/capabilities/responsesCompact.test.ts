@@ -86,14 +86,17 @@ describe('ensureCompactResponsesJsonAcceptHeader', () => {
     });
   });
 
-  it('preserves existing accept values and unrelated platforms', () => {
+  it('forces compact requests back to application/json even when callers asked for SSE', () => {
     expect(ensureCompactResponsesJsonAcceptHeader({
-      Accept: 'application/json',
+      Accept: 'text/event-stream',
     }, {
       sitePlatform: 'codex',
     })).toEqual({
-      Accept: 'application/json',
+      accept: 'application/json',
     });
+  });
+
+  it('preserves unrelated platforms', () => {
     expect(ensureCompactResponsesJsonAcceptHeader({}, {
       sitePlatform: 'openai',
     })).toEqual({});

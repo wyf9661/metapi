@@ -58,10 +58,24 @@ export function buildNormalizedFinalToOpenAiChatPayload(
   usage?: unknown,
 ) {
   const chatNormalized = normalized as OpenAiChatNormalizedFinalResponse;
+  const normalizedUsage = isRecord(usage)
+    && typeof usage.promptTokens === 'number'
+    && typeof usage.completionTokens === 'number'
+    && typeof usage.totalTokens === 'number'
+    ? {
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.totalTokens,
+      }
+    : {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      };
   const payload = serializeFinalResponse(
     'openai',
     normalized,
-    usage as { promptTokens: number; completionTokens: number; totalTokens: number },
+    normalizedUsage,
   ) as Record<string, unknown>;
 
   const choices = Array.isArray(chatNormalized.choices) && chatNormalized.choices.length > 0
@@ -136,13 +150,14 @@ export function buildNormalizedFinalToOpenAiChatChunks(normalized: NormalizedFin
         created: normalized.created,
         model: normalized.model,
         choices: choices.map((choice) => {
+          const toolCalls = Array.isArray(choice.toolCalls) ? choice.toolCalls : [];
           const delta: Record<string, unknown> = {
             role: choice.role || 'assistant',
             content: choice.content || '',
           };
           if (choice.reasoningContent) delta.reasoning_content = choice.reasoningContent;
-          if (choice.toolCalls.length > 0) {
-            delta.tool_calls = choice.toolCalls.map((toolCall, toolIndex) => ({
+          if (toolCalls.length > 0) {
+            delta.tool_calls = toolCalls.map((toolCall, toolIndex) => ({
               index: toolIndex,
               id: toolCall.id,
               type: 'function',
@@ -167,11 +182,14 @@ export function buildNormalizedFinalToOpenAiChatChunks(normalized: NormalizedFin
         object: 'chat.completion.chunk',
         created: normalized.created,
         model: normalized.model,
-        choices: choices.map((choice) => ({
-          index: choice.index,
-          delta: {},
-          finish_reason: choice.finishReason || (choice.toolCalls.length > 0 ? 'tool_calls' : 'stop'),
-        })).sort((left, right) => left.index - right.index),
+        choices: choices.map((choice) => {
+          const toolCalls = Array.isArray(choice.toolCalls) ? choice.toolCalls : [];
+          return {
+            index: choice.index,
+            delta: {},
+            finish_reason: choice.finishReason || (toolCalls.length > 0 ? 'tool_calls' : 'stop'),
+          };
+        }).sort((left, right) => left.index - right.index),
       },
     ]
     : buildSyntheticOpenAiChunks(normalized);

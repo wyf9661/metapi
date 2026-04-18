@@ -905,6 +905,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const body = parsedBody.data as RuntimeSettingsBody;
     const changedLabels: string[] = [];
     const currentRequestIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
+    let pendingPayloadRules: typeof config.payloadRules | undefined;
 
     const webhookTouched = body.webhookUrl !== undefined || body.webhookEnabled !== undefined;
     const nextWebhookUrl = body.webhookUrl !== undefined
@@ -1149,8 +1150,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       if (previousRules !== nextRules) {
         changedLabels.push('Payload 规则');
       }
-      config.payloadRules = parsedPayloadRules.normalized;
-      await upsertSetting('payload_rules', config.payloadRules);
+      pendingPayloadRules = parsedPayloadRules.normalized;
     }
 
     if (body.modelAvailabilityProbeEnabled !== undefined) {
@@ -1716,6 +1716,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.tokenRouterFailureCooldownMaxSec = normalized;
       upsertSetting('token_router_failure_cooldown_max_sec', normalized);
+    }
+
+    if (pendingPayloadRules !== undefined) {
+      config.payloadRules = pendingPayloadRules;
+      await upsertSetting('payload_rules', pendingPayloadRules);
     }
 
     if (changedLabels.length > 0) {

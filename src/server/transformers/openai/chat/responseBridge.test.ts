@@ -155,6 +155,64 @@ describe('openai chat response bridge', () => {
     });
   });
 
+  it('builds synthetic chunks for multi-choice finals even when some choices omit toolCalls', () => {
+    const chunks = buildNormalizedFinalToOpenAiChatChunks({
+      id: 'chatcmpl-multi-1',
+      model: 'gpt-5',
+      created: 123,
+      content: '',
+      reasoningContent: '',
+      finishReason: 'stop',
+      toolCalls: [],
+      choices: [
+        {
+          index: 0,
+          role: 'assistant',
+          content: '',
+          toolCalls: [{
+            id: 'call_multi_1',
+            name: 'lookup_weather',
+            arguments: '{"city":"Paris"}',
+          }],
+          finishReason: 'tool_calls',
+        },
+        {
+          index: 1,
+          role: 'assistant',
+          content: 'done',
+          finishReason: 'stop',
+        },
+      ],
+    } as any);
+
+    expect(chunks[0]).toMatchObject({
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [{
+              id: 'call_multi_1',
+              type: 'function',
+            }],
+          },
+        },
+        {
+          index: 1,
+          delta: {
+            role: 'assistant',
+            content: 'done',
+          },
+        },
+      ],
+    });
+    expect(chunks[1]).toMatchObject({
+      choices: [
+        { index: 0, finish_reason: 'tool_calls' },
+        { index: 1, finish_reason: 'stop' },
+      ],
+    });
+  });
+
   it('keeps the outbound facade pointed at the response bridge object', () => {
     expect(openAiChatOutbound).toBe(openAiChatResponseBridge);
   });

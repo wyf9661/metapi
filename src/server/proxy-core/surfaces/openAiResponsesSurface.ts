@@ -105,15 +105,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getCodexSessionHeaderValue(headers: Record<string, string>): string {
-  for (const [rawKey, rawValue] of Object.entries(headers)) {
-    const normalizedKey = rawKey.trim().toLowerCase();
-    if (
-      normalizedKey === 'session_id'
-      || normalizedKey === 'session-id'
-      || normalizedKey === 'conversation_id'
-      || normalizedKey === 'conversation-id'
-    ) {
-      return String(rawValue || '').trim();
+  const normalizedEntries = Object.entries(headers).map(([rawKey, rawValue]) => [
+    rawKey.trim().toLowerCase(),
+    String(rawValue || '').trim(),
+  ] as const);
+  for (const preferredKey of ['session_id', 'session-id', 'conversation_id', 'conversation-id']) {
+    const match = normalizedEntries.find(([normalizedKey, normalizedValue]) => (
+      normalizedKey === preferredKey && normalizedValue
+    ));
+    if (match) {
+      return match[1];
     }
   }
   return '';
@@ -626,7 +627,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               ctx.rawErrText = await readRuntimeResponseText(recoveredResponse).catch(() => 'unknown error');
             }
           }
-          const compactFallbackEnabled = config.responsesCompactFallbackToResponsesEnabled || !isCodexSite;
+          const compactFallbackEnabled = config.responsesCompactFallbackToResponsesEnabled;
           if (
             isCompactRequest
             && compactFallbackEnabled

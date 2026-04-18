@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCodexResponsesBodyForProxy } from './codexCompatibility.js';
-
-const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful coding assistant.';
+import {
+  CODEX_DEFAULT_INSTRUCTIONS,
+  normalizeCodexResponsesBodyForProxy,
+} from './codexCompatibility.js';
 
 describe('normalizeCodexResponsesBodyForProxy', () => {
   it('extracts codex system input into top-level instructions before proxying upstream', () => {
@@ -22,6 +23,7 @@ describe('normalizeCodexResponsesBodyForProxy', () => {
       max_output_tokens: 512,
       max_completion_tokens: 256,
       max_tokens: 128,
+      stream_options: { include_usage: true },
       temperature: 0.3,
       store: true,
     }, 'codex');
@@ -38,6 +40,62 @@ describe('normalizeCodexResponsesBodyForProxy', () => {
       store: false,
       temperature: 0.3,
     });
+  });
+
+  it('keeps non-text system content in input while lifting only the text blocks into instructions', () => {
+    const imageBlock = {
+      type: 'input_image',
+      image_url: 'https://example.com/reference.png',
+    };
+
+    const body = normalizeCodexResponsesBodyForProxy({
+      input: [
+        {
+          type: 'message',
+          role: 'system',
+          content: [
+            { type: 'input_text', text: 'keep the image context' },
+            imageBlock,
+          ],
+        },
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'hello' }],
+        },
+      ],
+    }, 'codex');
+
+    expect(body.instructions).toBe('keep the image context');
+    expect(body.input).toEqual([
+      {
+        type: 'message',
+        role: 'system',
+        content: [imageBlock],
+      },
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'hello' }],
+      },
+    ]);
+  });
+
+  it('joins multiple text blocks with separators instead of squashing them together', () => {
+    const body = normalizeCodexResponsesBodyForProxy({
+      input: [
+        {
+          type: 'message',
+          role: 'system',
+          content: [
+            { type: 'input_text', text: 'first line' },
+            { type: 'input_text', text: 'second line' },
+          ],
+        },
+      ],
+    }, 'codex');
+
+    expect(body.instructions).toBe('first line\nsecond line');
   });
 
   it('supplies a non-empty default instructions string for codex when missing', () => {

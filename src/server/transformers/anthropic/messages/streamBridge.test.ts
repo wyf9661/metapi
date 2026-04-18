@@ -68,6 +68,47 @@ describe('anthropic messages stream bridge', () => {
     expect(lines.join('')).toContain('sig-native');
   });
 
+  it('preserves whitespace in anthropic streaming text and thinking deltas', () => {
+    const streamContext = anthropicMessagesStream.createContext('claude-test');
+    const downstreamContext = anthropicMessagesStream.createDownstreamContext();
+
+    const textResult = consumeAnthropicSseEvent(
+      {
+        event: 'content_block_delta',
+        data: JSON.stringify({
+          type: 'content_block_delta',
+          index: 0,
+          delta: {
+            type: 'text_delta',
+            text: '  padded text  ',
+          },
+        }),
+      },
+      streamContext,
+      downstreamContext,
+      'claude-test',
+    );
+    const thinkingResult = consumeAnthropicSseEvent(
+      {
+        event: 'content_block_delta',
+        data: JSON.stringify({
+          type: 'content_block_delta',
+          index: 0,
+          delta: {
+            type: 'thinking_delta',
+            thinking: '  padded thinking  ',
+          },
+        }),
+      },
+      streamContext,
+      downstreamContext,
+      'claude-test',
+    );
+
+    expect(textResult.lines.join('')).toContain('  padded text  ');
+    expect(thinkingResult.lines.join('')).toContain('  padded thinking  ');
+  });
+
   it('preserves responses output-item ordering when streaming anthropic fallback blocks', () => {
     const streamContext = anthropicMessagesStream.createContext('claude-test');
     const downstreamContext = anthropicMessagesStream.createDownstreamContext();
