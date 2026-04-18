@@ -867,7 +867,7 @@ function normalizeAnthropicRawEvent(
       return {
         toolCallDeltas: [{
           index,
-          argumentsDelta: asTrimmedString(delta.partial_json),
+          argumentsDelta: asUntouchedString(delta.partial_json),
         }],
       };
     }

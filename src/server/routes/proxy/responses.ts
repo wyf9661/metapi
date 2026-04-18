@@ -34,7 +34,7 @@ export async function responsesProxyRoute(app: FastifyInstance) {
   app.get('/responses', async (_request: FastifyRequest, reply: FastifyReply) =>
     reply.code(426).send({
       error: {
-        message: 'WebSocket upgrade required for GET /responses',
+        message: 'WebSocket upgrade required for GET /v1/responses',
         type: 'invalid_request_error',
       },
     }));

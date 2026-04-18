@@ -618,10 +618,7 @@ export function convertOpenAiBodyToResponsesBody(
   };
 
   if (requestedMaxOutputTokens !== null && requestedMaxOutputTokens > 0) {
-    body.max_output_tokens = Math.max(
-      MIN_RESPONSES_MAX_OUTPUT_TOKENS,
-      Math.trunc(requestedMaxOutputTokens),
-    );
+    body.max_output_tokens = Math.trunc(requestedMaxOutputTokens);
   }
 
   if (systemContents.length > 0) {

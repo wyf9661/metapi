@@ -89,7 +89,7 @@ describe('proxy route aliases', () => {
     expect(handleOpenAiResponsesSurfaceRequestMock).not.toHaveBeenCalled();
     expect(response.json()).toEqual({
       error: {
-        message: 'WebSocket upgrade required for GET /responses',
+        message: 'WebSocket upgrade required for GET /v1/responses',
         type: 'invalid_request_error',
       },
     });

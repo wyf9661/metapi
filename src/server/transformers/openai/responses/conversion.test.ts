@@ -719,7 +719,7 @@ describe('convertOpenAiBodyToResponsesBody', () => {
     expect(result.max_output_tokens).toBeUndefined();
   });
 
-  it('clamps explicit chat token limits to the sub2api floor when converting to Responses bodies', () => {
+  it('preserves explicit chat token limits when converting to Responses bodies', () => {
     const result = convertOpenAiBodyToResponsesBody(
       {
         model: 'gpt-5',
@@ -730,7 +730,7 @@ describe('convertOpenAiBodyToResponsesBody', () => {
       false,
     );
 
-    expect(result.max_output_tokens).toBe(128);
+    expect(result.max_output_tokens).toBe(64);
   });
 
   it('uses sub2api-compatible placeholders for empty tool arguments and empty tool outputs', () => {

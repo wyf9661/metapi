@@ -109,6 +109,30 @@ describe('anthropic messages stream bridge', () => {
     expect(thinkingResult.lines.join('')).toContain('  padded thinking  ');
   });
 
+  it('preserves partial_json spacing for streaming tool-call deltas', () => {
+    const streamContext = anthropicMessagesStream.createContext('claude-test');
+    const downstreamContext = anthropicMessagesStream.createDownstreamContext();
+
+    const result = consumeAnthropicSseEvent(
+      {
+        event: 'content_block_delta',
+        data: JSON.stringify({
+          type: 'content_block_delta',
+          index: 0,
+          delta: {
+            type: 'input_json_delta',
+            partial_json: '{ "city": "Paris" }',
+          },
+        }),
+      },
+      streamContext,
+      downstreamContext,
+      'claude-test',
+    );
+
+    expect(result.lines.join('')).toContain('partial_json":"{ \\"city\\": \\"Paris\\" }"');
+  });
+
   it('preserves responses output-item ordering when streaming anthropic fallback blocks', () => {
     const streamContext = anthropicMessagesStream.createContext('claude-test');
     const downstreamContext = anthropicMessagesStream.createDownstreamContext();
