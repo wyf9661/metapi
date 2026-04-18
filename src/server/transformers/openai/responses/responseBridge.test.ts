@@ -292,6 +292,41 @@ describe('openai responses response bridge', () => {
     }
   });
 
+  it('uses fc_* item ids while keeping call_* ids for synthesized function_call outputs', () => {
+    const payload = buildNormalizedFinalToOpenAiResponsesPayload({
+      upstreamPayload: {
+        id: 'opaque_tool_call_ids',
+        model: 'gpt-5',
+      },
+      normalized: {
+        id: 'opaque_tool_call_ids',
+        model: 'gpt-5',
+        created: 1700000000,
+        content: '',
+        reasoningContent: '',
+        finishReason: 'tool_calls',
+        toolCalls: [{
+          id: 'call_weather_1',
+          name: 'lookup_weather',
+          arguments: '{"city":"Paris"}',
+        }],
+      },
+      usage: {
+        promptTokens: 1,
+        completionTokens: 1,
+        totalTokens: 2,
+      },
+    });
+
+    expect(payload.output).toEqual([
+      expect.objectContaining({
+        id: 'fc_weather_1',
+        type: 'function_call',
+        call_id: 'call_weather_1',
+      }),
+    ]);
+  });
+
   it('keeps the outbound facade pointed at the response bridge object', () => {
     expect(openAiResponsesOutbound).toBe(openAiResponsesResponseBridge);
   });

@@ -64,6 +64,10 @@ export function renderContributorsBlock(
   contributors: ReadmeContributor[],
   perLine = PER_LINE,
 ): string {
+  if (!Number.isInteger(perLine) || perLine <= 0) {
+    throw new RangeError('perLine must be a positive integer');
+  }
+
   if (contributors.length === 0) {
     return '<p align="left">\n  <sub>No public contributors found yet.</sub>\n</p>';
   }

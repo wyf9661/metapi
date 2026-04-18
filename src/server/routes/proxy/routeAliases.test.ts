@@ -95,6 +95,39 @@ describe('proxy route aliases', () => {
     });
   });
 
+  it('rejects unknown /responses alias subpaths instead of silently rewriting them', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/responses/other',
+      payload: { model: 'gpt-5.2', input: 'hello' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(handleOpenAiResponsesSurfaceRequestMock).not.toHaveBeenCalled();
+    expect(response.json()).toEqual({
+      error: {
+        message: 'Unknown /responses alias path',
+        type: 'invalid_request_error',
+      },
+    });
+  });
+
+  it('keeps GET /responses/compact aligned with the websocket upgrade path', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/responses/compact',
+    });
+
+    expect(response.statusCode).toBe(426);
+    expect(handleOpenAiResponsesSurfaceRequestMock).not.toHaveBeenCalled();
+    expect(response.json()).toEqual({
+      error: {
+        message: 'WebSocket upgrade required for GET /v1/responses/compact',
+        type: 'invalid_request_error',
+      },
+    });
+  });
+
   it('registers bare chat completions alias against the openai chat handler', async () => {
     const response = await app.inject({
       method: 'POST',

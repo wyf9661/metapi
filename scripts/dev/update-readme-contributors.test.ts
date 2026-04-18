@@ -110,6 +110,10 @@ describe('README contributors updater', () => {
     expect((html.match(/\n  <a href=/g) || []).length).toBe(2);
   });
 
+  it('rejects invalid per-line values instead of looping forever', () => {
+    expect(() => renderContributorsBlock([], 0)).toThrow('perLine must be a positive integer');
+  });
+
   it('parses concatenated paginated gh api arrays without requiring newlines between pages', () => {
     expect(parsePaginatedJson('[{"login":"a"}][{"login":"b"}]')).toEqual([
       { login: 'a' },

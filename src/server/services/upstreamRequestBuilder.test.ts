@@ -63,6 +63,27 @@ describe('upstreamRequestBuilder', () => {
     expect(request.body.store).toBe(false);
   });
 
+  it('overrides downstream Accept so responses transport mode wins', () => {
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'upstream-gpt',
+      stream: true,
+      tokenValue: 'sk-test',
+      sitePlatform: 'openai',
+      siteUrl: 'https://example.com',
+      openaiBody: {
+        model: 'gpt-5.2',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      downstreamFormat: 'openai',
+      downstreamHeaders: {
+        accept: 'application/json',
+      },
+    });
+
+    expect(request.headers.accept).toBe('text/event-stream');
+  });
+
   it('applies a sub2api-style allowlist to generic passthrough headers', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'chat',
@@ -133,5 +154,24 @@ describe('upstreamRequestBuilder', () => {
     expect(request.body).not.toHaveProperty('prompt_cache_key');
     expect(request.body).not.toHaveProperty('max_tokens');
     expect(request.body).not.toHaveProperty('maxTokens');
+  });
+
+  it('merges body betas with existing anthropic-beta headers for Claude count_tokens', () => {
+    const request = buildClaudeCountTokensUpstreamRequest({
+      modelName: 'claude-opus-4-6',
+      tokenValue: 'sk-test',
+      sitePlatform: 'claude',
+      claudeBody: {
+        model: 'claude-opus-4-6',
+        betas: ['beta-from-body'],
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      downstreamHeaders: {
+        'anthropic-beta': 'header-beta',
+      },
+    });
+
+    expect(request.headers['anthropic-beta']).toContain('header-beta');
+    expect(request.headers['anthropic-beta']).toContain('beta-from-body');
   });
 });

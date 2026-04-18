@@ -267,20 +267,19 @@ function ensureResponsesAcceptHeader(
     sitePlatform?: string;
   },
 ): Record<string, string> {
-  const existingAccept = (
-    headerValueToString(headers.accept)
-    || headerValueToString((headers as Record<string, unknown>).Accept)
-  );
-  if (existingAccept) return headers;
+  const nextHeaders = { ...headers };
+  delete (nextHeaders as Record<string, unknown>).Accept;
+  delete (nextHeaders as Record<string, unknown>).accept;
+
   if (input.stream) {
     return {
-      ...headers,
+      ...nextHeaders,
       accept: 'text/event-stream',
     };
   }
   if (normalizePlatformName(input.sitePlatform) === 'sub2api') {
     return {
-      ...headers,
+      ...nextHeaders,
       accept: 'application/json',
     };
   }
@@ -765,9 +764,18 @@ export function buildClaudeCountTokensUpstreamRequest(input: {
   delete sanitizedBody.maxTokens;
   delete sanitizedBody.stream;
   const providerProfile = resolveProviderProfile(sitePlatform);
+  const mergedBetas = [
+    ...asTrimmedString(claudeHeaders['anthropic-beta'])
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+    ...betas,
+  ];
   const effectiveClaudeHeaders = {
     ...claudeHeaders,
-    ...(betas.length > 0 ? { 'anthropic-beta': betas.join(',') } : {}),
+    ...(mergedBetas.length > 0
+      ? { 'anthropic-beta': Array.from(new Set(mergedBetas)).join(',') }
+      : {}),
   };
 
   if (providerProfile?.id === 'claude') {

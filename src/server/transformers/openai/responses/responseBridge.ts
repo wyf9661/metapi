@@ -20,6 +20,15 @@ function createSyntheticId(prefix: 'resp' | 'msg' | 'call'): string {
   return `${prefix}_${Date.now()}_${syntheticIdCounter}`;
 }
 
+function toFunctionCallItemId(callId: string): string {
+  const trimmed = callId.trim();
+  if (!trimmed) {
+    const syntheticCallId = createSyntheticId('call');
+    return `fc_${syntheticCallId.slice('call_'.length)}`;
+  }
+  return trimmed.startsWith('call_') ? `fc_${trimmed.slice('call_'.length)}` : `fc_${trimmed}`;
+}
+
 function cloneJson<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => cloneJson(item)) as T;
@@ -413,7 +422,7 @@ export function buildNormalizedFinalToOpenAiResponsesPayload(input: {
       }
 
       output.push({
-        id: toolCall.id,
+        id: toFunctionCallItemId(toolCall.id),
         type: 'function_call',
         status: 'completed',
         call_id: toolCall.id,
