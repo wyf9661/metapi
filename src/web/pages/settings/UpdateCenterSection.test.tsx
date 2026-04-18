@@ -73,6 +73,22 @@ describe('UpdateCenterSection', () => {
         displayVersion: 'latest @ sha256:efb2ee655386',
         publishedAt: '2026-03-29T11:54:35.591877Z',
       },
+      dockerHubRecentTags: [
+        {
+          normalizedVersion: 'dev',
+          tagName: 'dev',
+          digest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          displayVersion: 'dev @ sha256:aaaaaaaaaaaa',
+          publishedAt: '2026-03-30T11:54:35.591877Z',
+        },
+        {
+          normalizedVersion: 'dev-20260417-f67ade2',
+          tagName: 'dev-20260417-f67ade2',
+          digest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          displayVersion: 'dev-20260417-f67ade2 @ sha256:bbbbbbbbbbbb',
+          publishedAt: '2026-03-30T10:54:35.591877Z',
+        },
+      ],
       helper: {
         ok: true,
         healthy: true,
@@ -159,6 +175,15 @@ describe('UpdateCenterSection', () => {
         displayVersion: 'latest @ sha256:efb2ee655386',
         publishedAt: '2026-03-29T11:54:35.591877Z',
       },
+      dockerHubRecentTags: [
+        {
+          normalizedVersion: 'dev',
+          tagName: 'dev',
+          digest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          displayVersion: 'dev @ sha256:aaaaaaaaaaaa',
+          publishedAt: '2026-03-30T11:54:35.591877Z',
+        },
+      ],
       helper: {
         ok: true,
         healthy: true,
@@ -424,6 +449,50 @@ describe('UpdateCenterSection', () => {
         source: 'docker-hub-tag',
         targetTag: 'dev-20260417-f67ade2',
         targetDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      });
+      expect(apiMock.streamUpdateCenterTaskLogs).toHaveBeenCalledWith('task-1', expect.any(Object));
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('deploys auto-discovered recent non-stable Docker Hub tags without manual input', async () => {
+    let root!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <UpdateCenterSection />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const recentTagCard = root.root.find((node) => (
+        typeof node.props?.style === 'object'
+        && collectText(node).includes('dev-20260417-f67ade2 @ sha256:bbbbbbbbbbbb')
+      ));
+      expect(recentTagCard).toBeTruthy();
+
+      const deployRecentButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('部署 dev-20260417-f67ade2')
+      ));
+
+      expect(deployRecentButton.props.disabled).toBe(false);
+
+      await act(async () => {
+        await deployRecentButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.deployUpdateCenter).toHaveBeenCalledWith({
+        source: 'docker-hub-tag',
+        targetTag: 'dev-20260417-f67ade2',
+        targetDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       });
       expect(apiMock.streamUpdateCenterTaskLogs).toHaveBeenCalledWith('task-1', expect.any(Object));
     } finally {
