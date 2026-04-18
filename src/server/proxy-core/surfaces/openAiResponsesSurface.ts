@@ -23,9 +23,10 @@ import {
 } from '../../services/upstreamEndpointRuntimeMemory.js';
 import { ensureModelAllowedForDownstreamKey, getDownstreamRoutingPolicy, recordDownstreamCostUsage } from '../../routes/proxy/downstreamPolicy.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
-import { detectProxyFailure } from '../../routes/proxy/proxyFailureJudge.js';
+import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
 import { normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
+import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transformers/shared/endpointCompatibility.js';
 import {
   ProxyInputFileResolutionError,
   resolveResponsesBodyInputFiles,
@@ -39,11 +40,11 @@ import {
   collectResponsesFinalPayloadFromSseText,
   createSingleChunkStreamReader,
   looksLikeResponsesSseText,
-} from '../../routes/proxy/responsesSseFinal.js';
+} from '../runtime/responsesSseFinal.js';
 import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
-} from '../../routes/proxy/geminiCliCompat.js';
+} from '../../transformers/gemini/generate-content/cliBridge.js';
 import { isCodexResponsesSurface } from '../cliProfiles/codexProfile.js';
 import { getObservedResponseMeta } from '../firstByteTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
@@ -59,7 +60,9 @@ import {
   summarizeConversationFileInputsInResponsesBody,
 } from '../capabilities/conversationFileCapabilities.js';
 import {
+  ensureCompactResponsesJsonAcceptHeader,
   sanitizeCompactResponsesRequestBody,
+  shouldForceResponsesUpstreamStream,
   shouldFallbackCompactResponsesToResponses,
 } from '../capabilities/responsesCompact.js';
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
@@ -102,10 +105,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getCodexSessionHeaderValue(headers: Record<string, string>): string {
-  for (const [rawKey, rawValue] of Object.entries(headers)) {
-    const normalizedKey = rawKey.trim().toLowerCase();
-    if (normalizedKey === 'session_id' || normalizedKey === 'session-id') {
-      return String(rawValue || '').trim();
+  const normalizedEntries = Object.entries(headers).map(([rawKey, rawValue]) => [
+    rawKey.trim().toLowerCase(),
+    String(rawValue || '').trim(),
+  ] as const);
+  for (const preferredKey of ['session_id', 'session-id', 'conversation_id', 'conversation-id']) {
+    const match = normalizedEntries.find(([normalizedKey, normalizedValue]) => (
+      normalizedKey === preferredKey && normalizedValue
+    ));
+    if (match) {
+      return match[1];
     }
   }
   return '';
@@ -417,7 +426,24 @@ export async function handleOpenAiResponsesSurfaceRequest(
       const requiresNativeResponsesFileUrl = responsesConversationFileSummary.hasRemoteDocumentUrl
         || carriesResponsesFileUrlInput(normalizedResponsesBody.input);
       const endpointCandidates: UpstreamEndpoint[] = isCompactRequest
-        ? ['responses']
+        ? await resolveUpstreamEndpointCandidates(
+          {
+            site: selected.site,
+            account: selected.account,
+          },
+          modelName,
+          'responses',
+          requestedModel,
+          {
+            hasNonImageFileInput,
+            conversationFileSummary,
+            wantsNativeResponsesReasoning: prefersNativeResponsesReasoning,
+          },
+          {
+            requestKind: 'responses-compact',
+            requiresNativeResponsesFileUrl,
+          },
+        )
         : await resolveUpstreamEndpointCandidates(
           {
             site: selected.site,
@@ -431,10 +457,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
             conversationFileSummary,
             wantsNativeResponsesReasoning: prefersNativeResponsesReasoning,
           },
+          {
+            requiresNativeResponsesFileUrl,
+          },
         );
-      if (endpointCandidates.length === 0) {
-        endpointCandidates.push('responses', 'chat', 'messages');
-      }
       const endpointRuntimeContext = {
         siteId: selected.site.id,
         modelName,
@@ -467,9 +493,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
         })
       );
       const executeEndpointResultForSiteApiBaseUrl = async (siteApiBaseUrl: string) => {
-        const forceCodexUpstreamStream = isCodexSite && !isCompactRequest;
+        const forceResponsesUpstreamStream = shouldForceResponsesUpstreamStream({
+          sitePlatform: selected.site.platform,
+          isCompactRequest,
+        });
         const buildEndpointRequest = (endpoint: 'chat' | 'messages' | 'responses') => {
-          const upstreamStream = isStream || (forceCodexUpstreamStream && endpoint === 'responses');
+          const upstreamStream = isStream || (forceResponsesUpstreamStream && endpoint === 'responses');
           const responsesOriginalBody = (
             endpoint === 'responses'
             && isCodexSite
@@ -498,6 +527,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             responsesOriginalBody,
             downstreamHeaders: request.headers as Record<string, unknown>,
             providerHeaders: buildProviderHeaders(),
+            codexExplicitSessionId: codexSessionId || null,
           });
           const upstreamPath = (
             isCompactRequest && endpoint === 'responses'
@@ -506,13 +536,22 @@ export async function handleOpenAiResponsesSurfaceRequest(
           );
           const requestBody = (
             isCompactRequest && endpoint === 'responses'
-              ? sanitizeCompactResponsesRequestBody(endpointRequest.body as Record<string, unknown>)
+              ? sanitizeCompactResponsesRequestBody(endpointRequest.body as Record<string, unknown>, {
+                sitePlatform: selected.site.platform,
+              })
               : endpointRequest.body as Record<string, unknown>
+          );
+          const requestHeaders = (
+            isCompactRequest && endpoint === 'responses'
+              ? ensureCompactResponsesJsonAcceptHeader(endpointRequest.headers, {
+                sitePlatform: selected.site.platform,
+              })
+              : endpointRequest.headers
           );
           return {
             endpoint,
             path: upstreamPath,
-            headers: endpointRequest.headers,
+            headers: requestHeaders,
             body: requestBody,
             runtime: endpointRequest.runtime,
           };
@@ -536,8 +575,9 @@ export async function handleOpenAiResponsesSurfaceRequest(
           );
         };
         const endpointStrategy = openAiResponsesTransformer.compatibility.createEndpointStrategy({
-          isStream: isStream || forceCodexUpstreamStream,
+          isStream: isStream || forceResponsesUpstreamStream,
           requiresNativeResponsesFileUrl,
+          sitePlatform: selected.site.platform,
           dispatchRequest,
         });
         const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
@@ -587,19 +627,44 @@ export async function handleOpenAiResponsesSurfaceRequest(
               ctx.rawErrText = await readRuntimeResponseText(recoveredResponse).catch(() => 'unknown error');
             }
           }
+          const compactFallbackEnabled = config.responsesCompactFallbackToResponsesEnabled;
           if (
             isCompactRequest
-            && config.responsesCompactFallbackToResponsesEnabled
+            && compactFallbackEnabled
             && ctx.request.endpoint === 'responses'
             && ctx.request.path.endsWith('/responses/compact')
             && shouldFallbackCompactResponsesToResponses({
               status: ctx.response.status,
               rawErrText: ctx.rawErrText,
+              requestPath: ctx.request.path,
             })
           ) {
+            const normalizedSitePlatform = String(selected.site.platform || '').trim().toLowerCase();
+            const recoveredUpstreamStream = shouldForceResponsesUpstreamStream({
+              sitePlatform: selected.site.platform,
+              isCompactRequest: false,
+            });
+            const recoveredHeaders = { ...ctx.request.headers } as Record<string, string>;
+            delete (recoveredHeaders as Record<string, unknown>).Accept;
+            if (recoveredUpstreamStream) {
+              recoveredHeaders.accept = 'text/event-stream';
+            }
+            const recoveredBody = isRecord(ctx.request.body)
+              ? { ...ctx.request.body }
+              : ctx.request.body;
+            if (isRecord(recoveredBody)) {
+              if (recoveredUpstreamStream) {
+                recoveredBody.stream = true;
+              }
+              if (normalizedSitePlatform === 'codex' || normalizedSitePlatform === 'sub2api') {
+                recoveredBody.store = false;
+              }
+            }
             const recoveredRequest = {
               ...ctx.request,
               path: ctx.request.path.replace(/\/compact$/, ''),
+              headers: recoveredHeaders,
+              body: recoveredBody,
             };
             const recoveredResponse = await dispatchRequest(recoveredRequest);
             if (recoveredResponse.ok) {
@@ -684,6 +749,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
           },
           shouldDowngrade: endpointStrategy.shouldDowngrade,
           onDowngrade: async (ctx) => {
+            promoteRequiredEndpointCandidateAfterProtocolError(endpointCandidates, {
+              currentEndpoint: ctx.request.endpoint,
+              upstreamErrorText: ctx.rawErrText,
+            });
             await safeUpdateSurfaceProxyDebugAttempt(debugTrace, debugAttemptBase + ctx.endpointIndex, {
               downgradeDecision: true,
               downgradeReason: ctx.errText,

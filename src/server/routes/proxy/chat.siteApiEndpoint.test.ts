@@ -222,10 +222,10 @@ describe('chat proxy site api endpoint rotation', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()?.choices?.[0]?.message?.content).toBe('ok via api-b');
     expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(String(fetchMock.mock.calls[0]?.[0] || '')).toBe('https://api-a.example.com/v1/chat/completions');
-    expect(String(fetchMock.mock.calls[1]?.[0] || '')).toBe('https://api-a.example.com/v1/responses');
+    expect(String(fetchMock.mock.calls[0]?.[0] || '')).toBe('https://api-a.example.com/v1/responses');
+    expect(String(fetchMock.mock.calls[1]?.[0] || '')).toBe('https://api-a.example.com/v1/chat/completions');
     expect(String(fetchMock.mock.calls[2]?.[0] || '')).toBe('https://api-a.example.com/v1/messages');
-    expect(String(fetchMock.mock.calls[3]?.[0] || '')).toBe('https://api-b.example.com/v1/chat/completions');
+    expect(String(fetchMock.mock.calls[3]?.[0] || '')).toBe('https://api-b.example.com/v1/responses');
     expect(selectNextChannelMock).not.toHaveBeenCalled();
     expect(recordFailureMock).not.toHaveBeenCalled();
     expect(recordSuccessMock).toHaveBeenCalledTimes(1);

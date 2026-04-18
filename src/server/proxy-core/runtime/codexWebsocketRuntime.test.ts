@@ -141,6 +141,67 @@ describe('codexWebsocketRuntime', () => {
     await runtime.closeSession('exec-session-close');
   });
 
+  it('preserves remembered continuation ids across websocket session closes and reconnects', async () => {
+    const { createCodexWebsocketRuntime } = await import('./codexWebsocketRuntime.js');
+    const runtime = createCodexWebsocketRuntime();
+
+    await runtime.sendRequest({
+      sessionId: 'exec-session-continue-after-close',
+      requestUrl: upstreamWsUrl,
+      headers: {
+        Authorization: 'Bearer oauth-access-token',
+        'OpenAI-Beta': 'responses_websockets=2026-02-06',
+      },
+      body: {
+        model: 'gpt-5.4',
+        input: [],
+      },
+    });
+
+    await runtime.closeSession('exec-session-continue-after-close');
+
+    const recovered = await runtime.sendRequest({
+      sessionId: 'exec-session-continue-after-close',
+      requestUrl: upstreamWsUrl,
+      headers: {
+        Authorization: 'Bearer oauth-access-token',
+        'OpenAI-Beta': 'responses_websockets=2026-02-06',
+      },
+      body: {
+        model: 'gpt-5.4',
+        input: [
+          {
+            id: 'tool_out_runtime_1',
+            type: 'function_call_output',
+            call_id: 'call_runtime_1',
+            output: '{"ok":true}',
+          },
+        ],
+      },
+    });
+
+    expect(recovered.events[0]).toMatchObject({
+      type: 'response.completed',
+      response: { id: 'resp-2' },
+    });
+    expect(upstreamConnectionCount).toBe(2);
+    expect(upstreamRequests).toHaveLength(2);
+    expect(upstreamRequests[1]).toMatchObject({
+      type: 'response.create',
+      previous_response_id: 'resp-1',
+      input: [
+        {
+          id: 'tool_out_runtime_1',
+          type: 'function_call_output',
+          call_id: 'call_runtime_1',
+          output: '{"ok":true}',
+        },
+      ],
+    });
+
+    await runtime.closeSession('exec-session-continue-after-close');
+  });
+
   it('returns response.incomplete as a terminal websocket event without rejecting the session turn', async () => {
     upstreamMessageHandler = (socket, parsed) => {
       socket.send(JSON.stringify({
@@ -413,7 +474,8 @@ describe('codexWebsocketRuntime', () => {
       message: 'account mismatch',
       status: 502,
     });
-    expect((error as CodexWebsocketRuntimeError).events).toEqual([
+    const runtimeError = error as InstanceType<typeof CodexWebsocketRuntimeError>;
+    expect(runtimeError.events).toEqual([
       expect.objectContaining({
         type: 'error',
         error: expect.objectContaining({

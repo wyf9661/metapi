@@ -1,12 +1,18 @@
-import { canonicalRequestFromOpenAiBody, canonicalRequestToOpenAiChatBody } from '../../canonical/request.js';
 import type { CanonicalRequestEnvelope } from '../../canonical/types.js';
 import type { ProtocolBuildContext, ProtocolParseContext } from '../../contracts.js';
 import { type NormalizedFinalResponse, type NormalizedStreamEvent, type ParsedDownstreamChatRequest, type StreamTransformContext, type ClaudeDownstreamContext } from '../../shared/normalized.js';
 import { createChatEndpointStrategy } from '../../shared/chatEndpointStrategy.js';
 import { anthropicMessagesInbound } from './inbound.js';
-import { convertOpenAiBodyToAnthropicMessagesBody } from './conversion.js';
-import { anthropicMessagesOutbound } from './outbound.js';
-import { anthropicMessagesStream, consumeAnthropicSseEvent } from './stream.js';
+import {
+  buildCanonicalRequestToAnthropicMessagesBody,
+  parseAnthropicMessagesRequestToCanonical,
+} from './requestBridge.js';
+import {
+  anthropicMessagesResponseBridge,
+  buildNormalizedFinalToAnthropicMessagesBody,
+  normalizeAnthropicMessagesFinalToNormalized,
+} from './responseBridge.js';
+import { anthropicMessagesStream, consumeAnthropicSseEvent } from './streamBridge.js';
 import { anthropicMessagesUsage } from './usage.js';
 import { createAnthropicMessagesAggregateState } from './aggregator.js';
 import {
@@ -21,12 +27,12 @@ export {
   serializeAnthropicUpstreamFinalAsStream,
   serializeAnthropicRawSseEvent,
   syncAnthropicRawStreamStateFromEvent,
-} from './stream.js';
+} from './streamBridge.js';
 
 export const anthropicMessagesTransformer = {
   protocol: 'anthropic/messages' as const,
   inbound: anthropicMessagesInbound,
-  outbound: anthropicMessagesOutbound,
+  outbound: anthropicMessagesResponseBridge,
   stream: anthropicMessagesStream,
   usage: anthropicMessagesUsage,
   compatibility: {
@@ -41,42 +47,13 @@ export const anthropicMessagesTransformer = {
     body: unknown,
     ctx?: ProtocolParseContext,
   ): { value?: CanonicalRequestEnvelope; error?: { statusCode: number; payload: unknown } } {
-    const parsed = anthropicMessagesInbound.parse(body);
-    if (parsed.error) {
-      return { error: parsed.error };
-    }
-    if (!parsed.value) {
-      return {
-        error: {
-          statusCode: 400,
-          payload: {
-            error: {
-              message: 'invalid messages request',
-              type: 'invalid_request_error',
-            },
-          },
-        },
-      };
-    }
-
-    return {
-      value: canonicalRequestFromOpenAiBody({
-        body: parsed.value.parsed.upstreamBody,
-        surface: 'anthropic-messages',
-        cliProfile: ctx?.cliProfile,
-        operation: ctx?.operation,
-        metadata: ctx?.metadata,
-        passthrough: ctx?.passthrough,
-        continuation: ctx?.continuation,
-      }),
-    };
+    return parseAnthropicMessagesRequestToCanonical(body, ctx);
   },
   buildProtocolRequest(
     request: CanonicalRequestEnvelope,
     _ctx?: ProtocolBuildContext,
   ): Record<string, unknown> {
-    const openAiBody = canonicalRequestToOpenAiChatBody(request);
-    return convertOpenAiBodyToAnthropicMessagesBody(openAiBody, request.requestedModel, request.stream);
+    return buildCanonicalRequestToAnthropicMessagesBody(request);
   },
   transformRequest(body: unknown): ReturnType<typeof anthropicMessagesInbound.parse> {
     return anthropicMessagesInbound.parse(body);
@@ -88,7 +65,7 @@ export const anthropicMessagesTransformer = {
     return anthropicMessagesStream.createDownstreamContext();
   },
   transformFinalResponse(payload: unknown, modelName: string, fallbackText = ''): NormalizedFinalResponse {
-    return anthropicMessagesOutbound.normalizeFinal(payload, modelName, fallbackText);
+    return normalizeAnthropicMessagesFinalToNormalized(payload, modelName, fallbackText);
   },
   transformStreamEvent(payload: unknown, context: StreamTransformContext, modelName: string): NormalizedStreamEvent {
     return anthropicMessagesStream.normalizeEvent(payload, context, modelName);
@@ -108,9 +85,9 @@ export const anthropicMessagesTransformer = {
   },
   serializeFinalResponse(
     normalized: NormalizedFinalResponse,
-    usage: Parameters<typeof anthropicMessagesOutbound.serializeFinal>[1],
+    usage: Parameters<typeof buildNormalizedFinalToAnthropicMessagesBody>[1],
   ) {
-    return anthropicMessagesOutbound.serializeFinal(normalized, usage);
+    return buildNormalizedFinalToAnthropicMessagesBody(normalized, usage);
   },
   serializeUpstreamFinalAsStream(
     payload: unknown,
@@ -123,7 +100,7 @@ export const anthropicMessagesTransformer = {
       payload,
       modelName,
       fallbackText,
-      anthropicMessagesOutbound.normalizeFinal,
+      normalizeAnthropicMessagesFinalToNormalized,
       streamContext,
       claudeContext,
     );

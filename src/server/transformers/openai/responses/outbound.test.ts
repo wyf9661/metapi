@@ -244,7 +244,7 @@ describe('serializeResponsesFinalPayload', () => {
 
     expect(payload.output).toEqual([
       {
-        id: 'call_1',
+        id: 'fc_1',
         type: 'function_call',
         status: 'completed',
         call_id: 'call_1',

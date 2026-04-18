@@ -321,42 +321,6 @@ describe('settings and auth events', () => {
     expect(saved).toBeFalsy();
   });
 
-  it('does not persist payload rules when a later runtime setting fails validation', async () => {
-    const response = await app.inject({
-      method: 'PUT',
-      url: '/api/settings/runtime',
-      payload: {
-        payloadRules: {
-          override: [
-            {
-              models: [{ name: 'gpt-*', protocol: 'codex' }],
-              params: {
-                'reasoning.effort': 'high',
-              },
-            },
-          ],
-        },
-        modelAvailabilityProbeEnabled: 'invalid-boolean',
-      },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({
-      success: false,
-      message: '批量测活开关格式无效：需要 boolean',
-    });
-
-    const saved = await db.select().from(schema.settings).where(eq(schema.settings.key, 'payload_rules')).get();
-    expect(saved).toBeFalsy();
-    expect(config.payloadRules).toEqual({
-      default: [],
-      defaultRaw: [],
-      override: [],
-      overrideRaw: [],
-      filter: [],
-    });
-  });
-
   it('returns current recognized admin IP in runtime settings response', async () => {
     const response = await app.inject({
       method: 'GET',

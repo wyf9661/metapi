@@ -1,12 +1,20 @@
-import { canonicalRequestFromOpenAiBody, canonicalRequestToOpenAiChatBody } from '../../canonical/request.js';
 import type { CanonicalRequestEnvelope } from '../../canonical/types.js';
 import type { ProtocolBuildContext, ProtocolParseContext } from '../../contracts.js';
 import { type NormalizedFinalResponse, type NormalizedStreamEvent, type StreamTransformContext } from '../../shared/normalized.js';
 import { createChatEndpointStrategy } from '../../shared/chatEndpointStrategy.js';
 import { openAiChatInbound } from './inbound.js';
-import { openAiChatOutbound } from './outbound.js';
 import { createChatProxyStreamSession } from './proxyStream.js';
-import { openAiChatStream } from './stream.js';
+import {
+  buildCanonicalRequestToOpenAiChatBody,
+  parseOpenAiChatRequestToCanonical,
+} from './requestBridge.js';
+import {
+  openAiChatResponseBridge,
+  buildNormalizedFinalToOpenAiChatChunks,
+  buildNormalizedFinalToOpenAiChatPayload,
+  normalizeOpenAiChatFinalToNormalized,
+} from './responseBridge.js';
+import { openAiChatStream } from './streamBridge.js';
 import { openAiChatUsage } from './usage.js';
 import { createOpenAiChatAggregateState, applyOpenAiChatStreamEvent, finalizeOpenAiChatAggregate } from './aggregator.js';
 import type {
@@ -17,7 +25,7 @@ import type {
 export const openAiChatTransformer = {
   protocol: 'openai/chat' as const,
   inbound: openAiChatInbound,
-  outbound: openAiChatOutbound,
+  outbound: openAiChatResponseBridge,
   stream: openAiChatStream,
   usage: openAiChatUsage,
   compatibility: {
@@ -35,41 +43,13 @@ export const openAiChatTransformer = {
     body: unknown,
     ctx?: ProtocolParseContext,
   ): { value?: CanonicalRequestEnvelope; error?: { statusCode: number; payload: unknown } } {
-    const parsed = openAiChatInbound.parse(body);
-    if (parsed.error) {
-      return { error: parsed.error };
-    }
-    if (!parsed.value) {
-      return {
-        error: {
-          statusCode: 400,
-          payload: {
-            error: {
-              message: 'invalid chat request',
-              type: 'invalid_request_error',
-            },
-          },
-        },
-      };
-    }
-
-    return {
-      value: canonicalRequestFromOpenAiBody({
-        body: parsed.value.parsed.upstreamBody,
-        surface: 'openai-chat',
-        cliProfile: ctx?.cliProfile,
-        operation: ctx?.operation,
-        metadata: ctx?.metadata,
-        passthrough: ctx?.passthrough,
-        continuation: ctx?.continuation,
-      }),
-    };
+    return parseOpenAiChatRequestToCanonical(body, ctx);
   },
   buildProtocolRequest(
     request: CanonicalRequestEnvelope,
     _ctx?: ProtocolBuildContext,
   ): Record<string, unknown> {
-    return canonicalRequestToOpenAiChatBody(request);
+    return buildCanonicalRequestToOpenAiChatBody(request);
   },
   transformRequest(body: unknown): ReturnType<typeof openAiChatInbound.parse> {
     return openAiChatInbound.parse(body);
@@ -78,7 +58,7 @@ export const openAiChatTransformer = {
     return openAiChatStream.createContext(modelName);
   },
   transformFinalResponse(payload: unknown, modelName: string, fallbackText = ''): NormalizedFinalResponse {
-    return openAiChatOutbound.normalizeFinal(payload, modelName, fallbackText);
+    return normalizeOpenAiChatFinalToNormalized(payload, modelName, fallbackText);
   },
   transformStreamEvent(payload: unknown, context: StreamTransformContext, modelName: string): NormalizedStreamEvent {
     return openAiChatStream.normalizeEvent(payload, context, modelName);
@@ -98,9 +78,9 @@ export const openAiChatTransformer = {
   },
   serializeFinalResponse(
     normalized: NormalizedFinalResponse,
-    usage: Parameters<typeof openAiChatOutbound.serializeFinal>[1],
+    usage: Parameters<typeof buildNormalizedFinalToOpenAiChatPayload>[1],
   ) {
-    return openAiChatOutbound.serializeFinal(normalized, usage);
+    return buildNormalizedFinalToOpenAiChatPayload(normalized, usage);
   },
   serializeUpstreamFinalAsStream(
     payload: unknown,
@@ -108,16 +88,15 @@ export const openAiChatTransformer = {
     fallbackText: string,
     streamContext: StreamTransformContext,
   ) {
-    const normalizedFinal = openAiChatOutbound.normalizeFinal(payload, modelName, fallbackText);
+    const normalizedFinal = normalizeOpenAiChatFinalToNormalized(payload, modelName, fallbackText);
     streamContext.id = normalizedFinal.id;
     streamContext.model = normalizedFinal.model;
     streamContext.created = normalizedFinal.created;
-    return openAiChatOutbound
-      .buildSyntheticChunks(normalizedFinal)
+    return buildNormalizedFinalToOpenAiChatChunks(normalizedFinal)
       .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`);
   },
   buildSyntheticChunks(normalized: NormalizedFinalResponse) {
-    return openAiChatOutbound.buildSyntheticChunks(normalized);
+    return buildNormalizedFinalToOpenAiChatChunks(normalized);
   },
   pullSseEvents(buffer: string) {
     return openAiChatStream.pullSseEvents(buffer);

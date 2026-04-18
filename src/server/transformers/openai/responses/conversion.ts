@@ -439,6 +439,8 @@ const RESPONSES_COMPATIBILITY_FILTER_FIELDS = new Set([
   'verbosity',
 ]);
 
+const MIN_RESPONSES_MAX_OUTPUT_TOKENS = 128;
+
 export function sanitizeResponsesBodyForProxy(
   body: Record<string, unknown>,
   modelName: string,
@@ -571,7 +573,7 @@ export function convertOpenAiBodyToResponsesBody(
           type: 'function_call',
           call_id: callId,
           name: getShortToolName(name, toolNameMap),
-          arguments: argumentsValue,
+          arguments: argumentsValue || '{}',
         });
       }
       continue;
@@ -580,10 +582,16 @@ export function convertOpenAiBodyToResponsesBody(
     if (role === 'tool') {
       const callId = asTrimmedString(item.tool_call_id) || asTrimmedString(item.id);
       if (!callId) continue;
+      const output = normalizeToolOutput(item.content);
       inputItems.push({
         type: 'function_call_output',
         call_id: callId,
-        output: normalizeToolOutput(item.content),
+        output: (
+          (typeof output === 'string' && output === '')
+          || (Array.isArray(output) && output.length === 0)
+        )
+          ? '(empty)'
+          : output,
       });
       continue;
     }
@@ -597,19 +605,21 @@ export function convertOpenAiBodyToResponsesBody(
     });
   }
 
-  const maxOutputTokens = (
+  const requestedMaxOutputTokens = (
     toFiniteNumber(openaiBody.max_output_tokens)
     ?? toFiniteNumber(openaiBody.max_completion_tokens)
     ?? toFiniteNumber(openaiBody.max_tokens)
-    ?? 4096
   );
 
   const body: Record<string, unknown> = {
     model: modelName,
     stream,
-    max_output_tokens: maxOutputTokens,
     input: inputItems,
   };
+
+  if (requestedMaxOutputTokens !== null && requestedMaxOutputTokens > 0) {
+    body.max_output_tokens = Math.trunc(requestedMaxOutputTokens);
+  }
 
   if (systemContents.length > 0) {
     body.instructions = systemContents.join('\n\n');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composeProxyLogMessage } from './logPathMeta.js';
+import { composeProxyLogMessage } from './proxyLogMessage.js';
 
 describe('composeProxyLogMessage', () => {
   it('adds downstream path metadata before plain errors', () => {

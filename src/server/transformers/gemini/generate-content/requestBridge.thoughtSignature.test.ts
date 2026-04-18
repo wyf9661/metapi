@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGeminiGenerateContentRequestFromOpenAi } from './geminiCliCompat.js';
+import { buildGeminiGenerateContentRequestFromOpenAi } from './requestBridge.js';
 
 describe('thoughtSignature injection in OpenAI→Gemini conversion', () => {
   it('injects thoughtSignature from provider_specific_fields into functionCall parts', () => {
@@ -146,6 +146,40 @@ describe('thoughtSignature injection in OpenAI→Gemini conversion', () => {
     expect(fcParts.length).toBe(1);
     // No thinking → no signature injected
     expect(fcParts[0].thoughtSignature).toBeUndefined();
+  });
+
+  it('does not inject dummy signature or preserve thinkingConfig for non-gemini targets when signature is missing', () => {
+    const result = buildGeminiGenerateContentRequestFromOpenAi({
+      body: {
+        model: 'claude-sonnet-4-5',
+        reasoning_effort: 'high',
+        messages: [
+          { role: 'user', content: 'Do something.' },
+          {
+            role: 'assistant',
+            tool_calls: [
+              {
+                id: 'call_no_sig_non_gemini',
+                type: 'function',
+                function: { name: 'Bash', arguments: '{"command":"ls"}' },
+              },
+            ],
+          },
+          { role: 'tool', tool_call_id: 'call_no_sig_non_gemini', content: 'file1\nfile2' },
+        ],
+      },
+      modelName: 'claude-sonnet-4-5',
+    }) as Record<string, unknown>;
+
+    const contents = result.contents as Array<Record<string, unknown>>;
+    const modelMsgs = contents.filter((c) => c.role === 'model');
+    const fcParts = modelMsgs
+      .flatMap((m) => (m.parts as Array<Record<string, unknown>>))
+      .filter((p) => 'functionCall' in p);
+
+    expect(fcParts.length).toBe(1);
+    expect(fcParts[0].thoughtSignature).toBeUndefined();
+    expect((result.generationConfig as Record<string, unknown> | undefined)?.thinkingConfig).toBeUndefined();
   });
 
   it('preserves functionResponse count matching functionCall count', () => {

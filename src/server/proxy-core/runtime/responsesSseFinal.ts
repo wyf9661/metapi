@@ -1,6 +1,6 @@
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
-import { readRuntimeResponseText } from '../../proxy-core/executors/types.js';
+import { readRuntimeResponseText } from '../executors/types.js';
 
 type ResponsesTerminalStatus = 'completed' | 'incomplete';
 

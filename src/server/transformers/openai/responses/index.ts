@@ -1,4 +1,3 @@
-import { canonicalRequestFromOpenAiBody, canonicalRequestToOpenAiChatBody } from '../../canonical/request.js';
 import type { CanonicalRequestEnvelope } from '../../canonical/types.js';
 import type { ProtocolBuildContext, ProtocolParseContext } from '../../contracts.js';
 import { type StreamTransformContext } from '../../shared/normalized.js';
@@ -23,11 +22,19 @@ import {
   failResponsesStream,
   serializeConvertedResponsesEvents,
 } from './aggregator.js';
-import { openAiResponsesOutbound } from './outbound.js';
 import { openAiResponsesInbound } from './inbound.js';
 import { createResponsesProxyStreamSession } from './proxyStream.js';
+import {
+  buildCanonicalRequestToOpenAiResponsesBody,
+  parseOpenAiResponsesRequestToCanonical,
+} from './requestBridge.js';
+import {
+  openAiResponsesResponseBridge,
+  buildNormalizedFinalToOpenAiResponsesPayload,
+  normalizeOpenAiResponsesFinalToNormalized,
+} from './responseBridge.js';
 import { createResponsesEndpointStrategy } from './routeCompatibility.js';
-import { openAiResponsesStream } from './stream.js';
+import { openAiResponsesStream } from './streamBridge.js';
 import { openAiResponsesUsage } from './usage.js';
 import type {
   OpenAiResponsesParsedRequest as OpenAiResponsesParsedRequestModel,
@@ -45,7 +52,7 @@ export const openAiResponsesTransformer = {
     fromOpenAiBody: convertOpenAiBodyToResponsesBody,
     toOpenAiBody: convertResponsesBodyToOpenAiBody,
   },
-  outbound: openAiResponsesOutbound,
+  outbound: openAiResponsesResponseBridge,
   stream: openAiResponsesStream,
   usage: openAiResponsesUsage,
   compatibility: {
@@ -68,59 +75,13 @@ export const openAiResponsesTransformer = {
     body: unknown,
     ctx?: ProtocolParseContext,
   ): { value?: CanonicalRequestEnvelope; error?: { statusCode: number; payload: unknown } } {
-    const parsed = openAiResponsesInbound.parse(body, {
-      defaultEncryptedReasoningInclude: ctx?.defaultEncryptedReasoningInclude,
-    });
-    if (parsed.error) {
-      return { error: parsed.error };
-    }
-    if (!parsed.value) {
-      return {
-        error: {
-          statusCode: 400,
-          payload: {
-            error: {
-              message: 'invalid responses request',
-              type: 'invalid_request_error',
-            },
-          },
-        },
-      };
-    }
-
-    const responsesBody = parsed.value.parsed.normalizedBody;
-    const openAiBody = convertResponsesBodyToOpenAiBody(
-      responsesBody,
-      typeof responsesBody.model === 'string' ? responsesBody.model : parsed.value.model,
-      responsesBody.stream === true,
-      { defaultEncryptedReasoningInclude: ctx?.defaultEncryptedReasoningInclude },
-    );
-
-    return {
-      value: canonicalRequestFromOpenAiBody({
-        body: openAiBody,
-        surface: 'openai-responses',
-        cliProfile: ctx?.cliProfile,
-        operation: ctx?.operation,
-        metadata: ctx?.metadata,
-        passthrough: ctx?.passthrough,
-        continuation: ctx?.continuation,
-      }),
-    };
+    return parseOpenAiResponsesRequestToCanonical(body, ctx);
   },
   buildProtocolRequest(
     request: CanonicalRequestEnvelope,
     _ctx?: ProtocolBuildContext,
   ): Record<string, unknown> {
-    const openAiBody = canonicalRequestToOpenAiChatBody(request);
-    if (request.reasoning) {
-      openAiBody.reasoning = {
-        ...(request.reasoning.effort ? { effort: request.reasoning.effort } : {}),
-        ...(request.reasoning.budgetTokens !== undefined ? { budget_tokens: request.reasoning.budgetTokens } : {}),
-        ...(request.reasoning.summary ? { summary: request.reasoning.summary } : {}),
-      };
-    }
-    return convertOpenAiBodyToResponsesBody(openAiBody, request.requestedModel, request.stream);
+    return buildCanonicalRequestToOpenAiResponsesBody(request);
   },
   transformRequest(
     body: unknown,
@@ -132,13 +93,22 @@ export const openAiResponsesTransformer = {
     return openAiResponsesStream.createContext(modelName);
   },
   transformFinalResponse(payload: unknown, modelName: string, fallbackText = '') {
-    return openAiResponsesOutbound.normalizeFinal(payload, modelName, fallbackText);
+    return normalizeOpenAiResponsesFinalToNormalized(payload, modelName, fallbackText);
   },
   transformStreamEvent(payload: unknown, context: StreamTransformContext, modelName: string) {
     return openAiResponsesStream.normalizeEvent(payload, context, modelName);
   },
   pullSseEvents(buffer: string) {
     return openAiResponsesStream.pullSseEvents(buffer);
+  },
+  serializeFinalResponse(
+    normalized: Parameters<typeof buildNormalizedFinalToOpenAiResponsesPayload>[0]['normalized'],
+    input: Omit<Parameters<typeof buildNormalizedFinalToOpenAiResponsesPayload>[0], 'normalized'>,
+  ) {
+    return buildNormalizedFinalToOpenAiResponsesPayload({
+      ...input,
+      normalized,
+    });
   },
 };
 

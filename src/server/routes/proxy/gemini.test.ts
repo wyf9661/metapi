@@ -799,23 +799,22 @@ describe('gemini native proxy routes', () => {
       actualModel: 'gpt-4.1',
     });
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      id: 'chatcmpl-openai-1',
-      object: 'chat.completion',
-      created: 1_742_160_000,
+      id: 'resp-openai-1',
+      object: 'response',
       model: 'gpt-4.1',
-      choices: [
+      status: 'completed',
+      output: [
         {
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: 'hello from openai',
-          },
-          finish_reason: 'stop',
+          id: 'msg-openai-1',
+          type: 'message',
+          role: 'assistant',
+          status: 'completed',
+          content: [{ type: 'output_text', text: 'hello from openai' }],
         },
       ],
       usage: {
-        prompt_tokens: 4,
-        completion_tokens: 3,
+        input_tokens: 4,
+        output_tokens: 3,
         total_tokens: 7,
       },
     }), {
@@ -841,7 +840,7 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     const [targetUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(targetUrl).toBe('https://api.openai.com/v1/chat/completions');
+    expect(targetUrl).toBe('https://api.openai.com/v1/responses');
     expect(requestInit.headers).toMatchObject({
       Authorization: 'Bearer openai-access-token',
       'Content-Type': 'application/json',
@@ -862,21 +861,27 @@ describe('gemini native proxy routes', () => {
       expect.objectContaining({ traceId: 801 }),
       expect.objectContaining({
         finalStatus: 'success',
-        finalUpstreamPath: '/v1/chat/completions',
+        finalUpstreamPath: '/v1/responses',
       }),
     );
     expect(JSON.parse(String(requestInit.body))).toEqual({
       model: 'gpt-4.1',
       stream: false,
-      messages: [
+      input: [
         {
+          type: 'message',
           role: 'user',
-          content: 'hello',
+          content: [
+            {
+              type: 'input_text',
+              text: 'hello',
+            },
+          ],
         },
       ],
     });
     expect(response.json()).toEqual({
-      responseId: 'chatcmpl-openai-1',
+      responseId: 'resp-openai-1',
       modelVersion: 'gpt-4.1',
       candidates: [
         {
@@ -906,23 +911,22 @@ describe('gemini native proxy routes', () => {
       actualModel: 'gpt-4.1',
     });
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      id: 'chatcmpl-openai-stream-1',
-      object: 'chat.completion',
-      created: 1_742_160_003,
+      id: 'resp-openai-stream-1',
+      object: 'response',
       model: 'gpt-4.1',
-      choices: [
+      status: 'completed',
+      output: [
         {
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: 'hello from openai stream fallback',
-          },
-          finish_reason: 'stop',
+          id: 'msg-openai-stream-1',
+          type: 'message',
+          role: 'assistant',
+          status: 'completed',
+          content: [{ type: 'output_text', text: 'hello from openai stream fallback' }],
         },
       ],
       usage: {
-        prompt_tokens: 5,
-        completion_tokens: 6,
+        input_tokens: 5,
+        output_tokens: 6,
         total_tokens: 11,
       },
     }), {
@@ -950,7 +954,7 @@ describe('gemini native proxy routes', () => {
     expect(response.headers['content-type']).toContain('text/event-stream');
     expect(parseSsePayloads(response.body)).toEqual([
       {
-        responseId: 'chatcmpl-openai-stream-1',
+        responseId: 'resp-openai-stream-1',
         modelVersion: 'gpt-4.1',
         candidates: [
           {
@@ -981,23 +985,22 @@ describe('gemini native proxy routes', () => {
       actualModel: 'gpt-4.1',
     });
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      id: 'chatcmpl-openai-2',
-      object: 'chat.completion',
-      created: 1_742_160_001,
+      id: 'resp-openai-2',
+      object: 'response',
       model: 'gpt-4.1',
-      choices: [
+      status: 'completed',
+      output: [
         {
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: 'hello from gemini cli downstream',
-          },
-          finish_reason: 'stop',
+          id: 'msg-openai-2',
+          type: 'message',
+          role: 'assistant',
+          status: 'completed',
+          content: [{ type: 'output_text', text: 'hello from gemini cli downstream' }],
         },
       ],
       usage: {
-        prompt_tokens: 6,
-        completion_tokens: 5,
+        input_tokens: 6,
+        output_tokens: 5,
         total_tokens: 11,
       },
     }), {
@@ -1024,20 +1027,17 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     const [targetUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(targetUrl).toBe('https://api.openai.com/v1/chat/completions');
-    expect(JSON.parse(String(requestInit.body))).toEqual({
+    expect(targetUrl).toBe('https://api.openai.com/v1/responses');
+    const forwardedBody = JSON.parse(String(requestInit.body));
+    expect(forwardedBody).toMatchObject({
       model: 'gpt-4.1',
       stream: false,
-      messages: [
-        {
-          role: 'user',
-          content: 'hello',
-        },
-      ],
     });
+    expect(Array.isArray(forwardedBody.input)).toBe(true);
+    expect(JSON.stringify(forwardedBody.input)).toContain('hello');
     expect(response.json()).toEqual({
       response: {
-        responseId: 'chatcmpl-openai-2',
+        responseId: 'resp-openai-2',
         modelVersion: 'gpt-4.1',
         candidates: [
           {

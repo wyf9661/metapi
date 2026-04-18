@@ -1,8 +1,13 @@
 import { createProxyStreamLifecycle } from '../../shared/protocolLifecycle.js';
 import { type ParsedSseEvent } from '../../shared/normalized.js';
 import { completeResponsesStream, createOpenAiResponsesAggregateState, failResponsesStream, serializeConvertedResponsesEvents } from './aggregator.js';
-import { openAiResponsesOutbound } from './outbound.js';
-import { openAiResponsesStream } from './stream.js';
+import {
+  hasMeaningfulResponsesOutputItem,
+  hasMeaningfulResponsesPayloadOutput,
+  openAiResponsesStream,
+  preserveMeaningfulResponsesTerminalPayload,
+  serializeResponsesUpstreamFinalAsStream,
+} from './streamBridge.js';
 import { config } from '../../../config.js';
 
 type StreamReader = {
@@ -45,42 +50,8 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function hasNonEmptyString(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function hasMeaningfulContentPart(part: unknown): boolean {
-  if (!isRecord(part)) return false;
-  const partType = typeof part.type === 'string' ? part.type.trim().toLowerCase() : '';
-  if (partType === 'output_text' || partType === 'text') {
-    return hasNonEmptyString(part.text);
-  }
-  return partType.length > 0;
-}
-
-function hasMeaningfulOutputItem(item: unknown): boolean {
-  if (!isRecord(item)) return false;
-  const itemType = typeof item.type === 'string' ? item.type.trim().toLowerCase() : '';
-  if (itemType === 'message') {
-    return Array.isArray(item.content) && item.content.some((part) => hasMeaningfulContentPart(part));
-  }
-  if (itemType === 'reasoning') {
-    return (
-      (Array.isArray(item.summary) && item.summary.some((part) => hasMeaningfulContentPart(part)))
-      || hasNonEmptyString(item.encrypted_content)
-    );
-  }
-  return itemType.length > 0;
-}
-
-function hasMeaningfulResponsesPayloadOutput(payload: unknown): boolean {
-  if (!isRecord(payload)) return false;
-  if (hasNonEmptyString(payload.output_text)) return true;
-  return Array.isArray(payload.output) && payload.output.some((item) => hasMeaningfulOutputItem(item));
-}
-
 function hasMeaningfulAggregateOutput(state: ReturnType<typeof createOpenAiResponsesAggregateState>): boolean {
-  return state.outputItems.some((item) => hasMeaningfulOutputItem(item));
+  return state.outputItems.some((item) => hasMeaningfulResponsesOutputItem(item));
 }
 
 function shouldFailEmptyResponsesCompletion(input: {
@@ -114,59 +85,6 @@ function getResponsesStreamFailureMessage(payload: unknown, fallback = 'upstream
     }
   }
   return fallback;
-}
-
-function preserveMeaningfulTerminalResponsesPayload(
-  lines: string[],
-  eventType: 'response.completed' | 'response.incomplete',
-  payload: Record<string, unknown>,
-): string[] {
-  const responsePayload = isRecord(payload.response) ? payload.response : null;
-  if (!responsePayload || !hasMeaningfulResponsesPayloadOutput(responsePayload)) {
-    return lines;
-  }
-
-  const parsed = openAiResponsesStream.pullSseEvents(lines.join(''));
-  let replaced = false;
-  const nextLines: string[] = [];
-
-  for (const event of parsed.events) {
-    if (event.data === '[DONE]') {
-      nextLines.push('data: [DONE]\n\n');
-      continue;
-    }
-
-    let parsedPayload: unknown = null;
-    try {
-      parsedPayload = JSON.parse(event.data);
-    } catch {
-      nextLines.push(`${event.event ? `event: ${event.event}\n` : ''}data: ${event.data}\n\n`);
-      continue;
-    }
-
-    if (
-      isRecord(parsedPayload)
-      && asTrimmedString(parsedPayload.type) === eventType
-      && isRecord(parsedPayload.response)
-      && !hasMeaningfulResponsesPayloadOutput(parsedPayload.response)
-    ) {
-      replaced = true;
-      nextLines.push(
-        `event: ${event.event || eventType}\ndata: ${JSON.stringify({
-          ...parsedPayload,
-          response: {
-            ...parsedPayload.response,
-            ...responsePayload,
-          },
-        })}\n\n`,
-      );
-      continue;
-    }
-
-    nextLines.push(`${event.event ? `event: ${event.event}\n` : ''}data: ${event.data}\n\n`);
-  }
-
-  return replaced ? nextLines : lines;
 }
 
 export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSessionInput) {
@@ -268,9 +186,9 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
         usage: input.getUsage(),
       });
       if (isIncompleteEvent) {
-        convertedLines = preserveMeaningfulTerminalResponsesPayload(convertedLines, 'response.incomplete', parsedPayload);
+        convertedLines = preserveMeaningfulResponsesTerminalPayload(convertedLines, 'response.incomplete', parsedPayload);
       } else if (eventBlock.event === 'response.completed' || payloadType === 'response.completed') {
-        convertedLines = preserveMeaningfulTerminalResponsesPayload(convertedLines, 'response.completed', parsedPayload);
+        convertedLines = preserveMeaningfulResponsesTerminalPayload(convertedLines, 'response.completed', parsedPayload);
       }
       if (
         (eventBlock.event === 'response.completed' || payloadType === 'response.completed')
@@ -314,27 +232,22 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
       const payloadType = (isRecord(payload) && typeof payload.type === 'string')
         ? payload.type
         : '';
-      const payloadStatus = isRecord(payload) && typeof payload.status === 'string'
-        ? payload.status
-        : '';
       if (payloadType === 'error' || payloadType === 'response.failed') {
         fail(payload);
         response?.end();
         return terminalResult;
       }
 
-      const normalizedFinal = openAiResponsesOutbound.normalizeFinal(payload, input.modelName, fallbackText);
+      const serializedFinal = serializeResponsesUpstreamFinalAsStream({
+        payload,
+        modelName: input.modelName,
+        fallbackText,
+        usage: input.getUsage(),
+      });
+      const { normalizedFinal, streamPayload, isIncompletePayload, lines } = serializedFinal;
       streamContext.id = normalizedFinal.id;
       streamContext.model = normalizedFinal.model;
       streamContext.created = normalizedFinal.created;
-
-      const streamPayload = openAiResponsesOutbound.serializeFinal({
-        upstreamPayload: payload,
-        normalized: normalizedFinal,
-        usage: input.getUsage(),
-        serializationMode: 'response',
-      });
-      const isIncompletePayload = payloadType === 'response.incomplete' || payloadStatus === 'incomplete';
       if (!isIncompletePayload && shouldFailEmptyResponsesCompletion({
         payload: { type: 'response.completed', response: streamPayload },
         state: responsesState,
@@ -349,36 +262,13 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
         response?.end();
         return terminalResult;
       }
-      const createdPayload = {
-        ...streamPayload,
-        status: 'in_progress',
-        output: [],
-        output_text: '',
-      };
 
-      if (isIncompletePayload) {
-        finalized = true;
-        terminalResult = {
-          status: 'completed',
-          errorMessage: null,
-        };
-        input.writeLines([
-          `event: response.created\ndata: ${JSON.stringify({ type: 'response.created', response: createdPayload })}\n\n`,
-          `event: response.incomplete\ndata: ${JSON.stringify({ type: 'response.incomplete', response: streamPayload })}\n\n`,
-          'data: [DONE]\n\n',
-        ]);
-      } else {
-        finalized = true;
-        terminalResult = {
-          status: 'completed',
-          errorMessage: null,
-        };
-        input.writeLines([
-          `event: response.created\ndata: ${JSON.stringify({ type: 'response.created', response: createdPayload })}\n\n`,
-          `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', response: streamPayload })}\n\n`,
-          'data: [DONE]\n\n',
-        ]);
-      }
+      finalized = true;
+      terminalResult = {
+        status: 'completed',
+        errorMessage: null,
+      };
+      input.writeLines(lines);
       response?.end();
       return terminalResult;
     },

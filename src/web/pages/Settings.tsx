@@ -8,7 +8,6 @@ import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
 import ModelAvailabilityProbeConfirmModal from './settings/ModelAvailabilityProbeConfirmModal.js';
-import { PAYLOAD_RULE_PROTOCOL_OPTIONS } from './settings/payloadRuleProtocolOptions.js';
 import {
   createCodexDefaultHighReasoningVisualPreset,
   createVisualPayloadRule,
@@ -19,6 +18,7 @@ import {
   type VisualPayloadRuleValueMode,
   visualRulesToPayloadRules,
 } from './settings/payloadRulesVisual.js';
+import { PAYLOAD_RULE_PROTOCOL_OPTIONS } from './settings/payloadRuleProtocolOptions.js';
 import UpdateCenterSection from './settings/UpdateCenterSection.js';
 import {
   applyRoutingProfilePreset,
@@ -639,14 +639,6 @@ export default function Settings() {
   const applyVisualPayloadRules = (
     nextRulesOrUpdater: VisualPayloadRule[] | ((current: VisualPayloadRule[]) => VisualPayloadRule[]),
   ) => {
-    if (
-      payloadAdvancedDirty
-      && typeof globalThis.confirm === 'function'
-      && !globalThis.confirm('高级 JSON 有未同步修改，继续会覆盖这些内容。是否继续？')
-    ) {
-      return;
-    }
-
     setPayloadVisualRules((currentRules) => {
       const nextRules = typeof nextRulesOrUpdater === 'function'
         ? nextRulesOrUpdater(currentRules)
@@ -1629,14 +1621,14 @@ export default function Settings() {
                       />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>上游类型</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>协议</div>
                       <ModernSelect
                         size="sm"
                         data-testid={`payload-rule-protocol-${index + 1}`}
                         value={rule.protocol}
                         onChange={(value) => updatePayloadVisualRule(rule.id, { protocol: String(value || '') })}
                         options={PAYLOAD_RULE_PROTOCOL_OPTIONS}
-                        placeholder="全部上游类型"
+                        placeholder="全部协议"
                       />
                     </div>
                     <div>

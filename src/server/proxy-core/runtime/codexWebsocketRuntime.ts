@@ -337,7 +337,7 @@ async function sendSessionRequestAttempt(
     socket.once('error', onError);
     socket.once('close', onClose);
 
-    socket.send(JSON.stringify(buildCodexWebsocketRequestBody(input.body)), (error) => {
+    socket.send(JSON.stringify(buildCodexWebsocketRequestBody(input.body)), (error?: Error) => {
       if (!error) return;
       clearSessionSocket(session, socket);
       rejectWith(error.message || 'failed to send upstream websocket request');
@@ -409,7 +409,9 @@ export function createCodexWebsocketRuntime(input?: {
       await closeSocket(session.socket);
       session.socket = null;
       session.socketUrl = null;
-      clearCodexSessionResponseId(sessionId);
+      // Intentionally preserve the remembered previous_response_id across
+      // websocket reconnects. Closing a transport session should not sever the
+      // logical downstream continuation chain for the same session key.
     },
 
     async closeAllSessions(): Promise<void> {

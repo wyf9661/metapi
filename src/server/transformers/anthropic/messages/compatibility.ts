@@ -1,4 +1,5 @@
 import { type DownstreamFormat } from '../../shared/normalized.js';
+import { inferRequiredEndpointFromProtocolError } from '../../shared/endpointCompatibility.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -61,9 +62,9 @@ export function shouldRetryNormalizedMessagesBody(input: {
   if (input.downstreamFormat !== 'claude') return false;
   if (!input.endpointPath.includes('/v1/messages')) return false;
   if (input.status < 400 || input.status >= 500) return false;
-  return /messages\s+is\s+required/i.test(input.upstreamErrorText);
+  return inferRequiredEndpointFromProtocolError(input.upstreamErrorText) === 'messages';
 }
 
 export function isMessagesRequiredError(upstreamErrorText: string): boolean {
-  return /messages\s+is\s+required/i.test(upstreamErrorText);
+  return inferRequiredEndpointFromProtocolError(upstreamErrorText) === 'messages';
 }

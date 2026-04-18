@@ -15,7 +15,7 @@ import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../se
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { getDownstreamRoutingPolicy } from '../../routes/proxy/downstreamPolicy.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
-import { composeProxyLogMessage } from '../../routes/proxy/logPathMeta.js';
+import { composeProxyLogMessage } from '../../services/proxyLogMessage.js';
 import {
   buildUpstreamEndpointRequest,
   resolveUpstreamEndpointCandidates,
@@ -35,7 +35,7 @@ import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
   wrapGeminiCliRequest,
-} from '../../routes/proxy/geminiCliCompat.js';
+} from '../../transformers/gemini/generate-content/cliBridge.js';
 import { dispatchRuntimeRequest } from '../../services/runtimeDispatch.js';
 import { detectDownstreamClientContext, type DownstreamClientContext } from '../downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';

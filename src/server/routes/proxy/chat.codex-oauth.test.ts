@@ -21,6 +21,8 @@ const dbInsertMock = vi.fn((_arg?: any) => ({
   }),
 }));
 
+const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful coding assistant.';
+
 vi.mock('undici', async () => {
   const actual = await vi.importActual<typeof import('undici')>('undici');
   return {
@@ -206,7 +208,7 @@ describe('chat proxy codex oauth compatibility', () => {
     const [, options] = fetchMock.mock.calls[0] as [string, any];
     const forwardedBody = JSON.parse(options.body);
     expect(forwardedBody.stream).toBe(true);
-    expect(forwardedBody.instructions).toBe('');
+    expect(forwardedBody.instructions).toBe(CODEX_DEFAULT_INSTRUCTIONS);
     expect(forwardedBody.store).toBe(false);
     expect(forwardedBody.parallel_tool_calls).toBeUndefined();
     expect(forwardedBody.include).toBeUndefined();

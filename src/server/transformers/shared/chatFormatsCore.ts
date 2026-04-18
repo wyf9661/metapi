@@ -493,6 +493,29 @@ function parseResponsesReasoning(payload: Record<string, unknown>): {
   };
 }
 
+function responsesStatusToChatFinishReason(
+  status: unknown,
+  incompleteDetails: unknown,
+  hasToolCalls: boolean,
+): string {
+  const normalizedStatus = asTrimmedString(status).toLowerCase();
+  if (normalizedStatus === 'completed') {
+    return hasToolCalls ? 'tool_calls' : 'stop';
+  }
+  if (normalizedStatus === 'incomplete') {
+    const reason = (
+      isRecord(incompleteDetails)
+        ? asTrimmedString(incompleteDetails.reason).toLowerCase()
+        : ''
+    );
+    return reason === 'max_output_tokens' ? 'length' : 'stop';
+  }
+  if (normalizedStatus === 'failed') {
+    return 'stop';
+  }
+  return hasToolCalls ? 'tool_calls' : 'stop';
+}
+
 function unwrapTerminalResponsesEnvelope(
   payload: Record<string, unknown>,
 ): Record<string, unknown> | null {
@@ -1367,9 +1390,11 @@ export function normalizeUpstreamFinalResponse(
       content: parseResponsesOutputText(payload) || (toolCalls.length > 0 ? '' : fallbackText),
       reasoningContent: responsesReasoning.reasoningContent,
       ...(responsesReasoning.reasoningSignature ? { reasoningSignature: responsesReasoning.reasoningSignature } : {}),
-      finishReason: toolCalls.length > 0
-        ? 'tool_calls'
-        : (normalizeStopReason(payload.finish_reason ?? payload.status) || 'stop'),
+      finishReason: responsesStatusToChatFinishReason(
+        payload.status ?? payload.finish_reason,
+        payload.incomplete_details,
+        toolCalls.length > 0,
+      ),
       toolCalls,
     };
   }
@@ -1541,13 +1566,24 @@ export function normalizeUpstreamStreamEvent(
     return { role: 'assistant' };
   }
 
-  if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
+  if (type === 'response.incomplete' || type === 'response.failed' || type === 'error') {
     const responsePayload = isRecord((payload as any).response) ? (payload as any).response : null;
-    const finishReason = normalizeStopReason(
-      (responsePayload as any)?.status
-      ?? (payload as any).status
-      ?? (payload as any).type,
-    ) || 'error';
+    let finishReason: string;
+    if (type === 'response.incomplete') {
+      finishReason = responsesStatusToChatFinishReason(
+        'incomplete',
+        (responsePayload as any)?.incomplete_details ?? (payload as any).incomplete_details,
+        false,
+      );
+    } else if (type === 'response.failed') {
+      finishReason = responsesStatusToChatFinishReason('failed', null, false);
+    } else {
+      finishReason = normalizeStopReason(
+        (responsePayload as any)?.status
+        ?? (payload as any).status
+        ?? (payload as any).type,
+      ) || 'error';
+    }
     return {
       finishReason,
       done: true,

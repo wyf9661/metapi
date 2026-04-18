@@ -17,7 +17,7 @@ describe('resolveProviderProfile', () => {
         Authorization: 'Bearer oauth-access-token',
       },
       providerHeaders: {
-        Originator: 'codex_cli_rs',
+        Originator: 'Codex Desktop',
         'Chatgpt-Account-Id': 'chatgpt-account-123',
       },
       codexSessionCacheKey: 'gpt-5.2-codex:user-123',
@@ -30,7 +30,7 @@ describe('resolveProviderProfile', () => {
 
     expect(result.path).toBe('/responses');
     expect(result.headers.Authorization).toBe('Bearer oauth-access-token');
-    expect(result.headers.Originator).toBe('codex_cli_rs');
+    expect(result.headers.Originator).toBe('codex_chatgpt_desktop');
     expect(result.headers['Chatgpt-Account-Id']).toBe('chatgpt-account-123');
     expect(result.headers.Session_id).toMatch(/^[0-9a-f-]{36}$/i);
     expect(result.headers.Conversation_id).toBe(result.headers.Session_id);
@@ -74,6 +74,7 @@ describe('resolveProviderProfile', () => {
     expect(result.headers.Authorization).toBe('Bearer oauth-access-token');
     expect(result.headers['x-api-key']).toBeUndefined();
     expect(result.headers['anthropic-version']).toBe('2023-06-01');
+    expect(result.headers['anthropic-beta']).toContain('oauth-2025-04-20');
     expect(result.headers['Accept-Encoding']).toBe('gzip, deflate, br, zstd');
     expect(result.runtime).toMatchObject({
       executor: 'claude',
@@ -81,6 +82,60 @@ describe('resolveProviderProfile', () => {
       stream: false,
     });
     expect(result.body).toBe(protocolBody);
+  });
+
+  it('drops oauth-only claude betas for api-key upstreams', () => {
+    const profile = resolveProviderProfile('claude');
+    expect(profile?.id).toBe('claude');
+
+    const result = profile!.prepareRequest({
+      endpoint: 'messages',
+      modelName: 'claude-opus-4-6',
+      stream: false,
+      tokenValue: 'sk-claude-api-key',
+      sitePlatform: 'openai',
+      baseHeaders: {
+        'Content-Type': 'application/json',
+      },
+      claudeHeaders: {},
+      body: {
+        model: 'claude-opus-4-6',
+        max_tokens: 256,
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    });
+
+    expect(result.headers.Authorization).toBeUndefined();
+    expect(result.headers['x-api-key']).toBe('sk-claude-api-key');
+    expect(result.headers['anthropic-beta']).not.toContain('oauth-2025-04-20');
+    expect(result.headers['anthropic-beta']).toContain('fine-grained-tool-streaming-2025-05-14');
+  });
+
+  it('adds token-counting beta when building claude count_tokens requests', () => {
+    const profile = resolveProviderProfile('claude');
+    expect(profile?.id).toBe('claude');
+
+    const result = profile!.prepareRequest({
+      endpoint: 'messages',
+      modelName: 'claude-opus-4-6',
+      stream: false,
+      action: 'countTokens',
+      tokenValue: 'oauth-access-token',
+      oauthProvider: 'claude',
+      sitePlatform: 'claude',
+      baseHeaders: {
+        'Content-Type': 'application/json',
+      },
+      claudeHeaders: {},
+      body: {
+        model: 'claude-opus-4-6',
+        max_tokens: 256,
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    });
+
+    expect(result.path).toBe('/v1/messages/count_tokens?beta=true');
+    expect(result.headers['anthropic-beta']).toContain('token-counting-2024-11-01');
   });
 
   it('builds gemini-cli provider requests with wrapped runtime envelope and project validation', () => {

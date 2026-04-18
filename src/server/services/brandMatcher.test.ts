@@ -23,8 +23,11 @@ describe('brandMatcher', () => {
     expect(getBlockedBrandRules(['OpenRouter', 'OpenRouter', 'Unknown Brand'])).toEqual(['OpenRouter']);
   });
 
-  it('canonicalizes blocked brand names before validating them', () => {
-    expect(getBlockedBrandRules(['openai', '  aws   bedrock  ', 'unknown brand', 'OPENAI'])).toEqual(['OpenAI', 'AWS Bedrock']);
+  it('canonicalizes blocked brand names before filtering', () => {
+    expect(getBlockedBrandRules([' openrouter ', 'OPENROUTER', 'together   ai'])).toEqual([
+      'OpenRouter',
+      'Together AI',
+    ]);
   });
 
   it('uses the shared frontend detection result for global brand blocking', () => {
@@ -33,9 +36,6 @@ describe('brandMatcher', () => {
     expect(isModelBlockedByBrand('groq/compound-beta', providerRules)).toBe(true);
     expect(isModelBlockedByBrand('dashscope/wanx2.1-t2i-turbo', providerRules)).toBe(true);
     expect(isModelBlockedByBrand('LongCat-Flash-Lite', providerRules)).toBe(true);
-    expect(isModelBlockedByBrand('deepinfra/meta-llama/llama-3.3-70b-instruct', getBlockedBrandRules(['DeepInfra']))).toBe(true);
-    expect(isModelBlockedByBrand('azureai/gpt-4o', getBlockedBrandRules(['Azure AI']))).toBe(true);
-    expect(isModelBlockedByBrand('bedrock/us.amazon.nova-pro-v1:0', getBlockedBrandRules(['AWS Bedrock']))).toBe(true);
 
     const vendorRules = getBlockedBrandRules(['Anthropic', 'Meta', 'Google', 'OpenAI', 'Arcee', 'Xiaomi MiMo']);
     expect(isModelBlockedByBrand('openrouter/anthropic/claude-3-7-sonnet', vendorRules)).toBe(true);

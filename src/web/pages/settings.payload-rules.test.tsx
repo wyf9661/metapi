@@ -102,7 +102,6 @@ describe('Settings payload rules', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-    vi.unstubAllGlobals();
   });
 
   it('loads saved payload rules into the editor', async () => {
@@ -328,6 +327,69 @@ describe('Settings payload rules', () => {
     }
   });
 
+  it('keeps the full payload-rule protocol option set in the visual editor', async () => {
+    apiMock.getRuntimeSettings.mockResolvedValueOnce({
+      checkinCron: '0 8 * * *',
+      checkinScheduleMode: 'interval',
+      checkinIntervalHours: 6,
+      balanceRefreshCron: '0 * * * *',
+      logCleanupCron: '15 4 * * *',
+      logCleanupUsageLogsEnabled: true,
+      logCleanupProgramLogsEnabled: true,
+      logCleanupRetentionDays: 14,
+      routingFallbackUnitCost: 1,
+      proxyFirstByteTimeoutSec: 0,
+      routingWeights: {},
+      tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
+      adminIpAllowlist: [],
+      systemProxyUrl: '',
+      payloadRules: {},
+    });
+
+    let root!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <Settings />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const addButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '新增规则'
+      ));
+
+      await act(async () => {
+        addButton.props.onClick();
+      });
+
+      const protocolSelect = root.root.find((node) => (
+        node.props['data-testid'] === 'payload-rule-protocol-1'
+      ));
+      const options = Array.isArray(protocolSelect.props.options)
+        ? protocolSelect.props.options
+        : [];
+      const values = options.map((option: { value: string }) => option.value);
+
+      expect(values).toEqual(expect.arrayContaining([
+        '',
+        'sub2api',
+        'new-api',
+        'one-api',
+        'gemini-cli',
+        'anyrouter',
+      ]));
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('blocks save when a payload-rule section contains invalid JSON', async () => {
     let root!: ReactTestRenderer;
     try {
@@ -363,83 +425,6 @@ describe('Settings payload rules', () => {
       await flushMicrotasks();
 
       expect(apiMock.updateRuntimeSettings).not.toHaveBeenCalled();
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('asks before discarding unsynced advanced JSON when switching back to visual edits', async () => {
-    const confirmMock = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('confirm', confirmMock);
-
-    apiMock.getRuntimeSettings.mockResolvedValueOnce({
-      checkinCron: '0 8 * * *',
-      checkinScheduleMode: 'interval',
-      checkinIntervalHours: 6,
-      balanceRefreshCron: '0 * * * *',
-      logCleanupCron: '15 4 * * *',
-      logCleanupUsageLogsEnabled: true,
-      logCleanupProgramLogsEnabled: true,
-      logCleanupRetentionDays: 14,
-      routingFallbackUnitCost: 1,
-      proxyFirstByteTimeoutSec: 0,
-      routingWeights: {},
-      tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
-      adminIpAllowlist: [],
-      systemProxyUrl: '',
-      payloadRules: {},
-    });
-
-    let root!: ReactTestRenderer;
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter>
-            <ToastProvider>
-              <Settings />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const overrideTextarea = root.root.find((node) => (
-        node.type === 'textarea'
-        && node.props['aria-label'] === 'Payload 规则 override'
-      ));
-
-      const advancedDraft = `[
-  {
-    "models": [{ "name": "gpt-*", "protocol": "codex" }],
-    "params": {
-      "text.verbosity": "low"
-    }
-  }
-]`;
-
-      await act(async () => {
-        overrideTextarea.props.onChange({ target: { value: advancedDraft } });
-      });
-
-      const addButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '新增规则'
-      ));
-
-      await act(async () => {
-        addButton.props.onClick();
-      });
-
-      expect(confirmMock).toHaveBeenCalledWith('高级 JSON 有未同步修改，继续会覆盖这些内容。是否继续？');
-      expect(root.root.findAll((node) => (
-        node.type === 'input'
-        && node.props['aria-label'] === 'Payload 规则可视化模型 1'
-      ))).toHaveLength(0);
-      expect(String(root.root.find((node) => (
-        node.type === 'textarea'
-        && node.props['aria-label'] === 'Payload 规则 override'
-      )).props.value)).toBe(advancedDraft);
     } finally {
       root?.unmount();
     }

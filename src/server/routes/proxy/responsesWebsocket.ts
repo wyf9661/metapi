@@ -552,8 +552,10 @@ async function handleResponsesWebsocketConnection(
   request: IncomingMessage,
   authContext: ResponsesWebsocketAuthContext,
 ) {
-  const websocketSessionId = headerValueToTrimmedString(request.headers['session_id'])
-    || headerValueToTrimmedString(request.headers['session-id'])
+  const websocketSessionId = headerValueToTrimmedString(request.headers['session-id'])
+    || headerValueToTrimmedString(request.headers['session_id'])
+    || headerValueToTrimmedString(request.headers['conversation-id'])
+    || headerValueToTrimmedString(request.headers['conversation_id'])
     || randomUUID();
   const runtimeSessionKeys = new Set<string>();
   let lastRequest: Record<string, unknown> | null = null;

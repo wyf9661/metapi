@@ -7,10 +7,12 @@ import {
 } from './conversion.js';
 import {
   buildResponsesCompatibilityBodies,
+  buildResponsesCompatibilityHeaderCandidates,
   convertOpenAiBodyToResponsesBody as convertOpenAiBodyToResponsesBodyViaCompatibility,
   normalizeResponsesInputForCompatibility as normalizeResponsesInputForCompatibilityViaCompatibility,
   normalizeResponsesMessageContent as normalizeResponsesMessageContentViaCompatibility,
   sanitizeResponsesBodyForProxy as sanitizeResponsesBodyForProxyViaCompatibility,
+  shouldRetryResponsesCompatibility,
 } from './compatibility.js';
 import {
   normalizeResponsesInputForCompatibility,
@@ -702,6 +704,77 @@ describe('convertOpenAiBodyToResponsesBody', () => {
     );
 
     expect(result.include).toBeUndefined();
+  });
+
+  it('does not synthesize max_output_tokens when chat-style input omits all token-limit fields', () => {
+    const result = convertOpenAiBodyToResponsesBody(
+      {
+        model: 'gpt-5',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      'gpt-5',
+      false,
+    );
+
+    expect(result.max_output_tokens).toBeUndefined();
+  });
+
+  it('preserves explicit chat token limits when converting to Responses bodies', () => {
+    const result = convertOpenAiBodyToResponsesBody(
+      {
+        model: 'gpt-5',
+        messages: [{ role: 'user', content: 'hello' }],
+        max_tokens: 64,
+      },
+      'gpt-5',
+      false,
+    );
+
+    expect(result.max_output_tokens).toBe(64);
+  });
+
+  it('uses sub2api-compatible placeholders for empty tool arguments and empty tool outputs', () => {
+    const result = convertOpenAiBodyToResponsesBody(
+      {
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'assistant',
+            tool_calls: [
+              {
+                id: 'call_empty_1',
+                type: 'function',
+                function: {
+                  name: 'lookup_weather',
+                  arguments: '',
+                },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            tool_call_id: 'call_empty_1',
+            content: '',
+          },
+        ],
+      },
+      'gpt-5',
+      false,
+    );
+
+    expect(result.input).toEqual([
+      {
+        type: 'function_call',
+        call_id: 'call_empty_1',
+        name: 'lookup_weather',
+        arguments: '{}',
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'call_empty_1',
+        output: '(empty)',
+      },
+    ]);
   });
 
   it('maps OpenAI file-style content blocks into inline-only Responses input_file blocks', () => {
@@ -1568,6 +1641,87 @@ describe('convertResponsesBodyToOpenAiBody', () => {
     });
   });
 
+  it('does not generate extra compatibility bodies for sub2api when responses-only semantics are already present', () => {
+    const candidates = buildResponsesCompatibilityBodies({
+      model: 'gpt-5',
+      input: 'hello',
+      stream: true,
+      store: false,
+      include: ['reasoning.encrypted_content'],
+      reasoning: {
+        effort: 'high',
+      },
+      previous_response_id: 'resp_prev_9',
+      prompt_cache_key: 'cache-key-9',
+      service_tier: 'priority',
+      background: true,
+    }, {
+      sitePlatform: 'sub2api',
+    });
+
+    expect(candidates).toEqual([]);
+  });
+
+  it('builds a sub2api-safe compatibility header candidate that preserves session and codex passthrough headers', () => {
+    const candidates = buildResponsesCompatibilityHeaderCandidates({
+      accept: 'text/event-stream',
+      authorization: 'Bearer sk-test',
+      'content-type': 'application/json',
+      'accept-language': 'zh-CN',
+      'openai-beta': 'responses-2025-03-11',
+      originator: 'codex_cli_rs',
+      'user-agent': 'client-ua/1.0',
+      session_id: 'session-123',
+      conversation_id: 'conversation-123',
+      'x-codex-turn-state': 'turn-state',
+      'x-codex-turn-metadata': 'turn-metadata',
+      'x-stainless-lang': 'typescript',
+      version: '0.202.0',
+    }, true, {
+      sitePlatform: 'sub2api',
+    });
+
+    expect(candidates).toContainEqual({
+      accept: 'text/event-stream',
+      authorization: 'Bearer sk-test',
+      'content-type': 'application/json',
+      'accept-language': 'zh-CN',
+      'openai-beta': 'responses-2025-03-11',
+      originator: 'codex_cli_rs',
+      'user-agent': 'client-ua/1.0',
+      session_id: 'session-123',
+      conversation_id: 'conversation-123',
+      'x-codex-turn-state': 'turn-state',
+      'x-codex-turn-metadata': 'turn-metadata',
+    });
+    expect(candidates).not.toContainEqual({
+      accept: 'text/event-stream',
+      authorization: 'Bearer sk-test',
+      'content-type': 'application/json',
+    });
+  });
+
+  it('deduplicates semantically identical sub2api retry bodies even when field order differs', () => {
+    const candidates = buildResponsesCompatibilityBodies({
+      model: 'gpt-5',
+      input: 'hello',
+      previous_response_id: 'resp_prev_9',
+      include: ['reasoning.encrypted_content'],
+      reasoning: {
+        effort: 'high',
+      },
+      prompt_cache_key: 'cache-key-9',
+      service_tier: 'priority',
+      background: true,
+      stream: true,
+      store: false,
+    }, {
+      sitePlatform: 'sub2api',
+    });
+
+    expect(candidates).toEqual([]);
+  });
+
   it('preserves tools and tool_choice across all compatibility retry bodies', () => {
     const candidates = buildResponsesCompatibilityBodies({
       model: 'gpt-5',
@@ -1616,6 +1770,39 @@ describe('convertResponsesBodyToOpenAiBody', () => {
         },
       });
     }
+  });
+
+  it('does not retry auth-shaped failures and still retries generic upstream errors through compatibility variants', () => {
+    expect(shouldRetryResponsesCompatibility({
+      endpoint: 'responses',
+      status: 400,
+      rawErrText: JSON.stringify({
+        error: {
+          message: 'invalid_api_key',
+          type: 'authentication_error',
+        },
+      }),
+      body: {
+        model: 'gpt-5',
+        input: 'hello',
+      },
+    })).toBe(false);
+
+    expect(shouldRetryResponsesCompatibility({
+      endpoint: 'responses',
+      status: 400,
+      rawErrText: JSON.stringify({
+        error: {
+          message: '',
+          type: 'upstream_error',
+        },
+      }),
+      body: {
+        model: 'gpt-5',
+        input: 'hello',
+        metadata: { trace_id: 'req-1' },
+      },
+    })).toBe(true);
   });
 
   it('maps native tool choices and strict function tools into OpenAI-compatible fallback bodies', () => {

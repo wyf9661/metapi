@@ -2,7 +2,7 @@ import {
   parseProxyLogMetadata,
   type ParsedProxyLogMetadata,
   type ProxyLogUsageSource,
-} from '../../../shared/proxyLogMeta.js';
+} from '../../shared/proxyLogMeta.js';
 
 type ComposeProxyLogMessageArgs = {
   clientKind?: string | null;

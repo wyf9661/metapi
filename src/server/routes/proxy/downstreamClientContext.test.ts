@@ -80,6 +80,22 @@ describe('detectDownstreamClientContext', () => {
     });
   });
 
+  it('recognizes conversation_id-only Codex requests as continuation-capable sessions', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/responses',
+      headers: {
+        conversation_id: 'codex-conversation-123',
+      },
+    })).toEqual({
+      clientKind: 'codex',
+      clientAppId: 'codex',
+      clientAppName: 'Codex',
+      clientConfidence: 'heuristic',
+      sessionId: 'codex-conversation-123',
+      traceHint: 'codex-conversation-123',
+    });
+  });
+
   it('recognizes broader Codex official-client user-agent families without requiring stainless headers', () => {
     expect(detectDownstreamClientContext({
       downstreamPath: '/v1/responses',
