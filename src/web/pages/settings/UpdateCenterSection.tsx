@@ -221,9 +221,15 @@ function formatImageTarget(tag?: string | null, digest?: string | null) {
   return '';
 }
 
-function normalizeRecentDockerCandidates(input?: UpdateCenterStatus['dockerHubRecentTags'] | null) {
+type RecentDockerCandidate = NonNullable<NonNullable<UpdateCenterStatus['dockerHubRecentTags']>[number]>;
+
+function normalizeRecentDockerCandidates(
+  input?: UpdateCenterStatus['dockerHubRecentTags'] | null,
+): Array<RecentDockerCandidate & { tagName: string }> {
   if (!Array.isArray(input)) return [];
-  return input.filter((entry) => String(entry?.tagName || entry?.normalizedVersion || '').trim());
+  return input.filter(
+    (entry): entry is RecentDockerCandidate & { tagName: string } => !!String(entry?.tagName || '').trim(),
+  );
 }
 
 export default function UpdateCenterSection() {
@@ -800,7 +806,7 @@ export default function UpdateCenterSection() {
               {recentDockerCandidates.length ? (
                 <div style={{ display: 'grid', gap: 8 }}>
                   {recentDockerCandidates.map((candidate) => {
-                    const candidateTag = String(candidate.tagName || candidate.normalizedVersion || '').trim();
+                    const candidateTag = String(candidate.tagName || '').trim();
                     const candidateDigest = String(candidate.digest || '').trim();
                     const candidateLabel = candidate.displayVersion || candidate.normalizedVersion || candidateTag;
                     return (
@@ -820,6 +826,11 @@ export default function UpdateCenterSection() {
                         <div style={fieldHintStyle}>
                           最近推送：{formatTaskTime(candidate.publishedAt)}
                         </div>
+                        {candidateDigest ? (
+                          <div style={{ ...fieldHintStyle, fontFamily: 'var(--font-mono)' }} title={candidateDigest}>
+                            Digest：{formatShortDigest(candidateDigest)}
+                          </div>
+                        ) : null}
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button
                             type="button"
