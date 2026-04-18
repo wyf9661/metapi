@@ -327,6 +327,69 @@ describe('Settings payload rules', () => {
     }
   });
 
+  it('keeps the full payload-rule protocol option set in the visual editor', async () => {
+    apiMock.getRuntimeSettings.mockResolvedValueOnce({
+      checkinCron: '0 8 * * *',
+      checkinScheduleMode: 'interval',
+      checkinIntervalHours: 6,
+      balanceRefreshCron: '0 * * * *',
+      logCleanupCron: '15 4 * * *',
+      logCleanupUsageLogsEnabled: true,
+      logCleanupProgramLogsEnabled: true,
+      logCleanupRetentionDays: 14,
+      routingFallbackUnitCost: 1,
+      proxyFirstByteTimeoutSec: 0,
+      routingWeights: {},
+      tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
+      adminIpAllowlist: [],
+      systemProxyUrl: '',
+      payloadRules: {},
+    });
+
+    let root!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ToastProvider>
+              <Settings />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const addButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '新增规则'
+      ));
+
+      await act(async () => {
+        addButton.props.onClick();
+      });
+
+      const protocolSelect = root.root.find((node) => (
+        node.props['data-testid'] === 'payload-rule-protocol-1'
+      ));
+      const options = Array.isArray(protocolSelect.props.options)
+        ? protocolSelect.props.options
+        : [];
+      const values = options.map((option: { value: string }) => option.value);
+
+      expect(values).toEqual(expect.arrayContaining([
+        '',
+        'sub2api',
+        'new-api',
+        'one-api',
+        'gemini-cli',
+        'anyrouter',
+      ]));
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('blocks save when a payload-rule section contains invalid JSON', async () => {
     let root!: ReactTestRenderer;
     try {

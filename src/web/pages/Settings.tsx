@@ -18,6 +18,7 @@ import {
   type VisualPayloadRuleValueMode,
   visualRulesToPayloadRules,
 } from './settings/payloadRulesVisual.js';
+import { PAYLOAD_RULE_PROTOCOL_OPTIONS } from './settings/payloadRuleProtocolOptions.js';
 import UpdateCenterSection from './settings/UpdateCenterSection.js';
 import {
   applyRoutingProfilePreset,
@@ -207,15 +208,6 @@ const PAYLOAD_RULE_ACTION_OPTIONS: Array<{ value: PayloadRuleAction; label: stri
   { value: 'override', label: '强制覆盖' },
   { value: 'override-raw', label: '强制覆盖 JSON' },
   { value: 'filter', label: '删除字段' },
-];
-
-const PAYLOAD_RULE_PROTOCOL_OPTIONS = [
-  { value: '', label: '全部协议' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'claude', label: 'Claude' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' },
 ];
 
 const PAYLOAD_RULE_VALUE_MODE_OPTIONS: Array<{ value: VisualPayloadRuleValueMode; label: string }> = [
