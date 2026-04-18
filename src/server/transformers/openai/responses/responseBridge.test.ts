@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildNormalizedFinalToOpenAiResponsesPayload,
@@ -209,6 +209,87 @@ describe('openai responses response bridge', () => {
         },
       ],
     });
+  });
+
+  it('generates unique synthetic ids within the same millisecond fallback window', () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000);
+    try {
+      const first = buildNormalizedFinalToOpenAiResponsesPayload({
+        upstreamPayload: {
+          id: '',
+          model: 'gpt-5',
+          output: [
+            {
+              id: '',
+              type: 'function_call',
+              name: 'lookup_weather',
+              arguments: '{"city":"Paris"}',
+            },
+            {
+              id: '',
+              type: 'message',
+              role: 'assistant',
+              status: 'completed',
+              content: [{ type: 'output_text', text: 'first' }],
+            },
+          ],
+        },
+        normalized: {
+          id: '',
+          model: 'gpt-5',
+          created: 1700000000,
+          content: 'first',
+          reasoningContent: '',
+          finishReason: 'stop',
+          toolCalls: [{
+            id: '',
+            name: 'lookup_weather',
+            arguments: '{"city":"Paris"}',
+          }],
+        },
+        usage: {
+          promptTokens: 1,
+          completionTokens: 1,
+          totalTokens: 2,
+        },
+      });
+      const second = buildNormalizedFinalToOpenAiResponsesPayload({
+        upstreamPayload: {
+          id: '',
+          model: 'gpt-5',
+          output: [
+            {
+              id: '',
+              type: 'message',
+              role: 'assistant',
+              status: 'completed',
+              content: [{ type: 'output_text', text: 'second' }],
+            },
+          ],
+        },
+        normalized: {
+          id: '',
+          model: 'gpt-5',
+          created: 1700000000,
+          content: 'second',
+          reasoningContent: '',
+          finishReason: 'stop',
+          toolCalls: [],
+        },
+        usage: {
+          promptTokens: 1,
+          completionTokens: 1,
+          totalTokens: 2,
+        },
+      });
+
+      expect(first.id).not.toBe(second.id);
+      const firstOutput = first.output as Array<Record<string, unknown>>;
+      const secondOutput = second.output as Array<Record<string, unknown>>;
+      expect(firstOutput[1]?.id).not.toBe(secondOutput[0]?.id);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it('keeps the outbound facade pointed at the response bridge object', () => {

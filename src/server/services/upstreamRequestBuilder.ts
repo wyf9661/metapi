@@ -580,7 +580,6 @@ export function buildUpstreamEndpointRequest(input: {
       : {};
     const anthropicVersion = (
       claudeHeaders['anthropic-version']
-      || passthroughHeaders['anthropic-version']
       || '2023-06-01'
     );
     const nativeClaudeBody = (

@@ -127,9 +127,28 @@ export function fetchContributors(repo = REPO): ReadmeContributor[] {
   return normalizeContributors(parsePaginatedJson(raw) as GitHubContributor[]);
 }
 
-function parsePaginatedJson(raw: string): unknown[] {
+export function parsePaginatedJson(raw: string): unknown[] {
+  const trimmedRaw = raw.trim();
+  if (!trimmedRaw) return [];
+
+  try {
+    const parsed = JSON.parse(trimmedRaw);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    // Fall through to paginated-array parsing.
+  }
+
+  try {
+    const mergedArrays = JSON.parse(`[${trimmedRaw.replace(/\]\s*\[/g, '],[')}]`);
+    if (Array.isArray(mergedArrays)) {
+      return mergedArrays.flatMap((item) => (Array.isArray(item) ? item : [item]));
+    }
+  } catch {
+    // Fall through to line-by-line parsing.
+  }
+
   const items: unknown[] = [];
-  for (const line of raw.split('\n')) {
+  for (const line of trimmedRaw.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) {
       continue;

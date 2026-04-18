@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parsePaginatedJson,
   normalizeContributors,
   replaceContributorsSection,
   renderContributorsBlock,
@@ -107,5 +108,12 @@ describe('README contributors updater', () => {
     expect(html).toContain('\n  <a href="https://github.com/cita-777"');
     expect(html).toContain('\n  <a href="https://github.com/Babylonehy"');
     expect((html.match(/\n  <a href=/g) || []).length).toBe(2);
+  });
+
+  it('parses concatenated paginated gh api arrays without requiring newlines between pages', () => {
+    expect(parsePaginatedJson('[{"login":"a"}][{"login":"b"}]')).toEqual([
+      { login: 'a' },
+      { login: 'b' },
+    ]);
   });
 });

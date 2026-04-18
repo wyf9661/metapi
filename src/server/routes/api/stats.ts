@@ -31,7 +31,7 @@ import {
   getProxyDebugTraceDetail,
   listProxyDebugTraces,
 } from "../../services/proxyDebugTraceStore.js";
-import { parseProxyLogMessageMeta } from "../proxy/logPathMeta.js";
+import { parseProxyLogMessageMeta } from "../../services/proxyLogMessage.js";
 import { requiresManagedAccountTokens } from "../../services/accountExtraConfig.js";
 import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from "../../services/accountTokenService.js";
 import {

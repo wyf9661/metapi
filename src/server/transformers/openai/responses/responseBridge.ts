@@ -13,6 +13,13 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+let syntheticIdCounter = 0;
+
+function createSyntheticId(prefix: 'resp' | 'msg' | 'call'): string {
+  syntheticIdCounter += 1;
+  return `${prefix}_${Date.now()}_${syntheticIdCounter}`;
+}
+
 function cloneJson<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => cloneJson(item)) as T;
@@ -26,18 +33,18 @@ function cloneJson<T>(value: T): T {
 }
 
 function ensureResponseId(rawId: string): string {
-  const trimmed = rawId.trim() || `resp_${Date.now()}`;
+  const trimmed = rawId.trim() || createSyntheticId('resp');
   return trimmed.startsWith('resp_') ? trimmed : `resp_${trimmed}`;
 }
 
 function ensureMessageId(rawId: string): string {
-  const trimmed = rawId.trim() || `msg_${Date.now()}`;
+  const trimmed = rawId.trim() || createSyntheticId('msg');
   return trimmed.startsWith('msg_') ? trimmed : `msg_${trimmed}`;
 }
 
 function ensureFunctionCallId(rawId: string): string {
   const trimmed = rawId.trim();
-  if (!trimmed) return `call_${Date.now()}`;
+  if (!trimmed) return createSyntheticId('call');
   return trimmed.startsWith('call_') ? trimmed : `call_${trimmed}`;
 }
 
@@ -331,7 +338,7 @@ export function buildNormalizedFinalToOpenAiResponsesPayload(input: {
 
   const normalizedId = typeof normalized.id === 'string' && normalized.id.trim()
     ? normalized.id.trim()
-    : `resp_${Date.now()}`;
+    : createSyntheticId('resp');
   const responseId = ensureResponseId(normalizedId);
   const messageId = ensureMessageId(normalizedId);
   const syntheticOutput = extractSyntheticOutputItemsFromUpstream(upstreamPayload);
