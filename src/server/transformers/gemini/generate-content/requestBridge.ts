@@ -328,7 +328,10 @@ export function buildGeminiGenerateContentRequestFromOpenAi(input: {
   return request;
 }
 
-function canonicalPartToGeminiPart(part: CanonicalContentPart): Record<string, unknown> | null {
+function canonicalPartToGeminiPart(
+  part: CanonicalContentPart,
+  toolNameById?: ReadonlyMap<string, string>,
+): Record<string, unknown> | null {
   if (part.type === 'text') {
     return {
       text: part.text,
@@ -391,10 +394,13 @@ function canonicalPartToGeminiPart(part: CanonicalContentPart): Record<string, u
   }
 
   if (part.type === 'tool_result') {
+    const response = part.resultJson ?? parseJsonString(part.resultText ?? '');
     return {
       functionResponse: {
-        name: part.toolCallId,
-        response: part.resultJson ?? parseJsonString(part.resultText ?? ''),
+        name: toolNameById?.get(part.toolCallId) || 'unknown',
+        response: {
+          result: response,
+        },
       },
     };
   }
@@ -407,19 +413,26 @@ export function buildCanonicalRequestToGeminiGenerateContentBody(
 ): Record<string, unknown> {
   const contents: Array<Record<string, unknown>> = [];
   const systemParts: Array<Record<string, unknown>> = [];
+  const toolNameById = new Map<string, string>();
 
   for (const message of request.messages) {
     if (message.role === 'system' || message.role === 'developer') {
       systemParts.push(
         ...message.parts
-          .map((part) => canonicalPartToGeminiPart(part))
+          .map((part) => canonicalPartToGeminiPart(part, toolNameById))
           .filter((part): part is Record<string, unknown> => !!part),
       );
       continue;
     }
 
+    for (const part of message.parts) {
+      if (part.type === 'tool_call') {
+        toolNameById.set(part.id, part.name);
+      }
+    }
+
     const parts = message.parts
-      .map((part) => canonicalPartToGeminiPart(part))
+      .map((part) => canonicalPartToGeminiPart(part, toolNameById))
       .filter((part): part is Record<string, unknown> => !!part);
 
     if (parts.length <= 0) continue;

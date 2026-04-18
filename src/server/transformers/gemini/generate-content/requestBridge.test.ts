@@ -262,4 +262,57 @@ describe('gemini generate-content request bridge', () => {
     expect(functionCallCount).toBe(2);
     expect(functionResponseCount).toBe(2);
   });
+
+  it('uses canonical tool-call names for Gemini functionResponse parts', () => {
+    const body = buildCanonicalRequestToGeminiGenerateContentBody({
+      operation: 'generate',
+      surface: 'gemini-generate-content',
+      cliProfile: 'generic',
+      requestedModel: 'gemini-2.5-pro',
+      stream: false,
+      messages: [
+        {
+          role: 'assistant',
+          parts: [{
+            type: 'tool_call',
+            id: 'call_weather',
+            name: 'lookup_weather',
+            argumentsJson: '{"city":"Paris"}',
+          }],
+        },
+        {
+          role: 'tool',
+          parts: [{
+            type: 'tool_result',
+            toolCallId: 'call_weather',
+            resultJson: { temperature: '22C' },
+          }],
+        },
+      ],
+    });
+
+    expect(body.contents).toEqual([
+      {
+        role: 'model',
+        parts: [{
+          functionCall: {
+            id: 'call_weather',
+            name: 'lookup_weather',
+            args: { city: 'Paris' },
+          },
+        }],
+      },
+      {
+        role: 'user',
+        parts: [{
+          functionResponse: {
+            name: 'lookup_weather',
+            response: {
+              result: { temperature: '22C' },
+            },
+          },
+        }],
+      },
+    ]);
+  });
 });
