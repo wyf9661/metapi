@@ -689,9 +689,13 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (body.sortOrder !== undefined) updates.sortOrder = normalizedSortOrder;
     if (body.globalWeight !== undefined) updates.globalWeight = normalizedGlobalWeight;
     const anyBody = body as Record<string, unknown>;
-    if (anyBody.postRefreshProbeEnabled !== undefined) updates.postRefreshProbeEnabled = Boolean(anyBody.postRefreshProbeEnabled);
+    if (anyBody.postRefreshProbeEnabled !== undefined) updates.postRefreshProbeEnabled = anyBody.postRefreshProbeEnabled === true || anyBody.postRefreshProbeEnabled === 1;
     if (anyBody.postRefreshProbeModel !== undefined) updates.postRefreshProbeModel = String(anyBody.postRefreshProbeModel || '').trim();
     if (anyBody.postRefreshProbeScope !== undefined) updates.postRefreshProbeScope = anyBody.postRefreshProbeScope === 'all' ? 'all' : 'single';
+    if (anyBody.postRefreshProbeLatencyThresholdMs !== undefined) {
+      const ms = Number(anyBody.postRefreshProbeLatencyThresholdMs);
+      updates.postRefreshProbeLatencyThresholdMs = Number.isFinite(ms) && ms >= 0 ? Math.trunc(ms) : 0;
+    }
     updates.updatedAt = new Date().toISOString();
     try {
       await db.transaction(async (tx) => {
@@ -905,7 +909,9 @@ export async function sitesRoutes(app: FastifyInstance) {
     const body = request.body as Record<string, unknown> | null;
     const scope = body?.scope === 'all' ? 'all' : body?.scope === 'single' ? 'single' : undefined;
     const modelName = typeof body?.modelName === 'string' ? body.modelName.trim() : undefined;
-    const result = await probeSiteModels(id, { scope, modelName });
+    const parsedThresholdBody = Number(body?.latencyThresholdMs ?? 0);
+    const latencyThresholdMsBody = Number.isFinite(parsedThresholdBody) && parsedThresholdBody > 0 ? Math.trunc(parsedThresholdBody) : undefined;
+    const result = await probeSiteModels(id, { scope, modelName, latencyThresholdMs: latencyThresholdMsBody });
     if (!result.success) {
       return reply.code(422).send({ error: result.error });
     }
@@ -936,11 +942,17 @@ export async function sitesRoutes(app: FastifyInstance) {
       const parsedThreshold = parseInt(q.latencyThresholdMs ?? '', 10);
       const latencyThresholdMs = Number.isFinite(parsedThreshold) && parsedThreshold > 0 ? parsedThreshold : undefined;
 
+      // Propagate client disconnect to the probe worker pool
+      const probeAbort = new AbortController();
+      reply.raw.on('close', () => probeAbort.abort());
+
       try {
-        const result = await probeSiteModels(id, { scope, modelName, latencyThresholdMs }, (ev) => {
+        const result = await probeSiteModels(id, { scope, modelName, latencyThresholdMs, signal: probeAbort.signal }, (ev) => {
           sseWrite(reply.raw, ev.type, ev);
         });
-        sseWrite(reply.raw, 'complete', result);
+        if (!probeAbort.signal.aborted) {
+          sseWrite(reply.raw, 'complete', result);
+        }
       } catch (err: any) {
         sseWrite(reply.raw, 'error', { message: err?.message || '探测失败' });
       }

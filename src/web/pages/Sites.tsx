@@ -492,6 +492,7 @@ export default function Sites() {
     setProbeEnabled(!!site.postRefreshProbeEnabled);
     setProbeModel(typeof site.postRefreshProbeModel === 'string' ? site.postRefreshProbeModel : '');
     setProbeScope(site.postRefreshProbeScope === 'all' ? 'all' : 'single');
+    setProbeLatencyThreshold(String((site as any).postRefreshProbeLatencyThresholdMs ?? 0));
     setProbeLog([]);
     setProbeCompleted(false);
     probeAbortRef.current?.abort();
@@ -563,9 +564,10 @@ export default function Sites() {
         postRefreshProbeEnabled: probeEnabled,
         postRefreshProbeModel: probeModel.trim(),
         postRefreshProbeScope: probeScope,
+        postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0),
       });
       setSites((prev) => prev.map((s) => s.id === editor.editingSiteId
-        ? { ...s, postRefreshProbeEnabled: probeEnabled, postRefreshProbeModel: probeModel.trim(), postRefreshProbeScope: probeScope }
+        ? { ...s, postRefreshProbeEnabled: probeEnabled, postRefreshProbeModel: probeModel.trim(), postRefreshProbeScope: probeScope, postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0) }
         : s,
       ));
       toast.success('刷新后探测设置已保存');
@@ -588,6 +590,7 @@ export default function Sites() {
     probeAbortRef.current = controller;
     setProbing(true);
     setProbeLog([]);
+    setProbeCompleted(false);
 
     try {
       const token = getAuthToken(localStorage);
@@ -666,6 +669,15 @@ export default function Sites() {
           } else if (type === 'error') {
             addLog(d.message || '探测失败', 'var(--color-error, #ef4444)');
             toast.error(d.message || '探测失败');
+            // Refresh model state even on error
+            Promise.all([
+              api.getSiteAvailableModels(siteId).then((res: any) => {
+                setAvailableModels(Array.isArray(res?.models) ? res.models : []);
+              }),
+              api.getSiteDisabledModels(siteId).then((res: any) => {
+                setDisabledModels(Array.isArray(res?.models) ? res.models : []);
+              }),
+            ]).catch(() => {}).finally(() => setProbeCompleted(true));
           }
         } catch { /* ignore parse errors */ }
       };

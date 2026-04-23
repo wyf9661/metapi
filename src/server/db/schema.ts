@@ -18,6 +18,7 @@ export const sites = sqliteTable('sites', {
   postRefreshProbeEnabled: integer('post_refresh_probe_enabled', { mode: 'boolean' }).default(false),
   postRefreshProbeModel: text('post_refresh_probe_model').default(''),
   postRefreshProbeScope: text('post_refresh_probe_scope').default('single'),
+  postRefreshProbeLatencyThresholdMs: integer('post_refresh_probe_latency_threshold_ms').default(0),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
 }, (table) => ({

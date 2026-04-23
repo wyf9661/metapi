@@ -2107,6 +2107,12 @@
           "notNull": false,
           "defaultValue": "'single'",
           "primaryKey": false
+        },
+        "post_refresh_probe_latency_threshold_ms": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false
         }
       }
     },

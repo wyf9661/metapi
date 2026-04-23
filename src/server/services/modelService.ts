@@ -397,7 +397,7 @@ export type ProbeSiteModelsProgress =
 
 export async function probeSiteModels(
   siteId: number,
-  options?: { scope?: 'single' | 'all'; modelName?: string; concurrency?: number; latencyThresholdMs?: number },
+  options?: { scope?: 'single' | 'all'; modelName?: string; concurrency?: number; latencyThresholdMs?: number; signal?: AbortSignal },
   onProgress?: (event: ProbeSiteModelsProgress) => void,
 ): Promise<ProbeSiteModelsResult> {
   const empty = (scope: 'single' | 'all', error: string): ProbeSiteModelsResult =>
@@ -440,11 +440,12 @@ export async function probeSiteModels(
 
   // Probe models concurrently, limited by modelAvailabilityProbeConcurrency
   const concurrency = Math.max(1, options?.concurrency ?? 10);
-  const detailsMap = new Map<string, { modelName: string; status: RuntimeModelProbeStatus; latencyMs: number | null }>();
+  const detailsMap = new Map<string, { modelName: string; status: RuntimeModelProbeStatus; latencyMs: number | null; reason?: string }>();
 
   let cursor = 0;
   async function worker() {
     while (cursor < modelsToProbe.length) {
+      if (options?.signal?.aborted) break;
       const modelName = modelsToProbe[cursor++];
       try {
         const result = await probeRuntimeModel({
@@ -530,6 +531,8 @@ async function runPostRefreshProbeIfEnabled(params: {
     modelsToProbe = [found];
   }
 
+  // runPostRefreshProbeIfEnabled: apply latency threshold from site config
+  const threshold = params.site.postRefreshProbeLatencyThresholdMs ?? 0;
   // Probe each model sequentially
   const details: Array<{ modelName: string; status: RuntimeModelProbeStatus; latencyMs: number | null }> = [];
   for (const modelName of modelsToProbe) {
@@ -540,7 +543,14 @@ async function runPostRefreshProbeIfEnabled(params: {
         modelName,
         timeoutMs: config.modelAvailabilityProbeTimeoutMs,
       });
-      details.push({ modelName, status: result.status, latencyMs: result.latencyMs });
+      const latencyExceeded = (
+        result.status === 'supported'
+        && threshold > 0
+        && result.latencyMs != null
+        && result.latencyMs > threshold
+      );
+      const effectiveStatus: RuntimeModelProbeStatus = latencyExceeded ? 'unsupported' : result.status;
+      details.push({ modelName, status: effectiveStatus, latencyMs: result.latencyMs });
     } catch (err) {
       console.warn(`[post-refresh-probe] probe failed for account ${params.account.id} model ${modelName}`, err);
       details.push({ modelName, status: 'inconclusive', latencyMs: null });
