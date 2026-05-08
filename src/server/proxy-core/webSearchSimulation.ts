@@ -14,6 +14,8 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+const SEARCH_SIMULATION_MODEL = '__search';
+
 function findSearchTool(body: Record<string, unknown>): Record<string, unknown> | null {
   const tools = Array.isArray(body.tools) ? body.tools : [];
   for (const tool of tools) {
@@ -23,6 +25,7 @@ function findSearchTool(body: Record<string, unknown>): Record<string, unknown> 
     if (
       type === 'web_search'
       || type === 'web_search_preview'
+      || type === 'web_search_preview_2025_03_11'
       || type === 'web_search_20250305'
       || type === 'google_search'
       || name === 'web_search'
@@ -129,6 +132,7 @@ function buildSyntheticResponsesPayload(input: {
   const responseId = `resp_web_search_${randomUUID()}`;
   const searchCallId = `ws_${randomUUID()}`;
   const results = normalizeSearchResults(input.searchPayload);
+  const outputText = results.length > 0 ? JSON.stringify(results) : '[]';
 
   return {
     id: responseId,
@@ -136,6 +140,7 @@ function buildSyntheticResponsesPayload(input: {
     created_at: createdAt,
     model: asTrimmedString(input.body.model) || 'unknown',
     status: 'completed',
+    output_text: outputText,
     output: [
       {
         id: searchCallId,
@@ -153,9 +158,7 @@ function buildSyntheticResponsesPayload(input: {
         status: 'completed',
         content: [{
           type: 'output_text',
-          text: results.length > 0
-            ? JSON.stringify(results)
-            : '[]',
+          text: outputText,
         }],
       },
     ],
@@ -193,7 +196,7 @@ async function sendAnthropicSearchSimulation(input: {
     app: input.app,
     request: input.request,
     query,
-    model: asTrimmedString(input.body.model) || asTrimmedString(input.openAiBody.model) || '__search',
+    model: SEARCH_SIMULATION_MODEL,
     maxResults: toSearchMaxResults(tool),
   });
   if (search.statusCode < 200 || search.statusCode >= 300) {
@@ -252,7 +255,7 @@ async function sendResponsesSearchSimulation(input: {
     app: input.app,
     request: input.request,
     query,
-    model: asTrimmedString(input.body.model) || '__search',
+    model: SEARCH_SIMULATION_MODEL,
     maxResults: toSearchMaxResults(tool),
   });
   if (search.statusCode < 200 || search.statusCode >= 300) {

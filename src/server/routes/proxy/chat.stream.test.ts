@@ -4749,6 +4749,7 @@ describe('chat proxy stream behavior', () => {
 
     expect(response.statusCode, response.body).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(selectChannelMock).toHaveBeenCalledWith('__search', expect.anything());
     const [targetUrl, options] = fetchMock.mock.calls[0] as [string, any];
     expect(targetUrl).toBe('https://upstream.example.com/v1/search');
     expect(JSON.parse(options.body)).toMatchObject({
@@ -4816,6 +4817,7 @@ describe('chat proxy stream behavior', () => {
 
     expect(response.statusCode, response.body).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(selectChannelMock).toHaveBeenCalledWith('__search', expect.anything());
     const [targetUrl, options] = fetchMock.mock.calls[0] as [string, any];
     expect(targetUrl).toBe('https://upstream.example.com/v1/search');
     expect(JSON.parse(options.body)).toMatchObject({
@@ -4825,6 +4827,7 @@ describe('chat proxy stream behavior', () => {
 
     const body = response.json();
     expect(body.object).toBe('response');
+    expect(body.output_text).toContain('Metapi Responses');
     expect(body.output?.[0]).toMatchObject({
       type: 'web_search_call',
       status: 'completed',

@@ -126,6 +126,7 @@ export function applyOpenAiServiceTierPolicy(input: {
   context?: ServiceTierRuleContext;
   rules?: unknown;
 }): ServiceTierPolicyResult {
+  const hasRequestedServiceTier = Object.prototype.hasOwnProperty.call(input.body, 'service_tier');
   const rawTier = input.body.service_tier;
   const serviceTier = normalizeServiceTier(rawTier);
   const next = { ...input.body };
@@ -135,7 +136,7 @@ export function applyOpenAiServiceTierPolicy(input: {
     return {
       ok: true,
       body: next,
-      action: 'filter',
+      action: hasRequestedServiceTier ? 'filter' : 'pass',
     };
   }
 
@@ -160,4 +161,3 @@ export function applyOpenAiServiceTierPolicy(input: {
     action: 'pass',
   };
 }
-
