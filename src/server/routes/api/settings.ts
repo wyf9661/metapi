@@ -1425,7 +1425,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         changedLabels.push('全局品牌屏蔽');
       }
       config.globalBlockedBrands = uniqueBrands;
-      upsertSetting('global_blocked_brands', JSON.stringify(uniqueBrands));
+      upsertSetting('global_blocked_brands', uniqueBrands);
       if (prev !== next) {
         startBackgroundTask(
           {
@@ -1450,7 +1450,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         changedLabels.push('全局模型白名单');
       }
       config.globalAllowedModels = uniqueModels;
-      upsertSetting('global_allowed_models', JSON.stringify(uniqueModels));
+      upsertSetting('global_allowed_models', uniqueModels);
       if (prev !== next) {
         startBackgroundTask(
           {

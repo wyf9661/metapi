@@ -451,10 +451,6 @@ export default function UpdateCenterSection() {
   const manualDockerTag = String(manualDockerTarget.tag || '').trim();
   const manualDockerDigest = String(manualDockerTarget.digest || '').trim();
   const recentDockerCandidates = normalizeRecentDockerCandidates(status?.dockerHubRecentTags);
-  const canDeployDockerByTag = !deploying
-    && config.enabled
-    && config.dockerHubTagsEnabled
-    && helperHealthy;
   const canDeployManualDocker = !deploying
     && config.enabled
     && config.dockerHubTagsEnabled
@@ -809,6 +805,15 @@ export default function UpdateCenterSection() {
                     const candidateTag = String(candidate.tagName || '').trim();
                     const candidateDigest = String(candidate.digest || '').trim();
                     const candidateLabel = candidate.displayVersion || candidate.normalizedVersion || candidateTag;
+                    const candidateDeployState = describeDockerDeployState({
+                      enabled: config.enabled && config.dockerHubTagsEnabled,
+                      helperHealthy,
+                      helperError: status?.helper?.error,
+                      currentVersion: status?.currentVersion,
+                      helper: status?.helper,
+                      candidate,
+                    });
+                    const canDeployCandidate = !deploying && candidateDeployState.canDeploy;
                     return (
                       <div
                         key={`${candidateTag}:${candidateDigest || 'no-digest'}`}
@@ -836,9 +841,10 @@ export default function UpdateCenterSection() {
                             type="button"
                             className="btn btn-ghost"
                             style={{ border: '1px solid var(--color-border)' }}
-                            disabled={!canDeployDockerByTag || !candidateTag}
+                            disabled={!canDeployCandidate || !candidateTag}
+                            title={candidateDeployState.reason}
                             onClick={() => {
-                              if (!canDeployDockerByTag || !candidateTag) return;
+                              if (!canDeployCandidate || !candidateTag) return;
                               void runDeploy('docker-hub-tag', {
                                 tag: candidateTag,
                                 digest: candidateDigest || null,
