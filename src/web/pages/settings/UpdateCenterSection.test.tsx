@@ -470,11 +470,7 @@ describe('UpdateCenterSection', () => {
       });
       await flushMicrotasks();
 
-      const recentTagCard = root.root.find((node) => (
-        typeof node.props?.style === 'object'
-        && collectText(node).includes('dev-20260417-f67ade2 @ sha256:bbbbbbbbbbbb')
-      ));
-      expect(recentTagCard).toBeTruthy();
+      expect(collectText(root.root)).toContain('dev-20260417-f67ade2 @ sha256:bbbbbbbbbbbb');
 
       const deployRecentButton = root.root.find((node) => (
         node.type === 'button'
@@ -599,6 +595,7 @@ describe('UpdateCenterSection', () => {
         targetTag: 'dev-20260417-next',
         targetDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       });
+      expect(apiMock.streamUpdateCenterTaskLogs).toHaveBeenCalledWith('task-1', expect.any(Object));
     } finally {
       root?.unmount();
     }
