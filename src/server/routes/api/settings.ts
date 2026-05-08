@@ -702,6 +702,10 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.tokenRouterFailureCooldownMaxSec = normalized;
       return;
     }
+    case 'post_refresh_probe_enabled':
+    case 'post_refresh_probe_model':
+    case 'post_refresh_probe_scope':
+      return;
     default:
       return;
   }
