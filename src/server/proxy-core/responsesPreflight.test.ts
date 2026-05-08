@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateExternalResponsesHttpRequest } from './responsesPreflight.js';
+import {
+  hasResponsesWebSearchOnlyRequest,
+  validateExternalResponsesHttpRequest,
+} from './responsesPreflight.js';
 
 describe('validateExternalResponsesHttpRequest', () => {
   it('rejects external HTTP previous_response_id and explains msg ids separately', () => {
@@ -63,3 +66,21 @@ describe('validateExternalResponsesHttpRequest', () => {
   });
 });
 
+describe('hasResponsesWebSearchOnlyRequest', () => {
+  it('recognizes the current web_search_preview tool alias', () => {
+    expect(hasResponsesWebSearchOnlyRequest({
+      model: 'gpt-5',
+      tools: [{ type: 'web_search_preview_2025_03_11' }],
+      input: 'metapi protocol compatibility',
+    })).toBe(true);
+
+    expect(hasResponsesWebSearchOnlyRequest({
+      model: 'gpt-5',
+      tools: [
+        { type: 'web_search_preview_2025_03_11' },
+        { type: 'function', name: 'lookup' },
+      ],
+      input: 'metapi protocol compatibility',
+    })).toBe(false);
+  });
+});

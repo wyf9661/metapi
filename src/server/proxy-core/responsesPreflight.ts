@@ -120,6 +120,7 @@ function isWebSearchToolRecord(tool: Record<string, unknown>): boolean {
   const name = asTrimmedString(tool.name).toLowerCase();
   return type === 'web_search'
     || type === 'web_search_preview'
+    || type === 'web_search_preview_2025_03_11'
     || type === 'web_search_20250305'
     || type === 'google_search'
     || name === 'web_search'

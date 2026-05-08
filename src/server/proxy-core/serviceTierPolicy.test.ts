@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { applyOpenAiServiceTierPolicy } from './serviceTierPolicy.js';
 
 describe('applyOpenAiServiceTierPolicy', () => {
-  it('normalizes fast to priority and drops unknown or non-string tiers', () => {
+  it('normalizes fast to priority, leaves absent tiers alone, and drops unknown or non-string tiers', () => {
+    expect(applyOpenAiServiceTierPolicy({
+      body: { model: 'gpt-5' },
+    })).toMatchObject({
+      ok: true,
+      body: { model: 'gpt-5' },
+      action: 'pass',
+    });
+
     expect(applyOpenAiServiceTierPolicy({
       body: { model: 'gpt-5', service_tier: ' fast ' },
     })).toMatchObject({
@@ -73,4 +81,3 @@ describe('applyOpenAiServiceTierPolicy', () => {
     }
   });
 });
-

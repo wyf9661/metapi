@@ -5,7 +5,6 @@ import {
   fetchDockerHubTagCandidates,
   fetchLatestStableGitHubRelease,
   getCurrentRuntimeVersion,
-  type DockerHubTagCandidates,
   type UpdateCenterVersionCandidate,
 } from './updateCenterVersionService.js';
 import {
@@ -164,8 +163,8 @@ export async function buildUpdateCenterStatus(): Promise<UpdateCenterStatusResul
     loadUpdateCenterRuntimeState(),
   ]);
 
-  const githubRelease = githubLookup.value as UpdateCenterVersionCandidate | null;
-  const dockerHubCandidates = dockerLookup.value as DockerHubTagCandidates | null;
+  const githubRelease = githubLookup.value;
+  const dockerHubCandidates = dockerLookup.value;
   const dockerHubTag = dockerHubCandidates?.primary || null;
   const dockerHubRecentTags = dockerHubCandidates?.recentNonStable || [];
   const helper = (helperLookup.value as UpdateCenterHelperStatus | null) || buildUnavailableHelperStatus(helperLookup.error);
