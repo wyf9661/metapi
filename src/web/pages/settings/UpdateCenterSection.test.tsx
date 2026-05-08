@@ -88,6 +88,12 @@ describe('UpdateCenterSection', () => {
           displayVersion: 'dev-20260417-f67ade2 @ sha256:bbbbbbbbbbbb',
           publishedAt: '2026-03-30T10:54:35.591877Z',
         },
+        {
+          normalizedVersion: 'feature-without-raw-tag',
+          digest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+          displayVersion: 'feature-without-raw-tag @ sha256:cccccccccccc',
+          publishedAt: '2026-03-30T09:54:35.591877Z',
+        },
       ],
       helper: {
         ok: true,
@@ -470,6 +476,8 @@ describe('UpdateCenterSection', () => {
       });
       await flushMicrotasks();
 
+      expect(collectText(root.root)).toContain('Digest：sha256:bbbbbbbbbbbb');
+      expect(collectText(root.root)).not.toContain('feature-without-raw-tag');
       expect(collectText(root.root)).toContain('dev-20260417-f67ade2 @ sha256:bbbbbbbbbbbb');
 
       const deployRecentButton = root.root.find((node) => (
