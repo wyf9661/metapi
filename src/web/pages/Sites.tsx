@@ -67,6 +67,7 @@ type SiteRow = {
   postRefreshProbeEnabled?: boolean;
   postRefreshProbeModel?: string | null;
   postRefreshProbeScope?: string | null;
+  postRefreshProbeLatencyThresholdMs?: number | null;
   apiEndpoints?: Array<{
     id?: number;
     url: string;
@@ -334,6 +335,11 @@ export default function Sites() {
     }
   }, [editor]);
 
+  useEffect(() => () => {
+    probeAbortRef.current?.abort();
+    probeAbortRef.current = null;
+  }, []);
+
   const disabledModelSet = useMemo(() => new Set(disabledModels), [disabledModels]);
 
   const brandGroups = useMemo(() => {
@@ -492,7 +498,7 @@ export default function Sites() {
     setProbeEnabled(!!site.postRefreshProbeEnabled);
     setProbeModel(typeof site.postRefreshProbeModel === 'string' ? site.postRefreshProbeModel : '');
     setProbeScope(site.postRefreshProbeScope === 'all' ? 'all' : 'single');
-    setProbeLatencyThreshold(String((site as any).postRefreshProbeLatencyThresholdMs ?? 0));
+    setProbeLatencyThreshold(String(site.postRefreshProbeLatencyThresholdMs ?? 0));
     setProbeLog([]);
     setProbeCompleted(false);
     probeAbortRef.current?.abort();
@@ -743,6 +749,7 @@ export default function Sites() {
       postRefreshProbeEnabled: probeEnabled,
       postRefreshProbeModel: probeModel.trim(),
       postRefreshProbeScope: probeScope,
+      postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0),
     };
     if (!payload.name || !payload.url) {
       toast.error('请填写站点名称和 URL');
