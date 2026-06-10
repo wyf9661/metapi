@@ -424,7 +424,7 @@ export function buildUpstreamEndpointRequest(input: {
   headers: Record<string, string>;
   body: Record<string, unknown>;
   runtime?: {
-    executor: 'default' | 'codex' | 'gemini-cli' | 'antigravity' | 'claude';
+    executor: 'default' | 'codex' | 'gemini-native' | 'gemini-cli' | 'antigravity' | 'claude';
     modelName?: string;
     stream?: boolean;
     oauthProjectId?: string | null;
@@ -439,6 +439,27 @@ export function buildUpstreamEndpointRequest(input: {
   const isAntigravityUpstream = sitePlatform === 'antigravity';
   const isInternalGeminiUpstream = isGeminiCliUpstream || isAntigravityUpstream;
   const isClaudeOauthUpstream = isClaudeUpstream && input.oauthProvider === 'claude';
+
+  const hasAssistantToolCallHistory = (body: Record<string, unknown>): boolean => {
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    return messages.some((message) => (
+      isRecord(message)
+      && asTrimmedString(message.role).toLowerCase() === 'assistant'
+      && Array.isArray(message.tool_calls)
+      && message.tool_calls.length > 0
+    ));
+  };
+
+  const resolveGeminiNativeEndpointPath = (stream: boolean): string => {
+    const normalizedModel = asTrimmedString(input.modelName).replace(/^models\//, '');
+    const encodedModel = normalizedModel
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    return stream
+      ? `/v1beta/models/${encodedModel}:streamGenerateContent?alt=sse`
+      : `/v1beta/models/${encodedModel}:generateContent`;
+  };
 
   const resolveGeminiEndpointPath = (endpoint: UpstreamEndpoint): string => {
     const normalizedSiteUrl = asTrimmedString(input.siteUrl).toLowerCase();
@@ -526,7 +547,7 @@ export function buildUpstreamEndpointRequest(input: {
             : sitePlatform === 'claude'
               ? 'claude'
               : 'default'
-    ) as 'default' | 'codex' | 'gemini-cli' | 'antigravity' | 'claude',
+    ) as 'default' | 'codex' | 'gemini-native' | 'gemini-cli' | 'antigravity' | 'claude',
     modelName: input.modelName,
     stream: input.stream,
     oauthProjectId: asTrimmedString(input.oauthProjectId) || null,
@@ -571,6 +592,27 @@ export function buildUpstreamEndpointRequest(input: {
       body: configuredGeminiRequest,
       action: input.stream ? 'streamGenerateContent' : 'generateContent',
     });
+  }
+
+  if (isGeminiUpstream && input.endpoint === 'chat' && hasAssistantToolCallHistory(openaiBody)) {
+    const geminiRequest = buildGeminiGenerateContentRequestFromOpenAi({
+      body: openaiBody,
+      modelName: input.modelName,
+    });
+    const configuredGeminiRequest = applyConfiguredPayloadRules(geminiRequest);
+    const action = input.stream ? 'streamGenerateContent' : 'generateContent';
+    return {
+      path: resolveGeminiNativeEndpointPath(input.stream),
+      headers: ensureStreamAcceptHeader(commonHeaders, input.stream),
+      body: configuredGeminiRequest,
+      runtime: {
+        executor: 'gemini-native',
+        modelName: input.modelName,
+        stream: input.stream,
+        oauthProjectId: null,
+        action,
+      },
+    };
   }
 
   if (input.endpoint === 'messages') {
