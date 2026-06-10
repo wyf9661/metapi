@@ -658,6 +658,32 @@ function collectToolCallsFromResponsesPayload(payload: Record<string, unknown>):
   return toolCalls;
 }
 
+function collectToolCallsFromGeminiParts(parts: unknown): Array<{ id: string; name: string; arguments: string }> {
+  const contentParts = Array.isArray(parts) ? parts : [];
+  const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+
+  for (let index = 0; index < contentParts.length; index += 1) {
+    const part = contentParts[index];
+    if (!isRecord(part) || !isRecord(part.functionCall)) continue;
+
+    const functionCall = part.functionCall;
+    const id = (
+      typeof functionCall.id === 'string' && functionCall.id.trim().length > 0
+        ? functionCall.id.trim()
+        : `call_${index}`
+    );
+    const name = typeof functionCall.name === 'string' ? functionCall.name.trim() : '';
+    const argumentsText = stringifyUnknownValue(functionCall.args);
+    toolCalls.push({
+      id,
+      name,
+      arguments: argumentsText,
+    });
+  }
+
+  return toolCalls;
+}
+
 function collectIndexedToolCallsFromResponsesPayload(
   payload: Record<string, unknown>,
 ): Array<{ id: string; name: string; arguments: string; outputIndex: number }> {
@@ -1415,17 +1441,21 @@ export function normalizeUpstreamFinalResponse(
 
   if (isRecord(payload) && Array.isArray(payload.candidates)) {
     const candidate = payload.candidates[0] || {};
-    const parsedCandidate = extractTextAndReasoning(candidate?.content?.parts || candidate?.content);
+    const candidateParts = candidate?.content?.parts || candidate?.content;
+    const parsedCandidate = extractTextAndReasoning(candidateParts);
+    const toolCalls = collectToolCallsFromGeminiParts(candidateParts);
     return {
       id: isNonEmptyString((payload as any).responseId) ? (payload as any).responseId : fallbackId,
       model: isNonEmptyString((payload as any).modelVersion)
         ? (payload as any).modelVersion
         : fallbackModel,
       created: now,
-      content: parsedCandidate.content || fallbackText,
+      content: parsedCandidate.content || (toolCalls.length > 0 ? '' : fallbackText),
       reasoningContent: parsedCandidate.reasoning,
-      finishReason: normalizeStopReason(candidate?.finishReason || (payload as any).finishReason) || 'stop',
-      toolCalls: [],
+      finishReason: toolCalls.length > 0
+        ? 'tool_calls'
+        : (normalizeStopReason(candidate?.finishReason || (payload as any).finishReason) || 'stop'),
+      toolCalls,
     };
   }
 

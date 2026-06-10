@@ -46,6 +46,7 @@ import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
 } from '../../transformers/gemini/generate-content/cliBridge.js';
+import { geminiGenerateContentTransformer } from '../../transformers/gemini/generate-content/index.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 import { getObservedResponseMeta } from '../firstByteTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
@@ -92,6 +93,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function isGeminiNativeRuntimePath(path: string): boolean {
+  return /\/v1beta\/models\/[^/]+:(?:streamGenerateContent|generateContent)(?:\?|$)/.test(path);
+}
+
+function buildOpenAiFinalFromGeminiNativePayload(
+  payload: unknown,
+  modelName: string,
+  fallbackText = '',
+) {
+  const aggregate = geminiGenerateContentTransformer.aggregator.createState();
+  for (const item of geminiGenerateContentTransformer.stream.parseJsonArrayPayload(payload)) {
+    geminiGenerateContentTransformer.aggregator.apply(aggregate, item);
+  }
+  const geminiFinal = geminiGenerateContentTransformer.outbound.serializeAggregateResponse(aggregate);
+  return openAiChatTransformer.transformFinalResponse(geminiFinal, modelName, fallbackText);
+}
+
+function buildOpenAiStreamLinesFromGeminiNativeSse(
+  rawText: string,
+  modelName: string,
+): { lines: string[]; finalPayload: Record<string, unknown> } {
+  const aggregate = geminiGenerateContentTransformer.stream.createAggregateState();
+  const parsed = geminiGenerateContentTransformer.stream.parseSsePayloads(rawText);
+  for (const payload of parsed.events) {
+    geminiGenerateContentTransformer.stream.applyAggregate(aggregate, payload);
+  }
+
+  const geminiFinal = geminiGenerateContentTransformer.outbound.serializeAggregateResponse(aggregate);
+  const normalizedFinal = openAiChatTransformer.transformFinalResponse(geminiFinal, modelName, rawText);
+  const streamContext = openAiChatTransformer.createStreamContext(modelName);
+  streamContext.id = normalizedFinal.id;
+  streamContext.model = normalizedFinal.model;
+  streamContext.created = normalizedFinal.created;
+  return {
+    finalPayload: geminiFinal,
+    lines: [
+      ...openAiChatTransformer.buildSyntheticChunks(normalizedFinal)
+        .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`),
+      'data: [DONE]\n\n',
+    ],
+  };
 }
 
 function finalizeRetryAsUpstreamFailure(status: number, message: string) {
@@ -641,6 +685,36 @@ export async function handleChatSurfaceRequest(
           },
         });
         let rawText = '';
+        if (isGeminiNativeRuntimePath(successfulUpstreamPath)) {
+          rawText = await readRuntimeResponseText(upstream);
+          const bridged = buildOpenAiStreamLinesFromGeminiNativeSse(
+            rawText,
+            modelName,
+          );
+          upstreamUsagePresent = upstreamUsagePresent || hasProxyUsagePayload(bridged.finalPayload);
+          parsedUsage = mergeProxyUsage(parsedUsage, parseProxyUsage(bridged.finalPayload));
+          writeLines(bridged.lines);
+          streamResponse.end();
+
+          const latency = Date.now() - startTime;
+          await recordStreamSuccess(latency);
+          await finalizeDebugSuccess(
+            200,
+            successfulUpstreamPath,
+            buildSurfaceProxyDebugResponseHeaders(upstream),
+            debugTrace?.options.captureStreamChunks
+              ? rawText
+              : {
+                stream: true,
+                usage: parsedUsage,
+              },
+          );
+          bindSurfaceStickyChannel({
+            stickySessionKey,
+            selected,
+          });
+          return;
+        }
         if (!upstreamContentType.includes('text/event-stream')) {
           const fallbackText = await readRuntimeResponseText(upstream);
           rawText = fallbackText;
@@ -949,7 +1023,9 @@ export async function handleChatSurfaceRequest(
         );
         return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
       }
-      const normalizedFinal = downstreamTransformer.transformFinalResponse(upstreamData, modelName, rawText);
+      const normalizedFinal = isGeminiNativeRuntimePath(successfulUpstreamPath)
+        ? buildOpenAiFinalFromGeminiNativePayload(upstreamData, modelName, rawText)
+        : downstreamTransformer.transformFinalResponse(upstreamData, modelName, rawText);
       const downstreamResponse = downstreamTransformer.serializeFinalResponse(normalizedFinal, parsedUsage);
 
       await recordSurfaceSuccess({

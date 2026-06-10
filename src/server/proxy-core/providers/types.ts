@@ -15,7 +15,7 @@ export type ProviderAction =
   | 'countTokens';
 
 export type ProviderRuntimeDescriptor = {
-  executor: 'default' | 'codex' | 'gemini-cli' | 'antigravity' | 'claude';
+  executor: 'default' | 'codex' | 'gemini-native' | 'gemini-cli' | 'antigravity' | 'claude';
   modelName?: string;
   stream?: boolean;
   oauthProjectId?: string | null;

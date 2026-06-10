@@ -530,6 +530,58 @@ describe('shared normalized helpers', () => {
     });
   });
 
+  it('normalizes Gemini native function calls as OpenAI tool calls', () => {
+    const normalized = normalizeUpstreamFinalResponse({
+      responseId: 'resp-gemini-tool-1',
+      modelVersion: 'gemini-3.5-flash',
+      candidates: [{
+        index: 0,
+        finishReason: 'STOP',
+        content: {
+          role: 'model',
+          parts: [{
+            functionCall: {
+              id: 'call_read',
+              name: 'read',
+              args: { path: '/tmp/example.txt' },
+            },
+            thoughtSignature: 'sig-tool',
+          }],
+        },
+      }],
+    }, 'fallback-model');
+
+    expect(normalized.toolCalls).toEqual([{
+      id: 'call_read',
+      name: 'read',
+      arguments: '{"path":"/tmp/example.txt"}',
+    }]);
+    expect(normalized.content).toBe('');
+    expect(normalized.finishReason).toBe('tool_calls');
+
+    expect(serializeFinalResponse('openai', normalized, {
+      promptTokens: 4,
+      completionTokens: 6,
+      totalTokens: 10,
+    })).toMatchObject({
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{
+            id: 'call_read',
+            type: 'function',
+            function: {
+              name: 'read',
+              arguments: '{"path":"/tmp/example.txt"}',
+            },
+          }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    });
+  });
+
   it('serializes provider-tagged reasoning signatures for openai-compatible downstreams', () => {
     const normalized = {
       id: 'chatcmpl-2',

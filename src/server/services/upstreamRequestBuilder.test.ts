@@ -6,6 +6,68 @@ import {
 } from './upstreamRequestBuilder.js';
 
 describe('upstreamRequestBuilder', () => {
+  it('routes Gemini official chat tool history through native generateContent with signed functionCall parts', () => {
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'chat',
+      modelName: 'gemini-3.5-flash',
+      stream: true,
+      tokenValue: 'sk-test',
+      sitePlatform: 'gemini',
+      siteUrl: 'https://generativelanguage.googleapis.com',
+      openaiBody: {
+        model: 'gemini-3.5-flash',
+        stream: true,
+        messages: [
+          { role: 'system', content: 'You are concise.' },
+          { role: 'user', content: 'List files.' },
+          {
+            role: 'assistant',
+            tool_calls: [
+              {
+                id: 'call_read',
+                type: 'function',
+                function: {
+                  name: 'read',
+                  arguments: '{"path":"/tmp/a"}',
+                },
+              },
+            ],
+          },
+          { role: 'tool', tool_call_id: 'call_read', content: 'file content' },
+        ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'read',
+              parameters: { type: 'object', properties: {} },
+            },
+          },
+        ],
+        tool_choice: 'auto',
+      },
+      downstreamFormat: 'openai',
+    });
+
+    expect(request.path).toBe('/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse');
+    expect(request.runtime).toMatchObject({
+      executor: 'gemini-native',
+      action: 'streamGenerateContent',
+      modelName: 'gemini-3.5-flash',
+      stream: true,
+    });
+    expect(request.body).toHaveProperty('contents');
+    expect(request.body).not.toHaveProperty('messages');
+
+    const contents = request.body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    const functionCallParts = contents
+      .flatMap((content) => content.parts)
+      .filter((part) => 'functionCall' in part);
+
+    expect(functionCallParts).toHaveLength(1);
+    expect(functionCallParts[0].thoughtSignature).toEqual(expect.any(String));
+  });
+
   it('normalizes single-message OpenAI requests to structured responses input', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'responses',

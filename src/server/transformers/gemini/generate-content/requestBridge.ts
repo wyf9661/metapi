@@ -45,6 +45,11 @@ function isDummyThoughtSafeModel(modelName: string): boolean {
   return normalized.startsWith('gemini-') || normalized.startsWith('models/gemini-');
 }
 
+function requiresFunctionCallThoughtSignature(modelName: string): boolean {
+  const normalized = asTrimmedString(modelName).toLowerCase().replace(/^models\//, '');
+  return /gemini-3(?:[.-]|$)/i.test(normalized);
+}
+
 function parseInlineDataUrl(url: string): { mimeType: string; data: string } | null {
   if (!url.startsWith('data:')) return null;
   const [, rest] = url.split('data:', 2);
@@ -181,6 +186,7 @@ export function buildGeminiGenerateContentRequestFromOpenAi(input: {
 
   const hasThinkingEnabled = !!resolveGeminiThinkingConfigFromRequest(input.modelName, input.body);
   const allowsDummyThoughtSignature = isDummyThoughtSafeModel(input.modelName);
+  const requiresThoughtSignature = requiresFunctionCallThoughtSignature(input.modelName);
   let shouldDisableThinkingConfig = false;
 
   const thoughtSignatureById = new Map<string, string>();
@@ -256,7 +262,7 @@ export function buildGeminiGenerateContentRequestFromOpenAi(input: {
       const signature = thoughtSignatureById.get(id);
       if (signature) {
         fcPart.thoughtSignature = signature;
-      } else if (hasThinkingEnabled && allowsDummyThoughtSignature) {
+      } else if ((hasThinkingEnabled || requiresThoughtSignature) && allowsDummyThoughtSignature) {
         fcPart.thoughtSignature = DUMMY_THOUGHT_SIGNATURE;
       } else if (hasThinkingEnabled) {
         shouldDisableThinkingConfig = true;

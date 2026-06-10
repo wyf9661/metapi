@@ -14,7 +14,7 @@ export type BuiltEndpointRequest = {
   headers: Record<string, string>;
   body: Record<string, unknown>;
   runtime?: {
-    executor: 'default' | 'codex' | 'gemini-cli' | 'antigravity' | 'claude';
+    executor: 'default' | 'codex' | 'gemini-native' | 'gemini-cli' | 'antigravity' | 'claude';
     modelName?: string;
     stream?: boolean;
     oauthProjectId?: string | null;

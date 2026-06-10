@@ -148,6 +148,38 @@ describe('thoughtSignature injection in OpenAI→Gemini conversion', () => {
     expect(fcParts[0].thoughtSignature).toBeUndefined();
   });
 
+  it('injects dummy signature for Gemini 3 tool history even without explicit thinking config', () => {
+    const result = buildGeminiGenerateContentRequestFromOpenAi({
+      body: {
+        model: 'gemini-3.5-flash',
+        messages: [
+          { role: 'user', content: 'List files.' },
+          {
+            role: 'assistant',
+            tool_calls: [
+              {
+                id: 'call_ls',
+                type: 'function',
+                function: { name: 'ls', arguments: '{"path":"/tmp"}' },
+              },
+            ],
+          },
+          { role: 'tool', tool_call_id: 'call_ls', content: 'file1\nfile2' },
+        ],
+      },
+      modelName: 'gemini-3.5-flash',
+    }) as Record<string, unknown>;
+
+    const contents = result.contents as Array<Record<string, unknown>>;
+    const modelMsgs = contents.filter((c) => c.role === 'model');
+    const fcParts = modelMsgs
+      .flatMap((m) => (m.parts as Array<Record<string, unknown>>))
+      .filter((p) => 'functionCall' in p);
+
+    expect(fcParts).toHaveLength(1);
+    expect(fcParts[0].thoughtSignature).toEqual(expect.any(String));
+  });
+
   it('does not inject dummy signature or preserve thinkingConfig for non-gemini targets when signature is missing', () => {
     const result = buildGeminiGenerateContentRequestFromOpenAi({
       body: {
