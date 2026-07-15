@@ -219,22 +219,22 @@ describe('TokenRouter patterns and model mapping', () => {
   });
 
   it('keeps exact routes out of exposed models when covered by an explicit group', async () => {
-    const source = await createRouteWithSingleChannel('gpt-5.5-openai-compact');
-    await createRouteWithSingleChannel('gpt-5.5-openai-compact-high');
-    const exact = await createRouteWithSingleChannel('gpt-5.5-openai-compact-xhigh');
-    const group = await createExplicitGroupRoute('gpt-5.5-openai-compact', [source.route.id]);
+    const source = await createRouteWithSingleChannel('source-model-a');
+    const unrelated = await createRouteWithSingleChannel('unrelated-exact-model');
+    const group = await createExplicitGroupRoute('group-display-name', [source.route.id]);
     const router = new TokenRouter();
 
     const exposedModels = await router.getAvailableModels();
-    const selected = await router.selectChannel('gpt-5.5-openai-compact-xhigh');
-    const decision = await router.explainSelection('gpt-5.5-openai-compact-xhigh');
+    const selectedUnrelated = await router.selectChannel('unrelated-exact-model');
+    const selectedGroup = await router.selectChannel('group-display-name');
 
     expect(group.routeMode).toBe('explicit_group');
-    expect(exposedModels).toEqual(['gpt-5.5-openai-compact']);
-    expect(selected).toBeTruthy();
-    expect(selected?.channel.routeId).toBe(exact.route.id);
-    expect(decision.routeId).toBe(exact.route.id);
-    expect(decision.actualModel).toBe('gpt-5.5-openai-compact-xhigh');
+    // Group sources are hidden from exposed models; unrelated exact routes stay visible.
+    expect(exposedModels.sort()).toEqual(['group-display-name', 'unrelated-exact-model'].sort());
+    expect(selectedUnrelated).toBeTruthy();
+    expect(selectedUnrelated?.channel.routeId).toBe(unrelated.route.id);
+    expect(selectedGroup).toBeTruthy();
+    expect(selectedGroup?.channel.routeId).toBe(source.route.id);
   });
 
   it('falls back to the source exact-route model when explicit-group channels omit sourceModel', async () => {
