@@ -165,15 +165,33 @@ export default function Models() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [copied, setCopied] = useState<string | null>(null);
-  const [probingModel, setProbingModel] = useState<string | null>(null);
-  const [probeResults, setProbeResults] = useState<Record<string, {
+  const [probingKey, setProbingKey] = useState<string | null>(null);
+  type AccountProbeResult = {
     ok: boolean;
     status: string;
     latencyMs: number | null;
     reason: string;
+    accountId: number | null;
+    siteId: number | null;
     siteName: string | null;
     username: string | null;
-  }>>({});
+  };
+  type ModelProbeAggregate = {
+    ok: boolean;
+    status: string;
+    latencyMs: number | null;
+    reason: string;
+    summary?: {
+      total: number;
+      supported: number;
+      unsupported: number;
+      inconclusive: number;
+      skipped: number;
+      notFound: number;
+    };
+    byAccountId: Record<number, AccountProbeResult>;
+  };
+  const [probeResults, setProbeResults] = useState<Record<string, ModelProbeAggregate>>({});
   const [filterCollapsed, setFilterCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [metadataHydrating, setMetadataHydrating] = useState(false);
@@ -410,47 +428,136 @@ export default function Models() {
     setTimeout(() => setCopied(null), 1500);
   };
 
-  const probeModel = async (name: string) => {
-    if (probingModel) return;
-    setProbingModel(name);
+  const probeModel = async (
+    name: string,
+    options?: { siteId?: number | null; accountId?: number | null },
+  ) => {
+    if (probingKey) return;
+    const scopeKey = options?.accountId
+      ? `${name}#account:${options.accountId}`
+      : options?.siteId
+        ? `${name}#site:${options.siteId}`
+        : name;
+    setProbingKey(scopeKey);
     try {
-      const res: any = await api.probeModelOne(name);
-      const result = {
-        ok: !!(res?.ok || res?.status === 'supported'),
+      const res: any = await api.probeModelOne(name, {
+        siteId: options?.siteId ?? null,
+        accountId: options?.accountId ?? null,
+      });
+      const rows: AccountProbeResult[] = Array.isArray(res?.results)
+        ? res.results.map((item: any) => ({
+          ok: !!(item?.ok || item?.status === 'supported'),
+          status: String(item?.status || (item?.ok ? 'supported' : 'failed')),
+          latencyMs: typeof item?.latencyMs === 'number' ? item.latencyMs : null,
+          reason: String(item?.reason || item?.message || ''),
+          accountId: Number.isFinite(Number(item?.accountId)) ? Number(item.accountId) : null,
+          siteId: Number.isFinite(Number(item?.siteId)) ? Number(item.siteId) : null,
+          siteName: item?.siteName ? String(item.siteName) : null,
+          username: item?.username ? String(item.username) : null,
+        }))
+        : [{
+          ok: !!(res?.ok || res?.status === 'supported'),
+          status: String(res?.status || (res?.ok ? 'supported' : 'failed')),
+          latencyMs: typeof res?.latencyMs === 'number' ? res.latencyMs : null,
+          reason: String(res?.reason || res?.message || ''),
+          accountId: Number.isFinite(Number(res?.accountId)) ? Number(res.accountId) : null,
+          siteId: Number.isFinite(Number(res?.siteId)) ? Number(res.siteId) : null,
+          siteName: res?.siteName ? String(res.siteName) : null,
+          username: res?.username ? String(res.username) : null,
+        }];
+
+      const byAccountId: Record<number, AccountProbeResult> = {};
+      for (const row of rows) {
+        if (row.accountId != null) byAccountId[row.accountId] = row;
+      }
+
+      const aggregate: ModelProbeAggregate = {
+        ok: !!(res?.ok || res?.status === 'supported' || res?.status === 'mixed'),
         status: String(res?.status || (res?.ok ? 'supported' : 'failed')),
         latencyMs: typeof res?.latencyMs === 'number' ? res.latencyMs : null,
         reason: String(res?.reason || res?.message || ''),
-        siteName: res?.siteName ? String(res.siteName) : null,
-        username: res?.username ? String(res.username) : null,
+        summary: res?.summary && typeof res.summary === 'object' ? {
+          total: Number(res.summary.total || rows.length || 0),
+          supported: Number(res.summary.supported || 0),
+          unsupported: Number(res.summary.unsupported || 0),
+          inconclusive: Number(res.summary.inconclusive || 0),
+          skipped: Number(res.summary.skipped || 0),
+          notFound: Number(res.summary.notFound || 0),
+        } : {
+          total: rows.length,
+          supported: rows.filter((r) => r.status === 'supported').length,
+          unsupported: rows.filter((r) => r.status === 'unsupported').length,
+          inconclusive: rows.filter((r) => r.status === 'inconclusive').length,
+          skipped: rows.filter((r) => r.status === 'skipped').length,
+          notFound: rows.filter((r) => r.status === 'not_found').length,
+        },
+        byAccountId,
       };
-      setProbeResults((prev) => ({ ...prev, [name]: result }));
-      if (result.ok) {
-        const where = [result.siteName, result.username].filter(Boolean).join(' / ');
+
+      setProbeResults((prev) => {
+        const previous = prev[name];
+        // When probing a single supplier/account, merge into existing model map.
+        if (options?.siteId || options?.accountId) {
+          return {
+            ...prev,
+            [name]: {
+              ok: aggregate.ok || !!previous?.ok,
+              status: aggregate.status,
+              latencyMs: aggregate.latencyMs ?? previous?.latencyMs ?? null,
+              reason: aggregate.reason,
+              summary: aggregate.summary,
+              byAccountId: {
+                ...(previous?.byAccountId || {}),
+                ...byAccountId,
+              },
+            },
+          };
+        }
+        return { ...prev, [name]: aggregate };
+      });
+
+      if (aggregate.ok) {
+        const s = aggregate.summary;
         toast.success(
-          where
-            ? `${name} 可用 · ${result.latencyMs ?? '—'}ms · ${where}`
-            : `${name} 可用 · ${result.latencyMs ?? '—'}ms`,
+          s
+            ? `${name} 连通 ${s.supported}/${s.total}` + (aggregate.latencyMs != null ? ` · 均延迟 ${aggregate.latencyMs}ms` : '')
+            : `${name} 可用`,
         );
       } else {
-        toast.error(`${name} 探测失败：${result.reason || result.status}`);
+        toast.error(`${name} 探测失败：${aggregate.reason || aggregate.status}`);
       }
     } catch (err: any) {
       const reason = err?.message || '探测失败';
-      setProbeResults((prev) => ({
-        ...prev,
-        [name]: {
-          ok: false,
-          status: 'failed',
-          latencyMs: null,
-          reason,
-          siteName: null,
-          username: null,
-        },
-      }));
+      if (!(options?.siteId || options?.accountId)) {
+        setProbeResults((prev) => ({
+          ...prev,
+          [name]: {
+            ok: false,
+            status: 'failed',
+            latencyMs: null,
+            reason,
+            byAccountId: {},
+          },
+        }));
+      }
       toast.error(`${name} 探测失败：${reason}`);
     } finally {
-      setProbingModel(null);
+      setProbingKey(null);
     }
+  };
+
+  const renderConnectivity = (result?: AccountProbeResult | null) => {
+    if (!result) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
+    if (result.status === 'supported' || result.ok) {
+      return <span className="badge badge-success" style={{ fontSize: 11 }}>{tr('连通')}</span>;
+    }
+    if (result.status === 'unsupported') {
+      return <span className="badge badge-error" style={{ fontSize: 11 }} title={result.reason || ''}>{tr('不通')}</span>;
+    }
+    if (result.status === 'skipped') {
+      return <span className="badge badge-muted" style={{ fontSize: 11 }} title={result.reason || ''}>{tr('跳过')}</span>;
+    }
+    return <span className="badge badge-warning" style={{ fontSize: 11 }} title={result.reason || ''}>{tr('未知')}</span>;
   };
 
 
@@ -747,12 +854,12 @@ export default function Models() {
                     </button>
                     <button
                       className="model-card-action-btn"
-                      data-tooltip={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
-                      aria-label={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
-                      disabled={probingModel === m.name}
+                      data-tooltip={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
+                      aria-label={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
+                      disabled={!!probingKey}
                       onClick={() => void probeModel(m.name)}
                     >
-                      {probingModel === m.name ? (
+                      {probingKey === m.name ? (
                         <span className="spinner spinner-sm" />
                       ) : probeResults[m.name]?.ok ? (
                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -864,8 +971,32 @@ export default function Models() {
                             <div style={{ display: 'grid', gap: 6 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
                                 <span style={{ color: 'var(--color-text-muted)' }}>{tr('延迟')}</span>
-                                <span style={{ color: getMetricColor(a.latency), fontVariantNumeric: 'tabular-nums' }}>
-                                  {a.latency != null ? `${a.latency}ms` : '—'}
+                                <span style={{ color: getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency), fontVariantNumeric: 'tabular-nums' }}>
+                                  {(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null
+                                    ? `${probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency}ms`
+                                    : '—'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, alignItems: 'center' }}>
+                                <span style={{ color: 'var(--color-text-muted)' }}>{tr('连通性')}</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  {renderConnectivity(probeResults[m.name]?.byAccountId?.[a.id])}
+                                  <button
+                                    className="model-card-action-btn"
+                                    data-tooltip={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
+                                    aria-label={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
+                                    disabled={!!probingKey}
+                                    onClick={() => void probeModel(m.name, {
+                                      accountId: a.id,
+                                      siteId: siteIdByName.get(a.site) || null,
+                                    })}
+                                  >
+                                    {probingKey === `${m.name}#account:${a.id}` ? (
+                                      <span className="spinner spinner-sm" />
+                                    ) : (
+                                      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    )}
+                                  </button>
                                 </span>
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
@@ -892,6 +1023,7 @@ export default function Models() {
                             <th style={{ fontWeight: 500 }}>{tr('账号')}</th>
                             <th style={{ fontWeight: 500 }}>{tr('令牌')}</th>
                             <th style={{ fontWeight: 500 }}>{tr('延迟')}</th>
+                            <th style={{ fontWeight: 500 }}>{tr('连通性')}</th>
                             <th style={{ fontWeight: 500 }}>{tr('余额')}</th>
                           </tr>
                         </thead>
@@ -906,9 +1038,32 @@ export default function Models() {
                                 )) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                               </td>
                               <td>
-                                {a.latency != null ? (
-                                  <span style={{ color: getMetricColor(a.latency), fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{a.latency}ms</span>
+                                {(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null ? (
+                                  <span style={{ color: getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency), fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
+                                    {probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency}ms
+                                  </span>
                                 ) : '—'}
+                              </td>
+                              <td>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  {renderConnectivity(probeResults[m.name]?.byAccountId?.[a.id])}
+                                  <button
+                                    className="model-card-action-btn"
+                                    data-tooltip={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
+                                    aria-label={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
+                                    disabled={!!probingKey}
+                                    onClick={() => void probeModel(m.name, {
+                                      accountId: a.id,
+                                      siteId: siteIdByName.get(a.site) || null,
+                                    })}
+                                  >
+                                    {probingKey === `${m.name}#account:${a.id}` ? (
+                                      <span className="spinner spinner-sm" />
+                                    ) : (
+                                      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    )}
+                                  </button>
+                                </div>
                               </td>
                               <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>${(a.balance || 0).toFixed(2)}</td>
                             </tr>
@@ -992,12 +1147,12 @@ export default function Models() {
                           </button>
                           <button
                             className="model-card-action-btn"
-                            data-tooltip={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
-                            aria-label={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
-                            disabled={probingModel === m.name}
+                            data-tooltip={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
+                            aria-label={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
+                            disabled={!!probingKey}
                             onClick={() => void probeModel(m.name)}
                           >
-                            {probingModel === m.name ? (
+                            {probingKey === m.name ? (
                               <span className="spinner spinner-sm" />
                             ) : probeResults[m.name]?.ok ? (
                               <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -1070,6 +1225,7 @@ export default function Models() {
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('账号')}</th>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('令牌')}</th>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('延迟')}</th>
+                                <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('连通性')}</th>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('余额')}</th>
                               </tr></thead>
                               <tbody>
@@ -1082,8 +1238,31 @@ export default function Models() {
                                         <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-info'}`}>{t.name}</span>
                                       )) : '—'}
                                     </td>
-                                    <td style={{ padding: 8, color: a.latency != null ? getMetricColor(a.latency) : 'var(--color-text-muted)' }}>
-                                      {a.latency != null ? `${a.latency}ms` : '—'}
+                                    <td style={{ padding: 8, color: (probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null ? getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) : 'var(--color-text-muted)' }}>
+                                      {(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null
+                                        ? `${probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency}ms`
+                                        : '—'}
+                                    </td>
+                                    <td style={{ padding: 8 }}>
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        {renderConnectivity(probeResults[m.name]?.byAccountId?.[a.id])}
+                                        <button
+                                          className="model-card-action-btn"
+                                          data-tooltip={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
+                                          aria-label={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
+                                          disabled={!!probingKey}
+                                          onClick={() => void probeModel(m.name, {
+                                            accountId: a.id,
+                                            siteId: siteIdByName.get(a.site) || null,
+                                          })}
+                                        >
+                                          {probingKey === `${m.name}#account:${a.id}` ? (
+                                            <span className="spinner spinner-sm" />
+                                          ) : (
+                                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                          )}
+                                        </button>
+                                      </div>
                                     </td>
                                     <td style={{ padding: 8 }}>${(a.balance || 0).toFixed(2)}</td>
                                   </tr>

@@ -1960,8 +1960,10 @@ export async function statsRoutes(app: FastifyInstance) {
     },
   );
 
-  // On-demand single model probe for marketplace (safe, non-batch)
-  app.post<{ Body?: { model?: string; modelName?: string } }>(
+  // On-demand marketplace probe (safe, non-batch)
+  // - model only: probe all accounts that list the model
+  // - with siteId/accountId: probe only that supplier/account
+  app.post<{ Body?: { model?: string; modelName?: string; siteId?: number | string; accountId?: number | string } }>(
     "/api/models/probe-one",
     async (request, reply) => {
       const requestBody = request.body;
@@ -1979,7 +1981,25 @@ export async function statsRoutes(app: FastifyInstance) {
           .send({ success: false, message: "model 不能为空" });
       }
 
-      const result = await probeSingleModelAvailability(modelName);
+      const rawSiteId = requestBody?.siteId as unknown;
+      const rawAccountId = requestBody?.accountId as unknown;
+      const siteId = rawSiteId === undefined || rawSiteId === null || rawSiteId === ""
+        ? null
+        : Number(rawSiteId);
+      const accountId = rawAccountId === undefined || rawAccountId === null || rawAccountId === ""
+        ? null
+        : Number(rawAccountId);
+      if (siteId != null && (!Number.isFinite(siteId) || siteId <= 0)) {
+        return reply.code(400).send({ success: false, message: "siteId 无效" });
+      }
+      if (accountId != null && (!Number.isFinite(accountId) || accountId <= 0)) {
+        return reply.code(400).send({ success: false, message: "accountId 无效" });
+      }
+
+      const result = await probeSingleModelAvailability(modelName, {
+        siteId,
+        accountId,
+      });
       if (result.status === "not_found") {
         return reply.code(404).send({
           success: false,

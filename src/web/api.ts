@@ -1430,11 +1430,18 @@ export const api = {
     });
   },
   getModelTokenCandidates: () => request("/api/models/token-candidates"),
-  probeModelOne: (modelName: string) =>
+  probeModelOne: (
+    modelName: string,
+    options?: { siteId?: number | null; accountId?: number | null },
+  ) =>
     request("/api/models/probe-one", {
       method: "POST",
-      body: JSON.stringify({ model: modelName }),
-      timeoutMs: 30_000,
+      body: JSON.stringify({
+        model: modelName,
+        ...(options?.siteId ? { siteId: options.siteId } : {}),
+        ...(options?.accountId ? { accountId: options.accountId } : {}),
+      }),
+      timeoutMs: 120_000,
     }),
 
   // Simple chat test from admin panel

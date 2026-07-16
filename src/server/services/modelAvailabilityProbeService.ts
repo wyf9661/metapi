@@ -461,29 +461,152 @@ export type SingleModelProbeResult = {
   username: string | null;
 };
 
-/**
- * On-demand single-model probe for marketplace UI.
- * Probes only one discovered conversation model against one active account target.
- * Does NOT require batch probe to be enabled.
- */
-export async function probeSingleModelAvailability(modelName: string): Promise<SingleModelProbeResult> {
-  const normalized = String(modelName || '').trim();
-  if (!normalized) {
+export type MarketplaceModelProbeOptions = {
+  siteId?: number | null;
+  accountId?: number | null;
+};
+
+export type MarketplaceModelProbeResponse = {
+  modelName: string;
+  ok: boolean;
+  status: 'supported' | 'unsupported' | 'inconclusive' | 'skipped' | 'not_found' | 'mixed';
+  latencyMs: number | null;
+  reason: string;
+  accountId: number | null;
+  siteId: number | null;
+  siteName: string | null;
+  username: string | null;
+  summary: {
+    total: number;
+    supported: number;
+    unsupported: number;
+    inconclusive: number;
+    skipped: number;
+    notFound: number;
+  };
+  results: SingleModelProbeResult[];
+};
+
+type MarketplaceProbeTarget = {
+  accountRowId: number | null;
+  tokenRowId: number | null;
+  account: typeof schema.accounts.$inferSelect;
+  site: typeof schema.sites.$inferSelect;
+  tokenValue?: string;
+};
+
+async function resolvePreferredTokenValue(accountId: number): Promise<string | undefined> {
+  try {
+    const tokenRows = await db.select()
+      .from(schema.accountTokens)
+      .where(and(
+        eq(schema.accountTokens.accountId, accountId),
+        eq(schema.accountTokens.enabled, true),
+        eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
+      ))
+      .orderBy(asc(schema.accountTokens.id))
+      .all();
+    const preferredToken = tokenRows.find((row) => isUsableAccountToken(row) && String(row.token || '').trim());
+    if (preferredToken) return String(preferredToken.token || '').trim();
+  } catch {
+    // ignore and fall back to account credentials
+  }
+  return undefined;
+}
+
+function summarizeMarketplaceProbeResults(
+  modelName: string,
+  results: SingleModelProbeResult[],
+): MarketplaceModelProbeResponse {
+  const summary = {
+    total: results.length,
+    supported: results.filter((item) => item.status === 'supported').length,
+    unsupported: results.filter((item) => item.status === 'unsupported').length,
+    inconclusive: results.filter((item) => item.status === 'inconclusive').length,
+    skipped: results.filter((item) => item.status === 'skipped').length,
+    notFound: results.filter((item) => item.status === 'not_found').length,
+  };
+
+  if (results.length === 0) {
     return {
-      modelName: '',
+      modelName,
       ok: false,
       status: 'not_found',
       latencyMs: null,
-      reason: 'model name required',
+      reason: 'no active account/token currently lists this model',
       accountId: null,
       siteId: null,
       siteName: null,
       username: null,
+      summary,
+      results,
     };
   }
 
-  // Prefer an account-level availability row first.
-  const accountHit = await db.select({
+  const supported = results.filter((item) => item.status === 'supported');
+  const primary = supported[0] || results[0]!;
+  let status: MarketplaceModelProbeResponse['status'] = primary.status;
+  if (supported.length > 0 && supported.length < results.length) {
+    status = 'mixed';
+  } else if (supported.length === results.length) {
+    status = 'supported';
+  } else if (results.every((item) => item.status === 'unsupported')) {
+    status = 'unsupported';
+  } else if (results.every((item) => item.status === 'skipped')) {
+    status = 'skipped';
+  } else if (results.every((item) => item.status === 'not_found')) {
+    status = 'not_found';
+  } else if (supported.length === 0) {
+    status = 'inconclusive';
+  }
+
+  const latencyValues = supported
+    .map((item) => item.latencyMs)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const latencyMs = latencyValues.length > 0
+    ? Math.round(latencyValues.reduce((sum, value) => sum + value, 0) / latencyValues.length)
+    : primary.latencyMs;
+
+  return {
+    modelName,
+    ok: supported.length > 0,
+    status,
+    latencyMs,
+    reason: supported.length > 0
+      ? `supported ${summary.supported}/${summary.total}`
+      : (primary.reason || status),
+    accountId: primary.accountId,
+    siteId: primary.siteId,
+    siteName: primary.siteName,
+    username: primary.username,
+    summary,
+    results,
+  };
+}
+
+/**
+ * On-demand marketplace probe.
+ * - model-level: probe all active accounts that list the model
+ * - optional siteId/accountId: restrict to one supplier/account
+ * Does NOT require batch probe to be enabled.
+ */
+export async function probeSingleModelAvailability(
+  modelName: string,
+  options: MarketplaceModelProbeOptions = {},
+): Promise<MarketplaceModelProbeResponse> {
+  const normalized = String(modelName || '').trim();
+  if (!normalized) {
+    return summarizeMarketplaceProbeResults('', []);
+  }
+
+  const siteId = Number.isFinite(options.siteId as number) && Number(options.siteId) > 0
+    ? Math.trunc(Number(options.siteId))
+    : null;
+  const accountId = Number.isFinite(options.accountId as number) && Number(options.accountId) > 0
+    ? Math.trunc(Number(options.accountId))
+    : null;
+
+  const accountHits = await db.select({
     rowId: schema.modelAvailability.id,
     modelName: schema.modelAvailability.modelName,
     available: schema.modelAvailability.available,
@@ -497,63 +620,25 @@ export async function probeSingleModelAvailability(modelName: string): Promise<S
       eq(schema.modelAvailability.modelName, normalized),
       eq(schema.accounts.status, 'active'),
       eq(schema.sites.status, 'active'),
+      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+      ...(siteId ? [eq(schema.sites.id, siteId)] : []),
     ))
-    .orderBy(asc(schema.modelAvailability.checkedAt))
-    .limit(1)
-    .get();
+    .orderBy(asc(schema.sites.id), asc(schema.accounts.id))
+    .all();
 
-  if (accountHit) {
-    let preferredTokenValue: string | undefined;
-    try {
-      const tokenRows = await db.select()
-        .from(schema.accountTokens)
-        .where(and(
-          eq(schema.accountTokens.accountId, accountHit.account.id),
-          eq(schema.accountTokens.enabled, true),
-          eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
-        ))
-        .orderBy(asc(schema.accountTokens.id))
-        .all();
-      const preferredToken = tokenRows.find((row) => isUsableAccountToken(row) && String(row.token || '').trim());
-      if (preferredToken) {
-        preferredTokenValue = String(preferredToken.token || '').trim();
-      }
-    } catch {
-      preferredTokenValue = undefined;
-    }
-
-    const probe = await probeRuntimeModel({
-      site: accountHit.site,
-      account: accountHit.account,
-      modelName: normalized,
-      timeoutMs: config.modelAvailabilityProbeTimeoutMs,
-      tokenValue: preferredTokenValue,
+  const targetsByAccount = new Map<number, MarketplaceProbeTarget>();
+  for (const hit of accountHits) {
+    if (targetsByAccount.has(hit.account.id)) continue;
+    targetsByAccount.set(hit.account.id, {
+      accountRowId: hit.rowId,
+      tokenRowId: null,
+      account: hit.account,
+      site: hit.site,
     });
-    if (probe.status === 'supported' || probe.status === 'unsupported') {
-      await db.update(schema.modelAvailability)
-        .set({
-          available: probe.status === 'supported',
-          latencyMs: probe.latencyMs,
-          checkedAt: new Date().toISOString(),
-        })
-        .where(eq(schema.modelAvailability.id, accountHit.rowId))
-        .run();
-    }
-    return {
-      modelName: normalized,
-      ok: probe.status === 'supported',
-      status: probe.status,
-      latencyMs: probe.latencyMs,
-      reason: probe.reason,
-      accountId: accountHit.account.id,
-      siteId: accountHit.site.id,
-      siteName: accountHit.site.name,
-      username: accountHit.account.username,
-    };
   }
 
-  // Fallback: token-level availability.
-  const tokenHit = await db.select({
+  // Also include token-level availability for accounts not already covered.
+  const tokenHits = await db.select({
     rowId: schema.tokenModelAvailability.id,
     modelName: schema.tokenModelAvailability.modelName,
     available: schema.tokenModelAvailability.available,
@@ -571,52 +656,82 @@ export async function probeSingleModelAvailability(modelName: string): Promise<S
       eq(schema.sites.status, 'active'),
       eq(schema.accountTokens.enabled, true),
       eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
+      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+      ...(siteId ? [eq(schema.sites.id, siteId)] : []),
     ))
-    .orderBy(asc(schema.tokenModelAvailability.checkedAt))
-    .limit(1)
-    .get();
+    .orderBy(asc(schema.sites.id), asc(schema.accounts.id))
+    .all();
 
-  if (!tokenHit || !isUsableAccountToken(tokenHit.token)) {
+  for (const hit of tokenHits) {
+    if (!isUsableAccountToken(hit.token)) continue;
+    if (targetsByAccount.has(hit.account.id)) {
+      const existing = targetsByAccount.get(hit.account.id)!;
+      if (!existing.tokenValue) {
+        existing.tokenValue = String(hit.token.token || '').trim() || undefined;
+        existing.tokenRowId = hit.rowId;
+      }
+      continue;
+    }
+    targetsByAccount.set(hit.account.id, {
+      accountRowId: null,
+      tokenRowId: hit.rowId,
+      account: hit.account,
+      site: hit.site,
+      tokenValue: String(hit.token.token || '').trim() || undefined,
+    });
+  }
+
+  const targets = [...targetsByAccount.values()];
+  if (targets.length === 0) {
+    return summarizeMarketplaceProbeResults(normalized, []);
+  }
+
+  const results = await mapWithConcurrency(targets, 2, async (target) => {
+    const tokenValue = target.tokenValue || await resolvePreferredTokenValue(target.account.id);
+    const probe = await probeRuntimeModel({
+      site: target.site,
+      account: target.account,
+      modelName: normalized,
+      timeoutMs: config.modelAvailabilityProbeTimeoutMs,
+      tokenValue,
+    });
+
+    if (probe.status === 'supported' || probe.status === 'unsupported') {
+      const checkedAt = new Date().toISOString();
+      if (target.accountRowId != null) {
+        await db.update(schema.modelAvailability)
+          .set({
+            available: probe.status === 'supported',
+            latencyMs: probe.latencyMs,
+            checkedAt,
+          })
+          .where(eq(schema.modelAvailability.id, target.accountRowId))
+          .run();
+      }
+      if (target.tokenRowId != null) {
+        await db.update(schema.tokenModelAvailability)
+          .set({
+            available: probe.status === 'supported',
+            latencyMs: probe.latencyMs,
+            checkedAt,
+          })
+          .where(eq(schema.tokenModelAvailability.id, target.tokenRowId))
+          .run();
+      }
+    }
+
     return {
       modelName: normalized,
-      ok: false,
-      status: 'not_found',
-      latencyMs: null,
-      reason: 'no active account/token currently lists this model',
-      accountId: null,
-      siteId: null,
-      siteName: null,
-      username: null,
-    };
-  }
-
-  const tokenValue = String(tokenHit.token.token || '').trim();
-  const probe = await probeRuntimeModel({
-    site: tokenHit.site,
-    account: tokenHit.account,
-    modelName: normalized,
-    timeoutMs: config.modelAvailabilityProbeTimeoutMs,
-    tokenValue,
+      ok: probe.status === 'supported',
+      status: probe.status,
+      latencyMs: probe.latencyMs,
+      reason: probe.reason,
+      accountId: target.account.id,
+      siteId: target.site.id,
+      siteName: target.site.name,
+      username: target.account.username,
+    } satisfies SingleModelProbeResult;
   });
-  if (probe.status === 'supported' || probe.status === 'unsupported') {
-    await db.update(schema.tokenModelAvailability)
-      .set({
-        available: probe.status === 'supported',
-        latencyMs: probe.latencyMs,
-        checkedAt: new Date().toISOString(),
-      })
-      .where(eq(schema.tokenModelAvailability.id, tokenHit.rowId))
-      .run();
-  }
-  return {
-    modelName: normalized,
-    ok: probe.status === 'supported',
-    status: probe.status,
-    latencyMs: probe.latencyMs,
-    reason: probe.reason,
-    accountId: tokenHit.account.id,
-    siteId: tokenHit.site.id,
-    siteName: tokenHit.site.name,
-    username: tokenHit.account.username,
-  };
+
+  return summarizeMarketplaceProbeResults(normalized, results);
 }
