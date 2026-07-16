@@ -19,6 +19,7 @@ import { getSiteInitializationPreset } from '../../../shared/siteInitializationP
 import { normalizeSiteApiEndpointBaseUrl } from '../../services/siteApiEndpointService.js';
 import { analyzePrimarySiteUrl } from '../../../shared/sitePrimaryUrl.js';
 import { probeSiteModels } from '../../services/modelService.js';
+import { rebuildRoutesBestEffort } from '../../services/routeRefreshWorkflow.js';
 
 function sseWrite(raw: import('http').ServerResponse, event: string, data: unknown) {
   try { raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* ignore */ }
@@ -765,9 +766,49 @@ export async function sitesRoutes(app: FastifyInstance) {
   });
 
   // Delete a site
+  async function deleteSiteAndRelatedData(siteId: number): Promise<void> {
+  // Prefer explicit cleanup so connection/token management cannot keep orphan keys
+  // even if a runtime path has foreign_keys temporarily disabled.
+  const accountRows = await db.select({ id: schema.accounts.id })
+    .from(schema.accounts)
+    .where(eq(schema.accounts.siteId, siteId))
+    .all();
+  const accountIds = accountRows.map((row) => row.id).filter((id) => Number.isFinite(id) && id > 0);
+
+  if (accountIds.length > 0) {
+    const tokenRows = await db.select({ id: schema.accountTokens.id })
+      .from(schema.accountTokens)
+      .where(inArray(schema.accountTokens.accountId, accountIds))
+      .all();
+    const tokenIds = tokenRows.map((row) => row.id).filter((id) => Number.isFinite(id) && id > 0);
+
+    if (tokenIds.length > 0) {
+      await db.delete(schema.tokenModelAvailability)
+        .where(inArray(schema.tokenModelAvailability.tokenId, tokenIds))
+        .run();
+    }
+
+    await db.delete(schema.routeChannels)
+      .where(inArray(schema.routeChannels.accountId, accountIds))
+      .run();
+    await db.delete(schema.modelAvailability)
+      .where(inArray(schema.modelAvailability.accountId, accountIds))
+      .run();
+    await db.delete(schema.accountTokens)
+      .where(inArray(schema.accountTokens.accountId, accountIds))
+      .run();
+    await db.delete(schema.accounts)
+      .where(inArray(schema.accounts.id, accountIds))
+      .run();
+  }
+
+  await db.delete(schema.sites).where(eq(schema.sites.id, siteId)).run();
+  await rebuildRoutesBestEffort();
+}
+
   app.delete<{ Params: { id: string } }>('/api/sites/:id', async (request) => {
     const id = parseInt(request.params.id);
-    await db.delete(schema.sites).where(eq(schema.sites.id, id)).run();
+    await deleteSiteAndRelatedData(id);
     invalidateSiteCaches();
     return { success: true };
   });
@@ -799,7 +840,7 @@ export async function sitesRoutes(app: FastifyInstance) {
 
       try {
         if (action === 'delete') {
-          await db.delete(schema.sites).where(eq(schema.sites.id, id)).run();
+          await deleteSiteAndRelatedData(id);
         } else if (action === 'enableSystemProxy') {
           await db.update(schema.sites)
             .set({ useSystemProxy: true, updatedAt: new Date().toISOString() })
