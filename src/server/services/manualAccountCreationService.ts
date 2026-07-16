@@ -11,6 +11,7 @@ import {
 import { runWithSiteApiEndpointPool } from './siteApiEndpointService.js';
 import { type AccountCreatePayload } from '../contracts/accountsRoutePayloads.js';
 import { convergeAccountMutation } from './accountMutationWorkflow.js';
+import { extractRuntimeHealth, setAccountRuntimeHealth } from './accountHealthService.js';
 
 const ACCOUNT_VERIFY_TIMEOUT_MS = 10_000;
 
@@ -131,6 +132,39 @@ async function initializeAccountInBackground({
   summary.refreshedBalance = convergence.refreshedBalance;
   summary.refreshedModels = convergence.refreshedModels;
   summary.rebuiltRoutes = convergence.rebuiltRoutes;
+
+  // Ensure runtime health is written after first-time connection init.
+  // Model/balance refresh usually set it, but skip-model / partial success paths can leave "unknown".
+  try {
+    const account = await db.select().from(schema.accounts).where(eq(schema.accounts.id, accountId)).get();
+    const existing = extractRuntimeHealth(account?.extraConfig);
+    const hasConcreteState = existing
+      && existing.state !== 'unknown'
+      && existing.source
+      && existing.source !== 'none';
+    if (!hasConcreteState) {
+      if (summary.refreshedModels || summary.refreshedBalance) {
+        await setAccountRuntimeHealth(accountId, {
+          state: 'healthy',
+          reason: summary.refreshedModels ? '连接初始化完成（模型/余额同步成功）' : '连接初始化完成（余额同步成功）',
+          source: 'account-init',
+          checkedAt: new Date().toISOString(),
+        });
+      } else if (tokenType === 'apikey' || tokenType === 'session') {
+        // Credential was accepted and account was created; mark reachable even when model fetch was skipped.
+        await setAccountRuntimeHealth(accountId, {
+          state: 'healthy',
+          reason: skipModelFetch === true
+            ? '连接已添加（跳过模型同步）'
+            : '连接初始化完成',
+          source: 'account-init',
+          checkedAt: new Date().toISOString(),
+        });
+      }
+    }
+  } catch {
+    // best-effort only
+  }
 
   return summary;
 }
