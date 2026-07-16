@@ -49,6 +49,7 @@ interface ModelAccountInfo {
   connectivity?: boolean | null;
   checkedAt?: string | null;
   balance: number;
+  sourceModels?: string[];
   tokens: ModelTokenInfo[];
 }
 
@@ -108,6 +109,13 @@ function formatLatency(latency: number | null): string {
     return `${(Math.round(seconds * 10) / 10).toFixed(1)}s`;
   }
   return `${Math.round(latency)}ms`;
+}
+
+function renderSourceModels(account: ModelAccountInfo, canonicalName: string): string {
+  const names = (account.sourceModels || []).map((item) => String(item || '').trim()).filter(Boolean);
+  if (names.length === 0) return canonicalName;
+  // Prefer showing original upstream names for auditability.
+  return names.join(' / ');
 }
 
 function formatThroughput(tps: number | null | undefined): string {
@@ -1098,6 +1106,10 @@ export default function Models() {
                             </div>
                             <div style={{ display: 'grid', gap: 6 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+                                <span style={{ color: 'var(--color-text-muted)' }}>{tr('上游模型')}</span>
+                                <code style={{ fontSize: 11, color: 'var(--color-text-secondary)', maxWidth: '70%', textAlign: 'right', wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
                                 <span style={{ color: 'var(--color-text-muted)' }}>{tr('延迟')}</span>
                                 <span style={{ color: getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency), fontVariantNumeric: 'tabular-nums' }}>
                                   {formatLatency(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency)}
@@ -1129,6 +1141,7 @@ export default function Models() {
                           <tr>
                             <th style={{ fontWeight: 500 }}>{tr('站点')}</th>
                             <th style={{ fontWeight: 500 }}>{tr('账号')}</th>
+                            <th style={{ fontWeight: 500 }}>{tr('上游模型')}</th>
                             <th style={{ fontWeight: 500 }}>{tr('令牌')}</th>
                             <th style={{ fontWeight: 500 }}>{tr('延迟')}</th>
                             <th style={{ fontWeight: 500 }}>{tr('连通性')}</th>
@@ -1140,6 +1153,7 @@ export default function Models() {
                             <tr key={a.id}>
                               <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
                               <td style={{ fontSize: 12 }}>{a.username || `ID:${a.id}`}</td>
+                              <td style={{ fontSize: 11 }}><code style={{ wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                               <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                 {a.tokens.length > 0 ? a.tokens.map(t => (
                                   <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>{t.name}</span>
@@ -1335,6 +1349,7 @@ export default function Models() {
                               <thead><tr style={{ color: 'var(--color-text-muted)' }}>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('站点')}</th>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('账号')}</th>
+                                <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('上游模型')}</th>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('令牌')}</th>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('延迟')}</th>
                                 <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>{tr('连通性')}</th>
@@ -1345,6 +1360,7 @@ export default function Models() {
                                   <tr key={a.id} style={{ borderTop: '1px solid var(--color-border-light)' }}>
                                     <td style={{ padding: 8 }}><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
                                     <td style={{ padding: 8 }}>{a.username || `ID:${a.id}`}</td>
+                                    <td style={{ padding: 8 }}><code style={{ fontSize: 11, wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                                     <td style={{ padding: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                       {a.tokens.length > 0 ? a.tokens.map(t => (
                                         <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-info'}`}>{t.name}</span>
