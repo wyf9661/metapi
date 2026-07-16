@@ -51,7 +51,7 @@ const FALLBACK_COLORS = [
 
 /** Absolute icon URLs for brands missing from the shared icon CDN. */
 const CUSTOM_BRAND_ICON_URLS: Record<string, string> = {
-  agnes: 'https://agnes-ai.com/images/new-logo.png',
+  agnes: 'https://agnes-ai.com/images/biglogo.png',
 };
 
 function isAbsoluteHttpUrl(value: string): boolean {
