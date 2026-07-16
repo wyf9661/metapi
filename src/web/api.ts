@@ -387,6 +387,7 @@ export type RuntimeSettingsPayload = {
   logCleanupProgramLogsEnabled?: boolean;
   logCleanupRetentionDays?: number;
   webhookUrl?: string;
+  webhookSecret?: string;
   barkUrl?: string;
   webhookEnabled?: boolean;
   barkEnabled?: boolean;

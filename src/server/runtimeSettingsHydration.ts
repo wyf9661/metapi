@@ -229,6 +229,9 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const webhookUrl = parseSettingFromMap<string>(settingsMap, 'webhook_url');
   if (typeof webhookUrl === 'string') config.webhookUrl = webhookUrl;
 
+  const webhookSecret = parseSettingFromMap<string>(settingsMap, 'webhook_secret');
+  if (typeof webhookSecret === 'string') (config as any).webhookSecret = webhookSecret;
+
   const webhookEnabled = parseSettingFromMap<boolean>(settingsMap, 'webhook_enabled');
   if (typeof webhookEnabled === 'boolean') config.webhookEnabled = webhookEnabled;
 

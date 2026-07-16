@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { fetch } from 'undici';
 import { config } from '../config.js';
 import { withExplicitProxyRequestInit } from './siteProxy.js';
@@ -128,6 +129,67 @@ function buildFeishuText(
   return `${raw.slice(0, maxLength)}\n...(truncated)`;
 }
 
+
+function isDingTalkBotWebhook(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'oapi.dingtalk.com' && parsed.pathname.includes('/robot/send');
+  } catch {
+    return false;
+  }
+}
+
+function extractDingTalkSecret(url: string): string {
+  try {
+    const parsed = new URL(url);
+    // Prefer explicit secret query; also accept common aliases users might paste.
+    const candidates = [
+      parsed.searchParams.get('secret'),
+      parsed.searchParams.get('sec'),
+      parsed.searchParams.get('webhook_secret'),
+    ];
+    for (const value of candidates) {
+      const text = String(value || '').trim();
+      if (text) return text;
+    }
+  } catch {}
+  // Config-level secret (optional, set via WEBHOOK_SECRET / settings).
+  const fromConfig = String((config as any).webhookSecret || '').trim();
+  return fromConfig;
+}
+
+function buildDingTalkSignedUrl(url: string, secret: string, nowMs = Date.now()): string {
+  const parsed = new URL(url);
+  // Remove any stale static sign/timestamp so we always regenerate.
+  parsed.searchParams.delete('timestamp');
+  parsed.searchParams.delete('sign');
+  // Keep secret out of the final request URL if user pasted it into query.
+  parsed.searchParams.delete('secret');
+  parsed.searchParams.delete('sec');
+  parsed.searchParams.delete('webhook_secret');
+
+  const timestamp = String(nowMs);
+  const stringToSign = `${timestamp}\n${secret}`;
+  const sign = createHmac('sha256', secret)
+    .update(stringToSign)
+    .digest('base64');
+  parsed.searchParams.set('timestamp', timestamp);
+  parsed.searchParams.set('sign', sign);
+  return parsed.toString();
+}
+
+function buildDingTalkText(
+  title: string,
+  message: string,
+  level: 'info' | 'warning' | 'error',
+  timeFootnote: string,
+): string {
+  const maxLength = 1900;
+  const raw = `【metapi】[${level.toUpperCase()}] ${title}\n\n${message}\n\n${timeFootnote}`;
+  if (raw.length <= maxLength) return raw;
+  return `${raw.slice(0, maxLength)}\n...(truncated)`;
+}
+
 export async function sendNotification(
   title: string,
   message: string,
@@ -167,6 +229,7 @@ export async function sendNotification(
         run: async () => {
           const isWeComWebhook = isWeComBotWebhook(config.webhookUrl);
           const isFeishuWebhook = isFeishuBotWebhook(config.webhookUrl);
+          const isDingTalkWebhook = isDingTalkBotWebhook(config.webhookUrl);
           let body: string;
           if (isWeComWebhook) {
             body = JSON.stringify({
@@ -182,6 +245,13 @@ export async function sendNotification(
                 text: buildFeishuText(title, resolvedMessage, level, timeFootnote),
               },
             });
+          } else if (isDingTalkWebhook) {
+            body = JSON.stringify({
+              msgtype: 'text',
+              text: {
+                content: buildDingTalkText(title, resolvedMessage, level, timeFootnote),
+              },
+            });
           } else {
             body = JSON.stringify({
               title,
@@ -192,7 +262,16 @@ export async function sendNotification(
               timeZone: getResolvedTimeZone(),
             });
           }
-          const response = await fetch(config.webhookUrl, {
+
+          let targetUrl = config.webhookUrl;
+          if (isDingTalkWebhook) {
+            const secret = extractDingTalkSecret(config.webhookUrl);
+            if (secret) {
+              targetUrl = buildDingTalkSignedUrl(config.webhookUrl, secret, now.getTime());
+            }
+          }
+
+          const response = await fetch(targetUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body,
@@ -220,6 +299,17 @@ export async function sendNotification(
             }
             if (typeof payload?.code === 'number' && payload.code !== 0) {
               throw new Error(`飞书 Webhook 返回错误 ${payload.code}: ${payload.msg || 'unknown error'}`);
+            }
+          }
+          if (isDingTalkWebhook) {
+            let payload: { errcode?: number; errmsg?: string } | null = null;
+            try {
+              payload = await response.json() as { errcode?: number; errmsg?: string };
+            } catch {
+              throw new Error('钉钉 Webhook 返回了无效 JSON');
+            }
+            if (typeof payload?.errcode === 'number' && payload.errcode !== 0) {
+              throw new Error(`钉钉 Webhook 返回错误 ${payload.errcode}: ${payload.errmsg || 'unknown error'}`);
             }
           }
         },

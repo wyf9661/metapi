@@ -66,6 +66,7 @@ export async function checkinRoutes(app: FastifyInstance) {
         type: 'checkin',
         title: '全部账号签到',
         dedupeKey: 'checkin-all',
+        notifyOnSuccess: true,
         notifyOnFailure: true,
         successTitle: (currentTask) => {
           const summary = (currentTask.result as any)?.summary;
