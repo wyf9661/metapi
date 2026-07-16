@@ -203,7 +203,7 @@ export default function AddChannelModal({
                       padding: '8px 10px',
                       borderRadius: 'var(--radius-sm)',
                       border: `1px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                      background: isSelected ? 'color-mix(in srgb, var(--color-primary) 6%, transparent)' : 'transparent',
+                      background: isSelected ? 'var(--color-primary-light)' : 'var(--color-bg-card)',
                       cursor: 'pointer',
                     }}
                   >

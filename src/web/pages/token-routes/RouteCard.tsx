@@ -158,10 +158,8 @@ function PriorityRailNewLayerRow({
             padding: '5px 10px',
             borderRadius: 999,
             border: `1px dashed ${active ? 'var(--color-primary)' : 'var(--color-border)'}`,
-            background: active
-              ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-card))'
-              : 'color-mix(in srgb, var(--color-bg-card) 96%, white 4%)',
-            color: active ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            background: active ? 'var(--color-primary-light)' : 'var(--color-bg-card)',
+            color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
             fontSize: 11,
             fontWeight: 600,
             textAlign: 'center',
@@ -200,10 +198,8 @@ function PriorityRailNewLayerRow({
           padding: '6px 10px',
           borderRadius: 999,
           border: `1px dashed ${active ? 'var(--color-primary)' : 'var(--color-border)'}`,
-          background: active
-            ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-bg))'
-            : 'transparent',
-          color: active ? 'var(--color-primary)' : 'var(--color-text-muted)',
+          background: active ? 'var(--color-primary-light)' : 'var(--color-bg-card)',
+          color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
           fontSize: 11,
           fontWeight: 600,
           textAlign: 'center',
@@ -285,9 +281,9 @@ function PriorityDragPreview({
         alignItems: 'center',
         padding: '10px 12px',
         borderRadius: 16,
-        border: '1px solid color-mix(in srgb, var(--color-info) 36%, var(--color-border-light))',
-        background: 'color-mix(in srgb, var(--color-bg-card) 80%, var(--color-info) 20%)',
-        boxShadow: '0 18px 34px rgba(15, 23, 42, 0.14)',
+        border: '1px solid var(--color-info)',
+        background: 'var(--color-bg-card)',
+        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.12)',
         color: 'var(--color-text-primary)',
         pointerEvents: 'none',
       }}
@@ -661,10 +657,11 @@ function RouteCardInner({
       style={{
         fontSize: 11.5,
         padding: '5px 10px',
-        color: 'var(--color-text-secondary)',
-        background: 'color-mix(in srgb, var(--color-bg-card) 96%, white 4%)',
-        border: '1px dashed color-mix(in srgb, var(--color-border) 88%, transparent)',
+        color: 'var(--color-text-primary)',
+        background: 'var(--color-bg-card)',
+        border: '1px dashed var(--color-border)',
         borderRadius: 12,
+        fontWeight: 600,
         whiteSpace: fullWidth ? 'normal' : 'nowrap',
         width: fullWidth ? '100%' : 'auto',
         marginLeft: alignRight ? 'auto' : undefined,

@@ -57,34 +57,30 @@ export function SortableChannelRow({
     minWidth: 22,
     height: 22,
     padding: 0,
-    border: `1px solid ${dragging ? 'color-mix(in srgb, var(--color-info) 34%, var(--color-border-light))' : 'var(--color-border-light)'}`,
+    border: `1px solid ${dragging ? 'var(--color-info)' : 'var(--color-border)'}`,
     borderRadius: 10,
-    backgroundColor: dragging
-      ? 'color-mix(in srgb, var(--color-bg-card) 80%, var(--color-info) 20%)'
-      : 'color-mix(in srgb, var(--color-bg-card) 90%, white 10%)',
-    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.62)',
-    color: dragging ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+    backgroundColor: dragging ? 'var(--color-info-soft)' : 'var(--color-bg-card)',
+    boxShadow: 'none',
+    color: dragging ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
     cursor: isSavingPriority || managementLocked ? 'not-allowed' : 'grab',
-    opacity: managementLocked ? 0.65 : 1,
-    transition: 'background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease',
+    opacity: 1,
+    transition: 'background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease',
   };
 
   const rowStyle: CSSProperties = {
     transition: rowTransition || undefined,
-    opacity: dragging ? 0.92 : channel.enabled === false ? 0.56 : 1,
+    opacity: 1,
     display: 'grid',
     gridTemplateColumns: managementLocked || mobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) auto auto auto',
     alignItems: mobile ? 'stretch' : 'center',
     gap: mobile ? 8 : 6,
     padding: mobile ? '8px 9px' : '5px 8px',
-    border: `1px solid ${dragging ? 'color-mix(in srgb, var(--color-info) 38%, var(--color-border-light))' : 'color-mix(in srgb, var(--color-border-light) 92%, transparent)'}`,
-    borderRadius: 14,
+    border: `1px solid ${dragging ? 'var(--color-info)' : 'var(--color-border)'}`,
+    borderRadius: 12,
     backgroundColor: dragging
-      ? 'color-mix(in srgb, var(--color-bg-card) 82%, var(--color-info) 18%)'
-      : 'color-mix(in srgb, var(--color-bg-card) 96%, white 4%)',
-    boxShadow: dragging
-      ? '0 18px 34px rgba(15, 23, 42, 0.12)'
-      : '0 10px 22px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.7)',
+      ? 'var(--color-info-soft)'
+      : (channel.enabled === false ? 'var(--color-bg)' : 'var(--color-bg-card)'),
+    boxShadow: dragging ? '0 8px 18px rgba(15, 23, 42, 0.10)' : 'none',
   };
 
   const decisionState = getChannelDecisionState(decisionCandidate, channel, isExactRoute, loadingDecision);
@@ -171,8 +167,8 @@ export function SortableChannelRow({
                 style={{
                   fontSize: 10,
                   background: tokenBinding.badgeTone === 'info'
-                    ? 'color-mix(in srgb, var(--color-info) 15%, transparent)'
-                    : 'color-mix(in srgb, var(--color-warning) 15%, transparent)',
+                    ? 'var(--color-info-soft)'
+                    : 'var(--color-warning-soft)',
                   color: tokenBinding.badgeTone === 'info' ? 'var(--color-info)' : 'var(--color-warning)',
                 }}
               >
@@ -241,16 +237,18 @@ export function SortableChannelRow({
             ) : null}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>选中概率</span>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 96 }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>选中概率</span>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
                 <div
                   data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
                   style={{
-                    width: 60,
-                    height: 4,
-                    background: 'color-mix(in srgb, var(--color-border) 88%, white 12%)',
+                    width: 88,
+                    height: 8,
+                    background: 'var(--color-border)',
+                    border: '1px solid var(--color-border)',
                     borderRadius: 999,
                     overflow: 'hidden',
+                    flexShrink: 0,
                   }}
                 >
                   <div
@@ -266,10 +264,12 @@ export function SortableChannelRow({
                 <span
                   data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
                   style={{
-                    fontSize: 11,
-                    color: decisionState.probability > 0 ? 'var(--color-text-secondary)' : decisionState.reasonColor,
+                    fontSize: 12,
+                    color: decisionState.probability > 0 ? 'var(--color-text-primary)' : decisionState.reasonColor,
+                    fontWeight: 700,
                     fontVariantNumeric: 'tabular-nums',
                     whiteSpace: 'nowrap',
+                    minWidth: 44,
                   }}
                 >
                   {decisionState.probability.toFixed(1)}%
@@ -405,8 +405,8 @@ export function SortableChannelRow({
           style={{
             fontSize: 10,
             background: tokenBinding.badgeTone === 'info'
-              ? 'color-mix(in srgb, var(--color-info) 15%, transparent)'
-              : 'color-mix(in srgb, var(--color-warning) 15%, transparent)',
+              ? 'var(--color-info-soft)'
+              : 'var(--color-warning-soft)',
             color: tokenBinding.badgeTone === 'info' ? 'var(--color-info)' : 'var(--color-warning)',
           }}
         >
@@ -478,16 +478,18 @@ export function SortableChannelRow({
         ) : null}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginTop: mobile ? 0 : 1, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>选中概率</span>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 96 }}>
+          <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>选中概率</span>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
             <div
               data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
               style={{
-                width: 60,
-                height: 4,
-                background: 'color-mix(in srgb, var(--color-border) 88%, white 12%)',
+                width: 88,
+                height: 8,
+                background: 'var(--color-border)',
+                border: '1px solid var(--color-border)',
                 borderRadius: 999,
                 overflow: 'hidden',
+                flexShrink: 0,
               }}
             >
               <div
@@ -503,10 +505,12 @@ export function SortableChannelRow({
             <span
               data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
               style={{
-                fontSize: 11,
-                color: decisionState.probability > 0 ? 'var(--color-text-secondary)' : decisionState.reasonColor,
+                fontSize: 12,
+                color: decisionState.probability > 0 ? 'var(--color-text-primary)' : decisionState.reasonColor,
+                fontWeight: 700,
                 fontVariantNumeric: 'tabular-nums',
                 whiteSpace: 'nowrap',
+                minWidth: 44,
               }}
             >
               {decisionState.probability.toFixed(1)}%
