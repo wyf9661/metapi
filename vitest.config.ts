@@ -6,6 +6,9 @@ export default defineConfig({
       ...configDefaults.exclude,
       '.worktrees/**',
     ],
+    environmentMatchGlobs: [
+      ['src/web/**', 'jsdom'],
+    ],
     // Many of our web tests rely on React's test utilities (act, etc.).
     // If NODE_ENV is accidentally set to "production" in the environment,
     // React switches to the production build where act() is not supported.
