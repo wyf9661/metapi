@@ -239,6 +239,7 @@ export default function TokenRoutes() {
   const candidatesVersionRef = useRef(0);
   const candidatesSeqRef = useRef(0);
   const decisionRefreshWatchSeqRef = useRef(0);
+  const autoDecisionRefreshStartedRef = useRef(false);
   const mountedRef = useRef(true);
 
   const loadCandidates = (force?: boolean) => {
@@ -283,14 +284,15 @@ export default function TokenRoutes() {
       decisionPlaceholder[route.id] = route.decisionSnapshot || null;
     }
     setDecisionByRoute(decisionPlaceholder);
-    setDecisionAutoSkipped(
-      summaries.some((route) => isRouteExactModel(route) && !route.decisionSnapshot),
-    );
+    const needsDecisionRefresh = summaries.some((route) => isRouteExactModel(route) && !route.decisionSnapshot);
+    setDecisionAutoSkipped(needsDecisionRefresh);
 
     // Silently refresh candidates in the background if already loaded
     if (candidatesLoadedRef.current) {
       loadCandidates(true);
     }
+
+    return { needsDecisionRefresh };
   };
 
   const loadRef = useRef(load);
@@ -384,7 +386,25 @@ export default function TokenRoutes() {
     (async () => {
       try {
         await resumeRouteDecisionRefreshTask();
-        await load();
+        const loadResult = await load() as { needsDecisionRefresh?: boolean } | void;
+        // Rebuild/model refresh clears decision snapshots; auto-recompute so UI is not stuck at 0%.
+        if (
+          loadResult
+          && loadResult.needsDecisionRefresh
+          && !loadingDecision
+          && !autoDecisionRefreshStartedRef.current
+        ) {
+          autoDecisionRefreshStartedRef.current = true;
+          try {
+            const response = await api.refreshRouteDecisionSnapshots() as { jobId?: string };
+            const taskId = String(response?.jobId || '').trim();
+            if (taskId) monitorRouteDecisionRefreshTask(taskId);
+            else autoDecisionRefreshStartedRef.current = false;
+          } catch {
+            autoDecisionRefreshStartedRef.current = false;
+            // Keep page usable even if auto refresh fails; user can click manual button.
+          }
+        }
       } catch {
         toast.error('加载路由配置失败');
       }
@@ -413,6 +433,13 @@ export default function TokenRoutes() {
       toast.success(`自动重建完成（新增 ${createdRoutes} 条路由 / ${createdChannels} 个通道）`);
       invalidateChannels();
       await load();
+      try {
+        const response = await api.refreshRouteDecisionSnapshots() as { jobId?: string };
+        const taskId = String(response?.jobId || '').trim();
+        if (taskId) monitorRouteDecisionRefreshTask(taskId);
+      } catch {
+        // ignore auto probability refresh failure
+      }
     } catch (e: any) {
       toast.error(e.message || '重建路由失败');
     } finally {
