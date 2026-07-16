@@ -487,13 +487,24 @@ describe('NewApiAdapter', () => {
           return;
         }
         if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${CHECKIN_ALREADY_TOKEN}`) {
+          // Bearer is invalid for session cookies; this should not override already-checked-in from cookie path.
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, message: '今天已经签到过啦' }));
+          res.end(JSON.stringify({ success: false, message: 'Unauthorized, not logged in and no access token provided' }));
           return;
         }
         if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_ALREADY_TOKEN}`)) {
+          if (String(req.headers['new-api-user'] || '') === '11494') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: '今天已经签到过啦' }));
+            return;
+          }
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, message: '无权进行此操作，未登录且未提供 access token' }));
+          res.end(JSON.stringify({ success: false, message: 'Unauthorized, not logged in and no access token provided' }));
+          return;
+        }
+        if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`token=${CHECKIN_ALREADY_TOKEN}`)) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, message: 'Unauthorized, not logged in and no access token provided' }));
           return;
         }
         if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${COOKIE_SHIELDED_TOKEN}`) {
@@ -790,7 +801,17 @@ describe('NewApiAdapter', () => {
     const adapter = new NewApiAdapter();
     const result = await adapter.checkin(baseUrl, CHECKIN_ALREADY_TOKEN, 11494);
 
+    // Upstream marks already-checked-in as success=false; message must be preserved for upper-layer success mapping.
     expect(result.success).toBe(false);
+    expect(result.message).toBe('今天已经签到过啦');
+    expect(result.message).not.toContain('Unauthorized');
+    expect(result.message).not.toContain('未登录');
+  });
+
+  it('prefers cookie checkin for session-like credentials and keeps already-checked-in result', async () => {
+    const adapter = new NewApiAdapter();
+    // Long base64-like session credential should go cookie-first.
+    const result = await adapter.checkin(baseUrl, CHECKIN_ALREADY_TOKEN, 11494);
     expect(result.message).toBe('今天已经签到过啦');
   });
 

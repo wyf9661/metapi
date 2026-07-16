@@ -257,6 +257,9 @@ export async function executeModelAvailabilityProbe(input: {
   accountId?: number;
   rebuildRoutes?: boolean;
 } = {}): Promise<ModelAvailabilityProbeExecutionResult> {
+  if (!config.modelAvailabilityProbeAllow || !config.modelAvailabilityProbeEnabled) {
+    return summarizeProbeResults([], false);
+  }
   const accountIds = input.accountId
     ? [input.accountId]
     : (await db.select({ id: schema.accounts.id })
@@ -415,7 +418,7 @@ export function queueModelAvailabilityProbeTask(input: {
 
 export function startModelAvailabilityProbeScheduler(intervalMs = config.modelAvailabilityProbeIntervalMs) {
   stopModelAvailabilityProbeScheduler();
-  if (!config.modelAvailabilityProbeEnabled) {
+  if (!config.modelAvailabilityProbeAllow || !config.modelAvailabilityProbeEnabled) {
     return {
       enabled: false,
       intervalMs: 0,
@@ -444,4 +447,156 @@ export function stopModelAvailabilityProbeScheduler() {
 
 export function __resetModelAvailabilityProbeExecutionStateForTests(): void {
   probeAccountLeases.clear();
+}
+
+export type SingleModelProbeResult = {
+  modelName: string;
+  ok: boolean;
+  status: 'supported' | 'unsupported' | 'inconclusive' | 'skipped' | 'not_found';
+  latencyMs: number | null;
+  reason: string;
+  accountId: number | null;
+  siteId: number | null;
+  siteName: string | null;
+  username: string | null;
+};
+
+/**
+ * On-demand single-model probe for marketplace UI.
+ * Probes only one discovered conversation model against one active account target.
+ * Does NOT require batch probe to be enabled.
+ */
+export async function probeSingleModelAvailability(modelName: string): Promise<SingleModelProbeResult> {
+  const normalized = String(modelName || '').trim();
+  if (!normalized) {
+    return {
+      modelName: '',
+      ok: false,
+      status: 'not_found',
+      latencyMs: null,
+      reason: 'model name required',
+      accountId: null,
+      siteId: null,
+      siteName: null,
+      username: null,
+    };
+  }
+
+  // Prefer an account-level availability row first.
+  const accountHit = await db.select({
+    rowId: schema.modelAvailability.id,
+    modelName: schema.modelAvailability.modelName,
+    available: schema.modelAvailability.available,
+    account: schema.accounts,
+    site: schema.sites,
+  })
+    .from(schema.modelAvailability)
+    .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .where(and(
+      eq(schema.modelAvailability.modelName, normalized),
+      eq(schema.accounts.status, 'active'),
+      eq(schema.sites.status, 'active'),
+    ))
+    .orderBy(asc(schema.modelAvailability.checkedAt))
+    .limit(1)
+    .get();
+
+  if (accountHit) {
+    const probe = await probeRuntimeModel({
+      site: accountHit.site,
+      account: accountHit.account,
+      modelName: normalized,
+      timeoutMs: config.modelAvailabilityProbeTimeoutMs,
+    });
+    if (probe.status === 'supported' || probe.status === 'unsupported') {
+      await db.update(schema.modelAvailability)
+        .set({
+          available: probe.status === 'supported',
+          latencyMs: probe.latencyMs,
+          checkedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.modelAvailability.id, accountHit.rowId))
+        .run();
+    }
+    return {
+      modelName: normalized,
+      ok: probe.status === 'supported',
+      status: probe.status,
+      latencyMs: probe.latencyMs,
+      reason: probe.reason,
+      accountId: accountHit.account.id,
+      siteId: accountHit.site.id,
+      siteName: accountHit.site.name,
+      username: accountHit.account.username,
+    };
+  }
+
+  // Fallback: token-level availability.
+  const tokenHit = await db.select({
+    rowId: schema.tokenModelAvailability.id,
+    modelName: schema.tokenModelAvailability.modelName,
+    available: schema.tokenModelAvailability.available,
+    token: schema.accountTokens,
+    account: schema.accounts,
+    site: schema.sites,
+  })
+    .from(schema.tokenModelAvailability)
+    .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
+    .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .where(and(
+      eq(schema.tokenModelAvailability.modelName, normalized),
+      eq(schema.accounts.status, 'active'),
+      eq(schema.sites.status, 'active'),
+      eq(schema.accountTokens.enabled, true),
+      eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
+    ))
+    .orderBy(asc(schema.tokenModelAvailability.checkedAt))
+    .limit(1)
+    .get();
+
+  if (!tokenHit || !isUsableAccountToken(tokenHit.token)) {
+    return {
+      modelName: normalized,
+      ok: false,
+      status: 'not_found',
+      latencyMs: null,
+      reason: 'no active account/token currently lists this model',
+      accountId: null,
+      siteId: null,
+      siteName: null,
+      username: null,
+    };
+  }
+
+  const tokenValue = String(tokenHit.token.token || '').trim();
+  const probe = await probeRuntimeModel({
+    site: tokenHit.site,
+    account: tokenHit.account,
+    modelName: normalized,
+    timeoutMs: config.modelAvailabilityProbeTimeoutMs,
+    tokenValue,
+  });
+  if (probe.status === 'supported' || probe.status === 'unsupported') {
+    await db.update(schema.tokenModelAvailability)
+      .set({
+        available: probe.status === 'supported',
+        latencyMs: probe.latencyMs,
+        checkedAt: new Date().toISOString(),
+      })
+      .where(eq(schema.tokenModelAvailability.id, tokenHit.rowId))
+      .run();
+  }
+  return {
+    modelName: normalized,
+    ok: probe.status === 'supported',
+    status: probe.status,
+    latencyMs: probe.latencyMs,
+    reason: probe.reason,
+    accountId: tokenHit.account.id,
+    siteId: tokenHit.site.id,
+    siteName: tokenHit.site.name,
+    username: tokenHit.account.username,
+  };
 }

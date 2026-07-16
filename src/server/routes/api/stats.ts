@@ -10,6 +10,7 @@ import {
 } from "../../services/modelPricingService.js";
 import {
   buildModelAvailabilityProbeTaskDedupeKey,
+  probeSingleModelAvailability,
   queueModelAvailabilityProbeTask,
   type ModelAvailabilityProbeExecutionResult,
 } from "../../services/modelAvailabilityProbeService.js";
@@ -1848,6 +1849,12 @@ export async function statsRoutes(app: FastifyInstance) {
   app.post<{ Body?: { accountId?: number; wait?: boolean } }>(
     "/api/models/probe",
     async (request, reply) => {
+      if (!config.modelAvailabilityProbeAllow || !config.modelAvailabilityProbeEnabled) {
+        return reply.code(403).send({
+          success: false,
+          message: "批量测活已禁用。请使用 /api/models/probe-one 进行单模型定点探测，或设置 MODEL_AVAILABILITY_PROBE_ALLOW=true 后启用批量测活。",
+        });
+      }
       const requestBody = request.body;
       if (requestBody !== undefined && !isRecord(requestBody)) {
         return reply
@@ -1950,6 +1957,40 @@ export async function statsRoutes(app: FastifyInstance) {
           ? "模型可用性探测任务进行中，请稍后查看任务列表"
           : "已开始模型可用性探测，请稍后查看任务列表",
       });
+    },
+  );
+
+  // On-demand single model probe for marketplace (safe, non-batch)
+  app.post<{ Body?: { model?: string; modelName?: string } }>(
+    "/api/models/probe-one",
+    async (request, reply) => {
+      const requestBody = request.body;
+      if (requestBody !== undefined && !isRecord(requestBody)) {
+        return reply
+          .code(400)
+          .send({ success: false, message: "请求体必须是对象" });
+      }
+      const modelName = String(
+        requestBody?.modelName ?? requestBody?.model ?? "",
+      ).trim();
+      if (!modelName) {
+        return reply
+          .code(400)
+          .send({ success: false, message: "model 不能为空" });
+      }
+
+      const result = await probeSingleModelAvailability(modelName);
+      if (result.status === "not_found") {
+        return reply.code(404).send({
+          success: false,
+          ...result,
+          message: result.reason,
+        });
+      }
+      return {
+        success: true,
+        ...result,
+      };
     },
   );
 

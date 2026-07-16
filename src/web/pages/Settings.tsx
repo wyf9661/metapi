@@ -7,7 +7,6 @@ import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
-import ModelAvailabilityProbeConfirmModal from './settings/ModelAvailabilityProbeConfirmModal.js';
 import {
   createCodexDefaultHighReasoningVisualPreset,
   createVisualPayloadRule,
@@ -33,7 +32,6 @@ import { generateDownstreamSkKey } from './helpers/generateDownstreamSkKey.js';
 const PROXY_TOKEN_PREFIX = 'sk-';
 const FACTORY_RESET_ADMIN_TOKEN = 'change-me-admin-token';
 const FACTORY_RESET_CONFIRM_SECONDS = 3;
-const MODEL_AVAILABILITY_PROBE_CONFIRM_TEXT = '我确认我使用的中转站全部允许批量测活，如因开启此功能被中转站封号，自行负责。';
 const SECONDS_PER_DAY = 24 * 60 * 60;
 const ROUTE_COOLDOWN_UNIT_OPTIONS = [
   { value: 'second', label: '秒', multiplierSec: 1 },
@@ -372,7 +370,6 @@ export default function Settings() {
   const [testingCheckin, setTestingCheckin] = useState(false);
   const [savingToken, setSavingToken] = useState(false);
   const [savingSystemProxy, setSavingSystemProxy] = useState(false);
-  const [savingModelAvailabilityProbe, setSavingModelAvailabilityProbe] = useState(false);
   const [savingProxyTransport, setSavingProxyTransport] = useState(false);
   const [testingSystemProxy, setTestingSystemProxy] = useState(false);
   const [systemProxyTestState, setSystemProxyTestState] = useState<SystemProxyTestState>(null);
@@ -414,10 +411,6 @@ export default function Settings() {
   const [migrationSummary, setMigrationSummary] = useState<DatabaseMigrationSummary | null>(null);
   const [runtimeDatabaseState, setRuntimeDatabaseState] = useState<RuntimeDatabaseState | null>(null);
   const [showChangeKey, setShowChangeKey] = useState(false);
-  const [modelAvailabilityProbeConfirmOpen, setModelAvailabilityProbeConfirmOpen] = useState(false);
-  const modelAvailabilityProbeConfirmPresence = useAnimatedVisibility(modelAvailabilityProbeConfirmOpen, 220);
-  const [modelAvailabilityProbeConfirmationInput, setModelAvailabilityProbeConfirmationInput] = useState('');
-  const [savedModelAvailabilityProbeEnabled, setSavedModelAvailabilityProbeEnabled] = useState(false);
   const [factoryResetOpen, setFactoryResetOpen] = useState(false);
   const factoryResetPresence = useAnimatedVisibility(factoryResetOpen, 220);
   const [factoryResetting, setFactoryResetting] = useState(false);
@@ -457,11 +450,6 @@ export default function Settings() {
     }));
   }, [migrationDialect]);
 
-  useEffect(() => {
-    if (!modelAvailabilityProbeConfirmOpen) {
-      setModelAvailabilityProbeConfirmationInput('');
-    }
-  }, [modelAvailabilityProbeConfirmOpen]);
 
   useEffect(() => {
     if (!factoryResetOpen) {
@@ -615,17 +603,6 @@ export default function Settings() {
 
   const proxyTransportModeLabel = runtime.codexUpstreamWebsocketEnabled ? '上游 WebSocket 已启用' : 'HTTP 优先';
   const proxyTransportQueueLabel = `会话池 ${runtime.proxySessionChannelConcurrencyLimit} 并发 / ${runtime.proxySessionChannelQueueWaitMs}ms`;
-  const modelAvailabilityProbeDirty = runtime.modelAvailabilityProbeEnabled !== savedModelAvailabilityProbeEnabled;
-  const modelAvailabilityProbeStatusTone: SettingsPillTone = modelAvailabilityProbeDirty
-    ? 'warning'
-    : savedModelAvailabilityProbeEnabled
-      ? 'danger'
-      : 'neutral';
-  const modelAvailabilityProbeStatusLabel = modelAvailabilityProbeDirty
-    ? '待保存'
-    : savedModelAvailabilityProbeEnabled
-      ? '已启用'
-      : '已关闭';
 
   const syncPayloadRuleDraftsFromObject = (value: unknown) => {
     setPayloadRuleDrafts(normalizePayloadRulesForEditor(value));
@@ -709,7 +686,6 @@ export default function Settings() {
         globalBlockedBrands: Array.isArray(runtimeInfo.globalBlockedBrands) ? runtimeInfo.globalBlockedBrands : [],
         globalAllowedModels: Array.isArray(runtimeInfo.globalAllowedModels) ? runtimeInfo.globalAllowedModels : [],
       });
-      setSavedModelAvailabilityProbeEnabled(!!runtimeInfo.modelAvailabilityProbeEnabled);
       setBlockedBrands(Array.isArray(runtimeInfo.globalBlockedBrands) ? runtimeInfo.globalBlockedBrands : []);
       setAllowedModels(Array.isArray(runtimeInfo.globalAllowedModels) ? runtimeInfo.globalAllowedModels : []);
       setProxyErrorKeywordsText(
@@ -851,41 +827,6 @@ export default function Settings() {
     }
   };
 
-  const persistModelAvailabilityProbeSetting = async (enabled: boolean) => {
-    setSavingModelAvailabilityProbe(true);
-    try {
-      const res = await api.updateRuntimeSettings({
-        modelAvailabilityProbeEnabled: enabled,
-      });
-      const nextEnabled = typeof res?.modelAvailabilityProbeEnabled === 'boolean'
-        ? res.modelAvailabilityProbeEnabled
-        : enabled;
-      setRuntime((prev) => ({
-        ...prev,
-        modelAvailabilityProbeEnabled: nextEnabled,
-      }));
-      setSavedModelAvailabilityProbeEnabled(nextEnabled);
-      setModelAvailabilityProbeConfirmOpen(false);
-      setModelAvailabilityProbeConfirmationInput('');
-      toast.success(nextEnabled ? '批量测活已开启' : '批量测活已关闭');
-    } catch (err: any) {
-      toast.error(err?.message || '保存失败');
-    } finally {
-      setSavingModelAvailabilityProbe(false);
-    }
-  };
-
-  const saveModelAvailabilityProbeSettings = async () => {
-    if (runtime.modelAvailabilityProbeEnabled === savedModelAvailabilityProbeEnabled) {
-      toast.info('批量测活设置未变化');
-      return;
-    }
-    if (runtime.modelAvailabilityProbeEnabled) {
-      setModelAvailabilityProbeConfirmOpen(true);
-      return;
-    }
-    await persistModelAvailabilityProbeSetting(false);
-  };
 
   const saveProxyTransportSettings = async () => {
     setSavingProxyTransport(true);
@@ -1174,15 +1115,6 @@ export default function Settings() {
     setFactoryResetOpen(false);
   };
 
-  const closeModelAvailabilityProbeConfirmModal = () => {
-    if (savingModelAvailabilityProbe) return;
-    setModelAvailabilityProbeConfirmOpen(false);
-  };
-
-  const handleConfirmModelAvailabilityProbe = async () => {
-    if (modelAvailabilityProbeConfirmationInput.trim() !== MODEL_AVAILABILITY_PROBE_CONFIRM_TEXT) return;
-    await persistModelAvailabilityProbeSetting(true);
-  };
 
   const handleFactoryReset = async () => {
     if (factoryResetSecondsLeft > 0 || factoryResetting) return;
@@ -1878,16 +1810,12 @@ export default function Settings() {
             <div style={settingsModernTitleBlockStyle}>
               <div style={{ ...settingsModernTitleStyle, color: 'var(--color-danger)' }}>批量测活</div>
               <div style={settingsModernDescriptionStyle}>
-                默认关闭。开启后，metapi 会在后台定时对活跃账号模型发送最小化探测请求，用来校正“/models 能看到但实际不可用”的假阳性。
+                当前版本已禁用后台批量测活，避免对中转站发起全量探测请求导致风控。
               </div>
             </div>
             <div style={settingsModernPillRowStyle}>
-              <span style={getSettingsPillStyle(modelAvailabilityProbeStatusTone)}>
-                {modelAvailabilityProbeStatusLabel}
-              </span>
-              <span style={getSettingsPillStyle('danger')}>
-                高风险操作
-              </span>
+              <span style={getSettingsPillStyle('neutral')}>已禁用</span>
+              <span style={getSettingsPillStyle('danger')}>高风险操作</span>
             </div>
           </div>
           <div
@@ -1897,50 +1825,10 @@ export default function Settings() {
               background: 'color-mix(in srgb, var(--color-danger-soft) 38%, var(--color-bg-card))',
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-danger)' }}>风险提示</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-danger)' }}>策略说明</div>
             <div style={{ fontSize: 12, lineHeight: 1.75, color: 'var(--color-text-secondary)' }}>
-              只有在你确认自己使用的中转站明确允许批量测活时才应该开启。若上游不允许，这类探测可能带来封号或风控风险。
+              请在模型广场对单个模型点击“探测”。如需恢复旧版后台批量扫测，必须设置环境变量 MODEL_AVAILABILITY_PROBE_ALLOW=true 并重启服务（默认不开放 UI 开关）。
             </div>
-          </div>
-          <label style={settingsModernToggleStyle}>
-            <div style={settingsModernToggleCopyStyle}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>允许 metapi 后台主动批量测活</span>
-              <span style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--color-text-muted)' }}>
-                首次从关闭切换到开启时，需要手动输入确认语句；关闭时可直接保存。
-              </span>
-            </div>
-            <input
-              type="checkbox"
-              checked={runtime.modelAvailabilityProbeEnabled}
-              onChange={(e) => setRuntime((prev) => ({ ...prev, modelAvailabilityProbeEnabled: e.target.checked }))}
-              style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
-            />
-          </label>
-          <ResponsiveFormGrid columns={2}>
-            <div style={settingsModernFieldCardStyle}>
-              <div style={settingsModernFieldLabelStyle}>当前生效状态</div>
-              <div style={settingsModernPillRowStyle}>
-                <span style={getSettingsPillStyle(modelAvailabilityProbeStatusTone)}>
-                  {modelAvailabilityProbeStatusLabel}
-                </span>
-              </div>
-              <div style={settingsModernFieldHintStyle}>
-                {savedModelAvailabilityProbeEnabled
-                  ? '后台会定时执行最小化探测请求，用于校正模型可用性。'
-                  : '后台不会主动发起模型可用性探测请求。'}
-              </div>
-            </div>
-            <div style={settingsModernFieldCardStyle}>
-              <div style={settingsModernFieldLabelStyle}>启用门槛</div>
-              <div style={{ ...settingsModernFieldHintStyle, marginTop: 0 }}>
-                首次开启必须手动输入确认语句，避免误把高风险探测当成普通开关。
-              </div>
-            </div>
-          </ResponsiveFormGrid>
-          <div style={settingsModernActionsStyle}>
-            <button onClick={saveModelAvailabilityProbeSettings} disabled={savingModelAvailabilityProbe} className="btn btn-primary">
-              {savingModelAvailabilityProbe ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存批量测活设置'}
-            </button>
           </div>
         </div>
 
@@ -2632,15 +2520,6 @@ export default function Settings() {
         adminToken={FACTORY_RESET_ADMIN_TOKEN}
         onClose={closeFactoryResetModal}
         onConfirm={handleFactoryReset}
-      />
-      <ModelAvailabilityProbeConfirmModal
-        presence={modelAvailabilityProbeConfirmPresence}
-        confirmText={MODEL_AVAILABILITY_PROBE_CONFIRM_TEXT}
-        confirmationInput={modelAvailabilityProbeConfirmationInput}
-        saving={savingModelAvailabilityProbe}
-        onConfirmationInputChange={setModelAvailabilityProbeConfirmationInput}
-        onClose={closeModelAvailabilityProbeConfirmModal}
-        onConfirm={handleConfirmModelAvailabilityProbe}
       />
     </div>
   );

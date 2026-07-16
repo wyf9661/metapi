@@ -415,8 +415,9 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
     }
     case 'model_availability_probe_enabled': {
       if (typeof value !== 'boolean') return;
-      config.modelAvailabilityProbeEnabled = value;
-      if (value) {
+      const enabled = value && config.modelAvailabilityProbeAllow;
+      config.modelAvailabilityProbeEnabled = enabled;
+      if (enabled) {
         startModelAvailabilityProbeScheduler();
       } else {
         stopModelAvailabilityProbeScheduler();
@@ -1168,12 +1169,20 @@ export async function settingsRoutes(app: FastifyInstance) {
         });
       }
 
+      // Fork policy: batch probe is disabled unless MODEL_AVAILABILITY_PROBE_ALLOW=true.
+      if (nextValue && !config.modelAvailabilityProbeAllow) {
+        return reply.code(403).send({
+          success: false,
+          message: '当前版本已禁用批量测活。如需启用请设置 MODEL_AVAILABILITY_PROBE_ALLOW=true 后重启服务。',
+        });
+      }
+
       if (nextValue !== config.modelAvailabilityProbeEnabled) {
         changedLabels.push(nextValue ? '开启批量测活' : '关闭批量测活');
       }
       await upsertSetting('model_availability_probe_enabled', nextValue);
-      config.modelAvailabilityProbeEnabled = nextValue;
-      if (nextValue) {
+      config.modelAvailabilityProbeEnabled = nextValue && config.modelAvailabilityProbeAllow;
+      if (config.modelAvailabilityProbeEnabled) {
         startModelAvailabilityProbeScheduler();
       } else {
         stopModelAvailabilityProbeScheduler();
