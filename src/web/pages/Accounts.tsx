@@ -26,7 +26,7 @@ import {
   clearFocusParams,
   readFocusAccountIntent,
 } from "./helpers/navigationFocus.js";
-import { TokensPanel } from "./Tokens.js";
+import { TokensPanel } from "./tokens/TokensPanel.js";
 import { tr } from "../i18n.js";
 import {
   buildCustomReorderUpdates,

@@ -37,17 +37,11 @@ type RunOptions = {
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
 
-const ROUTES_PROXY_IMPORT_ALLOWLIST = new Set([
-  'src/server/proxy-core/surfaces/chatSurface.ts',
-  'src/server/proxy-core/surfaces/filesSurface.ts',
-  'src/server/proxy-core/surfaces/geminiSurface.ts',
-  'src/server/proxy-core/surfaces/openAiResponsesSurface.ts',
-  'src/server/proxy-core/surfaces/sharedSurface.ts',
-]);
+// Cleared: proxy-core no longer imports helpers from routes/proxy.
+const ROUTES_PROXY_IMPORT_ALLOWLIST = new Set<string>([]);
 
-const TOP_LEVEL_PAGE_IMPORT_ALLOWLIST = new Set([
-  'src/web/pages/Accounts.tsx',
-]);
+// Cleared: Accounts now imports TokensPanel from pages/tokens/ subfolder.
+const TOP_LEVEL_PAGE_IMPORT_ALLOWLIST = new Set<string>([]);
 
 function normalizeRelativePath(root: string, fullPath: string): string {
   return relative(root, fullPath).replaceAll('\\', '/');
