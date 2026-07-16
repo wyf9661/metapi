@@ -29,6 +29,9 @@ const LEGACY_ICON_ALIASES: Record<string, string> = {
   'zhipu.color': 'zhipu-color',
   azure: 'microsoft-color',
   'bytedance-brand-color': 'bytedance-color',
+  kilo: 'kilocode',
+  'kilo-color': 'kilocode',
+  'opencode-color': 'opencode',
 };
 
 function normalizeInput(value: string): string {
