@@ -302,4 +302,15 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
   if (adminIpAllowlist !== undefined) {
     config.adminIpAllowlist = toStringList(adminIpAllowlist);
   }
+
+  const tunnelDashboardAccess = parseSettingFromMap<boolean>(settingsMap, 'tunnel_dashboard_access');
+  if (typeof tunnelDashboardAccess === 'boolean') {
+    config.tunnelDashboardAccess = tunnelDashboardAccess;
+  }
+
+  const tunnelEnabled = parseSettingFromMap<boolean>(settingsMap, 'tunnel_enabled');
+  if (typeof tunnelEnabled === 'boolean') {
+    config.tunnelEnabled = tunnelEnabled;
+  }
+
 }

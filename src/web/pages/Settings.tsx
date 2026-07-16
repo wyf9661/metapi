@@ -57,6 +57,8 @@ type PayloadRulesEditorSectionKey = PayloadRuleAction;
 type PayloadRulesEditorDrafts = Record<PayloadRulesEditorSectionKey, string>;
 
 type RuntimeSettings = {
+  tunnelDashboardAccess?: boolean;
+  tunnelEnabled?: boolean;
   checkinCron: string;
   checkinScheduleMode: 'cron' | 'interval';
   checkinIntervalHours: number;
@@ -339,6 +341,8 @@ function toRouteCooldownSeconds(value: number, unit: RouteCooldownUnit): number 
 export default function Settings() {
   const isMobile = useIsMobile();
   const [runtime, setRuntime] = useState<RuntimeSettings>({
+    tunnelDashboardAccess: false,
+    tunnelEnabled: false,
     checkinCron: '0 8 * * *',
     checkinScheduleMode: 'cron',
     checkinIntervalHours: 6,
@@ -682,6 +686,8 @@ export default function Settings() {
         adminIpAllowlist: Array.isArray(runtimeInfo.adminIpAllowlist)
           ? runtimeInfo.adminIpAllowlist.filter((item: unknown) => typeof item === 'string')
           : [],
+        tunnelDashboardAccess: !!runtimeInfo.tunnelDashboardAccess,
+        tunnelEnabled: !!runtimeInfo.tunnelEnabled,
         currentAdminIp: typeof runtimeInfo.currentAdminIp === 'string' ? runtimeInfo.currentAdminIp : '',
         globalBlockedBrands: Array.isArray(runtimeInfo.globalBlockedBrands) ? runtimeInfo.globalBlockedBrands : [],
         globalAllowedModels: Array.isArray(runtimeInfo.globalAllowedModels) ? runtimeInfo.globalAllowedModels : [],
@@ -2483,6 +2489,46 @@ export default function Settings() {
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>会话与安全</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             登录会话默认 12 小时自动过期。可选配置管理端 IP 白名单，支持每行一个 IP 或 IPv4 CIDR 网段。
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '12px 14px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-border-light)',
+            background: 'var(--color-bg)',
+            marginBottom: 14,
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                允许通过隧道访问控制台
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
+                关闭时，公网隧道只允许 API（/v1/*）访问；开启后可通过隧道 URL 打开当前控制页（仍需管理员登录令牌）。
+              </div>
+            </div>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!runtime.tunnelDashboardAccess}
+                onChange={async (e) => {
+                  const next = e.target.checked;
+                  setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: next }));
+                  try {
+                    await api.setTunnelDashboardAccess(next);
+                    toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
+                  } catch (err: any) {
+                    setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: !next }));
+                    toast.error(err?.message || '更新失败');
+                  }
+                }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                {runtime.tunnelDashboardAccess ? '已开启' : '仅 API'}
+              </span>
+            </label>
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
             当前识别到的管理端 IP（由服务端判定）：

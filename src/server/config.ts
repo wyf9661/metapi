@@ -110,6 +110,8 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     smtpFrom: env.SMTP_FROM || '',
     smtpTo: env.SMTP_TO || '',
     notifyCooldownSec: Math.max(0, Math.trunc(parseNumber(env.NOTIFY_COOLDOWN_SEC, 300))),
+    tunnelDashboardAccess: env.TUNNEL_DASHBOARD_ACCESS === 'true',
+    tunnelEnabled: env.TUNNEL_ENABLED === 'true',
     adminIpAllowlist: parseCsvList(env.ADMIN_IP_ALLOWLIST),
     port: Math.trunc(parseNumber(env.PORT, 4000)),
     listenHost: parseListenHost(env),
