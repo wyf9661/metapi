@@ -42,8 +42,11 @@ interface ModelPricingSource {
 interface ModelAccountInfo {
   id: number;
   site: string;
+  siteId?: number | null;
   username: string | null;
   latency: number | null;
+  available?: boolean | null;
+  checkedAt?: string | null;
   balance: number;
   tokens: ModelTokenInfo[];
 }
@@ -235,6 +238,12 @@ export default function Models() {
   const siteIdByName = useMemo(() => {
     const index = new Map<string, number>();
     for (const model of data.models) {
+      for (const account of model.accounts || []) {
+        const siteName = String(account.site || '').trim();
+        const siteId = Number(account.siteId);
+        if (!siteName || !Number.isFinite(siteId) || siteId <= 0 || index.has(siteName)) continue;
+        index.set(siteName, Math.trunc(siteId));
+      }
       for (const source of model.pricingSources || []) {
         const siteName = String(source.siteName || '').trim();
         const siteId = Number(source.siteId);
@@ -460,6 +469,28 @@ export default function Models() {
     setTimeout(() => setCopied(null), 1500);
   };
 
+  const probeModelScoped = async (model: ModelRow) => {
+    if (activeSite) {
+      const siteId = siteIdByName.get(activeSite) || null;
+      const scopedAccounts = model.accounts.filter((account) => account.site === activeSite);
+      if (siteId) {
+        await probeModel(model.name, { siteId });
+        return;
+      }
+      // Fallback: probe only accounts currently shown for this supplier.
+      for (const account of scopedAccounts) {
+        await probeModel(model.name, {
+          accountId: account.id,
+          siteId: (typeof account.siteId === 'number' && account.siteId > 0)
+            ? account.siteId
+            : null,
+        });
+      }
+      return;
+    }
+    await probeModel(model.name);
+  };
+
   const probeModel = async (
     name: string,
     options?: { siteId?: number | null; accountId?: number | null },
@@ -548,6 +579,34 @@ export default function Models() {
         return { ...prev, [name]: aggregate };
       });
 
+      // Persist probe outcome into current marketplace rows immediately.
+      setData((prev) => ({
+        ...prev,
+        models: prev.models.map((model) => {
+          if (model.name !== name) return model;
+          return {
+            ...model,
+            accounts: model.accounts.map((account) => {
+              const live = byAccountId[account.id];
+              if (!live) return account;
+              const nextAvailable = live.status === 'supported'
+                ? true
+                : live.status === 'unsupported'
+                  ? false
+                  : account.available;
+              return {
+                ...account,
+                available: nextAvailable,
+                latency: live.latencyMs ?? account.latency,
+                checkedAt: new Date().toISOString(),
+              };
+            }),
+          };
+        }),
+      }));
+      // Refresh from server (cache cleared) so reload shows same connectivity.
+      try { await loadBaseMarketplace(false); } catch {}
+
       if (aggregate.ok) {
         const s = aggregate.summary;
         toast.success(
@@ -578,18 +637,32 @@ export default function Models() {
     }
   };
 
-  const renderConnectivity = (result?: AccountProbeResult | null) => {
-    if (!result) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
-    if (result.status === 'supported' || result.ok) {
-      return <span className="badge badge-success" style={{ fontSize: 11 }}>{tr('连通')}</span>;
+  const renderConnectivity = (
+    account: ModelAccountInfo,
+    live?: AccountProbeResult | null,
+  ) => {
+    // Prefer latest probe session result, then persisted availability from DB/live traffic.
+    if (live) {
+      if (live.status === 'supported' || live.ok) {
+        return <span className="badge badge-success" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('连通')}</span>;
+      }
+      if (live.status === 'unsupported') {
+        return <span className="badge badge-error" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('不通')}</span>;
+      }
+      if (live.status === 'skipped') {
+        return <span className="badge badge-muted" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('跳过')}</span>;
+      }
+      if (live.status === 'inconclusive' || live.status === 'failed') {
+        return <span className="badge badge-warning" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('未知')}</span>;
+      }
     }
-    if (result.status === 'unsupported') {
-      return <span className="badge badge-error" style={{ fontSize: 11 }} title={result.reason || ''}>{tr('不通')}</span>;
+    if (account.available === true) {
+      return <span className="badge badge-success" style={{ fontSize: 11 }} title={account.checkedAt || ''}>{tr('连通')}</span>;
     }
-    if (result.status === 'skipped') {
-      return <span className="badge badge-muted" style={{ fontSize: 11 }} title={result.reason || ''}>{tr('跳过')}</span>;
+    if (account.available === false) {
+      return <span className="badge badge-error" style={{ fontSize: 11 }} title={account.checkedAt || ''}>{tr('不通')}</span>;
     }
-    return <span className="badge badge-warning" style={{ fontSize: 11 }} title={result.reason || ''}>{tr('未知')}</span>;
+    return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
   };
 
 
@@ -905,7 +978,7 @@ export default function Models() {
                       data-tooltip={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
                       aria-label={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
                       disabled={!!probingKey}
-                      onClick={() => void probeModel(m.name)}
+                      onClick={() => void probeModelScoped(m)}
                     >
                       {probingKey === m.name ? (
                         <span className="spinner spinner-sm" />
@@ -1025,25 +1098,7 @@ export default function Models() {
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, alignItems: 'center' }}>
                                 <span style={{ color: 'var(--color-text-muted)' }}>{tr('连通性')}</span>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                  {renderConnectivity(probeResults[m.name]?.byAccountId?.[a.id])}
-                                  <button
-                                    className="model-card-action-btn"
-                                    data-tooltip={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
-                                    aria-label={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
-                                    disabled={!!probingKey}
-                                    onClick={() => void probeModel(m.name, {
-                                      accountId: a.id,
-                                      siteId: siteIdByName.get(a.site) || null,
-                                    })}
-                                  >
-                                    {probingKey === `${m.name}#account:${a.id}` ? (
-                                      <span className="spinner spinner-sm" />
-                                    ) : (
-                                      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                    )}
-                                  </button>
-                                </span>
+                                {renderConnectivity(a, probeResults[m.name]?.byAccountId?.[a.id])}
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
                                 <span style={{ color: 'var(--color-text-muted)' }}>{tr('余额')}</span>
@@ -1089,25 +1144,7 @@ export default function Models() {
                                 </span>
                               </td>
                               <td>
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                  {renderConnectivity(probeResults[m.name]?.byAccountId?.[a.id])}
-                                  <button
-                                    className="model-card-action-btn"
-                                    data-tooltip={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
-                                    aria-label={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
-                                    disabled={!!probingKey}
-                                    onClick={() => void probeModel(m.name, {
-                                      accountId: a.id,
-                                      siteId: siteIdByName.get(a.site) || null,
-                                    })}
-                                  >
-                                    {probingKey === `${m.name}#account:${a.id}` ? (
-                                      <span className="spinner spinner-sm" />
-                                    ) : (
-                                      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                    )}
-                                  </button>
-                                </div>
+                                {renderConnectivity(a, probeResults[m.name]?.byAccountId?.[a.id])}
                               </td>
                               <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>${(a.balance || 0).toFixed(2)}</td>
                             </tr>
@@ -1218,7 +1255,7 @@ export default function Models() {
                             data-tooltip={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
                             aria-label={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
                             disabled={!!probingKey}
-                            onClick={() => void probeModel(m.name)}
+                            onClick={() => void probeModelScoped(m)}
                           >
                             {probingKey === m.name ? (
                               <span className="spinner spinner-sm" />
@@ -1310,25 +1347,7 @@ export default function Models() {
                                       {formatLatency(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency)}
                                     </td>
                                     <td style={{ padding: 8 }}>
-                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                        {renderConnectivity(probeResults[m.name]?.byAccountId?.[a.id])}
-                                        <button
-                                          className="model-card-action-btn"
-                                          data-tooltip={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
-                                          aria-label={probingKey === `${m.name}#account:${a.id}` ? tr('探测中...') : tr('探测该供应商')}
-                                          disabled={!!probingKey}
-                                          onClick={() => void probeModel(m.name, {
-                                            accountId: a.id,
-                                            siteId: siteIdByName.get(a.site) || null,
-                                          })}
-                                        >
-                                          {probingKey === `${m.name}#account:${a.id}` ? (
-                                            <span className="spinner spinner-sm" />
-                                          ) : (
-                                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                          )}
-                                        </button>
-                                      </div>
+                                      {renderConnectivity(a, probeResults[m.name]?.byAccountId?.[a.id])}
                                     </td>
                                     <td style={{ padding: 8 }}>${(a.balance || 0).toFixed(2)}</td>
                                   </tr>
