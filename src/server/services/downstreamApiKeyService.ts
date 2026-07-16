@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { minimatch } from 'minimatch';
 import { db, schema } from '../db/index.js';
@@ -7,6 +8,17 @@ import {
   type DownstreamExcludedCredentialRef,
   type DownstreamRoutingPolicy,
 } from './downstreamPolicyTypes.js';
+
+function secretsEqualProxy(left: string, right: string): boolean {
+  const a = Buffer.from(String(left || ''), 'utf8');
+  const b = Buffer.from(String(right || ''), 'utf8');
+  if (a.length === 0 || b.length === 0) return false;
+  if (a.length !== b.length) {
+    timingSafeEqual(a, a);
+    return false;
+  }
+  return timingSafeEqual(a, b);
+}
 
 export type DownstreamApiKeyRow = typeof schema.downstreamApiKeys.$inferSelect;
 
@@ -46,7 +58,7 @@ export type DownstreamTokenAuthFailure = {
   ok: false;
   statusCode: number;
   error: string;
-  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests';
+  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests' | 'global_proxy_token_disabled';
 };
 
 export type DownstreamTokenAuthResult = DownstreamTokenAuthSuccess | DownstreamTokenAuthFailure;
@@ -476,13 +488,22 @@ export async function authorizeDownstreamToken(token: string): Promise<Downstrea
     };
   }
 
-  if (normalizedToken === config.proxyToken) {
+  if (config.allowGlobalProxyToken && secretsEqualProxy(normalizedToken, config.proxyToken)) {
     return {
       ok: true,
       source: 'global',
       token: normalizedToken,
       key: null,
       policy: getDefaultGlobalPolicy(),
+    };
+  }
+
+  if (!config.allowGlobalProxyToken && secretsEqualProxy(normalizedToken, config.proxyToken)) {
+    return {
+      ok: false,
+      statusCode: 403,
+      error: 'Global PROXY_TOKEN is disabled. Create a managed API key in the Metapi UI (Downstream Keys).',
+      reason: 'global_proxy_token_disabled',
     };
   }
 
@@ -494,14 +515,21 @@ export async function authorizeDownstreamToken(token: string): Promise<Downstrea
   };
 }
 
-export async function consumeManagedKeyRequest(keyId: number): Promise<void> {
+export async function consumeManagedKeyRequest(keyId: number): Promise<boolean> {
   const nowIso = new Date().toISOString();
-  await db.update(schema.downstreamApiKeys).set({
-    // Atomic increment to avoid lost updates under multi-process concurrency.
+  // Atomic check-and-increment: only succeeds when under maxRequests (or unlimited).
+  const result = await db.update(schema.downstreamApiKeys).set({
     usedRequests: sql`coalesce(${schema.downstreamApiKeys.usedRequests}, 0) + 1`,
     lastUsedAt: nowIso,
     updatedAt: nowIso,
-  }).where(eq(schema.downstreamApiKeys.id, keyId)).run();
+  }).where(and(
+    eq(schema.downstreamApiKeys.id, keyId),
+    sql`(${schema.downstreamApiKeys.maxRequests} is null or coalesce(${schema.downstreamApiKeys.usedRequests}, 0) < ${schema.downstreamApiKeys.maxRequests})`,
+  )).run();
+  const changes = typeof result?.changes === 'number'
+    ? result.changes
+    : (typeof result?.rowCount === 'number' ? result.rowCount : 1);
+  return changes > 0;
 }
 
 export async function recordManagedKeyCostUsage(keyId: number, estimatedCost: number): Promise<void> {

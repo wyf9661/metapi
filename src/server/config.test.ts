@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { buildConfig, buildFastifyOptions } from './config.js';
+import { assertProductionSecurity, buildConfig, buildFastifyOptions, isInsecureDefaultSecret } from './config.js';
 
 describe('buildConfig', () => {
   it('defaults to external listen host for server deployments', () => {
@@ -105,5 +105,68 @@ describe('buildConfig', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ ip: '203.0.113.5' });
     await app.close();
+  });
+});
+
+
+describe('assertProductionSecurity', () => {
+  const strongSecret = 'S3cure-Admin-Token-1234567890';
+  const strongCredential = 'Cred-Secret-0987654321-abcXYZ';
+
+  it('is a no-op outside production', () => {
+    const config = buildConfig({});
+    expect(() => assertProductionSecurity(config, { NODE_ENV: 'development' })).not.toThrow();
+  });
+
+  it('rejects default admin token in production', () => {
+    const config = buildConfig({ NODE_ENV: 'production' });
+    expect(() => assertProductionSecurity(config, { NODE_ENV: 'production' })).toThrow(/AUTH_TOKEN/);
+  });
+
+  it('rejects when credential secret equals admin token', () => {
+    const env = {
+      NODE_ENV: 'production',
+      AUTH_TOKEN: strongSecret,
+      ACCOUNT_CREDENTIAL_SECRET: strongSecret,
+      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
+    };
+    const config = buildConfig(env);
+    expect(() => assertProductionSecurity(config, env)).toThrow(/must differ from AUTH_TOKEN/);
+  });
+
+  it('passes with strong distinct secrets and global proxy token disabled', () => {
+    const env = {
+      NODE_ENV: 'production',
+      AUTH_TOKEN: strongSecret,
+      ACCOUNT_CREDENTIAL_SECRET: strongCredential,
+      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
+    };
+    const config = buildConfig(env);
+    expect(config.allowGlobalProxyToken).toBe(false);
+    expect(() => assertProductionSecurity(config, env)).not.toThrow();
+  });
+
+  it('rejects enabled global proxy token still using default value', () => {
+    const env = {
+      NODE_ENV: 'production',
+      AUTH_TOKEN: strongSecret,
+      ACCOUNT_CREDENTIAL_SECRET: strongCredential,
+      ALLOW_GLOBAL_PROXY_TOKEN: 'true',
+    };
+    const config = buildConfig(env);
+    expect(() => assertProductionSecurity(config, env)).toThrow(/PROXY_TOKEN/);
+  });
+
+  it('can be bypassed with ALLOW_INSECURE_DEFAULTS', () => {
+    const env = { NODE_ENV: 'production', ALLOW_INSECURE_DEFAULTS: 'true' };
+    const config = buildConfig(env);
+    expect(() => assertProductionSecurity(config, env)).not.toThrow();
+  });
+
+  it('flags insecure default secrets', () => {
+    expect(isInsecureDefaultSecret('change-me-admin-token')).toBe(true);
+    expect(isInsecureDefaultSecret('123456')).toBe(true);
+    expect(isInsecureDefaultSecret('')).toBe(true);
+    expect(isInsecureDefaultSecret('a-strong-unique-secret-value')).toBe(false);
   });
 });

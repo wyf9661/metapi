@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../config.js';
@@ -106,6 +107,19 @@ export function isIpAllowed(clientIp: string, allowlist: string[]): boolean {
   });
 }
 
+
+function secretsEqual(left: string, right: string): boolean {
+  const a = Buffer.from(String(left || ''), 'utf8');
+  const b = Buffer.from(String(right || ''), 'utf8');
+  if (a.length === 0 || b.length === 0) return false;
+  if (a.length !== b.length) {
+    // Compare against self to keep runtime roughly constant on length mismatch.
+    timingSafeEqual(a, a);
+    return false;
+  }
+  return timingSafeEqual(a, b);
+}
+
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply) {
   const clientIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
   if (!isIpAllowed(clientIp, config.adminIpAllowlist)) {
@@ -119,7 +133,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     return;
   }
   const token = auth.replace('Bearer ', '');
-  if (token !== config.authToken) {
+  if (!secretsEqual(token, config.authToken)) {
     reply.code(403).send({ error: 'Invalid token' });
     return;
   }
@@ -158,7 +172,11 @@ export async function proxyAuthMiddleware(request: FastifyRequest, reply: Fastif
   }
 
   if (authResult.source === 'managed' && authResult.key) {
-    await consumeManagedKeyRequest(authResult.key.id);
+    const consumed = await consumeManagedKeyRequest(authResult.key.id);
+    if (consumed === false) {
+      reply.code(403).send({ error: 'API key has exceeded max requests' });
+      return;
+    }
   }
 
   proxyAuthContextByRequest.set(request, {

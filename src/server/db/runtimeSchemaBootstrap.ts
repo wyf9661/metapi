@@ -15,6 +15,7 @@ import {
 import { installPostgresJsonTextParsers } from './postgresJsonTextParsers.js';
 import { introspectLiveSchema } from './schemaIntrospection.js';
 import { resolveGeneratedSchemaContractPath, type SchemaContract } from './schemaContract.js';
+import { config } from '../config.js';
 
 export type RuntimeSchemaDialect = 'sqlite' | 'mysql' | 'postgres';
 
@@ -323,7 +324,7 @@ async function resolveMySqlIndexPrefixRequirements(
 async function createPostgresClient(connectionString: string, ssl: boolean): Promise<RuntimeSchemaClient> {
   const clientOptions: pg.ClientConfig = { connectionString };
   if (ssl) {
-    clientOptions.ssl = { rejectUnauthorized: false };
+    clientOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   installPostgresJsonTextParsers();
   const client = new pg.Client(clientOptions);
@@ -350,7 +351,7 @@ async function createPostgresClient(connectionString: string, ssl: boolean): Pro
 async function createMySqlClient(connectionString: string, ssl: boolean): Promise<RuntimeSchemaClient> {
   const connectionOptions: mysql.ConnectionOptions = { uri: connectionString };
   if (ssl) {
-    connectionOptions.ssl = { rejectUnauthorized: false };
+    connectionOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   const connection = await mysql.createConnection(connectionOptions);
 

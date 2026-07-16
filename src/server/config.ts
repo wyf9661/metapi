@@ -8,6 +8,9 @@ const DEFAULT_CLAUDE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const DEFAULT_GEMINI_CLI_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const DEFAULT_GEMINI_CLI_CLIENT_SECRET = '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';
 export const TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING = 30 * 24 * 60 * 60;
+export const INSECURE_DEFAULT_AUTH_TOKEN = 'change-me-admin-token';
+export const INSECURE_DEFAULT_PROXY_TOKEN = 'change-me-proxy-sk-token';
+export const MIN_PRODUCTION_SECRET_LENGTH = 16;
 
 function parseBoolean(value: string | undefined, fallback = false): boolean {
   if (value === undefined) return fallback;
@@ -67,8 +70,14 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
   const dataDir = env.DATA_DIR || './data';
 
   return {
-    authToken: env.AUTH_TOKEN || 'change-me-admin-token',
-    proxyToken: env.PROXY_TOKEN || 'change-me-proxy-sk-token',
+    authToken: env.AUTH_TOKEN || INSECURE_DEFAULT_AUTH_TOKEN,
+    proxyToken: env.PROXY_TOKEN || INSECURE_DEFAULT_PROXY_TOKEN,
+    // Production default: false — clients should use UI-generated managed keys.
+    // Dev/test default: true for backward compatibility with PROXY_TOKEN.
+    allowGlobalProxyToken: parseBoolean(
+      env.ALLOW_GLOBAL_PROXY_TOKEN,
+      (env.NODE_ENV || '').toLowerCase() !== 'production',
+    ),
     deployHelperToken: parseOptionalSecret(env.DEPLOY_HELPER_TOKEN || env.UPDATE_CENTER_HELPER_TOKEN),
     codexClientId: parseOptionalSecret(env.CODEX_CLIENT_ID) || DEFAULT_CODEX_CLIENT_ID,
     claudeClientId: parseOptionalSecret(env.CLAUDE_CLIENT_ID) || DEFAULT_CLAUDE_CLIENT_ID,
@@ -76,7 +85,10 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     geminiCliClientId: parseOptionalSecret(env.GEMINI_CLI_CLIENT_ID) || DEFAULT_GEMINI_CLI_CLIENT_ID,
     geminiCliClientSecret: parseOptionalSecret(env.GEMINI_CLI_CLIENT_SECRET) || DEFAULT_GEMINI_CLI_CLIENT_SECRET,
     systemProxyUrl: env.SYSTEM_PROXY_URL || '',
-    accountCredentialSecret: env.ACCOUNT_CREDENTIAL_SECRET || env.AUTH_TOKEN || 'change-me-admin-token',
+    // Prefer a dedicated secret; fall back only for local/dev compatibility.
+    accountCredentialSecret: env.ACCOUNT_CREDENTIAL_SECRET
+      || env.AUTH_TOKEN
+      || INSECURE_DEFAULT_AUTH_TOKEN,
     checkinCron: env.CHECKIN_CRON || '0 8 * * *',
     checkinScheduleMode: (env.CHECKIN_SCHEDULE_MODE || 'cron').trim().toLowerCase() === 'interval'
       ? 'interval' as const
@@ -119,6 +131,14 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     dbType: parseDbType(env.DB_TYPE),
     dbUrl: (env.DB_URL || '').trim(),
     dbSsl: parseBoolean(env.DB_SSL, false),
+    // When DB_SSL=true, verify certificates by default (set DB_SSL_REJECT_UNAUTHORIZED=false for self-signed).
+    dbSslRejectUnauthorized: parseBoolean(env.DB_SSL_REJECT_UNAUTHORIZED, true),
+    // trustProxy: honor X-Forwarded-For from reverse proxies. Set TRUST_PROXY=false when exposed directly.
+    trustProxy: parseBoolean(env.TRUST_PROXY, true),
+    // Only constrain to N hops when explicitly configured; otherwise preserve legacy trust-all behavior.
+    trustProxyHops: env.TRUST_PROXY_HOPS !== undefined
+      ? Math.max(1, Math.trunc(parseNumber(env.TRUST_PROXY_HOPS, 1)))
+      : null,
     requestBodyLimit: DEFAULT_REQUEST_BODY_LIMIT,
     routingFallbackUnitCost: Math.max(1e-6, parseNumber(env.ROUTING_FALLBACK_UNIT_COST, 1)),
     proxyFirstByteTimeoutSec: Math.max(0, Math.trunc(parseNumber(env.PROXY_FIRST_BYTE_TIMEOUT_SEC, 0))),
@@ -185,7 +205,75 @@ export function buildFastifyOptions(
 ): FastifyServerOptions {
   return {
     logger: true,
-    trustProxy: true,
+    // false | true | hop count — avoid unconditionally trusting client-supplied XFF.
+    // Default preserves legacy trust-all (true); TRUST_PROXY=false disables; TRUST_PROXY_HOPS=N constrains.
+    trustProxy: appConfig.trustProxy
+      ? (appConfig.trustProxyHops ?? true)
+      : false,
     bodyLimit: appConfig.requestBodyLimit,
   };
+}
+
+export function isInsecureDefaultSecret(value: string | null | undefined): boolean {
+  const normalized = (value || '').trim();
+  return (
+    normalized.length === 0
+    || normalized === INSECURE_DEFAULT_AUTH_TOKEN
+    || normalized === INSECURE_DEFAULT_PROXY_TOKEN
+    || normalized === '123456'
+    || normalized === 'REPLACE_WITH_STRONG_RANDOM_SECRET'
+  );
+}
+
+/**
+ * Production startup gate. Dev/test keep insecure defaults for convenience.
+ * Set ALLOW_INSECURE_DEFAULTS=true to bypass (not recommended).
+ */
+export function assertProductionSecurity(
+  appConfig: ReturnType<typeof buildConfig>,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const nodeEnv = (env.NODE_ENV || '').trim().toLowerCase();
+  if (nodeEnv !== 'production') return;
+  if (parseBoolean(env.ALLOW_INSECURE_DEFAULTS, false)) {
+    console.warn('[security] ALLOW_INSECURE_DEFAULTS=true — production security checks skipped');
+    return;
+  }
+
+  const problems: string[] = [];
+  if (isInsecureDefaultSecret(appConfig.authToken) || appConfig.authToken.trim().length < MIN_PRODUCTION_SECRET_LENGTH) {
+    problems.push(
+      `AUTH_TOKEN must be a strong unique value (>=${MIN_PRODUCTION_SECRET_LENGTH} chars), not the built-in default`,
+    );
+  }
+  if (appConfig.allowGlobalProxyToken) {
+    if (isInsecureDefaultSecret(appConfig.proxyToken) || appConfig.proxyToken.trim().length < MIN_PRODUCTION_SECRET_LENGTH) {
+      problems.push(
+        'PROXY_TOKEN is enabled (ALLOW_GLOBAL_PROXY_TOKEN) but still uses an insecure/default value — generate managed keys in the UI or set a strong PROXY_TOKEN',
+      );
+    }
+  }
+  if (
+    isInsecureDefaultSecret(appConfig.accountCredentialSecret)
+    || appConfig.accountCredentialSecret.trim().length < MIN_PRODUCTION_SECRET_LENGTH
+  ) {
+    problems.push(
+      `ACCOUNT_CREDENTIAL_SECRET must be a strong unique value (>=${MIN_PRODUCTION_SECRET_LENGTH} chars)`,
+    );
+  }
+  if (appConfig.accountCredentialSecret === appConfig.authToken) {
+    problems.push(
+      'ACCOUNT_CREDENTIAL_SECRET must differ from AUTH_TOKEN (encryption key and admin login must not share a secret)',
+    );
+  }
+
+  if (problems.length === 0) return;
+
+  const message = [
+    '[security] Refusing to start in production with insecure configuration:',
+    ...problems.map((item) => `  - ${item}`),
+    'Fix: set strong AUTH_TOKEN + ACCOUNT_CREDENTIAL_SECRET in env, prefer UI-generated downstream keys (ALLOW_GLOBAL_PROXY_TOKEN=false).',
+    'Emergency only: ALLOW_INSECURE_DEFAULTS=true',
+  ].join('\n');
+  throw new Error(message);
 }

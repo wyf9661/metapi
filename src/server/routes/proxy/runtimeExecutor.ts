@@ -8,17 +8,18 @@ export async function dispatchRuntimeRequest(
   input: RuntimeDispatchInput,
 ): Promise<RuntimeResponse> {
   const executor = input.request.runtime?.executor || 'default';
-  if (executor === 'codex') {
-    return codexExecutor.dispatch(input);
+  switch (executor) {
+    case 'codex':
+    case 'default':
+      // Historical default executor is the codex HTTP runtime path.
+      return codexExecutor.dispatch(input);
+    case 'claude':
+      return claudeExecutor.dispatch(input);
+    case 'gemini-cli':
+      return geminiCliExecutor.dispatch(input);
+    case 'antigravity':
+      return antigravityExecutor.dispatch(input);
+    default:
+      throw new Error(`Unsupported runtime executor: ${String(executor)}`);
   }
-  if (executor === 'claude') {
-    return claudeExecutor.dispatch(input);
-  }
-  if (executor === 'gemini-cli') {
-    return geminiCliExecutor.dispatch(input);
-  }
-  if (executor === 'antigravity') {
-    return antigravityExecutor.dispatch(input);
-  }
-  return codexExecutor.dispatch(input);
 }

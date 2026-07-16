@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import {
+  assertProductionSecurity,
   buildFastifyOptions,
   config,
 } from './config.js';
@@ -203,6 +204,8 @@ try {
   console.warn(`Failed to load runtime settings overrides: ${(error as Error)?.message || 'unknown error'}`);
 }
 
+
+assertProductionSecurity(config);
 
 const app = Fastify(buildFastifyOptions(config));
 
