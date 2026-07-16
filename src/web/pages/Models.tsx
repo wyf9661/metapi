@@ -96,7 +96,14 @@ function getLatencyBadgeClass(latency: number | null) {
 }
 
 function formatLatency(latency: number | null): string {
-  return isKnownLatency(latency) ? `${latency}ms` : '—';
+  if (!isKnownLatency(latency)) return '—';
+  // >= 1s uses seconds for readability; sub-second keeps ms precision.
+  if (latency >= 1000) {
+    const seconds = latency / 1000;
+    if (seconds >= 10) return `${Math.round(seconds)}s`;
+    return `${(Math.round(seconds * 10) / 10).toFixed(1)}s`;
+  }
+  return `${Math.round(latency)}ms`;
 }
 
 function formatThroughput(tps: number | null | undefined): string {
@@ -545,7 +552,7 @@ export default function Models() {
         const s = aggregate.summary;
         toast.success(
           s
-            ? `${name} 连通 ${s.supported}/${s.total}` + (aggregate.latencyMs != null ? ` · 均延迟 ${aggregate.latencyMs}ms` : '')
+            ? `${name} 连通 ${s.supported}/${s.total}` + (aggregate.latencyMs != null ? ` · 均延迟 ${formatLatency(aggregate.latencyMs)}` : '')
             : `${name} 可用`,
         );
       } else {
@@ -1013,9 +1020,7 @@ export default function Models() {
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
                                 <span style={{ color: 'var(--color-text-muted)' }}>{tr('延迟')}</span>
                                 <span style={{ color: getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency), fontVariantNumeric: 'tabular-nums' }}>
-                                  {(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null
-                                    ? `${probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency}ms`
-                                    : '—'}
+                                  {formatLatency(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency)}
                                 </span>
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, alignItems: 'center' }}>
@@ -1079,11 +1084,9 @@ export default function Models() {
                                 )) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                               </td>
                               <td>
-                                {(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null ? (
-                                  <span style={{ color: getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency), fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
-                                    {probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency}ms
-                                  </span>
-                                ) : '—'}
+                                <span style={{ color: getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency), fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
+                                  {formatLatency(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency)}
+                                </span>
                               </td>
                               <td>
                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1304,9 +1307,7 @@ export default function Models() {
                                       )) : '—'}
                                     </td>
                                     <td style={{ padding: 8, color: (probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null ? getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) : 'var(--color-text-muted)' }}>
-                                      {(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null
-                                        ? `${probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency}ms`
-                                        : '—'}
+                                      {formatLatency(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency)}
                                     </td>
                                     <td style={{ padding: 8 }}>
                                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
