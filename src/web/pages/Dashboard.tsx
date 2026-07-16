@@ -229,6 +229,11 @@ export default function Dashboard({
   const [tunnel, setTunnel] = useState<any>(null);
   const [tunnelBusy, setTunnelBusy] = useState(false);
   const [tunnelError, setTunnelError] = useState<string | null>(null);
+  const isTunnelClientView = typeof window !== 'undefined'
+    && (
+      window.location.hostname.endsWith('.trycloudflare.com')
+      || window.location.hostname.endsWith('.abc-tunnel.us')
+    );
 
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -402,6 +407,10 @@ export default function Dashboard({
   }, [refreshTunnel]);
 
   const handleToggleDashboardAccess = async (next: boolean) => {
+    if (isTunnelClientView) {
+      toast.error('通过公网隧道时不允许修改该选项，请在本机控制台操作');
+      return;
+    }
     const prev = !!tunnel?.dashboardAccess;
     setTunnel((current: any) => ({ ...(current || {}), dashboardAccess: next }));
     try {
@@ -415,6 +424,10 @@ export default function Dashboard({
   };
 
   const handleToggleTunnel = async () => {
+    if (isTunnelClientView) {
+      toast.error('通过公网隧道时不允许关闭/创建隧道，请在本机控制台操作');
+      return;
+    }
     setTunnelBusy(true);
     setTunnelError(null);
     try {
@@ -733,12 +746,15 @@ export default function Dashboard({
                   允许通过隧道访问控制台
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-                  关闭=公网只走 API（/v1/*）；开启=可用隧道 URL 打开控制页（仍需管理员登录）
+                  {isTunnelClientView
+                    ? '当前正通过公网隧道访问，无法修改此选项。请在本机/内网控制台切换。'
+                    : '关闭=公网只走 API（/v1/*）；开启=可用隧道 URL 打开控制页（仍需管理员登录）'}
                 </div>
               </div>
               <input
                 type="checkbox"
                 checked={!!tunnel?.dashboardAccess}
+                disabled={isTunnelClientView}
                 onChange={(e) => { void handleToggleDashboardAccess(e.target.checked); }}
                 style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
               />
@@ -785,15 +801,21 @@ export default function Dashboard({
                 复制地址
               </button>
             ) : null}
-            <button
-              type="button"
-              className={`btn ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
-              style={{ border: '1px solid var(--color-border)', padding: '8px 12px', minWidth: 108 }}
-              disabled={tunnelBusy}
-              onClick={() => { void handleToggleTunnel(); }}
-            >
-              {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭隧道' : '创建隧道')}
-            </button>
+            {!isTunnelClientView ? (
+              <button
+                type="button"
+                className={`btn ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
+                style={{ border: '1px solid var(--color-border)', padding: '8px 12px', minWidth: 108 }}
+                disabled={tunnelBusy}
+                onClick={() => { void handleToggleTunnel(); }}
+              >
+                {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭隧道' : '创建隧道')}
+              </button>
+            ) : (
+              <span className="badge badge-warning" style={{ fontSize: 11, fontWeight: 600 }}>
+                隧道访问中：不可关闭隧道
+              </span>
+            )}
           </div>
         </div>
       </div>
