@@ -813,12 +813,15 @@ export default function Dashboard({
               >
                 复制地址
               </button>
-            ) : null}
+            ) : (
+              <div className="dashboard-tunnel-action-btn dashboard-tunnel-action-placeholder" aria-hidden>
+                复制地址
+              </div>
+            )}
             {!isTunnelClientView ? (
               <button
                 type="button"
                 className={`btn dashboard-tunnel-action-btn ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
-                style={{ flex: 1 }}
                 disabled={tunnelBusy}
                 onClick={() => { void handleToggleTunnel(); }}
               >
@@ -826,20 +829,9 @@ export default function Dashboard({
               </button>
             ) : (
               <div
-                className="badge badge-warning"
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  justifyContent: 'center',
-                  padding: '14px 12px',
-                  borderRadius: 10,
-                  minHeight: 52,
-                  whiteSpace: 'normal',
-                  textAlign: 'center',
-                  lineHeight: 1.4,
-                }}
+                className="btn dashboard-tunnel-action-btn dashboard-tunnel-action-locked"
+                role="status"
+                aria-label="隧道访问中，不可关闭隧道"
               >
                 隧道访问中
                 <br />
@@ -850,7 +842,7 @@ export default function Dashboard({
         </div>
       </div>
 
-<div className="dashboard-stat-grid">
+      <div className="dashboard-stat-grid">
         <div className="stat-card animate-slide-up stagger-1">
           <div className="stat-card-header">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">

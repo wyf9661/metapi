@@ -6865,16 +6865,38 @@ textarea {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  align-self: stretch;
+  height: 100%;
 }
 
 .dashboard-tunnel-action-btn {
   width: 100%;
-  min-height: 52px;
+  flex: 1 1 0;
+  min-height: 56px;
   padding: 14px 12px;
   font-size: 14px;
   font-weight: 700;
   border-radius: 10px;
   border: 1px solid var(--color-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.35;
+  box-sizing: border-box;
+}
+
+.dashboard-tunnel-action-placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.dashboard-tunnel-action-locked {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+  cursor: default;
+  user-select: none;
 }
 
 @media (max-width: 768px) {

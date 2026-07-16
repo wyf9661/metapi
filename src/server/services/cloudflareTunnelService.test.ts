@@ -16,6 +16,8 @@ describe('cloudflare tunnel access helpers', () => {
     expect(isTunnelDashboardPath('/')).toBe(true);
     expect(isTunnelDashboardPath('/settings')).toBe(true);
     expect(isTunnelDashboardPath('/api/settings/runtime')).toBe(true);
+    expect(isTunnelDashboardPath('/logo.png')).toBe(true);
+    expect(isTunnelDashboardPath('/favicon.png')).toBe(true);
     expect(isTunnelDashboardPath('/v1/models')).toBe(false);
   });
 
