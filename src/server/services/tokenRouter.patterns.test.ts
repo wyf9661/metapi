@@ -168,6 +168,22 @@ describe('TokenRouter patterns and model mapping', () => {
     })).toBe('target-glob');
   });
 
+  it('dispatches canonical exact routes using the selected channel source model', async () => {
+    await createRouteWithSingleChannel(
+      'minimax-m2.7',
+      undefined,
+      { sourceModel: 'MiniMax-M2.7' },
+    );
+    const router = new TokenRouter();
+
+    const selected = await router.selectChannel('minimax-m2.7');
+    const decision = await router.explainSelection('minimax-m2.7');
+
+    expect(selected).toBeTruthy();
+    expect(selected?.actualModel).toBe('MiniMax-M2.7');
+    expect(decision.actualModel).toBe('MiniMax-M2.7');
+  });
+
   it('matches a route by display name alias as an exposed model', async () => {
     await createRouteWithSingleChannel(
       're:^claude-(opus|sonnet)-4-5$',

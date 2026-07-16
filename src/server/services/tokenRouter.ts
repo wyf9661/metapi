@@ -29,6 +29,7 @@ import {
   matchesTokenRouteModelPattern,
   parseTokenRouteRegexPattern,
 } from '../../shared/tokenRoutePatterns.js';
+import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import {
   normalizeTokenRouteMode,
   type RouteDecision,
@@ -1410,13 +1411,7 @@ function buildVisibleEnabledRoutes(routes: RouteRow[]): RouteRow[] {
 }
 
 function normalizeModelAlias(modelName: string): string {
-  const normalized = (modelName || '').trim().toLowerCase();
-  if (!normalized) return '';
-  const slashIndex = normalized.lastIndexOf('/');
-  if (slashIndex >= 0 && slashIndex < normalized.length - 1) {
-    return normalized.slice(slashIndex + 1);
-  }
-  return normalized;
+  return canonicalizeModelName(modelName);
 }
 
 function isModelAliasEquivalent(left: string, right: string): boolean {
@@ -1492,6 +1487,9 @@ function resolveActualModelForSelectedChannel(
   channelSourceModel: string | null | undefined,
 ): string {
   const sourceModel = normalizeChannelSourceModel(channelSourceModel);
+  if (sourceModel && isModelAliasEquivalent(sourceModel, mappedModel)) {
+    return sourceModel;
+  }
   if (isRouteDisplayNameMatch(requestedModel, route.displayName) && sourceModel) {
     return sourceModel;
   }
