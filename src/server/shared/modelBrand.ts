@@ -37,6 +37,8 @@ const BRAND_DEFINITIONS: BrandDefinition[] = [
       { keyword: 'davinci', mode: 'startsWith' },
       { keyword: 'babbage', mode: 'startsWith' },
       { keyword: 'codex-mini', mode: 'startsWith' },
+      { keyword: 'codex-auto-review', mode: 'startsWith' },
+      { keyword: 'codex-', mode: 'startsWith' },
       { keyword: 'o1', mode: 'startsWith' },
       { keyword: 'o3', mode: 'startsWith' },
       { keyword: 'o4', mode: 'startsWith' },
@@ -170,6 +172,9 @@ const BRAND_DEFINITIONS: BrandDefinition[] = [
     rules: [
       { keyword: 'hunyuan', mode: 'includes' },
       { keyword: 'tencent-hunyuan', mode: 'includes' },
+      { keyword: 'hy-', mode: 'startsWith' },
+      { keyword: 'hy3', mode: 'startsWith' },
+      { keyword: 'hy3', mode: 'segment' },
     ],
   },
   {
@@ -218,6 +223,38 @@ const BRAND_DEFINITIONS: BrandDefinition[] = [
     color: 'linear-gradient(135deg, #111, #444)',
     rules: [
       { keyword: 'grok', mode: 'includes' },
+    ],
+  },
+  {
+    name: 'Agnes',
+    icon: 'agnes',
+    color: 'linear-gradient(135deg, #ec4899, #a855f7)',
+    rules: [
+      { keyword: 'agnes', mode: 'includes' },
+    ],
+  },
+  {
+    name: 'OpenCode',
+    icon: 'opencode',
+    color: 'linear-gradient(135deg, #111827, #374151)',
+    rules: [
+      { keyword: 'opencode', mode: 'includes' },
+      { keyword: 'big-pickle', mode: 'includes' },
+      { keyword: 'north-mini-code', mode: 'includes' },
+      { keyword: 'laguna', mode: 'includes' },
+      { keyword: 'poolside/', mode: 'startsWith' },
+      { keyword: 'poolside', mode: 'includes' },
+    ],
+  },
+  {
+    name: 'Kilo',
+    icon: 'kilocode',
+    color: 'linear-gradient(135deg, #f59e0b, #f97316)',
+    rules: [
+      { keyword: 'kilocode', mode: 'includes' },
+      { keyword: 'kilo-auto', mode: 'includes' },
+      { keyword: 'kilo-', mode: 'startsWith' },
+      { keyword: 'kilo', mode: 'boundary' },
     ],
   },
   {
