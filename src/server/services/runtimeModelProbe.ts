@@ -111,9 +111,15 @@ export async function probeRuntimeModel(input: {
   }
 
   const oauth = getOauthInfoFromAccount(input.account);
+  // Prefer explicit tokenValue, then:
+  // - OAuth accounts: accessToken (session/oauth token)
+  // - API-key style: apiToken, fallback accessToken (many new-api session imports only fill accessToken)
+  // Never treat empty apiToken as "no credential" when accessToken is present.
   const tokenValue = String(
     input.tokenValue
-    || (oauth ? input.account.accessToken : input.account.apiToken)
+    || (oauth
+      ? (input.account.accessToken || input.account.apiToken)
+      : (input.account.apiToken || input.account.accessToken))
     || '',
   ).trim();
   if (!tokenValue) {

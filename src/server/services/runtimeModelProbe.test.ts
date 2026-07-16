@@ -127,4 +127,39 @@ describe('probeRuntimeModel', () => {
     expect(result.latencyMs).not.toBeNull();
     expect(elapsedMs).toBeLessThan(200);
   });
+
+  it('falls back to accessToken for session accounts when apiToken is empty', async () => {
+    resolveUpstreamEndpointCandidatesMock.mockResolvedValue([{
+      id: 'chat',
+      path: '/v1/chat/completions',
+      format: 'openai',
+    }]);
+    dispatchRuntimeRequestMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: 'OK' } }] }),
+      body: { getReader: () => ({ read: async () => ({ done: true }) }) },
+    });
+    withSiteRecordProxyRequestInitMock.mockImplementation((_site, init) => init);
+
+    const sessionAccount = {
+      ...account,
+      apiToken: '',
+      accessToken: 'session-cookie-token',
+    };
+
+    const { probeRuntimeModel } = await import('./runtimeModelProbe.js');
+    const result = await probeRuntimeModel({
+      site,
+      account: sessionAccount,
+      modelName: 'gpt-5.4',
+      timeoutMs: 5000,
+    });
+
+    expect(result.status).toBe('supported');
+    expect(buildUpstreamEndpointRequestMock).toHaveBeenCalled();
+    const built = buildUpstreamEndpointRequestMock.mock.calls[0][0];
+    expect(built.tokenValue).toBe('session-cookie-token');
+  });
+
 });
