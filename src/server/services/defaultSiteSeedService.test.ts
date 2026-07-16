@@ -37,68 +37,18 @@ describe('defaultSiteSeedService', () => {
     delete process.env.DATA_DIR;
   });
 
-  it('seeds default official sites once when no site exists yet', async () => {
-    await ensureDefaultSitesSeeded();
+  it('writes seed marker without inserting official sites on empty database', async () => {
+    const summary = await ensureDefaultSitesSeeded();
+    expect(summary.seeded).toBe(0);
 
     const sites = await db.select().from(schema.sites).all();
-    const sorted = [...sites].sort((left, right) => (left.sortOrder || 0) - (right.sortOrder || 0));
-    expect(sorted.map((site) => ({
-      name: site.name,
-      url: site.url,
-      platform: site.platform,
-      status: site.status,
-      useSystemProxy: site.useSystemProxy,
-      isPinned: site.isPinned,
-      globalWeight: site.globalWeight,
-      sortOrder: site.sortOrder,
-    }))).toEqual([
-      {
-        name: 'OpenAI 官方',
-        url: 'https://api.openai.com',
-        platform: 'openai',
-        status: 'active',
-        useSystemProxy: false,
-        isPinned: false,
-        globalWeight: 1,
-        sortOrder: 0,
-      },
-      {
-        name: 'Claude 官方',
-        url: 'https://api.anthropic.com',
-        platform: 'claude',
-        status: 'active',
-        useSystemProxy: false,
-        isPinned: false,
-        globalWeight: 1,
-        sortOrder: 1,
-      },
-      {
-        name: 'Gemini 官方',
-        url: 'https://generativelanguage.googleapis.com',
-        platform: 'gemini',
-        status: 'active',
-        useSystemProxy: false,
-        isPinned: false,
-        globalWeight: 1,
-        sortOrder: 2,
-      },
-      {
-        name: 'CLIProxyAPI',
-        url: 'http://127.0.0.1:8317',
-        platform: 'cliproxyapi',
-        status: 'active',
-        useSystemProxy: false,
-        isPinned: false,
-        globalWeight: 1,
-        sortOrder: 3,
-      },
-    ]);
+    expect(sites).toHaveLength(0);
 
     const setting = await db.select().from(schema.settings).where(eq(schema.settings.key, DEFAULT_SITE_SEED_SETTING_KEY)).get();
     expect(JSON.parse(setting?.value || 'false')).toBe(true);
   });
 
-  it('marks first-run evaluation without seeding when sites already exist', async () => {
+  it('marks first-run evaluation without changing existing sites', async () => {
     await db.insert(schema.sites).values({
       name: 'Existing Site',
       url: 'https://existing.example.com',

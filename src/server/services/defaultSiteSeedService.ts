@@ -4,48 +4,7 @@ import { upsertSetting } from '../db/upsertSetting.js';
 
 export const DEFAULT_SITE_SEED_SETTING_KEY = 'default_site_seed_v1';
 
-const DEFAULT_SITE_ROWS: Array<typeof schema.sites.$inferInsert> = [
-  {
-    name: 'OpenAI 官方',
-    url: 'https://api.openai.com',
-    platform: 'openai',
-    status: 'active',
-    useSystemProxy: false,
-    isPinned: false,
-    globalWeight: 1,
-    sortOrder: 0,
-  },
-  {
-    name: 'Claude 官方',
-    url: 'https://api.anthropic.com',
-    platform: 'claude',
-    status: 'active',
-    useSystemProxy: false,
-    isPinned: false,
-    globalWeight: 1,
-    sortOrder: 1,
-  },
-  {
-    name: 'Gemini 官方',
-    url: 'https://generativelanguage.googleapis.com',
-    platform: 'gemini',
-    status: 'active',
-    useSystemProxy: false,
-    isPinned: false,
-    globalWeight: 1,
-    sortOrder: 2,
-  },
-  {
-    name: 'CLIProxyAPI',
-    url: 'http://127.0.0.1:8317',
-    platform: 'cliproxyapi',
-    status: 'active',
-    useSystemProxy: false,
-    isPinned: false,
-    globalWeight: 1,
-    sortOrder: 3,
-  },
-];
+const DEFAULT_SITE_ROWS: Array<typeof schema.sites.$inferInsert> = [];
 
 type SeedSummary = {
   seeded: number;
@@ -57,6 +16,8 @@ async function writeSeedMarker(tx: typeof db) {
   await upsertSetting(DEFAULT_SITE_SEED_SETTING_KEY, true, tx);
 }
 
+// Fork policy: do not auto-insert official/OAuth demo sites on install.
+// Only write the seed marker so upgrades never re-seed later.
 export async function ensureDefaultSitesSeeded(): Promise<SeedSummary> {
   return db.transaction(async (tx) => {
     const marker = await tx.select({ key: schema.settings.key })
@@ -86,7 +47,9 @@ export async function ensureDefaultSitesSeeded(): Promise<SeedSummary> {
       };
     }
 
-    await tx.insert(schema.sites).values(DEFAULT_SITE_ROWS).run();
+    if (DEFAULT_SITE_ROWS.length > 0) {
+      await tx.insert(schema.sites).values(DEFAULT_SITE_ROWS).run();
+    }
     await writeSeedMarker(tx);
     return {
       seeded: DEFAULT_SITE_ROWS.length,
