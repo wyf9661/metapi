@@ -11,7 +11,7 @@ import { useIsMobile } from '../components/useIsMobile.js';
 import { mergeMarketplaceMetadata, shouldHydrateMarketplaceMetadata } from './helpers/modelsMarketplaceMetadata.js';
 import { tr } from '../i18n.js';
 
-type SortColumn = 'name' | 'accountCount' | 'tokenCount' | 'avgLatency' | 'successRate';
+type SortColumn = 'name' | 'accountCount' | 'tokenCount' | 'avgLatency' | 'avgFirstByteMs' | 'avgThroughputTps' | 'successRate';
 type ViewMode = 'card' | 'table';
 
 interface ModelTokenInfo {
@@ -53,6 +53,8 @@ interface ModelRow {
   accountCount: number;
   tokenCount: number;
   avgLatency: number | null;
+  avgFirstByteMs: number | null;
+  avgThroughputTps: number | null;
   successRate: number | null;
   description: string | null;
   tags: string[];
@@ -97,6 +99,21 @@ function formatLatency(latency: number | null): string {
   return isKnownLatency(latency) ? `${latency}ms` : '—';
 }
 
+function formatThroughput(tps: number | null | undefined): string {
+  if (typeof tps !== 'number' || !Number.isFinite(tps) || tps <= 0) return '—';
+  if (tps >= 100) return `${Math.round(tps)} t/s`;
+  if (tps >= 10) return `${Math.round(tps * 10) / 10} t/s`;
+  return `${Math.round(tps * 100) / 100} t/s`;
+}
+
+function getThroughputBadgeClass(tps: number | null | undefined): string {
+  if (typeof tps !== 'number' || !Number.isFinite(tps) || tps <= 0) return 'badge-muted';
+  if (tps >= 40) return 'badge-success';
+  if (tps >= 15) return 'badge-info';
+  if (tps >= 5) return 'badge-warning';
+  return 'badge-error';
+}
+
 function getSuccessBadgeClass(rate: number | null) {
   if (rate == null) return 'badge-muted';
   if (rate >= 90) return 'badge-success';
@@ -135,11 +152,19 @@ function compareModels(a: ModelRow, b: ModelRow, sortBy: SortColumn, sortDir: 'a
 
   const resolveNumericSortValue = (model: ModelRow) => {
     if (sortBy === 'successRate') return model.successRate ?? -1;
-    if (sortBy === 'avgLatency') {
-      if (!isKnownLatency(model.avgLatency)) {
+    if (sortBy === 'avgThroughputTps') {
+      const value = model.avgThroughputTps;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return sortDir === 'asc' ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+      }
+      return value;
+    }
+    if (sortBy === 'avgLatency' || sortBy === 'avgFirstByteMs') {
+      const value = sortBy === 'avgLatency' ? model.avgLatency : model.avgFirstByteMs;
+      if (!isKnownLatency(value)) {
         return sortDir === 'asc' ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
       }
-      return model.avgLatency;
+      return value;
     }
     return model[sortBy] ?? 0;
   };
@@ -627,6 +652,8 @@ export default function Models() {
           { key: 'accountCount' as SortColumn, label: tr('账号数') },
           { key: 'tokenCount' as SortColumn, label: tr('令牌数') },
           { key: 'avgLatency' as SortColumn, label: tr('延迟') },
+          { key: 'avgFirstByteMs' as SortColumn, label: tr('首字') },
+          { key: 'avgThroughputTps' as SortColumn, label: tr('吞吐') },
           { key: 'successRate' as SortColumn, label: tr('成功率') },
           { key: 'name' as SortColumn, label: tr('名称') },
         ].map(opt => (
@@ -834,6 +861,20 @@ export default function Models() {
                         data-tooltip={tr('平均延迟')}
                       >
                         {tr('延迟')} {formatLatency(m.avgLatency)}
+                      </span>
+                      <span
+                        className={`badge ${getLatencyBadgeClass(m.avgFirstByteMs)}`}
+                        style={{ fontVariantNumeric: 'tabular-nums' }}
+                        data-tooltip={tr('平均首字延迟（近7天）')}
+                      >
+                        {tr('首字')} {formatLatency(m.avgFirstByteMs)}
+                      </span>
+                      <span
+                        className={`badge ${getThroughputBadgeClass(m.avgThroughputTps)}`}
+                        style={{ fontVariantNumeric: 'tabular-nums' }}
+                        data-tooltip={tr('平均吞吐（近7天，token/s）')}
+                      >
+                        {tr('吞吐')} {formatThroughput(m.avgThroughputTps)}
                       </span>
                       <span
                         className={`badge ${getSuccessBadgeClass(m.successRate)}`}
@@ -1098,6 +1139,12 @@ export default function Models() {
                   <th style={{ cursor: 'pointer' }} onClick={() => { setSortBy('avgLatency'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>
                     {tr('延迟')} {sortBy === 'avgLatency' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
                   </th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => { setSortBy('avgFirstByteMs'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>
+                    {tr('首字')} {sortBy === 'avgFirstByteMs' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                  </th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => { setSortBy('avgThroughputTps'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>
+                    {tr('吞吐')} {sortBy === 'avgThroughputTps' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                  </th>
                   <th style={{ cursor: 'pointer' }} onClick={() => { setSortBy('successRate'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>
                     {tr('成功率')} {sortBy === 'successRate' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
                   </th>
@@ -1126,6 +1173,24 @@ export default function Models() {
                           style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
                         >
                           {formatLatency(m.avgLatency)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${getLatencyBadgeClass(m.avgFirstByteMs)}`}
+                          style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
+                          data-tooltip={tr('平均首字延迟（近7天）')}
+                        >
+                          {formatLatency(m.avgFirstByteMs)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${getThroughputBadgeClass(m.avgThroughputTps)}`}
+                          style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
+                          data-tooltip={tr('平均吞吐（近7天，token/s）')}
+                        >
+                          {formatThroughput(m.avgThroughputTps)}
                         </span>
                       </td>
                       <td>
@@ -1165,7 +1230,7 @@ export default function Models() {
                     </tr>
                     {isExpanded ? (
                     <tr className="log-detail-row">
-                      <td colSpan={7} style={{ padding: 0 }}>
+                      <td colSpan={9} style={{ padding: 0 }}>
                         <div className="anim-collapse is-open">
                           <div className="anim-collapse-inner">
                             <div style={{ padding: '12px 16px 12px 54px' }}>

@@ -1158,22 +1158,85 @@ export async function statsRoutes(app: FastifyInstance) {
 
       const last7d = getLocalRangeStartUtc(7);
       const recentLogs = await db
-        .select(proxyLogBaseFields)
+        .select({
+          ...proxyLogBaseFields,
+          firstByteLatencyMs: schema.proxyLogs.firstByteLatencyMs,
+          isStream: schema.proxyLogs.isStream,
+        })
         .from(schema.proxyLogs)
         .where(gte(schema.proxyLogs.createdAt, last7d))
         .all();
 
       const modelLogStats: Record<
         string,
-        { success: number; total: number; totalLatency: number }
+        {
+          success: number;
+          total: number;
+          totalLatency: number;
+          firstByteSum: number;
+          firstByteCount: number;
+          throughputSum: number;
+          throughputCount: number;
+        }
       > = {};
       for (const log of recentLogs) {
         const model = log.modelActual || log.modelRequested || "";
-        if (!modelLogStats[model])
-          modelLogStats[model] = { success: 0, total: 0, totalLatency: 0 };
-        modelLogStats[model].total++;
-        if (log.status === "success") modelLogStats[model].success++;
-        modelLogStats[model].totalLatency += log.latencyMs || 0;
+        if (!model) continue;
+        if (!modelLogStats[model]) {
+          modelLogStats[model] = {
+            success: 0,
+            total: 0,
+            totalLatency: 0,
+            firstByteSum: 0,
+            firstByteCount: 0,
+            throughputSum: 0,
+            throughputCount: 0,
+          };
+        }
+        const stats = modelLogStats[model];
+        stats.total += 1;
+        if (log.status === "success") {
+          stats.success += 1;
+          const latencyMs = typeof log.latencyMs === "number" ? log.latencyMs : null;
+          if (latencyMs != null && Number.isFinite(latencyMs) && latencyMs >= 0) {
+            stats.totalLatency += latencyMs;
+          }
+
+          const firstByteMs = typeof (log as any).firstByteLatencyMs === "number"
+            ? (log as any).firstByteLatencyMs
+            : null;
+          if (firstByteMs != null && Number.isFinite(firstByteMs) && firstByteMs >= 0) {
+            stats.firstByteSum += firstByteMs;
+            stats.firstByteCount += 1;
+          }
+
+          const completionTokens = typeof log.completionTokens === "number"
+            ? log.completionTokens
+            : null;
+          if (
+            completionTokens != null
+            && Number.isFinite(completionTokens)
+            && completionTokens > 0
+            && latencyMs != null
+            && latencyMs > 0
+          ) {
+            let generationMs = latencyMs;
+            if (
+              firstByteMs != null
+              && Number.isFinite(firstByteMs)
+              && firstByteMs >= 0
+              && latencyMs > firstByteMs
+            ) {
+              // Prefer post-TTFT generation window for streaming-like throughput.
+              generationMs = latencyMs - firstByteMs;
+            }
+            const tps = completionTokens / (generationMs / 1000);
+            if (Number.isFinite(tps) && tps > 0 && tps < 1_000_000) {
+              stats.throughputSum += tps;
+              stats.throughputCount += 1;
+            }
+          }
+        }
       }
 
       type ModelMetadataAggregate = {
@@ -1403,6 +1466,12 @@ export async function statsRoutes(app: FastifyInstance) {
         const fallbackDescription = metadata?.description
           ? null
           : upstreamDescriptionMap.get(m.name.toLowerCase()) || null;
+        const avgFirstByteMs = logStats && logStats.firstByteCount > 0
+          ? Math.round(logStats.firstByteSum / logStats.firstByteCount)
+          : null;
+        const avgThroughputTps = logStats && logStats.throughputCount > 0
+          ? Math.round((logStats.throughputSum / logStats.throughputCount) * 10) / 10
+          : null;
         return {
           name: m.name,
           accountCount: accounts.length,
@@ -1411,6 +1480,8 @@ export async function statsRoutes(app: FastifyInstance) {
             0,
           ),
           avgLatency: Math.round(avgLatency),
+          avgFirstByteMs,
+          avgThroughputTps,
           successRate: logStats
             ? Math.round((logStats.success / logStats.total) * 1000) / 10
             : null,
