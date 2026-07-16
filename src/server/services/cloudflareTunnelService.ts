@@ -629,12 +629,27 @@ export function isTunnelDashboardPath(urlPath: string): boolean {
   if (!path || path === '/') return true;
   if (path.startsWith('/assets/')) return true;
   if (path === '/index.html') return true;
+  // Frontend shell static files at web root (logo/favicon/etc).
+  // Previously only extension-less SPA routes were allowed, so /logo.png 403'd on public tunnel.
+  if (
+    path === '/logo.png'
+    || path === '/favicon.png'
+    || path === '/favicon.ico'
+    || path === '/robots.txt'
+    || path === '/manifest.webmanifest'
+  ) {
+    return true;
+  }
   if (path.startsWith('/api/')) {
     // management APIs are dashboard surface
     return true;
   }
-  // SPA routes
+  // SPA routes (no file extension)
   if (!path.includes('.')) return true;
+  // Other hashed/static frontend assets at root if any
+  if (/\.(png|jpe?g|gif|svg|ico|webp|css|js|map|woff2?|ttf)$/i.test(path)) {
+    return true;
+  }
   return false;
 }
 
