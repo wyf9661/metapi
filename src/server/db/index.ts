@@ -64,7 +64,7 @@ function buildMysqlPoolOptions(
     jsonStrings: true,
   };
   if (sslEnabled) {
-    poolOptions.ssl = { rejectUnauthorized: false };
+    poolOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   return poolOptions;
 }
@@ -75,7 +75,7 @@ function buildPostgresPoolOptions(
 ): pg.PoolConfig {
   const poolOptions: pg.PoolConfig = { connectionString };
   if (sslEnabled) {
-    poolOptions.ssl = { rejectUnauthorized: false };
+    poolOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   return poolOptions;
 }

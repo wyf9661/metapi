@@ -24,6 +24,7 @@ import {
   normalizeLogicalColumnType,
   type LogicalColumnType,
 } from './schemaMetadata.js';
+import { config } from '../config.js';
 
 export type SchemaIntrospectionDialect = 'sqlite' | 'mysql' | 'postgres';
 
@@ -365,7 +366,7 @@ async function introspectSqliteSchema(connectionString: string): Promise<SchemaC
 async function introspectMySqlSchema(input: SchemaIntrospectionInput): Promise<SchemaContract> {
   const connectionOptions: mysql.ConnectionOptions = { uri: input.connectionString };
   if (input.ssl) {
-    connectionOptions.ssl = { rejectUnauthorized: false };
+    connectionOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   const connection = await mysql.createConnection(connectionOptions);
 
@@ -539,7 +540,7 @@ async function introspectMySqlSchema(input: SchemaIntrospectionInput): Promise<S
 async function introspectPostgresSchema(input: SchemaIntrospectionInput): Promise<SchemaContract> {
   const clientOptions: pg.ClientConfig = { connectionString: input.connectionString };
   if (input.ssl) {
-    clientOptions.ssl = { rejectUnauthorized: false };
+    clientOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   installPostgresJsonTextParsers();
   const client = new pg.Client(clientOptions);
@@ -767,7 +768,7 @@ async function applyMySqlStatements(
 ): Promise<void> {
   const connectionOptions: mysql.ConnectionOptions = { uri: connectionString };
   if (ssl) {
-    connectionOptions.ssl = { rejectUnauthorized: false };
+    connectionOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   const connection = await mysql.createConnection(connectionOptions);
   try {
@@ -790,7 +791,7 @@ async function applyPostgresStatements(
 ): Promise<void> {
   const clientOptions: pg.ClientConfig = { connectionString };
   if (ssl) {
-    clientOptions.ssl = { rejectUnauthorized: false };
+    clientOptions.ssl = { rejectUnauthorized: config.dbSslRejectUnauthorized !== false };
   }
   installPostgresJsonTextParsers();
   const client = new pg.Client(clientOptions);

@@ -5,7 +5,7 @@ const VERSION = 'v1';
 const ALGORITHM = 'aes-256-gcm';
 
 function buildKey(): Buffer {
-  const secret = (config.accountCredentialSecret || '').trim() || config.authToken || 'change-me-admin-token';
+  const secret = (config.accountCredentialSecret || '').trim() || config.authToken || 'change-me-admin-token'; // local/dev fallback only
   return createHash('sha256').update(secret).digest();
 }
 
