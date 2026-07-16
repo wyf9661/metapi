@@ -1,3 +1,4 @@
+import { and, eq } from 'drizzle-orm';
 import {
   db,
   schema,
@@ -256,6 +257,59 @@ export function isMissingProxyLogStreamTimingColumnsError(error: unknown): boole
     );
 }
 
+
+async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): Promise<void> {
+  const accountId = Number(input.accountId);
+  if (!Number.isFinite(accountId) || accountId <= 0) return;
+
+  const status = String(input.status || '').toLowerCase();
+  if (status !== 'success' && status !== 'failed') return;
+
+  const modelName = String(input.modelActual || input.modelRequested || '').trim();
+  if (!modelName) return;
+
+  const available = status === 'success';
+  const latencyMs = typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs)
+    ? Math.max(0, Math.round(input.latencyMs))
+    : null;
+  const checkedAt = input.createdAt || new Date().toISOString();
+
+  try {
+    const existing = await db.select({ id: schema.modelAvailability.id })
+      .from(schema.modelAvailability)
+      .where(and(
+        eq(schema.modelAvailability.accountId, accountId),
+        eq(schema.modelAvailability.modelName, modelName),
+      ))
+      .get();
+
+    if (existing?.id) {
+      await db.update(schema.modelAvailability)
+        .set({
+          available,
+          ...(latencyMs != null ? { latencyMs } : {}),
+          checkedAt,
+        })
+        .where(eq(schema.modelAvailability.id, existing.id))
+        .run();
+      return;
+    }
+
+    // Only create a row when traffic proves the model is available.
+    if (available) {
+      await db.insert(schema.modelAvailability).values({
+        accountId,
+        modelName,
+        available: true,
+        latencyMs,
+        checkedAt,
+      }).run();
+    }
+  } catch {
+    // best-effort; never break proxy logging
+  }
+}
+
 export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> {
   const baseValues = {
     routeId: input.routeId ?? null,
@@ -321,6 +375,7 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
 
     try {
       await db.insert(schema.proxyLogs).values(values).run();
+      void updateModelConnectivityFromProxyLog(input);
       return;
     } catch (error) {
       if (allowBillingDetails && isMissingBillingDetailsColumnError(error)) {

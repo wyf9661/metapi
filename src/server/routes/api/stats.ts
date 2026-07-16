@@ -110,6 +110,10 @@ function readModelsMarketplaceCache(includePricing: boolean): any[] | null {
   return cached.models;
 }
 
+function clearModelsMarketplaceCache(): void {
+  modelsMarketplaceCache.clear();
+}
+
 function writeModelsMarketplaceCache(
   includePricing: boolean,
   models: any[],
@@ -1349,8 +1353,11 @@ export async function statsRoutes(app: FastifyInstance) {
             {
               id: number;
               site: string;
+              siteId: number;
               username: string | null;
               latency: number | null;
+              available: boolean | null;
+              checkedAt: string | null;
               unitCost: number | null;
               balance: number;
               tokens: Array<{ id: number; name: string; isDefault: boolean }>;
@@ -1384,8 +1391,11 @@ export async function statsRoutes(app: FastifyInstance) {
           modelMap[m.modelName].accountsById.set(a.id, {
             id: a.id,
             site: s.name,
+            siteId: s.id,
             username: a.username,
             latency: m.latencyMs,
+            available: m.available == null ? null : !!m.available,
+            checkedAt: m.checkedAt || null,
             unitCost: a.unitCost,
             balance: a.balance || 0,
             tokens: [{ id: t.id, name: t.name, isDefault: !!t.isDefault }],
@@ -1397,6 +1407,15 @@ export async function statsRoutes(app: FastifyInstance) {
             return Math.min(existingAccount.latency, m.latencyMs);
           })();
           existingAccount.latency = nextLatency;
+          // Prefer more recently checked connectivity signal.
+          const incomingCheckedAt = m.checkedAt || null;
+          if (incomingCheckedAt && (!existingAccount.checkedAt || incomingCheckedAt >= existingAccount.checkedAt)) {
+            existingAccount.available = m.available == null ? existingAccount.available : !!m.available;
+            existingAccount.checkedAt = incomingCheckedAt;
+          } else if (existingAccount.available == null && m.available != null) {
+            existingAccount.available = !!m.available;
+            existingAccount.checkedAt = incomingCheckedAt || existingAccount.checkedAt;
+          }
           if (!existingAccount.tokens.some((token) => token.id === t.id)) {
             existingAccount.tokens.push({
               id: t.id,
@@ -1426,8 +1445,11 @@ export async function statsRoutes(app: FastifyInstance) {
           modelMap[m.modelName].accountsById.set(a.id, {
             id: a.id,
             site: s.name,
+            siteId: s.id,
             username: a.username,
             latency: m.latencyMs,
+            available: m.available == null ? null : !!m.available,
+            checkedAt: m.checkedAt || null,
             unitCost: a.unitCost,
             balance: a.balance || 0,
             tokens: [],
@@ -1441,6 +1463,14 @@ export async function statsRoutes(app: FastifyInstance) {
           return Math.min(existingAccount.latency, m.latencyMs);
         })();
         existingAccount.latency = nextLatency;
+        const incomingCheckedAt = m.checkedAt || null;
+        if (incomingCheckedAt && (!existingAccount.checkedAt || incomingCheckedAt >= existingAccount.checkedAt)) {
+          existingAccount.available = m.available == null ? existingAccount.available : !!m.available;
+          existingAccount.checkedAt = incomingCheckedAt;
+        } else if (existingAccount.available == null && m.available != null) {
+          existingAccount.available = !!m.available;
+          existingAccount.checkedAt = incomingCheckedAt || existingAccount.checkedAt;
+        }
       }
 
       let upstreamDescriptionMap = new Map<string, string>();
@@ -2071,6 +2101,8 @@ export async function statsRoutes(app: FastifyInstance) {
         siteId,
         accountId,
       });
+      // Probe mutates model_availability latency/available; drop marketplace cache.
+      clearModelsMarketplaceCache();
       if (result.status === "not_found") {
         return reply.code(404).send({
           success: false,
