@@ -442,7 +442,7 @@ function SortableChannelShell({
         transform: CSS.Translate.toString(translatedTransform),
         transition: shellTransition || undefined,
         zIndex: isDragging ? 10 : undefined,
-        willChange: isDragging || Boolean(transform) || Boolean(transition) ? 'transform' : undefined,
+        willChange: isDragging ? 'transform' : 'auto',
         display: compact ? 'flex' : 'grid',
         flexDirection: compact ? 'column' : undefined,
         gridTemplateColumns: compact ? undefined : '86px minmax(0, 1fr)',
