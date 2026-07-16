@@ -1269,6 +1269,49 @@ export default function Settings() {
           />
         </div>
 
+        <div className="card animate-slide-up stagger-2" style={{ padding: 20 }} data-settings-card="public-tunnel">
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>公网隧道访问</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+            对应仪表盘「创建隧道」。默认公网只允许 API；开启后才可通过隧道 URL 打开控制台（仍需管理员登录令牌）。
+          </div>
+          <label style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '12px 14px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-border-light)',
+            background: 'var(--color-bg)',
+            cursor: 'pointer',
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                允许通过隧道访问控制台
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
+                关闭：仅 /v1/* API　｜　开启：控制台 + 管理 API
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={!!runtime.tunnelDashboardAccess}
+              onChange={async (e) => {
+                const next = e.target.checked;
+                setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: next }));
+                try {
+                  await api.setTunnelDashboardAccess(next);
+                  toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
+                } catch (err: any) {
+                  setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: !next }));
+                  toast.error(err?.message || '更新失败');
+                }
+              }}
+              style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+            />
+          </label>
+        </div>
+
         <div className="card animate-slide-up stagger-2" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>定时任务</div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '180px 180px auto', gap: 12, alignItems: 'end', marginBottom: 12 }}>
@@ -2490,45 +2533,8 @@ export default function Settings() {
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             登录会话默认 12 小时自动过期。可选配置管理端 IP 白名单，支持每行一个 IP 或 IPv4 CIDR 网段。
           </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            padding: '12px 14px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--color-border-light)',
-            background: 'var(--color-bg)',
-            marginBottom: 14,
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                允许通过隧道访问控制台
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-                关闭时，公网隧道只允许 API（/v1/*）访问；开启后可通过隧道 URL 打开当前控制页（仍需管理员登录令牌）。
-              </div>
-            </div>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={!!runtime.tunnelDashboardAccess}
-                onChange={async (e) => {
-                  const next = e.target.checked;
-                  setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: next }));
-                  try {
-                    await api.setTunnelDashboardAccess(next);
-                    toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
-                  } catch (err: any) {
-                    setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: !next }));
-                    toast.error(err?.message || '更新失败');
-                  }
-                }}
-              />
-              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                {runtime.tunnelDashboardAccess ? '已开启' : '仅 API'}
-              </span>
-            </label>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
+            公网隧道控制台访问开关已移到本页顶部「公网隧道访问」，仪表盘隧道卡片也可直接切换。
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
             当前识别到的管理端 IP（由服务端判定）：

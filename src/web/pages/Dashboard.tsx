@@ -401,6 +401,19 @@ export default function Dashboard({
     return () => window.clearInterval(timer);
   }, [refreshTunnel]);
 
+  const handleToggleDashboardAccess = async (next: boolean) => {
+    const prev = !!tunnel?.dashboardAccess;
+    setTunnel((current: any) => ({ ...(current || {}), dashboardAccess: next }));
+    try {
+      const res = await api.setTunnelDashboardAccess(next) as any;
+      setTunnel(res?.tunnel || { ...(tunnel || {}), dashboardAccess: next });
+      toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
+    } catch (err: any) {
+      setTunnel((current: any) => ({ ...(current || {}), dashboardAccess: prev }));
+      toast.error(err?.message || '更新失败');
+    }
+  };
+
   const handleToggleTunnel = async () => {
     setTunnelBusy(true);
     setTunnelError(null);
@@ -703,6 +716,33 @@ export default function Dashboard({
                 </span>
               ) : null}
             </div>
+            <label style={{
+              marginTop: 12,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 12,
+              padding: '10px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-bg)',
+              cursor: 'pointer',
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                  允许通过隧道访问控制台
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
+                  关闭=公网只走 API（/v1/*）；开启=可用隧道 URL 打开控制页（仍需管理员登录）
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={!!tunnel?.dashboardAccess}
+                onChange={(e) => { void handleToggleDashboardAccess(e.target.checked); }}
+                style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+              />
+            </label>
             {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>公网地址</div>
