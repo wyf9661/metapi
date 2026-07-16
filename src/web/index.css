@@ -6850,3 +6850,35 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Dashboard public tunnel card */
+.dashboard-tunnel-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.dashboard-tunnel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-tunnel-action-btn {
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+}
+
+@media (max-width: 768px) {
+  .dashboard-tunnel-card {
+    grid-template-columns: 1fr;
+  }
+}

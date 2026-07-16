@@ -710,11 +710,11 @@ export default function Dashboard({
 
       
       <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 0, flex: '1 1 280px' }}>
+        <div className="dashboard-tunnel-card">
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>公网隧道</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-              基于 Cloudflare Quick Tunnel，无需公网 IP / 端口映射。默认仅暴露 API；可在设置中允许访问控制台。
+              基于 Cloudflare Quick Tunnel。Quick URL 会变，但会注册固定公网地址（重启后尽量保持不变）。默认仅暴露 API。
             </div>
             <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <span className={`badge ${(tunnel?.running || tunnel?.enabled) ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11, fontWeight: 700 }}>
@@ -723,6 +723,11 @@ export default function Dashboard({
               <span className={`badge ${tunnel?.dashboardAccess ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11, fontWeight: 600 }}>
                 {tunnel?.dashboardAccess ? '控制台+API' : '仅 API'}
               </span>
+              {tunnel?.shortId ? (
+                <span className="badge badge-muted" style={{ fontSize: 11, fontWeight: 600 }}>
+                  ID {tunnel.shortId}
+                </span>
+              ) : null}
               {tunnel?.downloading ? (
                 <span className="badge badge-warning" style={{ fontSize: 11 }}>
                   下载 cloudflared{typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '...'}
@@ -739,7 +744,7 @@ export default function Dashboard({
               borderRadius: 8,
               border: '1px solid var(--color-border)',
               background: 'var(--color-bg)',
-              cursor: 'pointer',
+              cursor: isTunnelClientView ? 'not-allowed' : 'pointer',
             }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
@@ -760,20 +765,29 @@ export default function Dashboard({
               />
             </label>
             {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>公网地址</div>
                 <code style={{
                   display: 'block',
-                  padding: '10px 12px',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '12px 14px',
                   background: 'var(--color-bg)',
                   border: '1px solid var(--color-border)',
                   borderRadius: 8,
-                  fontSize: 12,
+                  fontSize: 13,
+                  fontWeight: 600,
                   color: 'var(--color-text-primary)',
                   wordBreak: 'break-all',
+                  lineHeight: 1.5,
                 }}>
                   {tunnel?.publicUrl || tunnel?.tunnelUrl}
                 </code>
+                {tunnel?.tunnelUrl && tunnel?.publicUrl && tunnel.tunnelUrl !== tunnel.publicUrl ? (
+                  <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-muted)', wordBreak: 'break-all' }}>
+                    直连：{tunnel.tunnelUrl}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {tunnelError || tunnel?.lastError ? (
@@ -782,12 +796,11 @@ export default function Dashboard({
               </div>
             ) : null}
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+          <div className="dashboard-tunnel-actions">
             {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ border: '1px solid var(--color-border)', padding: '8px 12px' }}
+                className="btn btn-ghost dashboard-tunnel-action-btn"
                 onClick={async () => {
                   const url = String(tunnel?.publicUrl || tunnel?.tunnelUrl || '');
                   try {
@@ -804,17 +817,34 @@ export default function Dashboard({
             {!isTunnelClientView ? (
               <button
                 type="button"
-                className={`btn ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
-                style={{ border: '1px solid var(--color-border)', padding: '8px 12px', minWidth: 108 }}
+                className={`btn dashboard-tunnel-action-btn ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
+                style={{ flex: 1 }}
                 disabled={tunnelBusy}
                 onClick={() => { void handleToggleTunnel(); }}
               >
                 {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭隧道' : '创建隧道')}
               </button>
             ) : (
-              <span className="badge badge-warning" style={{ fontSize: 11, fontWeight: 600 }}>
-                隧道访问中：不可关闭隧道
-              </span>
+              <div
+                className="badge badge-warning"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  justifyContent: 'center',
+                  padding: '14px 12px',
+                  borderRadius: 10,
+                  minHeight: 52,
+                  whiteSpace: 'normal',
+                  textAlign: 'center',
+                  lineHeight: 1.4,
+                }}
+              >
+                隧道访问中
+                <br />
+                不可关闭隧道
+              </div>
             )}
           </div>
         </div>
