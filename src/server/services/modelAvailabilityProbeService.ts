@@ -701,7 +701,7 @@ export async function probeSingleModelAvailability(
       if (target.accountRowId != null) {
         await db.update(schema.modelAvailability)
           .set({
-            available: probe.status === 'supported',
+            connectivity: probe.status === 'supported',
             latencyMs: probe.latencyMs,
             checkedAt,
           })
@@ -711,7 +711,7 @@ export async function probeSingleModelAvailability(
       if (target.tokenRowId != null) {
         await db.update(schema.tokenModelAvailability)
           .set({
-            available: probe.status === 'supported',
+            connectivity: probe.status === 'supported',
             latencyMs: probe.latencyMs,
             checkedAt,
           })

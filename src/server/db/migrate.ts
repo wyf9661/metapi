@@ -62,6 +62,7 @@ const VERIFIED_SCHEMA_MARKERS: SchemaMarker[] = [
   { table: 'route_channels', column: 'token_id' },
   { table: 'account_tokens' },
   { table: 'token_model_availability' },
+  { table: 'token_model_availability', column: 'connectivity' },
   { table: 'events' },
   { table: 'sites', column: 'is_pinned' },
   { table: 'sites', column: 'sort_order' },
@@ -73,6 +74,7 @@ const VERIFIED_SCHEMA_MARKERS: SchemaMarker[] = [
   { table: 'account_tokens', column: 'token_group' },
   // 0009: is_manual column on model_availability
   { table: 'model_availability', column: 'is_manual' },
+  { table: 'model_availability', column: 'connectivity' },
   // 0010: downstream_api_key_id column on proxy_logs
   { table: 'proxy_logs', column: 'downstream_api_key_id' },
   // 0011: downstream key metadata columns

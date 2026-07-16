@@ -122,6 +122,8 @@ export const modelAvailability = sqliteTable('model_availability', {
   accountId: integer('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
   modelName: text('model_name').notNull(),
   available: integer('available', { mode: 'boolean' }),
+  // null = never connectivity-tested; true/false = probe or live traffic result
+  connectivity: integer('connectivity', { mode: 'boolean' }),
   isManual: integer('is_manual', { mode: 'boolean' }).default(false),
   latencyMs: integer('latency_ms'),
   checkedAt: text('checked_at').default(sql`(datetime('now'))`),
@@ -136,6 +138,7 @@ export const tokenModelAvailability = sqliteTable('token_model_availability', {
   tokenId: integer('token_id').notNull().references(() => accountTokens.id, { onDelete: 'cascade' }),
   modelName: text('model_name').notNull(),
   available: integer('available', { mode: 'boolean' }),
+  connectivity: integer('connectivity', { mode: 'boolean' }),
   latencyMs: integer('latency_ms'),
   checkedAt: text('checked_at').default(sql`(datetime('now'))`),
 }, (table) => ({

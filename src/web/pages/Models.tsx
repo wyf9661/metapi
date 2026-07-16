@@ -45,7 +45,7 @@ interface ModelAccountInfo {
   siteId?: number | null;
   username: string | null;
   latency: number | null;
-  available?: boolean | null;
+  connectivity?: boolean | null;
   checkedAt?: string | null;
   balance: number;
   tokens: ModelTokenInfo[];
@@ -589,14 +589,14 @@ export default function Models() {
             accounts: model.accounts.map((account) => {
               const live = byAccountId[account.id];
               if (!live) return account;
-              const nextAvailable = live.status === 'supported'
+              const nextConnectivity = live.status === 'supported'
                 ? true
                 : live.status === 'unsupported'
                   ? false
-                  : account.available;
+                  : account.connectivity;
               return {
                 ...account,
-                available: nextAvailable,
+                connectivity: nextConnectivity,
                 latency: live.latencyMs ?? account.latency,
                 checkedAt: new Date().toISOString(),
               };
@@ -656,10 +656,10 @@ export default function Models() {
         return <span className="badge badge-warning" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('未知')}</span>;
       }
     }
-    if (account.available === true) {
+    if (account.connectivity === true) {
       return <span className="badge badge-success" style={{ fontSize: 11 }} title={account.checkedAt || ''}>{tr('连通')}</span>;
     }
-    if (account.available === false) {
+    if (account.connectivity === false) {
       return <span className="badge badge-error" style={{ fontSize: 11 }} title={account.checkedAt || ''}>{tr('不通')}</span>;
     }
     return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
