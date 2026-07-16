@@ -540,6 +540,16 @@ export default function Dashboard({
               ? "color-mix(in srgb, var(--color-warning) 30%, var(--color-danger))"
               : "var(--color-danger)";
 
+  const formatDashboardLatency = (ms: number | null | undefined) => {
+    if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return "—";
+    if (ms >= 1000) {
+      const seconds = ms / 1000;
+      if (seconds >= 10) return `${Math.round(seconds)}s`;
+      return `${(Math.round(seconds * 10) / 10).toFixed(1)}s`;
+    }
+    return `${Math.round(ms)}ms`;
+  };
+
   const renderSiteSpeedLabel = (site: any, idx: number) => {
     const siteKey = getSiteSpeedKey(site, idx);
     const speedState = siteSpeedStates[siteKey];
@@ -570,7 +580,7 @@ export default function Dashboard({
             verticalAlign: "middle",
           }}
         />
-        <span style={{ color, fontWeight: 600 }}>{ms}ms</span>
+        <span style={{ color, fontWeight: 600 }}>{formatDashboardLatency(ms)}</span>
       </>
     );
   };
@@ -1189,7 +1199,7 @@ export default function Dashboard({
                     }
                   >
                     {site.averageLatencyMs != null
-                      ? `${site.averageLatencyMs}ms`
+                      ? formatDashboardLatency(site.averageLatencyMs)
                       : "—"}
                   </span>
                   <span className="site-observability-metric-sep">·</span>
@@ -1215,7 +1225,7 @@ export default function Dashboard({
                         `请求：${bucket.totalRequests} 次`,
                         `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                         bucket.averageLatencyMs != null
-                          ? `平均响应：${bucket.averageLatencyMs}ms`
+                          ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
                           : "平均响应：—",
                       ].join(" · ")}
                       data-tooltip-align="start"
@@ -1226,7 +1236,7 @@ export default function Dashboard({
                           : "无请求",
                         `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
                         bucket.averageLatencyMs != null
-                          ? `平均响应 ${bucket.averageLatencyMs}ms`
+                          ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
                           : "平均响应 —",
                       ].join(" | ")}
                       aria-label={`${site.siteName} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
@@ -1436,7 +1446,7 @@ export default function Dashboard({
                           });
                           const ms = Math.round(performance.now() - start);
                           setSiteSpeedState(siteKey, { status: "done", ms });
-                          toast.success(`${site.name}: ${ms}ms`);
+                          toast.success(`${site.name}: ${formatDashboardLatency(ms)}`);
                         } catch {
                           setSiteSpeedState(siteKey, { status: "timeout" });
                           toast.error(`${site.name}: 测速失败`);

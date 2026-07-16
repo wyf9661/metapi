@@ -523,6 +523,27 @@ export default function Accounts() {
       closeAddPanel();
       if (result.queued) {
         toast.info(result.message || "账号已添加，后台正在同步初始化信息。");
+        const jobId = typeof result.jobId === "string" ? result.jobId : "";
+        if (jobId) {
+          // Poll init task so runtime health flips from "未知" without manual refresh.
+          void (async () => {
+            const startedAt = Date.now();
+            while (Date.now() - startedAt < 90_000) {
+              try {
+                const task: any = await api.getTask(jobId);
+                const status = String(task?.status || task?.task?.status || "");
+                if (status === "succeeded" || status === "failed") {
+                  load(true);
+                  return;
+                }
+              } catch {
+                // ignore transient poll errors
+              }
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            }
+            load(true);
+          })();
+        }
       } else if (result.tokenType === "apikey") {
         toast.success("已添加为 API Key 账号（可用于代理转发）");
       } else {
