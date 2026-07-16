@@ -13,7 +13,7 @@ export default function SiteBadgeLink({
   siteId,
   siteName,
   className = 'badge-link',
-  badgeClassName = 'badge badge-muted',
+  badgeClassName = 'badge badge-info',
   badgeStyle,
 }: SiteBadgeLinkProps) {
   const label = String(siteName || '').trim() || '-';
