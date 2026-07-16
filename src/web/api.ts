@@ -1240,6 +1240,22 @@ export const api = {
       body: JSON.stringify({ oldToken, newToken }),
     }),
   getRuntimeSettings: () => request("/api/settings/runtime"),
+  getTunnelStatus: () => request("/api/tunnel/status"),
+  enableTunnel: () =>
+    request("/api/tunnel/enable", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  disableTunnel: () =>
+    request("/api/tunnel/disable", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  setTunnelDashboardAccess: (dashboardAccess: boolean) =>
+    request("/api/tunnel/dashboard-access", {
+      method: "PUT",
+      body: JSON.stringify({ dashboardAccess }),
+    }),
   getBrandList: () => request("/api/settings/brand-list"),
   updateRuntimeSettings: (data: RuntimeSettingsPayload) =>
     request("/api/settings/runtime", {

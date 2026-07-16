@@ -226,6 +226,10 @@ export default function Dashboard({
   const [data, setData] = useState<any>(null);
   const [insightsData, setInsightsData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [tunnel, setTunnel] = useState<any>(null);
+  const [tunnelBusy, setTunnelBusy] = useState(false);
+  const [tunnelError, setTunnelError] = useState<string | null>(null);
+
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -377,6 +381,53 @@ export default function Dashboard({
       }
     };
   }, []);
+
+
+  const refreshTunnel = useCallback(async () => {
+    try {
+      const res = await api.getTunnelStatus() as any;
+      setTunnel(res?.tunnel || res || null);
+      setTunnelError(null);
+    } catch (err: any) {
+      setTunnelError(err?.message || '加载隧道状态失败');
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshTunnel();
+    const timer = window.setInterval(() => {
+      void refreshTunnel();
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [refreshTunnel]);
+
+  const handleToggleTunnel = async () => {
+    setTunnelBusy(true);
+    setTunnelError(null);
+    try {
+      if (tunnel?.running || tunnel?.enabled) {
+        const res = await api.disableTunnel() as any;
+        setTunnel(res?.tunnel || null);
+        toast.success('隧道已关闭');
+      } else {
+        toast.info('正在创建公网隧道，首次可能需要下载 cloudflared...');
+        const res = await api.enableTunnel() as any;
+        setTunnel(res?.tunnel || null);
+        if (res?.tunnel?.publicUrl || res?.tunnel?.tunnelUrl) {
+          toast.success('隧道已启用');
+        } else {
+          toast.info(res?.message || '隧道启动中');
+        }
+      }
+      await refreshTunnel();
+    } catch (err: any) {
+      setTunnelError(err?.message || '隧道操作失败');
+      toast.error(err?.message || '隧道操作失败');
+      await refreshTunnel();
+    } finally {
+      setTunnelBusy(false);
+    }
+  };
 
   if (loading && !data) {
     return (
@@ -631,7 +682,83 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className="dashboard-stat-grid">
+      
+      <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0, flex: '1 1 280px' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>公网隧道</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
+              基于 Cloudflare Quick Tunnel，无需公网 IP / 端口映射。默认仅暴露 API；可在设置中允许访问控制台。
+            </div>
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <span className={`badge ${(tunnel?.running || tunnel?.enabled) ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11, fontWeight: 700 }}>
+                {(tunnel?.running || tunnel?.enabled) ? '运行中' : '未启用'}
+              </span>
+              <span className={`badge ${tunnel?.dashboardAccess ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11, fontWeight: 600 }}>
+                {tunnel?.dashboardAccess ? '控制台+API' : '仅 API'}
+              </span>
+              {tunnel?.downloading ? (
+                <span className="badge badge-warning" style={{ fontSize: 11 }}>
+                  下载 cloudflared{typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '...'}
+                </span>
+              ) : null}
+            </div>
+            {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>公网地址</div>
+                <code style={{
+                  display: 'block',
+                  padding: '10px 12px',
+                  background: 'var(--color-bg)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: 'var(--color-text-primary)',
+                  wordBreak: 'break-all',
+                }}>
+                  {tunnel?.publicUrl || tunnel?.tunnelUrl}
+                </code>
+              </div>
+            ) : null}
+            {tunnelError || tunnel?.lastError ? (
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-danger)' }}>
+                {tunnelError || tunnel?.lastError}
+              </div>
+            ) : null}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+            {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ border: '1px solid var(--color-border)', padding: '8px 12px' }}
+                onClick={async () => {
+                  const url = String(tunnel?.publicUrl || tunnel?.tunnelUrl || '');
+                  try {
+                    await navigator.clipboard.writeText(url);
+                    toast.success('已复制公网地址');
+                  } catch {
+                    toast.error('复制失败');
+                  }
+                }}
+              >
+                复制地址
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={`btn ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
+              style={{ border: '1px solid var(--color-border)', padding: '8px 12px', minWidth: 108 }}
+              disabled={tunnelBusy}
+              onClick={() => { void handleToggleTunnel(); }}
+            >
+              {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭隧道' : '创建隧道')}
+            </button>
+          </div>
+        </div>
+      </div>
+
+<div className="dashboard-stat-grid">
         <div className="stat-card animate-slide-up stagger-1">
           <div className="stat-card-header">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">

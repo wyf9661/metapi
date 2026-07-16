@@ -59,6 +59,13 @@ import {
 import { reloadBackupWebdavScheduler } from './services/backupService.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
 import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
+import { tunnelRoutes } from './routes/api/tunnel.js';
+import {
+  isLikelyTunnelRequest,
+  isTunnelApiPath,
+  isTunnelDashboardPath,
+  restoreCloudflareTunnelFromSettings,
+} from './services/cloudflareTunnelService.js';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, normalize, resolve, sep } from 'path';
@@ -201,8 +208,23 @@ const app = Fastify(buildFastifyOptions(config));
 
 await app.register(cors);
 
-// Auth middleware for /api routes
+// Tunnel access policy + Auth middleware for /api routes
 app.addHook('onRequest', async (request, reply) => {
+  const urlPath = (request.url || '').split('?')[0] || '/';
+  if (isLikelyTunnelRequest(request as any)) {
+    // Default: only OpenAI-compatible API paths are reachable via public tunnel.
+    // Optional: allow dashboard/control UI + management APIs when enabled in settings.
+    const apiOk = isTunnelApiPath(urlPath);
+    const dashboardOk = config.tunnelDashboardAccess && isTunnelDashboardPath(urlPath);
+    if (!apiOk && !dashboardOk) {
+      reply.code(403).send({
+        error: 'Tunnel access denied',
+        message: '当前隧道仅允许 API 访问。如需公网打开控制页，请在设置中开启「允许通过隧道访问控制台」。',
+      });
+      return;
+    }
+  }
+
   if (request.url.startsWith('/api/') && !isPublicApiRoute(request.url)) {
     await authMiddleware(request, reply);
   }
@@ -217,6 +239,7 @@ await app.register(tokensRoutes);
 await app.register(statsRoutes);
 await app.register(authRoutes);
 await app.register(settingsRoutes);
+await app.register(tunnelRoutes);
 await app.register(accountTokensRoutes);
 await app.register(searchRoutes);
 await app.register(eventsRoutes);
@@ -291,6 +314,8 @@ app.addHook('onClose', async () => {
 // Start server
 try {
   await app.listen({ port: config.port, host: config.listenHost });
+  // Best-effort restore of previously enabled public tunnel
+  void restoreCloudflareTunnelFromSettings();
   const summaryLines = buildStartupSummaryLines({
     port: config.port,
     host: config.listenHost,

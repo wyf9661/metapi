@@ -98,6 +98,7 @@ interface RuntimeSettingsBody {
   smtpTo?: string;
   notifyCooldownSec?: number;
   adminIpAllowlist?: string[] | string;
+  tunnelDashboardAccess?: boolean;
   routingFallbackUnitCost?: number;
   proxyFirstByteTimeoutSec?: number;
   tokenRouterFailureCooldownMaxSec?: number;
@@ -770,6 +771,8 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     smtpTo: config.smtpTo,
     notifyCooldownSec: config.notifyCooldownSec,
     adminIpAllowlist: config.adminIpAllowlist,
+    tunnelDashboardAccess: config.tunnelDashboardAccess,
+    tunnelEnabled: config.tunnelEnabled,
     currentAdminIp,
     serverTimeZone: getResolvedTimeZone(),
     systemProxyUrl: config.systemProxyUrl,
@@ -1670,6 +1673,15 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.notifyCooldownSec = nextCooldown;
       upsertSetting('notify_cooldown_sec', config.notifyCooldownSec);
+    }
+
+    if (body.tunnelDashboardAccess !== undefined) {
+      const next = !!body.tunnelDashboardAccess;
+      if (next !== config.tunnelDashboardAccess) {
+        changedLabels.push('tunnelDashboardAccess');
+      }
+      config.tunnelDashboardAccess = next;
+      upsertSetting('tunnel_dashboard_access', next);
     }
 
     if (body.adminIpAllowlist !== undefined) {
