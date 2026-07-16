@@ -340,6 +340,11 @@ function toRouteCooldownSeconds(value: number, unit: RouteCooldownUnit): number 
 
 export default function Settings() {
   const isMobile = useIsMobile();
+  const isTunnelClientView = typeof window !== 'undefined'
+    && (
+      window.location.hostname.endsWith('.trycloudflare.com')
+      || window.location.hostname.endsWith('.abc-tunnel.us')
+    );
   const [runtime, setRuntime] = useState<RuntimeSettings>({
     tunnelDashboardAccess: false,
     tunnelEnabled: false,
@@ -1065,6 +1070,10 @@ export default function Settings() {
   };
 
   const saveSecuritySettings = async () => {
+    if (isTunnelClientView) {
+      toast.error('通过公网隧道时不允许修改会话与安全设置');
+      return;
+    }
     setSavingSecurity(true);
     try {
       const allowlist = adminIpAllowlistText
@@ -1259,7 +1268,7 @@ export default function Settings() {
           <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 12 }}>
             {maskedToken || '****'}
           </code>
-          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary">修改登录令牌</button>
+          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? '公网隧道访问时不可修改' : undefined}>修改登录令牌</button>
           <ChangeKeyModal
             open={showChangeKey}
             onClose={() => {
@@ -1273,6 +1282,7 @@ export default function Settings() {
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>公网隧道访问</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
             对应仪表盘「创建隧道」。默认公网只允许 API；开启后才可通过隧道 URL 打开控制台（仍需管理员登录令牌）。
+            {isTunnelClientView ? ' 当前为公网隧道访问，此开关已锁定。' : ''}
           </div>
           <label style={{
             display: 'flex',
@@ -1296,7 +1306,12 @@ export default function Settings() {
             <input
               type="checkbox"
               checked={!!runtime.tunnelDashboardAccess}
+              disabled={isTunnelClientView}
               onChange={async (e) => {
+                if (isTunnelClientView) {
+                  toast.error('通过公网隧道时不允许修改该选项');
+                  return;
+                }
                 const next = e.target.checked;
                 setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: next }));
                 try {
@@ -2544,13 +2559,14 @@ export default function Settings() {
           </code>
           <textarea
             value={adminIpAllowlistText}
+            disabled={isTunnelClientView}
             onChange={(e) => setAdminIpAllowlistText(e.target.value)}
             placeholder={'例如：\n127.0.0.1\n192.168.1.10\n192.168.1.0/24'}
             rows={4}
             style={{ ...inputStyle, fontFamily: 'var(--font-mono)', resize: 'vertical', marginBottom: 10 }}
           />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={saveSecuritySettings} disabled={savingSecurity} className="btn btn-primary">
+            <button onClick={saveSecuritySettings} disabled={savingSecurity || isTunnelClientView} className="btn btn-primary">
               {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存安全设置'}
             </button>
             <button

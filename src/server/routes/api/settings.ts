@@ -4,6 +4,7 @@ import { fetch } from 'undici';
 import { config, normalizeTokenRouterFailureCooldownMaxSec } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
+import { isLikelyTunnelRequest } from '../../services/cloudflareTunnelService.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { getAllBrandNames } from '../../services/brandMatcher.js';
 import { updateBalanceRefreshCron, updateCheckinSchedule, updateLogCleanupSettings } from '../../services/checkinScheduler.js';
@@ -920,6 +921,20 @@ export async function settingsRoutes(app: FastifyInstance) {
     const body = parsedBody.data as RuntimeSettingsBody;
     const changedLabels: string[] = [];
     const currentRequestIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
+
+    // Tunnel clients must not change session/security or tunnel access policy.
+    if (isLikelyTunnelRequest(request as any)) {
+      const blockedSecurityKeys = [
+        body.adminIpAllowlist !== undefined ? 'adminIpAllowlist' : null,
+        body.tunnelDashboardAccess !== undefined ? 'tunnelDashboardAccess' : null,
+      ].filter(Boolean);
+      if (blockedSecurityKeys.length > 0) {
+        return reply.code(403).send({
+          success: false,
+          message: `通过公网隧道时不允许修改会话与安全设置（${blockedSecurityKeys.join(', ')}）。请在本机/内网控制台操作。`,
+        });
+      }
+    }
     let pendingPayloadRules: typeof config.payloadRules | undefined;
 
     const webhookTouched = body.webhookUrl !== undefined || body.webhookEnabled !== undefined;
