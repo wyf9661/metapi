@@ -1356,7 +1356,7 @@ export async function statsRoutes(app: FastifyInstance) {
               siteId: number;
               username: string | null;
               latency: number | null;
-              available: boolean | null;
+              connectivity: boolean | null;
               checkedAt: string | null;
               unitCost: number | null;
               balance: number;
@@ -1394,7 +1394,7 @@ export async function statsRoutes(app: FastifyInstance) {
             siteId: s.id,
             username: a.username,
             latency: m.latencyMs,
-            available: m.available == null ? null : !!m.available,
+            connectivity: (m as any).connectivity == null ? null : !!(m as any).connectivity,
             checkedAt: m.checkedAt || null,
             unitCost: a.unitCost,
             balance: a.balance || 0,
@@ -1410,10 +1410,10 @@ export async function statsRoutes(app: FastifyInstance) {
           // Prefer more recently checked connectivity signal.
           const incomingCheckedAt = m.checkedAt || null;
           if (incomingCheckedAt && (!existingAccount.checkedAt || incomingCheckedAt >= existingAccount.checkedAt)) {
-            existingAccount.available = m.available == null ? existingAccount.available : !!m.available;
+            existingAccount.connectivity = (m as any).connectivity == null ? existingAccount.connectivity : !!(m as any).connectivity;
             existingAccount.checkedAt = incomingCheckedAt;
-          } else if (existingAccount.available == null && m.available != null) {
-            existingAccount.available = !!m.available;
+          } else if (existingAccount.connectivity == null && (m as any).connectivity != null) {
+            existingAccount.connectivity = !!(m as any).connectivity;
             existingAccount.checkedAt = incomingCheckedAt || existingAccount.checkedAt;
           }
           if (!existingAccount.tokens.some((token) => token.id === t.id)) {
@@ -1448,7 +1448,7 @@ export async function statsRoutes(app: FastifyInstance) {
             siteId: s.id,
             username: a.username,
             latency: m.latencyMs,
-            available: m.available == null ? null : !!m.available,
+            connectivity: (m as any).connectivity == null ? null : !!(m as any).connectivity,
             checkedAt: m.checkedAt || null,
             unitCost: a.unitCost,
             balance: a.balance || 0,
@@ -1465,10 +1465,10 @@ export async function statsRoutes(app: FastifyInstance) {
         existingAccount.latency = nextLatency;
         const incomingCheckedAt = m.checkedAt || null;
         if (incomingCheckedAt && (!existingAccount.checkedAt || incomingCheckedAt >= existingAccount.checkedAt)) {
-          existingAccount.available = m.available == null ? existingAccount.available : !!m.available;
+          existingAccount.connectivity = (m as any).connectivity == null ? existingAccount.connectivity : !!(m as any).connectivity;
           existingAccount.checkedAt = incomingCheckedAt;
-        } else if (existingAccount.available == null && m.available != null) {
-          existingAccount.available = !!m.available;
+        } else if (existingAccount.connectivity == null && (m as any).connectivity != null) {
+          existingAccount.connectivity = !!(m as any).connectivity;
           existingAccount.checkedAt = incomingCheckedAt || existingAccount.checkedAt;
         }
       }

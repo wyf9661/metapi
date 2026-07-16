@@ -286,7 +286,7 @@ async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): 
     if (existing?.id) {
       await db.update(schema.modelAvailability)
         .set({
-          available,
+          connectivity: available,
           ...(latencyMs != null ? { latencyMs } : {}),
           checkedAt,
         })
@@ -295,12 +295,13 @@ async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): 
       return;
     }
 
-    // Only create a row when traffic proves the model is available.
+    // Create listing + connectivity only when traffic proves the model works.
     if (available) {
       await db.insert(schema.modelAvailability).values({
         accountId,
         modelName,
         available: true,
+        connectivity: true,
         latencyMs,
         checkedAt,
       }).run();
