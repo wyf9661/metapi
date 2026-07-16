@@ -2485,16 +2485,18 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 }
 
 .missing-token-site-tag {
-  border: 1px solid color-mix(in srgb, var(--color-info) 35%, transparent);
-  background: color-mix(in srgb, var(--color-info) 12%, var(--color-bg));
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  background: var(--color-info-soft);
+  color: #1e40af;
+  font-weight: 700;
   transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
 }
 
 .missing-token-site-tag:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--color-info) 65%, transparent);
-  background: color-mix(in srgb, var(--color-info) 22%, var(--color-bg));
-  box-shadow: 0 6px 14px color-mix(in srgb, var(--color-info) 22%, transparent);
+  border-color: rgba(37, 99, 235, 0.55);
+  background: #bfdbfe;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.16);
 }
 
 .missing-token-site-tag:focus-visible {
@@ -2560,8 +2562,16 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   color: #93c5fd;
 }
 
+[data-theme="dark"] .missing-token-site-tag {
+  background: #1e3a8a;
+  border-color: rgba(147, 197, 253, 0.35);
+  color: #bfdbfe;
+}
+
 [data-theme="dark"] .missing-token-site-tag:hover {
-  background: color-mix(in srgb, var(--color-info) 26%, var(--color-surface));
+  background: #1d4ed8;
+  border-color: rgba(191, 219, 254, 0.55);
+  color: #eff6ff;
 }
 
 [data-theme="dark"] [data-tooltip]::after {
@@ -6725,20 +6735,15 @@ textarea {
 .route-card-collapsed {
   padding: 8px 10px;
   border-radius: 14px;
-  border-color: color-mix(in srgb, var(--color-border) 84%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 94%, white 6%), color-mix(in srgb, var(--color-bg-card) 99%, white 1%));
-  box-shadow:
-    0 10px 20px rgba(15, 23, 42, 0.035),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border-color: var(--color-border);
+  background: var(--color-bg-card);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
 }
 
 .route-card-collapsed.is-active {
-  border-color: color-mix(in srgb, var(--color-info) 36%, var(--color-border));
-  box-shadow:
-    0 12px 22px rgba(14, 165, 233, 0.07),
-    0 0 0 1px color-mix(in srgb, var(--color-info) 16%, transparent);
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
 }
 
 .route-card-collapsed:hover {
@@ -6753,10 +6758,9 @@ textarea {
 .route-card-expanded {
   grid-column: 1 / -1;
   border-radius: 16px;
-  border-color: color-mix(in srgb, var(--color-border) 82%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 95%, white 5%), color-mix(in srgb, var(--color-bg-card) 99%, white 1%));
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
+  border-color: var(--color-border);
+  background: var(--color-bg-card);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
@@ -6847,17 +6851,13 @@ textarea {
 }
 
 [data-theme="dark"] .route-card-collapsed {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 94%, #0b1220 6%), color-mix(in srgb, var(--color-bg-card) 99%, #020617 1%));
-  box-shadow:
-    0 16px 30px rgba(2, 6, 23, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: var(--color-bg-card);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.28);
 }
 
 [data-theme="dark"] .route-card-expanded {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 95%, #0b1220 5%), color-mix(in srgb, var(--color-bg-card) 99%, #020617 1%));
-  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.24);
+  background: var(--color-bg-card);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.28);
 }
 
 @media (max-width: 768px) {

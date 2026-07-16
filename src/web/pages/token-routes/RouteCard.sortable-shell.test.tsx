@@ -113,7 +113,7 @@ describe('RouteCard sortable shell', () => {
     const innerRow = shell.find((node) => (
       node.type === 'div'
       && node.props.style
-      && node.props.style.borderRadius === 14
+      && node.props.style.borderRadius === 12
       && collectText(node).includes('user_a')
     ));
 
