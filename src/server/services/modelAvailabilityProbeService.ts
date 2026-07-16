@@ -503,11 +503,31 @@ export async function probeSingleModelAvailability(modelName: string): Promise<S
     .get();
 
   if (accountHit) {
+    let preferredTokenValue: string | undefined;
+    try {
+      const tokenRows = await db.select()
+        .from(schema.accountTokens)
+        .where(and(
+          eq(schema.accountTokens.accountId, accountHit.account.id),
+          eq(schema.accountTokens.enabled, true),
+          eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
+        ))
+        .orderBy(asc(schema.accountTokens.id))
+        .all();
+      const preferredToken = tokenRows.find((row) => isUsableAccountToken(row) && String(row.token || '').trim());
+      if (preferredToken) {
+        preferredTokenValue = String(preferredToken.token || '').trim();
+      }
+    } catch {
+      preferredTokenValue = undefined;
+    }
+
     const probe = await probeRuntimeModel({
       site: accountHit.site,
       account: accountHit.account,
       modelName: normalized,
       timeoutMs: config.modelAvailabilityProbeTimeoutMs,
+      tokenValue: preferredTokenValue,
     });
     if (probe.status === 'supported' || probe.status === 'unsupported') {
       await db.update(schema.modelAvailability)
