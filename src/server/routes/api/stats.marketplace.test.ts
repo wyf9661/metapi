@@ -12,6 +12,7 @@ describe('/api/models/marketplace', () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let dataDir = '';
+  let clearModelsMarketplaceCache: () => void;
 
   beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-stats-marketplace-'));
@@ -21,6 +22,7 @@ describe('/api/models/marketplace', () => {
     await import('../../db/migrate.js');
     const dbModule = await import('../../db/index.js');
     const routesModule = await import('./stats.js');
+    clearModelsMarketplaceCache = routesModule.clearModelsMarketplaceCache;
     db = dbModule.db;
     schema = dbModule.schema;
 
@@ -29,6 +31,7 @@ describe('/api/models/marketplace', () => {
   });
 
   beforeEach(async () => {
+    clearModelsMarketplaceCache();
     await db.delete(schema.proxyLogs).run();
     await db.delete(schema.routeChannels).run();
     await db.delete(schema.tokenRoutes).run();
@@ -111,5 +114,60 @@ describe('/api/models/marketplace', () => {
       username: 'alice',
       tokens: [],
     });
+  });
+
+  it('canonicalizes equivalent marketplace model names and keeps original source models', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'site-merge',
+      url: 'https://site-merge.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const accountA = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'alice',
+      accessToken: 'session-a',
+      status: 'active',
+      balance: 1,
+    }).returning().get();
+    const accountB = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'bob',
+      accessToken: 'session-b',
+      status: 'active',
+      balance: 2,
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      { accountId: accountA.id, modelName: 'MiniMax-M2.7', available: true, latencyMs: 100 },
+      { accountId: accountB.id, modelName: 'minimax/minimax-m2.7', available: true, latencyMs: 200 },
+      { accountId: accountB.id, modelName: 'minimaxai/minimax-m2.7', available: true, latencyMs: 300 },
+    ]).run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/models/marketplace',
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      models: Array<{
+        name: string;
+        accountCount: number;
+        accounts: Array<{ id: number; sourceModels?: string[] }>;
+      }>;
+    };
+
+    const variants = body.models.filter((item) => /minimax.*m2\.7/i.test(item.name));
+    expect(variants.map((item) => item.name)).toEqual(['minimax-m2.7']);
+    const model = variants[0]!;
+    expect(model.accountCount).toBe(2);
+    const bob = model.accounts.find((item) => item.id === accountB.id);
+    expect(bob?.sourceModels?.sort()).toEqual([
+      'minimax/minimax-m2.7',
+      'minimaxai/minimax-m2.7',
+    ]);
+    const alice = model.accounts.find((item) => item.id === accountA.id);
+    expect(alice?.sourceModels).toEqual(['MiniMax-M2.7']);
   });
 });

@@ -35,6 +35,7 @@ import {
 import { parseProxyLogMessageMeta } from "../../services/proxyLogMessage.js";
 import { requiresManagedAccountTokens } from "../../services/accountExtraConfig.js";
 import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from "../../services/accountTokenService.js";
+import { canonicalizeModelName } from "../../shared/modelCanonicalization.js";
 import {
   formatLocalDateTime,
   formatUtcSqlDateTime,
@@ -110,7 +111,7 @@ function readModelsMarketplaceCache(includePricing: boolean): any[] | null {
   return cached.models;
 }
 
-function clearModelsMarketplaceCache(): void {
+export function clearModelsMarketplaceCache(): void {
   modelsMarketplaceCache.clear();
 }
 
@@ -1184,8 +1185,9 @@ export async function statsRoutes(app: FastifyInstance) {
         }
       > = {};
       for (const log of recentLogs) {
-        const model = log.modelActual || log.modelRequested || "";
-        if (!model) continue;
+        const rawModel = log.modelActual || log.modelRequested || "";
+        if (!rawModel) continue;
+        const model = canonicalizeModelName(rawModel) || rawModel;
         if (!modelLogStats[model]) {
           modelLogStats[model] = {
             success: 0,
@@ -1311,7 +1313,7 @@ export async function statsRoutes(app: FastifyInstance) {
           if (!result.catalog) continue;
 
           for (const model of result.catalog.models) {
-            const key = model.modelName.toLowerCase();
+            const key = (canonicalizeModelName(model.modelName) || model.modelName).toLowerCase();
             if (!modelMetadataMap.has(key)) {
               modelMetadataMap.set(key, {
                 description: null,
@@ -1360,6 +1362,7 @@ export async function statsRoutes(app: FastifyInstance) {
               checkedAt: string | null;
               unitCost: number | null;
               balance: number;
+              sourceModels: string[];
               tokens: Array<{ id: number; name: string; isDefault: boolean }>;
             }
           >;
@@ -1379,16 +1382,19 @@ export async function statsRoutes(app: FastifyInstance) {
         )
           continue;
 
-        if (!modelMap[m.modelName]) {
-          modelMap[m.modelName] = {
-            name: m.modelName,
+        const sourceModel = String(m.modelName || "").trim();
+        if (!sourceModel) continue;
+        const canonicalName = canonicalizeModelName(sourceModel) || sourceModel;
+        if (!modelMap[canonicalName]) {
+          modelMap[canonicalName] = {
+            name: canonicalName,
             accountsById: new Map(),
           };
         }
 
-        const existingAccount = modelMap[m.modelName].accountsById.get(a.id);
+        const existingAccount = modelMap[canonicalName].accountsById.get(a.id);
         if (!existingAccount) {
-          modelMap[m.modelName].accountsById.set(a.id, {
+          modelMap[canonicalName].accountsById.set(a.id, {
             id: a.id,
             site: s.name,
             siteId: s.id,
@@ -1398,9 +1404,13 @@ export async function statsRoutes(app: FastifyInstance) {
             checkedAt: m.checkedAt || null,
             unitCost: a.unitCost,
             balance: a.balance || 0,
+            sourceModels: [sourceModel],
             tokens: [{ id: t.id, name: t.name, isDefault: !!t.isDefault }],
           });
         } else {
+          if (!existingAccount.sourceModels.includes(sourceModel)) {
+            existingAccount.sourceModels.push(sourceModel);
+          }
           const nextLatency = (() => {
             if (existingAccount.latency == null) return m.latencyMs;
             if (m.latencyMs == null) return existingAccount.latency;
@@ -1433,16 +1443,19 @@ export async function statsRoutes(app: FastifyInstance) {
         if (!m.available || a.status !== "active" || s.status !== "active")
           continue;
 
-        if (!modelMap[m.modelName]) {
-          modelMap[m.modelName] = {
-            name: m.modelName,
+        const sourceModel = String(m.modelName || "").trim();
+        if (!sourceModel) continue;
+        const canonicalName = canonicalizeModelName(sourceModel) || sourceModel;
+        if (!modelMap[canonicalName]) {
+          modelMap[canonicalName] = {
+            name: canonicalName,
             accountsById: new Map(),
           };
         }
 
-        const existingAccount = modelMap[m.modelName].accountsById.get(a.id);
+        const existingAccount = modelMap[canonicalName].accountsById.get(a.id);
         if (!existingAccount) {
-          modelMap[m.modelName].accountsById.set(a.id, {
+          modelMap[canonicalName].accountsById.set(a.id, {
             id: a.id,
             site: s.name,
             siteId: s.id,
@@ -1452,9 +1465,13 @@ export async function statsRoutes(app: FastifyInstance) {
             checkedAt: m.checkedAt || null,
             unitCost: a.unitCost,
             balance: a.balance || 0,
+            sourceModels: [sourceModel],
             tokens: [],
           });
           continue;
+        }
+        if (!existingAccount.sourceModels.includes(sourceModel)) {
+          existingAccount.sourceModels.push(sourceModel);
         }
 
         const nextLatency = (() => {
@@ -1488,7 +1505,10 @@ export async function statsRoutes(app: FastifyInstance) {
 
       const models = Object.values(modelMap).map((m) => {
         const logStats = modelLogStats[m.name];
-        const accounts = Array.from(m.accountsById.values());
+        const accounts = Array.from(m.accountsById.values()).map((account) => ({
+          ...account,
+          sourceModels: [...account.sourceModels].sort((a, b) => a.localeCompare(b)),
+        }));
         const avgLatency =
           accounts.reduce((sum, a) => sum + (a.latency || 0), 0) /
           (accounts.length || 1);
