@@ -76,6 +76,7 @@ interface RuntimeSettingsBody {
   logCleanupProgramLogsEnabled?: boolean;
   logCleanupRetentionDays?: number;
   webhookUrl?: string;
+  webhookSecret?: string;
   barkUrl?: string;
   webhookEnabled?: boolean;
   barkEnabled?: boolean;
@@ -569,6 +570,11 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       }
       return;
     }
+    case 'webhook_secret': {
+      if (typeof value !== 'string') return;
+      (config as any).webhookSecret = value.trim();
+      return;
+    }
     case 'webhook_url': {
       if (typeof value !== 'string') return;
       config.webhookUrl = value.trim();
@@ -742,6 +748,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     tokenRouterFailureCooldownMaxSec: config.tokenRouterFailureCooldownMaxSec,
     routingWeights: config.routingWeights,
     webhookUrl: config.webhookUrl,
+    webhookSecret: (config as any).webhookSecret || '',
     barkUrl: config.barkUrl,
     webhookEnabled: config.webhookEnabled,
     barkEnabled: config.barkEnabled,
@@ -1482,6 +1489,15 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.webhookUrl = String(body.webhookUrl || '').trim();
       upsertSetting('webhook_url', config.webhookUrl);
+    }
+
+    if (body.webhookSecret !== undefined) {
+      const nextSecret = String(body.webhookSecret || '').trim();
+      if (nextSecret !== String((config as any).webhookSecret || '')) {
+        changedLabels.push('Webhook 加签密钥');
+      }
+      (config as any).webhookSecret = nextSecret;
+      upsertSetting('webhook_secret', nextSecret);
     }
 
     if (body.webhookEnabled !== undefined) {

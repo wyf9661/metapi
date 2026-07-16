@@ -40,6 +40,7 @@ describe('notifyService', () => {
     config.notifyCooldownSec = 300;
     config.webhookEnabled = false;
     config.webhookUrl = '';
+    (config as any).webhookSecret = '';
     config.barkEnabled = false;
     config.barkUrl = '';
     config.serverChanEnabled = false;
@@ -376,5 +377,62 @@ describe('notifyService', () => {
     expect(payload.msg_type).toBe('text');
     expect(payload.content?.text || '').toContain('[metapi][WARNING] 测试通知');
     expect(payload.content?.text || '').toContain('lark message');
+  });
+
+  it('sends dingtalk text payload and signs url when secret is configured', async () => {
+    const { config } = await import('../config.js');
+    config.webhookEnabled = true;
+    config.webhookUrl = 'https://oapi.dingtalk.com/robot/send?access_token=demo-token';
+    (config as any).webhookSecret = 'SECdemo';
+    config.smtpEnabled = false;
+    config.barkEnabled = false;
+    config.serverChanEnabled = false;
+    (config as any).telegramEnabled = false;
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ errcode: 0, errmsg: 'ok' }),
+    });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('测试通知', 'dingtalk message', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const dingtalkCalls = fetchMock.mock.calls.filter((call) => String(call[0]).includes('oapi.dingtalk.com'));
+    expect(dingtalkCalls.length).toBe(1);
+    const [url, init] = dingtalkCalls[0];
+    expect(String(url)).toContain('https://oapi.dingtalk.com/robot/send?access_token=demo-token');
+    expect(String(url)).toContain('timestamp=');
+    expect(String(url)).toContain('sign=');
+    expect(String(url)).not.toContain('secret=');
+    const body = JSON.parse(String((init as any).body));
+    expect(body.msgtype).toBe('text');
+    expect(body.text.content).toContain('测试通知');
+    expect(body.text.content).toContain('dingtalk message');
+  });
+
+  it('fails when dingtalk webhook returns non-zero errcode', async () => {
+    const { config } = await import('../config.js');
+    config.webhookEnabled = true;
+    config.webhookUrl = 'https://oapi.dingtalk.com/robot/send?access_token=demo-token';
+    (config as any).webhookSecret = '';
+    config.smtpEnabled = false;
+    config.barkEnabled = false;
+    config.serverChanEnabled = false;
+    (config as any).telegramEnabled = false;
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ errcode: 310000, errmsg: 'sign not match' }),
+    });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await expect(
+      sendNotification('测试通知', 'message', 'info', {
+        bypassThrottle: true,
+        throwOnFailure: true,
+      }),
+    ).rejects.toThrow(/钉钉|310000|sign not match/i);
   });
 });

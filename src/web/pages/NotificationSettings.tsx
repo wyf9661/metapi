@@ -5,6 +5,7 @@ import { tr } from '../i18n.js';
 
 type RuntimeSettings = {
     webhookUrl: string;
+    webhookSecret: string;
     barkUrl: string;
     webhookEnabled: boolean;
     barkEnabled: boolean;
@@ -30,6 +31,7 @@ type RuntimeSettings = {
 export default function NotificationSettings() {
     const [runtime, setRuntime] = useState<RuntimeSettings>({
         webhookUrl: '',
+        webhookSecret: '',
         barkUrl: '',
         webhookEnabled: true,
         barkEnabled: true,
@@ -75,6 +77,7 @@ export default function NotificationSettings() {
             const runtimeInfo = await api.getRuntimeSettings();
             setRuntime({
                 webhookUrl: runtimeInfo.webhookUrl || '',
+                webhookSecret: (runtimeInfo as any).webhookSecret || '',
                 barkUrl: runtimeInfo.barkUrl || '',
                 webhookEnabled: runtimeInfo.webhookEnabled ?? true,
                 barkEnabled: runtimeInfo.barkEnabled ?? true,
@@ -114,6 +117,7 @@ export default function NotificationSettings() {
         try {
             const payload: RuntimeSettingsPayload = {
                 webhookUrl: runtime.webhookUrl,
+                webhookSecret: runtime.webhookSecret,
                 barkUrl: runtime.barkUrl,
                 webhookEnabled: runtime.webhookEnabled,
                 barkEnabled: runtime.barkEnabled,
@@ -255,10 +259,21 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.webhookUrl}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, webhookUrl: e.target.value }))}
-                                placeholder="https://your-webhook-url (可选)"
+                                placeholder="https://oapi.dingtalk.com/robot/send?access_token=... 或企业微信/飞书 Webhook"
                                 style={inputStyle}
                                 disabled={!runtime.webhookEnabled}
                             />
+                            <div style={{ fontSize: 13, fontWeight: 500, margin: '12px 0 8px', color: 'var(--color-text-secondary)' }}>钉钉加签密钥（SEC，可选）</div>
+                            <input
+                                value={runtime.webhookSecret}
+                                onChange={(e) => setRuntime((prev) => ({ ...prev, webhookSecret: e.target.value }))}
+                                placeholder="SEC...（仅钉钉加签机器人需要，可留空）"
+                                style={inputStyle}
+                                disabled={!runtime.webhookEnabled}
+                            />
+                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
+                                钉钉开启“加签”时填写 SEC 密钥；也可把 secret=SEC... 拼在 Webhook URL 查询参数里。
+                            </div>
                         </div>
                         <div style={{ opacity: runtime.barkEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
                             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Bark URL</div>

@@ -56,16 +56,87 @@ async function resolvePositiveIntegerSetting(settingKey: string, fallback: numbe
   );
 }
 
+
+function summarizeCheckinRun(results: Array<{ result?: any }>) {
+  let success = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const item of results) {
+    const status = item?.result?.status;
+    if (status === 'skipped' || item?.result?.skipped) {
+      skipped += 1;
+      continue;
+    }
+    if (item?.result?.success) success += 1;
+    else failed += 1;
+  }
+  return { total: results.length, success, skipped, failed };
+}
+
+function buildCheckinSummaryNotification(results: Array<{ accountId?: number; username?: string; site?: string; result?: any }>) {
+  const summary = summarizeCheckinRun(results);
+  const lines: string[] = [
+    `全部账号签到完成：成功 ${summary.success}，跳过 ${summary.skipped}，失败 ${summary.failed}`,
+  ];
+  const failedRows = results.filter((item) => {
+    const status = item?.result?.status;
+    if (status === 'skipped' || item?.result?.skipped) return false;
+    return !item?.result?.success;
+  }).slice(0, 8);
+  if (failedRows.length > 0) {
+    lines.push('失败明细:');
+    for (const item of failedRows) {
+      const label = `${item?.username || (item?.accountId ? `#${item.accountId}` : 'unknown')} @ ${item?.site || 'unknown'}`;
+      const reason = String(item?.result?.message || 'failed').trim().slice(0, 80);
+      lines.push(`- ${label}: ${reason}`);
+    }
+    if (summary.failed > failedRows.length) {
+      lines.push(`- ... 另有 ${summary.failed - failedRows.length} 个失败未展开`);
+    }
+  }
+  const title = summary.failed > 0
+    ? `签到完成（成功${summary.success}/失败${summary.failed}）`
+    : `签到完成（成功${summary.success}）`;
+  return {
+    title,
+    message: lines.join('\n'),
+    level: (summary.failed > 0 ? 'warning' : 'info') as 'info' | 'warning' | 'error',
+    summary,
+  };
+}
+
+async function notifyCheckinSummary(results: Array<{ accountId?: number; username?: string; site?: string; result?: any }>) {
+  const notification = buildCheckinSummaryNotification(results);
+  try {
+    await sendNotification(notification.title, notification.message, notification.level, {
+      // full-run summary should always attempt delivery once
+      bypassThrottle: true,
+    });
+  } catch (error) {
+    console.warn('[Scheduler] Check-in notification failed:', (error as Error)?.message || error);
+  }
+  return notification;
+}
+
 function createCheckinTask(cronExpr: string) {
   return cron.schedule(cronExpr, async () => {
     console.log(`[Scheduler] Running check-in at ${new Date().toISOString()}`);
     try {
       const results = await checkinAll({ scheduleMode: 'cron' });
-      const success = results.filter((r) => r.result.success).length;
-      const failed = results.length - success;
-      console.log(`[Scheduler] Check-in complete: ${success} success, ${failed} failed`);
+      const notification = await notifyCheckinSummary(results as any);
+      console.log(
+        `[Scheduler] Check-in complete: ${notification.summary.success} success, ${notification.summary.skipped} skipped, ${notification.summary.failed} failed`,
+      );
     } catch (err) {
       console.error('[Scheduler] Check-in error:', err);
+      try {
+        await sendNotification(
+          '定时签到失败',
+          `定时签到任务异常：${err instanceof Error ? err.message : String(err)}`,
+          'error',
+          { bypassThrottle: true },
+        );
+      } catch {}
     }
   });
 }
@@ -130,11 +201,20 @@ async function runIntervalCheckinPass(now = new Date()) {
     for (const item of results) {
       intervalAttemptByAccount.set(item.accountId, nowMs);
     }
-    const success = results.filter((r) => r.result.success).length;
-    const failed = results.length - success;
-    console.log(`[Scheduler] Interval check-in complete: ${success} success, ${failed} failed`);
+    const notification = await notifyCheckinSummary(results as any);
+    console.log(
+      `[Scheduler] Interval check-in complete: ${notification.summary.success} success, ${notification.summary.skipped} skipped, ${notification.summary.failed} failed`,
+    );
   } catch (err) {
     console.error('[Scheduler] Interval check-in error:', err);
+    try {
+      await sendNotification(
+        '间隔签到失败',
+        `间隔签到任务异常：${err instanceof Error ? err.message : String(err)}`,
+        'error',
+        { bypassThrottle: true },
+      );
+    } catch {}
   }
 }
 
