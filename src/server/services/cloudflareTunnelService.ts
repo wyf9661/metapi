@@ -32,6 +32,8 @@ type TunnelStatus = {
 };
 
 const QUICK_TUNNEL_URL_RE = /https:\/\/([a-z0-9-]+)\.trycloudflare\.com/gi;
+const SHORT_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const DEFAULT_TUNNEL_WORKER_URL = 'https://abc-tunnel.us';
 
 let child: ChildProcessWithoutNullStreams | null = null;
 let currentTunnelUrl: string | null = null;
@@ -70,6 +72,67 @@ function binaryName(): string {
 
 function binaryPath(): string {
   return join(binDir(), binaryName());
+}
+
+function tunnelWorkerBaseUrl(): string {
+  return String(process.env.TUNNEL_WORKER_URL || DEFAULT_TUNNEL_WORKER_URL).trim().replace(/\/+$/, '') || DEFAULT_TUNNEL_WORKER_URL;
+}
+
+function buildStablePublicUrl(shortId: string | null | undefined): string | null {
+  const id = String(shortId || '').trim().toLowerCase();
+  if (!id) return null;
+  return `https://r${id}.abc-tunnel.us`;
+}
+
+function generateShortId(length = 6): string {
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += SHORT_ID_ALPHABET.charAt(Math.floor(Math.random() * SHORT_ID_ALPHABET.length));
+  }
+  return out;
+}
+
+function ensureShortId(existing?: string | null): string {
+  const normalized = String(existing || currentShortId || '').trim().toLowerCase();
+  if (/^[a-z0-9]{4,16}$/.test(normalized)) {
+    currentShortId = normalized;
+    return normalized;
+  }
+  const created = generateShortId();
+  currentShortId = created;
+  return created;
+}
+
+async function registerStableTunnelMapping(shortId: string, tunnelUrl: string): Promise<void> {
+  const endpoint = `${tunnelWorkerBaseUrl()}/api/tunnel/register`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shortId, tunnelUrl }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`持久化公网地址注册失败: HTTP ${response.status}${text ? ` ${text.slice(0, 160)}` : ''}`);
+  }
+}
+
+async function waitForPublicUrlHealthy(publicUrl: string, timeoutMs = 60000): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const response = await fetch(publicUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: AbortSignal.timeout(5000),
+      });
+      // Any HTTP response means edge mapping is live (401/403 still OK).
+      if (response.status > 0) return true;
+    } catch {
+      // retry
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  return false;
 }
 
 function readStateFile(): TunnelStateFile {
@@ -307,8 +370,8 @@ export async function stopCloudflareTunnel(options?: { persistDisabled?: boolean
   killProcessTree(pid);
   child = null;
   currentTunnelUrl = null;
-  currentPublicUrl = null;
-  // keep shortId for possible reuse of vanity mapping if ever added
+  // Keep shortId + stable public URL so the same address comes back after restart.
+  currentPublicUrl = buildStablePublicUrl(currentShortId) || currentPublicUrl;
   writePid(null);
 
   if (persistDisabled) {
@@ -317,7 +380,7 @@ export async function stopCloudflareTunnel(options?: { persistDisabled?: boolean
     writeStateFile({
       enabled: false,
       tunnelUrl: null,
-      publicUrl: null,
+      publicUrl: currentPublicUrl,
       shortId: currentShortId,
       pid: null,
       updatedAt: new Date().toISOString(),
@@ -410,10 +473,27 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
     }
 
     currentTunnelUrl = tunnelUrl;
-    currentPublicUrl = tunnelUrl;
-    // short id from hostname
-    const m = tunnelUrl.match(/^https:\/\/([a-z0-9-]+)\.trycloudflare\.com\/?$/i);
-    currentShortId = m?.[1] || currentShortId;
+    // Persist a stable shortId across restarts (Quick Tunnel URL itself always changes).
+    const state = readStateFile();
+    const shortId = ensureShortId(state.shortId || currentShortId);
+    const stablePublicUrl = buildStablePublicUrl(shortId);
+    currentShortId = shortId;
+    currentPublicUrl = stablePublicUrl || tunnelUrl;
+
+    try {
+      await registerStableTunnelMapping(shortId, tunnelUrl);
+      if (stablePublicUrl) {
+        const healthy = await waitForPublicUrlHealthy(stablePublicUrl, 30000);
+        if (!healthy) {
+          console.warn(`[Tunnel] stable public URL not healthy yet, continue with ${stablePublicUrl}`);
+        }
+      }
+    } catch (error: any) {
+      // Fall back to direct trycloudflare URL if relay worker is unavailable.
+      console.warn(`[Tunnel] stable mapping failed: ${error?.message || error}`);
+      currentPublicUrl = tunnelUrl;
+      lastError = error?.message || String(error);
+    }
 
     config.tunnelEnabled = true;
     await upsertSetting('tunnel_enabled', true);
@@ -424,7 +504,7 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
       shortId: currentShortId,
       pid: proc.pid ?? null,
       updatedAt: new Date().toISOString(),
-      lastError: null,
+      lastError: lastError,
     });
 
     return getCloudflareTunnelStatus();
@@ -456,17 +536,21 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
 
 export function getCloudflareTunnelStatus(): TunnelStatus {
   const state = readStateFile();
+  const shortId = currentShortId || state.shortId;
   const running = !!(child && isProcessRunning(child.pid) && (currentTunnelUrl || state.tunnelUrl));
   const enabled = !!(config.tunnelEnabled || state.enabled) && running;
   const tunnelUrl = currentTunnelUrl || state.tunnelUrl;
-  const publicUrl = currentPublicUrl || state.publicUrl || tunnelUrl;
+  const publicUrl = currentPublicUrl
+    || buildStablePublicUrl(shortId)
+    || state.publicUrl
+    || tunnelUrl;
   return {
     enabled,
     running,
     settingsEnabled: !!(config.tunnelEnabled || state.enabled),
     tunnelUrl,
     publicUrl,
-    shortId: currentShortId || state.shortId,
+    shortId,
     dashboardAccess: !!config.tunnelDashboardAccess,
     downloading: downloadInProgress,
     downloadProgress,
@@ -553,3 +637,19 @@ export function isTunnelDashboardPath(urlPath: string): boolean {
   if (!path.includes('.')) return true;
   return false;
 }
+
+
+function hydrateTunnelRuntimeFromDisk(): void {
+  try {
+    const state = readStateFile();
+    if (state.shortId) currentShortId = state.shortId;
+    if (state.publicUrl) currentPublicUrl = state.publicUrl;
+    else if (state.shortId) currentPublicUrl = buildStablePublicUrl(state.shortId);
+    if (state.tunnelUrl) currentTunnelUrl = state.tunnelUrl;
+    if (state.lastError) lastError = state.lastError;
+  } catch {
+    // ignore
+  }
+}
+
+hydrateTunnelRuntimeFromDisk();
