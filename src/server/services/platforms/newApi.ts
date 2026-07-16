@@ -626,8 +626,53 @@ export class NewApiAdapter extends BasePlatformAdapter {
     return false;
   }
 
+
+  private isAlreadyCheckedInMessage(message?: string | null): boolean {
+    if (!message) return false;
+    const text = message.trim();
+    if (!text) return false;
+    const normalized = text.toLowerCase();
+    return (
+      normalized.includes('already checked in') ||
+      normalized.includes('already signed') ||
+      normalized.includes('already sign in') ||
+      text.includes('今日已签到') ||
+      text.includes('今天已签到') ||
+      text.includes('今天已经签到') ||
+      text.includes('今日已经签到') ||
+      text.includes('已经签到') ||
+      text.includes('已签到') ||
+      text.includes('重复签到') ||
+      text.includes('签到过')
+    );
+  }
+
+  private isSessionLikeCredential(token: string): boolean {
+    const raw = (token || '').trim();
+    if (!raw) return false;
+    if (raw.includes('=')) return true;
+    // NewAPI session cookies are typically long base64-ish values, not sk-/eyJ tokens.
+    if (raw.startsWith('sk-') || raw.startsWith('eyJ')) return false;
+    return raw.length >= 80;
+  }
+
+  private rememberCheckinFailureMessage(current: string | undefined, next?: string | null): string | undefined {
+    const incoming = typeof next === 'string' ? next.trim() : '';
+    if (!incoming) return current;
+    if (!current) return incoming;
+    // Never let later auth noise override an already-checked-in result.
+    if (this.isAlreadyCheckedInMessage(current)) return current;
+    if (this.isAlreadyCheckedInMessage(incoming)) return incoming;
+    // Prefer non-auth business errors over generic unauthorized once we have something better.
+    if (this.isCookieSessionFailureMessage(current) && !this.isCookieSessionFailureMessage(incoming)) {
+      return incoming;
+    }
+    return incoming;
+  }
+
   private shouldFallbackToCookieCheckin(message?: string | null): boolean {
     if (!message) return true;
+    if (this.isAlreadyCheckedInMessage(message)) return false;
     const text = message.toLowerCase();
     return (
       text.includes('unexpected token') ||
@@ -1084,53 +1129,39 @@ export class NewApiAdapter extends BasePlatformAdapter {
   async checkin(baseUrl: string, accessToken: string, platformUserId?: number): Promise<CheckinResult> {
     const resolvedUserId = platformUserId || await this.discoverUserId(baseUrl, accessToken);
     let firstFailureMessage: string | undefined;
+    const preferCookieFirst = this.isSessionLikeCredential(accessToken);
 
-    try {
-      const headers = this.authHeaders(accessToken, resolvedUserId || undefined);
+    const finalizeFailure = (message?: string) => ({
+      success: false as const,
+      message: message || 'checkin failed',
+    });
 
-      const res = await this.fetchJson<any>(`${baseUrl}/api/user/checkin`, {
-        method: 'POST',
-        headers,
-      });
-      if (res?.success) {
-        return { success: true, message: res.message || 'checkin success', reward: res.data?.reward?.toString() };
+    const tryBearerCheckin = async (): Promise<CheckinResult | null> => {
+      try {
+        const headers = this.authHeaders(accessToken, resolvedUserId || undefined);
+        const res = await this.fetchJson<any>(`${baseUrl}/api/user/checkin`, {
+          method: 'POST',
+          headers,
+        });
+        if (res?.success) {
+          return { success: true, message: res.message || 'checkin success', reward: res.data?.reward?.toString() };
+        }
+        const directMessage = this.extractResponseMessage(res);
+        if (this.isAlreadyCheckedInMessage(directMessage)) {
+          return { success: false, message: directMessage };
+        }
+        firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, directMessage);
+      } catch (err) {
+        const parsed = this.formatRequestErrorMessage(err);
+        firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, parsed);
       }
-      const directMessage = this.extractResponseMessage(res);
-      if (directMessage) firstFailureMessage = directMessage;
-    } catch (err) {
-      const parsed = this.formatRequestErrorMessage(err);
-      if (parsed) firstFailureMessage = parsed;
-    }
-
-    if (firstFailureMessage && !this.shouldFallbackToCookieCheckin(firstFailureMessage)) {
-      return { success: false, message: firstFailureMessage };
-    }
+      return null;
+    };
 
     const tryCookieCheckin = async (cookieUserId?: number | null): Promise<CheckinResult | null> => {
       for (const cookie of this.buildCookieCandidates(accessToken)) {
-        try {
-          const signInRes = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/sign_in`, {
-            method: 'POST',
-            body: '{}',
-            headers: {
-              Cookie: cookie,
-              'X-Requested-With': 'XMLHttpRequest',
-            },
-          });
-          if (signInRes?.success) {
-            return {
-              success: true,
-              message: signInRes.message || 'checked in',
-              reward: signInRes.data?.reward?.toString(),
-            };
-          }
-          const signInMessage = this.extractResponseMessage(signInRes);
-          if (!firstFailureMessage && signInMessage) firstFailureMessage = signInMessage;
-        } catch (err) {
-          const parsed = this.formatRequestErrorMessage(err);
-          if (!firstFailureMessage && parsed) firstFailureMessage = parsed;
-        }
-
+        // Prefer the real NewAPI checkin endpoint first. /api/user/sign_in is a legacy alias and
+        // often 404s, which previously polluted the final failure message.
         try {
           const headers: Record<string, string> = { Cookie: cookie };
           Object.assign(headers, this.userIdHeaders(cookieUserId));
@@ -1142,23 +1173,72 @@ export class NewApiAdapter extends BasePlatformAdapter {
             return { success: true, message: res.message || 'checkin success', reward: res.data?.reward?.toString() };
           }
           const cookieMessage = this.extractResponseMessage(res);
-          if (cookieMessage) firstFailureMessage = cookieMessage;
+          if (this.isAlreadyCheckedInMessage(cookieMessage)) {
+            return { success: false, message: cookieMessage };
+          }
+          firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, cookieMessage);
         } catch (err) {
           const parsed = this.formatRequestErrorMessage(err);
-          if (parsed) firstFailureMessage = parsed;
+          firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, parsed);
+        }
+
+        try {
+          const signInRes = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/sign_in`, {
+            method: 'POST',
+            body: '{}',
+            headers: {
+              Cookie: cookie,
+              'X-Requested-With': 'XMLHttpRequest',
+              ...this.userIdHeaders(cookieUserId),
+            },
+          });
+          if (signInRes?.success) {
+            return {
+              success: true,
+              message: signInRes.message || 'checked in',
+              reward: signInRes.data?.reward?.toString(),
+            };
+          }
+          const signInMessage = this.extractResponseMessage(signInRes);
+          if (this.isAlreadyCheckedInMessage(signInMessage)) {
+            return { success: false, message: signInMessage };
+          }
+          // Only keep sign_in message when we have nothing better; ignore pure missing-endpoint noise.
+          if (!this.isMissingCheckinEndpointMessage(signInMessage)) {
+            firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, signInMessage);
+          }
+        } catch (err) {
+          const parsed = this.formatRequestErrorMessage(err);
+          if (!this.isMissingCheckinEndpointMessage(parsed)) {
+            firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, parsed);
+          }
         }
       }
 
       return null;
     };
 
+    if (!preferCookieFirst) {
+      const bearerResult = await tryBearerCheckin();
+      if (bearerResult) return bearerResult;
+      if (firstFailureMessage && !this.shouldFallbackToCookieCheckin(firstFailureMessage)) {
+        return finalizeFailure(firstFailureMessage);
+      }
+    }
+
     const initialCookieResult = await tryCookieCheckin(resolvedUserId);
     if (initialCookieResult) return initialCookieResult;
 
     const alternateCookieUserId = await this.probeAlternateUserIdByCookie(baseUrl, accessToken, resolvedUserId);
-    if (alternateCookieUserId) {
+    if (alternateCookieUserId && alternateCookieUserId !== resolvedUserId) {
       const retriedCookieResult = await tryCookieCheckin(alternateCookieUserId);
       if (retriedCookieResult) return retriedCookieResult;
+    }
+
+    // Session credentials: cookie path is authoritative. Only try Bearer afterwards as a last resort.
+    if (preferCookieFirst && !this.isAlreadyCheckedInMessage(firstFailureMessage)) {
+      const bearerResult = await tryBearerCheckin();
+      if (bearerResult) return bearerResult;
     }
 
     if (this.isMissingCheckinEndpointMessage(firstFailureMessage)) {
@@ -1168,11 +1248,11 @@ export class NewApiAdapter extends BasePlatformAdapter {
         [resolvedUserId, alternateCookieUserId],
       );
       if (cookieSessionFailureMessage) {
-        return { success: false, message: cookieSessionFailureMessage };
+        return finalizeFailure(cookieSessionFailureMessage);
       }
     }
 
-    return { success: false, message: firstFailureMessage || 'checkin failed' };
+    return finalizeFailure(firstFailureMessage);
   }
 
   async getBalance(baseUrl: string, accessToken: string, platformUserId?: number): Promise<BalanceInfo> {

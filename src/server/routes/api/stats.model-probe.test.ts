@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { config } from '../../config.js';
 
 const buildModelAvailabilityProbeTaskDedupeKeyMock = vi.fn();
 const queueModelAvailabilityProbeTaskMock = vi.fn();
@@ -46,6 +47,8 @@ describe('/api/models/probe', () => {
   });
 
   beforeEach(() => {
+    config.modelAvailabilityProbeAllow = true;
+    config.modelAvailabilityProbeEnabled = true;
     buildModelAvailabilityProbeTaskDedupeKeyMock.mockReset();
     queueModelAvailabilityProbeTaskMock.mockReset();
     getBackgroundTaskMock.mockReset();
@@ -153,5 +156,19 @@ describe('/api/models/probe', () => {
         unsupported: 1,
       },
     });
+  });
+
+  it('rejects batch probe when disabled by fork policy', async () => {
+    config.modelAvailabilityProbeAllow = false;
+    config.modelAvailabilityProbeEnabled = false;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/models/probe',
+      payload: { wait: true },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(queueModelAvailabilityProbeTaskMock).not.toHaveBeenCalled();
   });
 });

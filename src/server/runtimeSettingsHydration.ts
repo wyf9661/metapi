@@ -50,7 +50,7 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
 
   const modelAvailabilityProbeEnabled = parseSettingFromMap<boolean>(settingsMap, 'model_availability_probe_enabled');
   if (typeof modelAvailabilityProbeEnabled === 'boolean') {
-    config.modelAvailabilityProbeEnabled = modelAvailabilityProbeEnabled;
+    config.modelAvailabilityProbeEnabled = modelAvailabilityProbeEnabled && config.modelAvailabilityProbeAllow;
   }
 
   const codexUpstreamWebsocketEnabled = parseSettingFromMap<boolean>(settingsMap, 'codex_upstream_websocket_enabled');

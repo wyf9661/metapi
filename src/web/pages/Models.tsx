@@ -165,6 +165,15 @@ export default function Models() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [copied, setCopied] = useState<string | null>(null);
+  const [probingModel, setProbingModel] = useState<string | null>(null);
+  const [probeResults, setProbeResults] = useState<Record<string, {
+    ok: boolean;
+    status: string;
+    latencyMs: number | null;
+    reason: string;
+    siteName: string | null;
+    username: string | null;
+  }>>({});
   const [filterCollapsed, setFilterCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [metadataHydrating, setMetadataHydrating] = useState(false);
@@ -400,6 +409,50 @@ export default function Models() {
     setCopied(name);
     setTimeout(() => setCopied(null), 1500);
   };
+
+  const probeModel = async (name: string) => {
+    if (probingModel) return;
+    setProbingModel(name);
+    try {
+      const res: any = await api.probeModelOne(name);
+      const result = {
+        ok: !!(res?.ok || res?.status === 'supported'),
+        status: String(res?.status || (res?.ok ? 'supported' : 'failed')),
+        latencyMs: typeof res?.latencyMs === 'number' ? res.latencyMs : null,
+        reason: String(res?.reason || res?.message || ''),
+        siteName: res?.siteName ? String(res.siteName) : null,
+        username: res?.username ? String(res.username) : null,
+      };
+      setProbeResults((prev) => ({ ...prev, [name]: result }));
+      if (result.ok) {
+        const where = [result.siteName, result.username].filter(Boolean).join(' / ');
+        toast.success(
+          where
+            ? `${name} 可用 · ${result.latencyMs ?? '—'}ms · ${where}`
+            : `${name} 可用 · ${result.latencyMs ?? '—'}ms`,
+        );
+      } else {
+        toast.error(`${name} 探测失败：${result.reason || result.status}`);
+      }
+    } catch (err: any) {
+      const reason = err?.message || '探测失败';
+      setProbeResults((prev) => ({
+        ...prev,
+        [name]: {
+          ok: false,
+          status: 'failed',
+          latencyMs: null,
+          reason,
+          siteName: null,
+          username: null,
+        },
+      }));
+      toast.error(`${name} 探测失败：${reason}`);
+    } finally {
+      setProbingModel(null);
+    }
+  };
+
 
   const filterControls = (
     <>
@@ -694,6 +747,23 @@ export default function Models() {
                     </button>
                     <button
                       className="model-card-action-btn"
+                      data-tooltip={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
+                      aria-label={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
+                      disabled={probingModel === m.name}
+                      onClick={() => void probeModel(m.name)}
+                    >
+                      {probingModel === m.name ? (
+                        <span className="spinner spinner-sm" />
+                      ) : probeResults[m.name]?.ok ? (
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      ) : probeResults[m.name] ? (
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--color-danger)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      ) : (
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                      )}
+                    </button>
+                    <button
+                      className="model-card-action-btn"
                       data-tooltip={isExpanded ? tr('收起') : tr('展开')}
                       aria-label={isExpanded ? tr('收起') : tr('展开')}
                     >
@@ -912,13 +982,30 @@ export default function Models() {
                         </span>
                       </td>
                       <td onClick={e => e.stopPropagation()}>
-                        <button className="model-card-action-btn" data-tooltip={tr('复制')} aria-label={tr('复制')} onClick={() => copyName(m.name)}>
-                          {copied === m.name ? (
-                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                          ) : (
-                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                          )}
-                        </button>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button className="model-card-action-btn" data-tooltip={tr('复制')} aria-label={tr('复制')} onClick={() => copyName(m.name)}>
+                            {copied === m.name ? (
+                              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            ) : (
+                              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            )}
+                          </button>
+                          <button
+                            className="model-card-action-btn"
+                            data-tooltip={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
+                            aria-label={probingModel === m.name ? tr('探测中...') : tr('探测可用性')}
+                            disabled={probingModel === m.name}
+                            onClick={() => void probeModel(m.name)}
+                          >
+                            {probingModel === m.name ? (
+                              <span className="spinner spinner-sm" />
+                            ) : probeResults[m.name]?.ok ? (
+                              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            ) : (
+                              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {isExpanded ? (

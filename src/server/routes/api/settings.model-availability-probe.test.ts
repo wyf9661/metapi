@@ -44,6 +44,7 @@ describe('settings model availability probe runtime setting', () => {
 
   beforeEach(async () => {
     await db.delete(schema.settings).run();
+    config.modelAvailabilityProbeAllow = true;
     config.modelAvailabilityProbeEnabled = false;
     startModelAvailabilityProbeSchedulerMock.mockReset();
     stopModelAvailabilityProbeSchedulerMock.mockReset();
@@ -102,5 +103,22 @@ describe('settings model availability probe runtime setting', () => {
 
     const saved = await db.select().from(schema.settings).where(eq(schema.settings.key, 'model_availability_probe_enabled')).get();
     expect(saved?.value).toBe(JSON.stringify(false));
+  });
+
+  it('rejects enabling batch probe when allow flag is false', async () => {
+    config.modelAvailabilityProbeAllow = false;
+    config.modelAvailabilityProbeEnabled = false;
+
+    const updateResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/runtime',
+      payload: {
+        modelAvailabilityProbeEnabled: true,
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(403);
+    expect(config.modelAvailabilityProbeEnabled).toBe(false);
+    expect(startModelAvailabilityProbeSchedulerMock).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
+import { config } from '../config.js';
 
 const resolveUpstreamEndpointCandidatesMock = vi.fn();
 const buildUpstreamEndpointRequestMock = vi.fn();
@@ -56,6 +57,8 @@ describe('modelAvailabilityProbeService', () => {
   });
 
   beforeEach(async () => {
+    config.modelAvailabilityProbeAllow = true;
+    config.modelAvailabilityProbeEnabled = true;
     resolveUpstreamEndpointCandidatesMock.mockReset();
     buildUpstreamEndpointRequestMock.mockReset();
     dispatchRuntimeRequestMock.mockReset();

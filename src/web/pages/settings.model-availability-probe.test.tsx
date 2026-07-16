@@ -4,8 +4,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Settings from './Settings.js';
 
-const MODEL_AVAILABILITY_PROBE_CONFIRM_TEXT = '我确认我使用的中转站全部允许批量测活，如因开启此功能被中转站封号，自行负责。';
-
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getAuthInfo: vi.fn(),
@@ -44,7 +42,7 @@ async function flushMicrotasks() {
   });
 }
 
-describe('Settings model availability probe confirmation', () => {
+describe('Settings model availability probe policy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMock.getAuthInfo.mockResolvedValue({ masked: 'sk-****' });
@@ -82,7 +80,7 @@ describe('Settings model availability probe confirmation', () => {
     vi.clearAllMocks();
   });
 
-  it('requires the exact confirmation text before enabling model availability probing', async () => {
+  it('shows batch probe as disabled and does not expose enable controls', async () => {
     let root!: ReactTestRenderer;
     try {
       await act(async () => {
@@ -100,65 +98,14 @@ describe('Settings model availability probe confirmation', () => {
         node.type === 'div'
         && node.props['data-settings-card'] === 'model-availability-probe'
       ));
-      expect(collectText(probeCard)).toContain('已关闭');
-      expect(collectText(probeCard)).toContain('高风险操作');
-
-      const toggleLabel = root.root.find((node) => (
-        node.type === 'label'
-        && collectText(node).includes('允许 metapi 后台主动批量测活')
-      ));
-      const toggle = toggleLabel.findByType('input');
-      expect(toggle.props.checked).toBe(false);
-
-      await act(async () => {
-        toggle.props.onChange({ target: { checked: true } });
-      });
-
-      expect(collectText(probeCard)).toContain('待保存');
-
-      const saveButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '保存批量测活设置'
-      ));
-      await act(async () => {
-        saveButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(JSON.stringify(root.toJSON())).toContain(MODEL_AVAILABILITY_PROBE_CONFIRM_TEXT);
+      const text = collectText(probeCard);
+      expect(text).toContain('已禁用');
+      expect(text).toContain('高风险操作');
+      expect(text).toContain('模型广场');
+      expect(text).toContain('MODEL_AVAILABILITY_PROBE_ALLOW=true');
+      expect(text).not.toContain('允许 metapi 后台主动批量测活');
+      expect(text).not.toContain('保存批量测活设置');
       expect(apiMock.updateRuntimeSettings).not.toHaveBeenCalled();
-
-      const confirmButtonBeforeTyping = root.root.find((node) => (
-        node.type === 'button'
-        && collectText(node).trim() === '确认开启批量测活'
-        && node.props.className === 'btn btn-danger'
-      ));
-      expect(confirmButtonBeforeTyping.props.disabled).toBe(true);
-
-      const confirmInput = root.root.find((node) => (
-        node.type === 'textarea'
-        && node.props.placeholder === '请输入上方确认语句'
-      ));
-      await act(async () => {
-        confirmInput.props.onChange({ target: { value: MODEL_AVAILABILITY_PROBE_CONFIRM_TEXT } });
-      });
-
-      const confirmButton = root.root.find((node) => (
-        node.type === 'button'
-        && collectText(node).trim() === '确认开启批量测活'
-        && node.props.className === 'btn btn-danger'
-      ));
-      expect(confirmButton.props.disabled).toBe(false);
-
-      await act(async () => {
-        confirmButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith({
-        modelAvailabilityProbeEnabled: true,
-      });
     } finally {
       root?.unmount();
     }

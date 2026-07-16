@@ -1429,6 +1429,12 @@ export const api = {
     });
   },
   getModelTokenCandidates: () => request("/api/models/token-candidates"),
+  probeModelOne: (modelName: string) =>
+    request("/api/models/probe-one", {
+      method: "POST",
+      body: JSON.stringify({ model: modelName }),
+      timeoutMs: 30_000,
+    }),
 
   // Simple chat test from admin panel
   startTestChatJob: (data: TestChatRequestPayload) =>
