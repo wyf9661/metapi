@@ -179,8 +179,8 @@ describe('notifyService', () => {
 
     expect(sendMailMock).toHaveBeenCalledTimes(1);
     const payload = sendMailMock.mock.calls[0]?.[0] as { text?: string };
-    expect(payload?.text || '').toContain('Local Time:');
-    expect(payload?.text || '').toContain('UTC Time:');
+    expect(payload?.text || '').toContain('时间:');
+    expect(payload?.text || '').not.toContain('UTC Time:');
   });
 
   it('sends telegram message without topic when telegram thread id is empty', async () => {
@@ -213,8 +213,8 @@ describe('notifyService', () => {
     expect(payload.chat_id).toBe('-1001234567890');
     expect(payload.message_thread_id).toBeUndefined();
     expect(payload.text || '').toContain('Level: warning');
-    expect(payload.text || '').toContain('Local Time:');
-    expect(payload.text || '').toContain('UTC Time:');
+    expect(payload.text || '').toContain('时间:');
+    expect(payload.text || '').not.toContain('UTC Time:');
   });
 
   it('sends telegram topic id when telegram thread id is configured', async () => {

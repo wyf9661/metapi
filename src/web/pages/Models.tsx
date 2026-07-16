@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { api } from '../api.js';
 import { BrandGlyph, getBrand, hashColor, BrandIcon, type BrandInfo } from '../components/BrandIcon.js';
 import SiteBadgeLink from '../components/SiteBadgeLink.js';
@@ -637,6 +638,12 @@ export default function Models() {
     }
   };
 
+  const formatConnectivityCheckedAt = (value?: string | null) => {
+    if (!value) return '';
+    const local = formatDateTimeLocal(value);
+    return local && local !== '—' ? `更新时间: ${local}` : '';
+  };
+
   const renderConnectivity = (
     account: ModelAccountInfo,
     live?: AccountProbeResult | null,
@@ -657,10 +664,10 @@ export default function Models() {
       }
     }
     if (account.connectivity === true) {
-      return <span className="badge badge-success" style={{ fontSize: 11 }} title={account.checkedAt || ''}>{tr('连通')}</span>;
+      return <span className="badge badge-success" style={{ fontSize: 11 }} title={formatConnectivityCheckedAt(account.checkedAt)}>{tr('连通')}</span>;
     }
     if (account.connectivity === false) {
-      return <span className="badge badge-error" style={{ fontSize: 11 }} title={account.checkedAt || ''}>{tr('不通')}</span>;
+      return <span className="badge badge-error" style={{ fontSize: 11 }} title={formatConnectivityCheckedAt(account.checkedAt)}>{tr('不通')}</span>;
     }
     return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
   };

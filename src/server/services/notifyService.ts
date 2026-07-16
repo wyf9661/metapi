@@ -65,11 +65,8 @@ function getSmtpTransporter() {
 }
 
 function buildTimeFootnote(now: Date): string {
-  const timeZone = getResolvedTimeZone();
-  return [
-    `Local Time: ${formatLocalDateTime(now)} (${timeZone})`,
-    `UTC Time: ${now.toISOString()}`,
-  ].join('\n');
+  // User-facing notifications only show local time.
+  return `时间: ${formatLocalDateTime(now)}`;
 }
 
 function buildTelegramText(
