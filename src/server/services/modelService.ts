@@ -36,6 +36,7 @@ import {
   validateGeminiCliOauthConnection,
 } from './platformDiscoveryRegistry.js';
 import { probeRuntimeModel, type RuntimeModelProbeStatus } from './runtimeModelProbe.js';
+import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 
 const API_TOKEN_DISCOVERY_TIMEOUT_MS = 8_000;
 const MODEL_DISCOVERY_TIMEOUT_MS = 12_000;
@@ -1388,20 +1389,23 @@ export async function rebuildTokenRoutesFromAvailability() {
     accountId: number;
     tokenId: number | null;
     oauthRouteUnitId: number | null;
+    sourceModel: string;
   }>>();
   const buildCandidateKey = (input: {
     accountId: number;
     tokenId: number | null;
     oauthRouteUnitId: number | null;
-  }) => (
-    input.oauthRouteUnitId
-      ? `route-unit:${input.oauthRouteUnitId}`
-      : `${input.accountId}:${input.tokenId ?? 'account'}`
-  );
+    sourceModel: string | null;
+  }) => {
+    const sourceModel = (input.sourceModel || '').trim().toLowerCase();
+    return input.oauthRouteUnitId
+      ? `route-unit:${input.oauthRouteUnitId}::${sourceModel}`
+      : `${input.accountId}:${input.tokenId ?? 'account'}::${sourceModel}`;
+  };
   const buildChannelKey = (channel: typeof schema.routeChannels.$inferSelect) => (
     channel.oauthRouteUnitId
-      ? `route-unit:${channel.oauthRouteUnitId}`
-      : `${channel.accountId}:${channel.tokenId ?? 'account'}`
+      ? `route-unit:${channel.oauthRouteUnitId}::${(channel.sourceModel || '').trim().toLowerCase()}`
+      : `${channel.accountId}:${channel.tokenId ?? 'account'}::${(channel.sourceModel || '').trim().toLowerCase()}`
   );
   const addModelCandidate = (
     modelNameRaw: string | null | undefined,
@@ -1410,13 +1414,14 @@ export async function rebuildTokenRoutesFromAvailability() {
     siteId: number,
     oauthRouteUnitId: number | null = null,
   ) => {
-    const modelName = (modelNameRaw || '').trim();
-    if (!modelName) return;
-    if (!isModelAllowedByWhitelist(modelName)) return;
-    if (isModelDisabledForSite(siteId, modelName)) return;
-    if (blockedBrandRules.length > 0 && isModelBlockedByBrand(modelName, blockedBrandRules)) return;
+    const sourceModel = (modelNameRaw || '').trim();
+    if (!sourceModel) return;
+    if (!isModelAllowedByWhitelist(sourceModel)) return;
+    if (isModelDisabledForSite(siteId, sourceModel)) return;
+    if (blockedBrandRules.length > 0 && isModelBlockedByBrand(sourceModel, blockedBrandRules)) return;
+    const modelName = canonicalizeModelName(sourceModel) || sourceModel;
     if (!modelCandidates.has(modelName)) modelCandidates.set(modelName, new Map());
-    const candidate = { accountId, tokenId, oauthRouteUnitId };
+    const candidate = { accountId, tokenId, oauthRouteUnitId, sourceModel };
     modelCandidates.get(modelName)!.set(buildCandidateKey(candidate), candidate);
   };
 
@@ -1476,6 +1481,7 @@ export async function rebuildTokenRoutesFromAvailability() {
         accountId: candidate.accountId,
         tokenId: candidate.tokenId,
         oauthRouteUnitId: candidate.oauthRouteUnitId,
+        sourceModel: candidate.sourceModel,
         priority: 0,
         weight: 10,
         enabled: true,

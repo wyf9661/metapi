@@ -199,6 +199,65 @@ describe('rebuildTokenRoutesFromAvailability', () => {
     expect(channels[0]?.manualOverride).toBe(false);
   });
 
+  it('canonicalizes equivalent upstream model names into one route while keeping source models', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'variant-site',
+      url: 'https://variant-site.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const accountA = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'variant-user-a',
+      accessToken: '',
+      apiToken: '«redacted:sk-a»',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+    const accountB = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'variant-user-b',
+      accessToken: '',
+      apiToken: '«redacted:sk-b»',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+    const accountC = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'variant-user-c',
+      accessToken: '',
+      apiToken: '«redacted:sk-c»',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      { accountId: accountA.id, modelName: 'MiniMax-M2.7', available: true },
+      { accountId: accountB.id, modelName: 'minimax/minimax-m2.7', available: true },
+      { accountId: accountC.id, modelName: 'minimaxai/minimax-m2.7', available: true },
+    ]).run();
+
+    const rebuild = await rebuildTokenRoutesFromAvailability();
+
+    expect(rebuild.models).toBe(1);
+    const route = await db.select().from(schema.tokenRoutes)
+      .where(eq(schema.tokenRoutes.modelPattern, 'minimax-m2.7'))
+      .get();
+    expect(route).toBeDefined();
+    expect(await db.select().from(schema.tokenRoutes)
+      .where(eq(schema.tokenRoutes.modelPattern, 'MiniMax-M2.7'))
+      .get()).toBeUndefined();
+
+    const channels = await db.select().from(schema.routeChannels)
+      .where(eq(schema.routeChannels.routeId, route!.id))
+      .all();
+    expect(channels.map((channel) => channel.sourceModel).sort()).toEqual([
+      'MiniMax-M2.7',
+      'minimax/minimax-m2.7',
+      'minimaxai/minimax-m2.7',
+    ]);
+  });
+
   it('creates an exact route with an account-direct channel for oauth accounts stored via structured identity columns', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'codex-site-structured',
