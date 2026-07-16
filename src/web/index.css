@@ -6573,11 +6573,10 @@ textarea {
 /* ===== Route Filter Bar (Collapsible, horizontal chips) ===== */
 .route-filter-bar {
   margin-bottom: 8px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 94%, white 6%), color-mix(in srgb, var(--color-bg-card) 99%, white 1%));
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.03);
+  background: var(--color-bg-card);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
 
@@ -6762,10 +6761,12 @@ textarea {
   background: var(--color-bg-card);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 .route-card-expanded-compact {
-  background: color-mix(in srgb, var(--color-bg-card) 96%, white 4%);
+  background: var(--color-bg-card);
 }
 
 .route-card-detail-panel {
@@ -6773,14 +6774,14 @@ textarea {
   margin-top: -1px;
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
-  contain: layout paint;
-  will-change: transform, opacity, clip-path;
-  backface-visibility: hidden;
-  transform-origin: top center;
+  /* Avoid scale/clip-path/will-change compositing: it blurs text on fractional DPR. */
+  transform: none;
+  filter: none;
+  opacity: 1;
 }
 
 .route-detail-panel-presence {
-  overflow: clip;
+  overflow: visible;
 }
 
 .route-detail-panel-presence.is-closing {
@@ -6788,44 +6789,24 @@ textarea {
 }
 
 .route-detail-panel-presence.is-open .route-card-detail-panel {
-  animation: route-detail-panel-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: none;
 }
 
 .route-detail-panel-presence.is-closing .route-card-detail-panel {
-  animation: route-detail-panel-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: none;
 }
 
 @keyframes route-detail-panel-in {
-  from {
-    opacity: 0;
-    clip-path: inset(0 0 100% 0 round 16px);
-    transform: translateY(-8px) scale(0.992);
-  }
-
-  62% {
+  from, to {
     opacity: 1;
-    clip-path: inset(0 0 0 0 round 16px);
-    transform: translateY(0) scale(1.006);
-  }
-
-  to {
-    opacity: 1;
-    clip-path: inset(0 0 0 0 round 16px);
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
 @keyframes route-detail-panel-out {
-  from {
+  from, to {
     opacity: 1;
-    clip-path: inset(0 0 0 0 round 16px);
-    transform: translateY(0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    clip-path: inset(0 0 100% 0 round 16px);
-    transform: translateY(-6px) scale(0.994);
+    transform: none;
   }
 }
 
@@ -6835,9 +6816,8 @@ textarea {
 }
 
 [data-theme="dark"] .route-filter-bar {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 94%, #0b1220 6%), color-mix(in srgb, var(--color-bg-card) 99%, #020617 1%));
-  box-shadow: 0 16px 34px rgba(2, 6, 23, 0.22);
+  background: var(--color-bg-card);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.28);
 }
 
 [data-theme="dark"] .filter-chip {
