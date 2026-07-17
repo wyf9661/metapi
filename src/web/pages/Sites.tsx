@@ -25,10 +25,12 @@ import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from '.
 import { shouldIgnoreRowSelectionClick } from './helpers/rowSelection.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
 import {
+  applyCodexClientProfile,
   buildSiteSaveAction,
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   emptySiteForm,
+  isCodexClientProfileEnabled,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
   siteFormFromSite,
@@ -1584,6 +1586,41 @@ export default function Sites() {
                 </button>
               </div>
             ))}
+            <label style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '10px 12px',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--color-bg)',
+              color: 'var(--color-text-primary)',
+              fontSize: 13,
+            }}>
+              <input
+                type="checkbox"
+                checked={isCodexClientProfileEnabled(form.customHeaders)}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setForm((prev) => ({
+                    ...prev,
+                    customHeaders: applyCodexClientProfile(prev.customHeaders, enabled),
+                    // Codex-only gateways need the UA forced onto upstream requests.
+                    customHeadersOverrideRequestHeaders: enabled
+                      ? true
+                      : prev.customHeadersOverrideRequestHeaders,
+                  }));
+                }}
+                style={{ marginTop: 2 }}
+              />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Codex 客户端特征（仅 Responses）</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                  勾选后自动添加 User-Agent=codex_cli_rs/0.39.0 与 originator=codex_cli_rs，
+                  并开启“覆盖同名请求头”。用于 welfare/muyuan 等只允许 Codex 客户端访问的 NewAPI 站。
+                </span>
+              </span>
+            </label>
             <label style={{
               display: 'flex',
               alignItems: 'flex-start',
