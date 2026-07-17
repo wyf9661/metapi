@@ -410,6 +410,66 @@ async function resolveSiteRequestConfigByRequestUrl(requestUrl: string): Promise
   };
 }
 
+
+/**
+ * Codex client fingerprints are only valid for OpenAI protocol endpoints
+ * (/v1/responses, /v1/chat/completions, ...). NewAPI management APIs like
+ * /api/user/self reject them with codex_requires_responses_protocol, which
+ * previously made session token verification look like a 10s network timeout.
+ */
+function shouldApplyCodexClientCustomHeaders(requestUrl: string): boolean {
+  try {
+    const path = new URL(requestUrl).pathname.toLowerCase();
+    if (path === '/v1' || path.startsWith('/v1/')) return true;
+    if (path === '/openai' || path.startsWith('/openai/')) return true;
+    if (path.includes('/backend-api/codex')) return true;
+    return false;
+  } catch {
+    const lower = String(requestUrl || '').toLowerCase();
+    return lower.includes('/v1/') || lower.includes('/openai/') || lower.includes('/backend-api/codex');
+  }
+}
+
+function isCodexClientCustomHeaderName(name: string): boolean {
+  const key = name.trim().toLowerCase();
+  return key === 'user-agent' || key === 'originator' || key.startsWith('x-codex-');
+}
+
+function filterCustomHeadersForRequestUrl(requestUrl: string, customHeaders: unknown): unknown {
+  if (shouldApplyCodexClientCustomHeaders(requestUrl)) return customHeaders;
+  if (customHeaders == null) return customHeaders;
+
+  let record: Record<string, unknown> | null = null;
+  if (typeof customHeaders === 'string') {
+    const trimmed = customHeaders.trim();
+    if (!trimmed) return customHeaders;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return customHeaders;
+      record = parsed as Record<string, unknown>;
+    } catch {
+      return customHeaders;
+    }
+  } else if (typeof customHeaders === 'object' && !Array.isArray(customHeaders)) {
+    record = customHeaders as Record<string, unknown>;
+  } else {
+    return customHeaders;
+  }
+
+  const filtered: Record<string, unknown> = {};
+  let removed = false;
+  for (const [key, value] of Object.entries(record)) {
+    if (isCodexClientCustomHeaderName(key)) {
+      removed = true;
+      continue;
+    }
+    filtered[key] = value;
+  }
+  if (!removed) return customHeaders;
+  if (Object.keys(filtered).length === 0) return null;
+  return typeof customHeaders === 'string' ? JSON.stringify(filtered) : filtered;
+}
+
 function resolveSiteCustomHeadersMergePriority(
   site: Pick<SiteProxyConfigLike, 'customHeadersOverrideRequestHeaders'> | null | undefined,
 ): SiteCustomHeadersMergePriority {
@@ -429,9 +489,13 @@ export async function withSiteProxyRequestInit(
   const nextOptions: UndiciRequestInit = {
     ...(options || {}),
   };
-  const mergedHeaders = mergeHeadersWithSiteCustomHeaders(resolved.customHeaders, options?.headers, {
-    priority: resolveSiteCustomHeadersMergePriority(resolved),
-  });
+  const mergedHeaders = mergeHeadersWithSiteCustomHeaders(
+    filterCustomHeadersForRequestUrl(requestUrl, resolved.customHeaders),
+    options?.headers,
+    {
+      priority: resolveSiteCustomHeadersMergePriority(resolved),
+    },
+  );
   if (mergedHeaders) {
     nextOptions.headers = mergedHeaders;
   }

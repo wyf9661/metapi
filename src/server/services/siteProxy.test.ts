@@ -225,6 +225,44 @@ describe('siteProxy', () => {
     expect(headers.get('x-trace-id')).toBe('trace-1');
   });
 
+  it('skips codex client custom headers for management APIs but keeps them on /v1 paths', async () => {
+    await db.insert(schema.sites).values({
+      name: 'codex-header-scope-site',
+      url: 'https://codex-header-scope.example.com',
+      platform: 'new-api',
+      customHeaders: JSON.stringify({
+        'User-Agent': 'codex_cli_rs/0.39.0',
+        originator: 'codex_cli_rs',
+        'X-Site-Token': 'keep-me',
+      }),
+      customHeadersOverrideRequestHeaders: true,
+    }).run();
+
+    const { withSiteProxyRequestInit } = await import('./siteProxy.js');
+
+    const manageInit = await withSiteProxyRequestInit('https://codex-header-scope.example.com/api/user/self', {
+      method: 'GET',
+      headers: {
+        'user-agent': 'request-agent',
+      },
+    });
+    const manageHeaders = new Headers(manageInit.headers);
+    expect(manageHeaders.get('user-agent')).toBe('request-agent');
+    expect(manageHeaders.get('originator')).toBeNull();
+    expect(manageHeaders.get('x-site-token')).toBe('keep-me');
+
+    const modelsInit = await withSiteProxyRequestInit('https://codex-header-scope.example.com/v1/models', {
+      method: 'GET',
+      headers: {
+        'user-agent': 'request-agent',
+      },
+    });
+    const modelHeaders = new Headers(modelsInit.headers);
+    expect(modelHeaders.get('user-agent')).toBe('codex_cli_rs/0.39.0');
+    expect(modelHeaders.get('originator')).toBe('codex_cli_rs');
+    expect(modelHeaders.get('x-site-token')).toBe('keep-me');
+  });
+
   it('merges site custom headers from site records even without cache lookup', async () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
