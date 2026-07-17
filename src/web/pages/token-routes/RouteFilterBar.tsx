@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { BrandGlyph, InlineBrandIcon, hashColor, type BrandInfo } from '../../components/BrandIcon.js';
+import { useAnimatedVisibility } from '../../components/useAnimatedVisibility.js';
 import { tr } from '../../i18n.js';
 import type { GroupFilter, GroupRouteItem } from './types.js';
 import { resolveEndpointTypeIconModel, siteAvatarLetters } from './utils.js';
@@ -105,31 +106,10 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
     collapsed,
     onToggle,
   } = props;
-  const [renderExpandedContent, setRenderExpandedContent] = useState(!collapsed);
-  const [presenceOpen, setPresenceOpen] = useState(!collapsed);
-
-  useEffect(() => {
-    if (!collapsed) return undefined;
-
-    const timerId = globalThis.setTimeout(() => setRenderExpandedContent(false), FILTER_EXPANDED_CONTENT_UNMOUNT_MS);
-    return () => globalThis.clearTimeout(timerId);
-  }, [collapsed]);
-
-  useLayoutEffect(() => {
-    if (collapsed) {
-      setPresenceOpen(false);
-      return undefined;
-    }
-
-    setRenderExpandedContent(true);
-    setPresenceOpen(false);
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      const rafId = window.requestAnimationFrame(() => setPresenceOpen(true));
-      return () => window.cancelAnimationFrame(rafId);
-    }
-    setPresenceOpen(true);
-    return undefined;
-  }, [collapsed]);
+  const { shouldRender: renderExpandedContent, isVisible: presenceOpen } = useAnimatedVisibility(
+    !collapsed,
+    FILTER_EXPANDED_CONTENT_UNMOUNT_MS,
+  );
 
   return (
     <div className="route-filter-bar">

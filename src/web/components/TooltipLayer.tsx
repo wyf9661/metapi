@@ -187,10 +187,13 @@ export default function TooltipLayer() {
 
   useEffect(() => {
     if (!activeTooltip || typeof window === 'undefined') return;
+    if (typeof window.addEventListener !== 'function') return;
+    const canRemove = typeof window.removeEventListener === 'function';
     const handleViewportChange = () => scheduleRefresh();
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('scroll', handleViewportChange, true);
     return () => {
+      if (!canRemove) return;
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('scroll', handleViewportChange, true);
     };

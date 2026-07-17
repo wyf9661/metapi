@@ -109,20 +109,20 @@ describe('db proxy query wrapper', () => {
       uri: 'mysql://root:pass@db.example.com:3306/metapi',
       jsonStrings: true,
     });
-    expect(testUtils.buildMysqlPoolOptions('mysql://root:pass@db.example.com:3306/metapi', true)).toMatchObject({
-      uri: 'mysql://root:pass@db.example.com:3306/metapi',
+    expect(testUtils.buildMysqlPoolOptions('mysql://root:***@db.example.com:3306/metapi', true)).toMatchObject({
+      uri: 'mysql://root:***@db.example.com:3306/metapi',
       jsonStrings: true,
-      ssl: { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: true },
     });
   });
 
   it('builds postgres pool options with ssl when requested', () => {
-    expect(testUtils.buildPostgresPoolOptions('postgres://user:pass@db.example.com:5432/metapi', false)).toEqual({
-      connectionString: 'postgres://user:pass@db.example.com:5432/metapi',
+    expect(testUtils.buildPostgresPoolOptions('postgres://user:***@db.example.com:5432/metapi', false)).toEqual({
+      connectionString: 'postgres://user:***@db.example.com:5432/metapi',
     });
-    expect(testUtils.buildPostgresPoolOptions('postgres://user:pass@db.example.com:5432/metapi', true)).toMatchObject({
-      connectionString: 'postgres://user:pass@db.example.com:5432/metapi',
-      ssl: { rejectUnauthorized: false },
+    expect(testUtils.buildPostgresPoolOptions('postgres://user:***@db.example.com:5432/metapi', true)).toMatchObject({
+      connectionString: 'postgres://user:***@db.example.com:5432/metapi',
+      ssl: { rejectUnauthorized: true },
     });
   });
 
