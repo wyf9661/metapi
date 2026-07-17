@@ -221,7 +221,7 @@ describe('accounts health refresh runtime state', () => {
       });
       expect(body.results[0]).toMatchObject({
         status: 'failed',
-        state: 'unhealthy',
+        state: 'degraded',
         message: '站点健康检查超时（10s）',
       });
     } finally {

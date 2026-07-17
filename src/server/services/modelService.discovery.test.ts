@@ -278,6 +278,41 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(tokenRows.map((row) => row.modelName)).toEqual(['gpt-5-nano']);
   });
 
+  it('marks transient model discovery failures degraded instead of unhealthy', async () => {
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockRejectedValue(new Error('model discovery timeout (15s)'));
+
+    const site = await db.insert(schema.sites).values({
+      name: 'site-timeout',
+      url: 'https://site-timeout.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'timeout-user',
+      accessToken: '',
+      apiToken: 'sk-timeout',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+
+    const result = await refreshModelsForAccount(account.id);
+    expect(result).toMatchObject({
+      status: 'failed',
+      errorCode: 'timeout',
+    });
+
+    const latest = await db.select().from(schema.accounts)
+      .where(eq(schema.accounts.id, account.id))
+      .get();
+    const parsed = JSON.parse(latest!.extraConfig || '{}');
+    expect(parsed.runtimeHealth?.state).toBe('degraded');
+    expect(parsed.runtimeHealth?.source).toBe('model-discovery');
+    expect(parsed.runtimeHealth?.reason).toBe('模型获取失败（请求超时）');
+  });
+
   it('marks runtime health unhealthy when model discovery fails', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockRejectedValue(new Error('HTTP 401: invalid token'));

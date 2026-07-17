@@ -176,7 +176,7 @@ describe('siteApiEndpointService', () => {
     });
   });
 
-  it('returns null when the site has configured api endpoints but none are currently eligible', async () => {
+  it('returns null when endpoints are all cooling down by default, but allows earliest half-open recovery', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'exhausted-site',
       url: 'https://panel.example.com',
@@ -193,7 +193,14 @@ describe('siteApiEndpointService', () => {
       },
       {
         siteId: site.id,
-        url: 'https://api-cooling.example.com',
+        url: 'https://api-late.example.com',
+        enabled: true,
+        sortOrder: 2,
+        cooldownUntil: '2026-03-31T12:10:00.000Z',
+      },
+      {
+        siteId: site.id,
+        url: 'https://api-early.example.com',
         enabled: true,
         sortOrder: 1,
         cooldownUntil: '2026-03-31T12:05:00.000Z',
@@ -201,8 +208,19 @@ describe('siteApiEndpointService', () => {
     ]).run();
 
     const selected = await selectSiteApiEndpointTarget(site, '2026-03-31T12:00:00.000Z');
-
     expect(selected).toBeNull();
+
+    const halfOpen = await selectSiteApiEndpointTarget(
+      site,
+      '2026-03-31T12:00:00.000Z',
+      { allowHalfOpen: true },
+    );
+    expect(halfOpen).toMatchObject({
+      baseUrl: 'https://api-early.example.com',
+      endpoint: expect.objectContaining({
+        cooldownUntil: '2026-03-31T12:05:00.000Z',
+      }),
+    });
   });
 
   it('records retryable failures with a 5-minute cooldown', async () => {

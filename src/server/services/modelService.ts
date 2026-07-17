@@ -179,6 +179,12 @@ function classifyModelDiscoveryError(message: string): ModelRefreshErrorCode {
   return 'unknown';
 }
 
+function modelDiscoveryFailureHealthState(code: ModelRefreshErrorCode): 'unhealthy' | 'degraded' {
+  // Only confirmed credential/permission failures make the connection unhealthy.
+  // Timeouts, 429/5xx, empty lists and shield/network failures are often transient.
+  return code === 'unauthorized' ? 'unhealthy' : 'degraded';
+}
+
 function buildModelFailureMessage(code: ModelRefreshErrorCode, fallback?: string, platform?: string | null) {
   const raw = String(fallback || '').trim();
   if (looksLikeHtmlJsonParseError(raw) || looksLikeShieldChallenge(raw)) {
@@ -771,7 +777,7 @@ export async function refreshModelsForAccount(
         lastDiscoveredModels: [],
       });
       await setAccountRuntimeHealth(account.id, {
-        state: 'unhealthy',
+        state: modelDiscoveryFailureHealthState(errorCode),
         reason: errorMessage,
         source: 'model-discovery',
         checkedAt,
@@ -857,7 +863,7 @@ export async function refreshModelsForAccount(
         lastDiscoveredModels: [],
       });
       await setAccountRuntimeHealth(account.id, {
-        state: 'unhealthy',
+        state: modelDiscoveryFailureHealthState(errorCode),
         reason: errorMessage,
         source: 'model-discovery',
         checkedAt,
@@ -956,7 +962,7 @@ export async function refreshModelsForAccount(
         lastDiscoveredModels: [],
       });
       await setAccountRuntimeHealth(account.id, {
-        state: 'unhealthy',
+        state: modelDiscoveryFailureHealthState(errorCode),
         reason: errorMessage,
         source: 'model-discovery',
         checkedAt,
@@ -1043,7 +1049,7 @@ export async function refreshModelsForAccount(
         lastDiscoveredModels: [],
       });
       await setAccountRuntimeHealth(account.id, {
-        state: 'unhealthy',
+        state: modelDiscoveryFailureHealthState(errorCode),
         reason: errorMessage,
         source: 'model-discovery',
         checkedAt,
@@ -1125,7 +1131,7 @@ export async function refreshModelsForAccount(
     const errorCode = classifyModelDiscoveryError(rawMessage);
     const errorMessage = rawMessage;
     await setAccountRuntimeHealth(account.id, {
-      state: 'unhealthy',
+      state: modelDiscoveryFailureHealthState(errorCode),
       reason: errorMessage,
       source: 'model-discovery',
       checkedAt: new Date().toISOString(),
@@ -1241,7 +1247,7 @@ export async function refreshModelsForAccount(
     const errorCode = firstMessage ? classifyModelDiscoveryError(firstMessage) : 'empty_models';
     const errorMessage = buildModelFailureMessage(errorCode, firstMessage, site.platform);
     await setAccountRuntimeHealth(account.id, {
-      state: 'unhealthy',
+      state: modelDiscoveryFailureHealthState(errorCode),
       reason: errorMessage,
       source: 'model-discovery',
       checkedAt: new Date().toISOString(),
