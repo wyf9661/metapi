@@ -178,6 +178,19 @@ export function DesktopDetailPanelPresence({
   );
 }
 
+
+function formatDecisionRefreshedHint(summaries: Array<{ decisionRefreshedAt?: string | null }>): string | null {
+  const times = summaries
+    .map((row) => String(row.decisionRefreshedAt || '').trim())
+    .filter(Boolean)
+    .map((value) => Date.parse(value.includes('T') ? value : value.replace(' ', 'T') + 'Z'))
+    .filter((ms) => Number.isFinite(ms));
+  if (times.length === 0) return null;
+  const latest = new Date(Math.max(...times));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${latest.getFullYear()}-${pad(latest.getMonth() + 1)}-${pad(latest.getDate())} ${pad(latest.getHours())}:${pad(latest.getMinutes())}:${pad(latest.getSeconds())}`;
+}
+
 export default function TokenRoutes() {
   const navigate = useNavigate();
   const [routeSummaries, setRouteSummaries] = useState<RouteSummaryRow[]>([]);
@@ -216,6 +229,7 @@ export default function TokenRoutes() {
   const [decisionByRoute, setDecisionByRoute] = useState<Record<number, RouteDecision | null>>({});
   const [loadingDecision, setLoadingDecision] = useState(false);
   const [decisionAutoSkipped, setDecisionAutoSkipped] = useState(false);
+  const [snapshotRefreshedAtHint, setSnapshotRefreshedAtHint] = useState<string | null>(null);
   const [recentSelections, setRecentSelections] = useState<Array<{
     at: string;
     requestedModel: string;
@@ -258,7 +272,6 @@ export default function TokenRoutes() {
   const candidatesVersionRef = useRef(0);
   const candidatesSeqRef = useRef(0);
   const decisionRefreshWatchSeqRef = useRef(0);
-  const autoDecisionRefreshStartedRef = useRef(false);
   const mountedRef = useRef(true);
 
   const loadCandidates = (force?: boolean) => {
@@ -305,6 +318,7 @@ export default function TokenRoutes() {
     setDecisionByRoute(decisionPlaceholder);
     const needsDecisionRefresh = summaries.some((route) => isRouteExactModel(route) && !route.decisionSnapshot);
     setDecisionAutoSkipped(needsDecisionRefresh);
+    setSnapshotRefreshedAtHint(formatDecisionRefreshedHint(summaries as any));
 
     // Silently refresh candidates in the background if already loaded
     if (candidatesLoadedRef.current) {
@@ -405,25 +419,9 @@ export default function TokenRoutes() {
     (async () => {
       try {
         await resumeRouteDecisionRefreshTask();
-        const loadResult = await load() as { needsDecisionRefresh?: boolean } | void;
-        // Rebuild/model refresh clears decision snapshots; auto-recompute so UI is not stuck at 0%.
-        if (
-          loadResult
-          && loadResult.needsDecisionRefresh
-          && !loadingDecision
-          && !autoDecisionRefreshStartedRef.current
-        ) {
-          autoDecisionRefreshStartedRef.current = true;
-          try {
-            const response = await api.refreshRouteDecisionSnapshots() as { jobId?: string };
-            const taskId = String(response?.jobId || '').trim();
-            if (taskId) monitorRouteDecisionRefreshTask(taskId);
-            else autoDecisionRefreshStartedRef.current = false;
-          } catch {
-            autoDecisionRefreshStartedRef.current = false;
-            // Keep page usable even if auto refresh fails; user can click manual button.
-          }
-        }
+        await load();
+        // Selection snapshots are maintained by the server scheduler (startup + every 5 min).
+        // Entering this page is read-only and must not trigger expensive route recomputation.
       } catch {
         toast.error('加载路由配置失败');
       }
@@ -1648,6 +1646,17 @@ export default function TokenRoutes() {
             )}
           </button>
 
+        {snapshotRefreshedAtHint && (
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 4 }}>
+            {tr('概率快照')}: {snapshotRefreshedAtHint}
+            <span style={{ marginLeft: 6 }}>{tr('（服务端每 5 分钟自动刷新）')}</span>
+          </span>
+        )}
+        {decisionAutoSkipped && (
+          <span style={{ fontSize: 12, color: 'var(--color-warning)', marginLeft: 4 }}>
+            {tr('部分路由尚无快照，可手动刷新或等待后台任务')}
+          </span>
+        )}
           <button
             onClick={handleRebuild}
             disabled={rebuilding}
