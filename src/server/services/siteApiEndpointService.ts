@@ -152,6 +152,7 @@ export function classifySiteApiEndpointFailure(
 export async function selectSiteApiEndpointTarget(
   site: SiteRow,
   now?: string | Date,
+  options: { allowHalfOpen?: boolean } = {},
 ): Promise<SiteApiEndpointTarget | null> {
   const nowIso = toIsoTimestamp(now);
   const endpoints = await db.select().from(schema.siteApiEndpoints)
@@ -181,15 +182,41 @@ export async function selectSiteApiEndpointTarget(
     });
 
   const selected = eligible[0];
-  if (!selected) return null;
+  if (selected) {
+    return {
+      kind: 'endpoint',
+      siteId: site.id,
+      endpointId: selected.id,
+      baseUrl: normalizeSiteApiEndpointBaseUrl(selected.url),
+      configuredEndpointCount: endpoints.length,
+      endpoint: selected,
+    };
+  }
+
+  if (!options.allowHalfOpen) return null;
+
+  // Half-open recovery: if every enabled endpoint is cooling down, probe the one
+  // whose cooldown expires first instead of declaring the whole site unavailable.
+  // This prevents a single transient 5xx/timeout from hiding a one-endpoint site
+  // for the full cooldown window. A successful request clears cooldown metadata.
+  const halfOpen = endpoints
+    .filter((endpoint) => endpoint.enabled ?? true)
+    .sort((left, right) => {
+      const cooldownOrder = compareNullableTimeAsc(left.cooldownUntil, right.cooldownUntil);
+      if (cooldownOrder !== 0) return cooldownOrder;
+      const sortOrder = (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
+      if (sortOrder !== 0) return sortOrder;
+      return (left.id ?? 0) - (right.id ?? 0);
+    })[0];
+  if (!halfOpen) return null;
 
   return {
     kind: 'endpoint',
     siteId: site.id,
-    endpointId: selected.id,
-    baseUrl: normalizeSiteApiEndpointBaseUrl(selected.url),
+    endpointId: halfOpen.id,
+    baseUrl: normalizeSiteApiEndpointBaseUrl(halfOpen.url),
     configuredEndpointCount: endpoints.length,
-    endpoint: selected,
+    endpoint: halfOpen,
   };
 }
 
@@ -205,7 +232,9 @@ export async function requireSiteApiBaseUrl(
   site: SiteRow,
   now?: string | Date,
 ): Promise<string> {
-  const baseUrl = await resolveSiteApiBaseUrl(site, now);
+  // Explicit discovery/health refresh is allowed to half-open the earliest endpoint.
+  const target = await selectSiteApiEndpointTarget(site, now, { allowHalfOpen: true });
+  const baseUrl = target?.baseUrl || null;
   if (baseUrl) return baseUrl;
   throw new Error('当前站点的 API 请求地址均不可用');
 }

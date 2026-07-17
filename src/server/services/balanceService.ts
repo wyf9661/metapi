@@ -303,12 +303,13 @@ export async function refreshBalance(accountId: number) {
     () => adapter.getBalance(site.url, token, platformUserId));
   const handleBalanceError = async (err: any) => {
     const message = appendSessionTokenRebindHint(err?.message || 'unknown error');
+    const expired = shouldReportExpired(message);
     setAccountRuntimeHealth(account.id, {
-      state: 'unhealthy',
+      state: expired ? 'unhealthy' : 'degraded',
       reason: message,
       source: 'balance',
     });
-    if (shouldReportExpired(message)) {
+    if (expired) {
       await reportTokenExpired({
         accountId: account.id,
         username: account.username,

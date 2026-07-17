@@ -30,7 +30,10 @@ import {
   setAccountRuntimeHealth,
   type RuntimeHealthState,
 } from "../../services/accountHealthService.js";
-import { appendSessionTokenRebindHint } from "../../services/alertRules.js";
+import {
+  appendSessionTokenRebindHint,
+  isTokenExpiredError,
+} from "../../services/alertRules.js";
 import {
   parseSiteProxyUrlInput,
   withAccountProxyOverride,
@@ -442,8 +445,10 @@ async function refreshRuntimeHealthForRow(
     };
   } catch (error: any) {
     const message = String(error?.message || "健康检查失败");
+    const unhealthy = isTokenExpiredError({ message });
+    const state = unhealthy ? "unhealthy" : "degraded";
     setAccountRuntimeHealth(accountId, {
-      state: "unhealthy",
+      state,
       reason: message,
       source: "health-refresh",
     });
@@ -452,7 +457,7 @@ async function refreshRuntimeHealthForRow(
       username,
       siteName,
       status: "failed",
-      state: "unhealthy",
+      state,
       message,
     };
   }
