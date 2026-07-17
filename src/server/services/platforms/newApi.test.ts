@@ -877,4 +877,21 @@ describe('NewApiAdapter', () => {
       },
     ]);
   });
+
+  it('treats welfare-style base64 session cookies as session credentials and extracts gob user id', async () => {
+    // Real NewAPI session cookie: base64(timestamp|payload|sig). Trailing "=" is padding only.
+    const payload = Buffer.concat([
+      Buffer.from([0x06]), Buffer.from('string'), Buffer.from([0x0c, 0x04, 0x00, 0x02]), Buffer.from('id'),
+      Buffer.from([0x03]), Buffer.from('int'), Buffer.from([0x04, 0x04, 0x00, 0xfe, 0x5b, 0x58]),
+      Buffer.from([0x06]), Buffer.from('string'), Buffer.from([0x0c, 0x0a, 0x00, 0x08]), Buffer.from('username'),
+      Buffer.from([0x06]), Buffer.from('string'), Buffer.from([0x0c, 0x09, 0x00, 0x07]), Buffer.from('wyf9661'),
+    ]);
+    const rawSession = `${Buffer.from(['1784252655', payload.toString('base64url'), 'sig'].join('|')).toString('base64url')}=`;
+
+    const adapter = new NewApiAdapter() as any;
+    expect(adapter.isSessionLikeCredential(rawSession)).toBe(true);
+    expect(adapter.looksLikeCookiePairCredential(rawSession)).toBe(false);
+    expect(adapter.extractLikelyUserIds(rawSession)).toContain(11692);
+  });
+
 });
