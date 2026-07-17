@@ -1,3 +1,9 @@
+import {
+  accumulateThroughputSample,
+  createThroughputAggregate,
+  finalizeThroughputTps,
+  type ThroughputAggregate,
+} from '../../services/marketplaceThroughput.js';
 ﻿import { FastifyInstance } from "fastify";
 import { db, schema } from "../../db/index.js";
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
@@ -1180,8 +1186,7 @@ export async function statsRoutes(app: FastifyInstance) {
           totalLatency: number;
           firstByteSum: number;
           firstByteCount: number;
-          throughputSum: number;
-          throughputCount: number;
+          throughput: ThroughputAggregate;
         }
       > = {};
       for (const log of recentLogs) {
@@ -1195,8 +1200,7 @@ export async function statsRoutes(app: FastifyInstance) {
             totalLatency: 0,
             firstByteSum: 0,
             firstByteCount: 0,
-            throughputSum: 0,
-            throughputCount: 0,
+            throughput: createThroughputAggregate(),
           };
         }
         const stats = modelLogStats[model];
@@ -1216,32 +1220,13 @@ export async function statsRoutes(app: FastifyInstance) {
             stats.firstByteCount += 1;
           }
 
-          const completionTokens = typeof log.completionTokens === "number"
-            ? log.completionTokens
-            : null;
-          if (
-            completionTokens != null
-            && Number.isFinite(completionTokens)
-            && completionTokens > 0
-            && latencyMs != null
-            && latencyMs > 0
-          ) {
-            let generationMs = latencyMs;
-            if (
-              firstByteMs != null
-              && Number.isFinite(firstByteMs)
-              && firstByteMs >= 0
-              && latencyMs > firstByteMs
-            ) {
-              // Prefer post-TTFT generation window for streaming-like throughput.
-              generationMs = latencyMs - firstByteMs;
-            }
-            const tps = completionTokens / (generationMs / 1000);
-            if (Number.isFinite(tps) && tps > 0 && tps < 1_000_000) {
-              stats.throughputSum += tps;
-              stats.throughputCount += 1;
-            }
-          }
+          accumulateThroughputSample(stats.throughput, {
+            status: log.status,
+            latencyMs,
+            firstByteLatencyMs: firstByteMs,
+            completionTokens: typeof log.completionTokens === "number" ? log.completionTokens : null,
+            isStream: (log as any).isStream,
+          });
         }
       }
 
@@ -1519,8 +1504,8 @@ export async function statsRoutes(app: FastifyInstance) {
         const avgFirstByteMs = logStats && logStats.firstByteCount > 0
           ? Math.round(logStats.firstByteSum / logStats.firstByteCount)
           : null;
-        const avgThroughputTps = logStats && logStats.throughputCount > 0
-          ? Math.round((logStats.throughputSum / logStats.throughputCount) * 10) / 10
+        const avgThroughputTps = logStats
+          ? finalizeThroughputTps(logStats.throughput)
           : null;
         return {
           name: m.name,
