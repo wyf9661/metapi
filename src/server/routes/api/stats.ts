@@ -2,6 +2,7 @@ import {
   accumulateThroughputSample,
   createThroughputAggregate,
   finalizeThroughputTps,
+  getThroughputSampleCount,
   type ThroughputAggregate,
 } from '../../services/marketplaceThroughput.js';
 ﻿import { FastifyInstance } from "fastify";
@@ -1507,6 +1508,9 @@ export async function statsRoutes(app: FastifyInstance) {
         const avgThroughputTps = logStats
           ? finalizeThroughputTps(logStats.throughput)
           : null;
+        const throughputSampleCount = logStats
+          ? getThroughputSampleCount(logStats.throughput)
+          : 0;
         return {
           name: m.name,
           accountCount: accounts.length,
@@ -1517,6 +1521,7 @@ export async function statsRoutes(app: FastifyInstance) {
           avgLatency: Math.round(avgLatency),
           avgFirstByteMs,
           avgThroughputTps,
+          throughputSampleCount,
           successRate: logStats
             ? Math.round((logStats.success / logStats.total) * 1000) / 10
             : null,

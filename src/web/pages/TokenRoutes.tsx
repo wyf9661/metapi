@@ -216,6 +216,25 @@ export default function TokenRoutes() {
   const [decisionByRoute, setDecisionByRoute] = useState<Record<number, RouteDecision | null>>({});
   const [loadingDecision, setLoadingDecision] = useState(false);
   const [decisionAutoSkipped, setDecisionAutoSkipped] = useState(false);
+  const [recentSelections, setRecentSelections] = useState<Array<{
+    at: string;
+    requestedModel: string;
+    routeId: number | null;
+    channelId: number | null;
+    siteId: number | null;
+    siteName: string | null;
+    platform: string | null;
+    accountId: number | null;
+    sourceModel: string | null;
+    actualModel: string | null;
+    retryCount: number;
+    sticky: boolean;
+    forcedChannelId: number | null;
+    reason: string;
+  }>>([]);
+  const [loadingRecentSelections, setLoadingRecentSelections] = useState(false);
+  const [showRecentSelections, setShowRecentSelections] = useState(false);
+
   const [visibleRouteCount, setVisibleRouteCount] = useState(ROUTE_RENDER_CHUNK);
   const [expandedSourceGroupMap, setExpandedSourceGroupMap] = useState<Record<string, boolean>>({});
   const [expandedRouteIds, setExpandedRouteIds] = useState<number[]>([]);
@@ -444,6 +463,18 @@ export default function TokenRoutes() {
       toast.error(e.message || '重建路由失败');
     } finally {
       setRebuilding(false);
+    }
+  };
+
+  const loadRecentSelections = async () => {
+    setLoadingRecentSelections(true);
+    try {
+      const res = await api.getRecentRouteSelections(20) as { items?: typeof recentSelections };
+      setRecentSelections(Array.isArray(res?.items) ? res.items : []);
+    } catch {
+      // ignore — panel is best-effort
+    } finally {
+      setLoadingRecentSelections(false);
     }
   };
 
@@ -1602,6 +1633,22 @@ export default function TokenRoutes() {
           </button>
 
           <button
+            onClick={async () => {
+              const next = !showRecentSelections;
+              setShowRecentSelections(next);
+              if (next) await loadRecentSelections();
+            }}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
+          >
+            {loadingRecentSelections ? (
+              <><span className="spinner spinner-sm" /> {tr('加载中...')}</>
+            ) : (
+              tr(showRecentSelections ? '收起最近选路' : '最近选路')
+            )}
+          </button>
+
+          <button
             onClick={handleRebuild}
             disabled={rebuilding}
             className="btn btn-ghost"
@@ -1768,7 +1815,66 @@ export default function TokenRoutes() {
       )}
 
       <div className={isMobile ? 'mobile-card-list' : 'route-card-grid'}>
-        {visibleRoutes.map((route) => {
+              {showRecentSelections && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 12,
+            padding: 12,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-bg-card)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{tr('最近选路（进程内，最多 20 条）')}</div>
+            <button
+              className="btn btn-ghost"
+              style={{ padding: '4px 8px', fontSize: 12 }}
+              onClick={() => void loadRecentSelections()}
+            >
+              {tr('刷新')}
+            </button>
+          </div>
+          {recentSelections.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              {tr('暂无选路记录。发起一次下游请求后会出现在这里。')}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflow: 'auto' }}>
+              {recentSelections.map((item, idx) => (
+                <div
+                  key={`${item.at}-${item.channelId}-${idx}`}
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  <span style={{ color: 'var(--color-text-muted)' }}>
+                    {item.at.replace('T', ' ').replace('Z', ' UTC')}
+                  </span>
+                  {' · '}
+                  <strong>{item.requestedModel}</strong>
+                  {' → '}
+                  <span>{item.siteName || item.siteId || '—'}</span>
+                  {item.sourceModel ? ` / ${item.sourceModel}` : ''}
+                  {' · '}
+                  <span style={{ color: 'var(--color-text-secondary)' }}>
+                    ch#{item.channelId ?? '—'} · {item.reason}
+                    {item.retryCount > 0 ? ` · retry${item.retryCount}` : ''}
+                    {item.sticky ? ' · sticky' : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+{visibleRoutes.map((route) => {
           const isExpanded = expandedRouteIds.includes(route.id);
           const isDesktopDetailClosing = closingDesktopDetailRouteIds.includes(route.id);
           const isReadOnlyRoute = route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true;

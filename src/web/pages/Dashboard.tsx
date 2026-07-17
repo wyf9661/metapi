@@ -709,6 +709,48 @@ export default function Dashboard({
       </div>
 
       
+
+      {(sites.length === 0 || totalAccounts === 0) && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            padding: 16,
+            border: '1px solid var(--color-info)',
+            background: 'var(--color-info-soft, var(--color-bg-card))',
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>首次配置引导</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
+            按顺序完成下面几步，即可用下游 Key 调通模型：
+          </div>
+          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--color-text-primary)' }}>
+            <li>
+              {sites.length === 0 ? (
+                <><strong>添加站点</strong> → <Link to="/sites">连接管理 / 站点</Link></>
+              ) : (
+                <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有站点</span>
+              )}
+            </li>
+            <li>
+              {totalAccounts === 0 ? (
+                <><strong>添加账号凭证</strong>（API Key 或 Session）并验证 → <Link to="/accounts">账号</Link></>
+              ) : (
+                <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有账号</span>
+              )}
+            </li>
+            <li>
+              <strong>重建路由</strong> → <Link to="/routes">模型路由</Link> 点「自动重建」
+            </li>
+            <li>
+              <strong>生成下游 Key</strong> → <Link to="/downstream-keys">下游密钥</Link>
+            </li>
+            <li>
+              用 Key 调用 <code>/v1/chat/completions</code> 试打
+            </li>
+          </ol>
+        </div>
+      )}
       <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
         <div className="dashboard-tunnel-card">
           <div style={{ minWidth: 0 }}>

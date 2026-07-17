@@ -4,6 +4,8 @@ import {
   computeSampleThroughputTps,
   createThroughputAggregate,
   finalizeThroughputTps,
+  getThroughputSampleCount,
+  isThroughputSampleSparse,
   resolveMarketplaceGenerationMs,
 } from './marketplaceThroughput.js';
 
@@ -82,5 +84,18 @@ describe('marketplaceThroughput', () => {
       firstByteLatencyMs: 9980,
       isStream: true,
     })).toBe(10000);
+  });
+
+  it('reports sample count and sparse flag', () => {
+    const agg = createThroughputAggregate();
+    accumulateThroughputSample(agg, {
+      status: 'success',
+      latencyMs: 2000,
+      completionTokens: 100,
+      isStream: false,
+    });
+    expect(getThroughputSampleCount(agg)).toBe(1);
+    expect(isThroughputSampleSparse(1)).toBe(true);
+    expect(isThroughputSampleSparse(5)).toBe(false);
   });
 });
