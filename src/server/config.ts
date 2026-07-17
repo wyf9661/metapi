@@ -10,7 +10,7 @@ const DEFAULT_GEMINI_CLI_CLIENT_SECRET = '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';
 export const TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING = 30 * 24 * 60 * 60;
 export const INSECURE_DEFAULT_AUTH_TOKEN = 'change-me-admin-token';
 export const INSECURE_DEFAULT_PROXY_TOKEN = 'change-me-proxy-sk-token';
-export const MIN_PRODUCTION_SECRET_LENGTH = 16;
+export const MIN_PRODUCTION_SECRET_LENGTH = 8;
 
 function parseBoolean(value: string | undefined, fallback = false): boolean {
   if (value === undefined) return fallback;

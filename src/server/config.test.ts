@@ -157,6 +157,24 @@ describe('assertProductionSecurity', () => {
     expect(() => assertProductionSecurity(config, env)).toThrow(/PROXY_TOKEN/);
   });
 
+  it('accepts 8-char unique secrets in production', () => {
+    const config = buildConfig({
+      AUTH_TOKEN: 'Admin#01',
+      ACCOUNT_CREDENTIAL_SECRET: 'Creds#02',
+      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
+    });
+    expect(() => assertProductionSecurity(config, { NODE_ENV: 'production' })).not.toThrow();
+  });
+
+  it('rejects secrets shorter than 8 chars in production', () => {
+    const config = buildConfig({
+      AUTH_TOKEN: 'short',
+      ACCOUNT_CREDENTIAL_SECRET: 'Creds#02',
+      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
+    });
+    expect(() => assertProductionSecurity(config, { NODE_ENV: 'production' })).toThrow(/AUTH_TOKEN/);
+  });
+
   it('can be bypassed with ALLOW_INSECURE_DEFAULTS', () => {
     const env = { NODE_ENV: 'production', ALLOW_INSECURE_DEFAULTS: 'true' };
     const config = buildConfig(env);
