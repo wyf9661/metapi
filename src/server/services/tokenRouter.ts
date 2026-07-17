@@ -61,6 +61,14 @@ import {
   type FailureAwareChannel,
 } from './tokenRouterCandidateFilter.js';
 import {
+  buildContributionRanks,
+  countCandidatesBySite,
+  normalizeContributions,
+  normalizeValueScores,
+  rankContributionIndices,
+  selectWeightedIndex,
+} from './tokenRouterProbability.js';
+import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
 } from './routeRoutingStrategy.js';
@@ -3347,10 +3355,7 @@ export class TokenRouter {
       return costWeight * (1 / unitCost) + balanceWeight * balance + usageWeight * (1 / recentUsage);
     });
 
-    const maxVS = Math.max(...valueScores, 0.001);
-    const minVS = Math.min(...valueScores, 0);
-    const range = maxVS - minVS || 1;
-    const normalizedVS = valueScores.map((v) => (v - minVS) / range);
+    const normalizedVS = normalizeValueScores(valueScores);
 
     const baseContributions = candidates.map((c, i) => {
       const weight = c.channel.weight ?? 10;
@@ -3359,10 +3364,7 @@ export class TokenRouter {
 
     // Avoid over-favoring a site that has many tokens/channels for the same route.
     // Site-level total contribution remains comparable, then split across its channels.
-    const siteChannelCounts = new Map<number, number>();
-    for (const candidate of candidates) {
-      siteChannelCounts.set(candidate.site.id, (siteChannelCounts.get(candidate.site.id) || 0) + 1);
-    }
+    const siteChannelCounts = countCandidatesBySite(candidates.map((candidate) => candidate.site.id));
     const siteHistoricalHealthMetrics = buildSiteHistoricalHealthMetrics(candidates);
 
     const contributions = candidates.map((candidate, i) => {
@@ -3408,25 +3410,21 @@ export class TokenRouter {
       return contribution;
     });
 
-    const totalContribution = contributions.reduce((a, b) => a + b, 0);
-    const rankedIndices = candidates.map((_, index) => index)
-      .sort((leftIndex, rightIndex) => {
-        const contributionDiff = contributions[rightIndex] - contributions[leftIndex];
-        if (Math.abs(contributionDiff) > 1e-9) {
-          return contributionDiff > 0 ? 1 : -1;
-        }
-        return this.compareStableFirstCandidates(candidates[leftIndex], candidates[rightIndex]);
-      });
-    const rankByIndex = new Map<number, number>();
-    rankedIndices.forEach((candidateIndex, rank) => {
-      rankByIndex.set(candidateIndex, rank + 1);
-    });
+    const probabilities = normalizeContributions(contributions);
+    const rankedIndices = rankContributionIndices(
+      contributions,
+      (leftIndex, rightIndex) => this.compareStableFirstCandidates(
+        candidates[leftIndex],
+        candidates[rightIndex],
+      ),
+    );
+    const rankByIndex = buildContributionRanks(rankedIndices);
     const stableSiteLeaderIndices = selectionMode === 'stable_first'
       ? this.getStableFirstSiteLeaderIndices(candidates, contributions, rankedIndices)
       : [];
     const stableSiteIds = new Set(stableSiteLeaderIndices.map((index) => candidates[index]?.site.id).filter((siteId) => typeof siteId === 'number'));
     const details = candidates.map((candidate, i) => {
-      const probability = totalContribution > 0 ? contributions[i] / totalContribution : 0;
+      const probability = probabilities[i] ?? 0;
       const weight = candidate.channel.weight ?? 10;
       const cost = effectiveCosts[i];
       const costSourceText = cost?.source === 'observed'
@@ -3490,15 +3488,8 @@ export class TokenRouter {
 
     let selected = candidates[rankedIndices[0] ?? 0];
     if (selectionMode === 'weighted') {
-      let rand = Math.random() * totalContribution;
-      selected = candidates[candidates.length - 1];
-      for (let i = 0; i < candidates.length; i++) {
-        rand -= contributions[i];
-        if (rand <= 0) {
-          selected = candidates[i];
-          break;
-        }
-      }
+      const selectedIndex = selectWeightedIndex(contributions);
+      selected = candidates[selectedIndex ?? (candidates.length - 1)];
     } else {
       selected = this.selectStableFirstCandidate(
         candidates,
