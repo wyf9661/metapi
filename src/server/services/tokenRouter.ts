@@ -47,6 +47,7 @@ import {
 } from './routeRoutingStrategy.js';
 import { type DownstreamRoutingPolicy, EMPTY_DOWNSTREAM_ROUTING_POLICY } from './downstreamPolicyTypes.js';
 import { isUsableAccountToken } from './accountTokenService.js';
+import { getCredentialModeFromExtraConfig } from './accountExtraConfig.js';
 import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { parseCodexQuotaResetHint } from './oauth/quota.js';
 import {
@@ -62,6 +63,11 @@ import {
   parseTokenRouteRegexPattern,
 } from '../../shared/tokenRoutePatterns.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
+import {
+  formatShadowSelectionLog,
+  rankShadowCandidates,
+  type ShadowCandidateInput,
+} from './routeScoringShadow.js';
 import {
   normalizeTokenRouteMode,
   type RouteDecision,
@@ -2612,6 +2618,141 @@ export class TokenRouter {
 
   // --- Private methods ---
 
+
+  private buildShadowCandidateInputs(
+    candidates: RouteChannelCandidate[],
+    modelName: string | ((candidate: RouteChannelCandidate) => string),
+    downstreamPolicy: DownstreamRoutingPolicy,
+    nowMs: number,
+  ): ShadowCandidateInput[] {
+    const resolveModelName = typeof modelName === 'function'
+      ? modelName
+      : (() => modelName);
+    return candidates.map((candidate) => {
+      const model = resolveModelName(candidate);
+      const cost = resolveEffectiveUnitCost(candidate, model);
+      const health = getSiteRuntimeHealthDetails(candidate.site.id, model, nowMs);
+      const load = proxyChannelCoordinator.getChannelLoadSnapshot({
+        channelId: candidate.channel.id,
+        accountExtraConfig: candidate.account.extraConfig,
+        accountOauthProvider: candidate.account.oauthProvider,
+      });
+      const historical = buildSiteHistoricalHealthMetrics([candidate]).get(candidate.site.id);
+      const downstreamSiteMultiplier = downstreamPolicy.siteWeightMultipliers[candidate.site.id] ?? 1;
+      const siteGlobalWeight = (
+        Number.isFinite(candidate.site.globalWeight) && (candidate.site.globalWeight || 0) > 0
+      ) ? (candidate.site.globalWeight as number) : 1;
+      const balanceRaw = candidate.account.balance;
+      const balance = typeof balanceRaw === 'number' && Number.isFinite(balanceRaw) ? balanceRaw : null;
+      const credentialMode = getCredentialModeFromExtraConfig(candidate.account.extraConfig);
+      const hasApiToken = typeof candidate.account.apiToken === 'string' && candidate.account.apiToken.trim().length > 0;
+      const hasAccessToken = typeof candidate.account.accessToken === 'string' && candidate.account.accessToken.trim().length > 0;
+      const lastBalanceRefresh = (candidate.account as { lastBalanceRefresh?: string | null }).lastBalanceRefresh;
+      const balanceRefreshed = typeof lastBalanceRefresh === 'string' && lastBalanceRefresh.trim().length > 0;
+      const looksLikeDirectApiKey = credentialMode === 'apikey' || (hasApiToken && !hasAccessToken);
+      const credentialKind: 'apikey' | 'session' | 'unknown' = looksLikeDirectApiKey
+        ? 'apikey'
+        : (credentialMode === 'session' || hasAccessToken)
+          ? 'session'
+          : 'unknown';
+      const balanceKnown = credentialKind === 'session' && balanceRefreshed;
+      return {
+        channelId: candidate.channel.id,
+        siteId: candidate.site.id,
+        siteName: candidate.site.name,
+        accountId: candidate.account.id,
+        accountUsername: candidate.account.username,
+        balance,
+        balanceKnown,
+        credentialKind,
+        channelWeight: candidate.channel.weight ?? 10,
+        successCount: candidate.channel.successCount ?? 0,
+        failCount: candidate.channel.failCount ?? 0,
+        unitCost: cost.unitCost,
+        costSource: cost.source,
+        runtimeHealth: health.combinedMultiplier,
+        historicalHealth: historical?.multiplier ?? 1,
+        recentSuccessRate: health.recentSampleCount > 0 ? health.recentSuccessRate : null,
+        recentSampleCount: health.recentSampleCount,
+        loadMultiplier: resolveChannelRuntimeLoadMultiplier(load),
+        manualSiteWeight: siteGlobalWeight * (
+          Number.isFinite(downstreamSiteMultiplier) && downstreamSiteMultiplier > 0
+            ? downstreamSiteMultiplier
+            : 1
+        ),
+      };
+    });
+  }
+
+  /**
+   * Live balanced-v2 selection (formerly shadow-only).
+   * Probability-weighted pick among positive scores; falls back to first candidate.
+   */
+  private selectByBalancedV2(
+    candidates: RouteChannelCandidate[],
+    modelName: string | ((candidate: RouteChannelCandidate) => string),
+    downstreamPolicy: DownstreamRoutingPolicy,
+    nowMs: number,
+    requestedModel: string,
+  ): RouteChannelCandidate | null {
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0] ?? null;
+    try {
+      const inputs = this.buildShadowCandidateInputs(candidates, modelName, downstreamPolicy, nowMs);
+      const ranked = rankShadowCandidates(inputs);
+      const active = ranked.candidates.filter((c) => !c.factors.exclusion && c.score > 0 && c.probability > 0);
+      let selectedId = ranked.selectedChannelId;
+      if (active.length > 0) {
+        let rand = Math.random();
+        selectedId = active[active.length - 1]!.channelId;
+        for (const row of active) {
+          rand -= row.probability;
+          if (rand <= 0) {
+            selectedId = row.channelId;
+            break;
+          }
+        }
+      }
+      const selected = candidates.find((c) => c.channel.id === selectedId) ?? candidates[0] ?? null;
+      console.info(formatShadowSelectionLog({
+        requestedModel,
+        liveChannelId: selected?.channel.id ?? null,
+        shadow: ranked,
+      }));
+      return selected;
+    } catch (error) {
+      console.warn(
+        `[route-score] balanced-v2 failed, fallback first candidate: ${error instanceof Error ? error.message : String(error || 'unknown')}`,
+      );
+      return candidates[0] ?? null;
+    }
+  }
+
+  private logShadowSelectionForCandidates(
+    requestedModel: string,
+    liveChannelId: number | null,
+    candidates: RouteChannelCandidate[],
+    modelName: string | ((candidate: RouteChannelCandidate) => string),
+    downstreamPolicy: DownstreamRoutingPolicy,
+    nowMs: number,
+  ): void {
+    // Kept for non-weighted strategies (round_robin/stable_first) observability only.
+    try {
+      if (candidates.length === 0) return;
+      const inputs = this.buildShadowCandidateInputs(candidates, modelName, downstreamPolicy, nowMs);
+      const shadow = rankShadowCandidates(inputs);
+      console.info(formatShadowSelectionLog({
+        requestedModel,
+        liveChannelId,
+        shadow,
+      }));
+    } catch (error) {
+      console.warn(
+        `[route-shadow] failed: ${error instanceof Error ? error.message : String(error || 'unknown')}`,
+      );
+    }
+  }
+
   private async selectFromMatch(
     match: RouteMatch,
     requestedModel: string,
@@ -2645,7 +2786,7 @@ export class TokenRouter {
       const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(available, runtimeModelResolver, nowMs);
       const selected = this.selectRoundRobinCandidate(breakerFiltered.candidates);
       if (!selected) return null;
-      return await this.finalizeSelectedCandidateForDispatch(
+      const resolvedRoundRobin = await this.finalizeSelectedCandidateForDispatch(
         selected,
         match,
         requestedModel,
@@ -2659,6 +2800,17 @@ export class TokenRouter {
         false,
         excludeChannelIds,
       );
+      if (resolvedRoundRobin) {
+        this.logShadowSelectionForCandidates(
+          requestedModel,
+          resolvedRoundRobin.channel.id,
+          breakerFiltered.candidates,
+          runtimeModelResolver,
+          downstreamPolicy,
+          nowMs,
+        );
+      }
+      return resolvedRoundRobin;
     }
 
     if (routeStrategy === 'stable_first') {
@@ -2691,7 +2843,7 @@ export class TokenRouter {
         shouldUseObservation ? `${rotationKey}:observe` : rotationKey,
       );
       if (!selected) return null;
-      return await this.finalizeSelectedCandidateForDispatch(
+      const resolvedStable = await this.finalizeSelectedCandidateForDispatch(
         selected,
         match,
         requestedModel,
@@ -2705,6 +2857,17 @@ export class TokenRouter {
         shouldUseObservation,
         excludeChannelIds,
       );
+      if (resolvedStable) {
+        this.logShadowSelectionForCandidates(
+          requestedModel,
+          resolvedStable.channel.id,
+          selectionPool,
+          requestedByDisplayName ? runtimeModelResolver : mappedModel,
+          downstreamPolicy,
+          nowMs,
+        );
+      }
+      return resolvedStable;
     }
 
     const layers = new Map<number, typeof available>();
@@ -2724,6 +2887,7 @@ export class TokenRouter {
         requestedByDisplayName ? runtimeModelResolver : mappedModel,
         downstreamPolicy,
         nowMs,
+        requestedModel,
       );
       if (!selected) continue;
       const resolved = await this.finalizeSelectedCandidateForDispatch(
@@ -3287,8 +3451,16 @@ export class TokenRouter {
     modelName: string | ((candidate: RouteChannelCandidate) => string),
     downstreamPolicy: DownstreamRoutingPolicy,
     nowMs = Date.now(),
+    requestedModel = '',
   ) {
-    return this.calculateWeightedSelection(candidates, modelName, downstreamPolicy, nowMs, 'weighted').selected;
+    // Production selection now uses balanced-v2 (API-key boost + soft balance drain).
+    return this.selectByBalancedV2(
+      candidates,
+      modelName,
+      downstreamPolicy,
+      nowMs,
+      requestedModel || (typeof modelName === 'string' ? modelName : ''),
+    );
   }
 
   private stableFirstSelect(
