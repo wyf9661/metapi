@@ -56,6 +56,11 @@ import {
   type SiteRuntimeHealthState,
 } from './siteRuntimeHealth.js';
 import {
+  filterRecentlyFailedCandidates as filterRecentlyFailedCandidatesPure,
+  isChannelRecentlyFailed as isChannelRecentlyFailedPure,
+  type FailureAwareChannel,
+} from './tokenRouterCandidateFilter.js';
+import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
 } from './routeRoutingStrategy.js';
@@ -117,11 +122,6 @@ interface SelectedChannel {
   tokenName: string;
   actualModel: string;
 }
-
-type FailureAwareChannel = {
-  failCount?: number | null;
-  lastFailAt?: string | null;
-};
 
 const FAILURE_BACKOFF_BASE_SEC = FAILURE_BACKOFF_BASE_SEC_CONST;
 const SHORT_WINDOW_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
@@ -887,15 +887,12 @@ export function isChannelRecentlyFailed(
   nowMs = Date.now(),
   avoidSec = resolveFailureBackoffSec(channel.failCount),
 ): boolean {
-  const avoidMs = clampFailureCooldownMs(avoidSec * 1000);
-  if (avoidMs <= 0) return false;
-  if ((channel.failCount ?? 0) <= 0) return false;
-  if (!channel.lastFailAt) return false;
-
-  const failTs = Date.parse(channel.lastFailAt);
-  if (Number.isNaN(failTs)) return false;
-
-  return nowMs - failTs < avoidMs;
+  return isChannelRecentlyFailedPure(
+    channel,
+    nowMs,
+    resolveConfiguredFailureCooldownMaxMs(),
+    avoidSec,
+  );
 }
 
 export function filterRecentlyFailedCandidates<T extends { channel: FailureAwareChannel }>(
@@ -903,12 +900,12 @@ export function filterRecentlyFailedCandidates<T extends { channel: FailureAware
   nowMs = Date.now(),
   avoidSec?: number,
 ): T[] {
-  if (candidates.length <= 1) return candidates;
-  if (avoidSec != null && avoidSec <= 0) return candidates;
-
-  const healthy = candidates.filter((candidate) => !isChannelRecentlyFailed(candidate.channel, nowMs, avoidSec));
-  // If all channels failed recently, keep them all and let weight/random decide.
-  return healthy.length > 0 ? healthy : candidates;
+  return filterRecentlyFailedCandidatesPure(
+    candidates,
+    nowMs,
+    resolveConfiguredFailureCooldownMaxMs(),
+    avoidSec,
+  );
 }
 
 export type RouteDecisionExplanation = RouteDecision & {
