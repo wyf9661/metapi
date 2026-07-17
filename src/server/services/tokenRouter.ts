@@ -42,6 +42,20 @@ import {
   STABLE_FIRST_SITE_SCORE_RATIO as STABLE_FIRST_SITE_SCORE_RATIO_CONST,
 } from './tokenRouterMath.js';
 import {
+  applyRuntimeHealthFailure,
+  applyRuntimeHealthSuccess,
+  cloneSiteRuntimeHealthState,
+  createSiteRuntimeHealthState,
+  getDecayedSiteRuntimePenalty,
+  getRecentSiteRuntimeOutcomeSnapshot,
+  getRuntimeHealthMultiplier,
+  hydrateSiteRuntimeHealthState,
+  isRuntimeHealthBreakerOpen,
+  shouldPersistSiteRuntimeHealthState,
+  SITE_RUNTIME_MIN_MULTIPLIER,
+  type SiteRuntimeHealthState,
+} from './siteRuntimeHealth.js';
+import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
 } from './routeRoutingStrategy.js';
@@ -109,21 +123,6 @@ type FailureAwareChannel = {
   lastFailAt?: string | null;
 };
 
-type SiteRuntimeHealthState = {
-  penaltyScore: number;
-  latencyEmaMs: number | null;
-  transientFailureStreak: number;
-  lastTransientFailureAtMs: number | null;
-  recentSuccessCount: number;
-  recentFailureCount: number;
-  recentWindowUpdatedAtMs: number;
-  breakerLevel: number;
-  breakerUntilMs: number | null;
-  lastUpdatedAtMs: number;
-  lastFailureAtMs: number | null;
-  lastSuccessAtMs: number | null;
-};
-
 const FAILURE_BACKOFF_BASE_SEC = FAILURE_BACKOFF_BASE_SEC_CONST;
 const SHORT_WINDOW_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
 // Keep weighted-route backoff within the JavaScript Date range when fail counts grow large.
@@ -132,15 +131,6 @@ const MIN_EFFECTIVE_UNIT_COST = 1e-6;
 const ROUND_ROBIN_FAILURE_THRESHOLD = 3;
 const ROUND_ROBIN_COOLDOWN_LEVELS_SEC = ROUND_ROBIN_COOLDOWN_LEVELS_SEC_CONST;
 const STABLE_FIRST_SITE_SCORE_RATIO = STABLE_FIRST_SITE_SCORE_RATIO_CONST;
-const SITE_RUNTIME_HEALTH_DECAY_HALF_LIFE_MS = 10 * 60 * 1000;
-const SITE_RUNTIME_MIN_MULTIPLIER = 0.08;
-const SITE_RUNTIME_LATENCY_BASELINE_MS = 2_500;
-const SITE_RUNTIME_LATENCY_WINDOW_MS = 30_000;
-const SITE_RUNTIME_MAX_LATENCY_PENALTY = 0.35;
-const SITE_RUNTIME_LATENCY_EMA_ALPHA = 0.3;
-const SITE_RUNTIME_BREAKER_STREAK_THRESHOLD = 3;
-const SITE_RUNTIME_BREAKER_LEVELS_MS = SITE_RUNTIME_BREAKER_LEVELS_MS_CONST;
-const SITE_TRANSIENT_STREAK_WINDOW_MS = 5 * 60 * 1000;
 const SITE_RECENT_OUTCOME_HALF_LIFE_MS = SITE_RECENT_OUTCOME_HALF_LIFE_MS_CONST;
 const SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES = SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES_CONST;
 const SITE_RECENT_SUCCESS_PRIOR_SUCCESSES = SITE_RECENT_SUCCESS_PRIOR_SUCCESSES_CONST;
@@ -154,9 +144,6 @@ const SITE_HISTORICAL_LATENCY_WINDOW_MS = 20_000;
 const SITE_HISTORICAL_MAX_LATENCY_PENALTY = 0.18;
 const SITE_RUNTIME_HEALTH_SETTING_KEY = 'token_router_site_runtime_health_v1';
 const SITE_RUNTIME_HEALTH_PERSIST_DEBOUNCE_MS = 500;
-const SITE_RUNTIME_HEALTH_PERSIST_STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const SITE_RUNTIME_HEALTH_PERSIST_IDLE_TTL_MS = 12 * 60 * 60 * 1000;
-const SITE_RUNTIME_HEALTH_PERSIST_MIN_PENALTY = 0.02;
 
 
 type SiteRuntimeHealthPersistencePayload = {
@@ -288,22 +275,7 @@ function resolveEffectiveFailureCooldownMs(failCount?: number | null): number {
 }
 
 function getRecentOutcomeSnapshot(state: SiteRuntimeHealthState | null | undefined, nowMs = Date.now()): RecentOutcomeSnapshot {
-  if (!state) {
-    return buildRecentOutcomeSnapshot(0, 0);
-  }
-  const updatedAtMs = Math.max(0, readFiniteInteger(state.recentWindowUpdatedAtMs) ?? state.lastUpdatedAtMs ?? nowMs);
-  const elapsedMs = Math.max(0, nowMs - updatedAtMs);
-  return buildRecentOutcomeSnapshot(
-    decayRecentOutcomeCount(state.recentSuccessCount, elapsedMs),
-    decayRecentOutcomeCount(state.recentFailureCount, elapsedMs),
-  );
-}
-
-function refreshRecentOutcomeWindow(state: SiteRuntimeHealthState, nowMs = Date.now()): void {
-  const snapshot = getRecentOutcomeSnapshot(state, nowMs);
-  state.recentSuccessCount = snapshot.successCount;
-  state.recentFailureCount = snapshot.failureCount;
-  state.recentWindowUpdatedAtMs = nowMs;
+  return getRecentSiteRuntimeOutcomeSnapshot(state, nowMs);
 }
 
 function blendRecentOutcomeSnapshots(
@@ -375,69 +347,10 @@ async function loadCredentialScopedChannelIds(
   return rows.map((row) => row.id);
 }
 
-function getDecayedSiteRuntimePenalty(state: SiteRuntimeHealthState, nowMs: number): number {
-  if (!Number.isFinite(state.penaltyScore) || state.penaltyScore <= 0) return 0;
-  const elapsedMs = Math.max(0, nowMs - state.lastUpdatedAtMs);
-  if (elapsedMs <= 0) return state.penaltyScore;
-  const decayFactor = Math.pow(0.5, elapsedMs / SITE_RUNTIME_HEALTH_DECAY_HALF_LIFE_MS);
-  return state.penaltyScore * decayFactor;
-}
-
-function hydrateSiteRuntimeHealthState(raw: unknown): SiteRuntimeHealthState | null {
-  if (!isRecord(raw)) return null;
-
-  const lastUpdatedAtMs = readFiniteInteger(raw.lastUpdatedAtMs) ?? Date.now();
-  const recentWindowUpdatedAtMs = readFiniteInteger(raw.recentWindowUpdatedAtMs) ?? lastUpdatedAtMs;
-  return {
-    penaltyScore: Math.max(0, readFiniteNumber(raw.penaltyScore) ?? 0),
-    latencyEmaMs: readFiniteNumber(raw.latencyEmaMs),
-    transientFailureStreak: Math.max(0, readFiniteInteger(raw.transientFailureStreak) ?? 0),
-    lastTransientFailureAtMs: readNullableTimestamp(raw.lastTransientFailureAtMs),
-    recentSuccessCount: Math.max(0, readFiniteNumber(raw.recentSuccessCount) ?? 0),
-    recentFailureCount: Math.max(0, readFiniteNumber(raw.recentFailureCount) ?? 0),
-    recentWindowUpdatedAtMs: Math.max(0, recentWindowUpdatedAtMs),
-    breakerLevel: Math.max(0, readFiniteInteger(raw.breakerLevel) ?? 0),
-    breakerUntilMs: readNullableTimestamp(raw.breakerUntilMs),
-    lastUpdatedAtMs: Math.max(0, lastUpdatedAtMs),
-    lastFailureAtMs: readNullableTimestamp(raw.lastFailureAtMs),
-    lastSuccessAtMs: readNullableTimestamp(raw.lastSuccessAtMs),
-  };
-}
-
-function cloneSiteRuntimeHealthState(state: SiteRuntimeHealthState): SiteRuntimeHealthState {
-  return {
-    penaltyScore: state.penaltyScore,
-    latencyEmaMs: state.latencyEmaMs,
-    transientFailureStreak: state.transientFailureStreak,
-    lastTransientFailureAtMs: state.lastTransientFailureAtMs,
-    recentSuccessCount: state.recentSuccessCount,
-    recentFailureCount: state.recentFailureCount,
-    recentWindowUpdatedAtMs: state.recentWindowUpdatedAtMs,
-    breakerLevel: state.breakerLevel,
-    breakerUntilMs: state.breakerUntilMs,
-    lastUpdatedAtMs: state.lastUpdatedAtMs,
-    lastFailureAtMs: state.lastFailureAtMs,
-    lastSuccessAtMs: state.lastSuccessAtMs,
-  };
-}
-
 function getOrCreateRuntimeHealthState<K>(states: Map<K, SiteRuntimeHealthState>, key: K, nowMs = Date.now()): SiteRuntimeHealthState {
   const existing = states.get(key);
   if (!existing) {
-    const initial: SiteRuntimeHealthState = {
-      penaltyScore: 0,
-      latencyEmaMs: null,
-      transientFailureStreak: 0,
-      lastTransientFailureAtMs: null,
-      recentSuccessCount: 0,
-      recentFailureCount: 0,
-      recentWindowUpdatedAtMs: nowMs,
-      breakerLevel: 0,
-      breakerUntilMs: null,
-      lastUpdatedAtMs: nowMs,
-      lastFailureAtMs: null,
-      lastSuccessAtMs: null,
-    };
+    const initial = createSiteRuntimeHealthState(nowMs);
     states.set(key, initial);
     return initial;
   }
@@ -475,29 +388,6 @@ function getOrCreateSiteModelRuntimeHealthState(
   return getOrCreateRuntimeHealthState(modelStates, modelKey, nowMs);
 }
 
-function isRuntimeHealthBreakerOpen(state: SiteRuntimeHealthState | null | undefined, nowMs = Date.now()): boolean {
-  if (!state) return false;
-  return typeof state.breakerUntilMs === 'number' && state.breakerUntilMs > nowMs;
-}
-
-function getRuntimeHealthMultiplier(state: SiteRuntimeHealthState | null | undefined, nowMs = Date.now()): number {
-  if (!state) return 1;
-  if (isRuntimeHealthBreakerOpen(state, nowMs)) {
-    return SITE_RUNTIME_MIN_MULTIPLIER;
-  }
-  const penaltyScore = getDecayedSiteRuntimePenalty(state, nowMs);
-  const failurePenaltyFactor = 1 / (1 + penaltyScore);
-  const latencyPenaltyRatio = state.latencyEmaMs == null
-    ? 0
-    : clampNumber(
-      (state.latencyEmaMs - SITE_RUNTIME_LATENCY_BASELINE_MS) / SITE_RUNTIME_LATENCY_WINDOW_MS,
-      0,
-      1,
-    );
-  const latencyFactor = 1 - (latencyPenaltyRatio * SITE_RUNTIME_MAX_LATENCY_PENALTY);
-  return clampNumber(failurePenaltyFactor * latencyFactor, SITE_RUNTIME_MIN_MULTIPLIER, 1);
-}
-
 function getSiteRuntimeHealthDetails(siteId: number, modelName?: string | null, nowMs = Date.now()): SiteRuntimeHealthDetails {
   const modelKey = normalizeModelAlias(modelName || '');
   const globalState = siteRuntimeHealthStates.get(siteId);
@@ -522,67 +412,6 @@ function getSiteRuntimeHealthDetails(siteId: number, modelName?: string | null, 
     recentSampleCount: recentSnapshot.sampleCount,
     recentConfidence: recentSnapshot.confidence,
   };
-}
-
-function applyRuntimeHealthFailure(state: SiteRuntimeHealthState, context: SiteRuntimeFailureContext = {}, nowMs = Date.now()): void {
-  refreshRecentOutcomeWindow(state, nowMs);
-  state.recentFailureCount += 1;
-  state.penaltyScore += resolveSiteRuntimeFailurePenalty(context);
-  if (isTransientSiteRuntimeFailure(context)) {
-    const lastTransientFailureAtMs = state.lastTransientFailureAtMs;
-    const shouldContinueStreak = (
-      typeof lastTransientFailureAtMs === 'number'
-      && (nowMs - lastTransientFailureAtMs) <= SITE_TRANSIENT_STREAK_WINDOW_MS
-    );
-    state.transientFailureStreak = shouldContinueStreak
-      ? state.transientFailureStreak + 1
-      : 1;
-    state.lastTransientFailureAtMs = nowMs;
-    if (state.transientFailureStreak >= SITE_RUNTIME_BREAKER_STREAK_THRESHOLD) {
-      state.breakerLevel = Math.min(state.breakerLevel + 1, SITE_RUNTIME_BREAKER_LEVELS_MS.length - 1);
-      const breakerMs = resolveSiteRuntimeBreakerMs(state.breakerLevel);
-      state.breakerUntilMs = breakerMs > 0 ? nowMs + breakerMs : null;
-      state.transientFailureStreak = 0;
-    }
-  } else {
-    state.transientFailureStreak = 0;
-    state.lastTransientFailureAtMs = null;
-  }
-  state.lastFailureAtMs = nowMs;
-}
-
-function applyRuntimeHealthSuccess(state: SiteRuntimeHealthState, latencyMs: number, nowMs = Date.now()): void {
-  refreshRecentOutcomeWindow(state, nowMs);
-  state.recentSuccessCount += 1;
-  state.penaltyScore = Math.max(0, state.penaltyScore * 0.2 - 0.3);
-  state.transientFailureStreak = 0;
-  state.lastTransientFailureAtMs = null;
-  state.breakerLevel = 0;
-  state.breakerUntilMs = null;
-  state.lastSuccessAtMs = nowMs;
-  const normalizedLatencyMs = Math.max(0, Math.trunc(latencyMs));
-  state.latencyEmaMs = state.latencyEmaMs == null
-    ? normalizedLatencyMs
-    : (state.latencyEmaMs * (1 - SITE_RUNTIME_LATENCY_EMA_ALPHA))
-      + (normalizedLatencyMs * SITE_RUNTIME_LATENCY_EMA_ALPHA);
-}
-
-function shouldPersistSiteRuntimeHealthState(state: SiteRuntimeHealthState, nowMs = Date.now()): boolean {
-  const lastTouchedAtMs = Math.max(
-    state.lastUpdatedAtMs,
-    state.lastFailureAtMs ?? 0,
-    state.lastSuccessAtMs ?? 0,
-    state.lastTransientFailureAtMs ?? 0,
-  );
-  if ((nowMs - lastTouchedAtMs) > SITE_RUNTIME_HEALTH_PERSIST_STALE_TTL_MS) {
-    return false;
-  }
-
-  if (isRuntimeHealthBreakerOpen(state, nowMs)) return true;
-  if (getDecayedSiteRuntimePenalty(state, nowMs) >= SITE_RUNTIME_HEALTH_PERSIST_MIN_PENALTY) return true;
-  if (getRecentOutcomeSnapshot(state, nowMs).sampleCount > 0.01) return true;
-  if ((state.latencyEmaMs ?? 0) > 0) return true;
-  return (nowMs - lastTouchedAtMs) <= SITE_RUNTIME_HEALTH_PERSIST_IDLE_TTL_MS;
 }
 
 function buildSiteRuntimeHealthPersistencePayload(nowMs = Date.now()): SiteRuntimeHealthPersistencePayload {
