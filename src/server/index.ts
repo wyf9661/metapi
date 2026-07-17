@@ -58,6 +58,10 @@ import {
   stopUsageAggregationProjectorScheduler,
 } from './services/usageAggregationService.js';
 import { reloadBackupWebdavScheduler } from './services/backupService.js';
+import {
+  startRouteDecisionRefreshScheduler,
+  stopRouteDecisionRefreshScheduler,
+} from './services/routeDecisionRefreshScheduler.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
 import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
 import { tunnelRoutes } from './routes/api/tunnel.js';
@@ -294,6 +298,7 @@ startSub2ApiManagedRefreshScheduler();
 startUpdateCenterPolling();
 startUsageAggregationProjectorScheduler();
 startAdminSnapshotWarmScheduler();
+startRouteDecisionRefreshScheduler();
 try {
   await startOAuthLoopbackCallbackServers();
 } catch (error) {
@@ -310,6 +315,7 @@ app.addHook('onClose', async () => {
   stopChannelRecoveryProbeScheduler();
   await stopUsageAggregationProjectorScheduler();
   await stopAdminSnapshotWarmScheduler();
+  stopRouteDecisionRefreshScheduler();
   await stopSub2ApiManagedRefreshScheduler();
   await stopOAuthLoopbackCallbackServers();
 });
