@@ -12,11 +12,15 @@ import {
 import { parseCheckinRewardAmount } from "./checkinRewardParser.js";
 import { getLocalDayRangeUtc } from "./localTimeService.js";
 import {
+  clearSnapshotCache,
   readSnapshotCache,
   type SnapshotEnvelope,
 } from "./snapshotCacheService.js";
 import { estimateRewardWithTodayIncomeFallback } from "./todayIncomeRewardService.js";
-import { createAdminSnapshotPersistence } from "./adminSnapshotStore.js";
+import {
+  createAdminSnapshotPersistence,
+  deleteAdminSnapshot,
+} from "./adminSnapshotStore.js";
 
 export type AccountCapabilities = {
   canCheckin: boolean;
@@ -227,4 +231,13 @@ export async function getAccountsSnapshot(options?: {
     persistence: accountsSnapshotPersistence,
     loader: loadAccountsSnapshotPayload,
   });
+}
+
+/** Drop in-memory + persisted accounts snapshot so connection management cannot show orphans. */
+export async function invalidateAccountsSnapshot(): Promise<void> {
+  clearSnapshotCache("accounts-snapshot");
+  clearSnapshotCache("dashboard-summary");
+  clearSnapshotCache("dashboard-insights");
+  clearSnapshotCache("site-stats");
+  await deleteAdminSnapshot({ namespace: "accounts-snapshot", key: "all" });
 }

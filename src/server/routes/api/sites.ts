@@ -20,6 +20,7 @@ import { normalizeSiteApiEndpointBaseUrl } from '../../services/siteApiEndpointS
 import { analyzePrimarySiteUrl } from '../../../shared/sitePrimaryUrl.js';
 import { probeSiteModels } from '../../services/modelService.js';
 import { rebuildRoutesBestEffort } from '../../services/routeRefreshWorkflow.js';
+import { invalidateAccountsSnapshot } from '../../services/accountsOverviewService.js';
 
 function sseWrite(raw: import('http').ServerResponse, event: string, data: unknown) {
   try { raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* ignore */ }
@@ -806,8 +807,14 @@ export async function sitesRoutes(app: FastifyInstance) {
       .run();
   }
 
+  // Related site-scoped rows that must not linger after site removal.
+  await db.delete(schema.siteApiEndpoints).where(eq(schema.siteApiEndpoints.siteId, siteId)).run();
+  await db.delete(schema.siteDisabledModels).where(eq(schema.siteDisabledModels.siteId, siteId)).run();
+  await db.delete(schema.siteAnnouncements).where(eq(schema.siteAnnouncements.siteId, siteId)).run();
   await db.delete(schema.sites).where(eq(schema.sites.id, siteId)).run();
   await rebuildRoutesBestEffort();
+  // Connection management reads accounts-snapshot; drop it immediately so orphans disappear.
+  await invalidateAccountsSnapshot();
 }
 
   app.delete<{ Params: { id: string } }>('/api/sites/:id', async (request) => {

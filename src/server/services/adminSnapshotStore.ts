@@ -117,6 +117,13 @@ export async function writeAdminSnapshot<T>(
     .run();
 }
 
+export async function deleteAdminSnapshot(identity: AdminSnapshotIdentity): Promise<void> {
+  await db
+    .delete(schema.adminSnapshots)
+    .where(buildSnapshotWhere(identity))
+    .run();
+}
+
 export async function deleteExpiredAdminSnapshots(beforeIso?: string) {
   const cutoffIso = beforeIso || new Date().toISOString();
   await db
