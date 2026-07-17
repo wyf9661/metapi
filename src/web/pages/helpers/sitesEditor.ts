@@ -22,6 +22,11 @@ export type SiteForm = {
   customHeaders: SiteCustomHeaderField[];
   customHeadersOverrideRequestHeaders: boolean;
   globalWeight: string;
+  protocolProfile: {
+    preferResponses: boolean;
+    requireCodexClient: boolean;
+    credentialMode: string;
+  };
 };
 
 export type SiteEditorState =
@@ -44,6 +49,7 @@ export type SiteSavePayload = {
   customHeaders: string;
   customHeadersOverrideRequestHeaders: boolean;
   globalWeight: number;
+  protocolProfile?: string | null;
   postRefreshProbeEnabled?: boolean;
   postRefreshProbeModel?: string;
   postRefreshProbeScope?: 'single' | 'all';
@@ -157,6 +163,7 @@ export function emptySiteForm(): SiteForm {
     apiEndpoints: [emptySiteApiEndpoint()],
     customHeaders: [emptySiteCustomHeader()],
     customHeadersOverrideRequestHeaders: false,
+    protocolProfile: { preferResponses: false, requireCodexClient: false, credentialMode: 'auto' },
     globalWeight: '1',
   };
 }
@@ -235,6 +242,16 @@ export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | '
     apiEndpoints: parseApiEndpointsForEditor(site.apiEndpoints),
     customHeaders: parseCustomHeadersForEditor(site.customHeaders),
     customHeadersOverrideRequestHeaders: !!site.customHeadersOverrideRequestHeaders,
+    protocolProfile: (() => {
+      try {
+        const raw = typeof (site as any).protocolProfile === 'string' ? JSON.parse((site as any).protocolProfile) : null;
+        return {
+          preferResponses: !!raw?.preferResponses,
+          requireCodexClient: !!raw?.requireCodexClient,
+          credentialMode: raw?.credentialMode || 'auto',
+        };
+      } catch { return { preferResponses: false, requireCodexClient: false, credentialMode: 'auto' }; }
+    })(),
     globalWeight,
   };
 }

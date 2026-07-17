@@ -2,6 +2,7 @@ import {
   rankConversationFileEndpoints,
   type ConversationFileInputSummary,
 } from '../proxy-core/capabilities/conversationFileCapabilities.js';
+import { siteProtocolPrefersResponses } from '../shared/siteProtocolProfile.js';
 import type { UpstreamEndpoint } from '../proxy-core/orchestration/upstreamRequest.js';
 import { fetchModelPricingCatalog } from './modelPricingService.js';
 import {
@@ -220,7 +221,10 @@ export async function resolveUpstreamEndpointCandidates(
 
   // NewAPI "Codex-only" gateways: if the site is configured with Codex client headers,
   // prefer /v1/responses first so chat requests convert instead of dying on nginx 403.
-  if (siteCustomHeadersPreferResponses((context.site as { customHeaders?: string | null }).customHeaders)) {
+  if (siteProtocolPrefersResponses({
+    protocolProfile: (context.site as any).protocolProfile,
+    customHeaders: (context.site as any).customHeaders,
+  })) {
     return finalizeCandidates(['responses', 'chat', 'messages']);
   }
 
