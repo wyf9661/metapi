@@ -7,6 +7,7 @@ import type { DownstreamRoutingPolicy } from '../../services/downstreamPolicyTyp
 import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
+import { mapUpstreamErrorForClient } from '../../shared/siteProtocolProfile.js';
 import { composeProxyLogMessage } from '../../services/proxyLogMessage.js';
 import { resolveProxyLogBilling } from '../../services/proxyBilling.js';
 import type { DownstreamClientContext } from '../downstreamClientContext.js';
@@ -37,6 +38,7 @@ type SurfaceFailureResponse = {
     error: {
       message: string;
       type: 'upstream_error';
+      code?: string;
     };
   };
 };
@@ -585,13 +587,15 @@ export function createSurfaceFailureToolkit(input: {
         reason: `upstream returned HTTP ${args.status}`,
       }));
 
+      const mapped = mapUpstreamErrorForClient(args.status, args.errText);
       return {
         action: 'respond',
         status: args.status,
         payload: {
           error: {
-            message: args.errText,
+            message: mapped.message,
             type: 'upstream_error',
+            code: mapped.code,
           },
         },
       };
@@ -642,13 +646,15 @@ export function createSurfaceFailureToolkit(input: {
         reason: args.failure.reason,
       }));
 
+      const mappedDetected = mapUpstreamErrorForClient(args.failure.status, args.failure.reason);
       return {
         action: 'respond',
         status: args.failure.status,
         payload: {
           error: {
-            message: args.failure.reason,
+            message: mappedDetected.message,
             type: 'upstream_error',
+            code: mappedDetected.code,
           },
         },
       };
