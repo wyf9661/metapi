@@ -58,6 +58,81 @@ export function emptySiteCustomHeader(): SiteCustomHeaderField {
   return { key: '', value: '' };
 }
 
+
+/** Preset used by “Codex 客户端” checkbox for NewAPI codex-only gateways. */
+export const CODEX_CLIENT_PROFILE_HEADERS = {
+  'User-Agent': 'codex_cli_rs/0.39.0',
+  originator: 'codex_cli_rs',
+} as const;
+
+export function isCodexClientProfileEnabled(fields: SiteCustomHeaderField[]): boolean {
+  const map = new Map<string, string>();
+  for (const field of fields) {
+    const key = field.key.trim().toLowerCase();
+    if (!key) continue;
+    map.set(key, field.value.trim());
+  }
+  const ua = (map.get('user-agent') || '').toLowerCase();
+  const originator = (map.get('originator') || '').toLowerCase();
+  const looksCodexUa = (
+    ua.includes('codex_cli_rs')
+    || ua.includes('openai-codex')
+    || ua.includes('codex_vscode')
+    || ua.includes('codex_chatgpt_desktop')
+    || ua.startsWith('codex')
+  );
+  const looksCodexOriginator = originator.includes('codex');
+  return looksCodexUa || looksCodexOriginator;
+}
+
+export function applyCodexClientProfile(
+  fields: SiteCustomHeaderField[],
+  enabled: boolean,
+): SiteCustomHeaderField[] {
+  const presetEntries = Object.entries(CODEX_CLIENT_PROFILE_HEADERS);
+  const presetKeys = new Set(presetEntries.map(([key]) => key.toLowerCase()));
+
+  // Drop empty rows and previous preset keys first when toggling.
+  const kept = fields.filter((field) => {
+    const key = field.key.trim();
+    const value = field.value;
+    if (!key && !value.trim()) return false;
+    if (!key) return true;
+    if (!enabled && presetKeys.has(key.toLowerCase())) {
+      // Only remove known preset keys when disabling.
+      const lower = key.toLowerCase();
+      if (lower === 'user-agent') {
+        const v = value.trim().toLowerCase();
+        return !(
+          v.includes('codex_cli_rs')
+          || v.includes('openai-codex')
+          || v === CODEX_CLIENT_PROFILE_HEADERS['User-Agent'].toLowerCase()
+        );
+      }
+      if (lower === 'originator') {
+        const v = value.trim().toLowerCase();
+        return !v.includes('codex');
+      }
+    }
+    if (enabled && presetKeys.has(key.toLowerCase())) {
+      // Replace existing preset keys below.
+      return false;
+    }
+    return true;
+  });
+
+  if (!enabled) {
+    return kept.length > 0 ? kept : [emptySiteCustomHeader()];
+  }
+
+  const next = [
+    ...presetEntries.map(([key, value]) => ({ key, value })),
+    ...kept,
+  ];
+  return next.length > 0 ? next : [emptySiteCustomHeader()];
+}
+
+
 export function emptySiteApiEndpoint(): SiteApiEndpointField {
   return {
     url: '',

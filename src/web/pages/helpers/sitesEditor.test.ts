@@ -3,7 +3,9 @@ import {
   buildSiteSaveAction,
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
+  applyCodexClientProfile,
   emptySiteForm,
+  isCodexClientProfileEnabled,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
   siteFormFromSite,
@@ -210,5 +212,26 @@ describe('buildSiteSaveAction', () => {
       apiEndpoints: [],
       error: 'API 请求地址 "https://api.example.com" 重复了',
     });
+  });
+});
+
+
+describe('codex client profile helpers', () => {
+  it('applies and detects the preset headers', () => {
+    const enabled = applyCodexClientProfile([], true);
+    expect(isCodexClientProfileEnabled(enabled)).toBe(true);
+    expect(enabled.some((item) => item.key === 'User-Agent' && item.value.includes('codex_cli_rs'))).toBe(true);
+    expect(enabled.some((item) => item.key === 'originator' && item.value === 'codex_cli_rs')).toBe(true);
+
+    const disabled = applyCodexClientProfile(enabled, false);
+    expect(isCodexClientProfileEnabled(disabled)).toBe(false);
+  });
+
+  it('keeps unrelated custom headers when toggling', () => {
+    const base = [{ key: 'X-Trace', value: '1' }];
+    const enabled = applyCodexClientProfile(base, true);
+    expect(enabled.some((item) => item.key === 'X-Trace' && item.value === '1')).toBe(true);
+    const disabled = applyCodexClientProfile(enabled, false);
+    expect(disabled).toEqual([{ key: 'X-Trace', value: '1' }]);
   });
 });
