@@ -60,6 +60,7 @@ interface ModelRow {
   avgLatency: number | null;
   avgFirstByteMs: number | null;
   avgThroughputTps: number | null;
+  throughputSampleCount?: number;
   successRate: number | null;
   description: string | null;
   tags: string[];
@@ -118,11 +119,16 @@ function renderSourceModels(account: ModelAccountInfo, canonicalName: string): s
   return names.join(' / ');
 }
 
-function formatThroughput(tps: number | null | undefined): string {
+function formatThroughput(tps: number | null | undefined, sampleCount?: number | null): string {
   if (typeof tps !== 'number' || !Number.isFinite(tps) || tps <= 0) return '—';
-  if (tps >= 100) return `${Math.round(tps)} t/s`;
-  if (tps >= 10) return `${Math.round(tps * 10) / 10} t/s`;
-  return `${Math.round(tps * 100) / 100} t/s`;
+  let base: string;
+  if (tps >= 100) base = `${Math.round(tps)} t/s`;
+  else if (tps >= 10) base = `${Math.round(tps * 10) / 10} t/s`;
+  else base = `${Math.round(tps * 100) / 100} t/s`;
+  if (typeof sampleCount === 'number' && sampleCount > 0 && sampleCount < 5) {
+    return `${base}·少样本`;
+  }
+  return base;
 }
 
 function getThroughputBadgeClass(tps: number | null | undefined): string {
@@ -967,9 +973,9 @@ export default function Models() {
                       <span
                         className={`badge ${getThroughputBadgeClass(m.avgThroughputTps)}`}
                         style={{ fontVariantNumeric: 'tabular-nums' }}
-                        data-tooltip={tr('平均吞吐（近7天，token/s）')}
+                        data-tooltip={tr('平均吞吐（近7天，token/s；样本<5 标少样本）')}
                       >
-                        {tr('吞吐')} {formatThroughput(m.avgThroughputTps)}
+                        {tr('吞吐')} {formatThroughput(m.avgThroughputTps, m.throughputSampleCount)}
                       </span>
                       <span
                         className={`badge ${getSuccessBadgeClass(m.successRate)}`}
@@ -1249,9 +1255,9 @@ export default function Models() {
                         <span
                           className={`badge ${getThroughputBadgeClass(m.avgThroughputTps)}`}
                           style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
-                          data-tooltip={tr('平均吞吐（近7天，token/s）')}
+                          data-tooltip={tr('平均吞吐（近7天，token/s；样本<5 标少样本）')}
                         >
-                          {formatThroughput(m.avgThroughputTps)}
+                          {formatThroughput(m.avgThroughputTps, m.throughputSampleCount)}
                         </span>
                       </td>
                       <td>

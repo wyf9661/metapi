@@ -14,6 +14,7 @@ import {
   type RouteRoutingStrategy,
 } from '../../services/routeRoutingStrategy.js';
 import { invalidateTokenRouterCache, matchesModelPattern, tokenRouter } from '../../services/tokenRouter.js';
+import { getRecentRouteSelections } from '../../services/routeSelectionLog.js';
 import { appendBackgroundTaskLog, startBackgroundTask } from '../../services/backgroundTaskService.js';
 import {
   clearRouteDecisionSnapshot,
@@ -822,6 +823,16 @@ export async function tokensRoutes(app: FastifyInstance) {
       decisionRefreshedAt: route.decisionRefreshedAt ?? null,
       channels: channelsByRoute.get(route.id) || [],
     }));
+  });
+
+
+  app.get<{ Querystring: { limit?: string } }>('/api/routes/selections/recent', async (request) => {
+    const raw = Number.parseInt(String(request.query.limit || '20'), 10);
+    const limit = Number.isFinite(raw) ? raw : 20;
+    return {
+      success: true,
+      items: getRecentRouteSelections(limit),
+    };
   });
 
   app.get<{ Querystring: { model?: string } }>('/api/routes/decision', async (request, reply) => {

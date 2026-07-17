@@ -979,6 +979,8 @@ export const api = {
     }),
   getRouteDecision: (model: string) =>
     request(`/api/routes/decision?model=${encodeURIComponent(model)}`),
+  getRecentRouteSelections: (limit = 20) =>
+    request(`/api/routes/selections/recent?limit=${encodeURIComponent(String(limit))}`),
   getRouteDecisionsBatch: (
     models: string[],
     options?: { refreshPricingCatalog?: boolean; persistSnapshots?: boolean },

@@ -116,3 +116,13 @@ export function finalizeThroughputTps(agg: ThroughputAggregate | null | undefine
   // Round to 1 decimal for UI parity with previous field.
   return Math.round(Math.min(tps, MARKETPLACE_THROUGHPUT_MAX_TPS) * 10) / 10;
 }
+
+export function getThroughputSampleCount(agg: ThroughputAggregate | null | undefined): number {
+  if (!agg || !Number.isFinite(agg.sampleCount) || agg.sampleCount <= 0) return 0;
+  return Math.trunc(agg.sampleCount);
+}
+
+/** Whether the sample set is too small to treat throughput as reliable. */
+export function isThroughputSampleSparse(sampleCount: number, minSamples = 5): boolean {
+  return !Number.isFinite(sampleCount) || sampleCount < minSamples;
+}
