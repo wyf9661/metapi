@@ -4,7 +4,9 @@ import {
   hasEndpointMismatchHint,
   inferRequiredEndpointFromProtocolError,
   inferSuggestedEndpointFromUpstreamError,
+  isEndpointDowngradeError,
   promoteRequiredEndpointCandidateAfterProtocolError,
+  shouldPreferResponsesAfterLegacyChatError,
 } from './endpointCompatibility.js';
 
 describe('inferRequiredEndpointFromProtocolError', () => {
@@ -22,6 +24,18 @@ describe('inferRequiredEndpointFromProtocolError', () => {
     expect(inferRequiredEndpointFromProtocolError('unsupported endpoint')).toBeNull();
     expect(inferRequiredEndpointFromProtocolError('')).toBeNull();
     expect(inferRequiredEndpointFromProtocolError(null)).toBeNull();
+  });
+
+  it('recognizes codex-only policy errors that require /v1/responses', () => {
+    const payload = JSON.stringify({
+      error: {
+        code: 'codex_requires_responses_protocol',
+        message: 'codex clients may only use the OpenAI Responses protocol at /v1/responses',
+        type: 'policy_violation',
+      },
+    });
+    expect(inferRequiredEndpointFromProtocolError(payload)).toBe('responses');
+    expect(inferSuggestedEndpointFromUpstreamError(payload)).toBe('responses');
   });
 });
 
@@ -73,5 +87,31 @@ describe('promoteRequiredEndpointCandidateAfterProtocolError', () => {
       upstreamErrorText: 'input is required',
     });
     expect(missingTarget).toEqual(['chat', 'messages']);
+  });
+});
+
+
+describe('codex-only gateway compatibility', () => {
+  it('treats codex policy 403 as endpoint downgrade and prefers responses after chat', () => {
+    const payload = JSON.stringify({
+      error: {
+        code: 'codex_requires_responses_protocol',
+        message: 'codex clients may only use the OpenAI Responses protocol at /v1/responses',
+        type: 'policy_violation',
+      },
+    });
+    expect(isEndpointDowngradeError(403, payload)).toBe(true);
+    expect(shouldPreferResponsesAfterLegacyChatError({
+      status: 403,
+      upstreamErrorText: payload,
+      downstreamFormat: 'openai',
+      sitePlatform: 'new-api',
+      modelName: 'gpt-5.6-sol',
+      currentEndpoint: 'chat',
+    })).toBe(true);
+  });
+
+  it('treats opaque nginx 403 HTML as endpoint downgrade', () => {
+    expect(isEndpointDowngradeError(403, '<html><title>403 Forbidden</title></html>')).toBe(true);
   });
 });

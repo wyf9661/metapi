@@ -23,6 +23,7 @@ type ChannelContext = {
     url: string;
     platform: string;
     apiKey?: string | null;
+    customHeaders?: string | null;
   };
   account: {
     id: number;
@@ -37,6 +38,19 @@ function asTrimmedString(value: unknown): string {
 
 function normalizePlatformName(platform: unknown): string {
   return asTrimmedString(platform).toLowerCase();
+}
+
+/** Site custom headers that look like a Codex client → force responses-first. */
+function siteCustomHeadersPreferResponses(customHeaders: unknown): boolean {
+  const raw = asTrimmedString(customHeaders);
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+  if (lower.includes('codex_cli_rs') || lower.includes('openai-codex') || lower.includes('codex_vscode')) {
+    return true;
+  }
+  if (lower.includes('user-agent') && lower.includes('codex')) return true;
+  if (lower.includes('originator') && lower.includes('codex')) return true;
+  return false;
 }
 
 function normalizeEndpointTypes(value: unknown): UpstreamEndpoint[] {
@@ -202,6 +216,12 @@ export async function resolveUpstreamEndpointCandidates(
       return finalizeCandidates(['responses', 'messages', 'chat']);
     }
     return finalizeCandidates(['messages', 'chat', 'responses']);
+  }
+
+  // NewAPI "Codex-only" gateways: if the site is configured with Codex client headers,
+  // prefer /v1/responses first so chat requests convert instead of dying on nginx 403.
+  if (siteCustomHeadersPreferResponses((context.site as { customHeaders?: string | null }).customHeaders)) {
+    return finalizeCandidates(['responses', 'chat', 'messages']);
   }
 
   const preferred = preferredEndpointOrder(

@@ -260,6 +260,56 @@ function ensureStreamAcceptHeader(
   };
 }
 
+
+const CODEX_GATED_PLATFORMS = new Set([
+  'new-api',
+  'one-api',
+  'veloera',
+  'one-hub',
+  'done-hub',
+  'sub2api',
+  'openai',
+]);
+
+function hasCodexClientFingerprint(headers: Record<string, string>): boolean {
+  const userAgent = (
+    headerValueToString(headers['user-agent'])
+    || headerValueToString((headers as Record<string, unknown>)['User-Agent'])
+    || ''
+  ).toLowerCase();
+  const originator = (
+    headerValueToString(headers.originator)
+    || headerValueToString((headers as Record<string, unknown>).Originator)
+    || ''
+  ).toLowerCase();
+  return (
+    userAgent.includes('codex_cli_rs')
+    || userAgent.includes('openai-codex')
+    || userAgent.includes('codex_vscode')
+    || userAgent.includes('codex_chatgpt_desktop')
+    || originator.includes('codex')
+  );
+}
+
+function ensureCodexClientFingerprintHeaders(
+  headers: Record<string, string>,
+  sitePlatform: string,
+): Record<string, string> {
+  if (!CODEX_GATED_PLATFORMS.has(sitePlatform)) return headers;
+  if (hasCodexClientFingerprint(headers)) return headers;
+
+  const next = { ...headers };
+  const configuredUa = asTrimmedString(config.codexHeaderDefaults?.userAgent);
+  if (!headerValueToString(next['user-agent']) && !headerValueToString((next as any)['User-Agent'])) {
+    next['User-Agent'] = configuredUa || 'codex_cli_rs/0.39.0';
+    delete next['user-agent'];
+  }
+  if (!headerValueToString(next.originator) && !headerValueToString((next as any).Originator)) {
+    next.originator = 'codex_cli_rs';
+  }
+  return next;
+}
+
 function ensureResponsesAcceptHeader(
   headers: Record<string, string>,
   input: {
@@ -743,13 +793,17 @@ export function buildUpstreamEndpointRequest(input: {
       });
     }
 
-    const headers = ensureResponsesAcceptHeader({
+    let headers = ensureResponsesAcceptHeader({
       ...commonHeaders,
       ...responsesHeaders,
     }, {
       stream: input.stream,
       sitePlatform,
     });
+    // Some NewAPI Codex-gated gateways reject non-Codex clients at nginx/app layer.
+    // If neither the client nor site supplied a Codex-like UA/originator, inject a
+    // conservative Codex CLI fingerprint so converted chat→responses calls work.
+    headers = ensureCodexClientFingerprintHeaders(headers, sitePlatform);
     return {
       path: resolveEndpointPath('responses'),
       headers,

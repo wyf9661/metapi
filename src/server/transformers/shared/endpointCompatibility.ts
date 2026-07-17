@@ -152,6 +152,9 @@ export function isEndpointDispatchDeniedError(status: number, upstreamErrorText?
   return (
     /does\s+not\s+allow\s+\/v1\/[a-z0-9/_:-]+\s+dispatch/i.test(upstreamErrorText || '')
     || text.includes('dispatch denied')
+    || text.includes('codex_requires_responses_protocol')
+    || text.includes('codex clients may only use the openai responses protocol')
+    || text.includes('policy_violation')
   );
 }
 
@@ -159,10 +162,24 @@ export function inferRequiredEndpointFromProtocolError(
   upstreamErrorText?: string | null,
 ): CompatibilityEndpoint | null {
   const parsed = parseEndpointErrorShape(upstreamErrorText);
-  const combined = `${parsed.text}\n${parsed.message}`;
+  const combined = `${parsed.text}\n${parsed.message}\n${parsed.code}\n${parsed.type}`;
   if (!combined.trim()) return null;
   if (/messages\s+is\s+required/i.test(combined)) return 'messages';
   if (/input\s+is\s+required/i.test(combined)) return 'responses';
+  // NewAPI / welfare-style Codex-only policy:
+  // {"error":{"code":"codex_requires_responses_protocol","message":"... /v1/responses ..."}}
+  if (
+    parsed.code === 'codex_requires_responses_protocol'
+    || parsed.type === 'policy_violation'
+    || /codex[_\s-]*requires[_\s-]*responses/i.test(combined)
+    || /codex clients may only use the openai responses protocol/i.test(combined)
+    || (
+      /only use the openai responses protocol/i.test(combined)
+      && /\/v1\/responses/i.test(combined)
+    )
+  ) {
+    return 'responses';
+  }
   return null;
 }
 
@@ -236,11 +253,25 @@ export function shouldPreferResponsesAfterLegacyChatError(
   }
 
   const text = (input.upstreamErrorText || '').toLowerCase();
-  return (
+  if (
     text.includes('unsupported legacy protocol')
     && text.includes('/v1/chat/completions')
     && text.includes('/v1/responses')
-  );
+  ) {
+    return true;
+  }
+  // Codex-gated NewAPI sites reject chat with a policy error and require /v1/responses.
+  if (
+    text.includes('codex_requires_responses_protocol')
+    || text.includes('codex clients may only use the openai responses protocol')
+    || (
+      text.includes('policy_violation')
+      && text.includes('/v1/responses')
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function promoteResponsesCandidateAfterLegacyChatError(
@@ -262,6 +293,20 @@ export function isEndpointDowngradeError(status: number, upstreamErrorText?: str
   const parsed = parseEndpointErrorShape(upstreamErrorText);
   const text = parsed.text;
   if (status === 404 || status === 405 || status === 415 || status === 501) return true;
+  // Codex-only gateways often return 403 with a protocol policy payload (or opaque nginx HTML).
+  if (status === 403) {
+    if (
+      parsed.code === 'codex_requires_responses_protocol'
+      || parsed.type === 'policy_violation'
+      || text.includes('codex_requires_responses_protocol')
+      || text.includes('codex clients may only use the openai responses protocol')
+      || text.includes('/v1/responses')
+      || text.includes('<html')
+      || text.includes('403 forbidden')
+    ) {
+      return true;
+    }
+  }
   if (!text) return false;
   const endpointMismatchHint = hasEndpointMismatchHint(upstreamErrorText);
 
