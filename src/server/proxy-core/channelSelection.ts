@@ -1,8 +1,9 @@
 import * as routeRefreshWorkflow from '../services/routeRefreshWorkflow.js';
 import { proxyChannelCoordinator } from '../services/proxyChannelCoordinator.js';
-import { canRetryProxyChannel } from '../services/proxyChannelRetry.js';
+import { canRetryProxyChannelWithBudget } from '../services/proxyChannelRetry.js';
 import type { DownstreamRoutingPolicy } from '../services/downstreamPolicyTypes.js';
 import { tokenRouter } from '../services/tokenRouter.js';
+import { logRouteSelection } from '../services/routeSelectionLog.js';
 
 type SelectedChannel = Awaited<ReturnType<typeof tokenRouter.selectChannel>>;
 
@@ -76,9 +77,13 @@ export function buildForcedChannelUnavailableMessage(forcedChannelId?: number | 
   return `指定通道 #${normalizedForcedChannelId} 当前不可用，固定通道模式不会自动切换其他通道`;
 }
 
-export function canRetryChannelSelection(retryCount: number, forcedChannelId?: number | null): boolean {
+export function canRetryChannelSelection(
+  retryCount: number,
+  forcedChannelId?: number | null,
+  elapsedMs?: number | null,
+): boolean {
   if (normalizeForcedChannelId(forcedChannelId) !== null) return false;
-  return canRetryProxyChannel(retryCount);
+  return canRetryProxyChannelWithBudget(retryCount, elapsedMs);
 }
 
 export async function selectProxyChannelForAttempt(input: {
@@ -153,6 +158,24 @@ export async function selectProxyChannelForAttempt(input: {
     await refreshRoutesForFirstAttempt();
     selected = await tokenRouter.selectChannel(input.requestedModel, input.downstreamPolicy);
   }
+
+  const stickyHit = !!(
+    input.stickySessionKey
+    && selected
+    && proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey) === selected.channel.id
+  );
+  logRouteSelection({
+    requestedModel: input.requestedModel,
+    selected,
+    retryCount: input.retryCount,
+    sticky: stickyHit,
+    forcedChannelId: input.forcedChannelId,
+    reason: input.forcedChannelId
+      ? 'forced'
+      : stickyHit
+        ? 'sticky'
+        : (input.retryCount > 0 ? 'failover' : 'primary'),
+  });
 
   return selected;
 }
