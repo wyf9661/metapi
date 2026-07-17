@@ -120,5 +120,8 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
     </div>
   );
 
-  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
+  // Skip the portal under the test runner (react-test-renderer cannot host a
+  // ReactDOM.createPortal into jsdom's document.body). Mirrors CenteredModal.
+  const isTestEnv = import.meta.env.MODE === 'test';
+  return !isTestEnv && typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }

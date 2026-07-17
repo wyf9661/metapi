@@ -34,8 +34,6 @@ describe('repo drift check', () => {
         ruleId: 'transformers-route-blind',
         file: 'src/server/transformers/openai/responses/routeCompatibility.ts',
       }),
-    ]));
-    expect(report.trackedDebt).toEqual(expect.arrayContaining([
       expect.objectContaining({
         ruleId: 'proxy-core-routes-proxy-import',
         file: 'src/server/proxy-core/surfaces/sharedSurface.ts',
@@ -45,6 +43,7 @@ describe('repo drift check', () => {
         file: 'src/web/pages/Accounts.tsx',
       }),
     ]));
+    expect(report.trackedDebt).toEqual([]);
   });
 
   it('keeps the current repository within the first-wave ratchet', () => {

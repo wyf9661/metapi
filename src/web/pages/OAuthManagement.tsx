@@ -619,7 +619,10 @@ function SideDrawer({
     </div>
   );
 
-  const portalTarget = typeof document !== 'undefined' ? document.body : null;
+  // Skip the portal under the test runner (react-test-renderer cannot host a
+  // ReactDOM.createPortal into jsdom's document.body). Mirrors CenteredModal.
+  const isTestEnv = import.meta.env.MODE === 'test';
+  const portalTarget = !isTestEnv && typeof document !== 'undefined' ? document.body : null;
   return portalTarget ? createPortal(panel, portalTarget) : panel;
 }
 

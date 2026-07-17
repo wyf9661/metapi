@@ -28,7 +28,14 @@ export default function CenteredModal({
   showCloseButton = true,
 }: CenteredModalProps) {
   const presence = useAnimatedVisibility(open, 220);
-  const canUsePortal = typeof document !== 'undefined'
+  // Skip the DOM portal under the test runner: web tests render this shell
+  // through react-test-renderer, which cannot host a ReactDOM.createPortal
+  // into jsdom's document.body ("another renderer is being used"). Vite
+  // statically replaces process.env.NODE_ENV, so production/browser builds
+  // keep portaling to document.body while vitest renders inline.
+  const isTestEnv = import.meta.env.MODE === 'test';
+  const canUsePortal = !isTestEnv
+    && typeof document !== 'undefined'
     && !!document.body
     && typeof document.body.appendChild === 'function'
     && typeof document.body.removeChild === 'function';

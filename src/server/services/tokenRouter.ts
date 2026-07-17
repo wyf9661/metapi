@@ -16,6 +16,32 @@ import {
   type SiteRuntimeFailureContext,
 } from './siteFailureClassification.js';
 import {
+  blendRecentOutcomeSnapshots as blendRecentOutcomeSnapshotsMath,
+  buildRecentOutcomeSnapshot,
+  clampFailureCooldownMs as clampFailureCooldownMsMath,
+  clampNumber,
+  decayRecentOutcomeCount,
+  FAILURE_BACKOFF_BASE_SEC as FAILURE_BACKOFF_BASE_SEC_CONST,
+  isContributionCloseToBest,
+  isRecord,
+  MAX_FAILURE_BACKOFF_SEC as MAX_FAILURE_BACKOFF_SEC_CONST,
+  readFiniteInteger,
+  readFiniteNumber,
+  readNullableTimestamp,
+  type RecentOutcomeSnapshot,
+  resolveEffectiveFailureCooldownMs as resolveEffectiveFailureCooldownMsMath,
+  resolveFailureBackoffSec,
+  resolveRoundRobinCooldownSec,
+  resolveSiteRuntimeBreakerMs,
+  ROUND_ROBIN_COOLDOWN_LEVELS_SEC as ROUND_ROBIN_COOLDOWN_LEVELS_SEC_CONST,
+  SITE_RECENT_OUTCOME_HALF_LIFE_MS as SITE_RECENT_OUTCOME_HALF_LIFE_MS_CONST,
+  SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES as SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES_CONST,
+  SITE_RECENT_SUCCESS_PRIOR_FAILURES as SITE_RECENT_SUCCESS_PRIOR_FAILURES_CONST,
+  SITE_RECENT_SUCCESS_PRIOR_SUCCESSES as SITE_RECENT_SUCCESS_PRIOR_SUCCESSES_CONST,
+  SITE_RUNTIME_BREAKER_LEVELS_MS as SITE_RUNTIME_BREAKER_LEVELS_MS_CONST,
+  STABLE_FIRST_SITE_SCORE_RATIO as STABLE_FIRST_SITE_SCORE_RATIO_CONST,
+} from './tokenRouterMath.js';
+import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
 } from './routeRoutingStrategy.js';
@@ -92,14 +118,14 @@ type SiteRuntimeHealthState = {
   lastSuccessAtMs: number | null;
 };
 
-const FAILURE_BACKOFF_BASE_SEC = 15;
+const FAILURE_BACKOFF_BASE_SEC = FAILURE_BACKOFF_BASE_SEC_CONST;
 const SHORT_WINDOW_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
 // Keep weighted-route backoff within the JavaScript Date range when fail counts grow large.
-const MAX_FAILURE_BACKOFF_SEC = 30 * 24 * 60 * 60;
+const MAX_FAILURE_BACKOFF_SEC = MAX_FAILURE_BACKOFF_SEC_CONST;
 const MIN_EFFECTIVE_UNIT_COST = 1e-6;
 const ROUND_ROBIN_FAILURE_THRESHOLD = 3;
-const ROUND_ROBIN_COOLDOWN_LEVELS_SEC = [0, 10 * 60, 60 * 60, 24 * 60 * 60] as const;
-const STABLE_FIRST_SITE_SCORE_RATIO = 0.92;
+const ROUND_ROBIN_COOLDOWN_LEVELS_SEC = ROUND_ROBIN_COOLDOWN_LEVELS_SEC_CONST;
+const STABLE_FIRST_SITE_SCORE_RATIO = STABLE_FIRST_SITE_SCORE_RATIO_CONST;
 const SITE_RUNTIME_HEALTH_DECAY_HALF_LIFE_MS = 10 * 60 * 1000;
 const SITE_RUNTIME_MIN_MULTIPLIER = 0.08;
 const SITE_RUNTIME_LATENCY_BASELINE_MS = 2_500;
@@ -107,12 +133,12 @@ const SITE_RUNTIME_LATENCY_WINDOW_MS = 30_000;
 const SITE_RUNTIME_MAX_LATENCY_PENALTY = 0.35;
 const SITE_RUNTIME_LATENCY_EMA_ALPHA = 0.3;
 const SITE_RUNTIME_BREAKER_STREAK_THRESHOLD = 3;
-const SITE_RUNTIME_BREAKER_LEVELS_MS = [0, 60_000, 5 * 60_000, 30 * 60 * 1000] as const;
+const SITE_RUNTIME_BREAKER_LEVELS_MS = SITE_RUNTIME_BREAKER_LEVELS_MS_CONST;
 const SITE_TRANSIENT_STREAK_WINDOW_MS = 5 * 60 * 1000;
-const SITE_RECENT_OUTCOME_HALF_LIFE_MS = 30 * 60 * 1000;
-const SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES = 12;
-const SITE_RECENT_SUCCESS_PRIOR_SUCCESSES = 1;
-const SITE_RECENT_SUCCESS_PRIOR_FAILURES = 1;
+const SITE_RECENT_OUTCOME_HALF_LIFE_MS = SITE_RECENT_OUTCOME_HALF_LIFE_MS_CONST;
+const SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES = SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES_CONST;
+const SITE_RECENT_SUCCESS_PRIOR_SUCCESSES = SITE_RECENT_SUCCESS_PRIOR_SUCCESSES_CONST;
+const SITE_RECENT_SUCCESS_PRIOR_FAILURES = SITE_RECENT_SUCCESS_PRIOR_FAILURES_CONST;
 const SITE_RECENT_SUCCESS_FALLBACK_RATE = 0.5;
 const SITE_RECENT_MODEL_WEIGHT = 0.65;
 const SITE_HISTORICAL_HEALTH_MIN_MULTIPLIER = 0.45;
@@ -153,13 +179,6 @@ type WeightedSelectionResult = {
   stableSiteCount: number;
 };
 
-type RecentOutcomeSnapshot = {
-  successCount: number;
-  failureCount: number;
-  sampleCount: number;
-  successRate: number;
-  confidence: number;
-};
 
 type StableFirstSitePoolState = {
   siteId: number;
@@ -248,27 +267,6 @@ function rememberStableFirstObservationSiteCooldown(
   }
 }
 
-function fibonacciNumber(index: number): number {
-  if (index <= 2) return 1;
-  let prev = 1;
-  let current = 1;
-  for (let i = 3; i <= index; i += 1) {
-    const next = prev + current;
-    prev = current;
-    current = next;
-  }
-  return current;
-}
-
-/**
- * Weighted-route failures use a Fibonacci backoff, but the resulting cooldown must stay
- * representable as a JavaScript Date for downstream `toISOString()` calls.
- */
-function resolveFailureBackoffSec(failCount?: number | null): number {
-  const normalizedFailCount = Math.max(1, Math.trunc(failCount ?? 0));
-  return Math.min(FAILURE_BACKOFF_BASE_SEC * fibonacciNumber(normalizedFailCount), MAX_FAILURE_BACKOFF_SEC);
-}
-
 function resolveConfiguredFailureCooldownMaxMs(): number {
   const normalized = normalizeTokenRouterFailureCooldownMaxSec(config.tokenRouterFailureCooldownMaxSec)
     ?? TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING;
@@ -276,78 +274,11 @@ function resolveConfiguredFailureCooldownMaxMs(): number {
 }
 
 function clampFailureCooldownMs(cooldownMs: number): number {
-  const normalized = Math.max(0, Math.trunc(cooldownMs));
-  return Math.min(normalized, resolveConfiguredFailureCooldownMaxMs());
+  return clampFailureCooldownMsMath(cooldownMs, resolveConfiguredFailureCooldownMaxMs());
 }
 
 function resolveEffectiveFailureCooldownMs(failCount?: number | null): number {
-  return clampFailureCooldownMs(resolveFailureBackoffSec(failCount) * 1000);
-}
-
-function resolveRoundRobinCooldownSec(level: number): number {
-  const normalizedLevel = Math.max(0, Math.min(ROUND_ROBIN_COOLDOWN_LEVELS_SEC.length - 1, Math.trunc(level)));
-  return ROUND_ROBIN_COOLDOWN_LEVELS_SEC[normalizedLevel] ?? 0;
-}
-
-function resolveSiteRuntimeBreakerMs(level: number): number {
-  const normalizedLevel = Math.max(0, Math.min(SITE_RUNTIME_BREAKER_LEVELS_MS.length - 1, Math.trunc(level)));
-  return SITE_RUNTIME_BREAKER_LEVELS_MS[normalizedLevel] ?? 0;
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function isContributionCloseToBest(value: number, bestValue: number, ratio = STABLE_FIRST_SITE_SCORE_RATIO): boolean {
-  if (bestValue <= 0) return true;
-  return value >= (bestValue * ratio);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function readFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function readFiniteInteger(value: unknown): number | null {
-  const normalized = readFiniteNumber(value);
-  return normalized == null ? null : Math.trunc(normalized);
-}
-
-function readNullableTimestamp(value: unknown): number | null {
-  const normalized = readFiniteInteger(value);
-  if (normalized == null || normalized <= 0) return null;
-  return normalized;
-}
-
-function decayRecentOutcomeCount(value: number, elapsedMs: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  if (elapsedMs <= 0) return value;
-  const decayFactor = Math.pow(0.5, elapsedMs / SITE_RECENT_OUTCOME_HALF_LIFE_MS);
-  return value * decayFactor;
-}
-
-function buildRecentOutcomeSnapshot(
-  successCount: number,
-  failureCount: number,
-): RecentOutcomeSnapshot {
-  const normalizedSuccessCount = Math.max(0, successCount);
-  const normalizedFailureCount = Math.max(0, failureCount);
-  const sampleCount = normalizedSuccessCount + normalizedFailureCount;
-  const successRate = (
-    normalizedSuccessCount + SITE_RECENT_SUCCESS_PRIOR_SUCCESSES
-  ) / (
-    sampleCount + SITE_RECENT_SUCCESS_PRIOR_SUCCESSES + SITE_RECENT_SUCCESS_PRIOR_FAILURES
-  );
-  return {
-    successCount: normalizedSuccessCount,
-    failureCount: normalizedFailureCount,
-    sampleCount,
-    successRate,
-    confidence: clampNumber(sampleCount / SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES, 0, 1),
-  };
+  return resolveEffectiveFailureCooldownMsMath(failCount, resolveConfiguredFailureCooldownMaxMs());
 }
 
 function getRecentOutcomeSnapshot(state: SiteRuntimeHealthState | null | undefined, nowMs = Date.now()): RecentOutcomeSnapshot {
@@ -373,15 +304,7 @@ function blendRecentOutcomeSnapshots(
   globalSnapshot: RecentOutcomeSnapshot,
   modelSnapshot: RecentOutcomeSnapshot | null,
 ): RecentOutcomeSnapshot {
-  if (!modelSnapshot || modelSnapshot.sampleCount <= 0) {
-    return globalSnapshot;
-  }
-  const modelWeight = SITE_RECENT_MODEL_WEIGHT;
-  const globalWeight = 1 - modelWeight;
-  return buildRecentOutcomeSnapshot(
-    (globalSnapshot.successCount * globalWeight) + (modelSnapshot.successCount * modelWeight),
-    (globalSnapshot.failureCount * globalWeight) + (modelSnapshot.failureCount * modelWeight),
-  );
+  return blendRecentOutcomeSnapshotsMath(globalSnapshot, modelSnapshot, SITE_RECENT_MODEL_WEIGHT);
 }
 
 function resolveStableFirstSuccessRate(
