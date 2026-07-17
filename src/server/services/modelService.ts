@@ -28,7 +28,10 @@ import { isCodexPlatform } from './oauth/codexAccount.js';
 import { buildStoredOauthStateFromAccount, getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { refreshOauthAccessTokenSingleflight } from './oauth/refreshSingleflight.js';
 import { listEnabledOauthRouteUnitsWithMembers } from './oauth/routeUnitService.js';
-import { requireSiteApiBaseUrl } from './siteApiEndpointService.js';
+import {
+  recordSiteApiEndpointSuccessByBaseUrl,
+  requireSiteApiBaseUrl,
+} from './siteApiEndpointService.js';
 import {
   discoverAntigravityModelsFromCloud,
   discoverClaudeModelsFromCloud,
@@ -1283,6 +1286,7 @@ export async function refreshModelsForAccount(
     source: 'model-discovery',
     checkedAt,
   });
+  await recordSiteApiEndpointSuccessByBaseUrl(site.id, aiBaseUrl, checkedAt);
 
   const modelsPreview = Array.from(accountModels.values()).slice(0, 10);
   const standardPostProbeResult = await runPostRefreshProbeIfEnabled({

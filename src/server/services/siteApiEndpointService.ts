@@ -276,6 +276,23 @@ export async function recordSiteApiEndpointSuccess(
   }).where(eq(schema.siteApiEndpoints.id, endpointId)).run();
 }
 
+/** Clear cooldown after a successful explicit discovery/health half-open request. */
+export async function recordSiteApiEndpointSuccessByBaseUrl(
+  siteId: number,
+  baseUrl: string,
+  now?: string | Date,
+): Promise<void> {
+  const normalized = normalizeSiteApiEndpointBaseUrl(baseUrl);
+  if (!normalized) return;
+  const endpoints = await db.select().from(schema.siteApiEndpoints)
+    .where(eq(schema.siteApiEndpoints.siteId, siteId))
+    .all();
+  const matched = endpoints.find((endpoint) => (
+    normalizeSiteApiEndpointBaseUrl(endpoint.url) === normalized
+  ));
+  if (matched) await recordSiteApiEndpointSuccess(matched.id, now);
+}
+
 export async function runWithSiteApiEndpointPool<T>(
   site: SiteRow,
   operation: (target: SiteApiEndpointTarget) => Promise<T>,

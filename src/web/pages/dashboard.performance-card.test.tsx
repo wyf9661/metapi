@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
+import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Dashboard from './Dashboard.js';
 import { installDashboardSnapshotCompat } from './testApiCompat.js';
@@ -72,6 +73,12 @@ describe('Dashboard performance stat card', () => {
       todayCheckin: { success: 0, total: 0 },
       proxy24h: { success: 0, total: 0, totalTokens: 606_573_377 },
       performance: {
+        qualityWindowHours: 24,
+        qualitySampleCount: 120,
+        successRatePercent: 97.5,
+        p95FirstByteLatencyMs: 850,
+        p95LatencyMs: 2_400,
+        qualitySparse: false,
         windowSeconds: 60,
         requestsPerMinute: 17,
         tokensPerMinute: 7_974,
@@ -84,9 +91,11 @@ describe('Dashboard performance stat card', () => {
     try {
       await act(async () => {
         root = create(
-          <ToastProvider>
-            <Dashboard />
-          </ToastProvider>,
+          <MemoryRouter>
+            <ToastProvider>
+              <Dashboard />
+            </ToastProvider>
+          </MemoryRouter>,
         );
       });
       await flushMicrotasks();
@@ -105,6 +114,10 @@ describe('Dashboard performance stat card', () => {
       expect(collectText(statGrid)).toContain('TPM');
       expect(collectText(statGrid)).toContain('8K');
       expect(collectText(statGrid)).toContain('24h Tokens');
+      expect(collectText(statGrid)).toContain('24h 成功率');
+      expect(collectText(statGrid)).toContain('97.5%');
+      expect(collectText(statGrid)).toContain('P95 首包 / 总耗时');
+      expect(collectText(statGrid)).toContain('850ms / 2.4s');
       expect(collectText(statGrid)).toContain('606.6M');
     } finally {
       root?.unmount();
@@ -124,9 +137,11 @@ describe('Dashboard performance stat card', () => {
     try {
       await act(async () => {
         root = create(
-          <ToastProvider>
-            <Dashboard />
-          </ToastProvider>,
+          <MemoryRouter>
+            <ToastProvider>
+              <Dashboard />
+            </ToastProvider>
+          </MemoryRouter>,
         );
       });
 

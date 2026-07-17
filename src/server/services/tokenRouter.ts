@@ -2628,6 +2628,7 @@ export class TokenRouter {
     const resolveModelName = typeof modelName === 'function'
       ? modelName
       : (() => modelName);
+    const historicalBySite = buildSiteHistoricalHealthMetrics(candidates);
     return candidates.map((candidate) => {
       const model = resolveModelName(candidate);
       const cost = resolveEffectiveUnitCost(candidate, model);
@@ -2637,7 +2638,7 @@ export class TokenRouter {
         accountExtraConfig: candidate.account.extraConfig,
         accountOauthProvider: candidate.account.oauthProvider,
       });
-      const historical = buildSiteHistoricalHealthMetrics([candidate]).get(candidate.site.id);
+      const historical = historicalBySite.get(candidate.site.id);
       const downstreamSiteMultiplier = downstreamPolicy.siteWeightMultipliers[candidate.site.id] ?? 1;
       const siteGlobalWeight = (
         Number.isFinite(candidate.site.globalWeight) && (candidate.site.globalWeight || 0) > 0

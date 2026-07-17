@@ -13,6 +13,7 @@ describe('siteApiEndpointService', () => {
   let selectSiteApiEndpointTarget: SiteApiEndpointServiceModule['selectSiteApiEndpointTarget'];
   let recordSiteApiEndpointFailure: SiteApiEndpointServiceModule['recordSiteApiEndpointFailure'];
   let recordSiteApiEndpointSuccess: SiteApiEndpointServiceModule['recordSiteApiEndpointSuccess'];
+  let recordSiteApiEndpointSuccessByBaseUrl: SiteApiEndpointServiceModule['recordSiteApiEndpointSuccessByBaseUrl'];
   let dataDir = '';
 
   beforeAll(async () => {
@@ -28,6 +29,7 @@ describe('siteApiEndpointService', () => {
     selectSiteApiEndpointTarget = serviceModule.selectSiteApiEndpointTarget;
     recordSiteApiEndpointFailure = serviceModule.recordSiteApiEndpointFailure;
     recordSiteApiEndpointSuccess = serviceModule.recordSiteApiEndpointSuccess;
+    recordSiteApiEndpointSuccessByBaseUrl = serviceModule.recordSiteApiEndpointSuccessByBaseUrl;
   });
 
   beforeEach(async () => {
@@ -353,6 +355,33 @@ describe('siteApiEndpointService', () => {
       cooldownUntil: null,
       lastSelectedAt: '2026-03-31T12:01:00.000Z',
       lastFailureReason: null,
+    });
+  });
+
+  it('clears cooldown by matching base URL through recordSiteApiEndpointSuccessByBaseUrl', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'by-url-site',
+      url: 'https://panel.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const endpoint = await db.insert(schema.siteApiEndpoints).values({
+      siteId: site.id,
+      url: 'https://api-clean.example.com',
+      enabled: true,
+      sortOrder: 0,
+      cooldownUntil: '2026-03-31T12:09:00.000Z',
+    }).returning().get();
+
+    await recordSiteApiEndpointSuccessByBaseUrl(site.id, 'https://api-clean.example.com', '2026-03-31T12:02:00.000Z');
+
+    const stored = await db.select().from(schema.siteApiEndpoints)
+      .where(eq(schema.siteApiEndpoints.id, endpoint.id))
+      .get();
+    expect(stored).toMatchObject({
+      cooldownUntil: null,
+      lastSelectedAt: '2026-03-31T12:02:00.000Z',
     });
   });
 });

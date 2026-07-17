@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { buildModelAnalysisFromDailyUsage } from "./modelAnalysisService.js";
 import { parseCheckinRewardAmount } from "./checkinRewardParser.js";
@@ -22,6 +22,7 @@ import {
 import { estimateRewardWithTodayIncomeFallback } from "./todayIncomeRewardService.js";
 import { createAdminSnapshotPersistence } from "./adminSnapshotStore.js";
 import { runUsageAggregationProjectionPass } from "./usageAggregationService.js";
+import { calculateProxyQualityMetrics } from "./proxyQualityMetrics.js";
 
 export type DashboardSummaryPayload = {
   totalBalance: number;
@@ -41,6 +42,12 @@ export type DashboardSummaryPayload = {
     windowSeconds: number;
     requestsPerMinute: number;
     tokensPerMinute: number;
+    qualityWindowHours: number;
+    qualitySampleCount: number;
+    successRatePercent: number | null;
+    p95FirstByteLatencyMs: number | null;
+    p95LatencyMs: number | null;
+    qualitySparse: boolean;
   };
 };
 
@@ -97,6 +104,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     totalUsedRow,
     proxy24hRow,
     proxyPerformanceRow,
+    proxyQualityRows,
     todaySpendRow,
   ] = await Promise.all([
     db
@@ -163,6 +171,27 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .get(),
     db
       .select({
+        status: schema.proxyLogs.status,
+        firstByteLatencyMs: schema.proxyLogs.firstByteLatencyMs,
+        latencyMs: schema.proxyLogs.latencyMs,
+      })
+      .from(schema.proxyLogs)
+      .innerJoin(
+        schema.accounts,
+        eq(schema.proxyLogs.accountId, schema.accounts.id),
+      )
+      .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+      .where(
+        and(
+          gte(schema.proxyLogs.createdAt, last24hDate),
+          eq(schema.sites.status, "active"),
+        ),
+      )
+      .orderBy(desc(schema.proxyLogs.createdAt))
+      .limit(5000)
+      .all(),
+    db
+      .select({
         todaySpend: sql<number>`coalesce(sum(coalesce(${schema.siteDayUsage.totalSiteSpend}, 0)), 0)`,
       })
       .from(schema.siteDayUsage)
@@ -206,6 +235,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
   const totalTokens = Number(proxy24hRow?.totalTokens || 0);
   const requestsPerMinute = Number(proxyPerformanceRow?.total || 0);
   const tokensPerMinute = Number(proxyPerformanceRow?.totalTokens || 0);
+  const proxyQuality = calculateProxyQualityMetrics(proxyQualityRows);
   const totalUsed = Number(totalUsedRow?.totalUsed || 0);
   const todaySpend = Number(todaySpendRow?.todaySpend || 0);
   const todayReward = accounts.reduce(
@@ -243,6 +273,12 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       windowSeconds: 60,
       requestsPerMinute,
       tokensPerMinute,
+      qualityWindowHours: 24,
+      qualitySampleCount: proxyQuality.sampleCount,
+      successRatePercent: proxyQuality.successRatePercent,
+      p95FirstByteLatencyMs: proxyQuality.p95FirstByteLatencyMs,
+      p95LatencyMs: proxyQuality.p95LatencyMs,
+      qualitySparse: proxyQuality.sparse,
     },
   };
 }
