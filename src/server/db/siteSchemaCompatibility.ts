@@ -83,6 +83,14 @@ export const SITE_COLUMN_COMPATIBILITY_SPECS: SiteColumnCompatibilitySpec[] = [
       postgres: 'UPDATE "sites" SET "global_weight" = 1 WHERE "global_weight" IS NULL OR "global_weight" <= 0',
     },
   },
+  {
+    column: 'protocol_profile',
+    addSql: {
+      sqlite: 'ALTER TABLE sites ADD COLUMN protocol_profile text;',
+      mysql: 'ALTER TABLE `sites` ADD COLUMN `protocol_profile` TEXT NULL',
+      postgres: 'ALTER TABLE "sites" ADD COLUMN "protocol_profile" TEXT',
+    },
+  },
 ];
 
 export const SITE_TABLE_COMPATIBILITY_SPECS: SiteTableCompatibilitySpec[] = [

@@ -772,6 +772,7 @@ export default function Sites() {
       customHeaders: serializedCustomHeaders.customHeaders,
       customHeadersOverrideRequestHeaders: !!form.customHeadersOverrideRequestHeaders,
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
+      protocolProfile: JSON.stringify(form.protocolProfile),
       postRefreshProbeEnabled: probeEnabled,
       postRefreshProbeModel: probeModel.trim(),
       postRefreshProbeScope: probeScope,
@@ -1652,6 +1653,64 @@ export default function Sites() {
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
               按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。
+            </div>
+            <div style={{ marginTop: 12, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>协议画像</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, lineHeight: 1.6 }}>
+                声明该站点的上游协议能力。勾选后 MetAPI 在路由和探测时自动适配。
+              </div>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={form.protocolProfile.preferResponses}
+                  onChange={(e) => setForm((prev) => ({
+                    ...prev,
+                    protocolProfile: { ...prev.protocolProfile, preferResponses: e.target.checked },
+                  }))}
+                  style={{ marginTop: 2 }}
+                />
+                <span style={{ fontSize: 13 }}>
+                  优先 /v1/responses（Responses 协议优先）
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    勾选后 MetAPI 对此站优先走 /v1/responses 而非 /v1/chat/completions。
+                  </span>
+                </span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={form.protocolProfile.requireCodexClient}
+                  onChange={(e) => setForm((prev) => ({
+                    ...prev,
+                    protocolProfile: { ...prev.protocolProfile, requireCodexClient: e.target.checked },
+                  }))}
+                  style={{ marginTop: 2 }}
+                />
+                <span style={{ fontSize: 13 }}>
+                  需要 Codex 客户端指纹
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    上游对非 Codex UA 返回 403/policy。等价于自定义头里的「Codex 客户端特征」勾选。
+                  </span>
+                </span>
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <span style={{ fontSize: 13, minWidth: 80 }}>凭证提示</span>
+                <select
+                  value={form.protocolProfile.credentialMode}
+                  onChange={(e) => setForm((prev) => ({
+                    ...prev,
+                    protocolProfile: { ...prev.protocolProfile, credentialMode: e.target.value },
+                  }))}
+                  style={{ fontSize: 13, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg)' }}
+                >
+                  <option value="auto">自动</option>
+                  <option value="api_key">API Key（sk-...）</option>
+                  <option value="session">Session Cookie</option>
+                </select>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  添加账号时的凭证验证策略提示
+                </span>
+              </div>
             </div>
             {isEditing && (
               <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>

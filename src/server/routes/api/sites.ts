@@ -580,6 +580,7 @@ export async function sitesRoutes(app: FastifyInstance) {
           useSystemProxy: normalizedUseSystemProxy ?? false,
           customHeaders: normalizedCustomHeaders.customHeaders,
           customHeadersOverrideRequestHeaders: normalizedCustomHeadersOverrideRequestHeaders ?? false,
+          protocolProfile: typeof (createBody as any).protocolProfile === 'string' ? (createBody as any).protocolProfile : null,
           externalCheckinUrl: normalizedExternalCheckinUrl.url,
           status: normalizedStatus ?? 'active',
           isPinned: normalizedPinned ?? false,
@@ -715,6 +716,9 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (normalizedCustomHeaders.present) updates.customHeaders = normalizedCustomHeaders.customHeaders;
     if (body.customHeadersOverrideRequestHeaders !== undefined) {
       updates.customHeadersOverrideRequestHeaders = normalizedCustomHeadersOverrideRequestHeaders;
+    }
+    if (typeof (body as any).protocolProfile === 'string' || (body as any).protocolProfile === null) {
+      (updates as any).protocolProfile = (body as any).protocolProfile ?? null;
     }
     if (normalizedExternalCheckinUrl.present) updates.externalCheckinUrl = normalizedExternalCheckinUrl.url;
     if (body.status !== undefined) updates.status = normalizedStatus;

@@ -197,6 +197,13 @@
       "when": 1784174930098,
       "tag": "0028_model_connectivity",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1784266509288,
+      "tag": "0029_site_protocol_profile",
+      "breakpoints": true
     }
   ]
 }
