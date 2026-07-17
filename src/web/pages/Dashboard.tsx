@@ -589,6 +589,17 @@ export default function Dashboard({
   );
   const requestsPerMinute = safeNumber(data?.performance?.requestsPerMinute);
   const tokensPerMinute = safeNumber(data?.performance?.tokensPerMinute);
+  const qualitySampleCount = safeNumber(data?.performance?.qualitySampleCount);
+  const qualitySuccessRate = typeof data?.performance?.successRatePercent === "number"
+    ? data.performance.successRatePercent
+    : null;
+  const p95FirstByteLatencyMs = typeof data?.performance?.p95FirstByteLatencyMs === "number"
+    ? data.performance.p95FirstByteLatencyMs
+    : null;
+  const p95LatencyMs = typeof data?.performance?.p95LatencyMs === "number"
+    ? data.performance.p95LatencyMs
+    : null;
+  const qualitySparse = Boolean(data?.performance?.qualitySparse);
   const rawSiteAvailability: SiteAvailabilitySummary[] = Array.isArray(
     insightsData?.siteAvailability,
   )
@@ -1226,6 +1237,36 @@ export default function Dashboard({
               <div className="dashboard-stat-note">
                 最近 {performanceWindowSeconds} 秒 Tokens
               </div>
+            </div>
+          </div>
+          <div className="stat-card-row">
+            <div className="stat-icon stat-icon-green">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="dashboard-stat-content">
+              <div className="stat-label">24h 成功率</div>
+              <div className="stat-value animate-count-up">
+                {qualitySuccessRate == null ? "—" : `${qualitySuccessRate.toFixed(1)}%`}
+              </div>
+              <div className="dashboard-stat-note">
+                {qualitySparse ? "样本不足 · " : ""}{Math.round(qualitySampleCount).toLocaleString()} 次请求
+              </div>
+            </div>
+          </div>
+          <div className="stat-card-row">
+            <div className="stat-icon stat-icon-orange">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="dashboard-stat-content">
+              <div className="stat-label">P95 首包 / 总耗时</div>
+              <div className="stat-value animate-count-up" style={{ fontSize: 17 }}>
+                {formatDashboardLatency(p95FirstByteLatencyMs)} / {formatDashboardLatency(p95LatencyMs)}
+              </div>
+              <div className="dashboard-stat-note">最近 24 小时长尾表现</div>
             </div>
           </div>
         </div>

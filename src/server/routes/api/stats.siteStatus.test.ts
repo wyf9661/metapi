@@ -233,13 +233,23 @@ describe('stats dashboard filters disabled sites', () => {
         windowSeconds: number;
         requestsPerMinute: number;
         tokensPerMinute: number;
+        qualityWindowHours: number;
+        qualitySampleCount: number;
+        successRatePercent: number | null;
+        p95FirstByteLatencyMs: number | null;
+        p95LatencyMs: number | null;
+        qualitySparse: boolean;
       };
     };
 
-    expect(body.performance).toEqual({
+    expect(body.performance).toMatchObject({
       windowSeconds: 60,
       requestsPerMinute: 3,
       tokensPerMinute: 1800,
+      qualityWindowHours: 24,
+      qualitySampleCount: 4,
+      successRatePercent: 75,
+      qualitySparse: true,
     });
   });
 
