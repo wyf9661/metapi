@@ -64,6 +64,7 @@ import RouteFilterBar, { type EnabledFilter } from './token-routes/RouteFilterBa
 import ManualRoutePanel from './token-routes/ManualRoutePanel.js';
 import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
+import TokenRouteConfirmModal, { type TokenRouteConfirmState } from './token-routes/TokenRouteConfirmModal.js';
 
 const EMPTY_ROUTE_CANDIDATE_VIEW: RouteCandidateView = {
   routeCandidates: [],
@@ -105,10 +106,6 @@ function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): str
   if (value === 'round_robin') return '已切换为轮询策略';
   if (value === 'stable_first') return '已切换为稳定优先策略';
   return '已切换为权重随机策略';
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export function DesktopDetailPanelPresence({
@@ -254,6 +251,8 @@ export default function TokenRoutes() {
   const [expandedRouteIds, setExpandedRouteIds] = useState<number[]>([]);
   const [closingDesktopDetailRouteIds, setClosingDesktopDetailRouteIds] = useState<number[]>([]);
   const [addChannelModalRouteId, setAddChannelModalRouteId] = useState<number | null>(null);
+  const [confirmState, setConfirmState] = useState<TokenRouteConfirmState | null>(null);
+  const confirmResolverRef = useRef<((result: { confirmed: boolean; dismissChecked: boolean }) => void) | null>(null);
   const isMobile = useIsMobile();
   const desktopDetailCloseTimersRef = useRef<Record<number, ReturnType<typeof globalThis.setTimeout>>>({});
 
@@ -266,6 +265,21 @@ export default function TokenRoutes() {
   } = useRouteChannels();
 
   const toast = useToast();
+
+  const requestConfirmation = useCallback((state: TokenRouteConfirmState) => (
+    new Promise<{ confirmed: boolean; dismissChecked: boolean }>((resolve) => {
+      confirmResolverRef.current?.({ confirmed: false, dismissChecked: false });
+      confirmResolverRef.current = resolve;
+      setConfirmState(state);
+    })
+  ), []);
+
+  const resolveConfirmation = useCallback((confirmed: boolean, dismissChecked = false) => {
+    const resolver = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    setConfirmState(null);
+    resolver?.({ confirmed, dismissChecked });
+  }, []);
 
   const candidatesLoadedRef = useRef(false);
   const candidatesPromiseRef = useRef<Promise<void> | null>(null);
@@ -1100,37 +1114,20 @@ export default function TokenRoutes() {
     const dismissedKey = 'metapi:channel-delete-warning-dismissed';
     const dismissed = localStorage.getItem(dismissedKey) === 'true';
     if (!dismissed) {
-      const dontAskAgain = { checked: false };
-      const confirmed = await new Promise<boolean>((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
-        const dialog = document.createElement('div');
-        dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
-        dialog.innerHTML = `
-          <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认移除通道</div>
-          <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
-            移除的通道会在定时模型刷新时被自动重建恢复。<br/>如果只是想临时停用通道，建议使用<b>禁用开关</b>。
-          </div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-muted);margin-bottom:16px;cursor:pointer">
-            <input type="checkbox" id="__ch_del_dismiss" /> 以后不再提示
-          </label>
-          <div style="display:flex;justify-content:flex-end;gap:8px">
-            <button id="__ch_del_cancel" class="btn btn-ghost" style="padding:6px 16px">取消</button>
-            <button id="__ch_del_confirm" class="btn btn-danger" style="padding:6px 16px">确认移除</button>
-          </div>
-        `;
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-        dialog.querySelector('#__ch_del_cancel')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(false); });
-        dialog.querySelector('#__ch_del_confirm')!.addEventListener('click', () => {
-          dontAskAgain.checked = (dialog.querySelector('#__ch_del_dismiss') as HTMLInputElement).checked;
-          document.body.removeChild(overlay);
-          resolve(true);
-        });
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } });
+      const result = await requestConfirmation({
+        title: '确认移除通道',
+        description: (
+          <>
+            移除的通道会在定时模型刷新时被自动重建恢复。<br />
+            如果只是想临时停用通道，建议使用<strong>禁用开关</strong>。
+          </>
+        ),
+        confirmText: '确认移除',
+        tone: 'danger',
+        dismissLabel: '以后不再提示',
       });
-      if (!confirmed) return;
-      if (dontAskAgain.checked) localStorage.setItem(dismissedKey, 'true');
+      if (!result.confirmed) return;
+      if (result.dismissChecked) localStorage.setItem(dismissedKey, 'true');
     }
     try {
       await api.deleteChannel(channelId);
@@ -1276,28 +1273,18 @@ export default function TokenRoutes() {
       return;
     }
     const siteName = channel.site.name || '未知站点';
-    const confirmed = await new Promise<boolean>((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
-      const dialog = document.createElement('div');
-      dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
-      dialog.innerHTML = `
-        <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认站点屏蔽</div>
-        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
-          将模型「<b>${escapeHtml(modelName)}</b>」加入站点「<b>${escapeHtml(siteName)}</b>」的禁用列表。<br/>执行后将自动触发路由重建，该站点下此模型的通道将不再生成。
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px">
-          <button id="__sb_cancel" class="btn btn-ghost" style="padding:6px 16px">取消</button>
-          <button id="__sb_confirm" class="btn btn-warning" style="padding:6px 16px">确认屏蔽</button>
-        </div>
-      `;
-      overlay.appendChild(dialog);
-      document.body.appendChild(overlay);
-      dialog.querySelector('#__sb_cancel')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(false); });
-      dialog.querySelector('#__sb_confirm')!.addEventListener('click', () => { document.body.removeChild(overlay); resolve(true); });
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } });
+    const result = await requestConfirmation({
+      title: '确认站点屏蔽',
+      description: (
+        <>
+          将模型「<strong>{modelName}</strong>」加入站点「<strong>{siteName}</strong>」的禁用列表。<br />
+          执行后将自动触发路由重建，该站点下此模型的通道将不再生成。
+        </>
+      ),
+      confirmText: '确认屏蔽',
+      tone: 'warning',
     });
-    if (!confirmed) return;
+    if (!result.confirmed) return;
 
     try {
       const siteId = channel.site.id;
@@ -2178,6 +2165,12 @@ export default function TokenRoutes() {
           existingChannelAccountIds={new Set((channelsByRouteId[addChannelModalRoute.id] || []).map((c) => c.accountId))}
         />
       )}
+
+      <TokenRouteConfirmModal
+        state={confirmState}
+        onCancel={() => resolveConfirmation(false)}
+        onConfirm={(dismissChecked) => resolveConfirmation(true, dismissChecked)}
+      />
     </div>
   );
 }
