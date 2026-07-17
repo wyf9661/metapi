@@ -79,7 +79,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     const raw = trimmed.startsWith('Bearer ') ? trimmed.slice(7).trim() : trimmed;
     const candidates: string[] = [];
 
-    if (raw.includes('=')) {
+    // Only treat as a full Cookie header when it looks like name=value pairs.
+    if (this.looksLikeCookiePairCredential(raw)) {
       candidates.push(raw);
     }
 
@@ -647,10 +648,28 @@ export class NewApiAdapter extends BasePlatformAdapter {
     );
   }
 
+  private looksLikeCookiePairCredential(token: string): boolean {
+    const raw = (token || '').trim();
+    if (!raw || !raw.includes('=')) return false;
+    // Real cookie header values contain name=value pairs, often with "; " separators.
+    // NewAPI session values are long base64 strings that may only end with padding "=".
+    if (raw.includes(';')) {
+      return /(?:^|;\s*)[A-Za-z_][A-Za-z0-9_-]*=/.test(raw);
+    }
+    const eq = raw.indexOf('=');
+    if (eq <= 0) return false;
+    const name = raw.slice(0, eq);
+    // Cookie names are short identifiers. Long base64 blobs before "=" are not cookie names.
+    if (name.length > 40) return false;
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(name)) return false;
+    // Require a non-empty value after the first "=" (allow value padding equals).
+    return raw.length > eq + 1;
+  }
+
   private isSessionLikeCredential(token: string): boolean {
     const raw = (token || '').trim();
     if (!raw) return false;
-    if (raw.includes('=')) return true;
+    if (this.looksLikeCookiePairCredential(raw)) return true;
     // NewAPI session cookies are typically long base64-ish values, not sk-/eyJ tokens.
     if (raw.startsWith('sk-') || raw.startsWith('eyJ')) return false;
     return raw.length >= 80;
@@ -912,10 +931,17 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   private async getOpenAiModels(baseUrl: string, token: string): Promise<string[]> {
-    const shouldTryShieldCookie = this.platformName === 'anyrouter' || token.includes('=');
+    // Session base64 values often end with "=" padding; that must NOT trigger the
+    // anyrouter shield-cookie path or verifyToken spends a long time on /v1/models.
+    const shouldTryShieldCookie = this.platformName === 'anyrouter' || this.looksLikeCookiePairCredential(token);
     if (shouldTryShieldCookie) {
       const shieldModels = await this.getOpenAiModelsViaShieldCookie(baseUrl, token);
       if (shieldModels.length > 0) return shieldModels;
+    }
+
+    // API keys only: session cookies are not valid OpenAI bearer tokens.
+    if (this.isSessionLikeCredential(token) && !token.trim().startsWith('sk-')) {
+      return [];
     }
 
     try {
@@ -928,7 +954,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     }
   }
 
-  private async discoverUserId(baseUrl: string, accessToken: string): Promise<number | null> {
+  private async discoverUserId
+(baseUrl: string, accessToken: string): Promise<number | null> {
     const jwtId = this.tryDecodeUserId(accessToken);
     if (jwtId) {
       try {
@@ -1033,9 +1060,32 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   override async verifyToken(baseUrl: string, token: string, platformUserId?: number): Promise<TokenVerifyResult> {
-    const openAiModels = await this.getOpenAiModels(baseUrl, token);
-    if (openAiModels.length > 0) {
-      return { tokenType: 'apikey', models: openAiModels };
+    // Session cookies (NewAPI gorilla securecookie) must not start with a slow
+    // OpenAI /v1/models probe — that path is for sk- API keys and used to hang the UI.
+    if (!this.isSessionLikeCredential(token) || token.trim().startsWith('sk-')) {
+      const openAiModels = await this.getOpenAiModels(baseUrl, token);
+      if (openAiModels.length > 0) {
+        return { tokenType: 'apikey', models: openAiModels };
+      }
+    }
+
+    // Fast path: decode user id from session payload, then cookie + New-API-User.
+    if (this.isSessionLikeCredential(token)) {
+      const guessedIds = this.extractLikelyUserIds(token);
+      const orderedIds = [
+        ...(typeof platformUserId === 'number' && platformUserId > 0 ? [platformUserId] : []),
+        ...guessedIds,
+      ];
+      for (const userId of orderedIds) {
+        const cookieRes = await this.fetchUserSelfByCookie(baseUrl, token, userId);
+        if (cookieRes?.success && cookieRes?.data) {
+          const userInfo = this.parseUserInfo(cookieRes.data);
+          const balance = this.parseBalance(cookieRes.data);
+          let apiToken: string | null = null;
+          try { apiToken = await this.getApiTokenWithUser(baseUrl, token, userId); } catch {}
+          return { tokenType: 'session', userInfo, balance, apiToken };
+        }
+      }
     }
 
     try {
