@@ -582,9 +582,14 @@ export function createSurfaceFailureToolkit(input: {
         if (retry) return retry;
       }
 
-      runBestEffort('report proxy all failed', () => reportProxyAllFailed({
+      runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: `upstream returned HTTP ${args.status}`,
+        outcome: args.retryCount >= input.maxRetries && input.maxRetries > 0
+          ? 'all_attempted_channels_failed'
+          : 'request_failed',
+        attemptedChannels: args.retryCount + 1,
+        configuredAttempts: input.maxRetries + 1,
       }));
 
       const mapped = mapUpstreamErrorForClient(args.status, args.errText);
@@ -641,9 +646,14 @@ export function createSurfaceFailureToolkit(input: {
         if (retry) return retry;
       }
 
-      runBestEffort('report proxy all failed', () => reportProxyAllFailed({
+      runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: args.failure.reason,
+        outcome: args.retryCount >= input.maxRetries && input.maxRetries > 0
+          ? 'all_attempted_channels_failed'
+          : 'request_failed',
+        attemptedChannels: args.retryCount + 1,
+        configuredAttempts: input.maxRetries + 1,
       }));
 
       const mappedDetected = mapUpstreamErrorForClient(args.failure.status, args.failure.reason);
@@ -689,9 +699,14 @@ export function createSurfaceFailureToolkit(input: {
       const retry = maybeRetry(args.retryCount);
       if (retry) return retry;
 
-      runBestEffort('report proxy all failed', () => reportProxyAllFailed({
+      runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: args.errorMessage || 'network failure',
+        outcome: args.retryCount >= input.maxRetries && input.maxRetries > 0
+          ? 'all_attempted_channels_failed'
+          : 'request_failed',
+        attemptedChannels: args.retryCount + 1,
+        configuredAttempts: input.maxRetries + 1,
       }));
 
       return {

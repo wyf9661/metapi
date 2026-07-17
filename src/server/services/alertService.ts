@@ -45,20 +45,66 @@ export async function reportTokenExpired(params: {
   );
 }
 
-export async function reportProxyAllFailed(params: { model: string; reason: string }) {
+export type ProxyFailureOutcome =
+  | 'request_failed'
+  | 'all_attempted_channels_failed'
+  | 'no_available_channels';
+
+export type ProxyFailureAlertParams = {
+  model: string;
+  reason: string;
+  outcome?: ProxyFailureOutcome;
+  attemptedChannels?: number;
+  configuredAttempts?: number;
+  retryBudgetExhausted?: boolean;
+};
+
+export function formatProxyFailureAlert(params: ProxyFailureAlertParams): {
+  title: string;
+  message: string;
+} {
+  const outcome = params.outcome || 'request_failed';
+  const title = outcome === 'all_attempted_channels_failed'
+    ? '已尝试渠道均失败'
+    : outcome === 'no_available_channels'
+      ? '代理无可用渠道'
+      : '代理请求失败';
+  const details = [
+    `模型=${params.model}`,
+    `原因=${params.reason}`,
+  ];
+  if (typeof params.attemptedChannels === 'number' && params.attemptedChannels >= 0) {
+    const configured = typeof params.configuredAttempts === 'number' && params.configuredAttempts > 0
+      ? `/${params.configuredAttempts}`
+      : '';
+    details.push(`已尝试=${params.attemptedChannels}${configured}`);
+  }
+  if (params.retryBudgetExhausted) {
+    details.push('终止=故障转移预算耗尽');
+  }
+  return { title, message: details.join(', ') };
+}
+
+/**
+ * Legacy name retained for callers/tests. The default is deliberately
+ * "代理请求失败", not "代理全部失败". A caller may only claim all attempted
+ * channels failed by explicitly passing outcome=all_attempted_channels_failed.
+ */
+export async function reportProxyAllFailed(params: ProxyFailureAlertParams) {
   const createdAt = formatUtcSqlDateTime(new Date());
+  const formatted = formatProxyFailureAlert(params);
   await db.insert(schema.events).values({
     type: 'proxy',
-    title: '代理全部失败',
-    message: `模型=${params.model}, 原因=${params.reason}`,
+    title: formatted.title,
+    message: formatted.message,
     level: 'error',
     relatedType: 'route',
     createdAt,
   }).run();
 
   await sendNotification(
-    '代理全部失败',
-    `模型=${params.model}, 原因=${params.reason}`,
+    formatted.title,
+    formatted.message,
     'error',
   );
 }
