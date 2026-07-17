@@ -2,14 +2,18 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildConfig, config } from '../config.js';
 import {
   canRetryProxyChannel,
+  canRetryProxyChannelWithBudget,
+  getProxyChannelFailoverBudgetMs,
   getProxyMaxChannelAttempts,
   getProxyMaxChannelRetries,
 } from './proxyChannelRetry.js';
 
 const originalProxyMaxChannelAttempts = config.proxyMaxChannelAttempts;
+const originalBudget = (config as any).proxyChannelFailoverBudgetMs;
 
 afterEach(() => {
   config.proxyMaxChannelAttempts = originalProxyMaxChannelAttempts;
+  (config as any).proxyChannelFailoverBudgetMs = originalBudget;
 });
 
 describe('proxyChannelRetry', () => {
@@ -33,5 +37,14 @@ describe('proxyChannelRetry', () => {
     expect(getProxyMaxChannelAttempts()).toBe(1);
     expect(getProxyMaxChannelRetries()).toBe(0);
     expect(canRetryProxyChannel(0)).toBe(false);
+  });
+
+  it('honors wall-clock failover budget', () => {
+    config.proxyMaxChannelAttempts = 3;
+    (config as any).proxyChannelFailoverBudgetMs = 1000;
+    expect(getProxyChannelFailoverBudgetMs()).toBe(1000);
+    expect(canRetryProxyChannelWithBudget(0, 100)).toBe(true);
+    expect(canRetryProxyChannelWithBudget(0, 1000)).toBe(false);
+    expect(canRetryProxyChannelWithBudget(2, 100)).toBe(false); // attempts exhausted
   });
 });

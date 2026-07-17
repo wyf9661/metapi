@@ -55,6 +55,18 @@ const NON_RETRYABLE_REQUEST_PATTERNS: RegExp[] = [
   /unsupported\s+media\s+type/i,
 ];
 
+/**
+ * Protocol / policy failures that will not improve by switching channel with the
+ * same client request shape (after in-channel endpoint cascade already ran).
+ * Fail fast instead of burning the multi-channel retry budget.
+ */
+const NON_RETRYABLE_PROTOCOL_PATTERNS: RegExp[] = [
+  /codex_requires_responses_protocol/i,
+  /codex clients may only use the openai responses protocol/i,
+  /only use the openai responses protocol/i,
+  /policy_violation/i,
+];
+
 const SAME_SITE_ENDPOINT_ABORT_PATTERNS: RegExp[] = [
   /\b429\b/i,
   /too\s+many\s+requests/i,
@@ -84,12 +96,42 @@ function matchesAnyPattern(patterns: RegExp[], rawMessage?: string | null): bool
   return patterns.some((pattern) => pattern.test(text));
 }
 
+export function isNonRetryableProtocolPolicyError(upstreamErrorText?: string | null): boolean {
+  return matchesAnyPattern(NON_RETRYABLE_PROTOCOL_PATTERNS, upstreamErrorText);
+}
+
+/**
+ * Whether failing over to another upstream channel is worthwhile.
+ *
+ * Retry: 5xx, timeouts, rate limits, channel-local auth, legacy-protocol hints,
+ *        model-not-supported (another site may have the model).
+ * No retry: request validation, Codex-only policy after conversion path,
+ *           generic 4xx that is not channel-local.
+ */
 export function shouldRetryProxyRequest(status: number, upstreamErrorText?: string | null): boolean {
+  // Permanent client/protocol policy — do not burn channel failover budget.
+  if (isNonRetryableProtocolPolicyError(upstreamErrorText)) {
+    return false;
+  }
+  if (matchesAnyPattern(NON_RETRYABLE_REQUEST_PATTERNS, upstreamErrorText)) {
+    return false;
+  }
+
   if (status >= 500) return true;
   if (status === 408 || status === 409 || status === 425 || status === 429) return true;
-  if (status === 401 || status === 403) return true;
+
+  // 401/403: only when it looks channel-local (auth / generic forbidden / rate),
+  // not blanket-retry every forbidden response.
+  if (status === 401 || status === 403) {
+    if (matchesAnyPattern(RETRYABLE_CHANNEL_LOCAL_PATTERNS, upstreamErrorText)) return true;
+    // Empty body 403 from some edges — allow one failover attempt.
+    if (!(upstreamErrorText || '').trim()) return true;
+    return false;
+  }
+
+  // Multi-site gateway: another channel may still serve this model.
   if (isModelUnsupportedErrorMessage(upstreamErrorText)) return true;
-  if (matchesAnyPattern(NON_RETRYABLE_REQUEST_PATTERNS, upstreamErrorText)) return false;
+
   if (matchesAnyPattern(RETRYABLE_CHANNEL_LOCAL_PATTERNS, upstreamErrorText)) return true;
   if (status === 400 || status === 404 || status === 422) return false;
   return false;

@@ -278,7 +278,8 @@ export async function handleChatSurfaceRequest(
   };
 
   const excludeChannelIds: number[] = [];
-  let retryCount = 0;
+  const requestStartedAtMs = Date.now();
+    let retryCount = 0;
 
   while (retryCount <= maxRetries) {
     const stickyPreferredChannelId = retryCount === 0
@@ -571,7 +572,7 @@ export async function handleChatSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
-      if (canRetryChannelSelection(retryCount, forcedChannelId)) {
+      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
         retryCount += 1;
         continue;
       }
@@ -806,7 +807,7 @@ export async function handleChatSurfaceRequest(
               upstreamPath: successfulUpstreamPath,
             });
             const terminalFailureOutcome = failureOutcome.action === 'retry'
-              ? (canRetryChannelSelection(retryCount, forcedChannelId)
+              ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
                 ? null
                 : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
               : failureOutcome;
@@ -1008,7 +1009,7 @@ export async function handleChatSurfaceRequest(
           upstreamPath: successfulUpstreamPath,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId)
+          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
             ? null
             : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
           : failureOutcome;
@@ -1102,7 +1103,7 @@ export async function handleChatSurfaceRequest(
           retryCount,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId)
+          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
             ? null
             : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err.message || 'unknown error'))
           : failureOutcome;
@@ -1127,7 +1128,7 @@ export async function handleChatSurfaceRequest(
         retryCount,
       });
       const terminalFailureOutcome = failureOutcome.action === 'retry'
-        ? (canRetryChannelSelection(retryCount, forcedChannelId)
+        ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
           ? null
           : finalizeRetryAsExecutionFailure(err?.message || 'network failure'))
         : failureOutcome;
@@ -1252,7 +1253,8 @@ export async function handleClaudeCountTokensSurfaceRequest(
     });
   };
   const excludeChannelIds: number[] = [];
-  let retryCount = 0;
+  const requestStartedAtMs = Date.now();
+    let retryCount = 0;
 
   while (retryCount <= maxRetries) {
     const stickyPreferredChannelId = retryCount === 0
@@ -1326,7 +1328,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       },
     });
     if (endpointCandidates.length === 0) {
-      if (canRetryChannelSelection(retryCount, forcedChannelId)) {
+      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
         retryCount += 1;
         continue;
       }
@@ -1364,7 +1366,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
-      if (canRetryChannelSelection(retryCount, forcedChannelId)) {
+      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
         retryCount += 1;
         continue;
       }
@@ -1550,7 +1552,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
           retryCount,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId)
+          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
             ? null
             : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, error.message || 'unknown error'))
           : failureOutcome;
@@ -1571,7 +1573,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         retryCount,
       });
       const terminalFailureOutcome = failureOutcome.action === 'retry'
-        ? (canRetryChannelSelection(retryCount, forcedChannelId)
+        ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
           ? null
           : finalizeRetryAsExecutionFailure(error?.message || 'network failure'))
         : failureOutcome;

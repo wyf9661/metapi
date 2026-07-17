@@ -353,6 +353,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
       });
     };
     const excludeChannelIds: number[] = [];
+    const requestStartedAtMs = Date.now();
     let retryCount = 0;
 
     while (retryCount <= maxRetries) {
@@ -827,7 +828,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
-      if (retryCount < maxRetries && canRetryChannelSelection(retryCount, forcedChannelId)) {
+      if (retryCount < maxRetries && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
         retryCount += 1;
         continue;
       }
@@ -1026,7 +1027,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 upstreamPath: successfulUpstreamPath,
 	              });
 	              const terminalFailureOutcome = failureOutcome.action === 'retry'
-	                ? (canRetryChannelSelection(retryCount, forcedChannelId)
+	                ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
 	                  ? null
 	                  : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
 	                : failureOutcome;
@@ -1294,7 +1295,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             upstreamPath: successfulUpstreamPath,
 	          });
 	          const terminalFailureOutcome = failureOutcome.action === 'retry'
-	            ? (canRetryChannelSelection(retryCount, forcedChannelId)
+	            ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
 	              ? null
 	              : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
 	            : failureOutcome;
@@ -1381,7 +1382,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
           retryCount,
         });
             const terminalFailureOutcome = failureOutcome.action === 'retry'
-              ? (canRetryChannelSelection(retryCount, forcedChannelId)
+              ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
                 ? null
                 : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err?.message || 'unknown error'))
               : failureOutcome;
@@ -1406,7 +1407,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             retryCount,
           });
           const terminalFailureOutcome = failureOutcome.action === 'retry'
-            ? (canRetryChannelSelection(retryCount, forcedChannelId)
+            ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
               ? null
               : finalizeRetryAsExecutionFailure(err?.message || 'network failure'))
             : failureOutcome;

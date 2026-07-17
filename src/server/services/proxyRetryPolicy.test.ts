@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { shouldAbortSameSiteEndpointFallback, shouldRetryProxyRequest } from './proxyRetryPolicy.js';
+import {
+  isNonRetryableProtocolPolicyError,
+  shouldAbortSameSiteEndpointFallback,
+  shouldRetryProxyRequest,
+} from './proxyRetryPolicy.js';
 
 describe('proxyRetryPolicy', () => {
   it('retries on rate limit and server errors', () => {
@@ -42,6 +46,18 @@ describe('proxyRetryPolicy', () => {
     expect(
       shouldRetryProxyRequest(400, 'Unsupported legacy protocol: /v1/chat/completions is not supported. Please use /v1/responses.'),
     ).toBe(true);
+  });
+
+  it('does not failover on codex-only protocol policy errors', () => {
+    const payload = JSON.stringify({
+      error: {
+        code: 'codex_requires_responses_protocol',
+        message: 'codex clients may only use the OpenAI Responses protocol at /v1/responses',
+        type: 'policy_violation',
+      },
+    });
+    expect(isNonRetryableProtocolPolicyError(payload)).toBe(true);
+    expect(shouldRetryProxyRequest(403, payload)).toBe(false);
   });
 
   it('does not retry client-side timeout validation errors', () => {
