@@ -8,6 +8,7 @@ import { refreshBalance } from './balanceService.js';
 import { parseCheckinRewardAmount } from './checkinRewardParser.js';
 import {
   getAutoReloginConfig,
+  getNewApiManagementTokenFromExtraConfig,
   getPlatformUserIdFromExtraConfig,
   guessPlatformUserIdFromUsername,
   mergeAccountExtraConfig,
@@ -178,7 +179,7 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
   const platformUserId = resolvePlatformUserId(account.extraConfig, account.username);
 
   const accountProxyUrl = resolveProxyUrlFromExtraConfig(account.extraConfig);
-  let activeAccessToken = account.accessToken;
+  let activeAccessToken = getNewApiManagementTokenFromExtraConfig(account.extraConfig) || account.accessToken;
   let result = await withAccountProxyOverride(accountProxyUrl,
     () => adapter.checkin(site.url, activeAccessToken, platformUserId));
 

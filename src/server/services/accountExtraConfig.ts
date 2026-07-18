@@ -7,6 +7,11 @@ type AutoReloginConfig = {
   updatedAt?: unknown;
 };
 
+type NewApiManagedAuthConfig = {
+  managementToken?: unknown;
+  issuedAt?: unknown;
+};
+
 type Sub2ApiAuthConfig = {
   refreshToken?: unknown;
   tokenExpiresAt?: unknown;
@@ -36,6 +41,7 @@ type AccountExtraConfig = {
     [key: string]: unknown;
   };
   autoRelogin?: AutoReloginConfig;
+  newApiManagedAuth?: NewApiManagedAuthConfig;
   sub2apiAuth?: Sub2ApiAuthConfig;
   sub2apiSubscription?: Sub2ApiSubscriptionConfig;
   [key: string]: unknown;
@@ -354,6 +360,13 @@ export function mergeAccountExtraConfig(
     ...patch,
   };
   return JSON.stringify(merged);
+}
+
+export function getNewApiManagementTokenFromExtraConfig(extraConfig?: ExtraConfigInput): string | undefined {
+  const parsed = parseExtraConfig(extraConfig);
+  const config = parsed.newApiManagedAuth;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return undefined;
+  return normalizeNonEmptyString(config.managementToken);
 }
 
 export function getAutoReloginConfig(extraConfig?: ExtraConfigInput): {
