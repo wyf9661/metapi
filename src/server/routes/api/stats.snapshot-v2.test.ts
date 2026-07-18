@@ -138,13 +138,14 @@ describe("stats snapshot v2 routes", () => {
     const insights = insightsResponse.json() as {
       generatedAt: string;
       siteAvailability: Array<{ siteId: number }>;
-      modelAnalysis: { totals: { calls: number } };
+      modelAnalysis: { window: { days: number }; totals: { calls: number } };
     };
     expect(Date.parse(insights.generatedAt)).not.toBeNaN();
     expect(insights.siteAvailability).toEqual([
       expect.objectContaining({ siteId: site.id }),
     ]);
-    expect(insights.modelAnalysis.totals.calls).toBe(3);
+    expect(insights.modelAnalysis.window.days).toBe(1);
+    expect(insights.modelAnalysis.totals.calls).toBe(2);
 
     const siteDistributionResponse = await app.inject({
       method: "GET",

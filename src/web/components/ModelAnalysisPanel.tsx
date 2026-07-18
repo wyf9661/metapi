@@ -12,6 +12,7 @@ interface CallsDistributionItem { model: string; calls: number; share: number; }
 interface CallRankingItem { model: string; calls: number; successRate: number; avgLatencyMs: number; spend: number; tokens: number; }
 
 interface ModelAnalysisData {
+  window?: { start?: string; end?: string; days?: number };
   totals?: { spend?: number; calls?: number; tokens?: number };
   spendDistribution?: SpendDistributionItem[];
   spendTrend?: SpendTrendItem[];
@@ -24,10 +25,10 @@ interface ModelAnalysisPanelProps {
 }
 
 const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
-  { key: 'spend', label: '消耗分布', icon: '💰' },
-  { key: 'trend', label: '消耗趋势', icon: '📈' },
+  { key: 'spend', label: '今日消耗', icon: '💰' },
+  { key: 'trend', label: 'Token 分布', icon: '📊' },
   { key: 'calls', label: '调用分布', icon: '🔄' },
-  { key: 'rank', label: '排行榜', icon: '🏆' },
+  { key: 'rank', label: '模型排行', icon: '🏆' },
 ];
 
 function toSafeNumber(value: unknown): number {
@@ -49,8 +50,8 @@ function formatPercent(value: number): string {
 function EmptyBlock() {
   return (
     <div className="empty-state" style={{ padding: 28 }}>
-      <div className="empty-state-title">暂无模型调用数据</div>
-      <div className="empty-state-desc">等待代理流量进入后会自动生成统计图表</div>
+      <div className="empty-state-title">今日暂无模型调用数据</div>
+      <div className="empty-state-desc">今日有代理流量进入后会自动生成统计图表</div>
     </div>
   );
 }
@@ -84,17 +85,22 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     animation: true, background: 'transparent',
   }), [spendDistribution, labelColor]);
 
-  const trendSpec = useMemo(() => ({
-    type: 'area' as const,
-    data: [{ id: 'data', values: spendTrend.map(d => ({ day: d.day, spend: toSafeNumber(d.spend) })) }],
-    xField: 'day', yField: 'spend',
-    line: { style: { lineWidth: 2.5, curveType: 'monotone' as const, stroke: '#4f46e5' } },
-    area: { style: { fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 0, y1: 1, stops: [{ offset: 0, color: 'rgba(79,70,229,0.25)' }, { offset: 1, color: 'rgba(79,70,229,0.02)' }] }, curveType: 'monotone' as const } },
-    point: { visible: true, style: { size: 7, fill: '#4f46e5', stroke: '#fff', lineWidth: 2 } },
-    axes: [{ orient: 'bottom' as const, label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'left' as const, label: { style: { fontSize: 11, fill: labelColor } } }],
-    tooltip: { mark: { content: [{ key: () => '消耗', value: (datum: any) => formatCurrency(datum?.spend ?? 0) }] } },
-    animation: true, background: 'transparent',
-  }), [spendTrend, labelColor]);
+  const trendSpec = useMemo(() => {
+    // With 1-day window, trend is meaningless — show per-model tokens instead
+    const tokenData = (data?.callRanking || data?.spendDistribution || []).slice(0, 10).map(d => ({
+      model: d.model.length > 20 ? d.model.slice(0, 20) + '...' : d.model,
+      value: 'tokens' in d ? toSafeNumber((d as CallRankingItem).tokens) : 0,
+    })).reverse();
+    return {
+      type: 'bar' as const,
+      data: [{ id: 'data', values: tokenData }],
+      xField: 'value', yField: 'model', direction: 'horizontal' as const,
+      bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#06b6d4' }, { offset: 1, color: '#22d3ee' }] } } },
+      label: { visible: true, position: 'right', formatter: '{value}', style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
+      axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
+      animation: true, background: 'transparent',
+    };
+  }, [data?.callRanking, data?.spendDistribution, labelColor]);
 
   const callsPieSpec = useMemo(() => ({
     type: 'pie' as const,
@@ -114,18 +120,18 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
   return (
     <div>
       {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-        <div className="stat-summary-card stat-summary-purple">
-          <div className="stat-summary-card-label">总消耗</div>
-          <div className="stat-summary-card-value">{formatCurrency(totals.spend)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 16 }}>
+        <div className="stat-summary-card stat-summary-purple" style={{ minHeight: 72, padding: '12px 14px' }}>
+          <div className="stat-summary-card-label">今日消耗</div>
+          <div className="stat-summary-card-value" style={{ fontSize: 20 }}>{formatCurrency(totals.spend)}</div>
         </div>
-        <div className="stat-summary-card stat-summary-blue">
-          <div className="stat-summary-card-label">总调用</div>
-          <div className="stat-summary-card-value">{Math.round(totals.calls).toLocaleString()}</div>
+        <div className="stat-summary-card stat-summary-blue" style={{ minHeight: 72, padding: '12px 14px' }}>
+          <div className="stat-summary-card-label">今日调用</div>
+          <div className="stat-summary-card-value" style={{ fontSize: 20 }}>{Math.round(totals.calls).toLocaleString()}</div>
         </div>
-        <div className="stat-summary-card stat-summary-green">
-          <div className="stat-summary-card-label">总 Tokens</div>
-          <div className="stat-summary-card-value">{formatCompactTokenMetric(totals.tokens)}</div>
+        <div className="stat-summary-card stat-summary-green" style={{ minHeight: 72, padding: '12px 14px' }}>
+          <div className="stat-summary-card-label">今日 Tokens</div>
+          <div className="stat-summary-card-value" style={{ fontSize: 20 }}>{formatCompactTokenMetric(totals.tokens)}</div>
         </div>
       </div>
 
