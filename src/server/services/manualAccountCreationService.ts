@@ -200,6 +200,7 @@ export async function createManualAccount({
   let apiToken = (body.apiToken || '').trim();
   let tokenType: 'session' | 'apikey' | 'unknown' = 'unknown';
   let verifiedModels: string[] = [];
+  let managementToken = '';
 
   if (credentialMode === 'apikey') {
     if (body.skipModelFetch === true) {
@@ -246,6 +247,11 @@ export async function createManualAccount({
     if (tokenType === 'session') {
       if (!username && verifyResult.userInfo?.username) username = String(verifyResult.userInfo.username).trim();
       if (!apiToken && verifyResult.apiToken) apiToken = String(verifyResult.apiToken).trim();
+      if (typeof adapter.issueManagementToken === 'function' && (site.platform || '').toLowerCase() !== 'sub2api') {
+        try {
+          managementToken = String(await adapter.issueManagementToken(site.url, rawAccessToken, body.platformUserId) || '').trim();
+        } catch {}
+      }
     } else if (tokenType === 'apikey') {
       accessToken = '';
       if (!apiToken) apiToken = rawAccessToken;
@@ -259,6 +265,12 @@ export async function createManualAccount({
     body.platformUserId || guessPlatformUserIdFromUsername(username) || undefined;
   const resolvedCredentialMode: AccountCredentialMode = tokenType === 'apikey' ? 'apikey' : 'session';
   const extraConfigPatch: Record<string, unknown> = { credentialMode: resolvedCredentialMode };
+  if (managementToken) {
+    extraConfigPatch.newApiManagedAuth = {
+      managementToken,
+      issuedAt: new Date().toISOString(),
+    };
+  }
   if (resolvedPlatformUserId) {
     extraConfigPatch.platformUserId = resolvedPlatformUserId;
   }

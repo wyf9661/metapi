@@ -278,6 +278,21 @@ describe('NewApiAdapter', () => {
         return;
       }
 
+      if (req.url === '/api/user/token') {
+        if (
+          typeof req.headers.cookie === 'string'
+          && req.headers.cookie.includes(`session=${COOKIE_SESSION_TOKEN}`)
+          && req.headers['new-api-user'] === '7788'
+        ) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, data: 'durable-management-token' }));
+          return;
+        }
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'unauthorized' }));
+        return;
+      }
+
       if (req.url === '/api/user/self') {
         if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${BALANCE_SHIELD_FAILURE_TOKEN}`) {
           res.writeHead(200, {
@@ -650,6 +665,18 @@ describe('NewApiAdapter', () => {
     expect(result.accessToken || '').toContain(`session=${COOKIE_ONLY_LOGIN_SESSION}`);
     expect(result.accessToken || '').toContain(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`);
     expect(result.accessToken || '').toContain(`cdn_sec_tc=${SHIELD_LOGIN_COOKIE}`);
+  });
+
+  it('upgrades a cookie session to a durable management token', async () => {
+    const adapter = new NewApiAdapter();
+    const token = await adapter.issueManagementToken(baseUrl, COOKIE_SESSION_TOKEN, 7788);
+
+    expect(token).toBe('durable-management-token');
+    expect(
+      requests.some((r) => r.url === '/api/user/token'
+        && r.headers.cookie?.includes(`session=${COOKIE_SESSION_TOKEN}`)
+        && r.headers['new-api-user'] === '7788'),
+    ).toBe(true);
   });
 
   it('detects cookie session values as session cookies for anyrouter-like deployments', async () => {

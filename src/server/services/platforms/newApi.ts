@@ -1384,6 +1384,24 @@ export class NewApiAdapter extends BasePlatformAdapter {
     return [];
   }
 
+  async issueManagementToken(
+    baseUrl: string,
+    sessionCredential: string,
+    platformUserId?: number,
+  ): Promise<string | null> {
+    const resolvedUserId = platformUserId || await this.probeUserIdByCookie(baseUrl, sessionCredential);
+    for (const cookie of this.buildCookieCandidates(sessionCredential)) {
+      try {
+        const headers: Record<string, string> = { Cookie: cookie };
+        Object.assign(headers, this.userIdHeaders(resolvedUserId));
+        const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/token`, { headers });
+        const token = typeof res?.data === 'string' ? res.data.trim() : '';
+        if (res?.success && token) return token;
+      } catch {}
+    }
+    return null;
+  }
+
   async getApiToken(baseUrl: string, accessToken: string, platformUserId?: number): Promise<string | null> {
     const userId = platformUserId || await this.discoverUserId(baseUrl, accessToken);
     const tokens = await this.getApiTokensWithUser(baseUrl, accessToken, userId);

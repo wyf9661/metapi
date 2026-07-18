@@ -7,6 +7,7 @@ import {
   buildStoredSub2ApiSubscriptionSummary,
   getAutoReloginConfig,
   getCredentialModeFromExtraConfig,
+  getNewApiManagementTokenFromExtraConfig,
   getSub2ApiAuthFromExtraConfig,
   mergeAccountExtraConfig,
   resolveProxyUrlFromExtraConfig,
@@ -278,8 +279,30 @@ export async function refreshBalance(accountId: number) {
   }
 
   const platformUserId = resolvePlatformUserId(account.extraConfig, account.username);
-  let activeAccessToken = account.accessToken;
+  const storedManagementToken = getNewApiManagementTokenFromExtraConfig(account.extraConfig);
+  let activeAccessToken = storedManagementToken || account.accessToken;
   let activeExtraConfig = account.extraConfig;
+  if (!storedManagementToken && account.accessToken && typeof adapter.issueManagementToken === 'function') {
+    try {
+      const issuedToken = await withAccountProxyOverride(
+        resolveProxyUrlFromExtraConfig(account.extraConfig),
+        () => adapter.issueManagementToken!(site.url, account.accessToken, platformUserId),
+      );
+      if (issuedToken) {
+        activeExtraConfig = mergeAccountExtraConfig(account.extraConfig, {
+          newApiManagedAuth: {
+            managementToken: issuedToken,
+            issuedAt: new Date().toISOString(),
+          },
+        });
+        await db.update(schema.accounts)
+          .set({ extraConfig: activeExtraConfig, updatedAt: new Date().toISOString() })
+          .where(eq(schema.accounts.id, account.id))
+          .run();
+        activeAccessToken = issuedToken;
+      }
+    } catch {}
+  }
   let balanceInfo: BalanceInfo | null = null;
 
   const accountProxyUrl = resolveProxyUrlFromExtraConfig(account.extraConfig);

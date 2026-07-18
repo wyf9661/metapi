@@ -101,6 +101,7 @@ export interface PlatformAdapter {
   getModels(baseUrl: string, token: string, platformUserId?: number): Promise<string[]>;
   getApiToken(baseUrl: string, accessToken: string, platformUserId?: number): Promise<string | null>;
   getApiTokens(baseUrl: string, accessToken: string, platformUserId?: number): Promise<ApiTokenInfo[]>;
+  issueManagementToken?(baseUrl: string, sessionCredential: string, platformUserId?: number): Promise<string | null>;
   getSiteAnnouncements(baseUrl: string, accessToken: string, platformUserId?: number): Promise<SiteAnnouncement[]>;
   getUserGroups(baseUrl: string, accessToken: string, platformUserId?: number): Promise<string[]>;
   createApiToken(baseUrl: string, accessToken: string, platformUserId?: number, options?: CreateApiTokenOptions): Promise<boolean>;
