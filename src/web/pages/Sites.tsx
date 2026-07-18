@@ -25,12 +25,12 @@ import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from '.
 import { shouldIgnoreRowSelectionClick } from './helpers/rowSelection.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
 import {
-  applyCodexClientProfile,
+  applyCodexCompatibilityMode,
   buildSiteSaveAction,
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   emptySiteForm,
-  isCodexClientProfileEnabled,
+  isCodexCompatibilityModeEnabled,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
   siteFormFromSite,
@@ -1600,25 +1600,16 @@ export default function Sites() {
             }}>
               <input
                 type="checkbox"
-                checked={isCodexClientProfileEnabled(form.customHeaders)}
+                checked={isCodexCompatibilityModeEnabled(form)}
                 onChange={(e) => {
-                  const enabled = e.target.checked;
-                  setForm((prev) => ({
-                    ...prev,
-                    customHeaders: applyCodexClientProfile(prev.customHeaders, enabled),
-                    // Codex-only gateways need the UA forced onto upstream requests.
-                    customHeadersOverrideRequestHeaders: enabled
-                      ? true
-                      : prev.customHeadersOverrideRequestHeaders,
-                  }));
+                  setForm((prev) => applyCodexCompatibilityMode(prev, e.target.checked));
                 }}
                 style={{ marginTop: 2 }}
               />
               <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>Codex 客户端特征（仅 Responses）</span>
+                <span>Codex 兼容模式</span>
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                  勾选后自动添加 User-Agent=codex_cli_rs/0.39.0 与 originator=codex_cli_rs，
-                  并开启“覆盖同名请求头”。用于 welfare/muyuan 等只允许 Codex 客户端访问的 NewAPI 站。
+                  用于只允许 Codex 客户端访问的站点。开启后自动配置 Responses 协议、客户端指纹和请求头，无需手动设置。
                 </span>
               </span>
             </label>
@@ -1655,45 +1646,7 @@ export default function Sites() {
               按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。
             </div>
             <div style={{ marginTop: 12, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>协议画像</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, lineHeight: 1.6 }}>
-                声明该站点的上游协议能力。勾选后 MetAPI 在路由和探测时自动适配。
-              </div>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={form.protocolProfile.preferResponses}
-                  onChange={(e) => setForm((prev) => ({
-                    ...prev,
-                    protocolProfile: { ...prev.protocolProfile, preferResponses: e.target.checked },
-                  }))}
-                  style={{ marginTop: 2 }}
-                />
-                <span style={{ fontSize: 13 }}>
-                  优先 /v1/responses（Responses 协议优先）
-                  <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    勾选后 MetAPI 对此站优先走 /v1/responses 而非 /v1/chat/completions。
-                  </span>
-                </span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={form.protocolProfile.requireCodexClient}
-                  onChange={(e) => setForm((prev) => ({
-                    ...prev,
-                    protocolProfile: { ...prev.protocolProfile, requireCodexClient: e.target.checked },
-                  }))}
-                  style={{ marginTop: 2 }}
-                />
-                <span style={{ fontSize: 13 }}>
-                  需要 Codex 客户端指纹
-                  <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    上游对非 Codex UA 返回 403/policy。等价于自定义头里的「Codex 客户端特征」勾选。
-                  </span>
-                </span>
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 13, minWidth: 80 }}>凭证提示</span>
                 <select
                   value={form.protocolProfile.credentialMode}

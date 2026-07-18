@@ -138,6 +138,28 @@ export function applyCodexClientProfile(
   return next.length > 0 ? next : [emptySiteCustomHeader()];
 }
 
+/** Keep the user-facing Codex switch's transport and protocol settings in sync. */
+export function isCodexCompatibilityModeEnabled(form: Pick<SiteForm, 'customHeaders' | 'protocolProfile'>): boolean {
+  return isCodexClientProfileEnabled(form.customHeaders)
+    || form.protocolProfile.preferResponses
+    || form.protocolProfile.requireCodexClient;
+}
+
+export function applyCodexCompatibilityMode(form: SiteForm, enabled: boolean): SiteForm {
+  return {
+    ...form,
+    customHeaders: applyCodexClientProfile(form.customHeaders, enabled),
+    customHeadersOverrideRequestHeaders: enabled
+      ? true
+      : form.customHeadersOverrideRequestHeaders,
+    protocolProfile: {
+      ...form.protocolProfile,
+      preferResponses: enabled,
+      requireCodexClient: enabled,
+    },
+  };
+}
+
 
 export function emptySiteApiEndpoint(): SiteApiEndpointField {
   return {

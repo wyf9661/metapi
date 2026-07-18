@@ -4,8 +4,10 @@ import {
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   applyCodexClientProfile,
+  applyCodexCompatibilityMode,
   emptySiteForm,
   isCodexClientProfileEnabled,
+  isCodexCompatibilityModeEnabled,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
   siteFormFromSite,
@@ -233,5 +235,36 @@ describe('codex client profile helpers', () => {
     expect(enabled.some((item) => item.key === 'X-Trace' && item.value === '1')).toBe(true);
     const disabled = applyCodexClientProfile(enabled, false);
     expect(disabled).toEqual([{ key: 'X-Trace', value: '1' }]);
+  });
+
+  it('configures headers and protocol flags through one compatibility switch', () => {
+    const base = emptySiteForm();
+    const enabled = applyCodexCompatibilityMode(base, true);
+    expect(isCodexCompatibilityModeEnabled(enabled)).toBe(true);
+    expect(isCodexClientProfileEnabled(enabled.customHeaders)).toBe(true);
+    expect(enabled.customHeadersOverrideRequestHeaders).toBe(true);
+    expect(enabled.protocolProfile).toEqual({
+      preferResponses: true,
+      requireCodexClient: true,
+      credentialMode: 'auto',
+    });
+
+    const disabled = applyCodexCompatibilityMode(enabled, false);
+    expect(isCodexCompatibilityModeEnabled(disabled)).toBe(false);
+    expect(isCodexClientProfileEnabled(disabled.customHeaders)).toBe(false);
+    expect(disabled.protocolProfile.preferResponses).toBe(false);
+    expect(disabled.protocolProfile.requireCodexClient).toBe(false);
+  });
+
+  it('recognizes legacy sites configured through either protocol flag', () => {
+    const form = emptySiteForm();
+    expect(isCodexCompatibilityModeEnabled({
+      ...form,
+      protocolProfile: { ...form.protocolProfile, preferResponses: true },
+    })).toBe(true);
+    expect(isCodexCompatibilityModeEnabled({
+      ...form,
+      protocolProfile: { ...form.protocolProfile, requireCodexClient: true },
+    })).toBe(true);
   });
 });
