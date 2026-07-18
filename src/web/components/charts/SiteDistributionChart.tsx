@@ -167,7 +167,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   return (
     <div
       className="chart-container animate-fade-in"
-      style={{ padding: 20 }}
+      style={{ padding: 20, height: '100%', display: 'flex', flexDirection: 'column' }}
     >
       {/* Header */}
       <div
@@ -265,8 +265,8 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       ) : !hasData ? (
         <EmptyState />
       ) : (
-        <div>
-          <div style={{ width: '100%', height: 300 }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ width: '100%', height: 320, flexShrink: 0 }}>
             {spec && <VChart spec={spec} style={{ width: '100%', height: '100%' }} />}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px' }}>

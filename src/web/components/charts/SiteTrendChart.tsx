@@ -169,7 +169,7 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
       <div style={headerStyle}>
         <MetricToggle metric={metric} onChange={setMetric} />
       </div>
-      <div style={{ width: '100%', height: 320 }}>
+      <div style={{ width: '100%', height: 320, flex: 1, minHeight: 320 }}>
         <VChart spec={spec as any} style={{ width: '100%', height: '100%' }} />
       </div>
     </div>
@@ -215,6 +215,9 @@ const containerStyle: React.CSSProperties = {
   border: '1px solid var(--color-border-light)',
   boxShadow: 'var(--shadow-card)',
   padding: 20,
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
 };
 
 const headerStyle: React.CSSProperties = {

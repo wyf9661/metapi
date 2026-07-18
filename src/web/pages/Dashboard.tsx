@@ -1341,7 +1341,7 @@ export default function Dashboard({
           marginBottom: 24,
         }}
       >
-        <div className="chart-panel-enter animate-slide-up stagger-6">
+        <div className="chart-panel-enter animate-slide-up stagger-6" style={{ height: "100%" }}>
           <Suspense fallback={<ChartFallback height={320} />}>
             <SiteDistributionChart
               data={siteDistribution}
@@ -1349,7 +1349,7 @@ export default function Dashboard({
             />
           </Suspense>
         </div>
-        <div className="chart-panel-enter animate-slide-up stagger-7">
+        <div className="chart-panel-enter animate-slide-up stagger-7" style={{ height: "100%" }}>
           <Suspense fallback={<ChartFallback height={320} />}>
             <SiteTrendChart data={siteTrend} loading={siteLoading} />
           </Suspense>
@@ -1559,7 +1559,10 @@ export default function Dashboard({
           gap: 16,
         }}
       >
-        <div className="chart-container animate-slide-up stagger-8">
+        <div
+          className="chart-container animate-slide-up stagger-8"
+          style={{ height: isMobile ? "auto" : 560, overflow: "hidden" }}
+        >
           <div
             style={{
               display: "flex",
@@ -1592,7 +1595,7 @@ export default function Dashboard({
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              模型数据分析（今日）
+          模型数据分析
             </div>
           </div>
           {insightsLoading && !insightsData ? (
@@ -1606,7 +1609,12 @@ export default function Dashboard({
 
         <div
           className="chart-container animate-slide-up stagger-9"
-          style={{ display: "flex", flexDirection: "column", alignSelf: "start" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            height: isMobile ? "auto" : 560,
+            overflow: "hidden",
+          }}
         >
           <div
             style={{
@@ -1697,7 +1705,7 @@ export default function Dashboard({
               display: "flex",
               flexDirection: "column",
               gap: 10,
-              maxHeight: 480,
+              minHeight: 0,
               overflowY: "auto",
               paddingRight: 4,
             }}
