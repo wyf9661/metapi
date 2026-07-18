@@ -41,7 +41,7 @@ describe('ModelAnalysisPanel token summaries', () => {
     globalThis.MutationObserver = originalMutationObserver;
   });
 
-  it('renders total token summaries with compact units', () => {
+  it('renders today token summaries with compact units', () => {
     let root!: WebTestRenderer;
 
     act(() => {
@@ -60,7 +60,7 @@ describe('ModelAnalysisPanel token summaries', () => {
 
     const rendered = collectText(root!.root);
 
-    expect(rendered).toContain('总 Tokens');
+    expect(rendered).toContain('今日 Tokens');
     expect(rendered).toContain('611.5M');
 
     root?.unmount();

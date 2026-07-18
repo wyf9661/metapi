@@ -289,7 +289,7 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
     SITE_AVAILABILITY_BUCKET_COUNT,
     siteAvailabilityNow,
   );
-  const modelAnalysisSinceDay = getLocalRangeStartDayKey(7);
+  const modelAnalysisSinceDay = getLocalRangeStartDayKey(1);
   await runUsageAggregationProjectionPass();
 
   const [activeSites, siteAvailabilityRows, modelDayRows] =
@@ -359,7 +359,7 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
           totalSpend: row.totalSpend,
           totalLatencyMs: row.totalLatencyMs,
         })),
-      { days: 7 },
+      { days: 1 },
     ),
   };
 }

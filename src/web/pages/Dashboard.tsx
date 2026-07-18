@@ -1555,7 +1555,7 @@ export default function Dashboard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 300px",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 320px",
           gap: 16,
         }}
       >
@@ -1592,7 +1592,7 @@ export default function Dashboard({
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              模型数据分析
+              模型数据分析（今日）
             </div>
           </div>
           {insightsLoading && !insightsData ? (
@@ -1606,7 +1606,7 @@ export default function Dashboard({
 
         <div
           className="chart-container animate-slide-up stagger-9"
-          style={{ display: "flex", flexDirection: "column" }}
+          style={{ display: "flex", flexDirection: "column", alignSelf: "start" }}
         >
           <div
             style={{
@@ -1636,8 +1636,11 @@ export default function Dashboard({
               </svg>
               站点信息
             </span>
-            {sites.length > 0 && (
-              <button
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--color-text-muted)", fontWeight: 500 }}>
+                {sites.length} 个站点
+              </span>
+              {sites.length > 0 && (<button
                 className="btn btn-ghost"
                 style={{
                   fontSize: 11,
@@ -1685,7 +1688,8 @@ export default function Dashboard({
                 </svg>
                 一键测速
               </button>
-            )}
+              )}
+            </span>
           </div>
           <div
             style={{
@@ -1693,6 +1697,9 @@ export default function Dashboard({
               display: "flex",
               flexDirection: "column",
               gap: 10,
+              maxHeight: 480,
+              overflowY: "auto",
+              paddingRight: 4,
             }}
           >
             {sites.length > 0 ? (
