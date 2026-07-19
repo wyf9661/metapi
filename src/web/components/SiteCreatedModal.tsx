@@ -1,11 +1,9 @@
 import CenteredModal from './CenteredModal.js';
-import { getSiteInitializationPreset } from '../../shared/siteInitializationPresets.js';
 
 type NextStepChoice = 'session' | 'apikey' | 'later';
 
 type Props = {
   siteName: string;
-  initializationPresetId?: string | null;
   initialSegment?: 'session' | 'apikey';
   sessionLabel?: string;
   onChoice: (choice: NextStepChoice) => void;
@@ -14,18 +12,15 @@ type Props = {
 
 export default function SiteCreatedModal({
   siteName,
-  initializationPresetId,
   initialSegment = 'session',
   sessionLabel = '添加账号（用户名密码登录）',
   onChoice,
   onClose,
 }: Props) {
-  const preset = getSiteInitializationPreset(initializationPresetId);
   const apiKeyFirst = initialSegment === 'apikey';
-  const helperText = preset?.description
-    || (apiKeyFirst
-      ? '该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。'
-      : '接下来您可以继续补充登录连接或 API Key。');
+  const helperText = apiKeyFirst
+    ? '该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。'
+    : '接下来您可以继续补充登录连接或 API Key。';
   const primaryAction = apiKeyFirst
     ? {
       choice: 'apikey' as const,
@@ -82,21 +77,12 @@ export default function SiteCreatedModal({
         </div>
       </div>
 
-      {preset ? (
-        <div className="alert alert-info" style={{ margin: 0 }}>
-          <div className="alert-title">{preset.label}</div>
-          <div className="site-created-helper-text">
-            {helperText}
-          </div>
-        </div>
-      ) : (
-        <p className="site-created-helper-text">
-          {helperText}
-        </p>
-      )}
+      <p className="site-created-helper-text">
+        {helperText}
+      </p>
 
       <p className="site-created-note">
-        提示：您可以随时在“站点管理”页面补充账号或 API Key。
+        提示：您可以随时在"站点管理"页面补充账号或 API Key。
       </p>
     </CenteredModal>
   );

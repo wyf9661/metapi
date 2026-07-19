@@ -7,7 +7,6 @@ const siteCreatePayloadSchema = z.object({
   name: requiredTrimmedString,
   url: requiredTrimmedString,
   platform: z.string().trim().optional(),
-  initializationPresetId: z.union([z.string(), z.null()]).optional(),
   proxyUrl: unknownField,
   useSystemProxy: unknownField,
   customHeaders: unknownField,

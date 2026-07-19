@@ -53,7 +53,6 @@ describe('SiteCreatedModal', () => {
     const root = create(
       <SiteCreatedModal
         siteName="CodingPlan"
-        initializationPresetId="codingplan-openai"
         initialSegment="apikey"
         onChoice={onChoice}
         onClose={onClose}
