@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { translateText } from './i18n.js';
+import { translateText, shouldReplaceStoredTranslation } from './i18n.js';
 
 describe('translateText', () => {
   it('keeps zh text unchanged in zh mode', () => {
@@ -25,6 +25,12 @@ describe('translateText', () => {
     for (const sample of samples) {
       expect(translateText(sample, 'en')).not.toMatch(/[\u3400-\u9fff]/);
     }
+  });
+
+  it('does not treat the previous translated value as a new source when switching back', () => {
+    expect(shouldReplaceStoredTranslation('Dashboard', '仪表盘', 'zh')).toBe(false);
+    expect(shouldReplaceStoredTranslation('仪表盘', '仪表盘', 'zh')).toBe(false);
+    expect(shouldReplaceStoredTranslation('New text', '仪表盘', 'zh')).toBe(true);
   });
 
   it('uses concrete english translations instead of fallback for common runtime text', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildModelAnalysis } from './modelAnalysisService.js';
+import { buildModelAnalysis, buildModelAnalysisFromDailyUsage } from './modelAnalysisService.js';
 import { formatLocalDate } from './localTimeService.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -146,6 +146,40 @@ describe('buildModelAnalysis', () => {
       model: 'gpt-4o-mini',
       spend: 0.002,
       calls: 1,
+    });
+  });
+
+  it('merges DeepSeek V4 Flash aliases in raw and daily dashboard statistics', () => {
+    const now = new Date('2026-02-24T12:00:00.000Z');
+    const logBase = {
+      createdAt: '2026-02-24T10:00:00.000Z',
+      modelRequested: null,
+      status: 'success',
+      latencyMs: 100,
+      totalTokens: 100,
+      estimatedCost: 0.1,
+    };
+    const raw = buildModelAnalysis([
+      { ...logBase, modelActual: 'deepseek-v4-flash' },
+      { ...logBase, modelActual: 'DeepSeek-V4-Flash' },
+      { ...logBase, modelActual: 'deepseek-v4-flash-free' },
+    ], { now, days: 1 });
+
+    expect(raw.callRanking).toHaveLength(1);
+    expect(raw.callRanking[0]).toMatchObject({ model: 'deepseek-v4-flash', calls: 3 });
+
+    const daily = buildModelAnalysisFromDailyUsage([
+      { localDay: '2026-02-24', model: 'deepseek-v4-flash', totalCalls: 1, successCalls: 1, totalTokens: 100, totalSpend: 0.1, totalLatencyMs: 100 },
+      { localDay: '2026-02-24', model: 'DeepSeek-V4-Flash', totalCalls: 2, successCalls: 2, totalTokens: 200, totalSpend: 0.2, totalLatencyMs: 200 },
+      { localDay: '2026-02-24', model: 'deepseek-v4-flash-free', totalCalls: 3, successCalls: 3, totalTokens: 300, totalSpend: 0.3, totalLatencyMs: 300 },
+    ], { now, days: 1 });
+
+    expect(daily.callRanking).toHaveLength(1);
+    expect(daily.callRanking[0]).toMatchObject({
+      model: 'deepseek-v4-flash',
+      calls: 6,
+      tokens: 600,
+      spend: 0.6,
     });
   });
 
