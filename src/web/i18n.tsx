@@ -21,7 +21,7 @@ const zhToEn: Record<string, string> = {
   '登录': 'Sign In',
   '中转站的中转站': 'The Hub of Hubs',
   '把分散的 New API / One API / OneHub 等站点聚合成统一网关，自动发现模型、智能路由、成本更优。': 'Turn fragmented New API / One API / OneHub sites into one unified gateway with auto model discovery, smart routing, and better cost control.',
-  '兼容 New API / One API / OneHub / DoneHub / Veloera / AnyRouter / Sub2API': 'Compatible with New API / One API / OneHub / DoneHub / Veloera / AnyRouter / Sub2API',
+  '兼容 New API / One API / OneHub / DoneHub / Veloera / Sub2API': 'Compatible with New API / One API / OneHub / DoneHub / Veloera / Sub2API',
   '用户名不能为空': 'Username cannot be empty',
   '用户名最多 24 个字符': 'Username can be at most 24 characters',
   '个人信息': 'Profile',

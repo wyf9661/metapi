@@ -201,7 +201,7 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
               {t('把分散的 New API / One API / OneHub 等站点聚合成统一网关，自动发现模型、智能路由、成本更优。')}
             </p>
           </div>
-          <div className="login-compat-line">{t('兼容 New API / One API / OneHub / DoneHub / Veloera / AnyRouter / Sub2API')}</div>
+          <div className="login-compat-line">{t('兼容 New API / One API / OneHub / DoneHub / Veloera / Sub2API')}</div>
           <div className="login-capability-list">
             {capabilityRows.map((feature, index) => (
               <div key={feature.title} className="login-capability-row">

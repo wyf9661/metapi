@@ -30,10 +30,8 @@ export const PLATFORM_ENDPOINT_FALLBACK_MAP: Record<string, string[]> = {
   'done-hub': ['openai'],
   sub2api: ['openai'],
   veloera: ['openai'],
-  cliproxyapi: ['openai'],
   claude: ['anthropic'],
   gemini: ['gemini'],
-  anyrouter: ['openai', 'anthropic'],
 };
 
 export const PLATFORM_ALIASES: Record<string, string> = {

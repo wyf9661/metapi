@@ -1,5 +1,5 @@
 export const PLATFORM_ALIASES = Object.assign(Object.create(null), {
-  anyrouter: 'anyrouter',
+  anyrouter: 'new-api',
   'wong-gongyi': 'new-api',
   'vo-api': 'new-api',
   'super-api': 'new-api',
@@ -28,9 +28,6 @@ export const PLATFORM_ALIASES = Object.assign(Object.create(null), {
   antigravity: 'antigravity',
   'anti-gravity': 'antigravity',
   google: 'gemini',
-  cliproxyapi: 'cliproxyapi',
-  cpa: 'cliproxyapi',
-  'cli-proxy-api': 'cliproxyapi',
 });
 
 function getPlatformAlias(raw) {
@@ -83,8 +80,8 @@ export function detectPlatformByUrlHint(url) {
     return 'gemini';
   }
   if (host === 'cloudcode-pa.googleapis.com') return 'gemini-cli';
-  if ((host === '127.0.0.1' || host === 'localhost') && port === '8317') return 'cliproxyapi';
-  if (host.includes('anyrouter')) return 'anyrouter';
+  if ((host === '127.0.0.1' || host === 'localhost') && port === '8317') return 'openai';
+  if (host.includes('anyrouter')) return 'new-api';
   if (host.includes('donehub') || host.includes('done-hub')) return 'done-hub';
   if (host.includes('onehub') || host.includes('one-hub')) return 'one-hub';
   if (host.includes('veloera')) return 'veloera';

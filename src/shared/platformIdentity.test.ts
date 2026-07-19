@@ -19,7 +19,7 @@ describe('platformIdentity', () => {
     expect(detectPlatformByUrlHint('https://api.anthropic.com/v1/messages')).toBe('claude');
     expect(detectPlatformByUrlHint('https://generativelanguage.googleapis.com/v1beta')).toBe('gemini');
     expect(detectPlatformByUrlHint('https://cloudcode-pa.googleapis.com')).toBe('gemini-cli');
-    expect(detectPlatformByUrlHint('http://127.0.0.1:8317/v1/models')).toBe('cliproxyapi');
+    expect(detectPlatformByUrlHint('http://127.0.0.1:8317/v1/models')).toBe('openai');
     expect(detectPlatformByUrlHint('https://evil.example.com/?next=https://api.openai.com/v1/models')).toBeUndefined();
   });
 });
