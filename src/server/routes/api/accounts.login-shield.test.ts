@@ -62,8 +62,8 @@ describe('accounts login shield detection', () => {
     });
 
     const site = await db.insert(schema.sites).values({
-      name: 'AnyRouter',
-      url: 'https://anyrouter.example.com',
+      name: 'NewAPI',
+      url: 'https://new-api.example.com',
       platform: 'new-api',
     }).returning().get();
 
@@ -92,8 +92,8 @@ describe('accounts login shield detection', () => {
     });
 
     const site = await db.insert(schema.sites).values({
-      name: 'AnyRouter',
-      url: 'https://anyrouter.example.com',
+      name: 'NewAPI',
+      url: 'https://new-api.example.com',
       platform: 'new-api',
     }).returning().get();
 

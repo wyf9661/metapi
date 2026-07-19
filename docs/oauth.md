@@ -128,7 +128,7 @@ Metapi 会同时给出：
 
 | 方式 | 入口 | 适合什么 | 典型例子 |
 |------|------|------|------|
-| 普通站点 + Session | 站点管理 / 账号管理 | 有后台面板，需要签到、余额、账号令牌管理 | New API、One API、DoneHub、AnyRouter、Sub2API |
+| 普通站点 + Session | 站点管理 / 账号管理 | 有后台面板，需要签到、余额、账号令牌管理 | New API、One API、Sub2API |
 | 普通站点 + API Key | 站点管理 / API Key 管理 | 只关心代理调用和模型列表 | OpenAI-compatible、Claude-compatible、CPA |
 | OAuth 连接 | OAuth 管理 | 需要 provider 官方授权、刷新、重绑 | Codex、Claude、Gemini CLI、Antigravity |
 

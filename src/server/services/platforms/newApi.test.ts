@@ -4,7 +4,6 @@ import { AddressInfo } from 'node:net';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { NewApiAdapter } from './newApi.js';
-import { AnyRouterAdapter } from './anyrouter.js';
 
 interface RequestSnapshot {
   method: string;
@@ -40,11 +39,11 @@ const COOKIE_GOB_USER_TOKEN = Buffer.from(
     'hex',
   ).toString('base64')}|sig`,
 ).toString('base64');
-const ANYROUTER_CHALLENGE_HTML = readFileSync(
-  new URL('./__fixtures__/anyrouter-challenge.html', import.meta.url),
+const SHIELD_CHALLENGE_HTML = readFileSync(
+  new URL('./__fixtures__/shield-challenge.html', import.meta.url),
   'utf8',
 );
-const ANYROUTER_CHALLENGE_ACW = '699dbedad126579b6bc0ebb91eaae8d7af3548b5';
+const SHIELD_CHALLENGE_ACW = '699dbedad126579b6bc0ebb91eaae8d7af3548b5';
 const CLOUDFLARE_530_HTML = `
 <!doctype html>
 <html lang="en-US">
@@ -75,12 +74,12 @@ describe('NewApiAdapter', () => {
       if (req.url === '/v1/models') {
         if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${OPENAI_MODELS_SHIELDED_TOKEN}`) {
           const cookieHeader = typeof req.headers.cookie === 'string' ? req.headers.cookie : '';
-          if (!cookieHeader.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`)) {
+          if (!cookieHeader.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`)) {
             res.writeHead(200, {
               'Content-Type': 'text/html; charset=utf-8',
               'Set-Cookie': `cdn_sec_tc=${SHIELD_LOGIN_COOKIE}; Path=/; HttpOnly`,
             });
-            res.end(ANYROUTER_CHALLENGE_HTML);
+            res.end(SHIELD_CHALLENGE_HTML);
             return;
           }
           if (
@@ -130,12 +129,12 @@ describe('NewApiAdapter', () => {
           }
 
           const cookieHeader = typeof req.headers.cookie === 'string' ? req.headers.cookie : '';
-          if (!cookieHeader.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`)) {
+          if (!cookieHeader.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`)) {
             res.writeHead(200, {
               'Content-Type': 'text/html; charset=utf-8',
               'Set-Cookie': `cdn_sec_tc=${SHIELD_LOGIN_COOKIE}; Path=/; HttpOnly`,
             });
-            res.end(ANYROUTER_CHALLENGE_HTML);
+            res.end(SHIELD_CHALLENGE_HTML);
             return;
           }
 
@@ -194,9 +193,9 @@ describe('NewApiAdapter', () => {
         }
 
         if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${COOKIE_SHIELDED_TOKEN}`)) {
-          if (!req.headers.cookie.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`)) {
+          if (!req.headers.cookie.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`)) {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(ANYROUTER_CHALLENGE_HTML);
+            res.end(SHIELD_CHALLENGE_HTML);
             return;
           }
           if (req.headers['new-api-user'] !== '131936') {
@@ -299,7 +298,7 @@ describe('NewApiAdapter', () => {
             'Content-Type': 'text/html; charset=utf-8',
             'Set-Cookie': `cdn_sec_tc=${SHIELD_LOGIN_COOKIE}; Path=/; HttpOnly`,
           });
-          res.end(ANYROUTER_CHALLENGE_HTML);
+          res.end(SHIELD_CHALLENGE_HTML);
           return;
         }
 
@@ -316,9 +315,9 @@ describe('NewApiAdapter', () => {
             req.headers.cookie.includes(`token=${BALANCE_SHIELD_FAILURE_TOKEN}`)
           )
         ) {
-          if (!req.headers.cookie.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`)) {
+          if (!req.headers.cookie.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`)) {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(ANYROUTER_CHALLENGE_HTML);
+            res.end(SHIELD_CHALLENGE_HTML);
             return;
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -339,9 +338,9 @@ describe('NewApiAdapter', () => {
         }
 
         if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${COOKIE_SHIELDED_TOKEN}`)) {
-          if (!req.headers.cookie.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`)) {
+          if (!req.headers.cookie.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`)) {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(ANYROUTER_CHALLENGE_HTML);
+            res.end(SHIELD_CHALLENGE_HTML);
             return;
           }
           if (req.headers['new-api-user'] !== '131936') {
@@ -528,9 +527,9 @@ describe('NewApiAdapter', () => {
           return;
         }
         if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${COOKIE_SHIELDED_TOKEN}`)) {
-          if (!req.headers.cookie.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`)) {
+          if (!req.headers.cookie.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`)) {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(ANYROUTER_CHALLENGE_HTML);
+            res.end(SHIELD_CHALLENGE_HTML);
             return;
           }
           if (req.headers['new-api-user'] !== '131936') {
@@ -603,29 +602,6 @@ describe('NewApiAdapter', () => {
     ).toBe(true);
   });
 
-  it('reuses shield cookie retry when anyrouter /v1/models returns challenge html', async () => {
-    const adapter = new AnyRouterAdapter();
-    const models = await adapter.getModels(baseUrl, OPENAI_MODELS_SHIELDED_TOKEN);
-
-    expect(models).toEqual(['claude-sonnet-4-5-20250929', 'claude-opus-4-6']);
-    expect(
-      requests.some(
-        (r) =>
-          r.url === '/v1/models'
-          && typeof r.headers.cookie === 'string'
-          && r.headers.cookie.includes(`session=${OPENAI_MODELS_SHIELDED_TOKEN}`),
-      ),
-    ).toBe(true);
-    expect(
-      requests.some(
-        (r) =>
-          r.url === '/v1/models'
-          && typeof r.headers.cookie === 'string'
-          && r.headers.cookie.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`),
-      ),
-    ).toBe(true);
-  });
-
   it('parses token list response with data.items[] shape', async () => {
     const adapter = new NewApiAdapter();
     const token = await adapter.getApiToken(baseUrl, 'session-token', 11494);
@@ -633,7 +609,7 @@ describe('NewApiAdapter', () => {
     expect(token).toBe('api-key-from-token-list');
   });
 
-  it('solves anyrouter acw challenge for account-password login', async () => {
+  it('solves New API acw challenge for account-password login', async () => {
     const adapter = new NewApiAdapter();
     const result = await adapter.login(baseUrl, SHIELD_LOGIN_USERNAME, SHIELD_LOGIN_PASSWORD);
 
@@ -644,7 +620,7 @@ describe('NewApiAdapter', () => {
         (r) =>
           r.url === '/api/user/login' &&
           typeof r.headers.cookie === 'string' &&
-          r.headers.cookie.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`),
+          r.headers.cookie.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`),
       ),
     ).toBe(true);
     expect(
@@ -663,7 +639,7 @@ describe('NewApiAdapter', () => {
 
     expect(result.success).toBe(true);
     expect(result.accessToken || '').toContain(`session=${COOKIE_ONLY_LOGIN_SESSION}`);
-    expect(result.accessToken || '').toContain(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`);
+    expect(result.accessToken || '').toContain(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`);
     expect(result.accessToken || '').toContain(`cdn_sec_tc=${SHIELD_LOGIN_COOKIE}`);
   });
 
@@ -679,7 +655,7 @@ describe('NewApiAdapter', () => {
     ).toBe(true);
   });
 
-  it('detects cookie session values as session cookies for anyrouter-like deployments', async () => {
+  it('detects cookie session values as session cookies for shield-protected New API deployments', async () => {
     const adapter = new NewApiAdapter();
     const result = await adapter.verifyToken(baseUrl, COOKIE_SESSION_TOKEN);
 
@@ -718,7 +694,7 @@ describe('NewApiAdapter', () => {
     ).toBe(true);
   });
 
-  it('solves anyrouter acw challenge and probes user id from session payload', async () => {
+  it('solves New API acw challenge and probes user id from session payload', async () => {
     const adapter = new NewApiAdapter();
     const result = await adapter.verifyToken(baseUrl, COOKIE_SHIELDED_TOKEN);
 
@@ -730,7 +706,7 @@ describe('NewApiAdapter', () => {
         (r) =>
           r.url === '/api/user/self' &&
           typeof r.headers.cookie === 'string' &&
-          r.headers.cookie.includes(`acw_sc__v2=${ANYROUTER_CHALLENGE_ACW}`),
+          r.headers.cookie.includes(`acw_sc__v2=${SHIELD_CHALLENGE_ACW}`),
       ),
     ).toBe(true);
     expect(
@@ -738,7 +714,7 @@ describe('NewApiAdapter', () => {
     ).toBe(true);
   });
 
-  it('extracts gob-encoded user id from anyrouter session cookie when reading balance', async () => {
+  it('extracts gob-encoded user id from New API session cookie when reading balance', async () => {
     const adapter = new NewApiAdapter();
     const balance = await adapter.getBalance(baseUrl, COOKIE_GOB_USER_TOKEN);
 
@@ -784,7 +760,7 @@ describe('NewApiAdapter', () => {
   });
 
   it('prefers post-challenge cookie failure over raw html parse error when reading balance', async () => {
-    const adapter = new AnyRouterAdapter();
+    const adapter = new NewApiAdapter();
 
     await expect(adapter.getBalance(baseUrl, BALANCE_SHIELD_FAILURE_TOKEN)).rejects
       .toThrow('无权进行此操作，未登录且未提供 access token');
@@ -862,7 +838,7 @@ describe('NewApiAdapter', () => {
     });
     const receivedHeaders: Record<string, string> = {};
     server = createServer((req, res) => {
-      for (const name of ['new-api-user', 'veloera-user', 'voapi-user', 'user-id', 'rix-api-user', 'neo-api-user']) {
+      for (const name of ['new-api-user', 'voapi-user', 'user-id', 'rix-api-user', 'neo-api-user']) {
         const val = req.headers[name];
         if (val) receivedHeaders[name] = String(val);
       }
@@ -882,7 +858,6 @@ describe('NewApiAdapter', () => {
     await adapter.getBalance(baseUrl, fakeJwt, 42);
 
     expect(receivedHeaders['new-api-user']).toBe('42');
-    expect(receivedHeaders['veloera-user']).toBe('42');
     expect(receivedHeaders['voapi-user']).toBe('42');
     expect(receivedHeaders['user-id']).toBe('42');
     expect(receivedHeaders['rix-api-user']).toBe('42');

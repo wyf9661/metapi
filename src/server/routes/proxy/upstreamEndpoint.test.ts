@@ -694,38 +694,6 @@ describe('resolveUpstreamEndpointCandidates', () => {
     expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
-  it('keeps anyrouter messages-first special case', async () => {
-    const openaiOrder = await resolveUpstreamEndpointCandidates(
-      {
-        ...baseContext,
-        site: { ...baseContext.site, platform: 'anyrouter' },
-      },
-      'claude-opus-4-6',
-      'openai',
-    );
-    expect(openaiOrder).toEqual(['messages', 'chat', 'responses']);
-
-    const claudeOrder = await resolveUpstreamEndpointCandidates(
-      {
-        ...baseContext,
-        site: { ...baseContext.site, platform: 'anyrouter' },
-      },
-      'claude-opus-4-6',
-      'claude',
-    );
-    expect(claudeOrder).toEqual(['messages', 'chat', 'responses']);
-
-    const responsesOrder = await resolveUpstreamEndpointCandidates(
-      {
-        ...baseContext,
-        site: { ...baseContext.site, platform: 'anyrouter' },
-      },
-      'claude-opus-4-6',
-      'responses',
-    );
-    expect(responsesOrder).toEqual(['responses', 'messages', 'chat']);
-  });
-
   it('prefers native responses endpoints for claude-family models when encrypted reasoning is explicitly requested', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {

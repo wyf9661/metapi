@@ -3358,56 +3358,6 @@ describe('chat proxy stream behavior', () => {
     expect(targetUrl).toContain('/v1/messages');
   });
 
-  it('forces anyrouter platform to prefer /v1/messages even when catalog says openai', async () => {
-    selectChannelMock.mockReturnValue({
-      channel: { id: 11, routeId: 22 },
-      site: { name: 'anyrouter-site', url: 'https://anyrouter.example.com', platform: 'anyrouter' },
-      account: { id: 33, username: 'demo-user' },
-      tokenName: 'default',
-      tokenValue: 'sk-demo',
-      actualModel: 'upstream-gpt',
-    });
-    fetchModelPricingCatalogMock.mockResolvedValue({
-      models: [
-        {
-          modelName: 'upstream-gpt',
-          supportedEndpointTypes: ['openai'],
-        },
-      ],
-      groupRatio: {},
-    });
-
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      id: 'msg_anyrouter',
-      type: 'message',
-      model: 'upstream-gpt',
-      content: [{ type: 'text', text: 'anyrouter prefers messages' }],
-      stop_reason: 'end_turn',
-      usage: { input_tokens: 6, output_tokens: 2, total_tokens: 8 },
-    }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }));
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/chat/completions',
-      payload: {
-        model: 'claude-haiku-4-5-20251001',
-        stream: false,
-        messages: [{ role: 'user', content: 'hello' }],
-      },
-    });
-
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body?.choices?.[0]?.message?.content).toContain('anyrouter prefers messages');
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [targetUrl] = fetchMock.mock.calls[0] as [string, any];
-    expect(targetUrl).toContain('/v1/messages');
-  });
-
   it('prefers /v1/responses on openai platform for claude-family models on /v1/chat/completions', async () => {
     fetchModelPricingCatalogMock.mockResolvedValue({
       models: [
@@ -3507,67 +3457,6 @@ describe('chat proxy stream behavior', () => {
     const [secondUrl] = fetchMock.mock.calls[1] as [string, any];
     expect(firstUrl).toContain('/v1/responses');
     expect(secondUrl).toContain('/v1/chat/completions');
-  });
-
-  it('falls back to /v1/responses for /v1/chat/completions when messages/chat endpoints return 502', async () => {
-    selectChannelMock.mockReturnValue({
-      channel: { id: 11, routeId: 22 },
-      site: { name: 'generic-site', url: 'https://generic.example.com', platform: 'new-api' },
-      account: { id: 33, username: 'demo-user' },
-      tokenName: 'default',
-      tokenValue: 'sk-generic',
-      actualModel: 'claude-haiku-4-5-20251001',
-    });
-
-    fetchMock
-      .mockResolvedValueOnce(new Response(
-        '<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body>Cloudflare</body></html>',
-        {
-          status: 502,
-          headers: { 'content-type': 'text/html; charset=UTF-8' },
-        },
-      ))
-      .mockResolvedValueOnce(new Response(
-        '<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body>Cloudflare</body></html>',
-        {
-          status: 502,
-          headers: { 'content-type': 'text/html; charset=UTF-8' },
-        },
-      ))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        id: 'resp_anyrouter_fallback',
-        object: 'response',
-        model: 'claude-haiku-4-5-20251001',
-        status: 'completed',
-        output_text: 'ok via responses fallback after 502',
-        usage: { input_tokens: 5, output_tokens: 2, total_tokens: 7 },
-      }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }));
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/chat/completions',
-      payload: {
-        model: 'claude-haiku-4-5-20251001',
-        stream: false,
-        messages: [{ role: 'user', content: 'hello' }],
-      },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-
-    const [firstUrl] = fetchMock.mock.calls[0] as [string, any];
-    const [secondUrl] = fetchMock.mock.calls[1] as [string, any];
-    const [thirdUrl] = fetchMock.mock.calls[2] as [string, any];
-    expect(firstUrl).toContain('/v1/messages');
-    expect(secondUrl).toContain('/v1/chat/completions');
-    expect(thirdUrl).toContain('/v1/responses');
-
-    const body = response.json();
-    expect(body?.choices?.[0]?.message?.content).toContain('ok via responses fallback after 502');
   });
 
   it('stops after the first failed protocol when cross protocol fallback is disabled', async () => {

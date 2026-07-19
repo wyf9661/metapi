@@ -16,9 +16,6 @@ describe('payload rule platform options', () => {
       'gemini',
       'gemini-cli',
       'antigravity',
-      'done-hub',
-      'one-hub',
-      'veloera',
     ]));
   });
 });

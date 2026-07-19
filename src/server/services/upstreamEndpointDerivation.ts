@@ -172,7 +172,6 @@ export async function resolveUpstreamEndpointCandidates(
   if (
     hints?.requiresNativeResponsesFileUrl
     && sitePlatform !== 'claude'
-    && sitePlatform !== 'anyrouter'
   ) {
     return ['responses'];
   }
@@ -207,17 +206,6 @@ export async function resolveUpstreamEndpointCandidates(
     hasRemoteDocumentUrl: false,
   };
 
-  if (sitePlatform === 'anyrouter') {
-    if (hasNonImageFileInput) {
-      return finalizeCandidates(downstreamFormat === 'responses'
-        ? ['responses', 'messages', 'chat']
-        : ['messages', 'responses', 'chat']);
-    }
-    if (downstreamFormat === 'responses') {
-      return finalizeCandidates(['responses', 'messages', 'chat']);
-    }
-    return finalizeCandidates(['messages', 'chat', 'responses']);
-  }
 
   // NewAPI "Codex-only" gateways: if the site is configured with Codex client headers,
   // prefer /v1/responses first so chat requests convert instead of dying on nginx 403.

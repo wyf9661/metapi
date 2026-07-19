@@ -1203,8 +1203,8 @@ describe('backupService', () => {
             },
             {
               id: 'cookie-account',
-              site_url: 'https://onehub.example.com',
-              site_type: 'one-hub',
+              site_url: 'https://new-api.example.com',
+              site_type: 'new-api',
               site_name: 'Cookie Site',
               username: 'cookie-user',
               authType: 'cookie',

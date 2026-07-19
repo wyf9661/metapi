@@ -3,10 +3,6 @@ export type InitialConnectionSegment = 'session' | 'apikey';
 const SESSION_FIRST_PLATFORMS = new Set([
   'new-api',
   'one-api',
-  'anyrouter',
-  'veloera',
-  'one-hub',
-  'done-hub',
   'sub2api',
   'codex',
 ]);

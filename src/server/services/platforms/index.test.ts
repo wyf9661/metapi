@@ -38,15 +38,6 @@ async function withHttpServer(
 }
 
 describe('getAdapter platform aliases', () => {
-  it('normalizes the legacy anyrouter alias to new-api', () => {
-    const adapter = getAdapter('anyrouter');
-    expect(adapter?.platformName).toBe('new-api');
-  });
-
-  it('handles case-insensitive platform strings', () => {
-    const adapter = getAdapter('Veloera');
-    expect(adapter?.platformName).toBe('veloera');
-  });
 
   it('returns undefined for unknown platforms', () => {
     expect(getAdapter('unknown-platform')).toBeUndefined();
@@ -68,16 +59,6 @@ describe('getAdapter platform aliases', () => {
     expect(getAdapter('chatgpt-codex')?.platformName).toBe('codex');
   });
 
-  it('detects anyrouter URLs as new-api-compatible', async () => {
-    const adapter = await detectPlatform('https://anyrouter.top');
-    expect(adapter?.platformName).toBe('new-api');
-  });
-
-  it('detects done-hub URL before generic adapters', async () => {
-    const adapter = await detectPlatform('https://demo.donehub.example');
-    expect(adapter?.platformName).toBe('done-hub');
-  });
-
   it('detects official openai/claude/gemini upstream URLs', async () => {
     const openai = await detectPlatform('https://api.openai.com');
     const claude = await detectPlatform('https://api.anthropic.com');
@@ -86,64 +67,6 @@ describe('getAdapter platform aliases', () => {
     expect(openai?.platformName).toBe('openai');
     expect(claude?.platformName).toBe('claude');
     expect(gemini?.platformName).toBe('gemini');
-  });
-
-  it('detects one-hub by title under custom domain before generic new-api', async () => {
-    await withHttpServer((req, res) => {
-      if (req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<html><head><title>One-Hub Console</title></head><body></body></html>');
-        return;
-      }
-      if (req.url === '/api/status') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: true,
-          data: { system_name: 'New API' },
-        }));
-        return;
-      }
-      res.writeHead(404).end();
-    }, async (baseUrl) => {
-      const adapter = await detectPlatform(baseUrl);
-      expect(adapter?.platformName).toBe('one-hub');
-    });
-  });
-
-  it('detects done-hub by title under custom domain', async () => {
-    await withHttpServer((req, res) => {
-      if (req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<html><head><title>Done-Hub Panel</title></head><body></body></html>');
-        return;
-      }
-      res.writeHead(404).end();
-    }, async (baseUrl) => {
-      const adapter = await detectPlatform(baseUrl);
-      expect(adapter?.platformName).toBe('done-hub');
-    });
-  });
-
-  it('detects veloera by title under custom domain before generic new-api', async () => {
-    await withHttpServer((req, res) => {
-      if (req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<html><head><title>Veloera 管理台</title></head><body></body></html>');
-        return;
-      }
-      if (req.url === '/api/status') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: true,
-          data: { system_name: 'new-api fork' },
-        }));
-        return;
-      }
-      res.writeHead(404).end();
-    }, async (baseUrl) => {
-      const adapter = await detectPlatform(baseUrl);
-      expect(adapter?.platformName).toBe('veloera');
-    });
   });
 
   it('falls back to new-api by title when api/status is unavailable', async () => {

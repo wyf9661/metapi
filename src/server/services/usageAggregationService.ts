@@ -166,9 +166,7 @@ function resolveSummarySpend(params: {
   if (explicit > 0) return explicit;
   const tokens = normalizeNonNegativeInt(params.totalTokens);
   if (tokens <= 0) return 0;
-  return String(params.platform || '').trim().toLowerCase() === 'veloera'
-    ? tokens / 1_000_000
-    : tokens / 500_000;
+  return tokens / 500_000;
 }
 
 function resolveSiteSpend(params: {

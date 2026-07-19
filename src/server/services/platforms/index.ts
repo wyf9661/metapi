@@ -1,9 +1,7 @@
 import type { PlatformAdapter } from './base.js';
 import { NewApiAdapter } from './newApi.js';
 import { OneApiAdapter } from './oneApi.js';
-import { VeloeraAdapter } from './veloera.js';
-import { OneHubAdapter } from './oneHub.js';
-import { DoneHubAdapter } from './doneHub.js';
+
 import { Sub2ApiAdapter } from './sub2api.js';
 import { OpenAiAdapter } from './openai.js';
 import { CodexAdapter } from './codex.js';
@@ -22,9 +20,7 @@ const adapters: PlatformAdapter[] = [
   new GeminiAdapter(),
   new GeminiCliAdapter(),
   new AntigravityAdapter(),
-  new DoneHubAdapter(),
-  new OneHubAdapter(),
-  new VeloeraAdapter(),
+
   new NewApiAdapter(),
   new Sub2ApiAdapter(),
   new OneApiAdapter(),
@@ -39,12 +35,7 @@ export function getAdapter(platform: string): PlatformAdapter | undefined {
   return adapters.find((a) => a.platformName === normalized);
 }
 
-const titleFirstPlatforms = new Set<string>([
-  'done-hub',
-  'one-hub',
-  'veloera',
-  'sub2api',
-]);
+const titleFirstPlatforms = new Set<string>(['sub2api']);
 
 export async function detectPlatform(url: string): Promise<PlatformAdapter | undefined> {
   const urlHint = detectPlatformByUrlHint(url);

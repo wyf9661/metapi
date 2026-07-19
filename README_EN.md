@@ -5,7 +5,7 @@
 **A relay for relays — aggregate scattered AI relay stations into one unified gateway**
 
 <p>
-Bring together all your New API / One API / OneHub / DoneHub / Veloera / AnyRouter / Sub2API sites
+Bring together all your New API / One API / Sub2API sites
 <br>
 into <strong>one API Key, one endpoint</strong>, with automatic model discovery, smart routing, and cost optimization.
 </p>
@@ -87,10 +87,6 @@ The AI ecosystem is seeing a growing number of aggregation relay stations based 
 
 - [New API](https://github.com/QuantumNous/new-api)
 - [One API](https://github.com/songquanpeng/one-api)
-- [OneHub](https://github.com/MartialBE/one-hub)
-- [DoneHub](https://github.com/deanxv/done-hub)
-- [Veloera](https://github.com/Veloera/Veloera)
-- [AnyRouter](https://anyrouter.top) — Universal routing platform
 - [Sub2API](https://github.com/Wei-Shaw/sub2api) — Subscription-based relay
 
 | Pain Point | How Metapi Solves It |
@@ -182,7 +178,7 @@ The AI ecosystem is seeing a growing number of aggregation relay stations based 
 &emsp;• Format Conversion — transparent bidirectional OpenAI ⇄ Claude conversion
 &emsp;• Auto Check-in · Balance Management · Alerts & Notifications · Data Dashboard
 &emsp;↓
-**Upstream Platforms** (New API · One API · OneHub · DoneHub · Veloera · AnyRouter · Sub2API …)
+**Upstream Platforms** (New API · One API · Sub2API …)
 
 ---
 
@@ -214,10 +210,6 @@ The AI ecosystem is seeing a growing number of aggregation relay stations based 
 | --- | --- | --- |
 | **New API** | `new-api` | Next-gen LLM gateway |
 | **One API** | `one-api` | Classic OpenAI API aggregation |
-| **OneHub** | `onehub` | Enhanced One API fork |
-| **DoneHub** | `done-hub` | Enhanced OneHub fork |
-| **Veloera** | `veloera` | API gateway platform |
-| **AnyRouter** | `anyrouter` | Universal routing platform |
 | **Sub2API** | `sub2api` | Subscription-based relay |
 
 Adapters cover shared capabilities such as model discovery, balance access, token management, and proxy integration; login, check-in, and user-info flows vary by platform.
@@ -529,9 +521,6 @@ npm run db:generate    # Generate Drizzle migration files
 | --- | --- |
 | [New API](https://github.com/QuantumNous/new-api) | Next-gen LLM gateway, one of Metapi's primary upstreams |
 | [One API](https://github.com/songquanpeng/one-api) | Classic OpenAI API aggregation |
-| [OneHub](https://github.com/MartialBE/one-hub) | Enhanced One API fork |
-| [DoneHub](https://github.com/deanxv/done-hub) | Enhanced OneHub fork |
-| [Veloera](https://github.com/Veloera/Veloera) | API gateway platform |
 
 ### Referenced & Used Projects
 

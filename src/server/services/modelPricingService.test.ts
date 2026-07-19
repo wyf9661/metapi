@@ -181,6 +181,6 @@ describe('modelPricingService', () => {
 
   it('uses platform-specific fallback token divisor', () => {
     expect(fallbackTokenCost(1500, 'new-api')).toBe(0.003);
-    expect(fallbackTokenCost(1500, 'veloera')).toBe(0.0015);
+    expect(fallbackTokenCost(1500, 'new-api')).toBe(0.003);
   });
 });

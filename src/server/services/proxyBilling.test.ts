@@ -38,8 +38,8 @@ describe('resolveProxyLogBilling', () => {
     const result = await resolveProxyLogBilling({
       site: {
         id: 1,
-        url: 'https://anyrouter.top',
-        platform: 'anyrouter',
+        url: 'https://new-api.example.com',
+        platform: 'new-api',
       },
       account: {
         id: 2,
