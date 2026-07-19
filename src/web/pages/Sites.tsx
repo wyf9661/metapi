@@ -1282,11 +1282,7 @@ export default function Sites() {
       {createdSiteForChoice && (
         <SiteCreatedModal
           siteName={createdSiteForChoice.name}
-          initializationPresetId={createdSiteForChoice.initializationPresetId}
-          initialSegment={
-            getSiteInitializationPreset(createdSiteForChoice.initializationPresetId)?.initialSegment
-            || resolveInitialConnectionSegment(createdSiteForChoice.platform)
-          }
+          initialSegment={resolveInitialConnectionSegment(createdSiteForChoice.platform)}
           sessionLabel={resolveSiteCreatedSessionLabel(createdSiteForChoice.platform)}
           onChoice={handleSiteCreatedChoice}
           onClose={() => {

@@ -15,7 +15,6 @@ import {
   parseSiteDisabledModelsPayload,
   parseSiteUpdatePayload,
 } from '../../contracts/siteRoutePayloads.js';
-import { getSiteInitializationPreset } from '../../../shared/siteInitializationPresets.js';
 import { normalizeSiteApiEndpointBaseUrl } from '../../services/siteApiEndpointService.js';
 import { analyzePrimarySiteUrl } from '../../../shared/sitePrimaryUrl.js';
 import { probeSiteModels } from '../../services/modelService.js';
@@ -477,7 +476,6 @@ export async function sitesRoutes(app: FastifyInstance) {
       name,
       url,
       platform,
-      initializationPresetId,
       proxyUrl,
       useSystemProxy,
       customHeaders,
@@ -531,12 +529,6 @@ export async function sitesRoutes(app: FastifyInstance) {
         error: 'Invalid customHeadersOverrideRequestHeaders value. Expected boolean.',
       });
     }
-    const explicitInitializationPreset = initializationPresetId == null || initializationPresetId === ''
-      ? null
-      : getSiteInitializationPreset(initializationPresetId);
-    if (initializationPresetId != null && initializationPresetId !== '' && !explicitInitializationPreset) {
-      return reply.code(400).send({ error: 'Invalid initializationPresetId.' });
-    }
     const normalizedApiEndpoints = normalizeSiteApiEndpointsInput(apiEndpoints);
     if (!normalizedApiEndpoints.valid) {
       return reply.code(400).send({ error: normalizedApiEndpoints.error || 'Invalid apiEndpoints.' });
@@ -549,18 +541,9 @@ export async function sitesRoutes(app: FastifyInstance) {
     const detectionUrl = analyzedPrimarySiteUrl.canonicalUrl || canonicalUrl;
     const canonicalPlatform = normalizeSitePlatform(platform);
     let detectedPlatform = canonicalPlatform;
-    let responseInitializationPresetId: string | null = explicitInitializationPreset?.id || null;
     if (!detectedPlatform) {
-      if (explicitInitializationPreset) {
-        detectedPlatform = explicitInitializationPreset.platform;
-      } else {
-        const detected = await detectSite(detectionUrl);
-        detectedPlatform = detected?.platform ?? null;
-        responseInitializationPresetId = detected?.initializationPresetId || null;
-      }
-    }
-    if (explicitInitializationPreset && explicitInitializationPreset.platform !== detectedPlatform) {
-      return reply.code(400).send({ error: 'initializationPresetId does not match the selected platform.' });
+      const detected = await detectSite(detectionUrl);
+      detectedPlatform = detected?.platform ?? null;
     }
     if (!detectedPlatform) {
       return { error: 'Could not detect platform. Please specify manually.' };
@@ -616,10 +599,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: 'Create site failed' });
     }
     invalidateSiteCaches();
-    return {
-      ...result,
-      ...(responseInitializationPresetId ? { initializationPresetId: responseInitializationPresetId } : {}),
-    };
+    return result;
   });
 
   // Update a site
