@@ -379,6 +379,17 @@ export function translateText(text: string, language: Language): string {
   return translated;
 }
 
+export function shouldReplaceStoredTranslation(
+  current: string,
+  stored: string,
+  language: Language,
+): boolean {
+  if (current === stored) return false;
+  if (current === translateText(stored, language)) return false;
+  if (current === translateText(stored, language === 'zh' ? 'en' : 'zh')) return false;
+  return true;
+}
+
 export function tr(text: string): string {
   return translateText(text, runtimeLanguage);
 }
@@ -425,11 +436,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       const stored = textNodeOriginalMap.get(node);
       if (!stored) {
         textNodeOriginalMap.set(node, current);
-      } else {
-        const expected = translateText(stored, language);
-        if (current !== expected && current !== stored) {
-          textNodeOriginalMap.set(node, current);
-        }
+      } else if (shouldReplaceStoredTranslation(current, stored, language)) {
+        textNodeOriginalMap.set(node, current);
       }
       const source = textNodeOriginalMap.get(node) || current;
       const next = translateText(source, language);
@@ -452,11 +460,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
         const stored = attrMap.get(attr);
         if (!stored) {
           attrMap.set(attr, current);
-        } else {
-          const expected = translateText(stored, language);
-          if (current !== expected && current !== stored) {
-            attrMap.set(attr, current);
-          }
+        } else if (shouldReplaceStoredTranslation(current, stored, language)) {
+          attrMap.set(attr, current);
         }
 
         const source = attrMap.get(attr) || current;

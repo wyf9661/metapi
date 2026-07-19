@@ -3,6 +3,7 @@ import {
   parseStoredUtcDateTime,
   type StoredUtcDateTimeInput,
 } from './localTimeService.js';
+import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -108,7 +109,7 @@ function round(value: number, digits = 2): number {
 
 function resolveModelName(log: ProxyLogLike): string {
   const raw = (log.modelActual || log.modelRequested || '').trim();
-  return raw.length > 0 ? raw : 'unknown';
+  return canonicalizeModelName(raw) || 'unknown';
 }
 
 export function resolveModelAnalysisSpend(
@@ -262,7 +263,8 @@ export function buildModelAnalysisFromDailyUsage(
     const aggregateDay = String(row.localDay || '').trim();
     if (!daySet.has(aggregateDay)) continue;
 
-    const model = String(row.model || '').trim() || 'unknown';
+    const rawModel = String(row.model || '').trim();
+    const model = canonicalizeModelName(rawModel) || 'unknown';
     const calls = toPositiveInt(row.totalCalls);
     const successCount = toPositiveInt(row.successCalls);
     const tokens = toPositiveInt(row.totalTokens);
