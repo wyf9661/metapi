@@ -1,5 +1,4 @@
 import type { PlatformAdapter } from './base.js';
-import { AnyRouterAdapter } from './anyrouter.js';
 import { NewApiAdapter } from './newApi.js';
 import { OneApiAdapter } from './oneApi.js';
 import { VeloeraAdapter } from './veloera.js';
@@ -12,7 +11,6 @@ import { ClaudeAdapter } from './claude.js';
 import { GeminiAdapter } from './gemini.js';
 import { GeminiCliAdapter } from './geminiCli.js';
 import { AntigravityAdapter } from './antigravity.js';
-import { CliProxyApiAdapter } from './cliproxyapi.js';
 import { detectPlatformByTitle } from './titleHint.js';
 import { detectPlatformByUrlHint, normalizePlatformAlias } from '../../../shared/platformIdentity.js';
 
@@ -24,8 +22,6 @@ const adapters: PlatformAdapter[] = [
   new GeminiAdapter(),
   new GeminiCliAdapter(),
   new AntigravityAdapter(),
-  new CliProxyApiAdapter(),
-  new AnyRouterAdapter(),
   new DoneHubAdapter(),
   new OneHubAdapter(),
   new VeloeraAdapter(),
@@ -44,7 +40,6 @@ export function getAdapter(platform: string): PlatformAdapter | undefined {
 }
 
 const titleFirstPlatforms = new Set<string>([
-  'anyrouter',
   'done-hub',
   'one-hub',
   'veloera',
