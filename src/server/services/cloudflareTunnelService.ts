@@ -34,6 +34,7 @@ type TunnelStatus = {
 const QUICK_TUNNEL_URL_RE = /https:\/\/([a-z0-9-]+)\.trycloudflare\.com/gi;
 const SHORT_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const DEFAULT_TUNNEL_WORKER_URL = 'https://abc-tunnel.us';
+const QUICK_TUNNEL_RETRY_DELAYS_MS = [10_000, 30_000, 60_000, 300_000] as const;
 
 let child: ChildProcessWithoutNullStreams | null = null;
 let currentTunnelUrl: string | null = null;
@@ -44,6 +45,36 @@ let spawnInProgress = false;
 let downloadInProgress = false;
 let downloadProgress: number | null = null;
 let enableToken = 0;
+let retryTimer: NodeJS.Timeout | null = null;
+let retryAttempt = 0;
+
+export function getQuickTunnelRetryDelay(attempt: number): number {
+  const index = Math.max(0, Math.min(Math.floor(attempt), QUICK_TUNNEL_RETRY_DELAYS_MS.length - 1));
+  return QUICK_TUNNEL_RETRY_DELAYS_MS[index];
+}
+
+function clearTunnelRetry(options?: { resetAttempt?: boolean }) {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  if (options?.resetAttempt !== false) retryAttempt = 0;
+}
+
+function scheduleTunnelRetry(reason: string) {
+  if (!config.tunnelEnabled || retryTimer) return;
+  const delayMs = getQuickTunnelRetryDelay(retryAttempt);
+  retryAttempt += 1;
+  console.warn(`[Tunnel] ${reason}; retrying in ${Math.round(delayMs / 1000)}s`);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (!config.tunnelEnabled) return;
+    void startCloudflareTunnel().catch((error) => {
+      console.warn(`[Tunnel] retry failed: ${error?.message || error}`);
+    });
+  }, delayMs);
+  retryTimer.unref?.();
+}
 
 function tunnelDir(): string {
   return join(config.dataDir, 'tunnel');
@@ -358,6 +389,7 @@ function killProcessTree(pid: number | null | undefined) {
 export async function stopCloudflareTunnel(options?: { persistDisabled?: boolean }): Promise<void> {
   enableToken += 1;
   const persistDisabled = options?.persistDisabled !== false;
+  clearTunnelRetry();
 
   if (child && !child.killed) {
     try {
@@ -402,6 +434,10 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
   spawnInProgress = true;
   const token = ++enableToken;
   lastError = null;
+
+  // Keep the persisted setting as user intent; one failed Quick Tunnel allocation is transient.
+  config.tunnelEnabled = true;
+  await upsertSetting('tunnel_enabled', true);
 
   try {
     const bin = await ensureCloudflaredBinary();
@@ -458,6 +494,7 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
             updatedAt: new Date().toISOString(),
             lastError,
           });
+          scheduleTunnelRetry('cloudflared exited unexpectedly');
         }
       }
     });
@@ -473,6 +510,7 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
     }
 
     currentTunnelUrl = tunnelUrl;
+    clearTunnelRetry();
     // Persist a stable shortId across restarts (Quick Tunnel URL itself always changes).
     const state = readStateFile();
     const shortId = ensureShortId(state.shortId || currentShortId);
@@ -517,17 +555,20 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
     }
     child = null;
     writePid(null);
+    const shouldRemainEnabled = config.tunnelEnabled && token === enableToken;
     writeStateFile({
-      enabled: false,
+      enabled: shouldRemainEnabled,
       tunnelUrl: null,
-      publicUrl: null,
+      publicUrl: currentPublicUrl || buildStablePublicUrl(currentShortId),
       shortId: currentShortId,
       pid: null,
       updatedAt: new Date().toISOString(),
       lastError,
     });
-    config.tunnelEnabled = false;
-    await upsertSetting('tunnel_enabled', false);
+    if (shouldRemainEnabled) {
+      await upsertSetting('tunnel_enabled', true);
+      scheduleTunnelRetry('Quick Tunnel allocation failed');
+    }
     throw error;
   } finally {
     spawnInProgress = false;
