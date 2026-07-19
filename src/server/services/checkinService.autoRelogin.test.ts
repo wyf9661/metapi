@@ -317,9 +317,9 @@ describe('checkinService auto relogin', () => {
         },
         sites: {
           id: 10,
-          name: 'anyrouter',
-          url: 'https://anyrouter.top',
-          platform: 'anyrouter',
+          name: 'new-api',
+          url: 'https://new-api.example.com',
+          platform: 'new-api',
         },
       },
     ]);
@@ -352,9 +352,9 @@ describe('checkinService auto relogin', () => {
         },
         sites: {
           id: 18,
-          name: 'done-hub',
+          name: 'new-api-2',
           url: 'https://done.example.com',
-          platform: 'donehub',
+          platform: 'new-api',
         },
       },
     ]);

@@ -11,11 +11,7 @@ export function proxyCostSqlExpression() {
   return sql<number>`
     coalesce(
       ${schema.proxyLogs.estimatedCost},
-      case
-        when lower(coalesce(${schema.sites.platform}, 'new-api')) = 'veloera'
-          then coalesce(${schema.proxyLogs.totalTokens}, 0) / 1000000.0
-        else coalesce(${schema.proxyLogs.totalTokens}, 0) / 500000.0
-      end
+      coalesce(${schema.proxyLogs.totalTokens}, 0) / 500000.0
     )
   `;
 }

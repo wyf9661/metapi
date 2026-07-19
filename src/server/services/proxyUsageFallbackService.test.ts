@@ -47,7 +47,7 @@ describe('proxyUsageFallbackService', () => {
         items: [
           {
             model_name: 'claude-haiku-4-5-20251001',
-            token_name: 'anyrouter',
+            token_name: 'new-api',
             prompt_tokens: 146638,
             completion_tokens: 172,
             quota: 41528,
@@ -70,7 +70,7 @@ describe('proxyUsageFallbackService', () => {
     const logs = extractSelfLogItems(payload);
     expect(logs[0]).toMatchObject({
       modelName: 'claude-haiku-4-5-20251001',
-      tokenName: 'anyrouter',
+      tokenName: 'new-api',
       promptTokens: 146638,
       completionTokens: 172,
       quota: 41528,
@@ -179,18 +179,10 @@ describe('proxyUsageFallbackService', () => {
     expect(matched).toEqual(logs[0]);
   });
 
-  it('always enables self-log lookup for done-hub/one-hub', () => {
-    expect(shouldLookupSelfLog('done-hub', { promptTokens: 12, completionTokens: 8, totalTokens: 20 })).toBe(true);
-    expect(shouldLookupSelfLog('one-hub', { promptTokens: 1, completionTokens: 1, totalTokens: 2 })).toBe(true);
-  });
 
   it('only enables self-log lookup for new-api when usage is missing', () => {
     expect(shouldLookupSelfLog('new-api', { promptTokens: 0, completionTokens: 0, totalTokens: 0 })).toBe(true);
     expect(shouldLookupSelfLog('new-api', { promptTokens: 12, completionTokens: 3, totalTokens: 15 })).toBe(false);
   });
 
-  it('always enables self-log lookup for anyrouter to recover exact billing metadata', () => {
-    expect(shouldLookupSelfLog('anyrouter', { promptTokens: 0, completionTokens: 0, totalTokens: 0 })).toBe(true);
-    expect(shouldLookupSelfLog('anyrouter', { promptTokens: 12, completionTokens: 3, totalTokens: 15 })).toBe(true);
-  });
 });

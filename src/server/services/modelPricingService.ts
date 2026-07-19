@@ -279,57 +279,6 @@ function normalizeCommonPricingPayload(payload: unknown): PricingData | null {
   return { models, groupRatio };
 }
 
-function normalizeOneHubPricingPayload(availablePayload: unknown, groupPayload: unknown): PricingData | null {
-  const available = unwrapPayload(availablePayload);
-  if (!available || typeof available !== 'object') return null;
-
-  const transformed: unknown[] = [];
-  for (const [modelName, rawValue] of Object.entries(available as Record<string, unknown>)) {
-    const item = rawValue as any;
-    const price = item?.price || {};
-    const input = toNumber(price.input, 0);
-    const output = toNumber(price.output, input);
-    const cacheRead = toNumber(
-      price.input_cache_read ?? price.inputCacheRead ?? price.cache_read ?? price.cacheRead,
-      Number.NaN,
-    );
-    const cacheWrite = toNumber(
-      price.input_cache_write ?? price.inputCacheWrite ?? price.cache_write ?? price.cacheWrite,
-      Number.NaN,
-    );
-    const isTokenType = String(price.type || '').toLowerCase() === 'tokens';
-
-    transformed.push({
-      model_name: modelName,
-      model_description: item?.description || item?.desc || '',
-      quota_type: isTokenType ? 0 : 1,
-      model_ratio: 1,
-      completion_ratio: input > 0 ? output / input : 1,
-      cache_ratio: input > 0 && Number.isFinite(cacheRead) && cacheRead >= 0 ? (cacheRead / input) : 1,
-      cache_creation_ratio: input > 0 && Number.isFinite(cacheWrite) && cacheWrite >= 0 ? (cacheWrite / input) : 1,
-      model_price: { input, output },
-      enable_groups: Array.isArray(item?.groups) && item.groups.length > 0 ? item.groups : [DEFAULT_GROUP],
-      supported_endpoint_types: Array.isArray(item?.supported_endpoint_types) ? item.supported_endpoint_types : [],
-      tags: Array.isArray(item?.tags) ? item.tags : [],
-      owner_by: item?.owned_by || item?.provider || null,
-    });
-  }
-
-  const models = normalizePricingModels(transformed);
-  if (models.size === 0) return null;
-
-  const groupMap = unwrapPayload(groupPayload);
-  const groupRatioSource: Record<string, number> = {};
-  if (groupMap && typeof groupMap === 'object') {
-    for (const [key, group] of Object.entries(groupMap as Record<string, any>)) {
-      groupRatioSource[key] = toNumber(group?.ratio, 1);
-    }
-  }
-
-  const groupRatio = normalizeGroupRatio(groupRatioSource);
-  return { models, groupRatio };
-}
-
 async function fetchJson(url: string, options?: UndiciRequestInit): Promise<unknown> {
   const { fetch } = await import('undici');
   const controller = new AbortController();
@@ -389,8 +338,7 @@ function buildTokenCandidates(input: EstimateProxyCostInput): string[] {
 }
 
 async function fetchCommonPricing(baseUrl: string, token?: string, sitePlatform?: string): Promise<PricingData | null> {
-  const normalizedPlatform = (sitePlatform || '').trim().toLowerCase();
-  const shouldTryShieldCookie = !!token && (normalizedPlatform === 'anyrouter' || token.includes('='));
+  const shouldTryShieldCookie = !!token && token.includes('=');
   if (shouldTryShieldCookie) {
     const payload = await fetchJsonViaNewApiShield(`${baseUrl}/api/pricing`, token!);
     const data = normalizeCommonPricingPayload(payload);
@@ -401,18 +349,6 @@ async function fetchCommonPricing(baseUrl: string, token?: string, sitePlatform?
   if (token) headers.Authorization = `Bearer ${token}`;
   const payload = await fetchJson(`${baseUrl}/api/pricing`, { headers });
   return normalizeCommonPricingPayload(payload);
-}
-
-async function fetchOneHubPricing(baseUrl: string, token?: string): Promise<PricingData | null> {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const [availablePayload, groupPayload] = await Promise.all([
-    fetchJson(`${baseUrl}/api/available_model`, { headers }),
-    fetchJson(`${baseUrl}/api/user_group_map`, { headers }),
-  ]);
-
-  return normalizeOneHubPricingPayload(availablePayload, groupPayload);
 }
 
 function getCacheKey(input: EstimateProxyCostInput): string {
@@ -455,9 +391,7 @@ async function fetchPricingData(input: EstimateProxyCostInput): Promise<PricingD
   const baseUrl = normalizeUrl(input.site.url);
   const tokenCandidates = buildTokenCandidates(input);
 
-  const fetcher = input.site.platform === 'one-hub' || input.site.platform === 'done-hub'
-    ? (baseUrl: string, token?: string) => fetchOneHubPricing(baseUrl, token)
-    : (baseUrl: string, token?: string) => fetchCommonPricing(baseUrl, token, input.site.platform);
+  const fetcher = (baseUrl: string, token?: string) => fetchCommonPricing(baseUrl, token, input.site.platform);
 
   for (const token of tokenCandidates) {
     try {
@@ -566,7 +500,7 @@ function calculatePerCallCost(
   }
 
   if (modelPrice && typeof modelPrice === 'object') {
-    // done-hub/one-hub times pricing follows input ratio only.
+    // Object pricing follows the input ratio.
     return toNumber(modelPrice.input, 0) * multiplier * ONE_HUB_PER_CALL_RATIO;
   }
 
@@ -787,8 +721,7 @@ export async function refreshModelPricingCatalog(input: EstimateProxyCostInput):
 }
 
 export function fallbackTokenCost(totalTokens: number, platform: string): number {
-  const divisor = platform === 'veloera' ? 1_000_000 : 500_000;
-  return roundCost(toPositiveInt(totalTokens) / divisor);
+  return roundCost(toPositiveInt(totalTokens) / 500_000);
 }
 
 export async function estimateProxyCost(input: EstimateProxyCostInput): Promise<number> {

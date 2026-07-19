@@ -2,9 +2,9 @@
 
 Thank you for your interest in contributing to Metapi! / 感谢您对 Metapi 项目的贡献！
 
-Metapi is a meta-aggregation layer for AI API platforms (New API, One API, OneHub, etc.), providing unified proxy, intelligent routing, and centralized management.
+Metapi is a meta-aggregation layer for AI API platforms (New API, One API, Sub2API, etc.), providing unified proxy, intelligent routing, and centralized management.
 
-Metapi 是 AI API 聚合平台（New API、One API、OneHub 等）的元聚合层，提供统一代理、智能路由和集中管理。
+Metapi 是 AI API 聚合平台（New API、One API、Sub2API 等）的元聚合层，提供统一代理、智能路由和集中管理。
 
 ## Before You Start / 开始之前
 
@@ -181,7 +181,7 @@ Types / 类型:
 
 Examples / 示例:
 ```
-feat: add AnyRouter platform adapter
+feat: add New API platform adapter
 fix: handle empty model list in dashboard
 docs: update Docker deployment guide
 refactor: extract route selection logic

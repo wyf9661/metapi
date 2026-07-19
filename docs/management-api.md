@@ -358,7 +358,7 @@ curl -sS "${METAPI_ADMIN_BASE_URL}/api/accounts" \
 |------|------|------|------|
 | `siteId` | `number` | 是 | 目标站点 ID |
 | `accessToken` | `string` | 是 | Session Token / Session Cookie / API Key |
-| `platformUserId` | `number` | 否 | 某些 `new-api` / `anyrouter` 站点需要手动传 |
+| `platformUserId` | `number` | 否 | 某些 `new-api` 站点需要手动传 |
 | `credentialMode` | `string` | 否 | `auto` / `session` / `apikey`，脚本里推荐显式传 |
 
 #### 验证 API Key
@@ -413,7 +413,7 @@ curl -sS "${METAPI_ADMIN_BASE_URL}/api/accounts/verify-token" \
 ```
 
 > [!TIP]
-> 对 `new-api` / `anyrouter` 一类站点，如果返回 `needsUserId: true`，说明脚本里要补上 `platformUserId` 再重试。
+> 对 `new-api` 一类站点，如果返回 `needsUserId: true`，说明脚本里要补上 `platformUserId` 再重试。
 
 ### 3. 保存账号
 
@@ -664,7 +664,7 @@ curl -sS "${METAPI_ADMIN_BASE_URL}/api/oauth/connections?limit=50&offset=0" \
 
 ### 需要补平台用户 ID
 
-某些 `new-api` / `anyrouter` 站点会返回：
+某些 `new-api` 站点会返回：
 
 ```json
 {

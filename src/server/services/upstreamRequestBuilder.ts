@@ -264,9 +264,7 @@ function ensureStreamAcceptHeader(
 const CODEX_GATED_PLATFORMS = new Set([
   'new-api',
   'one-api',
-  'veloera',
-  'one-hub',
-  'done-hub',
+
   'sub2api',
   'openai',
 ]);

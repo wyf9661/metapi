@@ -383,7 +383,6 @@ describe('Settings payload rules', () => {
         'new-api',
         'one-api',
         'gemini-cli',
-        'anyrouter',
       ]));
     } finally {
       root?.unmount();

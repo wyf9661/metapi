@@ -5,10 +5,6 @@ describe('defaultConnectionSegment', () => {
   it('maps management-style platforms to the session segment', () => {
     expect(resolveInitialConnectionSegment('new-api')).toBe('session');
     expect(resolveInitialConnectionSegment('one-api')).toBe('session');
-    expect(resolveInitialConnectionSegment('anyrouter')).toBe('session');
-    expect(resolveInitialConnectionSegment('veloera')).toBe('session');
-    expect(resolveInitialConnectionSegment('one-hub')).toBe('session');
-    expect(resolveInitialConnectionSegment('done-hub')).toBe('session');
     expect(resolveInitialConnectionSegment('sub2api')).toBe('session');
     expect(resolveInitialConnectionSegment('codex')).toBe('session');
   });

@@ -61,7 +61,7 @@ describe('accounts health refresh runtime state', () => {
     const site = await db.insert(schema.sites).values({
       name: 'Wind Hub',
       url: 'https://windhub.cc',
-      platform: 'done-hub',
+      platform: 'new-api',
     }).returning().get();
 
     const account = await db.insert(schema.accounts).values({
@@ -135,7 +135,7 @@ describe('accounts health refresh runtime state', () => {
     const site = await db.insert(schema.sites).values({
       name: 'Wind Hub',
       url: 'https://windhub.cc',
-      platform: 'done-hub',
+      platform: 'new-api',
     }).returning().get();
 
     await db.insert(schema.accounts).values({
@@ -182,7 +182,7 @@ describe('accounts health refresh runtime state', () => {
       const site = await db.insert(schema.sites).values({
         name: 'Slow Site',
         url: 'https://slow.example.com',
-        platform: 'done-hub',
+        platform: 'new-api',
       }).returning().get();
 
       const account = await db.insert(schema.accounts).values({
@@ -282,7 +282,7 @@ describe('accounts health refresh runtime state', () => {
       const site = await db.insert(schema.sites).values({
         name: 'Slow Site',
         url: 'https://slow.example.com',
-        platform: 'done-hub',
+        platform: 'new-api',
       }).returning().get();
 
       await db.insert(schema.accounts).values({

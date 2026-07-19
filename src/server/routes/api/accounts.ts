@@ -712,7 +712,7 @@ export async function accountsRoutes(app: FastifyInstance) {
           : undefined;
       const hasProvidedUserId = parsedPlatformUserId !== undefined;
       const skipRawShieldDetection =
-        normalizedPlatform === "new-api" || normalizedPlatform === "anyrouter";
+        normalizedPlatform === "new-api";
       const diagnoseVerificationFailure = async (
         options: { useApiEndpointPool?: boolean } = {},
       ): Promise<VerifyFailureReason> => {
@@ -858,7 +858,7 @@ export async function accountsRoutes(app: FastifyInstance) {
 
       if (
         !hasProvidedUserId &&
-        (normalizedPlatform === "new-api" || normalizedPlatform === "anyrouter")
+        (normalizedPlatform === "new-api")
       ) {
         const preflightReason = await diagnoseVerificationFailure({
           useApiEndpointPool: credentialMode === "apikey",

@@ -441,7 +441,7 @@ describe('balanceService auto relogin', () => {
           id: 5,
           name: 'Wind Hub',
           url: 'https://windhub.cc',
-          platform: 'done-hub',
+          platform: 'new-api',
         },
       },
     ]);

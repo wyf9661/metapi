@@ -74,9 +74,7 @@ function supportsTodayIncomeLogFallback(platform?: string | null): boolean {
   const normalized = (platform || '').toLowerCase();
   return (
     normalized === 'new-api' ||
-    normalized === 'anyrouter' ||
-    normalized === 'one-api' ||
-    normalized === 'veloera'
+    normalized === 'one-api'
   );
 }
 
@@ -132,7 +130,7 @@ function extractLogTotal(payload: any): number | null {
 }
 
 function resolveQuotaConversionFactor(platform?: string | null): number {
-  return (platform || '').toLowerCase() === 'veloera' ? 1_000_000 : 500_000;
+  return 500_000;
 }
 
 async function fetchTodayIncomeFromLogs(params: {

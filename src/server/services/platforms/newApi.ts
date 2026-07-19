@@ -62,7 +62,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
     if (userId) {
       const value = String(userId);
       headers['New-API-User'] = value;
-      headers['Veloera-User'] = value;
+
       headers['voapi-user'] = value;
       headers['User-id'] = value;
       headers['X-User-Id'] = value;
@@ -932,8 +932,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
   private async getOpenAiModels(baseUrl: string, token: string): Promise<string[]> {
     // Session base64 values often end with "=" padding; that must NOT trigger the
-    // anyrouter shield-cookie path or verifyToken spends a long time on /v1/models.
-    const shouldTryShieldCookie = this.platformName === 'anyrouter' || this.looksLikeCookiePairCredential(token);
+    const shouldTryShieldCookie = this.looksLikeCookiePairCredential(token);
     if (shouldTryShieldCookie) {
       const shieldModels = await this.getOpenAiModelsViaShieldCookie(baseUrl, token);
       if (shieldModels.length > 0) return shieldModels;

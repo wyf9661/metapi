@@ -68,8 +68,8 @@ describe('accounts verify-token shield detection', () => {
     verifyTokenMock.mockRejectedValueOnce(new Error('invalid access token'));
 
     const site = await db.insert(schema.sites).values({
-      name: 'AnyRouter',
-      url: 'https://anyrouter.example.com',
+      name: 'NewAPI',
+      url: 'https://new-api.example.com',
       platform: 'new-api',
     }).returning().get();
 
@@ -93,8 +93,8 @@ describe('accounts verify-token shield detection', () => {
     verifyTokenMock.mockRejectedValue(new Error('invalid access token'));
 
     const site = await db.insert(schema.sites).values({
-      name: 'AnyRouter',
-      url: 'https://anyrouter.example.com',
+      name: 'NewAPI',
+      url: 'https://new-api.example.com',
       platform: 'new-api',
     }).returning().get();
 
@@ -138,8 +138,8 @@ describe('accounts verify-token shield detection', () => {
     });
 
     const site = await db.insert(schema.sites).values({
-      name: 'AnyRouter',
-      url: 'https://anyrouter.example.com',
+      name: 'NewAPI',
+      url: 'https://new-api.example.com',
       platform: 'new-api',
     }).returning().get();
 
@@ -171,8 +171,8 @@ describe('accounts verify-token shield detection', () => {
     });
 
     const site = await db.insert(schema.sites).values({
-      name: 'AnyRouter Alias',
-      url: 'https://anyrouter-alias.example.com',
+      name: 'NewAPI Alias',
+      url: 'https://new-api-alias.example.com',
       platform: 'newapi',
     }).returning().get();
 

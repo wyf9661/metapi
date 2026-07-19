@@ -24,11 +24,11 @@ describe('normalizeTokenForDisplay', () => {
   it('adds sk- for any platform when token misses prefix', () => {
     expect(normalizeTokenForDisplay('abc123', 'new-api')).toBe('sk-abc123');
     expect(normalizeTokenForDisplay('xyz789', 'one-api')).toBe('sk-xyz789');
-    expect(normalizeTokenForDisplay('pqr456', 'anyrouter')).toBe('sk-pqr456');
-    expect(normalizeTokenForDisplay('uvw000', 'veloera')).toBe('sk-uvw000');
+    expect(normalizeTokenForDisplay('pqr456', 'new-api')).toBe('sk-pqr456');
+    expect(normalizeTokenForDisplay('uvw000', 'one-api')).toBe('sk-uvw000');
   });
 
   it('keeps existing sk- token unchanged', () => {
-    expect(normalizeTokenForDisplay('sk-abc123', 'veloera')).toBe('sk-abc123');
+    expect(normalizeTokenForDisplay('sk-abc123', 'one-api')).toBe('sk-abc123');
   });
 });

@@ -1,5 +1,5 @@
 export const PLATFORM_ALIASES = Object.assign(Object.create(null), {
-  anyrouter: 'new-api',
+
   'wong-gongyi': 'new-api',
   'vo-api': 'new-api',
   'super-api': 'new-api',
@@ -11,11 +11,7 @@ export const PLATFORM_ALIASES = Object.assign(Object.create(null), {
   oneapi: 'one-api',
   'one api': 'one-api',
   'one-api': 'one-api',
-  onehub: 'one-hub',
-  'one-hub': 'one-hub',
-  donehub: 'done-hub',
-  'done-hub': 'done-hub',
-  veloera: 'veloera',
+
   sub2api: 'sub2api',
   openai: 'openai',
   codex: 'codex',
@@ -81,10 +77,7 @@ export function detectPlatformByUrlHint(url) {
   }
   if (host === 'cloudcode-pa.googleapis.com') return 'gemini-cli';
   if ((host === '127.0.0.1' || host === 'localhost') && port === '8317') return 'openai';
-  if (host.includes('anyrouter')) return 'new-api';
-  if (host.includes('donehub') || host.includes('done-hub')) return 'done-hub';
-  if (host.includes('onehub') || host.includes('one-hub')) return 'one-hub';
-  if (host.includes('veloera')) return 'veloera';
+
   if (host.includes('sub2api')) return 'sub2api';
 
   return undefined;
