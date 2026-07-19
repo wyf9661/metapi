@@ -1425,14 +1425,6 @@ export const api = {
   testNotification: () =>
     request("/api/settings/notify/test", { method: "POST" }),
 
-  // Monitor embed
-  getMonitorConfig: () => request("/api/monitor/config"),
-  updateMonitorConfig: (data: { ldohCookie?: string | null }) =>
-    request("/api/monitor/config", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-  initMonitorSession: () => request("/api/monitor/session", { method: "POST" }),
 
   // Models marketplace
   getModelsMarketplace: (options?: {

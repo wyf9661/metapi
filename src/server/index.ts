@@ -19,7 +19,7 @@ import { searchRoutes } from './routes/api/search.js';
 import { eventsRoutes } from './routes/api/events.js';
 import { taskRoutes } from './routes/api/tasks.js';
 import { testRoutes } from './routes/api/test.js';
-import { monitorRoutes } from './routes/api/monitor.js';
+
 import { downstreamApiKeysRoutes } from './routes/api/downstreamApiKeys.js';
 import { oauthRoutes } from './routes/api/oauth.js';
 import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
@@ -254,7 +254,7 @@ await app.register(siteAnnouncementsRoutes);
 await app.register(updateCenterRoutes);
 await app.register(taskRoutes);
 await app.register(testRoutes);
-await app.register(monitorRoutes);
+
 await app.register(downstreamApiKeysRoutes);
 await app.register(oauthRoutes);
 

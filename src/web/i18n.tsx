@@ -56,7 +56,7 @@ const zhToEn: Record<string, string> = {
   '模型路由': 'Model Routes',
   '使用日志': 'Usage Logs',
   '暂无使用日志': 'No Usage Logs',
-  '可用性监控': 'Availability Monitor',
+
   '系统': 'System',
   '设置': 'Settings',
   '程序日志': 'System Logs',
@@ -93,7 +93,6 @@ const zhToEn: Record<string, string> = {
   '站点管理': 'Site Management',
   '账号管理': 'Connection Management',
   '导入 / 导出': 'Import / Export',
-  '监控内嵌': 'Embedded Monitor',
   '品牌': 'Brands',
   '全部品牌': 'All Brands',
   '其他': 'Other',
