@@ -752,8 +752,10 @@ export async function sitesRoutes(app: FastifyInstance) {
 
   // Delete a site
   async function deleteSiteAndRelatedData(siteId: number): Promise<void> {
-  // Prefer explicit cleanup so connection/token management cannot keep orphan keys
-  // even if a runtime path has foreign_keys temporarily disabled.
+  // Explicit cleanup so connection management cannot keep orphan keys, even when:
+  // - foreign_keys are temporarily off in a runtime path
+  // - API Key accounts store the key only on accounts.api_token (no account_tokens rows)
+  // - OAuth unit membership / checkin logs still reference the account
   const accountRows = await db.select({ id: schema.accounts.id })
     .from(schema.accounts)
     .where(eq(schema.accounts.siteId, siteId))
@@ -773,21 +775,29 @@ export async function sitesRoutes(app: FastifyInstance) {
         .run();
     }
 
+    await db.delete(schema.oauthRouteUnitMembers)
+      .where(inArray(schema.oauthRouteUnitMembers.accountId, accountIds))
+      .run();
     await db.delete(schema.routeChannels)
       .where(inArray(schema.routeChannels.accountId, accountIds))
       .run();
     await db.delete(schema.modelAvailability)
       .where(inArray(schema.modelAvailability.accountId, accountIds))
       .run();
+    await db.delete(schema.checkinLogs)
+      .where(inArray(schema.checkinLogs.accountId, accountIds))
+      .run();
     await db.delete(schema.accountTokens)
       .where(inArray(schema.accountTokens.accountId, accountIds))
       .run();
+    // API Key connections store credentials on accounts.api_token / accounts.access_token.
     await db.delete(schema.accounts)
       .where(inArray(schema.accounts.id, accountIds))
       .run();
   }
 
   // Related site-scoped rows that must not linger after site removal.
+  await db.delete(schema.oauthRouteUnits).where(eq(schema.oauthRouteUnits.siteId, siteId)).run();
   await db.delete(schema.siteApiEndpoints).where(eq(schema.siteApiEndpoints.siteId, siteId)).run();
   await db.delete(schema.siteDisabledModels).where(eq(schema.siteDisabledModels.siteId, siteId)).run();
   await db.delete(schema.siteAnnouncements).where(eq(schema.siteAnnouncements.siteId, siteId)).run();
