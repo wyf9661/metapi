@@ -77,6 +77,77 @@ describe('Models marketplace text', () => {
     globalThis.matchMedia = originalMatchMedia;
   });
 
+
+  it('toggles expanded state when clicking the expand/collapse button on a model card', async () => {
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/models']}>
+            <ToastProvider>
+              <Models />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const cards = root!.root.findAll((node) => (
+        node.type === 'div'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('model-card')
+        && typeof node.props.onClick === 'function'
+      ));
+      expect(cards.length).toBeGreaterThan(0);
+
+      const firstCard = cards[0]!;
+
+      // Find the expand/collapse button inside model-card-actions
+      const expandButton = firstCard.findAll((node) => (
+        node.type === 'button'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('model-card-action-btn')
+        && (node.props['data-tooltip'] === '展开' || node.props['data-tooltip'] === '收起')
+      ))[0];
+      const name = expandButton.props['data-tooltip'];
+
+      await act(async () => {
+        expandButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      // After expand, the expand section should be visible
+      const expandedSections = root!.root.findAll((node) => (
+        node.type === 'div'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('model-card-expand')
+      ));
+      expect(expandedSections.length).toBe(1);
+
+      // Click again should collapse
+      const collapseButton = firstCard.findAll((node) => (
+        node.type === 'button'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('model-card-action-btn')
+        && (node.props['data-tooltip'] === '展开' || node.props['data-tooltip'] === '收起')
+      ))[0];
+      await act(async () => {
+        collapseButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const collapsedSections = root!.root.findAll((node) => (
+        node.type === 'div'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('model-card-expand')
+      ));
+      expect(collapsedSections.length).toBe(0);
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('renders readable Chinese labels and fallback descriptions for marketplace models', async () => {
     let root!: WebTestRenderer;
 
