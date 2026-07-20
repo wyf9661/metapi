@@ -299,6 +299,9 @@ export async function handleChatSurfaceRequest(
       await reportProxyAllFailed({
         model: requestedModel,
         reason: forcedChannelId ? noChannelMessage : 'No available channels after retries',
+        outcome: forcedChannelId ? 'request_failed' : 'no_available_channels',
+        attemptedChannels: excludeChannelIds.length,
+        configuredAttempts: maxRetries + 1,
       });
       const payload = {
         error: { message: noChannelMessage, type: 'server_error' as const },
@@ -1274,6 +1277,9 @@ export async function handleClaudeCountTokensSurfaceRequest(
       await reportProxyAllFailed({
         model: requestedModel,
         reason: forcedChannelId ? noChannelMessage : 'No available channels after retries',
+        outcome: forcedChannelId ? 'request_failed' : 'no_available_channels',
+        attemptedChannels: excludeChannelIds.length,
+        configuredAttempts: maxRetries + 1,
       });
       await finalizeDebugFailure(503, {
         error: { message: noChannelMessage, type: 'server_error' },
