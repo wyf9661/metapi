@@ -93,7 +93,7 @@ describe('stats dashboard filters disabled sites', () => {
     expect(body.totalAccounts).toBe(1);
   });
 
-  it('treats skipped checkins as successful in dashboard stats', async () => {
+  it('counts dashboard checkins by site, not by attempt logs', async () => {
     const today = formatLocalDate(new Date());
     const site = await db.insert(schema.sites).values({
       name: 'checkin-site',
@@ -147,10 +147,11 @@ describe('stats dashboard filters disabled sites', () => {
       };
     };
 
+    // Same site + repeated attempts only refresh one site outcome.
     expect(body.todayCheckin).toEqual({
-      success: 2,
-      failed: 1,
-      total: 3,
+      success: 1,
+      failed: 0,
+      total: 1,
     });
   });
 

@@ -205,16 +205,26 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .get(),
   ]);
 
-  const todayCheckins = todayCheckinRows.map((row) => row.checkin_logs);
-  const checkinFailed = todayCheckins.filter(
-    (checkin) => checkin.status === "failed",
-  ).length;
-  const checkinSuccess = todayCheckins.length - checkinFailed;
+  // Site-level checkin stats: one site counts once today.
+  // Repeat attempts only refresh that site's outcome (success if any success/skipped).
+  const siteCheckinOutcome = new Map<number, "success" | "failed">();
   const rewardByAccount: Record<number, number> = {};
   const successCountByAccount: Record<number, number> = {};
   const parsedRewardCountByAccount: Record<number, number> = {};
   for (const row of todayCheckinRows) {
     const checkin = row.checkin_logs;
+    const siteId = row.sites.id;
+    const status = String(checkin.status || "");
+    const isSuccessLike = status === "success" || status === "skipped";
+    const prev = siteCheckinOutcome.get(siteId);
+    if (isSuccessLike) {
+      siteCheckinOutcome.set(siteId, "success");
+    } else if (status === "failed" && prev !== "success") {
+      siteCheckinOutcome.set(siteId, "failed");
+    } else if (!prev) {
+      siteCheckinOutcome.set(siteId, "failed");
+    }
+
     if (checkin.status !== "success") continue;
     const accountId = row.accounts.id;
     successCountByAccount[accountId] =
@@ -228,6 +238,13 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     parsedRewardCountByAccount[accountId] =
       (parsedRewardCountByAccount[accountId] || 0) + 1;
   }
+  let checkinSuccess = 0;
+  let checkinFailed = 0;
+  for (const outcome of siteCheckinOutcome.values()) {
+    if (outcome === "success") checkinSuccess += 1;
+    else checkinFailed += 1;
+  }
+  const checkinTotal = siteCheckinOutcome.size;
 
   const proxySuccess = Number(proxy24hRow?.success || 0);
   const proxyFailed = Number(proxy24hRow?.failed || 0);
@@ -261,7 +278,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     todayCheckin: {
       success: checkinSuccess,
       failed: checkinFailed,
-      total: todayCheckins.length,
+      total: checkinTotal,
     },
     proxy24h: {
       success: proxySuccess,

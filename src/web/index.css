@@ -1581,7 +1581,7 @@ body {
 
 .dashboard-stat-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -5895,7 +5895,7 @@ textarea {
 
   /* --- Stat Cards --- */
   .dashboard-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 10px;
   }
 
