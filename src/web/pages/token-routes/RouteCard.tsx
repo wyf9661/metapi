@@ -761,11 +761,41 @@ function RouteCardInner({
               </span>
               <span className="badge badge-muted" style={{ fontSize: 10, flexShrink: 0 }}>
                 {route.channelCount} {tr('通道')}
+                {(route.cooldownChannelCount || 0) > 0 ? (
+                  <span
+                    className="badge"
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      background: 'var(--color-warning-soft)',
+                      color: 'var(--color-warning)',
+                      fontWeight: 600,
+                    }}
+                    data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
+                  >
+                    冷却 {route.cooldownChannelCount}
+                  </span>
+                ) : null}
               </span>
             </>
           ) : (
             <span className="badge badge-info" style={{ fontSize: 10, flexShrink: 0 }}>
               {route.channelCount} {tr('通道')}
+                {(route.cooldownChannelCount || 0) > 0 ? (
+                  <span
+                    className="badge"
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      background: 'var(--color-warning-soft)',
+                      color: 'var(--color-warning)',
+                      fontWeight: 600,
+                    }}
+                    data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
+                  >
+                    冷却 {route.cooldownChannelCount}
+                  </span>
+                ) : null}
             </span>
           )}
           {hasCachedDecisionSnapshot ? (
@@ -856,11 +886,41 @@ function RouteCardInner({
                 </span>
                 <span className="badge badge-muted" style={{ fontSize: 10 }}>
                   {route.channelCount} {tr('通道')}
+                {(route.cooldownChannelCount || 0) > 0 ? (
+                  <span
+                    className="badge"
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      background: 'var(--color-warning-soft)',
+                      color: 'var(--color-warning)',
+                      fontWeight: 600,
+                    }}
+                    data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
+                  >
+                    冷却 {route.cooldownChannelCount}
+                  </span>
+                ) : null}
                 </span>
               </>
             ) : (
               <span className="badge badge-info" style={{ fontSize: 10 }}>
                 {route.channelCount} {tr('通道')}
+                {(route.cooldownChannelCount || 0) > 0 ? (
+                  <span
+                    className="badge"
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      background: 'var(--color-warning-soft)',
+                      color: 'var(--color-warning)',
+                      fontWeight: 600,
+                    }}
+                    data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
+                  >
+                    冷却 {route.cooldownChannelCount}
+                  </span>
+                ) : null}
               </span>
             )}
             {hasCachedDecisionSnapshot ? (
@@ -943,6 +1003,21 @@ function RouteCardInner({
               )}
               <span className="badge badge-info" style={{ fontSize: 10 }}>
                 {route.channelCount} {tr('通道')}
+                {(route.cooldownChannelCount || 0) > 0 ? (
+                  <span
+                    className="badge"
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      background: 'var(--color-warning-soft)',
+                      color: 'var(--color-warning)',
+                      fontWeight: 600,
+                    }}
+                    data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
+                  >
+                    冷却 {route.cooldownChannelCount}
+                  </span>
+                ) : null}
               </span>
               {hasCachedDecisionSnapshot ? (
                 <span

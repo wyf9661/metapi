@@ -304,7 +304,7 @@ try {
 } catch (error) {
   console.warn(`Failed to start OAuth callback listeners: ${(error as Error)?.message || 'unknown error'}`);
 }
-setLegacyProxyLogRetentionFallbackEnabled(!config.logCleanupConfigured);
+setLegacyProxyLogRetentionFallbackEnabled(!config.logCleanupConfigured || config.proxyLogRetentionDays > 0);
 startProxyFileRetentionService();
 app.addHook('onClose', async () => {
   stopSiteAnnouncementPolling();

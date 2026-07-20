@@ -60,6 +60,7 @@ import {
   buildForcedChannelUnavailableMessage,
   canRetryChannelSelection,
   getTesterForcedChannelId,
+  resolveProxyFailoverLimits,
 } from '../channelSelection.js';
 const GEMINI_MODEL_PROBES = [
   'gemini-2.5-flash',
@@ -354,12 +355,15 @@ export async function geminiProxyRoute(app: FastifyInstance) {
       clientIp: request.ip,
     });
     const requestStartedAtMs = Date.now();
+    let maxRetries = getProxyMaxChannelRetries();
+    let failoverBudgetMs = 0;
+
     let retryCount = 0;
     let lastStatus = 503;
     let lastText = 'No available channels for Gemini models';
     let lastContentType = 'application/json';
 
-    while (retryCount <= getProxyMaxChannelRetries()) {
+    while (retryCount <= maxRetries) {
       const selected = forcedChannelId !== null
         ? (retryCount === 0
           ? await selectPreferredGeminiProbeChannel(request, forcedChannelId, excludeChannelIds)
@@ -447,7 +451,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             status: upstream.status,
             errorText: text,
           });
-          if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+          if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount += 1;
             continue;
           }
@@ -476,7 +480,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             type: 'upstream_error',
           },
         });
-        if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+        if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
           retryCount += 1;
           continue;
         }
@@ -569,12 +573,23 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     };
     const excludeChannelIds: number[] = [];
     const requestStartedAtMs = Date.now();
+    let maxRetries = getProxyMaxChannelRetries();
+    let failoverBudgetMs = 0;
+    try {
+      const eligibleCount = await tokenRouter.countEligibleChannels(requestedModel, policy);
+      const limits = resolveProxyFailoverLimits(eligibleCount);
+      maxRetries = limits.maxRetries;
+      failoverBudgetMs = limits.budgetMs;
+    } catch {
+      // keep static maxRetries fallback
+    }
+
     let retryCount = 0;
     let lastStatus = 503;
     let lastText = 'No available channels for this model';
     let lastContentType = 'application/json';
 
-    while (retryCount <= getProxyMaxChannelRetries()) {
+    while (retryCount <= maxRetries) {
       const selected = forcedChannelId !== null
         ? (retryCount === 0
           ? await tokenRouter.selectPreferredChannel(requestedModel, forcedChannelId, policy, excludeChannelIds)
@@ -646,7 +661,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               status: 500,
               errorText: 'Gemini CLI OAuth project is missing',
             });
-            if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+            if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
               retryCount += 1;
               continue;
             }
@@ -825,7 +840,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               isStreamAction,
               firstByteLatencyMs,
             );
-            if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+            if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
               retryCount += 1;
               continue;
             }
@@ -1372,7 +1387,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             isStreamAction,
             null,
           );
-          if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+          if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount += 1;
             continue;
           }
@@ -1466,7 +1481,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           isStreamAction,
           null,
         );
-        if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+        if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
           retryCount += 1;
           continue;
         }

@@ -1,31 +1,40 @@
 import { config } from '../config.js';
 
+/** Hard ceiling so adaptive expansion cannot thrash forever. */
+export const PROXY_ADAPTIVE_CHANNEL_ATTEMPTS_CEILING = 8;
+
 export function getProxyMaxChannelAttempts(): number {
   const attempts = Math.trunc(config.proxyMaxChannelAttempts || 0);
   return attempts > 0 ? attempts : 1;
 }
 
-/** Minimum eligible candidates before the adaptive budget can meaningfully deviate from the static cap. */
+/** Minimum eligible candidates before adaptive expansion is meaningful. */
 const ADAPTIVE_ATTEMPTS_MIN_CANDIDATES = 4;
 
 /**
- * Compute retry budget scaled to the actual candidate pool size.
+ * Total channel attempts (not retries) for a known eligible candidate pool.
  *
- * When many channels match a model (e.g. 14 candidates for grok-4.5) the
- * static cap of 3 attempts would give up too early.  This helper returns
- * `ceil(candidateCount * 0.4) - 1` (bounded by proxyMaxChannelAttempts)
- * so that routes with 10+ channels get 4-5 retries rather than only 2.
- *
- * Callers that know the candidate set size before the failover loop starts
- * should use this instead of `getProxyMaxChannelRetries()`.
+ * Policy:
+ * - start from proxyMaxChannelAttempts (default 5)
+ * - when candidates >= 4, expand to max(base, ceil(candidates * 0.4))
+ * - never exceed PROXY_ADAPTIVE_CHANNEL_ATTEMPTS_CEILING (8)
+ */
+export function getProxyEffectiveMaxChannelAttempts(candidateCount: number): number {
+  const base = getProxyMaxChannelAttempts();
+  const count = Math.max(0, Math.trunc(candidateCount || 0));
+  if (count >= ADAPTIVE_ATTEMPTS_MIN_CANDIDATES) {
+    const adaptive = Math.ceil(count * 0.4);
+    return Math.max(1, Math.min(PROXY_ADAPTIVE_CHANNEL_ATTEMPTS_CEILING, Math.max(base, adaptive)));
+  }
+  return Math.max(1, base);
+}
+
+/**
+ * Retry budget (maxRetries) scaled to the candidate pool.
+ * Surfaces loop with `while (retryCount <= maxRetries)`.
  */
 export function getProxyEffectiveMaxChannelRetries(candidateCount: number): number {
-  const staticAttempts = getProxyMaxChannelAttempts();
-  if (candidateCount >= ADAPTIVE_ATTEMPTS_MIN_CANDIDATES && staticAttempts >= 3) {
-    const adaptive = Math.ceil(candidateCount * 0.4);
-    return Math.max(0, Math.min(staticAttempts, adaptive) - 1);
-  }
-  return Math.max(0, staticAttempts - 1);
+  return Math.max(0, getProxyEffectiveMaxChannelAttempts(candidateCount) - 1);
 }
 
 export function getProxyMaxChannelRetries(): number {
@@ -38,8 +47,25 @@ export function getProxyChannelFailoverBudgetMs(): number {
   return budget > 0 ? budget : 0;
 }
 
-export function canRetryProxyChannel(retryCount: number): boolean {
-  return retryCount < getProxyMaxChannelRetries();
+/**
+ * Scale wall-clock failover budget with effective attempts so larger pools
+ * are not cut off by the default 8s budget after only 2-3 slow failures.
+ * Returns 0 when base budget is disabled.
+ */
+export function getProxyEffectiveFailoverBudgetMs(candidateCount: number): number {
+  const base = getProxyChannelFailoverBudgetMs();
+  if (base <= 0) return 0;
+  const attempts = getProxyEffectiveMaxChannelAttempts(candidateCount);
+  // ~2.5s per attempt, never below configured base, capped at 20s.
+  const scaled = Math.max(base, attempts * 2_500);
+  return Math.min(20_000, scaled);
+}
+
+export function canRetryProxyChannel(
+  retryCount: number,
+  maxRetries: number = getProxyMaxChannelRetries(),
+): boolean {
+  return retryCount < Math.max(0, Math.trunc(maxRetries));
 }
 
 /**
@@ -50,8 +76,9 @@ export function canRetryProxyChannelWithBudget(
   retryCount: number,
   elapsedMs?: number | null,
   budgetMs: number = getProxyChannelFailoverBudgetMs(),
+  maxRetries: number = getProxyMaxChannelRetries(),
 ): boolean {
-  if (!canRetryProxyChannel(retryCount)) return false;
+  if (!canRetryProxyChannel(retryCount, maxRetries)) return false;
   if (!budgetMs || budgetMs <= 0) return true;
   if (typeof elapsedMs !== 'number' || !Number.isFinite(elapsedMs)) return true;
   return elapsedMs < budgetMs;

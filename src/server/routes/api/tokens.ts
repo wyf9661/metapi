@@ -507,6 +507,7 @@ function parseBatchRouteWideDecisionRouteIds(
 type RouteChannelSummary = {
   channelCount: number;
   enabledChannelCount: number;
+  cooldownChannelCount: number;
   siteNames: Set<string>;
 };
 
@@ -643,13 +644,21 @@ async function buildRouteChannelSummaryMap(routes: RouteRow[]): Promise<Map<numb
     const channels = channelsByRoute.get(route.id) || [];
     const siteNames = new Set<string>();
     let enabledChannelCount = 0;
+    let cooldownChannelCount = 0;
+    const nowMs = Date.now();
     for (const channel of channels) {
       if (channel.enabled) enabledChannelCount += 1;
       if (channel.site?.name) siteNames.add(channel.site.name);
+      const cooldownUntil = channel.cooldownUntil;
+      if (typeof cooldownUntil === 'string' && cooldownUntil.trim()) {
+        const untilMs = Date.parse(cooldownUntil);
+        if (Number.isFinite(untilMs) && untilMs > nowMs) cooldownChannelCount += 1;
+      }
     }
     summaryByRoute.set(route.id, {
       channelCount: channels.length,
       enabledChannelCount,
+      cooldownChannelCount,
       siteNames,
     });
   }
@@ -697,6 +706,7 @@ export async function tokensRoutes(app: FastifyInstance) {
         enabled: route.enabled,
         channelCount: agg?.channelCount ?? 0,
         enabledChannelCount: agg?.enabledChannelCount ?? 0,
+        cooldownChannelCount: agg?.cooldownChannelCount ?? 0,
         siteNames: agg ? Array.from(agg.siteNames) : [],
         decisionSnapshot: parseRouteDecisionSnapshot(route.decisionSnapshot),
         decisionRefreshedAt: route.decisionRefreshedAt ?? null,
