@@ -28,6 +28,46 @@ function round6(value: number): number {
   return Math.round(value * 1_000_000) / 1_000_000;
 }
 
+/**
+ * Site-level checkin stats (same rule as dashboard):
+ * one site counts once per day; success/skipped win over failed retries.
+ */
+export function summarizeSiteCheckinOutcomes(
+  rows: Array<{ siteId: number; status: string | null | undefined }>,
+): { total: number; success: number; failed: number } {
+  const siteCheckinOutcome = new Map<number, 'success' | 'failed'>();
+
+  for (const row of rows) {
+    const siteId = Number(row.siteId);
+    if (!Number.isFinite(siteId) || siteId <= 0) continue;
+
+    const status = String(row.status || '');
+    const isSuccessLike = status === 'success' || status === 'skipped';
+    const prev = siteCheckinOutcome.get(siteId);
+
+    if (isSuccessLike) {
+      siteCheckinOutcome.set(siteId, 'success');
+    } else if (status === 'failed' && prev !== 'success') {
+      siteCheckinOutcome.set(siteId, 'failed');
+    } else if (!prev) {
+      siteCheckinOutcome.set(siteId, 'failed');
+    }
+  }
+
+  let success = 0;
+  let failed = 0;
+  for (const outcome of siteCheckinOutcome.values()) {
+    if (outcome === 'success') success += 1;
+    else failed += 1;
+  }
+
+  return {
+    total: siteCheckinOutcome.size,
+    success,
+    failed,
+  };
+}
+
 export async function collectDailySummaryMetrics(now = new Date()): Promise<DailySummaryMetrics> {
   const proxyLogBaseFields = getProxyLogBaseSelectFields();
   const { localDay, startUtc, endUtc } = getLocalDayRangeUtc(now);
@@ -50,10 +90,17 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
       eq(schema.sites.status, 'active'),
     ))
     .all();
-  const todayCheckins = todayCheckinRows.map((row) => row.checkin_logs);
-  const checkinSkipped = todayCheckins.filter((checkin) => checkin.status === 'skipped').length;
-  const checkinFailed = todayCheckins.filter((checkin) => checkin.status === 'failed').length;
-  const checkinSuccess = todayCheckins.length - checkinSkipped - checkinFailed;
+
+  const siteCheckin = summarizeSiteCheckinOutcomes(
+    todayCheckinRows.map((row) => ({
+      siteId: row.sites.id,
+      status: row.checkin_logs.status,
+    })),
+  );
+
+  // Attempt-level skipped count is retained only for reward/debug context;
+  // published summary uses site-level totals (checkinSkipped is always 0 there).
+  const checkinSkipped = 0;
 
   const rewardByAccount: Record<number, number> = {};
   const successCountByAccount: Record<number, number> = {};
@@ -103,10 +150,10 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
     totalAccounts: accounts.length,
     activeAccounts,
     lowBalanceAccounts,
-    checkinTotal: todayCheckins.length,
-    checkinSuccess: Math.max(0, checkinSuccess),
+    checkinTotal: siteCheckin.total,
+    checkinSuccess: siteCheckin.success,
     checkinSkipped,
-    checkinFailed,
+    checkinFailed: siteCheckin.failed,
     proxyTotal: todayProxyLogs.length,
     proxySuccess,
     proxyFailed,
@@ -124,7 +171,7 @@ export function buildDailySummaryNotification(metrics: DailySummaryMetrics): { t
     `生成时间: ${metrics.generatedAtLocal} (${metrics.timeZone})`,
     '',
     `账号概览: 总计 ${metrics.totalAccounts} | 活跃 ${metrics.activeAccounts} | 低余额(<$1) ${metrics.lowBalanceAccounts}`,
-    `签到统计: 总计 ${metrics.checkinTotal} | 成功 ${metrics.checkinSuccess} | 跳过 ${metrics.checkinSkipped} | 失败 ${metrics.checkinFailed}`,
+    `签到统计(按站点): 总计 ${metrics.checkinTotal} | 成功 ${metrics.checkinSuccess} | 失败 ${metrics.checkinFailed}`,
     `代理统计: 总计 ${metrics.proxyTotal} | 成功 ${metrics.proxySuccess} | 失败 ${metrics.proxyFailed} | Tokens ${metrics.proxyTotalTokens.toLocaleString()}`,
     `费用统计: 支出 $${metrics.todaySpend.toFixed(6)} | 奖励 $${metrics.todayReward.toFixed(6)} | 净值 $${net.toFixed(6)}`,
   ].join('\n');
