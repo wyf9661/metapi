@@ -1,11 +1,17 @@
 /**
- * Shadow route scoring (balanced-v2).
+ * Balanced-v2 route scoring (live selection for weighted strategy).
  *
- * Does NOT change live selection. Used to log what the next algorithm would pick,
- * especially to prefer direct API-key (shared) accounts over paid session accounts that are truly low on balance.
+ * Prefers direct API-key (shared) accounts over paid session accounts that are
+ * truly low on balance, and soft-demotes channels whose account/model connectivity
+ * was recently proven false by probe or live proxy traffic.
  */
 
 import { clampNumber } from './tokenRouterMath.js';
+import {
+  CONNECTIVITY_FACTOR_NULL,
+  type ConnectivitySignal,
+  connectivityScoreFactor,
+} from './routeConnectivityLookup.js';
 
 export type ShadowCostSource = 'observed' | 'configured' | 'catalog' | 'fallback' | 'unknown';
 
@@ -36,6 +42,11 @@ export type ShadowCandidateInput = {
   /** Load multiplier already computed by coordinator (0.18..1). */
   loadMultiplier: number;
   manualSiteWeight?: number;
+  /**
+   * Marketplace/live connectivity for account+model:
+   * null untested, true proven, false recently failed.
+   */
+  connectivity?: ConnectivitySignal;
 };
 
 export type ShadowScoreFactors = {
@@ -47,6 +58,8 @@ export type ShadowScoreFactors = {
   /** Explicit direct API-key priority (shared/public keys should be consumed first). */
   credential: number;
   load: number;
+  /** Soft multiplier from connectivity (true > null > false). */
+  connectivity: number;
   exclusion: string | null;
 };
 
@@ -178,6 +191,7 @@ export function scoreShadowCandidate(
   // Direct API-key accounts (shared/public welfare keys) get an explicit boost.
   // Session accounts and unknown credential types stay neutral.
   const credential = input.credentialKind === 'apikey' ? 2.3 : 1.0;
+  const connectivity = connectivityScoreFactor(input.connectivity ?? null);
 
   let exclusion = balance.exclusion;
   let score = 0;
@@ -188,7 +202,8 @@ export function scoreShadowCandidate(
       * (cost ** 1.1)
       * (balance.factor ** 0.9)
       * credential
-      * (load ** 0.8);
+      * (load ** 0.8)
+      * connectivity;
     if (!Number.isFinite(score) || score <= 0) {
       score = 0;
       exclusion = exclusion || '评分无效';
@@ -211,6 +226,7 @@ export function scoreShadowCandidate(
       balance: balance.factor,
       credential,
       load,
+      connectivity,
       exclusion,
     },
     expectedRequestCost,
@@ -268,6 +284,7 @@ export function formatShadowSelectionLog(input: {
     `#${i + 1} ch=${c.channelId} site=${c.siteId}:${c.siteName || ''} p=${(c.probability * 100).toFixed(1)}% `
     + `cred=${c.factors.credential.toFixed(2)} bal=${c.factors.balance.toFixed(2)} cost=${c.factors.cost.toFixed(2)} `
     + `rel=${c.factors.reliability.toFixed(2)} health=${c.factors.health.toFixed(2)} `
+    + `conn=${(c.factors.connectivity ?? CONNECTIVITY_FACTOR_NULL).toFixed(2)} `
     + `cov=${c.balanceCoverage == null ? 'na' : c.balanceCoverage.toFixed(1)}`
   )).join(' | ');
   const excludedText = input.shadow.excluded.slice(0, 5).map((e) => `ch=${e.channelId}:${e.reason}`).join(', ');

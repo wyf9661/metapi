@@ -96,6 +96,13 @@ import {
   type ShadowCandidateInput,
 } from './routeScoringShadow.js';
 import {
+  loadConnectivityLookup,
+  resolveCandidateConnectivity,
+  softAvoidDisconnectedCandidates,
+  type ConnectivityLookup,
+  type ConnectivitySignal,
+} from './routeConnectivityLookup.js';
+import {
   normalizeTokenRouteMode,
   type RouteDecision,
   type RouteDecisionCandidate,
@@ -2484,6 +2491,8 @@ export class TokenRouter {
     modelName: string | ((candidate: RouteChannelCandidate) => string),
     downstreamPolicy: DownstreamRoutingPolicy,
     nowMs: number,
+    connectivityLookup?: ConnectivityLookup | null,
+    requestedModel?: string,
   ): ShadowCandidateInput[] {
     const resolveModelName = typeof modelName === 'function'
       ? modelName
@@ -2517,6 +2526,17 @@ export class TokenRouter {
           ? 'session'
           : 'unknown';
       const balanceKnown = credentialKind === 'session' && balanceRefreshed;
+      const connectivity: ConnectivitySignal = connectivityLookup
+        ? resolveCandidateConnectivity(connectivityLookup, {
+          accountId: candidate.account.id,
+          tokenId: candidate.channel.tokenId,
+          modelNames: [
+            candidate.channel.sourceModel,
+            model,
+            requestedModel,
+          ],
+        })
+        : null;
       return {
         channelId: candidate.channel.id,
         siteId: candidate.site.id,
@@ -2541,6 +2561,7 @@ export class TokenRouter {
             ? downstreamSiteMultiplier
             : 1
         ),
+        connectivity,
       };
     });
   }
@@ -2555,11 +2576,19 @@ export class TokenRouter {
     downstreamPolicy: DownstreamRoutingPolicy,
     nowMs: number,
     requestedModel: string,
+    connectivityLookup?: ConnectivityLookup | null,
   ): RouteChannelCandidate | null {
     if (candidates.length === 0) return null;
     if (candidates.length === 1) return candidates[0] ?? null;
     try {
-      const inputs = this.buildShadowCandidateInputs(candidates, modelName, downstreamPolicy, nowMs);
+      const inputs = this.buildShadowCandidateInputs(
+        candidates,
+        modelName,
+        downstreamPolicy,
+        nowMs,
+        connectivityLookup,
+        requestedModel,
+      );
       const ranked = rankShadowCandidates(inputs);
       const active = ranked.candidates.filter((c) => !c.factors.exclusion && c.score > 0 && c.probability > 0);
       let selectedId = ranked.selectedChannelId;
@@ -2596,11 +2625,19 @@ export class TokenRouter {
     modelName: string | ((candidate: RouteChannelCandidate) => string),
     downstreamPolicy: DownstreamRoutingPolicy,
     nowMs: number,
+    connectivityLookup?: ConnectivityLookup | null,
   ): void {
     // Kept for non-weighted strategies (round_robin/stable_first) observability only.
     try {
       if (candidates.length === 0) return;
-      const inputs = this.buildShadowCandidateInputs(candidates, modelName, downstreamPolicy, nowMs);
+      const inputs = this.buildShadowCandidateInputs(
+        candidates,
+        modelName,
+        downstreamPolicy,
+        nowMs,
+        connectivityLookup,
+        requestedModel,
+      );
       const shadow = rankShadowCandidates(inputs);
       console.info(formatShadowSelectionLog({
         requestedModel,
@@ -2643,8 +2680,32 @@ export class TokenRouter {
 
     if (available.length === 0) return null;
 
+    const connectivityLookup = await loadConnectivityLookup(
+      available.map((candidate) => candidate.account.id),
+      available
+        .map((candidate) => candidate.channel.tokenId)
+        .filter((tokenId): tokenId is number => typeof tokenId === 'number' && tokenId > 0),
+      nowMs,
+    );
+    const connectivityResolve = (candidate: RouteChannelCandidate): ConnectivitySignal => (
+      resolveCandidateConnectivity(connectivityLookup, {
+        accountId: candidate.account.id,
+        tokenId: candidate.channel.tokenId,
+        modelNames: [
+          candidate.channel.sourceModel,
+          typeof runtimeModelResolver === 'function'
+            ? runtimeModelResolver(candidate)
+            : runtimeModelResolver,
+          requestedModel,
+          mappedModel,
+        ],
+      })
+    );
+    const connectivityFiltered = softAvoidDisconnectedCandidates(available, connectivityResolve);
+    const routePool = connectivityFiltered.candidates;
+
     if (routeStrategy === 'round_robin') {
-      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(available, runtimeModelResolver, nowMs);
+      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(routePool, runtimeModelResolver, nowMs);
       const selected = this.selectRoundRobinCandidate(breakerFiltered.candidates);
       if (!selected) return null;
       const resolvedRoundRobin = await this.finalizeSelectedCandidateForDispatch(
@@ -2669,13 +2730,14 @@ export class TokenRouter {
           runtimeModelResolver,
           downstreamPolicy,
           nowMs,
+          connectivityLookup,
         );
       }
       return resolvedRoundRobin;
     }
 
     if (routeStrategy === 'stable_first') {
-      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(available, runtimeModelResolver, nowMs);
+      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(routePool, runtimeModelResolver, nowMs);
       const candidates = filterRecentlyFailedCandidates(breakerFiltered.candidates, nowMs);
       const rotationKey = this.buildStableFirstRotationKey(match.route.id, requestedModel);
       const poolPlan = buildStableFirstPoolPlan(
@@ -2726,13 +2788,14 @@ export class TokenRouter {
           requestedByDisplayName ? runtimeModelResolver : mappedModel,
           downstreamPolicy,
           nowMs,
+          connectivityLookup,
         );
       }
       return resolvedStable;
     }
 
-    const layers = new Map<number, typeof available>();
-    for (const candidate of available) {
+    const layers = new Map<number, typeof routePool>();
+    for (const candidate of routePool) {
       const priority = candidate.channel.priority ?? 0;
       if (!layers.has(priority)) layers.set(priority, []);
       layers.get(priority)!.push(candidate);
@@ -2749,6 +2812,7 @@ export class TokenRouter {
         downstreamPolicy,
         nowMs,
         requestedModel,
+        connectivityLookup,
       );
       if (!selected) continue;
       const resolved = await this.finalizeSelectedCandidateForDispatch(
@@ -3313,14 +3377,16 @@ export class TokenRouter {
     downstreamPolicy: DownstreamRoutingPolicy,
     nowMs = Date.now(),
     requestedModel = '',
+    connectivityLookup?: ConnectivityLookup | null,
   ) {
-    // Production selection now uses balanced-v2 (API-key boost + soft balance drain).
+    // Production selection now uses balanced-v2 (API-key boost + soft balance drain + connectivity).
     return this.selectByBalancedV2(
       candidates,
       modelName,
       downstreamPolicy,
       nowMs,
       requestedModel || (typeof modelName === 'string' ? modelName : ''),
+      connectivityLookup,
     );
   }
 

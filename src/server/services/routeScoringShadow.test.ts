@@ -28,6 +28,7 @@ function base(partial: Partial<ShadowCandidateInput> & Pick<ShadowCandidateInput
     recentSampleCount: partial.recentSampleCount ?? 10,
     loadMultiplier: partial.loadMultiplier ?? 1,
     manualSiteWeight: partial.manualSiteWeight ?? 1,
+    connectivity: partial.connectivity ?? null,
   };
 }
 
@@ -144,5 +145,49 @@ describe('routeScoringShadow', () => {
     expect(line).toContain('model=gpt-5.6-sol');
     expect(line).toContain('agree=0');
     expect(line).toContain('bal=');
+    expect(line).toContain('conn=');
+  });
+
+  it('strongly demotes known-false connectivity against healthy peers', () => {
+    const result = rankShadowCandidates([
+      base({
+        channelId: 1,
+        siteId: 1,
+        accountId: 1,
+        connectivity: false,
+        unitCost: 0.01,
+        credentialKind: 'session',
+        balanceKnown: true,
+        balance: 40,
+      }),
+      base({
+        channelId: 2,
+        siteId: 2,
+        accountId: 2,
+        connectivity: true,
+        unitCost: 0.01,
+        credentialKind: 'session',
+        balanceKnown: true,
+        balance: 40,
+      }),
+    ]);
+    expect(result.selectedChannelId).toBe(2);
+    const dead = result.candidates.find((c) => c.channelId === 1)!;
+    const live = result.candidates.find((c) => c.channelId === 2)!;
+    expect(dead.factors.connectivity).toBeLessThan(live.factors.connectivity);
+    expect(dead.probability).toBeLessThan(0.2);
+    expect(live.probability).toBeGreaterThan(0.8);
+  });
+
+  it('keeps untested connectivity neutral relative to proven-true boost', () => {
+    const result = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, connectivity: null, unitCost: 0.01 }),
+      base({ channelId: 2, siteId: 2, accountId: 2, connectivity: true, unitCost: 0.01 }),
+    ]);
+    const unknown = result.candidates.find((c) => c.channelId === 1)!;
+    const proven = result.candidates.find((c) => c.channelId === 2)!;
+    expect(proven.probability).toBeGreaterThan(unknown.probability);
+    expect(unknown.factors.connectivity).toBe(1);
+    expect(proven.factors.connectivity).toBeGreaterThan(1);
   });
 });
