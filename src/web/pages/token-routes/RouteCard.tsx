@@ -638,9 +638,23 @@ function RouteCardInner({
     : priorityBuckets.findIndex((bucket) => bucket.channels.some((channel) => channel.id === activeDragChannel.id));
   const renderClearCooldownButton = () => {
     if (readOnlyRoute) return null;
+    const cooling = Math.max(0, Number(route.cooldownChannelCount || 0));
+    if (cooling <= 0) {
+      return (
+        <button onClick={() => onClearCooldown(route.id)} className="btn btn-link btn-link-info" disabled={clearingCooldown}>
+          {clearingCooldown ? tr('清除中...') : tr('清除冷却')}
+        </button>
+      );
+    }
     return (
-      <button onClick={() => onClearCooldown(route.id)} className="btn btn-link btn-link-info" disabled={clearingCooldown}>
-        {clearingCooldown ? tr('清除中...') : tr('清除冷却')}
+      <button
+        onClick={() => onClearCooldown(route.id)}
+        className="btn btn-soft-warning"
+        disabled={clearingCooldown}
+        style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px' }}
+        data-tooltip={`当前有 ${cooling} 个通道冷却中，点击立即解除`}
+      >
+        {clearingCooldown ? tr('清除中...') : `${tr('清除冷却')} (${cooling})`}
       </button>
     );
   };

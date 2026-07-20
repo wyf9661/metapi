@@ -66,6 +66,7 @@ const VERIFIED_SCHEMA_MARKERS: SchemaMarker[] = [
   { table: 'events' },
   { table: 'sites', column: 'is_pinned' },
   { table: 'sites', column: 'protocol_profile' },
+  { table: 'downstream_api_keys', column: 'max_rpm' },
   { table: 'sites', column: 'sort_order' },
   { table: 'accounts', column: 'is_pinned' },
   { table: 'accounts', column: 'sort_order' },

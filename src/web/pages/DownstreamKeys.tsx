@@ -43,6 +43,7 @@ type DownstreamApiKeyItem = {
   maxCost: number | null;
   usedCost: number;
   maxRequests: number | null;
+  maxRpm?: number | null;
   usedRequests: number;
   supportedModels: string[];
   allowedRouteIds: number[];
@@ -345,6 +346,7 @@ function buildEditorForm(
     tags: normalizeTags(Array.isArray(item?.tags) ? item!.tags : []),
     maxCost: item?.maxCost === null || item?.maxCost === undefined ? '' : String(item.maxCost),
     maxRequests: item?.maxRequests === null || item?.maxRequests === undefined ? '' : String(item.maxRequests),
+    maxRpm: item?.maxRpm === null || item?.maxRpm === undefined ? '' : String(item.maxRpm),
     expiresAt: toDateTimeLocal(item?.expiresAt),
     enabled: item?.enabled ?? true,
     selectedModels: uniqStrings(selectedModels),
@@ -620,6 +622,7 @@ export default function DownstreamKeys() {
         enabled: raw?.enabled ?? item.enabled,
         expiresAt: raw?.expiresAt ?? item.expiresAt,
         maxCost: raw?.maxCost ?? item.maxCost,
+        maxRpm: raw?.maxRpm ?? item.maxRpm ?? null,
         usedCost: raw?.usedCost ?? item.usedCost,
         maxRequests: raw?.maxRequests ?? item.maxRequests,
         usedRequests: raw?.usedRequests ?? item.usedRequests,
@@ -833,6 +836,7 @@ export default function DownstreamKeys() {
         expiresAt: editorForm.expiresAt ? new Date(editorForm.expiresAt).toISOString() : null,
         maxCost: editorForm.maxCost.trim() ? Number(editorForm.maxCost.trim()) : null,
         maxRequests: editorForm.maxRequests.trim() ? Number(editorForm.maxRequests.trim()) : null,
+        maxRpm: editorForm.maxRpm.trim() ? Number(editorForm.maxRpm.trim()) : null,
         supportedModels: uniqStrings(editorForm.selectedModels),
         allowedRouteIds: uniqIds(editorForm.selectedGroupRouteIds).filter((id) => routeMap.has(id) && isGroupRouteOption(routeMap.get(id)!)),
         siteWeightMultipliers,
@@ -1180,7 +1184,7 @@ export default function DownstreamKeys() {
                   <MobileField label="模型" value={summarizeModelLimit(row.supportedModels || [])} stacked />
                   <MobileField label="群组" value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
                   <MobileField label="倍率" value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
-                  <MobileField label="额度" value={`${row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString()} / ${row.maxCost == null ? '成本不限' : formatMoney(row.maxCost)}`} stacked />
+                  <MobileField label="额度" value={[row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString(), row.maxRpm ? `${row.maxRpm} RPM` : null, row.maxCost == null ? '成本不限' : `成本 ${formatMoney(row.maxCost)}`].filter(Boolean).join(' / ')} stacked />
                   <MobileField label="用量" value={`${(row.rangeUsage?.totalRequests || 0).toLocaleString()} 请求 · ${formatCompactTokens(row.rangeUsage?.totalTokens || 0)}`} stacked />
                   <MobileField label="最近使用" value={formatIso(row.lastUsedAt)} stacked />
                 </MobileCard>

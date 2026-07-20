@@ -15,6 +15,7 @@ export type SummaryItem = {
   usedCost: number;
   maxRequests: number | null;
   usedRequests: number;
+  maxRpm?: number | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;

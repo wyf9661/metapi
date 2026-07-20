@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../config.js';
-import { authorizeDownstreamToken, consumeManagedKeyRequest } from '../services/downstreamApiKeyService.js';
+import { authorizeDownstreamToken, checkManagedKeyRpmLimit, consumeManagedKeyRequest } from '../services/downstreamApiKeyService.js';
 import { EMPTY_DOWNSTREAM_ROUTING_POLICY, type DownstreamRoutingPolicy } from '../services/downstreamPolicyTypes.js';
 
 export interface ProxyAuthContext {
@@ -172,6 +172,14 @@ export async function proxyAuthMiddleware(request: FastifyRequest, reply: Fastif
   }
 
   if (authResult.source === 'managed' && authResult.key) {
+    const rpm = checkManagedKeyRpmLimit(authResult.key.id, authResult.key.maxRpm);
+    if (!rpm.allowed) {
+      reply
+        .code(429)
+        .header('retry-after', String(rpm.retryAfterSec))
+        .send({ error: `API key RPM limit exceeded (${authResult.key.maxRpm}/min)` });
+      return;
+    }
     const consumed = await consumeManagedKeyRequest(authResult.key.id);
     if (consumed === false) {
       reply.code(403).send({ error: 'API key has exceeded max requests' });

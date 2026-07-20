@@ -531,6 +531,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "max_rpm": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },
