@@ -98,12 +98,13 @@ function getAvailabilityColor(value: number | null | undefined): string {
     Number.isNaN(value) ||
     !Number.isFinite(value)
   ) {
-    return "var(--color-border-light)";
+    return "transparent";
   }
   const clamped = Math.max(0, Math.min(100, value));
-  const low = { r: 229, g: 80, b: 69 }; // 鲜亮红
-  const mid = { r: 217, g: 161, b: 37 }; // 鲜亮黄
-  const high = { r: 82, g: 196, b: 26 }; // 鲜亮绿
+  // Brighter and more saturated palette for tiny 24h bars
+  const low = { r: 255, g: 59, b: 48 };   // vivid red
+  const mid = { r: 255, g: 204, b: 0 };   // vivid yellow
+  const high = { r: 52, g: 199, b: 89 };  // vivid green
 
   const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
 
@@ -1299,40 +1300,41 @@ export default function Dashboard({
                 </div>
                 <div className="site-availability-strip-compact">
                   {site.buckets.map((bucket, index) => (
-                    <Link
-                      key={`${site.siteId}-${index}`}
-                      to={buildAvailabilityBucketLogsRoute(site.siteId, bucket)}
-                      className="site-availability-cell site-availability-cell-link site-availability-cell-pill"
-                      style={{
-                        background: getAvailabilityColor(
-                          bucket.availabilityPercent,
-                        ),
-                        opacity: bucket.totalRequests > 0 ? 1 : 0.3,
-                      }}
-                      data-tooltip={[
-                        `时间：${formatAvailabilityBucketLabel(bucket)}`,
-                        bucket.totalRequests > 0
-                          ? `可用性：${formatAvailabilityPercent(bucket.availabilityPercent)}`
-                          : "可用性：无请求",
-                        `请求：${bucket.totalRequests} 次`,
-                        `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
-                        bucket.averageLatencyMs != null
-                          ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
-                          : "平均响应：—",
-                      ].join(" · ")}
-                      data-tooltip-align="start"
-                      title={[
-                        formatAvailabilityBucketLabel(bucket),
-                        bucket.totalRequests > 0
-                          ? `可用性 ${formatAvailabilityPercent(bucket.availabilityPercent)}`
-                          : "无请求",
-                        `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
-                        bucket.averageLatencyMs != null
-                          ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
-                          : "平均响应 —",
-                      ].join(" | ")}
-                      aria-label={`${site.siteName} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
-                    />
+                    bucket.totalRequests > 0 ? (
+                      <Link
+                        key={`${site.siteId}-${index}`}
+                        to={buildAvailabilityBucketLogsRoute(site.siteId, bucket)}
+                        className="site-availability-cell site-availability-cell-link site-availability-cell-pill"
+                        style={{
+                          background: getAvailabilityColor(bucket.availabilityPercent),
+                        }}
+                        data-tooltip={[
+                          `时间：${formatAvailabilityBucketLabel(bucket)}`,
+                          `可用性：${formatAvailabilityPercent(bucket.availabilityPercent)}`,
+                          `请求：${bucket.totalRequests} 次`,
+                          `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
+                          bucket.averageLatencyMs != null
+                            ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
+                            : "平均响应：—",
+                        ].join(" · ")}
+                        data-tooltip-align="start"
+                        title={[
+                          formatAvailabilityBucketLabel(bucket),
+                          `可用性 ${formatAvailabilityPercent(bucket.availabilityPercent)}`,
+                          `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
+                          bucket.averageLatencyMs != null
+                            ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
+                            : "平均响应 —",
+                        ].join(" | ")}
+                        aria-label={`${site.siteName} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
+                      />
+                    ) : (
+                      <span
+                        key={`${site.siteId}-${index}`}
+                        className="site-availability-cell site-availability-cell-empty"
+                        aria-hidden="true"
+                      />
+                    )
                   ))}
                 </div>
               </div>
