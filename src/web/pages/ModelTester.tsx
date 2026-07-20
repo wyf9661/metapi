@@ -57,6 +57,7 @@ import {
   resolveConversationFileCapability,
 } from './helpers/conversationFileCapabilities.js';
 import ConversationComposer from './model-tester/ConversationComposer.js';
+import { MarkdownContent } from './helpers/siteAnnouncementPresentation.js';
 import DebugPanel from './model-tester/DebugPanel.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
@@ -2868,10 +2869,13 @@ export default function ModelTester() {
                                   borderTop: '1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)',
                                   fontSize: 12,
                                   lineHeight: 1.7,
-                                  whiteSpace: 'pre-wrap',
                                   color: 'var(--color-text-secondary)',
                                 }}>
-                                  {message.reasoningContent}
+                                  <MarkdownContent
+                                    content={message.reasoningContent || ''}
+                                    className="announcement-rich-content model-tester-markdown"
+                                    style={{ color: 'inherit', whiteSpace: 'normal' }}
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -2886,7 +2890,7 @@ export default function ModelTester() {
                           border: isUser ? 'none' : (isError ? '1px solid color-mix(in srgb, var(--color-danger) 32%, transparent)' : '1px solid var(--color-border-light)'),
                           fontSize: 13,
                           lineHeight: 1.65,
-                          whiteSpace: 'pre-wrap',
+                          whiteSpace: (isUser || isError) ? 'pre-wrap' : 'normal',
                           wordBreak: 'break-word',
                           boxShadow: 'var(--shadow-sm)',
                           minHeight: 24,
@@ -2912,7 +2916,22 @@ export default function ModelTester() {
                           ) : (
                             <>
                               {isLoading && <span className="spinner spinner-sm" style={{ marginRight: 6, verticalAlign: 'middle' }} />}
-                              {message.content || (isLoading ? '思考中...' : '')}
+                              {message.content ? (
+                                (isUser || isError) ? (
+                                  message.content
+                                ) : (
+                                  <MarkdownContent
+                                    content={message.content}
+                                    className="announcement-rich-content model-tester-markdown"
+                                    style={{
+                                      color: 'inherit',
+                                      whiteSpace: 'normal',
+                                    }}
+                                  />
+                                )
+                              ) : (
+                                isLoading ? '思考中...' : ''
+                              )}
                             </>
                           )}
                         </div>
