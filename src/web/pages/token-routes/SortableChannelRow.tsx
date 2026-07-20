@@ -191,6 +191,27 @@ export function SortableChannelRow({
                 当前生效：{tokenBinding.effectiveTokenName}
               </span>
 
+              {channel.cooldownUntil && new Date(channel.cooldownUntil).getTime() > Date.now() ? (
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: 10,
+                    background: 'var(--color-warning-soft)',
+                    color: 'var(--color-warning)',
+                    fontWeight: 600,
+                  }}
+                  data-tooltip={suppressTooltips ? undefined : '该通道连续失败多次，已被暂时冷却。冷却结束后会自动恢复。可点击"清除路由冷却"提前解除。'}
+                >
+                  冷却中
+                  {' '}
+                  {(() => {
+                    const remaining = new Date(channel.cooldownUntil!).getTime() - Date.now();
+                    const mins = Math.ceil(remaining / 60_000);
+                    if (mins <= 0) return '';
+                    return mins < 60 ? `${mins}分钟` : `${Math.ceil(mins / 60)}小时`;
+                  })()}
+                </span>
+              ) : null}
               {channel.sourceModel ? (
                 <span className="badge badge-info" style={{ fontSize: 10 }}>
                   {channel.sourceModel}
@@ -429,6 +450,19 @@ export function SortableChannelRow({
           当前生效：{tokenBinding.effectiveTokenName}
         </span>
 
+        {channel.cooldownUntil && new Date(channel.cooldownUntil!).getTime() > Date.now() ? (
+          <span
+            className="badge"
+            style={{
+              fontSize: 10,
+              background: 'var(--color-warning-soft)',
+              color: 'var(--color-warning)',
+              fontWeight: 600,
+            }}
+          >
+            冷却中
+          </span>
+        ) : null}
         {channel.sourceModel ? (
           <span className="badge badge-info" style={{ fontSize: 10 }}>
             {channel.sourceModel}
