@@ -508,6 +508,7 @@ export const downstreamApiKeys = sqliteTable('downstream_api_keys', {
   usedCost: real('used_cost').default(0),
   maxRequests: integer('max_requests'),
   usedRequests: integer('used_requests').default(0),
+  maxRpm: integer('max_rpm'),
   supportedModels: text('supported_models'), // JSON array<string>
   allowedRouteIds: text('allowed_route_ids'), // JSON array<number>
   siteWeightMultipliers: text('site_weight_multipliers'), // JSON object { [siteId]: multiplier }

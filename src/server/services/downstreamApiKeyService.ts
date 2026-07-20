@@ -36,6 +36,7 @@ export type DownstreamApiKeyPolicyView = {
   usedCost: number;
   maxRequests: number | null;
   usedRequests: number;
+  maxRpm: number | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
@@ -58,7 +59,7 @@ export type DownstreamTokenAuthFailure = {
   ok: false;
   statusCode: number;
   error: string;
-  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests' | 'global_proxy_token_disabled';
+  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests' | 'over_rpm' | 'global_proxy_token_disabled';
 };
 
 export type DownstreamTokenAuthResult = DownstreamTokenAuthSuccess | DownstreamTokenAuthFailure;
@@ -373,6 +374,7 @@ export function toDownstreamApiKeyPolicyView(row: DownstreamApiKeyRow): Downstre
     maxCost: row.maxCost ?? null,
     usedCost: Number(row.usedCost || 0),
     maxRequests: row.maxRequests ?? null,
+    maxRpm: row.maxRpm ?? null,
     usedRequests: Number(row.usedRequests || 0),
     supportedModels,
     allowedRouteIds,
@@ -515,6 +517,37 @@ export async function authorizeDownstreamToken(token: string): Promise<Downstrea
   };
 }
 
+
+/** In-process per-key rolling 60s window. Multi-process deployments should put a shared limiter in front. */
+const managedKeyRpmWindows = new Map<number, number[]>();
+
+export function __resetManagedKeyRpmWindowsForTests(): void {
+  managedKeyRpmWindows.clear();
+}
+
+export function checkManagedKeyRpmLimit(keyId: number, maxRpm: number | null | undefined, nowMs = Date.now()): {
+  allowed: boolean;
+  retryAfterSec: number;
+  current: number;
+} {
+  const limit = typeof maxRpm === 'number' && Number.isFinite(maxRpm) ? Math.trunc(maxRpm) : null;
+  if (limit === null || limit <= 0) {
+    return { allowed: true, retryAfterSec: 0, current: 0 };
+  }
+  const windowStart = nowMs - 60_000;
+  const prev = managedKeyRpmWindows.get(keyId) || [];
+  const recent = prev.filter((ts) => ts > windowStart);
+  managedKeyRpmWindows.set(keyId, recent);
+  if (recent.length >= limit) {
+    const oldest = recent[0] || nowMs;
+    const retryAfterSec = Math.max(1, Math.ceil((oldest + 60_000 - nowMs) / 1000));
+    return { allowed: false, retryAfterSec, current: recent.length };
+  }
+  recent.push(nowMs);
+  managedKeyRpmWindows.set(keyId, recent);
+  return { allowed: true, retryAfterSec: 0, current: recent.length };
+}
+
 export async function consumeManagedKeyRequest(keyId: number): Promise<boolean> {
   const nowIso = new Date().toISOString();
   // Atomic check-and-increment: only succeeds when under maxRequests (or unlimited).
@@ -554,6 +587,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
   expiresAt?: unknown;
   maxCost?: unknown;
   maxRequests?: unknown;
+  maxRpm?: unknown;
   supportedModels?: unknown;
   allowedRouteIds?: unknown;
   siteWeightMultipliers?: unknown;
@@ -583,6 +617,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
 
   const maxCost = normalizePositiveNumberOrNull(input.maxCost);
   const maxRequests = normalizePositiveIntegerOrNull(input.maxRequests);
+  const maxRpm = normalizePositiveIntegerOrNull(input.maxRpm);
   const supportedModels = normalizeSupportedModelsInput(input.supportedModels);
   const allowedRouteIds = normalizeAllowedRouteIdsInput(input.allowedRouteIds);
   const siteWeightMultipliers = normalizeSiteWeightMultipliersInput(input.siteWeightMultipliers);
@@ -599,6 +634,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
     expiresAt,
     maxCost,
     maxRequests,
+    maxRpm,
     supportedModels,
     allowedRouteIds,
     siteWeightMultipliers,

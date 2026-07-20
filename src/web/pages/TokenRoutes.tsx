@@ -1811,7 +1811,35 @@ export default function TokenRoutes() {
       )}
 
       <div className={isMobile ? 'mobile-card-list' : 'route-card-grid'}>
-              {showRecentSelections && (
+              {(() => {
+        const coolingRoutes = routeSummaries.filter((r) => (r.cooldownChannelCount || 0) > 0);
+        if (coolingRoutes.length === 0) return null;
+        const totalCoolingChannels = coolingRoutes.reduce((sum, r) => sum + (r.cooldownChannelCount || 0), 0);
+        return (
+          <div
+            className="card"
+            style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              border: '1px solid color-mix(in srgb, var(--color-warning) 35%, var(--color-border))',
+              background: 'var(--color-warning-soft)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 600 }}>
+              {coolingRoutes.length} 条路由 / {totalCoolingChannels} 个通道冷却中
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              展开对应路由可查看「冷却中」通道，或点「清除冷却」立即恢复
+            </div>
+          </div>
+        );
+      })()}
+      {showRecentSelections && (
         <div
           className="card"
           style={{
