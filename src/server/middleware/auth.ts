@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, randomBytes, createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../config.js';
@@ -7,18 +7,58 @@ import { EMPTY_DOWNSTREAM_ROUTING_POLICY, type DownstreamRoutingPolicy } from '.
 
 export interface ProxyAuthContext {
   token: string;
-  source: 'managed' | 'global';
+  source: 'managed' | 'global' | 'playground';
   keyId: number | null;
   keyName: string;
   policy: DownstreamRoutingPolicy;
 }
 
 export interface ProxyResourceOwner {
-  ownerType: 'managed_key' | 'global_proxy_token';
+  ownerType: 'managed_key' | 'global_proxy_token' | 'playground';
   ownerId: string;
 }
 
 const proxyAuthContextByRequest = new WeakMap<FastifyRequest, ProxyAuthContext>();
+
+// NewAPI-style ephemeral playground tokens: issued in-memory for admin session
+// tester requests. Not persisted, short-lived, and not a managed downstream key.
+const PLAYGROUND_TOKEN_TTL_MS = 10 * 60 * 1000;
+const playgroundTokens = new Map<string, { expiresAt: number; name: string }>();
+
+function hashPlaygroundToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function cleanupPlaygroundTokens(now = Date.now()) {
+  for (const [hash, item] of playgroundTokens.entries()) {
+    if (item.expiresAt <= now) playgroundTokens.delete(hash);
+  }
+}
+
+export function issuePlaygroundProxyToken(name = 'playground'): string {
+  cleanupPlaygroundTokens();
+  const token = `sk-pg-${randomBytes(24).toString('hex')}`;
+  playgroundTokens.set(hashPlaygroundToken(token), {
+    expiresAt: Date.now() + PLAYGROUND_TOKEN_TTL_MS,
+    name,
+  });
+  return token;
+}
+
+export function peekPlaygroundProxyToken(token: string): { name: string } | null {
+  cleanupPlaygroundTokens();
+  const item = playgroundTokens.get(hashPlaygroundToken(token));
+  if (!item) return null;
+  if (item.expiresAt <= Date.now()) {
+    playgroundTokens.delete(hashPlaygroundToken(token));
+    return null;
+  }
+  return { name: item.name };
+}
+
+export function __resetPlaygroundProxyTokensForTests(): void {
+  playgroundTokens.clear();
+}
 
 type ParsedAllowlistEntry =
   | { kind: 'exact'; normalizedIp: string }
@@ -165,6 +205,18 @@ export async function proxyAuthMiddleware(request: FastifyRequest, reply: Fastif
     return;
   }
 
+  const playground = peekPlaygroundProxyToken(token);
+  if (playground) {
+    proxyAuthContextByRequest.set(request, {
+      token,
+      source: 'playground',
+      keyId: null,
+      keyName: playground.name || 'playground',
+      policy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+    });
+    return;
+  }
+
   const authResult = await authorizeDownstreamToken(token);
   if (!authResult.ok) {
     reply.code(authResult.statusCode).send({ error: authResult.error });
@@ -208,6 +260,13 @@ export function getProxyResourceOwner(request: FastifyRequest): ProxyResourceOwn
     return {
       ownerType: 'managed_key',
       ownerId: auth.keyId === null ? auth.token : String(auth.keyId),
+    };
+  }
+
+  if (auth.source === 'playground') {
+    return {
+      ownerType: 'playground',
+      ownerId: auth.keyName || 'playground',
     };
   }
 
