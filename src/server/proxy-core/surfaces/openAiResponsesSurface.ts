@@ -372,9 +372,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
       if (!selected) {
         const noChannelMessage = buildForcedChannelUnavailableMessage(forcedChannelId);
         await reportProxyAllFailed({
-          model: requestedModel,
-          reason: forcedChannelId ? noChannelMessage : 'No available channels after retries',
-        });
+        model: requestedModel,
+        reason: forcedChannelId ? noChannelMessage : 'No available channels after retries',
+        outcome: forcedChannelId ? 'request_failed' : 'no_available_channels',
+        attemptedChannels: excludeChannelIds.length,
+        configuredAttempts: maxRetries + 1,
+      });
         const payload = {
           error: { message: noChannelMessage, type: 'server_error' as const },
         };

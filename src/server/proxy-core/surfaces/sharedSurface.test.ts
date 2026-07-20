@@ -600,7 +600,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     expect(reportProxyAllFailedMock).toHaveBeenCalledWith({
       model: 'gpt-5.2',
       reason: 'upstream returned HTTP 401',
-      outcome: 'all_attempted_channels_failed',
+      outcome: 'request_failed',
       attemptedChannels: 3,
       configuredAttempts: 3,
     });
@@ -703,7 +703,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     expect(reportProxyAllFailedMock).toHaveBeenCalledWith({
       model: 'gpt-5.2',
       reason: 'upstream failure',
-      outcome: 'all_attempted_channels_failed',
+      outcome: 'request_failed',
       attemptedChannels: 3,
       configuredAttempts: 3,
     });
@@ -755,7 +755,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     expect(reportProxyAllFailedMock).toHaveBeenCalledWith({
       model: 'gpt-5.2',
       reason: 'socket hang up',
-      outcome: 'all_attempted_channels_failed',
+      outcome: 'request_failed',
       attemptedChannels: 3,
       configuredAttempts: 3,
     });

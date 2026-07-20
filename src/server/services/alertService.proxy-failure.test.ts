@@ -52,25 +52,26 @@ describe('proxy failure notify policy', () => {
     __resetProxyFailureNotifyStateForTests();
   });
 
-  it('does not push external notify for single request_failed', () => {
+  it('pushes external notify only for empty candidate sets', () => {
     expect(shouldPushProxyFailureNotification('request_failed')).toBe(false);
-    expect(shouldPushProxyFailureNotification('all_attempted_channels_failed')).toBe(true);
+    // Attempt-cap exhaustion is not a full inventory failure; keep it events-only.
+    expect(shouldPushProxyFailureNotification('all_attempted_channels_failed')).toBe(false);
     expect(shouldPushProxyFailureNotification('no_available_channels')).toBe(true);
   });
 
   it('throttles same model+outcome for 10 minutes regardless of reason text', () => {
-    const key = createProxyFailureNotifyKey('GPT-5.6-sol', 'all_attempted_channels_failed');
-    expect(key).toBe('all_attempted_channels_failed||gpt-5.6-sol');
+    const key = createProxyFailureNotifyKey('GPT-5.6-sol', 'no_available_channels');
+    expect(key).toBe('no_available_channels||gpt-5.6-sol');
 
-    const first = evaluateProxyFailureNotifyThrottle('gpt-5.6-sol', 'all_attempted_channels_failed', 1_000);
+    const first = evaluateProxyFailureNotifyThrottle('gpt-5.6-sol', 'no_available_channels', 1_000);
     expect(first.shouldSend).toBe(true);
 
-    const second = evaluateProxyFailureNotifyThrottle('gpt-5.6-sol', 'all_attempted_channels_failed', 2_000);
+    const second = evaluateProxyFailureNotifyThrottle('gpt-5.6-sol', 'no_available_channels', 2_000);
     expect(second.shouldSend).toBe(false);
 
     const afterCooldown = evaluateProxyFailureNotifyThrottle(
       'gpt-5.6-sol',
-      'all_attempted_channels_failed',
+      'no_available_channels',
       1_000 + PROXY_FAILURE_NOTIFY_COOLDOWN_MS + 1,
     );
     expect(afterCooldown.shouldSend).toBe(true);

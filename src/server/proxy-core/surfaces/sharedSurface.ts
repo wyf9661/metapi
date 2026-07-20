@@ -585,9 +585,9 @@ export function createSurfaceFailureToolkit(input: {
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: `upstream returned HTTP ${args.status}`,
-        outcome: args.retryCount >= input.maxRetries && input.maxRetries > 0
-          ? 'all_attempted_channels_failed'
-          : 'request_failed',
+        // Attempt-cap exhaustion is not "all channels failed" — the route may still
+        // have many unused channels. Keep this events-only via request_failed.
+        outcome: 'request_failed',
         attemptedChannels: args.retryCount + 1,
         configuredAttempts: input.maxRetries + 1,
       }));
@@ -649,9 +649,9 @@ export function createSurfaceFailureToolkit(input: {
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: args.failure.reason,
-        outcome: args.retryCount >= input.maxRetries && input.maxRetries > 0
-          ? 'all_attempted_channels_failed'
-          : 'request_failed',
+        // Attempt-cap exhaustion is not "all channels failed" — the route may still
+        // have many unused channels. Keep this events-only via request_failed.
+        outcome: 'request_failed',
         attemptedChannels: args.retryCount + 1,
         configuredAttempts: input.maxRetries + 1,
       }));
@@ -702,9 +702,9 @@ export function createSurfaceFailureToolkit(input: {
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
         reason: args.errorMessage || 'network failure',
-        outcome: args.retryCount >= input.maxRetries && input.maxRetries > 0
-          ? 'all_attempted_channels_failed'
-          : 'request_failed',
+        // Attempt-cap exhaustion is not "all channels failed" — the route may still
+        // have many unused channels. Keep this events-only via request_failed.
+        outcome: 'request_failed',
         attemptedChannels: args.retryCount + 1,
         configuredAttempts: input.maxRetries + 1,
       }));

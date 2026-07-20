@@ -91,13 +91,14 @@ export function formatProxyFailureAlert(params: ProxyFailureAlertParams): {
 }
 
 /**
- * External push only for terminal multi-channel / empty-candidate outcomes.
- * Single-channel request_failed (common on flaky midstream) is events-only.
+ * External push only when there are truly no candidates left to try.
+ * Partial failover (default 3 attempts among many channels) is events-only —
+ * labeling that as "all channels failed" is misleading noise.
  */
 export function shouldPushProxyFailureNotification(
   outcome: ProxyFailureOutcome = 'request_failed',
 ): boolean {
-  return outcome === 'all_attempted_channels_failed' || outcome === 'no_available_channels';
+  return outcome === 'no_available_channels';
 }
 
 /** Throttle key ignores exact reason text so the same model cannot flood. */
