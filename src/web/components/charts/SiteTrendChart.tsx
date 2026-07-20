@@ -43,19 +43,35 @@ const COLOR_PALETTE = [
 
 export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
   const [metric, setMetric] = useState<Metric>('spend');
+  const [focusedSite, setFocusedSite] = useState<string | null>(null);
+
+  const allSites = useMemo(() => {
+    if (!data || data.length === 0) return [] as string[];
+    const names = new Set<string>();
+    for (const day of data) {
+      for (const site of Object.keys(day.sites || {})) names.add(site);
+    }
+    return Array.from(names);
+  }, [data]);
 
   /* ---------- data transform ---------- */
 
   const flatData = useMemo(() => {
     if (!data || data.length === 0) return [];
     return data.flatMap((d) =>
-      Object.entries(d.sites).map(([site, v]) => ({
-        date: d.date,
-        site,
-        value: metric === 'spend' ? v.spend : v.calls,
-      })),
+      Object.entries(d.sites)
+        .filter(([site]) => !focusedSite || site === focusedSite)
+        .map(([site, v]) => ({
+          date: d.date,
+          site,
+          value: metric === 'spend' ? v.spend : v.calls,
+        })),
     );
-  }, [data, metric]);
+  }, [data, metric, focusedSite]);
+
+  const toggleFocusedSite = (site: string) => {
+    setFocusedSite((current) => (current === site ? null : site));
+  };
 
   /* ---------- loading state ---------- */
 
@@ -101,14 +117,9 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
     line: {
       style: { lineWidth: 2, curveType: 'monotone' },
     },
+    // Built-in legend removed: bottom chips are the only site list / selector.
     legends: {
-      visible: true,
-      orient: 'bottom',
-      padding: { top: 12 },
-      item: {
-        shape: { style: { symbolType: 'circle' } },
-        label: { style: { fontSize: 12 } },
-      },
+      visible: false,
     },
     tooltip: {
       mark: {
@@ -168,10 +179,62 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
     <div style={containerStyle}>
       <div style={headerStyle}>
         <MetricToggle metric={metric} onChange={setMetric} />
+        {focusedSite && (
+          <div style={focusChipStyle}>
+            <span>当前查看：</span>
+            <strong style={{ color: 'var(--color-text-primary)' }}>{focusedSite}</strong>
+            <button
+              type="button"
+              onClick={() => setFocusedSite(null)}
+              style={focusClearBtnStyle}
+            >
+              显示全部
+            </button>
+          </div>
+        )}
       </div>
       <div style={{ width: '100%', height: 320, flex: 1, minHeight: 320 }}>
-        <VChart spec={spec as any} style={{ width: '100%', height: '100%' }} />
+        <VChart
+          spec={spec as any}
+          style={{ width: '100%', height: '100%' }}
+        />
       </div>
+      {/* Site list / selector (replaces chart built-in legend) */}
+      {allSites.length > 0 && (
+        <div style={legendFallbackStyle}>
+          {allSites.map((site, idx) => {
+            const active = !focusedSite || focusedSite === site;
+            return (
+              <button
+                key={site}
+                type="button"
+                onClick={() => toggleFocusedSite(site)}
+                style={{
+                  ...legendChipStyle,
+                  opacity: active ? 1 : 0.4,
+                  borderColor: focusedSite === site
+                    ? 'color-mix(in srgb, var(--color-primary) 40%, var(--color-border))'
+                    : 'transparent',
+                  background: focusedSite === site
+                    ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)'
+                    : 'transparent',
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: COLOR_PALETTE[idx % COLOR_PALETTE.length],
+                    flexShrink: 0,
+                  }}
+                />
+                <span>{site}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -224,7 +287,9 @@ const headerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  gap: 12,
   marginBottom: 16,
+  flexWrap: 'wrap',
 };
 
 const toggleGroupStyle: React.CSSProperties = {
@@ -253,4 +318,46 @@ const toggleBtnActive: React.CSSProperties = {
 const toggleBtnInactive: React.CSSProperties = {
   background: 'var(--color-bg-card)',
   color: 'var(--color-text-secondary)',
+};
+
+const focusChipStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '4px 10px',
+  borderRadius: 999,
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-bg)',
+  fontSize: 12,
+  color: 'var(--color-text-secondary)',
+};
+
+const focusClearBtnStyle: React.CSSProperties = {
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-bg-card)',
+  color: 'var(--color-text-primary)',
+  borderRadius: 999,
+  padding: '2px 8px',
+  fontSize: 11,
+  cursor: 'pointer',
+};
+
+const legendFallbackStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '6px 10px',
+  marginTop: 10,
+};
+
+const legendChipStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  borderRadius: 999,
+  border: '1px solid transparent',
+  padding: '3px 10px',
+  fontSize: 12,
+  color: 'var(--color-text-secondary)',
+  cursor: 'pointer',
+  background: 'transparent',
 };
