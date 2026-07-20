@@ -1,3 +1,4 @@
+import type React from 'react';
 import { marked } from 'marked';
 import { formatDateTimeLocal } from './checkinLogTime.js';
 
@@ -358,20 +359,47 @@ export function formatSiteAnnouncementSeenAt(
   return formatDateTimeLocal(value, 'zh-CN', timeZone);
 }
 
-export function renderSiteAnnouncementHtml(content: string): string {
-  const raw = String(content || '').trim();
-  if (!raw) return '<p>-</p>';
+export function renderMarkdownContentHtml(content: string, options?: { emptyHtml?: string }): string {
+  const emptyHtml = options?.emptyHtml ?? '<p>-</p>';
+  const raw = String(content || '');
+  if (!raw.trim()) return emptyHtml;
 
-  if (isLikelyHtml(raw)) {
-    return sanitizeAnnouncementHtml(raw);
-  }
+  // Streaming / partial markdown should still render progressively.
+  // Prefer marked when available; fall back to plain text escaping.
+  try {
+    if (isLikelyHtml(raw)) {
+      return sanitizeAnnouncementHtml(raw);
+    }
 
-  if (isLikelyMarkdown(raw)) {
+    // Always parse as markdown with GFM + hard breaks so streaming updates
+    // keep code fences / lists readable without waiting for complete docs.
     const rendered = String(marked.parse(raw, { gfm: true, breaks: true }));
-    return sanitizeAnnouncementHtml(rendered || renderMarkdown(raw));
+    return sanitizeAnnouncementHtml(rendered || renderMarkdown(raw) || renderPlainText(raw));
+  } catch {
+    return renderPlainText(raw);
   }
+}
 
-  return renderPlainText(raw);
+export function renderSiteAnnouncementHtml(content: string): string {
+  return renderMarkdownContentHtml(content, { emptyHtml: '<p>-</p>' });
+}
+
+export function MarkdownContent({
+  content,
+  className = 'announcement-rich-content',
+  style,
+}: {
+  content: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={className}
+      style={style}
+      dangerouslySetInnerHTML={{ __html: renderMarkdownContentHtml(content, { emptyHtml: '' }) }}
+    />
+  );
 }
 
 export function SiteAnnouncementContent({ content }: { content: string }) {

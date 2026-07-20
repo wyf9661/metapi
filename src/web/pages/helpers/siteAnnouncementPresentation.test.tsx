@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   SiteAnnouncementContent,
+  renderMarkdownContentHtml,
   formatSiteAnnouncementSeenAt,
   readClientTimeZone,
   resolveSiteAnnouncementTimeZone,
@@ -67,5 +68,23 @@ describe('siteAnnouncementPresentation helpers', () => {
 
   it('reads the browser timezone when available', () => {
     expect(readClientTimeZone()).toBeTruthy();
+  });
+});
+
+
+describe('renderMarkdownContentHtml', () => {
+  it('renders streaming markdown without waiting for a complete document', () => {
+    const html = renderMarkdownContentHtml('# Title\n\n- item **bold**\n\n```ts\nconst x = 1;');
+    expect(html).toContain('<h1');
+    expect(html).toContain('<strong>bold</strong>');
+    expect(html).toContain('<pre');
+    expect(html).toContain('const x = 1;');
+  });
+
+  it('strips unsafe script tags while keeping surrounding text', () => {
+    const html = renderMarkdownContentHtml('a <script>alert(1)</script> b');
+    expect(html.toLowerCase()).not.toContain('<script');
+    expect(html).toContain('a');
+    expect(html).toContain('b');
   });
 });

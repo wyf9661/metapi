@@ -6797,3 +6797,42 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Model tester live markdown rendering */
+.model-tester-markdown {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+.model-tester-markdown > :first-child { margin-top: 0; }
+.model-tester-markdown > :last-child { margin-bottom: 0; }
+.model-tester-markdown p,
+.model-tester-markdown ul,
+.model-tester-markdown ol,
+.model-tester-markdown pre,
+.model-tester-markdown blockquote {
+  margin: 0 0 0.65em;
+}
+.model-tester-markdown pre {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-bg) 82%, var(--color-text-primary));
+}
+.model-tester-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+.model-tester-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+.model-tester-markdown ul,
+.model-tester-markdown ol {
+  padding-left: 1.25em;
+}
+.model-tester-markdown a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
