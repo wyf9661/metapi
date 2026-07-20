@@ -1711,9 +1711,35 @@ export default function TokenRoutes() {
           </button>
         </div>
 
-        <span className="badge badge-info" style={{ fontSize: 12, fontWeight: 500, marginLeft: 'auto' }}>
-          {tr('共')} {filteredRoutes.length} {tr('条路由')}
-        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {(() => {
+            const coolingRoutes = routeSummaries.filter((r) => (r.cooldownChannelCount || 0) > 0);
+            if (coolingRoutes.length === 0) return null;
+            const totalCoolingChannels = coolingRoutes.reduce((sum, r) => sum + (r.cooldownChannelCount || 0), 0);
+            return (
+              <button
+                type="button"
+                className="badge"
+                onClick={() => setEnabledFilter(enabledFilter === 'cooling' ? 'all' : 'cooling')}
+                title="点击筛选/取消筛选冷却中的路由"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: '1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border))',
+                  background: enabledFilter === 'cooling' ? 'var(--color-warning)' : 'var(--color-warning-soft)',
+                  color: enabledFilter === 'cooling' ? '#fff' : 'var(--color-warning)',
+                  padding: '4px 10px',
+                }}
+              >
+                {coolingRoutes.length} 路由 / {totalCoolingChannels} 通道冷却中
+              </button>
+            );
+          })()}
+          <span className="badge badge-info" style={{ fontSize: 12, fontWeight: 500 }}>
+            {tr('共')} {filteredRoutes.length} {tr('条路由')}
+          </span>
+        </div>
       </div>
 
       {/* Collapsible filter panel */}
@@ -1831,44 +1857,6 @@ export default function TokenRoutes() {
       )}
 
       <div className={isMobile ? 'mobile-card-list' : 'route-card-grid'}>
-              {(() => {
-        const coolingRoutes = routeSummaries.filter((r) => (r.cooldownChannelCount || 0) > 0);
-        if (coolingRoutes.length === 0) return null;
-        const totalCoolingChannels = coolingRoutes.reduce((sum, r) => sum + (r.cooldownChannelCount || 0), 0);
-        return (
-          <div
-            className="card"
-            style={{
-              marginBottom: 12,
-              padding: '10px 12px',
-              border: '1px solid color-mix(in srgb, var(--color-warning) 35%, var(--color-border))',
-              background: 'var(--color-warning-soft)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 600 }}>
-              {coolingRoutes.length} 条路由 / {totalCoolingChannels} 个通道冷却中
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                展开对应路由可查看「冷却中」通道，或点「清除冷却」立即恢复
-              </div>
-              <button
-                type="button"
-                className="btn btn-soft-warning"
-                style={{ fontSize: 12, padding: '4px 10px', fontWeight: 700 }}
-                onClick={() => setEnabledFilter('cooling')}
-              >
-                只看冷却中
-              </button>
-            </div>
-          </div>
-        );
-      })()}
       {showRecentSelections && (
         <div
           className="card"
