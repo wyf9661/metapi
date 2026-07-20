@@ -7,6 +7,7 @@ const consumeManagedKeyRequestMock = vi.fn();
 vi.mock('../services/downstreamApiKeyService.js', () => ({
   authorizeDownstreamToken: (...args: unknown[]) => authorizeDownstreamTokenMock(...args),
   consumeManagedKeyRequest: (...args: unknown[]) => consumeManagedKeyRequestMock(...args),
+  checkManagedKeyRpmLimit: () => ({ allowed: true, retryAfterSec: 0 }),
 }));
 
 describe('proxyAuthMiddleware', () => {

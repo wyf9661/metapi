@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { fetch, File as UndiciFile, FormData as UndiciFormData } from 'undici';
 import { config } from '../../config.js';
+import { issuePlaygroundProxyToken } from '../../middleware/auth.js';
 import { readRuntimeResponseText } from '../../proxy-core/executors/types.js';
 import {
   normalizeForcedChannelId,
@@ -459,21 +460,25 @@ function decodeDataUrl(dataUrl: string): { mimeType: string; buffer: Buffer } {
 }
 
 function createDefaultHeadersForPath(path: string): Record<string, string> {
+  // NewAPI-style: issue short-lived in-memory playground token under admin session,
+  // instead of relying on production-disabled global PROXY_TOKEN.
+  const playgroundToken = issuePlaygroundProxyToken('sys_playground');
+
   if (/^\/v1\/messages$/i.test(path)) {
     return {
-      'x-api-key': config.proxyToken,
+      'x-api-key': playgroundToken,
       'anthropic-version': '2023-06-01',
     };
   }
 
   if (/^\/(?:gemini\/[^/]+\/models\/.+|v1beta\/models\/.+)$/i.test(path)) {
     return {
-      'x-goog-api-key': config.proxyToken,
+      'x-goog-api-key': playgroundToken,
     };
   }
 
   return {
-    Authorization: `Bearer ${config.proxyToken}`,
+    Authorization: `Bearer ${playgroundToken}`,
   };
 }
 

@@ -5,6 +5,7 @@ import type { Duplex } from 'node:stream';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { createCodexWebsocketRuntime, CodexWebsocketRuntimeError } from '../../proxy-core/runtime/codexWebsocketRuntime.js';
 import { buildCodexSessionResponseStoreKey } from '../../proxy-core/runtime/codexSessionResponseStore.js';
+import { peekPlaygroundProxyToken } from '../../middleware/auth.js';
 import {
   authorizeDownstreamToken,
   consumeManagedKeyRequest,
@@ -820,6 +821,20 @@ export function ensureResponsesWebsocketTransport(app: FastifyInstance) {
       const token = extractWebsocketAuthToken(request, url);
       if (!token) {
         writeUpgradeHttpError(socket, 401, 'Missing Authorization, x-api-key, x-goog-api-key, or key query parameter');
+        return;
+      }
+      const playground = peekPlaygroundProxyToken(token);
+      if (playground) {
+        const playgroundAuth = {
+          ok: true as const,
+          source: 'global' as const, // websocket path only needs a valid auth result shape
+          token,
+          key: null,
+          policy: null as any,
+        };
+        websocketServer.handleUpgrade(request, socket, head, (client) => {
+          void handleResponsesWebsocketConnection(app, client, request, playgroundAuth as any);
+        });
         return;
       }
       const authResult = await authorizeDownstreamToken(token);
