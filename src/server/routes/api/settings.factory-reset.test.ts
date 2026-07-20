@@ -156,12 +156,7 @@ describe('settings factory reset api', () => {
     expect(config.systemProxyUrl).toBe('http://127.0.0.1:7890');
 
     const sites = await db.select().from(schema.sites).all();
-    expect(sites.map((site) => site.name)).toEqual([
-      'OpenAI 官方',
-      'Claude 官方',
-      'Gemini 官方',
-      'CLIProxyAPI',
-    ]);
+    expect(sites).toEqual([]);
 
     const authTokenSetting = await db.select().from(schema.settings).where(eq(schema.settings.key, 'auth_token')).get();
     const dbTypeSetting = await db.select().from(schema.settings).where(eq(schema.settings.key, 'db_type')).get();

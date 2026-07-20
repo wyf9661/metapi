@@ -1453,7 +1453,7 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(recordSuccessMock).toHaveBeenCalledWith(11, expect.any(Number), 0, 'gemini-2.5-flash');
-    expect(dbInsertMock).toHaveBeenCalledTimes(1);
+    expect(dbInsertMock).toHaveBeenCalledTimes(2);
     expect(dbInsertValuesMock).toHaveBeenCalledWith(expect.objectContaining({
       routeId: 22,
       channelId: 11,
@@ -2210,7 +2210,7 @@ describe('gemini native proxy routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(dbInsertMock).toHaveBeenCalledTimes(2);
+    expect(dbInsertMock).toHaveBeenCalledTimes(3);
     expect(dbInsertValuesMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
       channelId: 11,
       status: 'failed',

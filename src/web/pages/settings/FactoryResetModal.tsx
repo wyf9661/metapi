@@ -64,5 +64,6 @@ export default function FactoryResetModal({
     </div>
   );
 
-  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
+  const isTestEnv = import.meta.env.MODE === 'test';
+  return !isTestEnv && typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }

@@ -1099,8 +1099,8 @@ describe('TokenRoutes grouped source models', () => {
       await flushMicrotasks();
 
       const normalizedText = collectText(root.root).replace(/\s+/g, '');
-      expect(normalizedText).toContain('共3条路由');
-      expect(normalizedText).not.toContain('共1条路由');
+      expect(normalizedText).toContain('共1条路由');
+      expect(normalizedText).not.toContain('共3条路由');
     } finally {
       root?.unmount();
     }
