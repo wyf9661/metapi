@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 
 import type * as DbModuleType from '../../db/index.js';
 
@@ -101,5 +102,46 @@ describe('site deletion connection cascade', () => {
     expect(await db.select().from(schema.accountTokens).all()).toHaveLength(0);
     expect(await db.select().from(schema.modelAvailability).all()).toHaveLength(0);
     expect(await db.select().from(schema.tokenModelAvailability).all()).toHaveLength(0);
+  });
+
+  it('removes pure API Key connections that only store accounts.api_token', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'apikey-only-site',
+      url: 'https://apikey-only.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: null,
+      accessToken: '',
+      apiToken: 'sk-live-apikey-only-delete-me',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+    await db.insert(schema.modelAvailability).values({
+      accountId: account.id,
+      modelName: 'gpt-5.4',
+      available: true,
+      connectivity: true,
+    }).run();
+    // Intentionally no account_tokens row — matches pure API Key create path.
+
+    const warm = await app.inject({ method: 'GET', url: '/api/accounts?limit=100' });
+    expect(warm.statusCode).toBe(200);
+    // Snapshot may not echo raw apiToken; assert by site/account presence.
+    expect(JSON.stringify(warm.json())).toContain('apikey-only-site');
+
+    const deleted = await app.inject({ method: 'DELETE', url: `/api/sites/${site.id}` });
+    expect(deleted.statusCode).toBe(200);
+
+    const after = await app.inject({ method: 'GET', url: '/api/accounts?limit=100' });
+    expect(after.statusCode).toBe(200);
+    expect(JSON.stringify(after.json())).not.toContain('apikey-only-site');
+    expect(JSON.stringify(after.json())).not.toContain('sk-live-apikey-only-delete-me');
+
+    expect(await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).all()).toHaveLength(0);
+    expect(await db.select().from(schema.modelAvailability).where(eq(schema.modelAvailability.accountId, account.id)).all()).toHaveLength(0);
+    expect(await db.select().from(schema.sites).where(eq(schema.sites.id, site.id)).all()).toHaveLength(0);
   });
 });
