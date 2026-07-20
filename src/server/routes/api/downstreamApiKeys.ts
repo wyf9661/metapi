@@ -523,6 +523,11 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
           maxRequests: normalized.maxRequests,
           usedRequests: 0,
           maxRpm: normalized.maxRpm,
+          maxDailyRequests: normalized.maxDailyRequests,
+          maxDailyCost: normalized.maxDailyCost,
+          dailyUsedRequests: 0,
+          dailyUsedCost: 0,
+          dailyWindowDate: null,
           supportedModels: toPersistenceJson(normalized.supportedModels),
           allowedRouteIds: toPersistenceJson(normalized.allowedRouteIds),
           siteWeightMultipliers: toPersistenceJson(normalized.siteWeightMultipliers),
@@ -582,6 +587,8 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         maxCost: hasOwn('maxCost') ? body.maxCost : existing.maxCost,
         maxRequests: hasOwn('maxRequests') ? body.maxRequests : existing.maxRequests,
         maxRpm: hasOwn('maxRpm') ? body.maxRpm : existing.maxRpm,
+        maxDailyRequests: hasOwn('maxDailyRequests') ? body.maxDailyRequests : existing.maxDailyRequests,
+        maxDailyCost: hasOwn('maxDailyCost') ? body.maxDailyCost : existing.maxDailyCost,
         supportedModels: hasOwn('supportedModels') ? body.supportedModels : existingView.supportedModels,
         allowedRouteIds: hasOwn('allowedRouteIds') ? body.allowedRouteIds : existingView.allowedRouteIds,
         siteWeightMultipliers: hasOwn('siteWeightMultipliers') ? body.siteWeightMultipliers : existingView.siteWeightMultipliers,
@@ -658,6 +665,9 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
     await db.update(schema.downstreamApiKeys).set({
       usedCost: 0,
       usedRequests: 0,
+      dailyUsedCost: 0,
+      dailyUsedRequests: 0,
+      dailyWindowDate: null,
       updatedAt: new Date().toISOString(),
     }).where(eq(schema.downstreamApiKeys.id, id)).run();
 

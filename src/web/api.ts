@@ -944,6 +944,11 @@ export const api = {
     request(`/api/routes/${id}`, { method: "DELETE" }),
   clearRouteCooldown: (id: number) =>
     request(`/api/routes/${id}/cooldown/clear`, { method: "POST" }),
+  clearRouteCooldownBatch: (ids: number[]) =>
+    request(`/api/routes/cooldown/clear-batch`, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
   batchUpdateRoutes: (data: { ids: number[]; action: "enable" | "disable" }) =>
     request("/api/routes/batch", {
       method: "POST",
