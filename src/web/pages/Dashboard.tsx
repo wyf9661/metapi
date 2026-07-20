@@ -931,13 +931,13 @@ export default function Dashboard({
             <div className="dashboard-stat-content">
               <div className="stat-label">今日签到</div>
               <div className="stat-value animate-count-up">{Math.round(todaySuccess)}/{Math.round(todayTotal)}</div>
-              <div className="dashboard-stat-note">按站点去重</div>
             </div>
           </div>
           <div className="stat-card-row">
             <div className="stat-icon stat-icon-orange">
               <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
               </svg>
             </div>
             <div className="dashboard-stat-content">
@@ -945,7 +945,6 @@ export default function Dashboard({
               <div className="stat-value animate-count-up">
                 {todayTotal > 0 ? Math.round((todaySuccess / todayTotal) * 100) : 0}%
               </div>
-              <div className="dashboard-stat-note">重复签到不累计次数</div>
             </div>
           </div>
         </div>
@@ -1019,7 +1018,6 @@ export default function Dashboard({
             <div className="dashboard-stat-content">
               <div className="stat-label">RPM</div>
               <div className="stat-value animate-count-up">{Math.round(requestsPerMinute).toLocaleString()}</div>
-              <div className="dashboard-stat-note">最近 {performanceWindowSeconds} 秒请求</div>
             </div>
           </div>
           <div className="stat-card-row">
@@ -1031,7 +1029,6 @@ export default function Dashboard({
             <div className="dashboard-stat-content">
               <div className="stat-label">TPM</div>
               <div className="stat-value animate-count-up">{formatCompactTokenMetric(tokensPerMinute)}</div>
-              <div className="dashboard-stat-note">最近 {performanceWindowSeconds} 秒 Tokens</div>
             </div>
           </div>
           <div className="stat-card-row">
@@ -1045,15 +1042,12 @@ export default function Dashboard({
               <div className="stat-value animate-count-up">
                 {qualitySuccessRate == null ? "—" : `${qualitySuccessRate.toFixed(1)}%`}
               </div>
-              <div className="dashboard-stat-note">
-                {qualitySparse ? "样本不足 · " : ""}{Math.round(qualitySampleCount).toLocaleString()} 次请求
-              </div>
             </div>
           </div>
           <div className="stat-card-row">
             <div className="stat-icon stat-icon-orange">
               <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h4l3 8 4-16 3 8h4" />
               </svg>
             </div>
             <div className="dashboard-stat-content">
@@ -1061,7 +1055,6 @@ export default function Dashboard({
               <div className="stat-value animate-count-up" style={{ fontSize: 17 }}>
                 {formatDashboardLatency(p95FirstByteLatencyMs)} / {formatDashboardLatency(p95LatencyMs)}
               </div>
-              <div className="dashboard-stat-note">最近 24 小时长尾表现</div>
             </div>
           </div>
         </div>

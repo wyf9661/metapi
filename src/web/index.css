@@ -1596,6 +1596,10 @@ body {
 
 .dashboard-stat-content {
   min-width: 0;
+  min-height: 42px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .dashboard-stat-grid .stat-label,
