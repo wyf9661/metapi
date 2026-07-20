@@ -902,9 +902,14 @@ export default function Dashboard({
             </div>
             <div className="dashboard-stat-content">
               <div className="stat-label">当前余额</div>
-              <div className="stat-value animate-count-up">${totalBalance.toFixed(2)}</div>
-              <div style={{ fontSize: 11, color: todayReward > 0 ? "var(--color-success)" : "var(--color-text-muted)", fontWeight: 500, marginTop: 2 }}>
-                今日 +{todayReward.toFixed(2)}
+              <div className="stat-value animate-count-up">
+                ${totalBalance.toFixed(2)}
+                <span
+                  className="dashboard-stat-inline"
+                  style={{ color: todayReward > 0 ? "var(--color-success)" : "var(--color-text-muted)" }}
+                >
+                  （今日 +{todayReward.toFixed(2)}）
+                </span>
               </div>
             </div>
           </div>
@@ -916,9 +921,14 @@ export default function Dashboard({
             </div>
             <div className="dashboard-stat-content">
               <div className="stat-label">累计消耗</div>
-              <div className="stat-value animate-count-up">${totalUsed.toFixed(2)}</div>
-              <div style={{ fontSize: 11, color: todaySpend > 0 ? "var(--color-danger)" : "var(--color-text-muted)", fontWeight: 500, marginTop: 2 }}>
-                今日 -{todaySpend.toFixed(2)}
+              <div className="stat-value animate-count-up">
+                ${totalUsed.toFixed(2)}
+                <span
+                  className="dashboard-stat-inline"
+                  style={{ color: todaySpend > 0 ? "var(--color-danger)" : "var(--color-text-muted)" }}
+                >
+                  （今日 -{todaySpend.toFixed(2)}）
+                </span>
               </div>
             </div>
           </div>
