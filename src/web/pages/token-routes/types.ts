@@ -91,6 +91,7 @@ export type RouteSummaryRow = {
   enabled: boolean;
   channelCount: number;
   enabledChannelCount: number;
+  cooldownChannelCount?: number;
   siteNames: string[];
   decisionSnapshot: RouteDecision | null;
   decisionRefreshedAt: string | null;

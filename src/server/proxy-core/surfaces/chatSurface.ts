@@ -85,6 +85,7 @@ import {
   buildForcedChannelUnavailableMessage,
   canRetryChannelSelection,
   getTesterForcedChannelId,
+  resolveProxyFailoverLimits,
 } from '../channelSelection.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -232,7 +233,17 @@ export async function handleChatSurfaceRequest(
     proxyToken: getProxyAuthContext(request)?.token || null,
   });
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
-  const maxRetries = getProxyMaxChannelRetries();
+  let maxRetries = getProxyMaxChannelRetries();
+  let failoverBudgetMs = 0;
+  try {
+    const eligibleCount = await tokenRouter.countEligibleChannels(requestedModel, downstreamPolicy);
+    const limits = resolveProxyFailoverLimits(eligibleCount);
+    maxRetries = limits.maxRetries;
+    failoverBudgetMs = limits.budgetMs;
+  } catch {
+    // keep static maxRetries fallback
+  }
+
   const failureToolkit = createSurfaceFailureToolkit({
     warningScope: 'chat',
     downstreamPath,
@@ -575,7 +586,7 @@ export async function handleChatSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
-      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
         retryCount += 1;
         continue;
       }
@@ -810,7 +821,7 @@ export async function handleChatSurfaceRequest(
               upstreamPath: successfulUpstreamPath,
             });
             const terminalFailureOutcome = failureOutcome.action === 'retry'
-              ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
+              ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
                 ? null
                 : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
               : failureOutcome;
@@ -1012,7 +1023,7 @@ export async function handleChatSurfaceRequest(
           upstreamPath: successfulUpstreamPath,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
+          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
             ? null
             : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
           : failureOutcome;
@@ -1106,7 +1117,7 @@ export async function handleChatSurfaceRequest(
           retryCount,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
+          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
             ? null
             : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err.message || 'unknown error'))
           : failureOutcome;
@@ -1131,7 +1142,7 @@ export async function handleChatSurfaceRequest(
         retryCount,
       });
       const terminalFailureOutcome = failureOutcome.action === 'retry'
-        ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
+        ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
           ? null
           : finalizeRetryAsExecutionFailure(err?.message || 'network failure'))
         : failureOutcome;
@@ -1211,7 +1222,17 @@ export async function handleClaudeCountTokensSurfaceRequest(
     clientIp: request.ip,
   });
   const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
-  const maxRetries = getProxyMaxChannelRetries();
+  let maxRetries = getProxyMaxChannelRetries();
+  let failoverBudgetMs = 0;
+  try {
+    const eligibleCount = await tokenRouter.countEligibleChannels(requestedModel, downstreamPolicy);
+    const limits = resolveProxyFailoverLimits(eligibleCount);
+    maxRetries = limits.maxRetries;
+    failoverBudgetMs = limits.budgetMs;
+  } catch {
+    // keep static maxRetries fallback
+  }
+
   const failureToolkit = createSurfaceFailureToolkit({
     warningScope: 'chat',
     downstreamPath,
@@ -1334,7 +1355,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       },
     });
     if (endpointCandidates.length === 0) {
-      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
         retryCount += 1;
         continue;
       }
@@ -1372,7 +1393,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
-      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)) {
+      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
         retryCount += 1;
         continue;
       }
@@ -1558,7 +1579,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
           retryCount,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
+          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
             ? null
             : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, error.message || 'unknown error'))
           : failureOutcome;
@@ -1579,7 +1600,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         retryCount,
       });
       const terminalFailureOutcome = failureOutcome.action === 'retry'
-        ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs)
+        ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
           ? null
           : finalizeRetryAsExecutionFailure(error?.message || 'network failure'))
         : failureOutcome;

@@ -1,6 +1,11 @@
 import * as routeRefreshWorkflow from '../services/routeRefreshWorkflow.js';
 import { proxyChannelCoordinator } from '../services/proxyChannelCoordinator.js';
-import { canRetryProxyChannelWithBudget } from '../services/proxyChannelRetry.js';
+import {
+  canRetryProxyChannelWithBudget,
+  getProxyEffectiveFailoverBudgetMs,
+  getProxyEffectiveMaxChannelRetries,
+  getProxyMaxChannelRetries,
+} from '../services/proxyChannelRetry.js';
 import type { DownstreamRoutingPolicy } from '../services/downstreamPolicyTypes.js';
 import { tokenRouter } from '../services/tokenRouter.js';
 import { logRouteSelection } from '../services/routeSelectionLog.js';
@@ -81,9 +86,30 @@ export function canRetryChannelSelection(
   retryCount: number,
   forcedChannelId?: number | null,
   elapsedMs?: number | null,
+  options?: {
+    maxRetries?: number;
+    budgetMs?: number;
+  },
 ): boolean {
   if (normalizeForcedChannelId(forcedChannelId) !== null) return false;
-  return canRetryProxyChannelWithBudget(retryCount, elapsedMs);
+  const maxRetries = options?.maxRetries ?? getProxyMaxChannelRetries();
+  const budgetMs = options?.budgetMs;
+  return canRetryProxyChannelWithBudget(retryCount, elapsedMs, budgetMs, maxRetries);
+}
+
+/** Resolve adaptive maxRetries + wall-clock budget from eligible candidate count. */
+export function resolveProxyFailoverLimits(candidateCount: number): {
+  maxRetries: number;
+  budgetMs: number;
+  attempts: number;
+} {
+  const maxRetries = getProxyEffectiveMaxChannelRetries(candidateCount);
+  const budgetMs = getProxyEffectiveFailoverBudgetMs(candidateCount);
+  return {
+    maxRetries,
+    budgetMs,
+    attempts: maxRetries + 1,
+  };
 }
 
 export async function selectProxyChannelForAttempt(input: {

@@ -1477,6 +1477,32 @@ export class TokenRouter {
   /**
    * Select next channel for failover (exclude already-tried channels).
    */
+  /**
+   * Count currently eligible channels for a model (no side effects).
+   * Used by proxy surfaces to scale failover attempt/budget to pool size.
+   */
+  async countEligibleChannels(
+    requestedModel: string,
+    downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
+    excludeChannelIds: number[] = [],
+  ): Promise<number> {
+    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return 0;
+    await ensureSiteRuntimeHealthStateLoaded();
+    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    if (!match) return 0;
+    const nowIso = new Date().toISOString();
+    const requestedByDisplayName = isRouteDisplayNameMatch(requestedModel, match.route.displayName);
+    return match.channels.filter((candidate) => (
+      this.getCandidateEligibilityReasons(candidate, {
+        requestedModel,
+        bypassSourceModelCheck: requestedByDisplayName,
+        excludeChannelIds,
+        nowIso,
+        downstreamPolicy,
+      }).length === 0
+    )).length;
+  }
+
   async selectNextChannel(
     requestedModel: string,
     excludeChannelIds: number[],
