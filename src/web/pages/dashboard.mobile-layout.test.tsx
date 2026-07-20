@@ -9,6 +9,6 @@ describe('Dashboard mobile layout', () => {
     expect(source).toContain('import { useIsMobile } from "../components/useIsMobile.js";');
     expect(source).toContain('const isMobile = useIsMobile()');
     expect(source).toContain('gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr"');
-    expect(source).toContain('gridTemplateColumns: isMobile ? "1fr" : "1fr 300px"');
+    expect(source).toContain('gridTemplateColumns: isMobile ? "1fr" : "1fr 320px"');
   });
 });

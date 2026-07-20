@@ -425,7 +425,7 @@ describe('responses proxy codex oauth refresh', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(response.json()).toMatchObject({
       error: {
-        message: expect.stringContaining('quota exceeded for workspace'),
+        message: expect.stringContaining('上游限流或配额不足'),
       },
     });
   });

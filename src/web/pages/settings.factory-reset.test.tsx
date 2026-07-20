@@ -104,7 +104,9 @@ describe('Settings factory reset', () => {
     });
     Object.defineProperty(globalThis, 'window', {
       value: {
-        location: { reload },
+        location: { hostname: '', reload },
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
       },
       configurable: true,
       writable: true,

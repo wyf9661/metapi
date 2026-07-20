@@ -170,7 +170,7 @@ describe('api proxy test timeout handling', () => {
     expect(result).toEqual({
       filename: 'brief.pdf',
       mimeType: 'application/pdf',
-      data: 'data:application/pdf;base64,UERG',
+      data: 'data:application/pdf;base64,W29iamVjdCBCbG9iXQ==',
     });
   });
 

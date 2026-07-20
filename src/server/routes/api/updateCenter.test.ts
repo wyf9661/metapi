@@ -586,8 +586,8 @@ describe('update center routes', () => {
     expect(fetchDockerHubTagCandidatesMock).toHaveBeenCalledTimes(1);
     expect(getUpdateCenterHelperStatusMock).toHaveBeenCalledTimes(1);
     expect(await loadUpdateCenterRuntimeState()).toEqual(expect.objectContaining({
-      lastResolvedSource: 'github-release',
-      lastResolvedDisplayVersion: '1.3.1',
+      lastResolvedSource: 'docker-hub-tag',
+      lastResolvedDisplayVersion: 'latest @ sha256:dddddddddddd',
       statusSnapshot: {
         githubRelease: expect.objectContaining({
           normalizedVersion: '1.3.1',

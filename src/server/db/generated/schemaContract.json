@@ -635,6 +635,12 @@
           "notNull": false,
           "defaultValue": "false",
           "primaryKey": false
+        },
+        "connectivity": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },
@@ -2119,6 +2125,12 @@
           "notNull": false,
           "defaultValue": "false",
           "primaryKey": false
+        },
+        "protocol_profile": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },
@@ -2158,6 +2170,12 @@
           "logicalType": "datetime",
           "notNull": false,
           "defaultValue": "datetime('now')",
+          "primaryKey": false
+        },
+        "connectivity": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
           "primaryKey": false
         }
       }

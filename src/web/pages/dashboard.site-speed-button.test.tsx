@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
+import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Dashboard from './Dashboard.js';
 import { installDashboardSnapshotCompat } from './testApiCompat.js';
@@ -37,6 +38,7 @@ async function flushMicrotasks() {
 describe('Dashboard site speed buttons', () => {
   const originalDocument = globalThis.document;
   const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -71,6 +73,7 @@ describe('Dashboard site speed buttons', () => {
     vi.clearAllMocks();
     globalThis.document = originalDocument;
     globalThis.fetch = originalFetch;
+    globalThis.window = originalWindow;
   });
 
   it('updates site speed status without imperative document lookups', async () => {
@@ -79,9 +82,11 @@ describe('Dashboard site speed buttons', () => {
     try {
       await act(async () => {
         root = create(
-          <ToastProvider>
-            <Dashboard />
-          </ToastProvider>,
+          <MemoryRouter>
+            <ToastProvider>
+              <Dashboard />
+            </ToastProvider>
+          </MemoryRouter>,
         );
       });
       await flushMicrotasks();
@@ -109,9 +114,11 @@ describe('Dashboard site speed buttons', () => {
     try {
       await act(async () => {
         root = create(
-          <ToastProvider>
-            <Dashboard />
-          </ToastProvider>,
+          <MemoryRouter>
+            <ToastProvider>
+              <Dashboard />
+            </ToastProvider>
+          </MemoryRouter>,
         );
       });
       await flushMicrotasks();

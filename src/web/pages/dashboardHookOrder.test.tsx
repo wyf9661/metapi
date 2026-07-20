@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create } from 'react-test-renderer';
+import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Dashboard from './Dashboard.js';
 import { installDashboardSnapshotCompat } from './testApiCompat.js';
@@ -72,9 +73,11 @@ describe('Dashboard hook order', () => {
     try {
       await act(async () => {
         root = create(
-          <ToastProvider>
-            <Dashboard />
-          </ToastProvider>,
+          <MemoryRouter>
+            <ToastProvider>
+              <Dashboard />
+            </ToastProvider>
+          </MemoryRouter>,
         );
       });
 
