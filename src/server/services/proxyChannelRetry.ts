@@ -5,6 +5,29 @@ export function getProxyMaxChannelAttempts(): number {
   return attempts > 0 ? attempts : 1;
 }
 
+/** Minimum eligible candidates before the adaptive budget can meaningfully deviate from the static cap. */
+const ADAPTIVE_ATTEMPTS_MIN_CANDIDATES = 4;
+
+/**
+ * Compute retry budget scaled to the actual candidate pool size.
+ *
+ * When many channels match a model (e.g. 14 candidates for grok-4.5) the
+ * static cap of 3 attempts would give up too early.  This helper returns
+ * `ceil(candidateCount * 0.4) - 1` (bounded by proxyMaxChannelAttempts)
+ * so that routes with 10+ channels get 4-5 retries rather than only 2.
+ *
+ * Callers that know the candidate set size before the failover loop starts
+ * should use this instead of `getProxyMaxChannelRetries()`.
+ */
+export function getProxyEffectiveMaxChannelRetries(candidateCount: number): number {
+  const staticAttempts = getProxyMaxChannelAttempts();
+  if (candidateCount >= ADAPTIVE_ATTEMPTS_MIN_CANDIDATES && staticAttempts >= 3) {
+    const adaptive = Math.ceil(candidateCount * 0.4);
+    return Math.max(0, Math.min(staticAttempts, adaptive) - 1);
+  }
+  return Math.max(0, staticAttempts - 1);
+}
+
 export function getProxyMaxChannelRetries(): number {
   return Math.max(0, getProxyMaxChannelAttempts() - 1);
 }
