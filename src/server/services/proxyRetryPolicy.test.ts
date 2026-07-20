@@ -44,6 +44,12 @@ describe('proxyRetryPolicy', () => {
       shouldRetryProxyRequest(403, '{"error":{"message":"forbidden"}}'),
     ).toBe(true);
     expect(
+      shouldRetryProxyRequest(403, 'Your request was blocked.'),
+    ).toBe(true);
+    expect(
+      shouldRetryProxyRequest(403, 'access denied'),
+    ).toBe(true);
+    expect(
       shouldRetryProxyRequest(400, 'Unsupported legacy protocol: /v1/chat/completions is not supported. Please use /v1/responses.'),
     ).toBe(true);
   });
