@@ -1015,6 +1015,7 @@ export default function Models() {
                       className="model-card-action-btn"
                       data-tooltip={isExpanded ? tr('收起') : tr('展开')}
                       aria-label={isExpanded ? tr('收起') : tr('展开')}
+                      onClick={() => setExpanded(isExpanded ? null : m.name)}
                     >
                       <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
