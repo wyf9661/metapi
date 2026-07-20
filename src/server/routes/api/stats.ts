@@ -18,6 +18,7 @@ import {
 import {
   buildModelAvailabilityProbeTaskDedupeKey,
   probeSingleModelAvailability,
+  probeSingleModelAvailabilityStream,
   queueModelAvailabilityProbeTask,
   type ModelAvailabilityProbeExecutionResult,
 } from "../../services/modelAvailabilityProbeService.js";
@@ -2120,6 +2121,79 @@ export async function statsRoutes(app: FastifyInstance) {
         success: true,
         ...result,
       };
+    },
+  );
+
+  // Streaming marketplace probe — SSE, one event per account as it finishes.
+  // Event types: "start" (targets list), "result" (per-account), "done" (aggregate).
+  app.post<{ Body?: { model?: string; modelName?: string; siteId?: number | string; accountId?: number | string } }>(
+    "/api/models/probe-one/stream",
+    async (request, reply) => {
+      const requestBody = request.body;
+      if (requestBody !== undefined && !isRecord(requestBody)) {
+        return reply
+          .code(400)
+          .send({ success: false, message: "请求体必须是对象" });
+      }
+      const modelName = String(
+        requestBody?.modelName ?? requestBody?.model ?? "",
+      ).trim();
+      if (!modelName) {
+        return reply
+          .code(400)
+          .send({ success: false, message: "model 不能为空" });
+      }
+
+      const rawSiteId = requestBody?.siteId as unknown;
+      const rawAccountId = requestBody?.accountId as unknown;
+      const siteId = rawSiteId === undefined || rawSiteId === null || rawSiteId === ""
+        ? null
+        : Number(rawSiteId);
+      const accountId = rawAccountId === undefined || rawAccountId === null || rawAccountId === ""
+        ? null
+        : Number(rawAccountId);
+      if (siteId != null && (!Number.isFinite(siteId) || siteId <= 0)) {
+        return reply.code(400).send({ success: false, message: "siteId 无效" });
+      }
+      if (accountId != null && (!Number.isFinite(accountId) || accountId <= 0)) {
+        return reply.code(400).send({ success: false, message: "accountId 无效" });
+      }
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+        "x-accel-buffering": "no",
+      });
+      const send = (event: string, data: unknown) => {
+        try {
+          reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        } catch {
+          // client disconnected
+        }
+      };
+
+      try {
+        send("start", { modelName });
+        const result = await probeSingleModelAvailabilityStream(
+          modelName,
+          { siteId, accountId },
+          (row) => {
+            send("result", row);
+          },
+        );
+        clearModelsMarketplaceCache();
+        send("done", { success: true, ...result });
+      } catch (error: any) {
+        send("error", {
+          success: false,
+          message: error?.message || "探测失败",
+        });
+      } finally {
+        try { reply.raw.end(); } catch {}
+      }
+      return reply;
     },
   );
 

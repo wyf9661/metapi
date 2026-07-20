@@ -216,6 +216,8 @@ export default function Models() {
   const [pageSize, setPageSize] = useState(20);
   const [copied, setCopied] = useState<string | null>(null);
   const [probingKey, setProbingKey] = useState<string | null>(null);
+  const [probingAccountIds, setProbingAccountIds] = useState<Set<number>>(new Set());
+  const probeStreamCleanupRef = useRef<(() => void) | null>(null);
   type AccountProbeResult = {
     ok: boolean;
     status: string;
@@ -459,6 +461,13 @@ export default function Models() {
 
   useEffect(() => { setPage(1); }, [search, activeSite, activeBrand, pageSize]);
 
+  useEffect(() => {
+    return () => {
+      probeStreamCleanupRef.current?.();
+      probeStreamCleanupRef.current = null;
+    };
+  }, []);
+
   /* ---- stats ---- */
   const totalCoverageSlots = detailModels.reduce((s, m) => s + m.accountCount, 0);
   const uniqueAccountCount = (() => {
@@ -485,6 +494,8 @@ export default function Models() {
   };
 
   const probeModelScoped = async (model: ModelRow) => {
+    // Expand so the connectivity column is visible while probing.
+    setExpanded(model.name);
     if (activeSite) {
       const siteId = siteIdByName.get(activeSite) || null;
       const scopedAccounts = model.accounts.filter((account) => account.site === activeSite);
@@ -506,6 +517,9 @@ export default function Models() {
     await probeModel(model.name);
   };
 
+  const isModelProbing = (modelName: string) =>
+    !!probingKey && (probingKey === modelName || probingKey.startsWith(`${modelName}#`));
+
   const probeModel = async (
     name: string,
     options?: { siteId?: number | null; accountId?: number | null },
@@ -517,121 +531,153 @@ export default function Models() {
         ? `${name}#site:${options.siteId}`
         : name;
     setProbingKey(scopeKey);
+
+    // Mark all accounts of this model as probing (spinner in connectivity column)
+    const modelRow = data.models.find((m) => m.name === name);
+    const targetAccountIds = new Set<number>();
+    if (modelRow) {
+      for (const acc of modelRow.accounts) {
+        if (options?.accountId && acc.id !== options.accountId) continue;
+        if (options?.siteId && acc.siteId !== options.siteId) continue;
+        targetAccountIds.add(acc.id);
+      }
+    }
+    setProbingAccountIds(targetAccountIds);
+
+    // Initialize probe results as "probing" for each account
+    setProbeResults((prev) => ({
+      ...prev,
+      [name]: {
+        ok: false,
+        status: 'probing',
+        latencyMs: null,
+        reason: '',
+        summary: { total: targetAccountIds.size, supported: 0, unsupported: 0, inconclusive: 0, skipped: 0, notFound: 0 },
+        byAccountId: Object.fromEntries(
+          [...targetAccountIds].map((id) => [id, {
+            ok: false, status: 'probing', latencyMs: null, reason: '',
+            accountId: id, siteId: null, siteName: null, username: null,
+          }]),
+        ),
+      },
+    }));
+
     try {
-      const res: any = await api.probeModelOne(name, {
-        siteId: options?.siteId ?? null,
-        accountId: options?.accountId ?? null,
-      });
-      const rows: AccountProbeResult[] = Array.isArray(res?.results)
-        ? res.results.map((item: any) => ({
-          ok: !!(item?.ok || item?.status === 'supported'),
-          status: String(item?.status || (item?.ok ? 'supported' : 'failed')),
-          latencyMs: typeof item?.latencyMs === 'number' ? item.latencyMs : null,
-          reason: String(item?.reason || item?.message || ''),
-          accountId: Number.isFinite(Number(item?.accountId)) ? Number(item.accountId) : null,
-          siteId: Number.isFinite(Number(item?.siteId)) ? Number(item.siteId) : null,
-          siteName: item?.siteName ? String(item.siteName) : null,
-          username: item?.username ? String(item.username) : null,
-        }))
-        : [{
-          ok: !!(res?.ok || res?.status === 'supported'),
-          status: String(res?.status || (res?.ok ? 'supported' : 'failed')),
-          latencyMs: typeof res?.latencyMs === 'number' ? res.latencyMs : null,
-          reason: String(res?.reason || res?.message || ''),
-          accountId: Number.isFinite(Number(res?.accountId)) ? Number(res.accountId) : null,
-          siteId: Number.isFinite(Number(res?.siteId)) ? Number(res.siteId) : null,
-          siteName: res?.siteName ? String(res.siteName) : null,
-          username: res?.username ? String(res.username) : null,
-        }];
-
-      const byAccountId: Record<number, AccountProbeResult> = {};
-      for (const row of rows) {
-        if (row.accountId != null) byAccountId[row.accountId] = row;
-      }
-
-      const aggregate: ModelProbeAggregate = {
-        ok: !!(res?.ok || res?.status === 'supported' || res?.status === 'mixed'),
-        status: String(res?.status || (res?.ok ? 'supported' : 'failed')),
-        latencyMs: typeof res?.latencyMs === 'number' ? res.latencyMs : null,
-        reason: String(res?.reason || res?.message || ''),
-        summary: res?.summary && typeof res.summary === 'object' ? {
-          total: Number(res.summary.total || rows.length || 0),
-          supported: Number(res.summary.supported || 0),
-          unsupported: Number(res.summary.unsupported || 0),
-          inconclusive: Number(res.summary.inconclusive || 0),
-          skipped: Number(res.summary.skipped || 0),
-          notFound: Number(res.summary.notFound || 0),
-        } : {
-          total: rows.length,
-          supported: rows.filter((r) => r.status === 'supported').length,
-          unsupported: rows.filter((r) => r.status === 'unsupported').length,
-          inconclusive: rows.filter((r) => r.status === 'inconclusive').length,
-          skipped: rows.filter((r) => r.status === 'skipped').length,
-          notFound: rows.filter((r) => r.status === 'not_found').length,
-        },
-        byAccountId,
-      };
-
-      setProbeResults((prev) => {
-        const previous = prev[name];
-        // When probing a single supplier/account, merge into existing model map.
-        if (options?.siteId || options?.accountId) {
-          return {
-            ...prev,
-            [name]: {
-              ok: aggregate.ok || !!previous?.ok,
-              status: aggregate.status,
-              latencyMs: aggregate.latencyMs ?? previous?.latencyMs ?? null,
-              reason: aggregate.reason,
-              summary: aggregate.summary,
-              byAccountId: {
-                ...(previous?.byAccountId || {}),
-                ...byAccountId,
-              },
-            },
-          };
-        }
-        return { ...prev, [name]: aggregate };
-      });
-
-      // Persist probe outcome into current marketplace rows immediately.
-      setData((prev) => ({
-        ...prev,
-        models: prev.models.map((model) => {
-          if (model.name !== name) return model;
-          return {
-            ...model,
-            accounts: model.accounts.map((account) => {
-              const live = byAccountId[account.id];
-              if (!live) return account;
-              const nextConnectivity = live.status === 'supported'
-                ? true
-                : live.status === 'unsupported'
-                  ? false
-                  : account.connectivity;
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = api.probeModelOneStream(name, {
+          siteId: options?.siteId ?? null,
+          accountId: options?.accountId ?? null,
+        }, {
+          onResult: (row: any) => {
+            const accountId = Number.isFinite(Number(row?.accountId)) ? Number(row.accountId) : null;
+            if (accountId == null) return;
+            const result: AccountProbeResult = {
+              ok: !!(row?.ok || row?.status === 'supported'),
+              status: String(row?.status || (row?.ok ? 'supported' : 'failed')),
+              latencyMs: typeof row?.latencyMs === 'number' ? row.latencyMs : null,
+              reason: String(row?.reason || row?.message || ''),
+              accountId,
+              siteId: Number.isFinite(Number(row?.siteId)) ? Number(row.siteId) : null,
+              siteName: row?.siteName ? String(row.siteName) : null,
+              username: row?.username ? String(row.username) : null,
+            };
+            // Remove from probing set, update result
+            setProbingAccountIds((prev) => {
+              const next = new Set(prev);
+              next.delete(accountId);
+              return next;
+            });
+            setProbeResults((prev) => {
+              const existing = prev[name];
+              const byAccountId = { ...(existing?.byAccountId || {}), [accountId]: result };
+              const completed = Object.values(byAccountId).filter((r) => r.status !== 'probing').length;
+              const supported = Object.values(byAccountId).filter((r) => r.status === 'supported').length;
               return {
-                ...account,
-                connectivity: nextConnectivity,
-                latency: live.latencyMs ?? account.latency,
-                checkedAt: new Date().toISOString(),
+                ...prev,
+                [name]: {
+                  ok: supported > 0,
+                  status: completed === targetAccountIds.size ? (supported > 0 ? 'supported' : 'failed') : 'probing',
+                  latencyMs: result.latencyMs ?? existing?.latencyMs ?? null,
+                  reason: result.reason,
+                  summary: {
+                    total: targetAccountIds.size,
+                    supported,
+                    unsupported: Object.values(byAccountId).filter((r) => r.status === 'unsupported').length,
+                    inconclusive: Object.values(byAccountId).filter((r) => r.status === 'inconclusive').length,
+                    skipped: Object.values(byAccountId).filter((r) => r.status === 'skipped').length,
+                    notFound: Object.values(byAccountId).filter((r) => r.status === 'not_found').length,
+                  },
+                  byAccountId,
+                },
               };
-            }),
-          };
-        }),
-      }));
-      // Refresh from server (cache cleared) so reload shows same connectivity.
-      try { await loadBaseMarketplace(false); } catch {}
+            });
+            // Also update the marketplace row data
+            setData((prev) => ({
+              ...prev,
+              models: prev.models.map((model) => {
+                if (model.name !== name) return model;
+                return {
+                  ...model,
+                  accounts: model.accounts.map((account) => {
+                    if (account.id !== accountId) return account;
+                    return {
+                      ...account,
+                      connectivity: result.status === 'supported' ? true : result.status === 'unsupported' ? false : account.connectivity,
+                      latency: result.latencyMs ?? account.latency,
+                      checkedAt: new Date().toISOString(),
+                    };
+                  }),
+                };
+              }),
+            }));
+          },
+          onDone: (res: any) => {
+            // Final aggregate — update probe results with server-side summary
+            const aggregate: ModelProbeAggregate = {
+              ok: !!(res?.ok || res?.status === 'supported' || res?.status === 'mixed'),
+              status: String(res?.status || (res?.ok ? 'supported' : 'failed')),
+              latencyMs: typeof res?.latencyMs === 'number' ? res.latencyMs : null,
+              reason: String(res?.reason || res?.message || ''),
+              summary: res?.summary && typeof res.summary === 'object' ? {
+                total: Number(res.summary.total || 0),
+                supported: Number(res.summary.supported || 0),
+                unsupported: Number(res.summary.unsupported || 0),
+                inconclusive: Number(res.summary.inconclusive || 0),
+                skipped: Number(res.summary.skipped || 0),
+                notFound: Number(res.summary.notFound || 0),
+              } : { total: 0, supported: 0, unsupported: 0, inconclusive: 0, skipped: 0, notFound: 0 },
+              byAccountId: {},
+            };
+            setProbeResults((prev) => {
+              const existing = prev[name];
+              return {
+                ...prev,
+                [name]: {
+                  ...aggregate,
+                  byAccountId: existing?.byAccountId || {},
+                },
+              };
+            });
 
-      if (aggregate.ok) {
-        const s = aggregate.summary;
-        toast.success(
-          s
-            ? `${name} 连通 ${s.supported}/${s.total}` + (aggregate.latencyMs != null ? ` · 均延迟 ${formatLatency(aggregate.latencyMs)}` : '')
-            : `${name} 可用`,
-        );
-      } else {
-        toast.error(`${name} 探测失败：${aggregate.reason || aggregate.status}`);
-      }
+            if (aggregate.ok) {
+              const s = aggregate.summary;
+              toast.success(
+                s
+                  ? `${name} 连通 ${s.supported}/${s.total}` + (aggregate.latencyMs != null ? ` · 均延迟 ${formatLatency(aggregate.latencyMs)}` : '')
+                  : `${name} 可用`,
+              );
+            } else {
+              toast.error(`${name} 探测失败：${aggregate.reason || aggregate.status}`);
+            }
+            resolve();
+          },
+          onError: (err: Error) => {
+            toast.error(`${name} 探测失败：${err.message}`);
+            reject(err);
+          },
+        });
+        probeStreamCleanupRef.current = cleanup;
+      });
     } catch (err: any) {
       const reason = err?.message || '探测失败';
       if (!(options?.siteId || options?.accountId)) {
@@ -646,9 +692,10 @@ export default function Models() {
           },
         }));
       }
-      toast.error(`${name} 探测失败：${reason}`);
     } finally {
       setProbingKey(null);
+      setProbingAccountIds(new Set());
+      probeStreamCleanupRef.current = null;
     }
   };
 
@@ -662,6 +709,29 @@ export default function Models() {
     account: ModelAccountInfo,
     live?: AccountProbeResult | null,
   ) => {
+    // While this account is being probed, show spinner in connectivity column.
+    if (probingAccountIds.has(account.id) || live?.status === 'probing') {
+      return (
+        <span
+          className="badge badge-muted"
+          style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          title={tr('探测中...')}
+        >
+          <span
+            style={{
+              display: 'inline-block',
+              width: 10,
+              height: 10,
+              border: '2px solid var(--color-primary)',
+              borderTopColor: 'transparent',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+            }}
+          />
+          {tr('探测中')}
+        </span>
+      );
+    }
     // Prefer latest probe session result, then persisted availability from DB/live traffic.
     if (live) {
       if (live.status === 'supported' || live.ok) {
@@ -996,12 +1066,12 @@ export default function Models() {
                     </button>
                     <button
                       className="model-card-action-btn"
-                      data-tooltip={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
-                      aria-label={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
+                      data-tooltip={isModelProbing(m.name) ? tr('探测中...') : tr('探测可用性')}
+                      aria-label={isModelProbing(m.name) ? tr('探测中...') : tr('探测可用性')}
                       disabled={!!probingKey}
                       onClick={() => void probeModelScoped(m)}
                     >
-                      {probingKey === m.name ? (
+                      {isModelProbing(m.name) ? (
                         <span className="spinner spinner-sm" />
                       ) : probeResults[m.name]?.ok ? (
                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -1280,12 +1350,12 @@ export default function Models() {
                           </button>
                           <button
                             className="model-card-action-btn"
-                            data-tooltip={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
-                            aria-label={probingKey === m.name ? tr('探测中...') : tr('探测可用性')}
+                            data-tooltip={isModelProbing(m.name) ? tr('探测中...') : tr('探测可用性')}
+                            aria-label={isModelProbing(m.name) ? tr('探测中...') : tr('探测可用性')}
                             disabled={!!probingKey}
                             onClick={() => void probeModelScoped(m)}
                           >
-                            {probingKey === m.name ? (
+                            {isModelProbing(m.name) ? (
                               <span className="spinner spinner-sm" />
                             ) : probeResults[m.name]?.ok ? (
                               <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--color-success)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

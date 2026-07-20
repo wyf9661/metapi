@@ -1454,6 +1454,75 @@ export const api = {
       timeoutMs: 120_000,
     }),
 
+  /**
+   * Streaming model probe via SSE. Calls onResult for each account as it
+   * finishes, then onDone with the aggregate. Returns a cleanup function to
+   * abort the stream.
+   */
+  probeModelOneStream: (
+    modelName: string,
+    options: { siteId?: number | null; accountId?: number | null } | undefined,
+    callbacks: {
+      onResult?: (row: any) => void;
+      onDone?: (result: any) => void;
+      onError?: (error: Error) => void;
+    },
+  ): (() => void) => {
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const response = await fetch("/api/models/probe-one/stream", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            Authorization: `Bearer ${requireAuthToken()}`,
+          },
+          body: JSON.stringify({
+            model: modelName,
+            ...(options?.siteId ? { siteId: options.siteId } : {}),
+            ...(options?.accountId ? { accountId: options.accountId } : {}),
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          throw new Error(`HTTP ${response.status}: ${text.slice(0, 200)}`);
+        }
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("no response body");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          let currentEvent = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              currentEvent = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (currentEvent === "result") callbacks.onResult?.(data);
+                else if (currentEvent === "done") callbacks.onDone?.(data);
+                else if (currentEvent === "error") callbacks.onError?.(new Error(data?.message || "探测失败"));
+              } catch {}
+            } else if (line === "") {
+              currentEvent = "";
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
+    })();
+    return () => controller.abort();
+  },
+
   // Simple chat test from admin panel
   startTestChatJob: (data: TestChatRequestPayload) =>
     request("/api/test/chat/jobs", {

@@ -599,6 +599,52 @@ export async function probeSingleModelAvailability(
     return summarizeMarketplaceProbeResults('', []);
   }
 
+  const targets = await collectMarketplaceProbeTargets(normalized, options);
+  if (targets.length === 0) {
+    return summarizeMarketplaceProbeResults(normalized, []);
+  }
+
+  const results = await mapWithConcurrency(targets, 2, async (target) => {
+    return await probeMarketplaceTarget(target, normalized);
+  });
+
+  return summarizeMarketplaceProbeResults(normalized, results);
+}
+
+/**
+ * Streaming variant: probes each target and invokes onResult as soon as each
+ * account finishes. Returns the same aggregate as probeSingleModelAvailability.
+ */
+export async function probeSingleModelAvailabilityStream(
+  modelName: string,
+  options: MarketplaceModelProbeOptions,
+  onResult: (result: SingleModelProbeResult) => void | Promise<void>,
+): Promise<MarketplaceModelProbeResponse> {
+  const normalized = String(modelName || '').trim();
+  if (!normalized) {
+    return summarizeMarketplaceProbeResults('', []);
+  }
+
+  const targets = await collectMarketplaceProbeTargets(normalized, options);
+  if (targets.length === 0) {
+    return summarizeMarketplaceProbeResults(normalized, []);
+  }
+
+  const results: SingleModelProbeResult[] = [];
+  await mapWithConcurrency(targets, 2, async (target) => {
+    const result = await probeMarketplaceTarget(target, normalized);
+    results.push(result);
+    await onResult(result);
+  });
+
+  return summarizeMarketplaceProbeResults(normalized, results);
+}
+
+async function collectMarketplaceProbeTargets(
+  normalized: string,
+  options: MarketplaceModelProbeOptions,
+): Promise<MarketplaceProbeTarget[]> {
+
   const siteId = Number.isFinite(options.siteId as number) && Number(options.siteId) > 0
     ? Math.trunc(Number(options.siteId))
     : null;
@@ -681,57 +727,55 @@ export async function probeSingleModelAvailability(
     });
   }
 
-  const targets = [...targetsByAccount.values()];
-  if (targets.length === 0) {
-    return summarizeMarketplaceProbeResults(normalized, []);
-  }
+  return [...targetsByAccount.values()];
+}
 
-  const results = await mapWithConcurrency(targets, 2, async (target) => {
-    const tokenValue = target.tokenValue || await resolvePreferredTokenValue(target.account.id);
-    const probe = await probeRuntimeModel({
-      site: target.site,
-      account: target.account,
-      modelName: normalized,
-      timeoutMs: config.modelAvailabilityProbeTimeoutMs,
-      tokenValue,
-    });
-
-    if (probe.status === 'supported' || probe.status === 'unsupported') {
-      const checkedAt = new Date().toISOString();
-      if (target.accountRowId != null) {
-        await db.update(schema.modelAvailability)
-          .set({
-            connectivity: probe.status === 'supported',
-            latencyMs: probe.latencyMs,
-            checkedAt,
-          })
-          .where(eq(schema.modelAvailability.id, target.accountRowId))
-          .run();
-      }
-      if (target.tokenRowId != null) {
-        await db.update(schema.tokenModelAvailability)
-          .set({
-            connectivity: probe.status === 'supported',
-            latencyMs: probe.latencyMs,
-            checkedAt,
-          })
-          .where(eq(schema.tokenModelAvailability.id, target.tokenRowId))
-          .run();
-      }
-    }
-
-    return {
-      modelName: normalized,
-      ok: probe.status === 'supported',
-      status: probe.status,
-      latencyMs: probe.latencyMs,
-      reason: probe.reason,
-      accountId: target.account.id,
-      siteId: target.site.id,
-      siteName: target.site.name,
-      username: target.account.username,
-    } satisfies SingleModelProbeResult;
+async function probeMarketplaceTarget(
+  target: MarketplaceProbeTarget,
+  normalized: string,
+): Promise<SingleModelProbeResult> {
+  const tokenValue = target.tokenValue || await resolvePreferredTokenValue(target.account.id);
+  const probe = await probeRuntimeModel({
+    site: target.site,
+    account: target.account,
+    modelName: normalized,
+    timeoutMs: config.modelAvailabilityProbeTimeoutMs,
+    tokenValue,
   });
 
-  return summarizeMarketplaceProbeResults(normalized, results);
+  if (probe.status === 'supported' || probe.status === 'unsupported') {
+    const checkedAt = new Date().toISOString();
+    if (target.accountRowId != null) {
+      await db.update(schema.modelAvailability)
+        .set({
+          connectivity: probe.status === 'supported',
+          latencyMs: probe.latencyMs,
+          checkedAt,
+        })
+        .where(eq(schema.modelAvailability.id, target.accountRowId))
+        .run();
+    }
+    if (target.tokenRowId != null) {
+      await db.update(schema.tokenModelAvailability)
+        .set({
+          connectivity: probe.status === 'supported',
+          latencyMs: probe.latencyMs,
+          checkedAt,
+        })
+        .where(eq(schema.tokenModelAvailability.id, target.tokenRowId))
+        .run();
+    }
+  }
+
+  return {
+    modelName: normalized,
+    ok: probe.status === 'supported',
+    status: probe.status,
+    latencyMs: probe.latencyMs,
+    reason: probe.reason,
+    accountId: target.account.id,
+    siteId: target.site.id,
+    siteName: target.site.name,
+    username: target.account.username,
+  } satisfies SingleModelProbeResult;
 }
