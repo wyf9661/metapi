@@ -734,6 +734,26 @@ export async function tokensRoutes(app: FastifyInstance) {
     return result;
   });
 
+  app.post<{ Body: { ids?: number[] } }>('/api/routes/cooldown/clear-batch', async (request, reply) => {
+    const ids = Array.isArray(request.body?.ids)
+      ? request.body.ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0).map((id) => Math.trunc(id))
+      : [];
+    if (ids.length === 0) {
+      return reply.code(400).send({ success: false, message: '请提供路由 ID 列表' });
+    }
+    const uniqueIds = Array.from(new Set(ids)).slice(0, 200);
+    let clearedRoutes = 0;
+    let clearedChannels = 0;
+    for (const routeId of uniqueIds) {
+      const result = await clearRouteCooldown(routeId);
+      if (!result) continue;
+      clearedRoutes += 1;
+      clearedChannels += result.clearedChannels || 0;
+    }
+    return { success: true, clearedRoutes, clearedChannels, requested: uniqueIds.length };
+  });
+
+
   // Batch add channels to a route
   app.post<{ Params: { id: string }; Body: unknown }>('/api/routes/:id/channels/batch', async (request, reply) => {
     const parsedBody = parseRouteChannelBatchCreatePayload(request.body);

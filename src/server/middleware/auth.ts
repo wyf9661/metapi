@@ -182,7 +182,7 @@ export async function proxyAuthMiddleware(request: FastifyRequest, reply: Fastif
     }
     const consumed = await consumeManagedKeyRequest(authResult.key.id);
     if (consumed === false) {
-      reply.code(403).send({ error: 'API key has exceeded max requests' });
+      reply.code(403).send({ error: 'API key has exceeded request quota (lifetime or daily)' });
       return;
     }
   }

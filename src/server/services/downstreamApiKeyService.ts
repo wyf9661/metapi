@@ -20,6 +20,38 @@ function secretsEqualProxy(left: string, right: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+
+function currentDailyWindowDate(nowMs = Date.now(), timeZone = process.env.TZ || 'Asia/Shanghai'): string {
+  try {
+    // en-CA yields YYYY-MM-DD
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(nowMs));
+  } catch {
+    return new Date(nowMs).toISOString().slice(0, 10);
+  }
+}
+
+function resolveDailyUsage(row: Pick<DownstreamApiKeyRow, 'dailyUsedRequests' | 'dailyUsedCost' | 'dailyWindowDate'>, nowMs = Date.now()) {
+  const today = currentDailyWindowDate(nowMs);
+  const windowDate = row.dailyWindowDate || null;
+  if (windowDate === today) {
+    return {
+      windowDate: today,
+      dailyUsedRequests: Number(row.dailyUsedRequests || 0),
+      dailyUsedCost: Number(row.dailyUsedCost || 0),
+    };
+  }
+  return {
+    windowDate: today,
+    dailyUsedRequests: 0,
+    dailyUsedCost: 0,
+  };
+}
+
 export type DownstreamApiKeyRow = typeof schema.downstreamApiKeys.$inferSelect;
 
 export type DownstreamApiKeyPolicyView = {
@@ -37,6 +69,11 @@ export type DownstreamApiKeyPolicyView = {
   maxRequests: number | null;
   usedRequests: number;
   maxRpm: number | null;
+  maxDailyRequests: number | null;
+  maxDailyCost: number | null;
+  dailyUsedRequests: number;
+  dailyUsedCost: number;
+  dailyWindowDate: string | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
@@ -59,7 +96,7 @@ export type DownstreamTokenAuthFailure = {
   ok: false;
   statusCode: number;
   error: string;
-  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests' | 'over_rpm' | 'global_proxy_token_disabled';
+  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests' | 'over_rpm' | 'over_daily_requests' | 'over_daily_cost' | 'global_proxy_token_disabled';
 };
 
 export type DownstreamTokenAuthResult = DownstreamTokenAuthSuccess | DownstreamTokenAuthFailure;
@@ -376,6 +413,11 @@ export function toDownstreamApiKeyPolicyView(row: DownstreamApiKeyRow): Downstre
     maxRequests: row.maxRequests ?? null,
     maxRpm: row.maxRpm ?? null,
     usedRequests: Number(row.usedRequests || 0),
+    maxDailyRequests: row.maxDailyRequests ?? null,
+    maxDailyCost: row.maxDailyCost ?? null,
+    dailyUsedRequests: resolveDailyUsage(row).dailyUsedRequests,
+    dailyUsedCost: resolveDailyUsage(row).dailyUsedCost,
+    dailyWindowDate: resolveDailyUsage(row).windowDate,
     supportedModels,
     allowedRouteIds,
     siteWeightMultipliers,
@@ -481,6 +523,28 @@ export async function authorizeDownstreamToken(token: string): Promise<Downstrea
       };
     }
 
+    const daily = resolveDailyUsage({
+      dailyUsedRequests: managed.dailyUsedRequests,
+      dailyUsedCost: managed.dailyUsedCost,
+      dailyWindowDate: managed.dailyWindowDate,
+    } as any);
+    if (managed.maxDailyRequests !== null && daily.dailyUsedRequests >= managed.maxDailyRequests) {
+      return {
+        ok: false,
+        statusCode: 403,
+        error: 'API key has exceeded daily request quota',
+        reason: 'over_daily_requests',
+      };
+    }
+    if (managed.maxDailyCost !== null && daily.dailyUsedCost >= managed.maxDailyCost) {
+      return {
+        ok: false,
+        statusCode: 403,
+        error: 'API key has exceeded daily cost quota',
+        reason: 'over_daily_cost',
+      };
+    }
+
     return {
       ok: true,
       source: 'managed',
@@ -550,14 +614,27 @@ export function checkManagedKeyRpmLimit(keyId: number, maxRpm: number | null | u
 
 export async function consumeManagedKeyRequest(keyId: number): Promise<boolean> {
   const nowIso = new Date().toISOString();
-  // Atomic check-and-increment: only succeeds when under maxRequests (or unlimited).
+  const today = currentDailyWindowDate();
+  // Atomic check-and-increment across lifetime + daily windows.
+  // When daily_window_date rolls, daily counters reset inline.
   const result = await db.update(schema.downstreamApiKeys).set({
     usedRequests: sql`coalesce(${schema.downstreamApiKeys.usedRequests}, 0) + 1`,
+    dailyWindowDate: today,
+    dailyUsedRequests: sql`case when ${schema.downstreamApiKeys.dailyWindowDate} = ${today} then coalesce(${schema.downstreamApiKeys.dailyUsedRequests}, 0) + 1 else 1 end`,
     lastUsedAt: nowIso,
     updatedAt: nowIso,
   }).where(and(
     eq(schema.downstreamApiKeys.id, keyId),
     sql`(${schema.downstreamApiKeys.maxRequests} is null or coalesce(${schema.downstreamApiKeys.usedRequests}, 0) < ${schema.downstreamApiKeys.maxRequests})`,
+    sql`(
+      ${schema.downstreamApiKeys.maxDailyRequests} is null
+      or (
+        case when ${schema.downstreamApiKeys.dailyWindowDate} = ${today}
+          then coalesce(${schema.downstreamApiKeys.dailyUsedRequests}, 0)
+          else 0
+        end
+      ) < ${schema.downstreamApiKeys.maxDailyRequests}
+    )`,
   )).run();
   const changes = typeof result?.changes === 'number'
     ? result.changes
@@ -569,9 +646,12 @@ export async function recordManagedKeyCostUsage(keyId: number, estimatedCost: nu
   const cost = Number(estimatedCost);
   if (!Number.isFinite(cost) || cost <= 0) return;
   const nowIso = new Date().toISOString();
+  const today = currentDailyWindowDate();
   await db.update(schema.downstreamApiKeys).set({
     // Atomic increment to avoid lost updates under multi-process concurrency.
     usedCost: sql`coalesce(${schema.downstreamApiKeys.usedCost}, 0) + ${cost}`,
+    dailyWindowDate: today,
+    dailyUsedCost: sql`case when ${schema.downstreamApiKeys.dailyWindowDate} = ${today} then coalesce(${schema.downstreamApiKeys.dailyUsedCost}, 0) + ${cost} else ${cost} end`,
     lastUsedAt: nowIso,
     updatedAt: nowIso,
   }).where(eq(schema.downstreamApiKeys.id, keyId)).run();
@@ -588,6 +668,8 @@ export function normalizeDownstreamApiKeyPayload(input: {
   maxCost?: unknown;
   maxRequests?: unknown;
   maxRpm?: unknown;
+  maxDailyRequests?: unknown;
+  maxDailyCost?: unknown;
   supportedModels?: unknown;
   allowedRouteIds?: unknown;
   siteWeightMultipliers?: unknown;
@@ -618,6 +700,8 @@ export function normalizeDownstreamApiKeyPayload(input: {
   const maxCost = normalizePositiveNumberOrNull(input.maxCost);
   const maxRequests = normalizePositiveIntegerOrNull(input.maxRequests);
   const maxRpm = normalizePositiveIntegerOrNull(input.maxRpm);
+  const maxDailyRequests = normalizePositiveIntegerOrNull(input.maxDailyRequests);
+  const maxDailyCost = normalizePositiveNumberOrNull(input.maxDailyCost);
   const supportedModels = normalizeSupportedModelsInput(input.supportedModels);
   const allowedRouteIds = normalizeAllowedRouteIdsInput(input.allowedRouteIds);
   const siteWeightMultipliers = normalizeSiteWeightMultipliersInput(input.siteWeightMultipliers);
@@ -635,6 +719,8 @@ export function normalizeDownstreamApiKeyPayload(input: {
     maxCost,
     maxRequests,
     maxRpm,
+    maxDailyRequests,
+    maxDailyCost,
     supportedModels,
     allowedRouteIds,
     siteWeightMultipliers,

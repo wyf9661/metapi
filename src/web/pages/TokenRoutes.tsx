@@ -922,16 +922,21 @@ export default function TokenRoutes() {
   const enabledCounts = useMemo(() => {
     let enabled = 0;
     let disabled = 0;
+    let cooling = 0;
     for (const route of baseFilteredRoutes) {
       if (route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true) continue;
-      if (route.enabled) enabled++;
-      else disabled++;
+      if (route.enabled) enabled += 1;
+      else disabled += 1;
+      if ((route.cooldownChannelCount || 0) > 0) cooling += 1;
     }
-    return { enabled, disabled };
+    return { enabled, disabled, cooling };
   }, [baseFilteredRoutes]);
 
   const filteredRoutes = useMemo(() => {
     if (enabledFilter === 'all') return baseFilteredRoutes;
+    if (enabledFilter === 'cooling') {
+      return baseFilteredRoutes.filter((route) => (route.cooldownChannelCount || 0) > 0);
+    }
     return baseFilteredRoutes.filter((route) => {
       if (route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true) return false;
       return enabledFilter === 'enabled' ? route.enabled : !route.enabled;
@@ -1336,6 +1341,21 @@ export default function TokenRoutes() {
       toast.error(e.message || '清除路由冷却失败');
     } finally {
       setClearingCooldownByRoute((prev) => ({ ...prev, [routeId]: false }));
+    }
+  };
+
+  const handleBatchClearCooldown = async () => {
+    const ids = Array.from(selectedRouteIds).filter((id) => selectableRouteIds.has(id));
+    if (ids.length === 0) return;
+    setBatchUpdatingRoutes(true);
+    try {
+      const res = await api.clearRouteCooldownBatch(ids);
+      toast.success(`已清除 ${res?.clearedRoutes || 0} 条路由冷却（通道 ${res?.clearedChannels || 0}）`);
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || '批量清除冷却失败');
+    } finally {
+      setBatchUpdatingRoutes(false);
     }
   };
 
@@ -1833,8 +1853,18 @@ export default function TokenRoutes() {
             <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 600 }}>
               {coolingRoutes.length} 条路由 / {totalCoolingChannels} 个通道冷却中
             </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-              展开对应路由可查看「冷却中」通道，或点「清除冷却」立即恢复
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                展开对应路由可查看「冷却中」通道，或点「清除冷却」立即恢复
+              </div>
+              <button
+                type="button"
+                className="btn btn-soft-warning"
+                style={{ fontSize: 12, padding: '4px 10px', fontWeight: 700 }}
+                onClick={() => setEnabledFilter('cooling')}
+              >
+                只看冷却中
+              </button>
             </div>
           </div>
         );

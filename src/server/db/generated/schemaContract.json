@@ -537,6 +537,36 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "max_daily_requests": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "max_daily_cost": {
+          "logicalType": "real",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "daily_used_requests": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "daily_used_cost": {
+          "logicalType": "real",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "daily_window_date": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },

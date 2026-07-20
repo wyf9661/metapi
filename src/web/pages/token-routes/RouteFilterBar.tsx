@@ -5,7 +5,7 @@ import { tr } from '../../i18n.js';
 import type { GroupFilter, GroupRouteItem } from './types.js';
 import { resolveEndpointTypeIconModel, siteAvatarLetters } from './utils.js';
 
-export type EnabledFilter = 'all' | 'enabled' | 'disabled';
+export type EnabledFilter = 'all' | 'enabled' | 'disabled' | 'cooling';
 
 const FILTER_EXPANDED_CONTENT_UNMOUNT_MS = 180;
 
@@ -21,7 +21,7 @@ type RouteFilterBarProps = {
   setActiveGroupFilter: (filter: GroupFilter) => void;
   enabledFilter: EnabledFilter;
   setEnabledFilter: (filter: EnabledFilter) => void;
-  enabledCounts: { enabled: number; disabled: number };
+  enabledCounts: { enabled: number; disabled: number; cooling?: number };
   brandList: { list: [string, { count: number; brand: BrandInfo }][]; otherCount: number };
   siteList: [string, { count: number; siteId: number }][];
   endpointTypeList: [string, number][];
@@ -75,6 +75,7 @@ function ActiveFilterSummary({
   const tags: string[] = [];
   if (enabledFilter === 'enabled') tags.push('状态=启用');
   else if (enabledFilter === 'disabled') tags.push('状态=禁用');
+  else if (enabledFilter === 'cooling') tags.push('状态=冷却中');
   if (activeBrand) tags.push(`品牌=${activeBrand === '__other__' ? '其他' : activeBrand}`);
   if (activeSite) tags.push(`站点=${activeSite}`);
   if (activeGroupFilter === '__all__') tags.push('群组=全部');
@@ -163,6 +164,13 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
                   count={enabledCounts.disabled}
                   icon={<span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>●</span>}
                   onClick={() => setEnabledFilter(enabledFilter === 'disabled' ? 'all' : 'disabled')}
+                />
+                <FilterChip
+                  active={enabledFilter === 'cooling'}
+                  label={tr('冷却中')}
+                  count={enabledCounts.cooling || 0}
+                  icon={<span style={{ fontSize: 10, color: 'var(--color-warning)' }}>●</span>}
+                  onClick={() => setEnabledFilter(enabledFilter === 'cooling' ? 'all' : 'cooling')}
                 />
               </FilterRow>
 
