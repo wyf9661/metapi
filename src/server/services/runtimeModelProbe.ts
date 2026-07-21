@@ -58,6 +58,37 @@ function classifyUnsupportedFailure(status: number, rawErrorText: string): boole
   return DEFINITE_UNSUPPORTED_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+/**
+ * Failures returned by a relay can describe its downstream model channel rather
+ * than the MetAPI account credential. Keep that distinction explicit for the
+ * marketplace so a healthy account is not presented as expired or broken.
+ */
+export function classifyProbeFailureReason(status: number, rawErrorText: string): string {
+  const text = String(rawErrorText || '').trim();
+  const lower = text.toLowerCase();
+  const isChannelAuthFailure = (
+    lower.includes('authorization failed')
+    || lower.includes('model authorization failed')
+    || (lower.includes('bad_response_status_code') && lower.includes('authorization'))
+  );
+  if (isChannelAuthFailure) {
+    return `上游模型渠道鉴权失败（不是 MetAPI 账户凭证失效）：${text}`;
+  }
+
+  const isModelChannelUnavailable = (
+    status === 404
+    || lower.includes('model not found')
+    || lower.includes('model_not_found')
+    || lower.includes('no available channel')
+    || lower.includes('当前模型暂不可用')
+    || lower.includes('openai_error')
+  );
+  if (isModelChannelUnavailable) {
+    return `上游模型渠道不可用（本站其他模型可能仍正常）：${text || `HTTP ${status}`}`;
+  }
+  return text || `probe failed with status ${status || 0}`;
+}
+
 function buildProbeBody(modelName: string): Record<string, unknown> {
   return {
     model: modelName,
@@ -244,7 +275,7 @@ export async function probeRuntimeModel(input: {
     return {
       status: classifyUnsupportedFailure(result.status || 0, rawErrorText) ? 'unsupported' : 'inconclusive',
       latencyMs,
-      reason: rawErrorText || `probe failed with status ${result.status || 0}`,
+      reason: classifyProbeFailureReason(result.status || 0, rawErrorText),
     };
   } catch (error) {
     return {
