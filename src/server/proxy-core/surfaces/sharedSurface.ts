@@ -709,13 +709,15 @@ export function createSurfaceFailureToolkit(input: {
         configuredAttempts: input.maxRetries + 1,
       }));
 
+      const mappedExecution = mapUpstreamErrorForClient(502, args.errorMessage || 'network failure');
       return {
         action: 'respond',
         status: 502,
         payload: {
           error: {
-            message: `Upstream error: ${args.errorMessage || 'network failure'}`,
+            message: mappedExecution.message,
             type: 'upstream_error',
+            code: mappedExecution.code,
           },
         },
       };

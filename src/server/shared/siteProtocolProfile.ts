@@ -127,6 +127,22 @@ export function siteProtocolPrefersResponses(input: {
   return resolveSiteProtocolProfile(input).preferResponses;
 }
 
+/**
+ * Soft routing affinity for sites with an explicit modern protocol profile.
+ * Codex/responses-oriented gateways get a mild boost so they win ties against
+ * generic OpenAI-compat rows that only work after more conversion work.
+ * Pure demotion is avoided: MetAPI can convert chat→responses for Codex sites.
+ */
+export function siteProtocolAffinityFactor(input: {
+  protocolProfile?: unknown;
+  customHeaders?: unknown;
+}): number {
+  const profile = resolveSiteProtocolProfile(input);
+  if (profile.requireCodexClient && profile.preferResponses) return 1.18;
+  if (profile.preferResponses || profile.requireCodexClient) return 1.1;
+  return 1;
+}
+
 export type MappedUpstreamError = {
   code: string;
   message: string;

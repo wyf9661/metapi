@@ -102,6 +102,7 @@ import {
   type ConnectivityLookup,
   type ConnectivitySignal,
 } from './routeConnectivityLookup.js';
+import { siteProtocolAffinityFactor } from '../shared/siteProtocolProfile.js';
 import {
   normalizeTokenRouteMode,
   type RouteDecision,
@@ -2562,6 +2563,10 @@ export class TokenRouter {
             : 1
         ),
         connectivity,
+        protocolAffinity: siteProtocolAffinityFactor({
+          protocolProfile: (candidate.site as { protocolProfile?: unknown }).protocolProfile,
+          customHeaders: (candidate.site as { customHeaders?: unknown }).customHeaders,
+        }),
       };
     });
   }
@@ -2865,6 +2870,42 @@ export class TokenRouter {
 
     const preferred = available.find((candidate) => candidate.channel.id === preferredChannelId);
     if (!preferred) return null;
+
+    // Sticky/forced may pin a recently failed connectivity path. Soft-break stickiness
+    // when other eligible candidates are not known-false (forced path is still single-shot).
+    try {
+      const connectivityLookup = await loadConnectivityLookup(
+        available.map((candidate) => candidate.account.id),
+        available
+          .map((candidate) => candidate.channel.tokenId)
+          .filter((tokenId): tokenId is number => typeof tokenId === 'number' && tokenId > 0),
+        nowMs,
+      );
+      const resolveConn = (candidate: RouteChannelCandidate): ConnectivitySignal => (
+        resolveCandidateConnectivity(connectivityLookup, {
+          accountId: candidate.account.id,
+          tokenId: candidate.channel.tokenId,
+          modelNames: [
+            candidate.channel.sourceModel,
+            typeof runtimeModelResolver === 'function'
+              ? runtimeModelResolver(candidate)
+              : runtimeModelResolver,
+            requestedModel,
+            mappedModel,
+          ],
+        })
+      );
+      const preferredConn = resolveConn(preferred);
+      if (preferredConn === false) {
+        const hasHealthyAlt = available.some((candidate) => {
+          if (candidate.channel.id === preferred.channel.id) return false;
+          return resolveConn(candidate) !== false;
+        });
+        if (hasHealthyAlt) return null;
+      }
+    } catch {
+      // never block preferred selection on lookup failure
+    }
 
     const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel([preferred], runtimeModelResolver, nowMs);
     if (breakerFiltered.candidates.length <= 0) return null;

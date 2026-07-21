@@ -4,6 +4,7 @@ import {
   parseSiteProtocolProfile,
   resolveSiteProtocolProfile,
   serializeSiteProtocolProfile,
+  siteProtocolAffinityFactor,
   siteProtocolPrefersResponses,
 } from './siteProtocolProfile.js';
 
@@ -43,5 +44,15 @@ describe('siteProtocolProfile', () => {
     const capacity = mapUpstreamErrorForClient(503, '无可用账号，请稍后重试');
     expect(capacity.code).toBe('upstream_no_capacity');
     expect(capacity.retryable).toBe(true);
+  });
+
+  it('scores protocol affinity without hard demotion', () => {
+    expect(siteProtocolAffinityFactor({ protocolProfile: null })).toBe(1);
+    expect(siteProtocolAffinityFactor({
+      protocolProfile: JSON.stringify({ preferResponses: true, requireCodexClient: false, credentialMode: 'auto' }),
+    })).toBeCloseTo(1.1, 5);
+    expect(siteProtocolAffinityFactor({
+      protocolProfile: JSON.stringify({ preferResponses: true, requireCodexClient: true, credentialMode: 'auto' }),
+    })).toBeCloseTo(1.18, 5);
   });
 });
