@@ -1474,6 +1474,7 @@ export const api = {
     },
   ): (() => void) => {
     const controller = new AbortController();
+    let currentEvent = "";
     (async () => {
       try {
         const response = await fetch("/api/models/probe-one/stream", {
@@ -1503,7 +1504,6 @@ export const api = {
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
-          let currentEvent = "";
           for (const line of lines) {
             if (line.startsWith("event: ")) {
               currentEvent = line.slice(7).trim();
