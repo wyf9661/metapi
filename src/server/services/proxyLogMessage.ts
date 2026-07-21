@@ -8,6 +8,7 @@ type ComposeProxyLogMessageArgs = {
   clientKind?: string | null;
   sessionId?: string | null;
   traceHint?: string | null;
+  traceId?: string | null;
   downstreamPath?: string | null;
   upstreamPath?: string | null;
   usageSource?: ProxyLogUsageSource;
@@ -25,6 +26,7 @@ export function composeProxyLogMessage({
   clientKind,
   sessionId,
   traceHint,
+  traceId,
   downstreamPath,
   upstreamPath,
   usageSource,
@@ -35,6 +37,7 @@ export function composeProxyLogMessage({
   const parsed = parseProxyLogMessageMeta(rawMessage);
   const finalClientKind = (clientKind || parsed.clientKind || '').trim();
   const finalSessionId = (sessionId || traceHint || parsed.sessionId || '').trim();
+  const finalTraceId = (traceId || parsed.traceId || '').trim();
   const finalDownstreamPath = (downstreamPath || parsed.downstreamPath || '').trim();
   const finalUpstreamPath = (upstreamPath || parsed.upstreamPath || '').trim();
   const finalUsageSource = (usageSource || parsed.usageSource || '').trim();
@@ -44,6 +47,7 @@ export function composeProxyLogMessage({
   const prefixParts: string[] = [];
   if (finalClientKind) prefixParts.push(`[client:${finalClientKind}]`);
   if (finalSessionId) prefixParts.push(`[session:${finalSessionId}]`);
+  if (finalTraceId) prefixParts.push(`[trace:${finalTraceId}]`);
   if (finalDownstreamPath) prefixParts.push(`[downstream:${finalDownstreamPath}]`);
   if (finalUpstreamPath) prefixParts.push(`[upstream:${finalUpstreamPath}]`);
   if (finalUsageSource) prefixParts.push(`[usage:${finalUsageSource}]`);

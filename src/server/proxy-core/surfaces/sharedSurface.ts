@@ -209,6 +209,7 @@ export async function writeSurfaceProxyLog(input: {
   clientContext?: DownstreamClientContext | null;
   downstreamApiKeyId?: number | null;
   errorCode?: string | null;
+  traceId?: string | null;
 }): Promise<void> {
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
@@ -222,6 +223,7 @@ export async function writeSurfaceProxyLog(input: {
         : null,
       sessionId: input.clientContext?.sessionId || null,
       traceHint: input.clientContext?.traceHint || null,
+      traceId: input.traceId || null,
       downstreamPath: input.downstreamPath,
       upstreamPath: input.upstreamPath || null,
       usageSource: input.usageSource || null,
@@ -482,6 +484,7 @@ export function createSurfaceFailureToolkit(input: {
   maxRetries: number;
   clientContext?: DownstreamClientContext | null;
   downstreamApiKeyId?: number | null;
+  traceId?: string | null;
 }) {
   const log = async (args: {
     selected: SurfaceSelectedChannel;
@@ -522,6 +525,7 @@ export function createSurfaceFailureToolkit(input: {
       upstreamPath: args.upstreamPath,
       clientContext: input.clientContext,
       downstreamApiKeyId: input.downstreamApiKeyId,
+      traceId: input.traceId,
     });
   };
 
