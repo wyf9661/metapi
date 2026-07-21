@@ -16,6 +16,12 @@ export type EndpointDerivationHints = {
   oauthProvider?: string | null;
   requestKind?: 'default' | 'responses-compact' | 'claude-count-tokens';
   requiresNativeResponsesFileUrl?: boolean;
+  /**
+   * Downstream client family (e.g. codex / claude_code). When `codex`, prefer
+   * /v1/responses first so chat-surface requests convert instead of burning
+   * failover budget on chat/messages rejections.
+   */
+  clientKind?: string | null;
 };
 
 type ChannelContext = {
@@ -104,6 +110,8 @@ function preferredEndpointOrder(
 ): UpstreamEndpoint[] {
   const platform = normalizePlatformName(sitePlatform);
   const oauthProvider = asTrimmedString(hints?.oauthProvider).toLowerCase();
+  const clientKind = asTrimmedString(hints?.clientKind).toLowerCase();
+  const codexClient = clientKind === 'codex' || oauthProvider === 'codex';
 
   if (hints?.requestKind === 'responses-compact') {
     return ['responses'];
@@ -141,11 +149,16 @@ function preferredEndpointOrder(
   }
 
   if (downstreamFormat === 'openai' && preferMessagesForClaudeModel) {
+    // Codex clients still want responses-first even when the model name looks Claude-ish;
+    // many NewAPI welfare sites only accept /v1/responses for Codex fingerprint traffic.
+    if (codexClient) {
+      return ['responses', 'messages', 'chat'];
+    }
     return ['messages', 'chat', 'responses'];
   }
 
   const base = ['chat', 'messages', 'responses'] as UpstreamEndpoint[];
-  if (oauthProvider === 'codex' && base.includes('responses')) {
+  if (codexClient && base.includes('responses')) {
     return ['responses', ...base.filter((endpoint) => endpoint !== 'responses')];
   }
 
@@ -213,6 +226,19 @@ export async function resolveUpstreamEndpointCandidates(
     protocolProfile: (context.site as any).protocolProfile,
     customHeaders: (context.site as any).customHeaders,
   })) {
+    return finalizeCandidates(['responses', 'chat', 'messages']);
+  }
+
+  // Downstream Codex clients on generic NewAPI/Sub2API sites: same responses-first
+  // preference even when the site has not been marked Codex-compatible yet.
+  const clientKind = asTrimmedString(hints?.clientKind).toLowerCase();
+  if (
+    clientKind === 'codex'
+    && sitePlatform !== 'claude'
+    && sitePlatform !== 'gemini'
+    && sitePlatform !== 'gemini-cli'
+    && sitePlatform !== 'antigravity'
+  ) {
     return finalizeCandidates(['responses', 'chat', 'messages']);
   }
 

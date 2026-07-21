@@ -139,6 +139,16 @@ export function getRuntimeHealthMultiplier(
   return clampNumber(failurePenaltyFactor * latencyFactor, SITE_RUNTIME_MIN_MULTIPLIER, 1);
 }
 
+function isEndpointPoolExhaustedFailure(context: SiteRuntimeFailureContext = {}): boolean {
+  const text = (context.errorText || '').trim();
+  if (!text) return false;
+  return (
+    /API\s*请求地址均不可用/i.test(text)
+    || /endpoint\s+pool\s+exhausted/i.test(text)
+    || /all\s+(?:api\s+)?endpoints?\s+(?:are\s+)?unavailable/i.test(text)
+  );
+}
+
 export function applyRuntimeHealthFailure(
   state: SiteRuntimeHealthState,
   context: SiteRuntimeFailureContext = {},
@@ -147,7 +157,16 @@ export function applyRuntimeHealthFailure(
   refreshRecentOutcomeWindow(state, nowMs);
   state.recentFailureCount += 1;
   state.penaltyScore += resolveSiteRuntimeFailurePenalty(context);
-  if (isTransientSiteRuntimeFailure(context)) {
+  if (isEndpointPoolExhaustedFailure(context)) {
+    // All configured base URLs are cooling/unavailable — open a short breaker
+    // immediately so the next request soft-avoids this site without waiting for
+    // the usual 3-failure streak. Level 1 = 60s (see SITE_RUNTIME_BREAKER_LEVELS_MS).
+    state.breakerLevel = Math.max(state.breakerLevel, 1);
+    const breakerMs = resolveSiteRuntimeBreakerMs(state.breakerLevel);
+    state.breakerUntilMs = breakerMs > 0 ? nowMs + breakerMs : null;
+    state.transientFailureStreak = 0;
+    state.lastTransientFailureAtMs = nowMs;
+  } else if (isTransientSiteRuntimeFailure(context)) {
     const shouldContinueStreak = typeof state.lastTransientFailureAtMs === 'number'
       && (nowMs - state.lastTransientFailureAtMs) <= SITE_TRANSIENT_STREAK_WINDOW_MS;
     state.transientFailureStreak = shouldContinueStreak ? state.transientFailureStreak + 1 : 1;
