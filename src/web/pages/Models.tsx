@@ -648,13 +648,44 @@ export default function Models() {
               } : { total: 0, supported: 0, unsupported: 0, inconclusive: 0, skipped: 0, notFound: 0 },
               byAccountId: {},
             };
+            const aggregateReason = String(res?.reason || res?.message || '探测完成');
+            const finalRows = Array.isArray(res?.results) ? res.results : [];
+            const finalByAccountId: Record<number, AccountProbeResult> = {};
+            for (const row of finalRows) {
+              const accountId = Number(row?.accountId);
+              if (!Number.isFinite(accountId)) continue;
+              finalByAccountId[accountId] = {
+                ok: !!(row?.ok || row?.status === 'supported'),
+                status: String(row?.status || (row?.ok ? 'supported' : 'inconclusive')),
+                latencyMs: typeof row?.latencyMs === 'number' ? row.latencyMs : null,
+                reason: String(row?.reason || row?.message || res?.reason || ''),
+                accountId,
+                siteId: Number.isFinite(Number(row?.siteId)) ? Number(row.siteId) : null,
+                siteName: row?.siteName ? String(row.siteName) : null,
+                username: row?.username ? String(row.username) : null,
+              };
+            }
+            setProbingAccountIds(new Set());
             setProbeResults((prev) => {
               const existing = prev[name];
+              const byAccountId = {
+                ...(existing?.byAccountId || {}),
+                ...finalByAccountId,
+              };
+              for (const accountId of targetAccountIds) {
+                if (byAccountId[accountId]?.status === 'probing') {
+                  byAccountId[accountId] = {
+                    ...byAccountId[accountId],
+                    status: 'inconclusive',
+                    reason: aggregateReason,
+                  };
+                }
+              }
               return {
                 ...prev,
                 [name]: {
                   ...aggregate,
-                  byAccountId: existing?.byAccountId || {},
+                  byAccountId,
                 },
               };
             });
@@ -680,18 +711,40 @@ export default function Models() {
       });
     } catch (err: any) {
       const reason = err?.message || '探测失败';
-      if (!(options?.siteId || options?.accountId)) {
-        setProbeResults((prev) => ({
+      setProbingAccountIds(new Set());
+      setProbeResults((prev) => {
+        const existing = prev[name];
+        const byAccountId = { ...(existing?.byAccountId || {}) };
+        for (const accountId of targetAccountIds) {
+          byAccountId[accountId] = {
+            ...(byAccountId[accountId] || {
+              ok: false,
+              latencyMs: null,
+              accountId,
+              siteId: null,
+              siteName: null,
+              username: null,
+            }),
+            status: 'inconclusive',
+            reason,
+          };
+        }
+        return {
           ...prev,
           [name]: {
+            ...(existing || {
+              ok: false,
+              status: 'failed',
+              latencyMs: null,
+              summary: { total: targetAccountIds.size, supported: 0, unsupported: 0, inconclusive: targetAccountIds.size, skipped: 0, notFound: 0 },
+            }),
             ok: false,
             status: 'failed',
-            latencyMs: null,
             reason,
-            byAccountId: {},
+            byAccountId,
           },
-        }));
-      }
+        };
+      });
     } finally {
       setProbingKey(null);
       setProbingAccountIds(new Set());
