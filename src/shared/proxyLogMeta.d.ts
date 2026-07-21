@@ -6,6 +6,7 @@ export type ParsedProxyLogMetadata = {
   downstreamPath: string | null;
   upstreamPath: string | null;
   usageSource: ProxyLogUsageSource;
+  errorCode: string | null;
   messageText: string;
 };
 

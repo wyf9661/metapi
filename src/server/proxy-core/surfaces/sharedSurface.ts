@@ -208,9 +208,14 @@ export async function writeSurfaceProxyLog(input: {
   usageSource?: 'upstream' | 'self-log' | 'unknown' | null;
   clientContext?: DownstreamClientContext | null;
   downstreamApiKeyId?: number | null;
+  errorCode?: string | null;
 }): Promise<void> {
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
+    const inferredErrorCode = input.errorCode
+      || (input.status === 'failed' && input.errorMessage
+        ? mapUpstreamErrorForClient(input.httpStatus || 502, input.errorMessage).code
+        : null);
     const normalizedErrorMessage = composeProxyLogMessage({
       clientKind: input.clientContext?.clientKind && input.clientContext.clientKind !== 'generic'
         ? input.clientContext.clientKind
@@ -220,6 +225,7 @@ export async function writeSurfaceProxyLog(input: {
       downstreamPath: input.downstreamPath,
       upstreamPath: input.upstreamPath || null,
       usageSource: input.usageSource || null,
+      errorCode: inferredErrorCode,
       errorMessage: input.errorMessage,
     });
     await insertProxyLog({

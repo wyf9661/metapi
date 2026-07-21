@@ -376,6 +376,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       downstreamPath: '/v1/chat/completions',
       upstreamPath: '/v1/responses',
       usageSource: 'self-log',
+      errorCode: 'upstream_5xx',
       errorMessage: 'upstream failed',
     });
     expect(insertProxyLogMock).toHaveBeenCalledWith({
