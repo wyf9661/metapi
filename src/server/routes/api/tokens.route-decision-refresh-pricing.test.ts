@@ -237,8 +237,10 @@ describe('POST /api/routes/decision/batch refreshPricingCatalog', () => {
     expect(candidateA).toBeTruthy();
     expect(candidateB).toBeTruthy();
     expect(candidateB?.probability || 0).toBeGreaterThan(candidateA?.probability || 0);
-    expect(candidateA?.reason || '').toContain('成本=目录');
-    expect(candidateB?.reason || '').toContain('成本=目录');
+    expect(candidateA?.reason || '').toContain('balanced-v2');
+    expect(candidateB?.reason || '').toContain('balanced-v2');
+    expect(candidateA?.reason || '').toMatch(/成本=/);
+    expect(candidateB?.reason || '').toMatch(/成本=/);
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

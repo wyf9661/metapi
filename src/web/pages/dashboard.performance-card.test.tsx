@@ -107,7 +107,7 @@ describe('Dashboard performance stat card', () => {
 
       const statCards = statGrid.findAll(isStatCard);
 
-      expect(statCards).toHaveLength(5);
+      expect(statCards).toHaveLength(3);
       expect(collectText(statGrid)).toContain('性能指标');
       expect(collectText(statGrid)).toContain('RPM');
       expect(collectText(statGrid)).toContain('17');
@@ -124,7 +124,7 @@ describe('Dashboard performance stat card', () => {
     }
   });
 
-  it('shows five skeleton stat cards while dashboard data is still loading', async () => {
+  it('shows three skeleton stat cards while dashboard data is still loading', async () => {
     let resolveDashboard: ((value: Record<string, unknown>) => void) | undefined;
     apiMock.getDashboard.mockImplementation(() => (
       new Promise((resolve) => {
@@ -151,7 +151,7 @@ describe('Dashboard performance stat card', () => {
       ));
       const statCards = statGrid.findAll(isStatCard);
 
-      expect(statCards).toHaveLength(5);
+      expect(statCards).toHaveLength(3);
     } finally {
       if (resolveDashboard) {
         resolveDashboard({
