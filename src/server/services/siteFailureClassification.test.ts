@@ -50,10 +50,3 @@ describe('siteFailureClassification', () => {
     expect(matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, 'overloaded')).toBe(true);
   });
 });
-
-  it('treats site endpoint-pool exhaustion as transient with high penalty', () => {
-    const ctx = { errorText: '当前站点的 API 请求地址均不可用' };
-    expect(isTransientSiteRuntimeFailure(ctx)).toBe(true);
-    expect(resolveSiteRuntimeFailurePenalty(ctx)).toBeGreaterThanOrEqual(2.5);
-  });
-

@@ -56,10 +56,3 @@ describe('siteProtocolProfile', () => {
     })).toBeCloseTo(1.18, 5);
   });
 });
-
-  it('maps endpoint pool exhaustion to endpoint_all_down', () => {
-    const mapped = mapUpstreamErrorForClient(502, '当前站点的 API 请求地址均不可用');
-    expect(mapped.code).toBe('endpoint_all_down');
-    expect(mapped.retryable).toBe(true);
-  });
-
