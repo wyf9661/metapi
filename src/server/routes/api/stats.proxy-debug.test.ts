@@ -106,4 +106,57 @@ describe('stats proxy debug api', () => {
       responseStatus: 200,
     });
   });
+
+  it('clears all proxy debug traces and resets identity so next id starts at 1', async () => {
+    const first = await store.createProxyDebugTrace({
+      downstreamPath: '/v1/chat/completions',
+      clientKind: 'codex',
+      sessionId: 'sess-1',
+      requestedModel: 'gpt-4.1',
+    });
+    await store.insertProxyDebugAttempt({
+      traceId: first.id,
+      attemptIndex: 0,
+      endpoint: 'chat',
+      requestPath: '/v1/chat/completions',
+      targetUrl: 'https://example.com/v1/chat/completions',
+      responseStatus: 500,
+    });
+    const second = await store.createProxyDebugTrace({
+      downstreamPath: '/v1/responses',
+      clientKind: 'codex',
+      sessionId: 'sess-2',
+      requestedModel: 'gpt-5',
+    });
+    expect(second.id).toBeGreaterThan(first.id);
+
+    const clearResponse = await app.inject({
+      method: 'DELETE',
+      url: '/api/stats/proxy-debug/traces',
+    });
+    expect(clearResponse.statusCode).toBe(200);
+    const clearBody = clearResponse.json() as {
+      ok?: boolean;
+      deletedTraces?: number;
+      deletedAttempts?: number;
+    };
+    expect(clearBody.ok).toBe(true);
+    expect(clearBody.deletedTraces).toBeGreaterThanOrEqual(2);
+    expect(clearBody.deletedAttempts).toBeGreaterThanOrEqual(1);
+
+    const listResponse = await app.inject({
+      method: 'GET',
+      url: '/api/stats/proxy-debug/traces?limit=10',
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect((listResponse.json() as { items?: unknown[] }).items).toEqual([]);
+
+    const recreated = await store.createProxyDebugTrace({
+      downstreamPath: '/v1/chat/completions',
+      clientKind: 'codex',
+      sessionId: 'sess-reset',
+      requestedModel: 'gpt-4.1',
+    });
+    expect(recreated.id).toBe(1);
+  });
 });

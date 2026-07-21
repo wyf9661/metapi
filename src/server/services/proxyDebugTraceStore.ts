@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import { config } from '../config.js';
-import { db, schema } from '../db/index.js';
+import { db, runtimeDbDialect, schema } from '../db/index.js';
 import { requireInsertedRowId } from '../db/insertHelpers.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
 
@@ -157,6 +157,35 @@ export async function deleteExpiredProxyDebugTraces(retentionHours = config.prox
     .where(lt(schema.proxyDebugTraces.createdAt, cutoff))
     .run();
   return Number(result.changes || 0);
+}
+
+/**
+ * Delete every proxy debug trace/attempt and reset identity counters so the next
+ * captured session starts at id=1 again (sqlite_sequence / AUTO_INCREMENT / SERIAL).
+ */
+export async function clearAllProxyDebugTraces(): Promise<{ deletedTraces: number; deletedAttempts: number }> {
+  const attemptDelete = await db.delete(schema.proxyDebugAttempts).run();
+  const traceDelete = await db.delete(schema.proxyDebugTraces).run();
+  const deletedAttempts = Number(attemptDelete.changes || 0);
+  const deletedTraces = Number(traceDelete.changes || 0);
+
+  try {
+    if (runtimeDbDialect === 'sqlite') {
+      await db.run(sql`DELETE FROM sqlite_sequence WHERE name = 'proxy_debug_traces'`);
+      await db.run(sql`DELETE FROM sqlite_sequence WHERE name = 'proxy_debug_attempts'`);
+    } else if (runtimeDbDialect === 'mysql') {
+      await db.run(sql`ALTER TABLE proxy_debug_traces AUTO_INCREMENT = 1`);
+      await db.run(sql`ALTER TABLE proxy_debug_attempts AUTO_INCREMENT = 1`);
+    } else if (runtimeDbDialect === 'postgres') {
+      await db.run(sql`ALTER SEQUENCE IF EXISTS proxy_debug_traces_id_seq RESTART WITH 1`);
+      await db.run(sql`ALTER SEQUENCE IF EXISTS proxy_debug_attempts_id_seq RESTART WITH 1`);
+    }
+  } catch (error) {
+    // Clearing rows already succeeded; identity reset is best-effort across dialects/versions.
+    console.warn('[proxy-debug] failed to reset debug trace identity counters', error);
+  }
+
+  return { deletedTraces, deletedAttempts };
 }
 
 async function pruneProxyDebugTracesIfNeeded(nowMs = Date.now(), retentionHours = config.proxyDebugRetentionHours): Promise<void> {

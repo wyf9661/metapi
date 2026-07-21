@@ -98,4 +98,21 @@ describe('proxyRetryPolicy', () => {
     expect(shouldAbortSameSiteEndpointFallback(403, 'error code: 1010')).toBe(true);
     expect(shouldAbortSameSiteEndpointFallback(403, 'forbidden')).toBe(false);
   });
+
+  it('aborts same-site protocol cascade when model/tool/function is missing', () => {
+    expect(
+      shouldAbortSameSiteEndpointFallback(
+        404,
+        "Function id '74f02205-c7ba-438f-b81a-2537955bd7ec' version 'null': Specified function in account is not found",
+      ),
+    ).toBe(true);
+    expect(
+      shouldAbortSameSiteEndpointFallback(404, 'unknown provider for model gpt-5.4'),
+    ).toBe(true);
+    expect(
+      shouldAbortSameSiteEndpointFallback(404, 'The model `gpt-4.1` does not exist'),
+    ).toBe(true);
+    // Generic path Not Found still allows endpoint recovery.
+    expect(shouldAbortSameSiteEndpointFallback(404, 'Not Found')).toBe(false);
+  });
 });

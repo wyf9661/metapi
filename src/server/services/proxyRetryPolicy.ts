@@ -91,6 +91,25 @@ const SAME_SITE_ENDPOINT_ABORT_PATTERNS: RegExp[] = [
   ...RETRYABLE_TIMEOUT_PATTERNS,
 ];
 
+/**
+ * Upstream model/tool/function missing — changing chat/messages/responses on the
+ * same site almost never helps. Fail over to another channel immediately.
+ */
+const SAME_SITE_MODEL_OR_FUNCTION_MISSING_PATTERNS: RegExp[] = [
+  /function\s+id\s+['"]?[\w-]+['"]?\s+version/i,
+  /function\s+id\s+['"]?[\w-]+['"]?\s+is\s+not\s+found/i,
+  /specified\s+function\s+in\s+account/i,
+  /unknown\s+provider\s+for\s+model/i,
+  /no\s+such\s+model/i,
+  /model\s+not\s+found/i,
+  /model.*does\s+not\s+exist/i,
+  /the\s+model\s+`[^`]+`\s+does\s+not\s+exist/i,
+  /模型渠道不存在/i,
+  /模型不存在/i,
+  /模型未找到/i,
+  /渠道不存在/i,
+];
+
 function isModelUnsupportedErrorMessage(rawMessage?: string | null): boolean {
   const text = (rawMessage || '').trim();
   if (!text) return false;
@@ -149,6 +168,10 @@ export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErro
   // mismatch. Trying chat/messages on the same site only adds latency and can
   // turn an explicit responses-capable site into a misleading protocol chase.
   if (status === 502 || status === 503 || status === 504) return true;
+  // Model/tool/function missing is not protocol recovery material.
+  if (matchesAnyPattern(SAME_SITE_MODEL_OR_FUNCTION_MISSING_PATTERNS, upstreamErrorText)) {
+    return true;
+  }
   // Cloudflare/WAF blocks are likewise site/request-fingerprint local. Move to
   // another channel rather than cascading through every protocol on this site.
   if ((status === 401 || status === 403) && matchesAnyPattern(SAME_SITE_ENDPOINT_ABORT_PATTERNS, upstreamErrorText)) {

@@ -37,6 +37,7 @@ import {
   withProxyLogSelectFields,
 } from "../../services/proxyLogStore.js";
 import {
+  clearAllProxyDebugTraces,
   getProxyDebugTraceDetail,
   listProxyDebugTraces,
 } from "../../services/proxyDebugTraceStore.js";
@@ -1063,6 +1064,17 @@ export async function statsRoutes(app: FastifyInstance) {
       }
 
       return detail;
+    },
+  );
+
+  app.delete(
+    "/api/stats/proxy-debug/traces",
+    async () => {
+      const result = await clearAllProxyDebugTraces();
+      return {
+        ok: true,
+        ...result,
+      };
     },
   );
 
