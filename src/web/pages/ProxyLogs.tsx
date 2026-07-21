@@ -1360,6 +1360,31 @@ export default function ProxyLogs() {
     );
   }, [debugSettings, persistDebugSettings]);
 
+  const handleClearDebugTraces = useCallback(async () => {
+    if (debugPanelSaving) return;
+    const confirmed = globalThis.confirm?.(
+      "确定删除全部代理调试追踪？删除后编号会从 1 重新开始。",
+    );
+    if (confirmed === false) return;
+
+    setDebugPanelSaving(true);
+    try {
+      const result = await api.clearProxyDebugTraces();
+      setSelectedDebugTraceId(null);
+      setShowDebugTraceDetailModal(false);
+      setDebugDetailById({});
+      setDebugTracePage(1);
+      await syncDebugTraceItems([], { refreshSelectedDetail: false });
+      toast.success(
+        `已删除 ${result.deletedTraces} 条调试追踪（尝试 ${result.deletedAttempts} 条），编号已重置`,
+      );
+    } catch (error: any) {
+      toast.error(error?.message || "删除调试追踪失败");
+    } finally {
+      setDebugPanelSaving(false);
+    }
+  }, [debugPanelSaving, syncDebugTraceItems, toast]);
+
   const handleToggleExpand = useCallback(
     (id: number) => {
       const shouldExpand = expanded !== id;
@@ -2217,6 +2242,16 @@ export default function ProxyLogs() {
               disabled={debugPanelLoading}
             >
               {debugPanelLoading ? "刷新中..." : "刷新追踪"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ border: "1px solid var(--color-border)" }}
+              onClick={() => void handleClearDebugTraces()}
+              disabled={debugPanelSaving || debugPanelLoading}
+              data-tooltip="删除全部调试追踪，下一条从 #1 开始"
+            >
+              删除追踪
             </button>
           </div>
         </div>

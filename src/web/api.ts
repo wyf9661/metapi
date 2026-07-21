@@ -1096,6 +1096,10 @@ export const api = {
     request(
       `/api/stats/proxy-debug/traces/${id}`,
     ) as Promise<ProxyDebugTraceDetail>,
+  clearProxyDebugTraces: () =>
+    request(`/api/stats/proxy-debug/traces`, {
+      method: "DELETE",
+    }) as Promise<{ ok: boolean; deletedTraces: number; deletedAttempts: number }>,
   checkModels: (accountId: number) =>
     request(`/api/models/check/${accountId}`, { method: "POST" }),
   getSiteDistribution: () => request("/api/stats/site-distribution"),
