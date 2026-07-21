@@ -29,6 +29,7 @@ function base(partial: Partial<ShadowCandidateInput> & Pick<ShadowCandidateInput
     loadMultiplier: partial.loadMultiplier ?? 1,
     manualSiteWeight: partial.manualSiteWeight ?? 1,
     connectivity: partial.connectivity ?? null,
+    protocolAffinity: partial.protocolAffinity ?? 1,
   };
 }
 
@@ -177,6 +178,18 @@ describe('routeScoringShadow', () => {
     expect(dead.factors.connectivity).toBeLessThan(live.factors.connectivity);
     expect(dead.probability).toBeLessThan(0.2);
     expect(live.probability).toBeGreaterThan(0.8);
+  });
+
+  it('boosts codex/responses protocol affinity on ties', () => {
+    const result = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, protocolAffinity: 1, unitCost: 0.01 }),
+      base({ channelId: 2, siteId: 2, accountId: 2, protocolAffinity: 1.18, unitCost: 0.01 }),
+    ]);
+    expect(result.selectedChannelId).toBe(2);
+    const plain = result.candidates.find((c) => c.channelId === 1)!;
+    const codex = result.candidates.find((c) => c.channelId === 2)!;
+    expect(codex.probability).toBeGreaterThan(plain.probability);
+    expect(codex.factors.protocolAffinity).toBeCloseTo(1.18, 2);
   });
 
   it('keeps untested connectivity neutral relative to proven-true boost', () => {

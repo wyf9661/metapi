@@ -47,6 +47,8 @@ export type ShadowCandidateInput = {
    * null untested, true proven, false recently failed.
    */
   connectivity?: ConnectivitySignal;
+  /** Soft multiplier from site protocol profile (Codex/responses). */
+  protocolAffinity?: number;
 };
 
 export type ShadowScoreFactors = {
@@ -60,6 +62,8 @@ export type ShadowScoreFactors = {
   load: number;
   /** Soft multiplier from connectivity (true > null > false). */
   connectivity: number;
+  /** Soft multiplier from site protocol profile. */
+  protocolAffinity: number;
   exclusion: string | null;
 };
 
@@ -192,6 +196,11 @@ export function scoreShadowCandidate(
   // Session accounts and unknown credential types stay neutral.
   const credential = input.credentialKind === 'apikey' ? 2.3 : 1.0;
   const connectivity = connectivityScoreFactor(input.connectivity ?? null);
+  const protocolAffinity = clampNumber(
+    Number.isFinite(input.protocolAffinity) ? Number(input.protocolAffinity) : 1,
+    0.5,
+    1.5,
+  );
 
   let exclusion = balance.exclusion;
   let score = 0;
@@ -203,7 +212,8 @@ export function scoreShadowCandidate(
       * (balance.factor ** 0.9)
       * credential
       * (load ** 0.8)
-      * connectivity;
+      * connectivity
+      * protocolAffinity;
     if (!Number.isFinite(score) || score <= 0) {
       score = 0;
       exclusion = exclusion || '评分无效';
@@ -227,6 +237,7 @@ export function scoreShadowCandidate(
       credential,
       load,
       connectivity,
+      protocolAffinity,
       exclusion,
     },
     expectedRequestCost,
@@ -285,6 +296,7 @@ export function formatShadowSelectionLog(input: {
     + `cred=${c.factors.credential.toFixed(2)} bal=${c.factors.balance.toFixed(2)} cost=${c.factors.cost.toFixed(2)} `
     + `rel=${c.factors.reliability.toFixed(2)} health=${c.factors.health.toFixed(2)} `
     + `conn=${(c.factors.connectivity ?? CONNECTIVITY_FACTOR_NULL).toFixed(2)} `
+    + `proto=${(c.factors.protocolAffinity ?? 1).toFixed(2)} `
     + `cov=${c.balanceCoverage == null ? 'na' : c.balanceCoverage.toFixed(1)}`
   )).join(' | ');
   const excludedText = input.shadow.excluded.slice(0, 5).map((e) => `ch=${e.channelId}:${e.reason}`).join(', ');

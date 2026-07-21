@@ -743,8 +743,9 @@ describe('selectSurfaceChannelForAttempt', () => {
       status: 502,
       payload: {
         error: {
-          message: 'Upstream error: socket hang up',
+          message: 'socket hang up',
           type: 'upstream_error',
+          code: 'upstream_5xx',
         },
       },
     });
