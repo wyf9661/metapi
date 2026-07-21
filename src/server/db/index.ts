@@ -1477,6 +1477,15 @@ export const db: any = new Proxy({}, {
 });
 export { schema };
 
+export function checkpointSqliteWal(mode: 'PASSIVE' | 'FULL' | 'RESTART' = 'PASSIVE'): void {
+  if (!sqliteConnection) return;
+  try {
+    sqliteConnection.pragma(`wal_checkpoint(${mode})`);
+  } catch (error) {
+    console.warn('[db] WAL checkpoint failed', error);
+  }
+}
+
 export async function closeDbConnections(): Promise<void> {
   resetSchemaCapabilityCache();
   if (mysqlPool) {

@@ -1178,29 +1178,38 @@ export async function statsRoutes(app: FastifyInstance) {
         .all();
 
       const last7d = getLocalRangeStartUtc(7);
-      const recentLogs = await db
+
+      // SQL pushdown: aggregate simple per-model stats (total, success, avg
+      // latency, avg first-byte) without reading every raw log row into Node.
+      const modelLogAggregateRows = await db
         .select({
-          ...proxyLogBaseFields,
-          firstByteLatencyMs: schema.proxyLogs.firstByteLatencyMs,
-          isStream: schema.proxyLogs.isStream,
+          modelActual: schema.proxyLogs.modelActual,
+          modelRequested: schema.proxyLogs.modelRequested,
+          status: schema.proxyLogs.status,
+          total: sql<number>`count(*)`,
+          successCount: sql<number>`coalesce(sum(case when ${schema.proxyLogs.status} = 'success' then 1 else 0 end), 0)`,
+          avgLatencyMs: sql<number>`coalesce(avg(case when ${schema.proxyLogs.status} = 'success' then ${schema.proxyLogs.latencyMs} end), 0)`,
+          firstByteSum: sql<number>`coalesce(sum(case when ${schema.proxyLogs.status} = 'success' and ${schema.proxyLogs.firstByteLatencyMs} is not null then ${schema.proxyLogs.firstByteLatencyMs} end), 0)`,
+          firstByteCount: sql<number>`coalesce(sum(case when ${schema.proxyLogs.status} = 'success' and ${schema.proxyLogs.firstByteLatencyMs} is not null then 1 end), 0)`,
         })
         .from(schema.proxyLogs)
         .where(gte(schema.proxyLogs.createdAt, last7d))
+        .groupBy(schema.proxyLogs.modelActual, schema.proxyLogs.modelRequested, schema.proxyLogs.status)
         .all();
 
-      const modelLogStats: Record<
-        string,
-        {
-          success: number;
-          total: number;
-          totalLatency: number;
-          firstByteSum: number;
-          firstByteCount: number;
-          throughput: ThroughputAggregate;
-        }
-      > = {};
-      for (const log of recentLogs) {
-        const rawModel = log.modelActual || log.modelRequested || "";
+      type ModelLogStats = {
+        success: number;
+        total: number;
+        totalLatency: number;
+        firstByteSum: number;
+        firstByteCount: number;
+        throughput: ThroughputAggregate;
+      };
+
+      const modelLogStats: Record<string, ModelLogStats> = {};
+
+      for (const row of modelLogAggregateRows) {
+        const rawModel = row.modelActual || row.modelRequested || "";
         if (!rawModel) continue;
         const model = canonicalizeModelName(rawModel) || rawModel;
         if (!modelLogStats[model]) {
@@ -1214,30 +1223,51 @@ export async function statsRoutes(app: FastifyInstance) {
           };
         }
         const stats = modelLogStats[model];
-        stats.total += 1;
-        if (log.status === "success") {
-          stats.success += 1;
-          const latencyMs = typeof log.latencyMs === "number" ? log.latencyMs : null;
-          if (latencyMs != null && Number.isFinite(latencyMs) && latencyMs >= 0) {
-            stats.totalLatency += latencyMs;
+        stats.total += Number(row.total || 0);
+        if (row.status === "success") {
+          stats.success += Number(row.successCount || 0);
+          const avgLat = Number(row.avgLatencyMs || 0);
+          if (Number.isFinite(avgLat) && avgLat >= 0) {
+            stats.totalLatency += avgLat * Number(row.successCount || 0);
           }
-
-          const firstByteMs = typeof (log as any).firstByteLatencyMs === "number"
-            ? (log as any).firstByteLatencyMs
-            : null;
-          if (firstByteMs != null && Number.isFinite(firstByteMs) && firstByteMs >= 0) {
-            stats.firstByteSum += firstByteMs;
-            stats.firstByteCount += 1;
-          }
-
-          accumulateThroughputSample(stats.throughput, {
-            status: log.status,
-            latencyMs,
-            firstByteLatencyMs: firstByteMs,
-            completionTokens: typeof log.completionTokens === "number" ? log.completionTokens : null,
-            isStream: (log as any).isStream,
-          });
+          stats.firstByteSum += Number(row.firstByteSum || 0);
+          stats.firstByteCount += Number(row.firstByteCount || 0);
         }
+      }
+
+      // Throughput: targeted query — only success+stream rows, 4 columns.
+      // Returns far fewer rows than the full 7-day scan.
+      const throughputRows = await db
+        .select({
+          modelActual: schema.proxyLogs.modelActual,
+          modelRequested: schema.proxyLogs.modelRequested,
+          latencyMs: schema.proxyLogs.latencyMs,
+          firstByteLatencyMs: schema.proxyLogs.firstByteLatencyMs,
+          completionTokens: schema.proxyLogs.completionTokens,
+        })
+        .from(schema.proxyLogs)
+        .where(
+          and(
+            gte(schema.proxyLogs.createdAt, last7d),
+            eq(schema.proxyLogs.status, "success"),
+            eq(schema.proxyLogs.isStream, true),
+          ),
+        )
+        .all();
+
+      for (const row of throughputRows) {
+        const rawModel = row.modelActual || row.modelRequested || "";
+        if (!rawModel) continue;
+        const model = canonicalizeModelName(rawModel) || rawModel;
+        const stats = modelLogStats[model];
+        if (!stats) continue;
+        accumulateThroughputSample(stats.throughput, {
+          status: "success",
+          latencyMs: row.latencyMs,
+          firstByteLatencyMs: row.firstByteLatencyMs,
+          completionTokens: row.completionTokens,
+          isStream: true,
+        });
       }
 
       type ModelMetadataAggregate = {
