@@ -1,6 +1,6 @@
 import { lt } from 'drizzle-orm';
 import { config } from '../config.js';
-import { db, schema } from '../db/index.js';
+import { db, schema, checkpointSqliteWal } from '../db/index.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
 import { normalizeLogCleanupRetentionDays } from '../shared/logCleanupRetentionDays.js';
 
@@ -116,6 +116,14 @@ export async function cleanupConfiguredLogs(options: LogCleanupOptions = {}): Pr
     ? await cleanupProgramLogs(retentionDays, nowMs)
     : { deleted: 0 };
 
+  // After deleting rows, checkpoint the WAL so the -wal file doesn't grow
+  // unbounded. PASSIVE mode is safe: it checkpoints as much as possible
+  // without blocking readers/writers.
+  const totalDeleted = usageResult.deleted + programResult.deleted;
+  if (totalDeleted > 0) {
+    checkpointSqliteWal('PASSIVE');
+  }
+
   return {
     enabled: true,
     usageLogsEnabled,
@@ -124,6 +132,6 @@ export async function cleanupConfiguredLogs(options: LogCleanupOptions = {}): Pr
     cutoffUtc,
     usageLogsDeleted: usageResult.deleted,
     programLogsDeleted: programResult.deleted,
-    totalDeleted: usageResult.deleted + programResult.deleted,
+    totalDeleted,
   };
 }

@@ -354,6 +354,12 @@ let routeCacheSnapshot: RouteCacheSnapshot = {
 
 const routeMatchCache = new Map<number, RouteMatchCacheSnapshot>();
 
+// Single-flight promise stores: prevent concurrent cache-miss queries from
+// all hitting the DB at once. When the first caller starts loading, subsequent
+// callers await the same promise instead of issuing duplicate queries.
+let enabledRoutesInflight: Promise<RouteRow[]> | null = null;
+const routeMatchInflight = new Map<number, Promise<RouteMatch>>();
+
 function resolveTokenRouterCacheTtlMs(): number {
   const raw = Math.trunc(config.tokenRouterCacheTtlMs || 0);
   return Math.max(100, raw);
@@ -367,35 +373,47 @@ async function loadEnabledRoutes(nowMs = Date.now()): Promise<RouteRow[]> {
   if (isCacheFresh(routeCacheSnapshot.loadedAt, nowMs)) {
     return routeCacheSnapshot.routes;
   }
-
-  const rawRoutes = await db.select().from(schema.tokenRoutes)
-    .where(eq(schema.tokenRoutes.enabled, true))
-    .all();
-  const explicitGroupRouteIds = rawRoutes
-    .filter((route) => normalizeRouteMode(route.routeMode) === 'explicit_group')
-    .map((route) => route.id);
-  const sourceRows = explicitGroupRouteIds.length > 0
-    ? await db.select().from(schema.routeGroupSources)
-      .where(inArray(schema.routeGroupSources.groupRouteId, explicitGroupRouteIds))
-      .all()
-    : [];
-  const sourceIdsByRouteId = new Map<number, number[]>();
-  for (const row of sourceRows) {
-    if (!sourceIdsByRouteId.has(row.groupRouteId)) {
-      sourceIdsByRouteId.set(row.groupRouteId, []);
-    }
-    sourceIdsByRouteId.get(row.groupRouteId)!.push(row.sourceRouteId);
+  // Single-flight: if another caller is already loading, share its promise.
+  if (enabledRoutesInflight) {
+    return enabledRoutesInflight;
   }
-  const routes = rawRoutes.map((route) => ({
-    ...route,
-    routeMode: normalizeRouteMode(route.routeMode),
-    sourceRouteIds: Array.from(new Set(sourceIdsByRouteId.get(route.id) ?? [])),
-  }));
-  routeCacheSnapshot = {
-    loadedAt: nowMs,
-    routes,
-  };
-  return routes;
+
+  enabledRoutesInflight = (async () => {
+    const rawRoutes = await db.select().from(schema.tokenRoutes)
+      .where(eq(schema.tokenRoutes.enabled, true))
+      .all();
+    const explicitGroupRouteIds = rawRoutes
+      .filter((route) => normalizeRouteMode(route.routeMode) === 'explicit_group')
+      .map((route) => route.id);
+    const sourceRows = explicitGroupRouteIds.length > 0
+      ? await db.select().from(schema.routeGroupSources)
+        .where(inArray(schema.routeGroupSources.groupRouteId, explicitGroupRouteIds))
+        .all()
+      : [];
+    const sourceIdsByRouteId = new Map<number, number[]>();
+    for (const row of sourceRows) {
+      if (!sourceIdsByRouteId.has(row.groupRouteId)) {
+        sourceIdsByRouteId.set(row.groupRouteId, []);
+      }
+      sourceIdsByRouteId.get(row.groupRouteId)!.push(row.sourceRouteId);
+    }
+    const routes = rawRoutes.map((route) => ({
+      ...route,
+      routeMode: normalizeRouteMode(route.routeMode),
+      sourceRouteIds: Array.from(new Set(sourceIdsByRouteId.get(route.id) ?? [])),
+    }));
+    routeCacheSnapshot = {
+      loadedAt: Date.now(),
+      routes,
+    };
+    return routes;
+  })();
+
+  try {
+    return await enabledRoutesInflight;
+  } finally {
+    enabledRoutesInflight = null;
+  }
 }
 
 async function loadRouteMatch(route: RouteRow, nowMs = Date.now()): Promise<RouteMatch> {
@@ -403,77 +421,93 @@ async function loadRouteMatch(route: RouteRow, nowMs = Date.now()): Promise<Rout
   if (cached && isCacheFresh(cached.loadedAt, nowMs)) {
     return cached.match;
   }
+  // Single-flight: if another caller is already loading this route match,
+  // share its promise.
+  const existing = routeMatchInflight.get(route.id);
+  if (existing) {
+    return existing;
+  }
 
-  const enabledRoutes = await loadEnabledRoutes(nowMs);
-  const routeIds = (() => {
-    if (!isExplicitGroupRoute(route)) {
-      return [route.id];
-    }
-    return Array.from(new Set(route.sourceRouteIds.filter((routeId) => Number.isFinite(routeId) && routeId > 0)));
+  const promise = (async (): Promise<RouteMatch> => {
+    const enabledRoutes = await loadEnabledRoutes(nowMs);
+    const routeIds = (() => {
+      if (!isExplicitGroupRoute(route)) {
+        return [route.id];
+      }
+      return Array.from(new Set(route.sourceRouteIds.filter((routeId) => Number.isFinite(routeId) && routeId > 0)));
+    })();
+    const enabledSourceRoutes = isExplicitGroupRoute(route)
+      ? enabledRoutes.filter((item) => (
+        routeIds.includes(item.id)
+        && !isExplicitGroupRoute(item)
+        && isExactRouteModelPattern(item.modelPattern)
+      ))
+      : enabledRoutes.filter((item) => routeIds.includes(item.id));
+    const enabledSourceRouteIds = enabledSourceRoutes.map((item) => item.id);
+    const fallbackSourceModelByRouteId = new Map<number, string>(
+      enabledSourceRoutes
+        .filter((item) => isExactRouteModelPattern(item.modelPattern))
+        .map((item) => [item.id, (item.modelPattern || '').trim()]),
+    );
+    const channels = enabledSourceRouteIds.length > 0
+      ? await db
+        .select()
+        .from(schema.routeChannels)
+        .innerJoin(schema.accounts, eq(schema.routeChannels.accountId, schema.accounts.id))
+        .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+        .leftJoin(schema.accountTokens, eq(schema.routeChannels.tokenId, schema.accountTokens.id))
+        .where(inArray(schema.routeChannels.routeId, enabledSourceRouteIds))
+        .all()
+      : [];
+
+    const oauthRouteUnitIds: number[] = Array.from(new Set<number>(
+      channels
+        .map((row) => Number(row.route_channels.oauthRouteUnitId))
+        .filter((id): id is number => Number.isFinite(id) && id > 0),
+    ));
+    const [routeUnitSummaries, routeUnitMembersByUnitId] = await Promise.all([
+      loadOauthRouteUnitSummariesByIds(oauthRouteUnitIds),
+      listOauthRouteUnitMembersByUnitIds(oauthRouteUnitIds),
+    ]);
+
+    const mapped = channels.map((row) => ({
+      channel: {
+        ...row.route_channels,
+        sourceModel: normalizeChannelSourceModel(row.route_channels.sourceModel)
+          || fallbackSourceModelByRouteId.get(row.route_channels.routeId)
+          || null,
+      },
+      account: row.accounts,
+      site: row.sites,
+      token: row.account_tokens,
+      routeUnit: row.route_channels.oauthRouteUnitId
+        ? (routeUnitSummaries.get(row.route_channels.oauthRouteUnitId) || null)
+        : null,
+      routeUnitMembers: row.route_channels.oauthRouteUnitId
+        ? (routeUnitMembersByUnitId.get(row.route_channels.oauthRouteUnitId) || []).map((member) => ({
+          member: member.member,
+          account: member.account,
+          site: member.site,
+          token: null,
+        }))
+        : [],
+    }));
+
+    const match = { route, channels: mapped };
+    routeMatchCache.set(route.id, {
+      loadedAt: Date.now(),
+      match,
+    });
+    return match;
   })();
-  const enabledSourceRoutes = isExplicitGroupRoute(route)
-    ? enabledRoutes.filter((item) => (
-      routeIds.includes(item.id)
-      && !isExplicitGroupRoute(item)
-      && isExactRouteModelPattern(item.modelPattern)
-    ))
-    : enabledRoutes.filter((item) => routeIds.includes(item.id));
-  const enabledSourceRouteIds = enabledSourceRoutes.map((item) => item.id);
-  const fallbackSourceModelByRouteId = new Map<number, string>(
-    enabledSourceRoutes
-      .filter((item) => isExactRouteModelPattern(item.modelPattern))
-      .map((item) => [item.id, (item.modelPattern || '').trim()]),
-  );
-  const channels = enabledSourceRouteIds.length > 0
-    ? await db
-      .select()
-      .from(schema.routeChannels)
-      .innerJoin(schema.accounts, eq(schema.routeChannels.accountId, schema.accounts.id))
-      .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-      .leftJoin(schema.accountTokens, eq(schema.routeChannels.tokenId, schema.accountTokens.id))
-      .where(inArray(schema.routeChannels.routeId, enabledSourceRouteIds))
-      .all()
-    : [];
 
-  const oauthRouteUnitIds: number[] = Array.from(new Set<number>(
-    channels
-      .map((row) => Number(row.route_channels.oauthRouteUnitId))
-      .filter((id): id is number => Number.isFinite(id) && id > 0),
-  ));
-  const [routeUnitSummaries, routeUnitMembersByUnitId] = await Promise.all([
-    loadOauthRouteUnitSummariesByIds(oauthRouteUnitIds),
-    listOauthRouteUnitMembersByUnitIds(oauthRouteUnitIds),
-  ]);
+  routeMatchInflight.set(route.id, promise);
 
-  const mapped = channels.map((row) => ({
-    channel: {
-      ...row.route_channels,
-      sourceModel: normalizeChannelSourceModel(row.route_channels.sourceModel)
-        || fallbackSourceModelByRouteId.get(row.route_channels.routeId)
-        || null,
-    },
-    account: row.accounts,
-    site: row.sites,
-    token: row.account_tokens,
-    routeUnit: row.route_channels.oauthRouteUnitId
-      ? (routeUnitSummaries.get(row.route_channels.oauthRouteUnitId) || null)
-      : null,
-    routeUnitMembers: row.route_channels.oauthRouteUnitId
-      ? (routeUnitMembersByUnitId.get(row.route_channels.oauthRouteUnitId) || []).map((member) => ({
-        member: member.member,
-        account: member.account,
-        site: member.site,
-        token: null,
-      }))
-      : [],
-  }));
-
-  const match = { route, channels: mapped };
-  routeMatchCache.set(route.id, {
-    loadedAt: nowMs,
-    match,
-  });
-  return match;
+  try {
+    return await promise;
+  } finally {
+    routeMatchInflight.delete(route.id);
+  }
 }
 
 function patchCachedChannel(channelId: number, apply: (channel: ChannelRow) => void): void {
