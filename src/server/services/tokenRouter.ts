@@ -1553,7 +1553,7 @@ export class TokenRouter {
   ): Promise<RouteDecisionExplanation> {
     await ensureSiteRuntimeHealthStateLoaded();
     const match = await this.findRoute(requestedModel, downstreamPolicy);
-    return this.explainSelectionFromMatch(match, requestedModel, { excludeChannelIds, downstreamPolicy });
+    return await this.explainSelectionFromMatch(match, requestedModel, { excludeChannelIds, downstreamPolicy });
   }
 
   async explainSelectionForRoute(
@@ -1564,14 +1564,14 @@ export class TokenRouter {
   ): Promise<RouteDecisionExplanation> {
     await ensureSiteRuntimeHealthStateLoaded();
     const match = await this.findRouteById(routeId, downstreamPolicy);
-    return this.explainSelectionFromMatch(match, requestedModel, { excludeChannelIds, downstreamPolicy });
+    return await this.explainSelectionFromMatch(match, requestedModel, { excludeChannelIds, downstreamPolicy });
   }
 
   async explainSelectionRouteWide(routeId: number, downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY): Promise<RouteDecisionExplanation> {
     await ensureSiteRuntimeHealthStateLoaded();
     const match = await this.findRouteById(routeId, downstreamPolicy);
     const fallbackRequestedModel = match?.route.modelPattern || `route:${routeId}`;
-    return this.explainSelectionFromMatch(match, fallbackRequestedModel, {
+    return await this.explainSelectionFromMatch(match, fallbackRequestedModel, {
       bypassSourceModelCheck: true,
       useChannelSourceModelForCost: true,
       downstreamPolicy,
@@ -1610,11 +1610,11 @@ export class TokenRouter {
     });
   }
 
-  private explainSelectionFromMatch(
+  private async explainSelectionFromMatch(
     match: RouteMatch | null,
     requestedModel: string,
     options: ExplainSelectionOptions = {},
-  ): RouteDecisionExplanation {
+  ): Promise<RouteDecisionExplanation> {
     const excludeChannelIds = options.excludeChannelIds ?? [];
     const downstreamPolicy = options.downstreamPolicy ?? DEFAULT_DOWNSTREAM_POLICY;
 
@@ -1701,8 +1701,42 @@ export class TokenRouter {
       };
     }
 
+    // Match live selectFromMatch: soft-avoid known-disconnected channels before scoring.
+    const connectivityLookup = await loadConnectivityLookup(
+      available.map((candidate) => candidate.account.id),
+      available
+        .map((candidate) => candidate.channel.tokenId)
+        .filter((tokenId): tokenId is number => typeof tokenId === 'number' && tokenId > 0),
+      nowMs,
+    );
+    const connectivityResolve = (candidate: RouteChannelCandidate): ConnectivitySignal => (
+      resolveCandidateConnectivity(connectivityLookup, {
+        accountId: candidate.account.id,
+        tokenId: candidate.channel.tokenId,
+        modelNames: [
+          candidate.channel.sourceModel,
+          typeof runtimeModelResolver === 'function'
+            ? runtimeModelResolver(candidate)
+            : runtimeModelResolver,
+          requestedModel,
+          mappedModel,
+        ],
+      })
+    );
+    const connectivityFiltered = softAvoidDisconnectedCandidates(available, connectivityResolve);
+    if (connectivityFiltered.avoided.length > 0) {
+      for (const item of connectivityFiltered.avoided) {
+        const target = candidateMap.get(item.candidate.channel.id);
+        if (!target) continue;
+        target.probability = 0;
+        target.reason = item.reason;
+      }
+      summary.push(`连通性软避让 ${connectivityFiltered.avoided.length}`);
+    }
+    const routePool = connectivityFiltered.candidates;
+
     if (routeStrategy === 'round_robin') {
-      const rawOrdered = this.getRoundRobinCandidates(available);
+      const rawOrdered = this.getRoundRobinCandidates(routePool);
       const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(rawOrdered, runtimeModelResolver, nowMs);
       if (breakerFiltered.avoided.length > 0) {
         for (const item of breakerFiltered.avoided) {
@@ -1774,7 +1808,7 @@ export class TokenRouter {
     }
 
     if (routeStrategy === 'stable_first') {
-      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(available, runtimeModelResolver, nowMs);
+      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(routePool, runtimeModelResolver, nowMs);
       if (breakerFiltered.avoided.length > 0) {
         for (const item of breakerFiltered.avoided) {
           const target = candidateMap.get(item.candidate.channel.id);
@@ -1883,7 +1917,7 @@ export class TokenRouter {
         };
       }
 
-      const summaryParts = [`稳定优先：可用 ${available.length}`];
+      const summaryParts = [`稳定优先：可用 ${routePool.length}`];
       if (poolPlan.primarySiteIds.size > 0) {
         summaryParts.push(`主池站点 ${poolPlan.primarySiteIds.size}`);
       }
@@ -1943,7 +1977,7 @@ export class TokenRouter {
     }
 
     const availableByPriority = new Map<number, RouteChannelCandidate[]>();
-    for (const row of available) {
+    for (const row of routePool) {
       const priority = row.channel.priority ?? 0;
       if (!availableByPriority.has(priority)) availableByPriority.set(priority, []);
       availableByPriority.get(priority)!.push(row);
@@ -1962,6 +1996,7 @@ export class TokenRouter {
         for (const item of breakerFiltered.avoided) {
           const target = candidateMap.get(item.candidate.channel.id);
           if (!target) continue;
+          target.probability = 0;
           target.reason = item.reason;
         }
       }
@@ -1973,28 +2008,52 @@ export class TokenRouter {
           const target = candidateMap.get(row.channel.id);
           if (!target) continue;
           target.avoidedByRecentFailure = true;
+          target.probability = 0;
           target.reason = `最近失败，优先避让（${resolveFailureBackoffSec(row.channel.failCount)} 秒窗口）`;
         }
       }
 
-      const weighted = this.calculateWeightedSelection(
+      // Match live weighted selection: balanced-v2 (connectivity + credential + protocol affinity).
+      const modelForCost = useChannelSourceModelForCost ? runtimeModelResolver : mappedModel;
+      const shadowInputs = this.buildShadowCandidateInputs(
         filteredLayer,
-        useChannelSourceModelForCost ? runtimeModelResolver : mappedModel,
+        modelForCost,
         downstreamPolicy,
         nowMs,
-        'weighted',
+        connectivityLookup,
+        requestedModel,
       );
-      for (const detail of weighted.details) {
-        const target = candidateMap.get(detail.candidate.channel.id);
+      const ranked = rankShadowCandidates(shadowInputs);
+      const byChannelId = new Map(ranked.candidates.map((row) => [row.channelId, row]));
+      for (const row of filteredLayer) {
+        const target = candidateMap.get(row.channel.id);
         if (!target) continue;
-        target.probability = Number((detail.probability * 100).toFixed(2));
+        const scored = byChannelId.get(row.channel.id);
+        if (!scored) {
+          target.probability = 0;
+          continue;
+        }
+        target.probability = Number((scored.probability * 100).toFixed(2));
         if (target.eligible && !target.avoidedByRecentFailure) {
-          target.reason = detail.reason;
+          const connText = scored.factors.connectivity >= 1.2
+            ? '通'
+            : (scored.factors.connectivity <= 0.2 ? '不通' : '未知');
+          target.reason = (
+            `balanced-v2（W=${row.channel.weight ?? 10}，凭证=${scored.factors.credential.toFixed(2)}，`
+            + `余额=${scored.factors.balance.toFixed(2)}，成本=${scored.factors.cost.toFixed(2)}，`
+            + `可靠=${scored.factors.reliability.toFixed(2)}，健康=${scored.factors.health.toFixed(2)}，`
+            + `连通=${scored.factors.connectivity.toFixed(2)}(${connText})，`
+            + `协议=${scored.factors.protocolAffinity.toFixed(2)}，负载=${scored.factors.load.toFixed(2)}，`
+            + `概率≈${(scored.probability * 100).toFixed(1)}%）`
+          );
         }
       }
 
-      if (!weighted.selected) continue;
-      selected = weighted.selected;
+      const selectedId = ranked.selectedChannelId;
+      selected = filteredLayer.find((row) => row.channel.id === selectedId)
+        ?? filteredLayer[0]
+        ?? null;
+      if (!selected) continue;
       selectedPriority = priority;
       const layerSummaryParts = [`优先级 P${priority}：可用 ${rawLayer.length}`];
       if (breakerFiltered.avoided.length > 0) {
@@ -2006,6 +2065,7 @@ export class TokenRouter {
       if (avoided.length > 0) {
         layerSummaryParts.push(`最近失败避让 ${avoided.length}`);
       }
+      layerSummaryParts.push('评分=balanced-v2');
       summary.push(layerSummaryParts.join('，'));
       break;
     }
