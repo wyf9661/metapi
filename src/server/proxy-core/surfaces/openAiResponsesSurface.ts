@@ -71,6 +71,7 @@ import { validateExternalResponsesHttpRequest } from '../responsesPreflight.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
 import { maybeHandleWebSearchOnlySimulation } from '../webSearchSimulation.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
+import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { shouldAbortSameSiteEndpointFallback } from '../../services/proxyRetryPolicy.js';
 import {
@@ -322,12 +323,14 @@ export async function handleOpenAiResponsesSurfaceRequest(
     // keep static maxRetries fallback
   }
 
+    const requestTraceId = createRequestTraceId();
     const failureToolkit = createSurfaceFailureToolkit({
       warningScope: 'responses',
       downstreamPath,
       maxRetries,
       clientContext,
       downstreamApiKeyId,
+      traceId: requestTraceId,
     });
     const stickySessionKey = buildSurfaceStickySessionKey({
       clientContext,

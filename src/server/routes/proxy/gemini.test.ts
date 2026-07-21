@@ -1467,7 +1467,7 @@ describe('gemini native proxy routes', () => {
       promptTokens: 10,
       completionTokens: 5,
       totalTokens: 15,
-      errorMessage: '[downstream:/v1beta/models/gemini-2.5-flash:generateContent] [upstream:/v1beta/models/gemini-2.5-flash:generateContent]',
+      errorMessage: expect.stringMatching(/\[trace:r_[0-9a-f]+\] \[downstream:\/v1beta\/models\/gemini-2\.5-flash:generateContent\] \[upstream:\/v1beta\/models\/gemini-2\.5-flash:generateContent\]/),
       createdAt: expect.any(String),
     }));
   });
@@ -2217,7 +2217,7 @@ describe('gemini native proxy routes', () => {
       status: 'failed',
       httpStatus: 500,
       retryCount: 0,
-      errorMessage: '[downstream:/v1beta/models/gemini-2.5-flash:streamGenerateContent] [upstream:/v1beta/models/gemini-2.5-flash:streamGenerateContent] {\"error\":{\"message\":\"upstream unavailable\"}}',
+      errorMessage: expect.stringMatching(/\[trace:r_[0-9a-f]+\] \[downstream:\/v1beta\/models\/gemini-2\.5-flash:streamGenerateContent\] \[upstream:\/v1beta\/models\/gemini-2\.5-flash:streamGenerateContent\]/),
     }));
     expect(dbInsertValuesMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
       channelId: 12,
@@ -2227,7 +2227,7 @@ describe('gemini native proxy routes', () => {
       promptTokens: 11,
       completionTokens: 6,
       totalTokens: 17,
-      errorMessage: '[downstream:/v1beta/models/gemini-2.5-flash:streamGenerateContent] [upstream:/v1beta/models/gemini-2.5-flash:streamGenerateContent]',
+      errorMessage: expect.stringMatching(/\[trace:r_[0-9a-f]+\] \[downstream:\/v1beta\/models\/gemini-2\.5-flash:streamGenerateContent\] \[upstream:\/v1beta\/models\/gemini-2\.5-flash:streamGenerateContent\]/),
     }));
     expect(recordSuccessMock).toHaveBeenCalledWith(12, expect.any(Number), 0, 'gemini-2.5-flash');
   });

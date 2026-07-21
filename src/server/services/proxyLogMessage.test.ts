@@ -41,12 +41,23 @@ describe('composeProxyLogMessage', () => {
     })).toBe('[client:codex] [session:codex-session-123] [downstream:/v1/responses] upstream failed');
   });
 
-  it('reuses existing client and session metadata without duplication', () => {
+  it('adds request-level trace metadata without replacing session ids', () => {
+    expect(composeProxyLogMessage({
+      clientKind: 'codex',
+      sessionId: 'codex-session-123',
+      traceId: 'r_abc123',
+      downstreamPath: '/v1/responses',
+      errorMessage: 'upstream failed',
+    })).toBe('[client:codex] [session:codex-session-123] [trace:r_abc123] [downstream:/v1/responses] upstream failed');
+  });
+
+  it('reuses existing client, session and trace metadata without duplication', () => {
     expect(composeProxyLogMessage({
       clientKind: 'claude_code',
       sessionId: 'session-123',
+      traceId: 'r_xyz',
       downstreamPath: '/v1/messages',
-      errorMessage: '[client:claude_code] [session:session-123] [upstream:/v1/messages] bad request',
-    })).toBe('[client:claude_code] [session:session-123] [downstream:/v1/messages] [upstream:/v1/messages] bad request');
+      errorMessage: '[client:claude_code] [session:session-123] [trace:r_xyz] [upstream:/v1/messages] bad request',
+    })).toBe('[client:claude_code] [session:session-123] [trace:r_xyz] [downstream:/v1/messages] [upstream:/v1/messages] bad request');
   });
 });

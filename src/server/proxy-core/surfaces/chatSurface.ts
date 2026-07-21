@@ -54,6 +54,7 @@ import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import { shouldAbortSameSiteEndpointFallback } from '../../services/proxyRetryPolicy.js';
+import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
 import { maybeHandleWebSearchOnlySimulation } from '../webSearchSimulation.js';
 import {
@@ -88,83 +89,16 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function isGeminiNativeRuntimePath(path: string): boolean {
-  return /\/v1beta\/models\/[^/]+:(?:streamGenerateContent|generateContent)(?:\?|$)/.test(path);
-}
-
-function buildOpenAiFinalFromGeminiNativePayload(
-  payload: unknown,
-  modelName: string,
-  fallbackText = '',
-) {
-  const aggregate = geminiGenerateContentTransformer.aggregator.createState();
-  for (const item of geminiGenerateContentTransformer.stream.parseJsonArrayPayload(payload)) {
-    geminiGenerateContentTransformer.aggregator.apply(aggregate, item);
-  }
-  const geminiFinal = geminiGenerateContentTransformer.outbound.serializeAggregateResponse(aggregate);
-  return openAiChatTransformer.transformFinalResponse(geminiFinal, modelName, fallbackText);
-}
-
-function buildOpenAiStreamLinesFromGeminiNativeSse(
-  rawText: string,
-  modelName: string,
-): { lines: string[]; finalPayload: Record<string, unknown> } {
-  const aggregate = geminiGenerateContentTransformer.stream.createAggregateState();
-  const parsed = geminiGenerateContentTransformer.stream.parseSsePayloads(rawText);
-  for (const payload of parsed.events) {
-    geminiGenerateContentTransformer.stream.applyAggregate(aggregate, payload);
-  }
-
-  const geminiFinal = geminiGenerateContentTransformer.outbound.serializeAggregateResponse(aggregate);
-  const normalizedFinal = openAiChatTransformer.transformFinalResponse(geminiFinal, modelName, rawText);
-  const streamContext = openAiChatTransformer.createStreamContext(modelName);
-  streamContext.id = normalizedFinal.id;
-  streamContext.model = normalizedFinal.model;
-  streamContext.created = normalizedFinal.created;
-  return {
-    finalPayload: geminiFinal,
-    lines: [
-      ...openAiChatTransformer.buildSyntheticChunks(normalizedFinal)
-        .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`),
-      'data: [DONE]\n\n',
-    ],
-  };
-}
-
-function finalizeRetryAsUpstreamFailure(status: number, message: string) {
-  return {
-    action: 'respond' as const,
-    status,
-    payload: {
-      error: {
-        message,
-        type: 'upstream_error' as const,
-      },
-    },
-  };
-}
-
-function finalizeRetryAsExecutionFailure(message: string) {
-  return {
-    action: 'respond' as const,
-    status: 502,
-    payload: {
-      error: {
-        message: `Upstream error: ${message}`,
-        type: 'upstream_error' as const,
-      },
-    },
-  };
-}
+import {
+  asTrimmedString,
+  buildOpenAiFinalFromGeminiNativePayload,
+  buildOpenAiStreamLinesFromGeminiNativeSse,
+  deriveCodexSessionCacheKey,
+  finalizeRetryAsExecutionFailure,
+  finalizeRetryAsUpstreamFailure,
+  isGeminiNativeRuntimePath,
+  isRecord,
+} from './chatSurfaceHelpers.js';
 
 export async function handleChatSurfaceRequest(
   request: FastifyRequest,
@@ -245,12 +179,14 @@ export async function handleChatSurfaceRequest(
     // keep static maxRetries fallback
   }
 
+  const requestTraceId = createRequestTraceId();
   const failureToolkit = createSurfaceFailureToolkit({
     warningScope: 'chat',
     downstreamPath,
     maxRetries,
     clientContext,
     downstreamApiKeyId,
+    traceId: requestTraceId,
   });
   const stickySessionKey = buildSurfaceStickySessionKey({
     clientContext,
@@ -1165,29 +1101,6 @@ export async function handleChatSurfaceRequest(
     }
 }
 
-function deriveCodexSessionCacheKey(input: {
-  downstreamFormat: DownstreamFormat | 'responses';
-  body: unknown;
-  requestedModel: string;
-  proxyToken: string | null;
-}): string | null {
-  if (isRecord(input.body)) {
-    if (input.downstreamFormat === 'claude' && isRecord(input.body.metadata)) {
-      const userId = asTrimmedString(input.body.metadata.user_id);
-      if (userId) return `${input.requestedModel}:claude:${userId}`;
-    }
-    const promptCacheKey = asTrimmedString(input.body.prompt_cache_key);
-    if (promptCacheKey) return `${input.requestedModel}:responses:${promptCacheKey}`;
-  }
-
-  const proxyToken = asTrimmedString(input.proxyToken);
-  if (proxyToken) {
-    return `${input.requestedModel}:proxy:${proxyToken}`;
-  }
-
-  return null;
-}
-
 export async function handleClaudeCountTokensSurfaceRequest(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -1236,12 +1149,14 @@ export async function handleClaudeCountTokensSurfaceRequest(
     // keep static maxRetries fallback
   }
 
+  const requestTraceId = createRequestTraceId();
   const failureToolkit = createSurfaceFailureToolkit({
     warningScope: 'chat',
     downstreamPath,
     maxRetries,
     clientContext,
     downstreamApiKeyId,
+    traceId: requestTraceId,
   });
   const stickySessionKey = buildSurfaceStickySessionKey({
     clientContext,

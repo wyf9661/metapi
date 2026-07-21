@@ -373,6 +373,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       clientKind: 'codex',
       sessionId: 'sess-1',
       traceHint: 'trace-1',
+      traceId: null,
       downstreamPath: '/v1/chat/completions',
       upstreamPath: '/v1/responses',
       usageSource: 'self-log',

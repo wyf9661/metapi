@@ -84,11 +84,11 @@ import {
   type OAuthRouteUnitSummary,
 } from './oauth/routeUnitService.js';
 import {
-  isExactTokenRouteModelPattern,
-  isTokenRouteRegexPattern,
-  matchesTokenRouteModelPattern,
-  parseTokenRouteRegexPattern,
-} from '../../shared/tokenRoutePatterns.js';
+  isExactRouteModelPattern,
+  isRegexModelPattern,
+  matchesModelPattern,
+  parseRegexModelPattern,
+} from './tokenRouterModelPatterns.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import {
   formatShadowSelectionLog,
@@ -958,22 +958,6 @@ type CostSignal = {
   source: 'observed' | 'configured' | 'catalog' | 'fallback';
 };
 
-export function isRegexModelPattern(pattern: string): boolean {
-  return isTokenRouteRegexPattern(pattern);
-}
-
-export function parseRegexModelPattern(pattern: string): { test(value: string): boolean } | null {
-  return parseTokenRouteRegexPattern(pattern).regex;
-}
-
-export function matchesModelPattern(model: string, pattern: string): boolean {
-  return matchesTokenRouteModelPattern(model, pattern);
-}
-
-function isExactRouteModelPattern(pattern: string): boolean {
-  return isExactTokenRouteModelPattern(pattern);
-}
-
 function normalizeRouteMode(routeMode: string | null | undefined): RouteMode {
   return normalizeTokenRouteMode(routeMode);
 }
@@ -1455,6 +1439,13 @@ function updateStableFirstObservationProgress(
 function isExplicitTokenChannel(candidate: RouteChannelCandidate): boolean {
   return typeof candidate.channel.tokenId === 'number' && candidate.channel.tokenId > 0;
 }
+
+export {
+  isExactRouteModelPattern,
+  isRegexModelPattern,
+  matchesModelPattern,
+  parseRegexModelPattern,
+} from './tokenRouterModelPatterns.js';
 
 export class TokenRouter {
   /**

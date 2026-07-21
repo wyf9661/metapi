@@ -3,6 +3,7 @@ import { parseProxyLogMetadata, type ParsedProxyLogMetadata } from '../../../sha
 type ProxyLogPathMeta = {
   clientFamily: string | null;
   sessionId: string | null;
+  traceId: string | null;
   downstreamPath: string | null;
   upstreamPath: string | null;
   usageSource: ParsedProxyLogMetadata['usageSource'];
@@ -16,6 +17,7 @@ export function parseProxyLogPathMeta(message?: string): ProxyLogPathMeta {
   return {
     clientFamily: parsed.clientKind,
     sessionId: parsed.sessionId,
+    traceId: parsed.traceId,
     downstreamPath: parsed.downstreamPath,
     upstreamPath: parsed.upstreamPath,
     usageSource: parsed.usageSource,

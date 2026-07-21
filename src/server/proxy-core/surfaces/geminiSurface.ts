@@ -16,6 +16,7 @@ import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { getDownstreamRoutingPolicy } from '../../services/downstreamPolicyRequest.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
 import { composeProxyLogMessage } from '../../services/proxyLogMessage.js';
+import { createRequestTraceId } from '../../services/requestTraceId.js';
 import {
   buildUpstreamEndpointRequest,
   resolveUpstreamEndpointCandidates,
@@ -257,6 +258,7 @@ async function logProxy(
   totalTokens = 0,
   isStream = false,
   firstByteLatencyMs: number | null = null,
+  traceId: string | null = null,
 ) {
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
@@ -266,6 +268,7 @@ async function logProxy(
         : null,
       sessionId: clientContext?.sessionId || null,
       traceHint: clientContext?.traceHint || null,
+      traceId,
       downstreamPath,
       upstreamPath,
       errorMessage,
@@ -320,6 +323,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
       downstreamPath,
       headers: request.headers as Record<string, unknown>,
     });
+    const requestTraceId = createRequestTraceId();
     const debugTrace = await startSurfaceProxyDebugTrace({
       downstreamPath,
       clientKind: clientContext.clientKind,
@@ -542,6 +546,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
       headers: request.headers as Record<string, unknown>,
       body: request.body,
     });
+    const requestTraceId = createRequestTraceId();
     const debugTrace = await startSurfaceProxyDebugTrace({
       downstreamPath,
       clientKind: clientContext.clientKind,
@@ -839,7 +844,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               0,
               isStreamAction,
               firstByteLatencyMs,
-            );
+          requestTraceId,);
             if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
               retryCount += 1;
               continue;
@@ -882,7 +887,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 0,
                 isStreamAction,
                 firstByteLatencyMs,
-              );
+          requestTraceId,);
               await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
                 attemptIndex: retryCount,
                 endpoint: isInternalGemini ? 'gemini-internal' : 'gemini-native',
@@ -968,7 +973,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 parsedUsage.totalTokens,
                 isStreamAction,
                 firstByteLatencyMs,
-              );
+          requestTraceId,);
               await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
                 attemptIndex: retryCount,
                 endpoint: isInternalGemini ? 'gemini-internal' : 'gemini-native',
@@ -1022,7 +1027,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 parsedUsage.totalTokens,
                 isStreamAction,
                 firstByteLatencyMs,
-              );
+          requestTraceId,);
               await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
                 attemptIndex: retryCount,
                 endpoint: isInternalGemini ? 'gemini-internal' : 'gemini-native',
@@ -1088,7 +1093,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               parsedUsage.totalTokens,
               isStreamAction,
               firstByteLatencyMs,
-            );
+          requestTraceId,);
             await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
               attemptIndex: retryCount,
               endpoint: isInternalGemini ? 'gemini-internal' : 'gemini-native',
@@ -1138,7 +1143,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               0,
               isStreamAction,
               firstByteLatencyMs,
-            );
+          requestTraceId,);
             await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
               attemptIndex: retryCount,
               endpoint: isInternalGemini ? 'gemini-internal' : 'gemini-native',
@@ -1386,7 +1391,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             0,
             isStreamAction,
             null,
-          );
+          requestTraceId,);
           if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount += 1;
             continue;
@@ -1433,7 +1438,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           parsedUsage.totalTokens,
           isStreamAction,
           firstByteLatencyMs,
-        );
+          requestTraceId,);
         const downstreamPayload = isGeminiCliDownstream
           ? { response: geminiResponse }
           : geminiResponse;
@@ -1480,7 +1485,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           0,
           isStreamAction,
           null,
-        );
+          requestTraceId,);
         if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
           retryCount += 1;
           continue;
