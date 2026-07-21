@@ -6,7 +6,6 @@ import { reportProxyAllFailed } from '../../services/alertService.js';
 import { hasProxyUsagePayload, mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { type DownstreamFormat } from '../../transformers/shared/normalized.js';
 import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transformers/shared/endpointCompatibility.js';
-import { learnSitePreferResponsesBestEffort } from '../../services/siteProtocolProfileLearning.js';
 import { shouldForceResponsesUpstreamStream } from '../capabilities/responsesCompact.js';
 import {
   buildClaudeCountTokensUpstreamRequest,
@@ -526,14 +525,6 @@ export async function handleChatSurfaceRequest(
             ...endpointRuntimeContext,
             endpoint: ctx.request.endpoint,
           });
-          if (ctx.request.endpoint === 'responses') {
-            learnSitePreferResponsesBestEffort({
-              siteId: selected.site.id,
-              platform: selected.site.platform,
-              endpoint: 'responses',
-              reason: 'responses_success',
-            });
-          }
           const responseBody = await captureSurfaceProxyDebugSuccessResponseBody(debugTrace, ctx);
           await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
             attemptIndex: debugAttemptBase + ctx.endpointIndex,
@@ -558,14 +549,6 @@ export async function handleChatSurfaceRequest(
           promoteRequiredEndpointCandidateAfterProtocolError(endpointCandidates, {
             currentEndpoint: ctx.request.endpoint,
             upstreamErrorText: ctx.rawErrText,
-          });
-          learnSitePreferResponsesBestEffort({
-            siteId: selected.site.id,
-            platform: selected.site.platform,
-            endpoint: ctx.request.endpoint,
-            reason: 'codex_policy_failure',
-            errorText: ctx.rawErrText || ctx.errText,
-            requireCodexClient: true,
           });
           await safeUpdateSurfaceProxyDebugAttempt(debugTrace, debugAttemptBase + ctx.endpointIndex, {
             downgradeDecision: true,

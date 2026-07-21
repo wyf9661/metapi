@@ -11,7 +11,6 @@ type ComposeProxyLogMessageArgs = {
   downstreamPath?: string | null;
   upstreamPath?: string | null;
   usageSource?: ProxyLogUsageSource;
-  errorCode?: string | null;
   errorMessage?: string | null;
 };
 
@@ -28,7 +27,6 @@ export function composeProxyLogMessage({
   downstreamPath,
   upstreamPath,
   usageSource,
-  errorCode,
   errorMessage,
 }: ComposeProxyLogMessageArgs): string | null {
   const rawMessage = typeof errorMessage === 'string' ? errorMessage.trim() : '';
@@ -38,7 +36,6 @@ export function composeProxyLogMessage({
   const finalDownstreamPath = (downstreamPath || parsed.downstreamPath || '').trim();
   const finalUpstreamPath = (upstreamPath || parsed.upstreamPath || '').trim();
   const finalUsageSource = (usageSource || parsed.usageSource || '').trim();
-  const finalErrorCode = (errorCode || parsed.errorCode || '').trim();
   const finalMessageText = parsed.messageText.trim();
 
   const prefixParts: string[] = [];
@@ -47,7 +44,6 @@ export function composeProxyLogMessage({
   if (finalDownstreamPath) prefixParts.push(`[downstream:${finalDownstreamPath}]`);
   if (finalUpstreamPath) prefixParts.push(`[upstream:${finalUpstreamPath}]`);
   if (finalUsageSource) prefixParts.push(`[usage:${finalUsageSource}]`);
-  if (finalErrorCode) prefixParts.push(`[code:${finalErrorCode}]`);
 
   if (prefixParts.length === 0 && !finalMessageText) return null;
   if (finalMessageText) return `${prefixParts.join(' ')} ${finalMessageText}`.trim();

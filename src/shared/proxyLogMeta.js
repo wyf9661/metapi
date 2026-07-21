@@ -1,13 +1,11 @@
 export function parseProxyLogMetadata(rawMessage) {
-  const text = typeof rawMessage === 'string' ? rawMessage : '';
-  const clientMatch = text.match(/\[client:([^\]]+)\]/i);
-  const sessionMatch = text.match(/\[session:([^\]]+)\]/i);
-  const downstreamMatch = text.match(/\[downstream:([^\]]+)\]/i);
-  const upstreamMatch = text.match(/\[upstream:([^\]]+)\]/i);
-  const usageMatch = text.match(/\[usage:([^\]]+)\]/i);
-  const codeMatch = text.match(/\[code:([^\]]+)\]/i);
-  const messageText = text.replace(
-    /^\s*(?:\[(?:client|session|downstream|upstream|usage|code):[^\]]+\]\s*)+/i,
+  const clientMatch = rawMessage.match(/\[client:([^\]]+)\]/i);
+  const sessionMatch = rawMessage.match(/\[session:([^\]]+)\]/i);
+  const downstreamMatch = rawMessage.match(/\[downstream:([^\]]+)\]/i);
+  const upstreamMatch = rawMessage.match(/\[upstream:([^\]]+)\]/i);
+  const usageMatch = rawMessage.match(/\[usage:([^\]]+)\]/i);
+  const messageText = rawMessage.replace(
+    /^\s*(?:\[(?:client|session|downstream|upstream|usage):[^\]]+\]\s*)+/i,
     '',
   ).trim();
 
@@ -17,7 +15,6 @@ export function parseProxyLogMetadata(rawMessage) {
     downstreamPath: downstreamMatch?.[1]?.trim() || null,
     upstreamPath: upstreamMatch?.[1]?.trim() || null,
     usageSource: usageMatch?.[1]?.trim() || null,
-    errorCode: codeMatch?.[1]?.trim() || null,
     messageText,
   };
 }

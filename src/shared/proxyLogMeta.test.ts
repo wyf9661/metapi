@@ -5,14 +5,13 @@ import { parseProxyLogMetadata } from './proxyLogMeta.js';
 describe('proxyLogMeta', () => {
   it('parses all supported proxy log prefixes', () => {
     expect(parseProxyLogMetadata(
-      '[client:codex] [session:turn-1] [downstream:/v1/responses] [upstream:/responses] [usage:self-log] [code:endpoint_all_down] boom',
+      '[client:codex] [session:turn-1] [downstream:/v1/responses] [upstream:/responses] [usage:self-log] boom',
     )).toEqual({
       clientKind: 'codex',
       sessionId: 'turn-1',
       downstreamPath: '/v1/responses',
       upstreamPath: '/responses',
       usageSource: 'self-log',
-      errorCode: 'endpoint_all_down',
       messageText: 'boom',
     });
   });
@@ -24,7 +23,6 @@ describe('proxyLogMeta', () => {
       downstreamPath: null,
       upstreamPath: null,
       usageSource: null,
-      errorCode: null,
       messageText: 'network timeout',
     });
   });
@@ -36,7 +34,6 @@ describe('proxyLogMeta', () => {
       downstreamPath: null,
       upstreamPath: null,
       usageSource: null,
-      errorCode: null,
       messageText: 'boom',
     });
 
@@ -46,7 +43,6 @@ describe('proxyLogMeta', () => {
       downstreamPath: null,
       upstreamPath: null,
       usageSource: null,
-      errorCode: null,
       messageText: 'boom',
     });
 
@@ -56,7 +52,6 @@ describe('proxyLogMeta', () => {
       downstreamPath: null,
       upstreamPath: '/x',
       usageSource: null,
-      errorCode: null,
       messageText: 'msg',
     });
 
@@ -66,7 +61,6 @@ describe('proxyLogMeta', () => {
       downstreamPath: null,
       upstreamPath: null,
       usageSource: null,
-      errorCode: null,
       messageText: '',
     });
   });
