@@ -27,7 +27,7 @@ import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
 import { normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
 import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transformers/shared/endpointCompatibility.js';
-import { learnSitePreferResponsesBestEffort } from '../../services/siteProtocolProfileLearning.js';
+
 import {
   ProxyInputFileResolutionError,
   resolveResponsesBodyInputFiles,
@@ -781,14 +781,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 ...endpointRuntimeContext,
                 endpoint: ctx.request.endpoint,
               });
-            if (!isCompactRequest && ctx.request.endpoint === 'responses') {
-              learnSitePreferResponsesBestEffort({
-                siteId: selected.site.id,
-                platform: selected.site.platform,
-                endpoint: 'responses',
-                reason: 'responses_success',
-              });
-            }
+
             const responseBody = await captureSurfaceProxyDebugSuccessResponseBody(debugTrace, ctx);
             await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
               attemptIndex: debugAttemptBase + ctx.endpointIndex,
@@ -814,14 +807,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               currentEndpoint: ctx.request.endpoint,
               upstreamErrorText: ctx.rawErrText,
             });
-            learnSitePreferResponsesBestEffort({
-              siteId: selected.site.id,
-              platform: selected.site.platform,
-              endpoint: ctx.request.endpoint,
-              reason: 'codex_policy_failure',
-              errorText: ctx.rawErrText || ctx.errText,
-              requireCodexClient: true,
-            });
+
             await safeUpdateSurfaceProxyDebugAttempt(debugTrace, debugAttemptBase + ctx.endpointIndex, {
               downgradeDecision: true,
               downgradeReason: ctx.errText,
