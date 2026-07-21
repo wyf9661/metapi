@@ -71,7 +71,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'gpt-5.3',
       'openai',
     );
-    expect(openaiOrder).toEqual(['chat', 'messages', 'responses']);
+    expect(openaiOrder).toEqual(['messages', 'chat', 'responses']);
 
     const claudeOrder = await resolveUpstreamEndpointCandidates(
       {
@@ -271,7 +271,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
-    expect(order).toEqual(['responses', 'chat', 'messages']);
+    expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 
   it('prefers document-capable endpoints when downstream content contains non-image files', async () => {
@@ -325,7 +325,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
-    expect(order).toEqual(['chat', 'messages', 'responses']);
+    expect(order).toEqual(['messages', 'chat', 'responses']);
   });
 
   it('does not expose preferred endpoint in snapshot when runtime memory is disabled for multimodal requests', () => {
@@ -442,7 +442,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'openai',
     );
 
-    expect(order).toEqual(['responses', 'chat', 'messages']);
+    expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 
   it('keeps learned endpoint state scoped to the model key', async () => {
@@ -471,8 +471,8 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'openai',
     );
 
-    expect(learnedOrder).toEqual(['responses', 'chat', 'messages']);
-    expect(unrelatedModelOrder).toEqual(['chat', 'messages', 'responses']);
+    expect(learnedOrder).toEqual(['responses', 'messages', 'chat']);
+    expect(unrelatedModelOrder).toEqual(['messages', 'chat', 'responses']);
   });
 
   it('bounds runtime model keys before storing them', () => {

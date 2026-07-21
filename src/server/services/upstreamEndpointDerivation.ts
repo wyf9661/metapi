@@ -144,7 +144,10 @@ function preferredEndpointOrder(
     return ['messages', 'chat', 'responses'];
   }
 
-  const base = ['chat', 'messages', 'responses'] as UpstreamEndpoint[];
+  // Generic NewAPI-class gateways: prefer Anthropic-compatible messages, then
+  // OpenAI chat, and only then responses. Responses-first is reserved for
+  // explicit Codex/preferResponses sites and native openai/codex platforms.
+  const base = ['messages', 'chat', 'responses'] as UpstreamEndpoint[];
   if (oauthProvider === 'codex' && base.includes('responses')) {
     return ['responses', ...base.filter((endpoint) => endpoint !== 'responses')];
   }
@@ -205,13 +208,13 @@ export async function resolveUpstreamEndpointCandidates(
     hasRemoteDocumentUrl: false,
   };
 
-  // NewAPI "Codex-only" gateways: if the site is configured with Codex client headers,
-  // prefer /v1/responses first so chat requests convert instead of dying on nginx 403.
+  // Explicit Codex/Responses compatibility only — never infer from client alone.
+  // Order: responses first, then messages, then chat (messages remains preferred fallback).
   if (siteProtocolPrefersResponses({
     protocolProfile: (context.site as any).protocolProfile,
     customHeaders: (context.site as any).customHeaders,
   })) {
-    return finalizeCandidates(['responses', 'chat', 'messages']);
+    return finalizeCandidates(['responses', 'messages', 'chat']);
   }
 
   const preferred = preferredEndpointOrder(

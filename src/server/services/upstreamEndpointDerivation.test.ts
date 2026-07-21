@@ -57,10 +57,8 @@ describe('upstreamEndpointDerivation', () => {
       },
     );
 
-    expect(order).toEqual(['responses', 'chat', 'messages']);
+    expect(order).toEqual(['responses', 'messages', 'chat']);
   });
-
-
 
   it('keeps explicit openai platforms on responses-first ordering even for claude-family models', async () => {
     const order = await resolveUpstreamEndpointCandidates(
@@ -162,5 +160,33 @@ describe('upstreamEndpointDerivation', () => {
     );
 
     expect(order).toEqual([]);
+  });
+
+  it('uses messages-first for generic new-api openai requests', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      baseContext,
+      'glm-5.2',
+      'openai',
+    );
+    expect(order).toEqual(['messages', 'chat', 'responses']);
+  });
+
+  it('uses responses-first only when site explicitly prefers responses (Codex compat)', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          protocolProfile: JSON.stringify({
+            preferResponses: true,
+            requireCodexClient: false,
+            credentialMode: 'auto',
+          }),
+        },
+      },
+      'glm-5.2',
+      'openai',
+    );
+    expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 });

@@ -8,6 +8,8 @@ import {
   type UpstreamEndpoint,
 } from './upstreamEndpointRuntime.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/orchestration/endpointFlow.js';
+import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
+import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
 import type { schema } from '../db/index.js';
 
 export type RuntimeModelProbeStatus = 'supported' | 'unsupported' | 'inconclusive' | 'skipped';
@@ -256,6 +258,16 @@ export async function probeRuntimeModel(input: {
         endpointCandidates,
         buildRequest,
         dispatchRequest,
+        // Match live proxy surfaces: cascade protocols on endpoint mismatch,
+        // but abort same-site cascade for WAF/5xx/model-missing style failures.
+        shouldAbortRemainingEndpoints: (ctx) => shouldAbortSameSiteEndpointFallback(
+          ctx.response.status,
+          ctx.rawErrText,
+        ),
+        shouldDowngrade: (ctx) => (
+          ctx.response.status >= 500
+          || isEndpointDowngradeError(ctx.response.status, ctx.rawErrText)
+        ),
       });
     } finally {
       clearTimeout(abortTimer);
