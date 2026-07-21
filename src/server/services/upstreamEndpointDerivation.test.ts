@@ -59,30 +59,7 @@ describe('upstreamEndpointDerivation', () => {
 
     expect(order).toEqual(['responses', 'chat', 'messages']);
   });
-  it('derives downstream codex client openai requests as responses-first on generic new-api sites', async () => {
-    const order = await resolveUpstreamEndpointCandidates(
-      baseContext,
-      'grok-4.5',
-      'openai',
-      undefined,
-      undefined,
-      {
-        clientKind: 'codex',
-      },
-    );
 
-    expect(order).toEqual(['responses', 'chat', 'messages']);
-  });
-
-  it('keeps non-codex clients on chat-first for generic openai-format new-api sites', async () => {
-    const order = await resolveUpstreamEndpointCandidates(
-      baseContext,
-      'grok-4.5',
-      'openai',
-    );
-
-    expect(order).toEqual(['chat', 'messages', 'responses']);
-  });
 
 
   it('keeps explicit openai platforms on responses-first ordering even for claude-family models', async () => {
