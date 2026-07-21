@@ -85,6 +85,9 @@ const SAME_SITE_ENDPOINT_ABORT_PATTERNS: RegExp[] = [
   /connection\s+refused/i,
   /econnreset/i,
   /econnrefused/i,
+  /request\s+was\s+blocked/i,
+  /error\s+code:\s*1010/i,
+  /cf-ray/i,
   ...RETRYABLE_TIMEOUT_PATTERNS,
 ];
 
@@ -142,6 +145,15 @@ export function shouldRetryProxyRequest(status: number, upstreamErrorText?: stri
 }
 
 export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErrorText?: string | null): boolean {
+  // 502/503/504 describe an unhealthy relay/origin, not an endpoint protocol
+  // mismatch. Trying chat/messages on the same site only adds latency and can
+  // turn an explicit responses-capable site into a misleading protocol chase.
+  if (status === 502 || status === 503 || status === 504) return true;
+  // Cloudflare/WAF blocks are likewise site/request-fingerprint local. Move to
+  // another channel rather than cascading through every protocol on this site.
+  if ((status === 401 || status === 403) && matchesAnyPattern(SAME_SITE_ENDPOINT_ABORT_PATTERNS, upstreamErrorText)) {
+    return true;
+  }
   if (status < 500 && status !== 408 && status !== 429) {
     return false;
   }
