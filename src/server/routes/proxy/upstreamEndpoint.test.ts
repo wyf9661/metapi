@@ -564,7 +564,33 @@ describe('resolveUpstreamEndpointCandidates', () => {
     });
   });
 
-  it('does not block generic /v1/responses endpoints on transient upstream errors', async () => {
+  it('remembers WAF blocks briefly for the same site/model/endpoint', async () => {
+    const memoryWrite = recordUpstreamEndpointFailure({
+      siteId: baseContext.site.id,
+      endpoint: 'chat',
+      downstreamFormat: 'openai',
+      modelName: 'glm-5.2',
+      status: 403,
+      errorText: 'Your request was blocked. error code: 1010',
+    });
+    expect(memoryWrite).toMatchObject({
+      action: 'failure',
+      endpoint: 'chat',
+      blockedEndpoint: 'chat',
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: { ...baseContext.site, platform: 'new-api' },
+      },
+      'glm-5.2',
+      'openai',
+    );
+    expect(order).toEqual(['messages', 'responses']);
+  });
+
+  it('keeps transient 504 failures out of endpoint runtime blocking', async () => {
     const memoryWrite = recordUpstreamEndpointFailure({
       siteId: baseContext.site.id,
       endpoint: 'responses',

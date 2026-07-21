@@ -86,4 +86,16 @@ describe('proxyRetryPolicy', () => {
       shouldAbortSameSiteEndpointFallback(429, '{"error":{"message":"too many requests"}}'),
     ).toBe(true);
   });
+
+  it('aborts same-site protocol cascade on relay 502/503/504 failures', () => {
+    expect(shouldAbortSameSiteEndpointFallback(502, 'openai_error')).toBe(true);
+    expect(shouldAbortSameSiteEndpointFallback(503, 'system cpu overloaded')).toBe(true);
+    expect(shouldAbortSameSiteEndpointFallback(504, 'Cloudflare Gateway time-out')).toBe(true);
+  });
+
+  it('aborts same-site protocol cascade on WAF blocks but keeps generic forbidden eligible for protocol recovery', () => {
+    expect(shouldAbortSameSiteEndpointFallback(403, 'Your request was blocked.')).toBe(true);
+    expect(shouldAbortSameSiteEndpointFallback(403, 'error code: 1010')).toBe(true);
+    expect(shouldAbortSameSiteEndpointFallback(403, 'forbidden')).toBe(false);
+  });
 });

@@ -48,6 +48,7 @@ type EndpointRuntimeState = {
 
 const ENDPOINT_RUNTIME_PREFERRED_TTL_MS = 24 * 60 * 60 * 1000;
 const ENDPOINT_RUNTIME_BLOCK_TTL_MS = 6 * 60 * 60 * 1000;
+const ENDPOINT_RUNTIME_WAF_BLOCK_TTL_MS = 10 * 60 * 1000;
 const MAX_ENDPOINT_RUNTIME_STATES = 512;
 export const MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH = 64;
 export const MODEL_KEY_HASH_SUFFIX_LENGTH = 8;
@@ -209,6 +210,18 @@ function inferSuggestedEndpointFromError(
 ): UpstreamEndpointRuntimeEndpoint | null {
   const suggestedEndpoint = inferSuggestedEndpointFromUpstreamError(errorText);
   return suggestedEndpoint && endpoint !== suggestedEndpoint ? suggestedEndpoint : null;
+}
+
+function endpointTransientBlockTtlMs(status: number, errorText?: string | null): number {
+  const text = String(errorText || '').toLowerCase();
+  if (
+    text.includes('your request was blocked')
+    || text.includes('error code: 1010')
+    || text.includes('cf-ray')
+  ) {
+    return ENDPOINT_RUNTIME_WAF_BLOCK_TTL_MS;
+  }
+  return 0;
 }
 
 function shouldBlockEndpointByError(
@@ -400,7 +413,8 @@ export function recordUpstreamEndpointFailure(input: {
     requestCapabilities: input.requestCapabilities,
   });
   if (!shouldUseEndpointRuntimeMemory(capabilityProfile)) return null;
-  if (!shouldBlockEndpointByError(input.endpoint, input.status, input.errorText)) return null;
+  const transientBlockTtlMs = endpointTransientBlockTtlMs(input.status, input.errorText);
+  if (!shouldBlockEndpointByError(input.endpoint, input.status, input.errorText) && transientBlockTtlMs <= 0) return null;
 
   const nowMs = Date.now();
   const key = buildEndpointRuntimeStateKey({
@@ -409,7 +423,10 @@ export function recordUpstreamEndpointFailure(input: {
     capabilityProfile,
   });
   const state = getOrCreateEndpointRuntimeState(key, nowMs);
-  state.blockedUntilMsByEndpoint[input.endpoint] = nowMs + ENDPOINT_RUNTIME_BLOCK_TTL_MS;
+  const blockTtlMs = transientBlockTtlMs > 0
+    ? transientBlockTtlMs
+    : ENDPOINT_RUNTIME_BLOCK_TTL_MS;
+  state.blockedUntilMsByEndpoint[input.endpoint] = nowMs + blockTtlMs;
 
   const suggestedEndpoint = inferSuggestedEndpointFromError(input.endpoint, input.errorText);
   if (suggestedEndpoint && suggestedEndpoint !== input.endpoint) {
