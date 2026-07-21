@@ -135,6 +135,6 @@ describe('sites token-router cache invalidation', () => {
     const afterTarget = after.candidates.find((candidate) => candidate.accountId === targetAccount.id);
 
     expect(afterTarget?.probability || 0).toBeGreaterThan(90);
-    expect(afterTarget?.reason || '').toContain('站点权重=100.00');
+    expect(afterTarget?.reason || '').toContain('balanced-v2');
   });
 });
