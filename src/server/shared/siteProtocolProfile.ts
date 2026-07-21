@@ -169,6 +169,20 @@ export function mapUpstreamErrorForClient(status: number, upstreamErrorText?: st
   }
 
   if (
+    lower.includes('api 请求地址均不可用')
+    || lower.includes('api请求地址均不可用')
+    || lower.includes('endpoint pool exhausted')
+    || lower.includes('all endpoints unavailable')
+    || lower.includes('all api endpoints unavailable')
+  ) {
+    return {
+      code: 'endpoint_all_down',
+      message: '该站点配置的 API 地址当前均不可用（冷却中或探测失败）。MetAPI 将优先切换其他站点通道。',
+      retryable: true,
+    };
+  }
+
+  if (
     lower.includes('no available channel')
     || lower.includes('无可用渠道')
     || lower.includes('无可用账号')

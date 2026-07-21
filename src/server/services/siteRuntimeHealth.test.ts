@@ -76,3 +76,10 @@ describe('siteRuntimeHealth', () => {
     expect(shouldPersistSiteRuntimeHealthState(recent, now)).toBe(true);
   });
 });
+
+  it('opens a short breaker immediately when endpoint pool is exhausted', () => {
+    const state = createSiteRuntimeHealthState(0);
+    applyRuntimeHealthFailure(state, { errorText: '当前站点的 API 请求地址均不可用' }, 1_000);
+    expect(isRuntimeHealthBreakerOpen(state, 1_000)).toBe(true);
+    expect(state.breakerLevel).toBeGreaterThanOrEqual(1);
+  });

@@ -67,6 +67,10 @@ export const SITE_TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
   /connection\s+refused/i,
   /econnreset/i,
   /econnrefused/i,
+  // Site multi-base-url pool exhausted — treat as site-wide transient outage.
+  /API\s*请求地址均不可用/i,
+  /endpoint\s+pool\s+exhausted/i,
+  /all\s+(?:api\s+)?endpoints?\s+(?:are\s+)?unavailable/i,
 ];
 
 export const USAGE_LIMIT_RATE_LIMIT_PATTERNS: RegExp[] = [
@@ -125,6 +129,16 @@ export function resolveSiteRuntimeFailurePenalty(context: SiteRuntimeFailureCont
     return 0.25;
   }
 
+  // Dead endpoint pool is a site-wide outage signal: score like a hard 5xx so
+  // three quick hits open the short breaker and stop burning failover budget.
+  if (
+    /API\s*请求地址均不可用/i.test(errorText)
+    || /endpoint\s+pool\s+exhausted/i.test(errorText)
+    || /all\s+(?:api\s+)?endpoints?\s+(?:are\s+)?unavailable/i.test(errorText)
+  ) {
+    return 3.0;
+  }
+
   if (status >= 500 || matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, errorText)) {
     return 2.5;
   }
@@ -163,5 +177,8 @@ export function isTransientSiteRuntimeFailure(context: SiteRuntimeFailureContext
   if (isValidationRuntimeFailure({ status, errorText })) {
     return false;
   }
-  return status >= 500 || status === 429 || matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, errorText);
+  if (matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, errorText)) {
+    return true;
+  }
+  return status >= 500 || status === 429;
 }
