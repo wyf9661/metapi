@@ -162,4 +162,18 @@ describe('probeRuntimeModel', () => {
     expect(built.tokenValue).toBe('session-cookie-token');
   });
 
+  it('labels relay model-channel authorization failures separately from account credentials', async () => {
+    const { classifyProbeFailureReason } = await import('./runtimeModelProbe.js');
+    const reason = classifyProbeFailureReason(401, '{"error":{"message":"Authorization failed","type":"bad_response_status_code"}}');
+    expect(reason).toContain('上游模型渠道鉴权失败');
+    expect(reason).toContain('不是 MetAPI 账户凭证失效');
+  });
+
+  it('labels relay model-not-found responses as channel unavailable', async () => {
+    const { classifyProbeFailureReason } = await import('./runtimeModelProbe.js');
+    const reason = classifyProbeFailureReason(404, '{"error":{"message":"Model not found"}}');
+    expect(reason).toContain('上游模型渠道不可用');
+    expect(reason).toContain('本站其他模型可能仍正常');
+  });
+
 });
