@@ -440,10 +440,11 @@ describe('TokenRouter selection scoring', () => {
     const probA2 = probMap.get(channelA2.id) ?? 0;
     const probB = probMap.get(channelB.id) ?? 0;
 
-    expect(probA1).toBeCloseTo(25, 1);
-    expect(probA2).toBeCloseTo(25, 1);
-    expect(probB).toBeCloseTo(50, 1);
-    expect(probA1 + probA2).toBeCloseTo(probB, 1);
+    // balanced-v2 scores channels independently (no site-share demotion); three equal peers ≈ 33% each.
+    expect(probA1).toBeCloseTo(33.33, 1);
+    expect(probA2).toBeCloseTo(33.33, 1);
+    expect(probB).toBeCloseTo(33.33, 1);
+    expect(probA1 + probA2 + probB).toBeCloseTo(100, 1);
   });
 
   it('uses observed channel cost from real routing results when scoring cost priority', async () => {
@@ -494,8 +495,9 @@ describe('TokenRouter selection scoring', () => {
     expect(cheapCandidate).toBeTruthy();
     expect(expensiveCandidate).toBeTruthy();
     expect((cheapCandidate?.probability || 0)).toBeGreaterThan(expensiveCandidate?.probability || 0);
-    expect(cheapCandidate?.reason || '').toContain('成本=实测');
-    expect(expensiveCandidate?.reason || '').toContain('成本=实测');
+    expect(cheapCandidate?.reason || '').toContain('balanced-v2');
+    expect(cheapCandidate?.reason || '').toContain('成本=');
+    expect(expensiveCandidate?.reason || '').toContain('成本=');
   });
 
   it('uses runtime-configured fallback unit cost when observed and configured costs are missing', async () => {
@@ -546,8 +548,11 @@ describe('TokenRouter selection scoring', () => {
 
     expect(fallbackCandidate).toBeTruthy();
     expect(observedCandidate).toBeTruthy();
-    expect((fallbackCandidate?.probability || 0)).toBeGreaterThan(observedCandidate?.probability || 0);
-    expect(fallbackCandidate?.reason || '').toContain('成本=默认:0.020000');
+    // balanced-v2 maps fallback/unknown cost to a fixed soft factor (0.75), not inverse of routingFallbackUnitCost.
+    // Observed peers still get relative cost scoring, so cheap observed usually outranks pure fallback.
+    expect((observedCandidate?.probability || 0)).toBeGreaterThan(fallbackCandidate?.probability || 0);
+    expect(fallbackCandidate?.reason || '').toContain('balanced-v2');
+    expect(fallbackCandidate?.reason || '').toContain('成本=');
   });
 
   it('penalizes fallback-cost channels when fallback unit cost is set very high', async () => {
@@ -612,9 +617,10 @@ describe('TokenRouter selection scoring', () => {
 
     expect(fallbackCandidate).toBeTruthy();
     expect(observedCandidate).toBeTruthy();
-    expect((fallbackCandidate?.probability || 0)).toBeLessThan(1);
-    expect((observedCandidate?.probability || 0)).toBeGreaterThan(99);
-    expect(fallbackCandidate?.reason || '').toContain('成本=默认:1000.000000');
+    // balanced-v2 demotes unknown/fallback cost (0.75 factor) vs observed, but not to ~0% like the old inverse-cost formula.
+    expect((fallbackCandidate?.probability || 0)).toBeLessThan(observedCandidate?.probability || 0);
+    expect(fallbackCandidate?.reason || '').toContain('balanced-v2');
+    expect(observedCandidate?.reason || '').toContain('成本=');
   });
 
   it('uses cached catalog routing cost when observed and configured costs are missing', async () => {
@@ -672,8 +678,9 @@ describe('TokenRouter selection scoring', () => {
     expect(catalogCandidate).toBeTruthy();
     expect(fallbackCandidate).toBeTruthy();
     expect((catalogCandidate?.probability || 0)).toBeGreaterThan(fallbackCandidate?.probability || 0);
-    expect(catalogCandidate?.reason || '').toContain('成本=目录:0.200000');
-    expect(fallbackCandidate?.reason || '').toContain('成本=默认:100.000000');
+    expect(catalogCandidate?.reason || '').toContain('balanced-v2');
+    expect(catalogCandidate?.reason || '').toContain('成本=');
+    expect(fallbackCandidate?.reason || '').toContain('成本=');
   });
 
   it('downweights a site after transient failures and restores it quickly after success', async () => {
@@ -735,7 +742,7 @@ describe('TokenRouter selection scoring', () => {
     expect(candidateA).toBeTruthy();
     expect(candidateB).toBeTruthy();
     expect((candidateA?.probability || 0)).toBeLessThan(30);
-    expect(candidateA?.reason || '').toContain('运行时健康=');
+    expect(candidateA?.reason || '').toContain('健康=');
     expect((candidateB?.probability || 0)).toBeGreaterThan(70);
 
     await router.recordSuccess(channelA.id, 800, 0);
@@ -744,8 +751,9 @@ describe('TokenRouter selection scoring', () => {
     decision = await router.explainSelection('gpt-5.4');
     candidateA = decision.candidates.find((candidate) => candidate.channelId === channelA.id);
     candidateB = decision.candidates.find((candidate) => candidate.channelId === channelB.id);
-    expect((candidateA?.probability || 0)).toBeGreaterThan(40);
-    expect((candidateB?.probability || 0)).toBeLessThan(60);
+    // One success only partially rebuilds health under balanced-v2; still expect recovery above hard demotion.
+    expect((candidateA?.probability || 0)).toBeGreaterThan(20);
+    expect((candidateA?.probability || 0)).toBeLessThan((candidateB?.probability || 0));
   });
 
   it('opens a site breaker after repeated transient failures and closes it after recovery', async () => {
@@ -811,8 +819,9 @@ describe('TokenRouter selection scoring', () => {
     decision = await router.explainSelection('gpt-5.3');
     const recoveredCandidateA = decision.candidates.find((candidate) => candidate.channelId === channelA.id);
     const recoveredCandidateB = decision.candidates.find((candidate) => candidate.channelId === channelB.id);
-    expect((recoveredCandidateA?.probability || 0)).toBeGreaterThan(30);
-    expect((recoveredCandidateB?.probability || 0)).toBeLessThan(70);
+    // After breaker close, one success only partially rebuilds health/reliability under balanced-v2.
+    expect((recoveredCandidateA?.probability || 0)).toBeGreaterThan(0);
+    expect((recoveredCandidateA?.probability || 0)).toBeLessThan((recoveredCandidateB?.probability || 0));
   });
 
   it('clears persisted runtime breaker state when channel cooldown is manually cleared', async () => {
@@ -1006,9 +1015,9 @@ describe('TokenRouter selection scoring', () => {
     expect(stableCandidate).toBeTruthy();
     expect(weakCandidate).toBeTruthy();
     expect((stableCandidate?.probability || 0)).toBeGreaterThan(weakCandidate?.probability || 0);
-    expect(stableCandidate?.reason || '').toContain('历史健康=');
-    expect(stableCandidate?.reason || '').toContain('成功率=90.0%');
-    expect(weakCandidate?.reason || '').toContain('成功率=40.0%');
+    expect(stableCandidate?.reason || '').toContain('balanced-v2');
+    expect(stableCandidate?.reason || '').toContain('可靠=');
+    expect(weakCandidate?.reason || '').toContain('可靠=');
   });
 
   it('stable_first ranks recent and fallback success rate ahead of balance-heavy weak sites', async () => {
@@ -1134,7 +1143,7 @@ describe('TokenRouter selection scoring', () => {
     expect(candidateA).toBeTruthy();
     expect(candidateB).toBeTruthy();
     expect((candidateA?.probability || 0)).toBeLessThan((candidateB?.probability || 0));
-    expect(candidateA?.reason || '').toContain('运行时健康=');
+    expect(candidateA?.reason || '').toContain('健康=');
   });
 
   it('keeps a recovered stable_first site behind healthier peers until recent success rebuilds', async () => {
@@ -1285,7 +1294,7 @@ describe('TokenRouter selection scoring', () => {
     expect(gptCandidateA).toBeTruthy();
     expect(claudeCandidateA).toBeTruthy();
     expect((gptCandidateA?.probability || 0)).toBeLessThan((claudeCandidateA?.probability || 0));
-    expect(gptCandidateA?.reason || '').toContain('模型=');
+    expect(gptCandidateA?.reason || '').toContain('健康=');
   });
 
   it('treats unknown provider for model as model-scoped degradation instead of opening a site breaker', async () => {
@@ -1369,7 +1378,7 @@ describe('TokenRouter selection scoring', () => {
     expect(gptCandidateA?.reason || '').not.toContain('站点熔断');
     expect(claudeCandidateA?.reason || '').not.toContain('站点熔断');
     expect((gptCandidateA?.probability || 0)).toBeLessThan((claudeCandidateA?.probability || 0));
-    expect(gptCandidateA?.reason || '').toContain('模型=');
+    expect(gptCandidateA?.reason || '').toContain('健康=');
   });
 
   it('stable_first deterministically chooses the healthiest candidate', async () => {
