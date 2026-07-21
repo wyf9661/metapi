@@ -357,7 +357,6 @@ export async function handleChatSurfaceRequest(
         },
         {
           oauthProvider: oauth?.provider,
-          clientKind: clientContext.clientKind,
         },
       ),
     ];
