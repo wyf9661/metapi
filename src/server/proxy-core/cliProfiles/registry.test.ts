@@ -111,6 +111,38 @@ describe('detectCliProfile', () => {
     });
   });
 
+  it('does not treat OpenAI SDK chat/completions traffic as Codex', () => {
+    // Hermes / OpenAI Python SDK send x-stainless-* on every chat request.
+    // That is not a Codex fingerprint and must stay generic (or hermes).
+    expect(detectCliProfile({
+      downstreamPath: '/v1/chat/completions',
+      headers: {
+        'user-agent': 'OpenAI/Python 2.45.0',
+        'x-stainless-lang': 'python',
+        'x-stainless-package-version': '2.45.0',
+        'x-stainless-runtime': 'CPython',
+        'x-stainless-arch': 'x64',
+        'x-stainless-os': 'Linux',
+      },
+    })).toMatchObject({
+      id: 'generic',
+    });
+  });
+
+  it('still detects official Codex clients on chat/completions when fingerprints are explicit', () => {
+    expect(detectCliProfile({
+      downstreamPath: '/v1/chat/completions',
+      headers: {
+        originator: 'codex_cli_rs',
+        'user-agent': 'codex_cli_rs/1.2.3',
+      },
+    })).toMatchObject({
+      id: 'codex',
+      clientAppId: 'codex_cli_rs',
+      clientConfidence: 'exact',
+    });
+  });
+
   it('detects Claude Code requests on the count_tokens surface and exposes token counting support', () => {
     expect(detectCliProfile({
       downstreamPath: '/v1/messages/count_tokens',

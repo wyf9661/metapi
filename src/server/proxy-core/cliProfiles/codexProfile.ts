@@ -59,9 +59,10 @@ function hasHeaderPrefix(headers: Record<string, unknown> | undefined, prefix: s
 
 function isCodexPath(path: string): boolean {
   const normalizedPath = path.trim().toLowerCase();
+  // Codex surface is the Responses API. Chat/completions is shared by Hermès,
+  // OpenAI Python SDK, and many other clients — do not treat it as Codex-only.
   return normalizedPath === '/v1/responses'
-    || normalizedPath.startsWith('/v1/responses/')
-    || normalizedPath === '/v1/chat/completions';
+    || normalizedPath.startsWith('/v1/responses/');
 }
 
 export function detectCodexOfficialClientApp(
@@ -91,11 +92,17 @@ export function getCodexSessionId(headers?: Record<string, unknown>): string | n
 }
 
 export function isCodexRequest(input: DetectCliProfileInput): boolean {
-  if (!isCodexPath(input.downstreamPath)) return false;
   const headers = input.headers;
   if (!headers) return false;
 
+  // Explicit Codex client fingerprints (originator/user-agent) count on any
+  // supported surface, including rare chat/completions traffic.
   if (isCodexOfficialClientHeaders(headers)) return true;
+
+  // Weak markers (OpenAI SDK stainless headers, session ids, openai-beta) only
+  // count on the Responses surface. Chat/completions is shared by Hermès and
+  // many non-Codex OpenAI clients.
+  if (!isCodexPath(input.downstreamPath)) return false;
   if (getHeaderValue(headers, 'openai-beta')) return true;
   if (hasHeaderPrefix(headers, 'x-stainless-')) return true;
   if (getCodexSessionId(headers)) return true;
