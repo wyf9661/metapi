@@ -54,6 +54,7 @@ let proxyLogBillingDetailsColumnAvailable: boolean | null = null;
 let proxyLogDownstreamApiKeyIdColumnAvailable: boolean | null = null;
 let proxyLogClientColumnsAvailable: boolean | null = null;
 let proxyLogStreamTimingColumnsAvailable: boolean | null = null;
+let proxyLogRequestTraceIdColumnAvailable: boolean | null = null;
 
 function buildMysqlPoolOptions(
   connectionString = config.dbUrl,
@@ -697,6 +698,28 @@ function ensureProxyLogStreamTimingSchema() {
   proxyLogStreamTimingColumnsAvailable = true;
 }
 
+
+function ensureProxyLogRequestTraceIdSchema() {
+  if (!tableExists('proxy_logs')) {
+    return;
+  }
+
+  if (!tableColumnExists('proxy_logs', 'request_trace_id')) {
+    execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN request_trace_id text;');
+  }
+  // Best-effort index; IF NOT EXISTS keeps restarts idempotent.
+  try {
+    execSqliteLegacyCompat(
+      'CREATE INDEX IF NOT EXISTS proxy_logs_request_trace_id_created_at_idx ON proxy_logs(request_trace_id, created_at);',
+    );
+  } catch {
+    // Ignore duplicate/unsupported index creation on older sqlite builds.
+  }
+
+  proxyLogRequestTraceIdColumnAvailable = true;
+}
+
+
 function normalizeSchemaErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error && 'message' in error) {
     return String((error as { message?: unknown }).message || '');
@@ -1022,6 +1045,93 @@ export async function ensureProxyLogClientColumns(): Promise<boolean> {
   }
 }
 
+
+export async function hasProxyLogRequestTraceIdColumn(): Promise<boolean> {
+  if (proxyLogRequestTraceIdColumnAvailable !== null) {
+    return proxyLogRequestTraceIdColumnAvailable;
+  }
+
+  if (runtimeDbDialect === 'sqlite') {
+    proxyLogRequestTraceIdColumnAvailable = tableExists('proxy_logs')
+      && tableColumnExists('proxy_logs', 'request_trace_id');
+    return proxyLogRequestTraceIdColumnAvailable;
+  }
+
+  if (runtimeDbDialect === 'mysql') {
+    if (!mysqlPool) return false;
+    const [rows] = await mysqlPool.query(
+      'SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
+      ['proxy_logs', 'request_trace_id'],
+    ) as [Array<{ column_name?: string }>, unknown];
+    proxyLogRequestTraceIdColumnAvailable = Array.isArray(rows) && rows.some((row) => String(row?.column_name || '').toLowerCase() === 'request_trace_id');
+    return proxyLogRequestTraceIdColumnAvailable;
+  }
+
+  if (!pgPool) return false;
+  const result = await pgPool.query(
+    'SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2 LIMIT 1',
+    ['proxy_logs', 'request_trace_id'],
+  );
+  proxyLogRequestTraceIdColumnAvailable = Number(result.rowCount || 0) > 0;
+  return proxyLogRequestTraceIdColumnAvailable;
+}
+
+export async function ensureProxyLogRequestTraceIdColumn(): Promise<boolean> {
+  if (runtimeDbDialect === 'sqlite') {
+    ensureProxyLogRequestTraceIdSchema();
+    proxyLogRequestTraceIdColumnAvailable = tableExists('proxy_logs')
+      && tableColumnExists('proxy_logs', 'request_trace_id');
+    return proxyLogRequestTraceIdColumnAvailable;
+  }
+
+  if (await hasProxyLogRequestTraceIdColumn()) {
+    return true;
+  }
+
+  try {
+    if (runtimeDbDialect === 'mysql') {
+      if (!mysqlPool) return false;
+      const [rows] = await mysqlPool.query('SHOW COLUMNS FROM `proxy_logs` LIKE ?', ['request_trace_id']);
+      if (!(Array.isArray(rows) && rows.length > 0)) {
+        await executeLegacyCompat(
+          (statement) => mysqlPool!.query(statement).then(() => undefined),
+          'ALTER TABLE `proxy_logs` ADD COLUMN `request_trace_id` VARCHAR(64) NULL',
+        );
+      }
+      await executeLegacyCompat(
+        (statement) => mysqlPool!.query(statement).then(() => undefined),
+        'CREATE INDEX `proxy_logs_request_trace_id_created_at_idx` ON `proxy_logs` (`request_trace_id`, `created_at`(191))',
+      ).catch(() => undefined);
+    } else {
+      if (!pgPool) return false;
+      const result = await pgPool.query(
+        'SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2 LIMIT 1',
+        ['proxy_logs', 'request_trace_id'],
+      );
+      if (Number(result.rowCount || 0) === 0) {
+        await executeLegacyCompat(
+          (statement) => pgPool!.query(statement).then(() => undefined),
+          'ALTER TABLE "proxy_logs" ADD COLUMN "request_trace_id" TEXT',
+        );
+      }
+      await executeLegacyCompat(
+        (statement) => pgPool!.query(statement).then(() => undefined),
+        'CREATE INDEX IF NOT EXISTS "proxy_logs_request_trace_id_created_at_idx" ON "proxy_logs" ("request_trace_id", "created_at")',
+      ).catch(() => undefined);
+    }
+    proxyLogRequestTraceIdColumnAvailable = true;
+    return true;
+  } catch (error) {
+    if (isDuplicateColumnError(error) || isDuplicateIndexError(error)) {
+      proxyLogRequestTraceIdColumnAvailable = await hasProxyLogRequestTraceIdColumn();
+      return proxyLogRequestTraceIdColumnAvailable;
+    }
+    proxyLogRequestTraceIdColumnAvailable = false;
+    console.warn('[db] failed to ensure proxy_logs request_trace_id column', error);
+    return false;
+  }
+}
+
 export async function hasProxyLogStreamTimingColumns(): Promise<boolean> {
   if (proxyLogStreamTimingColumnsAvailable !== null) {
     return proxyLogStreamTimingColumnsAvailable;
@@ -1070,6 +1180,7 @@ export async function ensureProxyLogStreamTimingColumns(): Promise<boolean> {
 
   if (runtimeDbDialect === 'sqlite') {
     ensureProxyLogStreamTimingSchema();
+    ensureProxyLogRequestTraceIdSchema();
     proxyLogStreamTimingColumnsAvailable = tableExists('proxy_logs')
       && requiredColumns.every((column) => tableColumnExists('proxy_logs', column.name));
     return proxyLogStreamTimingColumnsAvailable;
@@ -1122,6 +1233,7 @@ function resetSchemaCapabilityCache() {
   proxyLogDownstreamApiKeyIdColumnAvailable = null;
   proxyLogClientColumnsAvailable = null;
   proxyLogStreamTimingColumnsAvailable = null;
+  proxyLogRequestTraceIdColumnAvailable = null;
 }
 
 async function sqliteProxyQuery(sqlText: string, params: unknown[], method: SqlMethod) {

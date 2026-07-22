@@ -16,6 +16,7 @@ import { getProxyAuthContext } from '../../middleware/auth.js';
 import { buildUpstreamUrl } from './upstreamUrl.js';
 import { detectDownstreamClientContext, type DownstreamClientContext } from '../../proxy-core/downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';
+import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { fetchWithObservedFirstByte, getObservedResponseMeta } from '../../proxy-core/firstByteTimeout.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
@@ -47,6 +48,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
       body,
     });
     const firstByteTimeoutMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+    const requestTraceId = createRequestTraceId();
     let maxRetries = getProxyMaxChannelRetries();
     let failoverBudgetMs = 0;
     try {
@@ -141,6 +143,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
             clientContext,
             false,
             firstByteLatencyMs,
+            requestTraceId,
           );
           if (canRetryChannelSelection(retryCount, forcedChannelId, null, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount++;
@@ -187,6 +190,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
           clientContext,
           false,
           firstByteLatencyMs,
+          requestTraceId,
         );
         return reply.code(upstream.status).send(data.value);
       } catch (err: any) {
@@ -212,6 +216,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
           clientContext,
           false,
           firstByteLatencyMs,
+          requestTraceId,
         );
         if (status > 0 && isTokenExpiredError({ status, message: errorText })) {
           await reportTokenExpired({
@@ -262,6 +267,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
       body: jsonBody || Object.fromEntries(multipartForm?.entries?.() || []),
     });
     const firstByteTimeoutMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+    const requestTraceId = createRequestTraceId();
     let maxRetries = getProxyMaxChannelRetries();
     let failoverBudgetMs = 0;
     try {
@@ -371,6 +377,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
             clientContext,
             false,
             firstByteLatencyMs,
+            requestTraceId,
           );
           if (canRetryChannelSelection(retryCount, forcedChannelId, null, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount++;
@@ -417,6 +424,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
           clientContext,
           false,
           firstByteLatencyMs,
+          requestTraceId,
         );
         return reply.code(upstream.status).send(data.value);
       } catch (err: any) {
@@ -442,6 +450,7 @@ export async function imagesProxyRoute(app: FastifyInstance) {
           clientContext,
           false,
           firstByteLatencyMs,
+          requestTraceId,
         );
         if (status > 0 && isTokenExpiredError({ status, message: errorText })) {
           await reportTokenExpired({
@@ -493,6 +502,7 @@ async function logProxy(
   clientContext: DownstreamClientContext | null = null,
   isStream = false,
   firstByteLatencyMs: number | null = null,
+  requestTraceId: string | null = null,
 ) {
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
@@ -502,6 +512,7 @@ async function logProxy(
         : null,
       sessionId: clientContext?.sessionId || null,
       traceHint: clientContext?.traceHint || null,
+      traceId: requestTraceId || null,
       downstreamPath,
       errorMessage,
     });
@@ -526,6 +537,7 @@ async function logProxy(
       clientAppName: clientContext?.clientAppName || null,
       clientConfidence: clientContext?.clientConfidence || null,
       errorMessage: normalizedErrorMessage,
+      requestTraceId: requestTraceId || null,
       retryCount,
       createdAt,
     });

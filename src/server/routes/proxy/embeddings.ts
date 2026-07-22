@@ -17,6 +17,7 @@ import { getProxyAuthContext } from '../../middleware/auth.js';
 import { buildUpstreamUrl } from './upstreamUrl.js';
 import { detectDownstreamClientContext, type DownstreamClientContext } from '../../proxy-core/downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';
+import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { fetchWithObservedFirstByte, getObservedResponseMeta } from '../../proxy-core/firstByteTimeout.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
@@ -49,6 +50,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
       body,
     });
     const firstByteTimeoutMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+    const requestTraceId = createRequestTraceId();
 
     let maxRetries = getProxyMaxChannelRetries();
     let failoverBudgetMs = 0;
@@ -167,6 +169,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
           selected, requestedModel, 'success', upstream.status, latency, null, retryCount, downstreamApiKeyId,
           resolvedUsage.promptTokens, resolvedUsage.completionTokens, resolvedUsage.totalTokens, estimatedCost, billingDetails, clientContext, downstreamPath,
           resolvedUsage.usageSource, false, firstByteLatencyMs,
+          requestTraceId,
         );
         return reply.code(upstream.status).send(data);
       } catch (err: any) {
@@ -197,6 +200,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
           null,
           false,
           firstByteLatencyMs,
+          requestTraceId,
         );
         if (status > 0 && isTokenExpiredError({ status, message: errorText })) {
           await reportTokenExpired({
@@ -244,6 +248,7 @@ async function logProxy(
   usageSource: 'upstream' | 'self-log' | 'unknown' | null = null,
   isStream = false,
   firstByteLatencyMs: number | null = null,
+  requestTraceId: string | null = null,
 ) {
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
@@ -253,6 +258,7 @@ async function logProxy(
         : null,
       sessionId: clientContext?.sessionId || null,
       traceHint: clientContext?.traceHint || null,
+      traceId: requestTraceId || null,
       downstreamPath,
       usageSource,
       errorMessage,
@@ -279,6 +285,7 @@ async function logProxy(
       clientAppName: clientContext?.clientAppName || null,
       clientConfidence: clientContext?.clientConfidence || null,
       errorMessage: normalizedErrorMessage,
+      requestTraceId: requestTraceId || null,
       retryCount,
       createdAt,
     });

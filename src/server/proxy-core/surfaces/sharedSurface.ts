@@ -252,6 +252,7 @@ export async function writeSurfaceProxyLog(input: {
       clientAppName: input.clientContext?.clientAppName || null,
       clientConfidence: input.clientContext?.clientConfidence || null,
       errorMessage: normalizedErrorMessage,
+      requestTraceId: input.traceId || null,
       retryCount: input.retryCount,
       createdAt,
     });

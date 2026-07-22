@@ -14,6 +14,7 @@ import { getProxyAuthContext } from '../../middleware/auth.js';
 import { buildUpstreamUrl } from './upstreamUrl.js';
 import { detectDownstreamClientContext, type DownstreamClientContext } from '../../proxy-core/downstreamClientContext.js';
 import { insertProxyLog } from '../../services/proxyLogStore.js';
+import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { fetchWithObservedFirstByte, getObservedResponseMeta } from '../../proxy-core/firstByteTimeout.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
@@ -75,6 +76,7 @@ export async function searchProxyRoute(app: FastifyInstance) {
       body,
     });
     const firstByteTimeoutMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+    const requestTraceId = createRequestTraceId();
     let maxRetries = getProxyMaxChannelRetries();
     let failoverBudgetMs = 0;
     try {
@@ -173,6 +175,7 @@ export async function searchProxyRoute(app: FastifyInstance) {
           downstreamPath,
           false,
           firstByteLatencyMs,
+          requestTraceId,
         );
         return reply.code(upstream.status).send(data);
       } catch (error: any) {
@@ -197,6 +200,7 @@ export async function searchProxyRoute(app: FastifyInstance) {
           downstreamPath,
           false,
           firstByteLatencyMs,
+          requestTraceId,
         );
         if (status > 0 && isTokenExpiredError({ status, message: errorText })) {
           await reportTokenExpired({
@@ -238,6 +242,7 @@ async function logProxy(
   downstreamPath = '/v1/search',
   isStream = false,
   firstByteLatencyMs: number | null = null,
+  requestTraceId: string | null = null,
 ) {
   try {
     const createdAt = formatUtcSqlDateTime(new Date());
@@ -263,9 +268,11 @@ async function logProxy(
           : null,
         sessionId: clientContext?.sessionId || null,
         traceHint: clientContext?.traceHint || null,
+        traceId: requestTraceId || null,
         downstreamPath,
         errorMessage,
       }),
+      requestTraceId: requestTraceId || null,
       clientFamily: clientContext?.clientKind || null,
       clientAppId: clientContext?.clientAppId || null,
       clientAppName: clientContext?.clientAppName || null,

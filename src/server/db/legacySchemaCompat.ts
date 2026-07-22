@@ -56,6 +56,7 @@ const BOOTSTRAP_OWNED_LEGACY_COLUMNS = [
   'proxy_logs.billing_details',
   'proxy_logs.is_stream',
   'proxy_logs.first_byte_latency_ms',
+  'proxy_logs.request_trace_id',
   'proxy_logs.client_family',
   'proxy_logs.client_app_id',
   'proxy_logs.client_app_name',
@@ -73,6 +74,7 @@ const BOOTSTRAP_OWNED_LEGACY_INDEXES = [
   'downstream_api_keys_expires_at_idx',
   'proxy_logs_client_app_id_created_at_idx',
   'proxy_logs_client_family_created_at_idx',
+  'proxy_logs_request_trace_id_created_at_idx',
   'proxy_logs_downstream_api_key_created_at_idx',
 ];
 

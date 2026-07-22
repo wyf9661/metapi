@@ -267,6 +267,7 @@ export const proxyLogs = sqliteTable('proxy_logs', {
   clientAppName: text('client_app_name'),
   clientConfidence: text('client_confidence'),
   errorMessage: text('error_message'),
+  requestTraceId: text('request_trace_id'),
   retryCount: integer('retry_count').default(0),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 }, (table) => ({
@@ -277,6 +278,7 @@ export const proxyLogs = sqliteTable('proxy_logs', {
   downstreamKeyCreatedIdx: index('proxy_logs_downstream_api_key_created_at_idx').on(table.downstreamApiKeyId, table.createdAt),
   clientAppCreatedIdx: index('proxy_logs_client_app_id_created_at_idx').on(table.clientAppId, table.createdAt),
   clientFamilyCreatedIdx: index('proxy_logs_client_family_created_at_idx').on(table.clientFamily, table.createdAt),
+  requestTraceCreatedIdx: index('proxy_logs_request_trace_id_created_at_idx').on(table.requestTraceId, table.createdAt),
 }));
 
 export const proxyDebugTraces = sqliteTable('proxy_debug_traces', {

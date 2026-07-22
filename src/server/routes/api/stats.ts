@@ -5,9 +5,9 @@ import {
   getThroughputSampleCount,
   type ThroughputAggregate,
 } from '../../services/marketplaceThroughput.js';
-﻿import { FastifyInstance } from "fastify";
+import { FastifyInstance } from "fastify";
 import { db, schema } from "../../db/index.js";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
 import { config } from "../../config.js";
 import { refreshModelsForAccount } from "../../services/modelService.js";
 import * as routeRefreshWorkflow from "../../services/routeRefreshWorkflow.js";
@@ -36,6 +36,7 @@ import {
   parseProxyLogBillingDetails,
   withProxyLogSelectFields,
 } from "../../services/proxyLogStore.js";
+import { calculateProxyRequestLevelMetrics } from "../../services/proxyRequestLevelMetrics.js";
 import {
   clearAllProxyDebugTraces,
   getProxyDebugTraceDetail,
@@ -1036,6 +1037,63 @@ export async function statsRoutes(app: FastifyInstance) {
       }
 
       return mapProxyLogRow(row, { includeBillingDetails: true });
+    },
+  );
+
+  app.get(
+    "/api/stats/proxy-request-metrics",
+    async (request) => {
+      const query = (request.query || {}) as Record<string, unknown>;
+      const since = typeof query.since === "string" ? query.since : null;
+      const until = typeof query.until === "string" ? query.until : null;
+      const model = typeof query.model === "string" ? query.model.trim() : "";
+      const conditions: any[] = [];
+      if (since) conditions.push(gte(schema.proxyLogs.createdAt, since));
+      if (until) conditions.push(lte(schema.proxyLogs.createdAt, until));
+      if (model) {
+        conditions.push(
+          or(
+            eq(schema.proxyLogs.modelActual, model),
+            eq(schema.proxyLogs.modelRequested, model),
+          ),
+        );
+      }
+
+      const rows = await withProxyLogSelectFields(
+        async ({ fields, includeRequestTraceId }) => {
+          if (!includeRequestTraceId) {
+            return [] as Array<{
+              requestTraceId: string | null;
+              status: string | null;
+              retryCount: number | null;
+              createdAt: string | null;
+            }>;
+          }
+          const selection = {
+            requestTraceId: schema.proxyLogs.requestTraceId,
+            status: fields.status,
+            retryCount: fields.retryCount,
+            createdAt: fields.createdAt,
+          };
+          const base = db.select(selection).from(schema.proxyLogs);
+          if (conditions.length === 0) {
+            return await base.all();
+          }
+          return await base.where(and(...conditions)).all();
+        },
+        { includeRequestTraceId: true },
+      );
+
+      const requestLevel = calculateProxyRequestLevelMetrics(rows as Array<{
+        requestTraceId?: string | null;
+        status?: string | null;
+        retryCount?: number | null;
+        createdAt?: string | null;
+      }>);
+      return {
+        attemptCount: Array.isArray(rows) ? rows.length : 0,
+        requestLevel,
+      };
     },
   );
 
