@@ -46,6 +46,18 @@ describe('siteProtocolProfile', () => {
     expect(capacity.retryable).toBe(true);
   });
 
+  it('normalizes NewAPI sensitive-word rejection to a client content error', () => {
+    const mapped = mapUpstreamErrorForClient(500, JSON.stringify({
+      error: { code: 'sensitive_words_detected' },
+    }));
+    expect(mapped).toMatchObject({
+      code: 'sensitive_words_detected',
+      retryable: false,
+      status: 400,
+    });
+    expect(mapped.message).toContain('敏感词');
+  });
+
   it('scores protocol affinity without hard demotion', () => {
     expect(siteProtocolAffinityFactor({ protocolProfile: null })).toBe(1);
     expect(siteProtocolAffinityFactor({

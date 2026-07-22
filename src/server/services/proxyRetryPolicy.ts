@@ -69,6 +69,8 @@ const NON_RETRYABLE_PROTOCOL_PATTERNS: RegExp[] = [
   /codex clients may only use the openai responses protocol/i,
   /only use the openai responses protocol/i,
   /policy_violation/i,
+  /sensitive[_\s-]*words?[_\s-]*detected/i,
+  /敏感词(?:检测|拦截|命中)/i,
 ];
 
 const SAME_SITE_ENDPOINT_ABORT_PATTERNS: RegExp[] = [
@@ -164,6 +166,9 @@ export function shouldRetryProxyRequest(status: number, upstreamErrorText?: stri
 }
 
 export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErrorText?: string | null): boolean {
+  // Content-policy rejection is caused by the request content. Trying another
+  // protocol path on the same site cannot recover it and may duplicate logs.
+  if (isNonRetryableProtocolPolicyError(upstreamErrorText)) return true;
   // 502/503/504 describe an unhealthy relay/origin, not an endpoint protocol
   // mismatch. Trying chat/messages on the same site only adds latency and can
   // turn an explicit responses-capable site into a misleading protocol chase.

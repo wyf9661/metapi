@@ -97,7 +97,7 @@ function buildProbeBody(modelName: string): Record<string, unknown> {
     messages: [
       {
         role: 'user',
-        content: 'Reply with OK.',
+        content: 'What is the capital of the United States?',
       },
     ],
     max_tokens: 8,
