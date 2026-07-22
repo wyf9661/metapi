@@ -1413,6 +1413,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "request_trace_id": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },
@@ -2718,6 +2724,15 @@
       "table": "proxy_logs",
       "columns": [
         "model_actual",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "proxy_logs_request_trace_id_created_at_idx",
+      "table": "proxy_logs",
+      "columns": [
+        "request_trace_id",
         "created_at"
       ],
       "unique": false
