@@ -88,6 +88,7 @@ vi.mock('../../services/downstreamApiKeyService.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  hasProxyLogRequestTraceIdColumn: async () => true,
   db: {
     select: (..._args: unknown[]) => createDbSelectChain(),
     insert: (arg: unknown) => dbInsertMock(arg),

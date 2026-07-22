@@ -90,6 +90,7 @@ vi.mock('../../services/oauth/quota.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  hasProxyLogRequestTraceIdColumn: async () => true,
   db: {
     insert: (arg: any) => dbInsertMock(arg),
     select: () => ({

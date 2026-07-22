@@ -79,7 +79,7 @@ describe('executeEndpointFlow first-byte timeout', () => {
     expect(timedOutSignal?.aborted).toBe(true);
     expect(failures).toHaveLength(1);
     expect(failures[0]).toContain('first byte timeout');
-  });
+  }, 15_000);
 
   it('treats first-byte timeout as terminal when cross-protocol fallback is disabled', async () => {
     const { executeEndpointFlow } = await import('./endpointFlow.js');

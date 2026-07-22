@@ -74,6 +74,7 @@ vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  hasProxyLogRequestTraceIdColumn: async () => true,
   db: {
     insert: (arg: any) => dbInsertMock(arg),
     select: () => ({
