@@ -115,6 +115,7 @@ export default function Accounts() {
   const [sites, setSites] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("custom");
+  const [page, setPage] = useState(1);
   const [highlightAccountId, setHighlightAccountId] = useState<number | null>(
     null,
   );
@@ -301,9 +302,15 @@ export default function Accounts() {
       (account) => resolveAccountCredentialMode(account) === activeSegment,
     );
   }, [activeSegment, sortedAccounts]);
+  const totalPages = Math.max(1, Math.ceil(visibleAccounts.length / 8));
+  const safePage = Math.min(page, totalPages);
+  const pagedAccounts = visibleAccounts.slice((safePage - 1) * 8, safePage * 8);
   const allVisibleAccountsSelected =
-    visibleAccounts.length > 0 &&
-    visibleAccounts.every((account) => selectedAccountIds.includes(account.id));
+    pagedAccounts.length > 0 &&
+    pagedAccounts.every((account) => selectedAccountIds.includes(account.id));
+  useEffect(() => {
+    setPage(1);
+  }, [activeSegment, sortMode, accounts.length]);
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
 
@@ -1022,14 +1029,14 @@ export default function Accounts() {
     if (!checked) {
       setSelectedAccountIds((current) =>
         current.filter(
-          (id) => !visibleAccounts.some((account) => account.id === id),
+          (id) => !pagedAccounts.some((account) => account.id === id),
         ),
       );
       return;
     }
     setSelectedAccountIds((current) =>
       Array.from(
-        new Set([...current, ...visibleAccounts.map((account) => account.id)]),
+        new Set([...current, ...pagedAccounts.map((account) => account.id)]),
       ),
     );
   };
@@ -1212,16 +1219,24 @@ export default function Accounts() {
     const { accountId, openRebind } = readFocusAccountIntent(location.search);
     if (!accountId || !loaded || activeSegment === "tokens") return;
 
-    const target = visibleAccounts.find((account) => account.id === accountId);
-    const row = rowRefs.current.get(accountId);
     const cleanedSearch = clearFocusParams(location.search);
-    if (!target || !row) {
+    const targetIndex = visibleAccounts.findIndex((account) => account.id === accountId);
+    if (targetIndex < 0) {
       navigate(
         { pathname: location.pathname, search: cleanedSearch },
         { replace: true },
       );
       return;
     }
+    const targetPage = Math.floor(targetIndex / 8) + 1;
+    if (targetPage !== safePage) {
+      setPage(targetPage);
+      return;
+    }
+
+    const target = visibleAccounts[targetIndex];
+    const row = rowRefs.current.get(accountId);
+    if (!target || !row) return;
 
     row.scrollIntoView({ behavior: "smooth", block: "center" });
     setHighlightAccountId(accountId);
@@ -1255,6 +1270,7 @@ export default function Accounts() {
     navigate,
     openRebindPanel,
     rebindTarget,
+    safePage,
     visibleAccounts,
   ]);
 
@@ -2764,7 +2780,7 @@ export default function Accounts() {
             {visibleAccounts.length > 0 ? (
               isMobile ? (
                 <div className="mobile-card-list">
-                  {visibleAccounts.map((a: any) => {
+                  {pagedAccounts.map((a: any) => {
                     const capabilities = resolveAccountCapabilities(a);
                     const connectionMode = resolveAccountCredentialMode(a);
                     const health = resolveRuntimeHealth(a);
@@ -3104,7 +3120,8 @@ export default function Accounts() {
                     );
                   })}
                 </div>
-              ) : (
+                ) : (
+                  <div className="accounts-desktop-table-wrap">
                 <table className="data-table accounts-table">
                   <thead>
                     <tr>
@@ -3132,7 +3149,7 @@ export default function Accounts() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleAccounts.map((a: any, i: number) => {
+                    {pagedAccounts.map((a: any, i: number) => {
                       const capabilities = resolveAccountCapabilities(a);
                       const connectionMode = resolveAccountCredentialMode(a);
                       return (
@@ -3441,6 +3458,14 @@ export default function Accounts() {
                     })}
                   </tbody>
                 </table>
+                {visibleAccounts.length > 8 ? (
+                  <div className="pagination" style={{ marginTop: 12 }}>
+                    <button className="pagination-btn" disabled={safePage <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
+                    <span>第 {safePage} / {totalPages} 页</span>
+                    <button className="pagination-btn" disabled={safePage >= totalPages} onClick={() => setPage((current) => current + 1)}>下一页</button>
+                  </div>
+                ) : null}
+                  </div>
               )
             ) : (
               <div className="empty-state">
@@ -3473,6 +3498,13 @@ export default function Accounts() {
                 </div>
               </div>
             )}
+            {isMobile && visibleAccounts.length > 8 ? (
+              <div className="pagination" style={{ marginTop: 12 }}>
+                <button className="pagination-btn" disabled={safePage <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
+                <span>第 {safePage} / {totalPages} 页</span>
+                <button className="pagination-btn" disabled={safePage >= totalPages} onClick={() => setPage((current) => current + 1)}>下一页</button>
+              </div>
+            ) : null}
           </div>
         </>
       )}

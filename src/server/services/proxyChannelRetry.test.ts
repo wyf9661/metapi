@@ -51,20 +51,17 @@ describe('proxyChannelRetry', () => {
     expect(canRetryProxyChannelWithBudget(2, 100)).toBe(false); // attempts exhausted
   });
 
-  it('scales attempts and budget for large candidate pools', () => {
+  it('uses every eligible candidate and disables the aggregate wall-clock cutoff', () => {
     config.proxyMaxChannelAttempts = 5;
     (config as any).proxyChannelFailoverBudgetMs = 8_000;
 
-    // 14 candidates → ceil(14*0.4)=6 attempts (> base 5)
-    expect(getProxyEffectiveMaxChannelAttempts(14)).toBe(6);
-    expect(getProxyEffectiveMaxChannelRetries(14)).toBe(5);
-    // budget scales with attempts * 2500 but not below base
-    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(15_000);
+    expect(getProxyEffectiveMaxChannelAttempts(14)).toBe(14);
+    expect(getProxyEffectiveMaxChannelRetries(14)).toBe(13);
+    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(0);
 
-    // small pool stays at base
-    expect(getProxyEffectiveMaxChannelAttempts(2)).toBe(5);
-    expect(getProxyEffectiveMaxChannelRetries(2)).toBe(4);
-    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(12_500);
+    expect(getProxyEffectiveMaxChannelAttempts(2)).toBe(2);
+    expect(getProxyEffectiveMaxChannelRetries(2)).toBe(1);
+    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(0);
   });
 
   it('accepts explicit maxRetries override in budget gate', () => {

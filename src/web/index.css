@@ -2062,6 +2062,7 @@ body {
 .accounts-table {
   width: 100%;
   table-layout: fixed;
+  min-width: 1180px;
 }
 
 .accounts-table th,
@@ -2071,25 +2072,28 @@ body {
 }
 
 .accounts-actions-col {
-  width: 24%;
-  min-width: 0;
+  width: 38%;
+  min-width: 430px;
 }
 
 .accounts-actions-cell {
-  min-width: 0;
-  white-space: normal !important;
+  min-width: 430px;
+  white-space: nowrap !important;
 }
 
 .accounts-row-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 4px 6px;
+  align-items: center;
+  gap: 2px;
   width: 100%;
 }
 
 .accounts-row-actions .btn-link {
   white-space: nowrap;
+  padding: 4px 5px;
+  font-size: 12px;
 }
 
 .sites-actions-col {
@@ -5619,7 +5623,8 @@ textarea {
   }
 
   .accounts-actions-col {
-    width: 28%;
+    width: 38%;
+    min-width: 430px;
   }
 
   .token-table-actions-col {

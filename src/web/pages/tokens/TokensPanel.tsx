@@ -60,6 +60,7 @@ type SyncableAccount = {
 };
 
 const ACCOUNT_SELECT_SEARCH_PLACEHOLDER = '筛选账号（名称 / 站点）';
+const TOKEN_PAGE_SIZE = 8;
 
 const isAccountSyncable = (account: any) =>
   resolveAccountCredentialMode(account) === 'session'
@@ -130,6 +131,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
   };
 
   const [tokens, setTokens] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -311,8 +313,18 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       return Number(left?.id || 0) - Number(right?.id || 0);
     });
   }, [tokens]);
-  const allVisibleTokensSelected = accountClusteredTokens.length > 0
-    && accountClusteredTokens.every((token) => selectedTokenIds.includes(token.id));
+  const totalPages = Math.max(1, Math.ceil(accountClusteredTokens.length / TOKEN_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedTokens = accountClusteredTokens.slice(
+    (safePage - 1) * TOKEN_PAGE_SIZE,
+    safePage * TOKEN_PAGE_SIZE,
+  );
+  const allVisibleTokensSelected = pagedTokens.length > 0
+    && pagedTokens.every((token) => selectedTokenIds.includes(token.id));
+
+  useEffect(() => {
+    setPage(1);
+  }, [tokens.length]);
 
   const activeAccounts = useMemo(() => accounts.filter(isAccountSyncable), [accounts]);
   const activeAccountSelectOptions = useMemo(() => (
@@ -369,12 +381,20 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     const focusTokenId = readFocusTokenId(location.search);
     if (!focusTokenId || loading) return;
 
-    const row = rowRefs.current.get(focusTokenId);
     const cleanedSearch = clearFocusParams(location.search);
-    if (!row) {
+    const targetIndex = accountClusteredTokens.findIndex((token) => token.id === focusTokenId);
+    if (targetIndex < 0) {
       navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
       return;
     }
+    const targetPage = Math.floor(targetIndex / TOKEN_PAGE_SIZE) + 1;
+    if (targetPage !== safePage) {
+      setPage(targetPage);
+      return;
+    }
+
+    const row = rowRefs.current.get(focusTokenId);
+    if (!row) return;
 
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setHighlightTokenId(focusTokenId);
@@ -384,7 +404,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     }, 2200);
 
     navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
-  }, [loading, location.pathname, location.search, navigate, tokens]);
+  }, [accountClusteredTokens, loading, location.pathname, location.search, navigate, safePage]);
 
   const focusTokenRow = useCallback((tokenId: number) => {
     const row = rowRefs.current.get(tokenId);
@@ -417,10 +437,10 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
 
   const toggleSelectAllTokens = (checked: boolean) => {
     if (!checked) {
-      setSelectedTokenIds((current) => current.filter((id) => !accountClusteredTokens.some((token) => token.id === id)));
+      setSelectedTokenIds((current) => current.filter((id) => !pagedTokens.some((token) => token.id === id)));
       return;
     }
-    setSelectedTokenIds((current) => Array.from(new Set([...current, ...accountClusteredTokens.map((token) => token.id)])));
+    setSelectedTokenIds((current) => Array.from(new Set([...current, ...pagedTokens.map((token) => token.id)])));
   };
 
   const toggleTokenDetails = (tokenId: number) => {
@@ -1179,7 +1199,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         ) : tokens.length > 0 ? (
           isMobile ? (
             <div className="mobile-card-list">
-              {accountClusteredTokens.map((token: any) => {
+              {pagedTokens.map((token: any) => {
                 const loadingPrefix = `token-${token.id}`;
                 const isPending = isMaskedPendingToken(token);
                 const isExpanded = expandedTokenIds.includes(token.id);
@@ -1328,7 +1348,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
               </tr>
             </thead>
             <tbody>
-              {accountClusteredTokens.map((token: any, i: number) => {
+              {pagedTokens.map((token: any, i: number) => {
                 const loadingPrefix = `token-${token.id}`;
                 const isPending = isMaskedPendingToken(token);
                 return (
@@ -1451,6 +1471,13 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
             <div className="empty-state-desc">可先同步站点令牌，或直接在站点创建新令牌。</div>
           </div>
         )}
+        {!loading && accountClusteredTokens.length > TOKEN_PAGE_SIZE ? (
+          <div className="pagination" style={{ marginTop: 12 }}>
+            <button className="pagination-btn" disabled={safePage <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
+            <span>第 {safePage} / {totalPages} 页</span>
+            <button className="pagination-btn" disabled={safePage >= totalPages} onClick={() => setPage((current) => current + 1)}>下一页</button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
