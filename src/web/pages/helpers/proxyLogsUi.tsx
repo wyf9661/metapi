@@ -214,6 +214,93 @@ export function renderProxyLogClientCell(
   );
 }
 
+/** Compact stream/non-stream indicator for log tables. */
+export function StreamModeIcon({
+  isStream,
+}: {
+  isStream: boolean | null | undefined;
+}) {
+  if (isStream == null) {
+    return (
+      <span
+        data-testid="proxy-log-stream-unknown"
+        style={{ color: "var(--color-text-muted)", fontSize: 12 }}
+      >
+        -
+      </span>
+    );
+  }
+
+  if (isStream) {
+    return (
+      <span
+        data-testid="proxy-log-stream-icon"
+        title="流式"
+        aria-label="流式"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--color-primary)",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M4 12c2.5-3 5.5-3 8 0s5.5 3 8 0"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <path
+            d="M6.5 16.5c1.8-2.2 4-2.2 5.5 0s3.7 2.2 5.5 0"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <path
+            d="M7.5 7.5c1.6-2 3.6-2 5 0s3.4 2 5 0"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      data-testid="proxy-log-nonstream-icon"
+      title="非流"
+      aria-label="非流"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "var(--color-text-muted)",
+      }}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect
+          x="5"
+          y="4"
+          width="14"
+          height="16"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+        <path
+          d="M8 9h8M8 13h8M8 17h5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 export function CompactSummaryMetric({
   label,
   value,

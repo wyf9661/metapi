@@ -277,12 +277,16 @@ describe('ProxyLogs server-driven page', () => {
       expect(text).toContain('全部 12');
       expect(text).toContain('成功 8');
       expect(text).toContain('失败 4');
-      expect(text).toContain('Cherry Studio');
-      expect(text).toContain('Codex');
-      expect(text).toContain('推测');
-      expect(text).toContain('下游 Key: 移动端灰度');
-      expect(text).toContain('流式');
+      // Client filter options may still list apps; main table rows no longer show client labels.
+      const row = root!.root.find((node) => (
+        node.type === 'tr' && node.props['data-testid'] === 'proxy-log-row-101'
+      ));
+      const rowText = collectText(row);
+      expect(rowText).not.toContain('Cherry Studio');
+      expect(rowText).not.toContain('下游 Key');
+      expect(root!.root.findAllByProps({ 'data-testid': 'proxy-log-stream-icon' }).length).toBeGreaterThan(0);
       expect(text).toContain('首字');
+      expect(text).toContain('模式');
     } finally {
       await act(async () => {
         root?.unmount();
@@ -810,7 +814,7 @@ describe('ProxyLogs server-driven page', () => {
     }
   });
 
-  it('renders explicit client self-reports before protocol-family fallback labels', async () => {
+  it('keeps client labels out of the main row and shows stream icon instead', async () => {
     apiMock.getProxyLogs.mockResolvedValue(buildListResponse({
       items: [
         {
@@ -860,9 +864,12 @@ describe('ProxyLogs server-driven page', () => {
         node.type === 'tr' && node.props['data-testid'] === 'proxy-log-row-101'
       ));
       const rowText = collectText(row);
-      expect(rowText).toContain('openclaw');
-      expect(rowText).toContain('Codex');
-      expect(rowText).not.toContain('推测');
+      expect(rowText).not.toContain('openclaw');
+      expect(rowText).not.toContain('Codex');
+      expect(rowText).not.toContain('下游 Key');
+      expect(root!.root.findAllByProps({ 'data-testid': 'proxy-log-nonstream-icon' }).length).toBeGreaterThan(0);
+      // first-byte column shows raw latency, not the old "首字 xx" badge
+      expect(rowText).toMatch(/22ms|0\.0*s|22/);
     } finally {
       root?.unmount();
     }
