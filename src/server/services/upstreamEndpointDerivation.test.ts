@@ -189,4 +189,55 @@ describe('upstreamEndpointDerivation', () => {
     );
     expect(order).toEqual(['responses', 'messages', 'chat']);
   });
+
+  it('keeps preferResponses sites responses-first even when runtime memory prefers chat', async () => {
+    const { recordUpstreamEndpointSuccess } = await import('./upstreamEndpointRuntimeMemory.js');
+    recordUpstreamEndpointSuccess({
+      siteId: baseContext.site.id,
+      endpoint: 'chat',
+      downstreamFormat: 'openai',
+      modelName: 'gpt-5.6-sol',
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          protocolProfile: JSON.stringify({
+            preferResponses: true,
+            requireCodexClient: false,
+            credentialMode: 'auto',
+          }),
+          customHeaders: JSON.stringify({
+            originator: 'codex_cli_rs',
+            'user-agent': 'codex_cli_rs/0.39.0',
+          }),
+        },
+      },
+      'gpt-5.6-sol',
+      'openai',
+    );
+
+    expect(order[0]).toBe('responses');
+    expect(order).toContain('chat');
+  });
+
+  it('infers preferResponses from Codex custom headers alone', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          customHeaders: JSON.stringify({
+            originator: 'codex_cli_rs',
+            'user-agent': 'codex_cli_rs/0.39.0',
+          }),
+        },
+      },
+      'gpt-5.6-sol',
+      'openai',
+    );
+    expect(order[0]).toBe('responses');
+  });
 });
