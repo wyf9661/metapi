@@ -1263,7 +1263,7 @@ export default function DownstreamKeys() {
                       </td>
                       <td style={{ color: 'var(--color-text-muted)' }}>{formatIso(row.lastUsedAt)}</td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <div className="accounts-row-actions" style={{ justifyContent: 'flex-end' }}>
+                        <div className="accounts-row-actions">
                           <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>查看</button>
                           <button className="btn btn-link" onClick={() => openEdit(row)}>编辑</button>
                           <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? '处理中...' : (row.enabled ? '禁用' : '启用')}</button>
