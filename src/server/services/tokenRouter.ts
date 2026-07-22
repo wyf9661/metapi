@@ -86,12 +86,26 @@ import {
   type OAuthRouteUnitSummary,
 } from './oauth/routeUnitService.js';
 import {
+  buildVisibleEnabledRoutes,
+  channelSupportsRequestedModel,
+  getExposedModelNameForRoute,
+  isExplicitGroupRoute,
+  isModelAllowedByDownstreamPolicy,
+  isRouteDisplayNameMatch,
+  matchesRouteRequestModel,
+  normalizeChannelSourceModel,
+  normalizeModelAlias,
+  normalizeRouteDisplayName,
+  normalizeRouteMode,
+  resolveActualModelForSelectedChannel,
+  resolveMappedModel,
+} from './tokenRouterModelMatching.js';
+import {
   isExactRouteModelPattern,
   isRegexModelPattern,
   matchesModelPattern,
   parseRegexModelPattern,
 } from './tokenRouterModelPatterns.js';
-import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import {
   formatShadowSelectionLog,
   rankShadowCandidates,
@@ -106,7 +120,6 @@ import {
 } from './routeConnectivityLookup.js';
 import { siteProtocolAffinityFactor } from '../shared/siteProtocolProfile.js';
 import {
-  normalizeTokenRouteMode,
   type RouteDecision,
   type RouteDecisionCandidate,
   type RouteMode,
@@ -618,158 +631,6 @@ type CostSignal = {
   unitCost: number;
   source: 'observed' | 'configured' | 'catalog' | 'fallback';
 };
-
-function normalizeRouteMode(routeMode: string | null | undefined): RouteMode {
-  return normalizeTokenRouteMode(routeMode);
-}
-
-function isExplicitGroupRoute(route: Pick<RouteRow, 'routeMode'> | Pick<typeof schema.tokenRoutes.$inferSelect, 'routeMode'>): boolean {
-  return normalizeRouteMode(route.routeMode) === 'explicit_group';
-}
-
-function normalizeRouteDisplayName(displayName: string | null | undefined): string {
-  return (displayName || '').trim();
-}
-
-function isRouteDisplayNameMatch(model: string, displayName: string | null | undefined): boolean {
-  const alias = normalizeRouteDisplayName(displayName);
-  return !!alias && alias === model;
-}
-
-function matchesRouteRequestModel(model: string, route: RouteRow): boolean {
-  if (isExplicitGroupRoute(route)) {
-    return isRouteDisplayNameMatch(model, route.displayName);
-  }
-  return matchesModelPattern(model, route.modelPattern) || isRouteDisplayNameMatch(model, route.displayName);
-}
-
-function getExposedModelNameForRoute(route: RouteRow): string {
-  return normalizeRouteDisplayName(route.displayName) || route.modelPattern;
-}
-
-function hasCustomDisplayName(route: Pick<RouteRow, 'modelPattern' | 'displayName'>): boolean {
-  const displayName = normalizeRouteDisplayName(route.displayName);
-  const modelPattern = (route.modelPattern || '').trim();
-  return !!displayName && displayName !== modelPattern;
-}
-
-function buildVisibleEnabledRoutes(routes: RouteRow[]): RouteRow[] {
-  const coveringGroups = routes.filter((route) => (
-    route.enabled
-    && (
-      (isExplicitGroupRoute(route) && normalizeRouteDisplayName(route.displayName).length > 0 && route.sourceRouteIds.length > 0)
-      || (!isExplicitGroupRoute(route) && !isExactRouteModelPattern(route.modelPattern) && hasCustomDisplayName(route))
-    )
-  ));
-
-  if (coveringGroups.length === 0) return routes;
-
-  return routes.filter((route) => {
-    if (isExplicitGroupRoute(route)) {
-      return normalizeRouteDisplayName(route.displayName).length > 0;
-    }
-    if (!isExactRouteModelPattern(route.modelPattern)) return true;
-    if (hasCustomDisplayName(route)) return true;
-
-    const exactModel = (route.modelPattern || '').trim();
-    if (!exactModel) return true;
-
-    return !coveringGroups.some((groupRoute) => {
-      if (groupRoute.id === route.id) return false;
-      if (!normalizeRouteDisplayName(groupRoute.displayName)) return false;
-      if (isExplicitGroupRoute(groupRoute)) {
-        return groupRoute.sourceRouteIds.includes(route.id);
-      }
-      return matchesModelPattern(exactModel, groupRoute.modelPattern);
-    });
-  });
-}
-
-function normalizeModelAlias(modelName: string): string {
-  return canonicalizeModelName(modelName);
-}
-
-function isModelAliasEquivalent(left: string, right: string): boolean {
-  const a = normalizeModelAlias(left);
-  const b = normalizeModelAlias(right);
-  return !!a && !!b && a === b;
-}
-
-function channelSupportsRequestedModel(channelSourceModel: string | null | undefined, requestedModel: string): boolean {
-  const source = (channelSourceModel || '').trim();
-  if (!source) return true;
-  if (source === requestedModel) return true;
-  if (isModelAliasEquivalent(source, requestedModel)) return true;
-  if (matchesModelPattern(requestedModel, source)) return true;
-  return false;
-}
-
-function isModelAllowedByDownstreamPolicy(requestedModel: string, policy: DownstreamRoutingPolicy): boolean {
-  const supportedPatterns = Array.isArray(policy.supportedModels)
-    ? policy.supportedModels
-    : [];
-  const hasSupportedPatterns = supportedPatterns.length > 0;
-  const hasAllowedRoutes = policy.allowedRouteIds.length > 0;
-  if (!hasSupportedPatterns && !hasAllowedRoutes) return policy.denyAllWhenEmpty === true ? false : true;
-  const matchedSupportedPattern = supportedPatterns.some((pattern) => matchesModelPattern(requestedModel, pattern));
-  if (matchedSupportedPattern) return true;
-  if (hasAllowedRoutes) return true;
-  return false;
-}
-
-function parseModelMappingRecord(modelMapping?: string | Record<string, unknown> | null): Record<string, unknown> | null {
-  if (!modelMapping) return null;
-  if (typeof modelMapping === 'object' && !Array.isArray(modelMapping)) {
-    return modelMapping as Record<string, unknown>;
-  }
-  if (typeof modelMapping !== 'string') return null;
-  try {
-    const parsed = JSON.parse(modelMapping);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function resolveMappedModel(requestedModel: string, modelMapping?: string | Record<string, unknown> | null): string {
-  const parsed = parseModelMappingRecord(modelMapping);
-  if (!parsed) return requestedModel;
-
-  const entries = Object.entries(parsed)
-    .filter(([, value]) => typeof value === 'string' && value.trim().length > 0) as Array<[string, string]>;
-
-  const exact = entries.find(([pattern]) => pattern === requestedModel);
-  if (exact) return exact[1].trim();
-
-  for (const [pattern, target] of entries) {
-    if (matchesModelPattern(requestedModel, pattern)) {
-      return target.trim();
-    }
-  }
-
-  return requestedModel;
-}
-
-function normalizeChannelSourceModel(channelSourceModel: string | null | undefined): string {
-  return (channelSourceModel || '').trim();
-}
-
-function resolveActualModelForSelectedChannel(
-  requestedModel: string,
-  route: RouteRow,
-  mappedModel: string,
-  channelSourceModel: string | null | undefined,
-): string {
-  const sourceModel = normalizeChannelSourceModel(channelSourceModel);
-  if (sourceModel && isModelAliasEquivalent(sourceModel, mappedModel)) {
-    return sourceModel;
-  }
-  if (isRouteDisplayNameMatch(requestedModel, route.displayName) && sourceModel) {
-    return sourceModel;
-  }
-  return mappedModel;
-}
 
 function resolveRouteStrategy(route: RouteRow): RouteRoutingStrategy {
   return normalizeRouteRoutingStrategy(route.routingStrategy);
