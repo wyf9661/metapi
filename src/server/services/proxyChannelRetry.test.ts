@@ -42,7 +42,8 @@ describe('proxyChannelRetry', () => {
     expect(canRetryProxyChannel(0)).toBe(false);
   });
 
-  it('honors wall-clock failover budget', () => {
+  it('defaults aggregate wall-clock budget off and still honors explicit values', () => {
+    expect(buildConfig({} as NodeJS.ProcessEnv).proxyChannelFailoverBudgetMs).toBe(0);
     config.proxyMaxChannelAttempts = 3;
     (config as any).proxyChannelFailoverBudgetMs = 1000;
     expect(getProxyChannelFailoverBudgetMs()).toBe(1000);
