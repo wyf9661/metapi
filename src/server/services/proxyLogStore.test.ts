@@ -5,6 +5,7 @@ const {
   hasProxyLogClientColumnsMock,
   hasProxyLogDownstreamApiKeyIdColumnMock,
   hasProxyLogStreamTimingColumnsMock,
+  hasProxyLogRequestTraceIdColumnMock,
   dbInsertMock,
   dbInsertValuesMock,
   dbInsertRunMock,
@@ -14,6 +15,7 @@ const {
   hasProxyLogClientColumnsMock: vi.fn(),
   hasProxyLogDownstreamApiKeyIdColumnMock: vi.fn(),
   hasProxyLogStreamTimingColumnsMock: vi.fn(),
+  hasProxyLogRequestTraceIdColumnMock: vi.fn(),
   dbInsertMock: vi.fn(),
   dbInsertValuesMock: vi.fn(),
   dbInsertRunMock: vi.fn(),
@@ -39,6 +41,7 @@ const {
     clientAppName: 'client_app_name',
     clientConfidence: 'client_confidence',
     errorMessage: 'error_message',
+    requestTraceId: 'request_trace_id',
     retryCount: 'retry_count',
     createdAt: 'created_at',
   },
@@ -55,6 +58,7 @@ vi.mock('../db/index.js', () => ({
   hasProxyLogClientColumns: (...args: unknown[]) => hasProxyLogClientColumnsMock(...args),
   hasProxyLogDownstreamApiKeyIdColumn: (...args: unknown[]) => hasProxyLogDownstreamApiKeyIdColumnMock(...args),
   hasProxyLogStreamTimingColumns: (...args: unknown[]) => hasProxyLogStreamTimingColumnsMock(...args),
+  hasProxyLogRequestTraceIdColumn: (...args: unknown[]) => hasProxyLogRequestTraceIdColumnMock(...args),
 }));
 
 import { insertProxyLog, parseProxyLogBillingDetails, withProxyLogSelectFields } from './proxyLogStore.js';
@@ -65,6 +69,7 @@ describe('proxyLogStore', () => {
     hasProxyLogClientColumnsMock.mockReset();
     hasProxyLogDownstreamApiKeyIdColumnMock.mockReset();
     hasProxyLogStreamTimingColumnsMock.mockReset();
+    hasProxyLogRequestTraceIdColumnMock.mockReset();
     dbInsertMock.mockReset();
     dbInsertValuesMock.mockReset();
     dbInsertRunMock.mockReset();
@@ -72,6 +77,7 @@ describe('proxyLogStore', () => {
     hasProxyLogClientColumnsMock.mockResolvedValue(false);
     hasProxyLogDownstreamApiKeyIdColumnMock.mockResolvedValue(false);
     hasProxyLogStreamTimingColumnsMock.mockResolvedValue(false);
+    hasProxyLogRequestTraceIdColumnMock.mockResolvedValue(false);
 
     dbInsertMock.mockReturnValue({
       values: (...args: unknown[]) => dbInsertValuesMock(...args),

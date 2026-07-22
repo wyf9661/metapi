@@ -89,6 +89,8 @@ const VERIFIED_SCHEMA_MARKERS: SchemaMarker[] = [
   // 0019: proxy log stream/timing columns
   { table: 'proxy_logs', column: 'is_stream' },
   { table: 'proxy_logs', column: 'first_byte_latency_ms' },
+  // 0020: request_trace_id for request-level failover metrics
+  { table: 'proxy_logs', column: 'request_trace_id' },
 ];
 
 
