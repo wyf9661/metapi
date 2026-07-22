@@ -2321,8 +2321,8 @@ describe('chat proxy stream behavior', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [firstUrl, firstOptions] = fetchMock.mock.calls[0] as [string, any];
     const [secondUrl, secondOptions] = fetchMock.mock.calls[1] as [string, any];
-    expect(firstUrl).toContain('/v1/messages');
-    expect(secondUrl).toContain('/v1/messages');
+    expect(firstUrl).toContain('/v1/chat/completions');
+    expect(secondUrl).toContain('/v1/chat/completions');
     expect(firstOptions.headers['openai-beta']).toBe('responses-2025-03-11');
     expect(secondOptions.headers['openai-beta']).toBeUndefined();
     expect(secondOptions.headers['content-type']).toBe('application/json');

@@ -144,10 +144,12 @@ function preferredEndpointOrder(
     return ['messages', 'chat', 'responses'];
   }
 
-  // Generic NewAPI-class gateways: prefer Anthropic-compatible messages, then
-  // OpenAI chat, and only then responses. Responses-first is reserved for
-  // explicit Codex/preferResponses sites and native openai/codex platforms.
-  const base = ['messages', 'chat', 'responses'] as UpstreamEndpoint[];
+  // Generic NewAPI-class gateways for OpenAI-compatible clients: prefer chat
+  // (matches the downstream path), then messages, then responses.
+  // Messages-first is reserved for Claude downstream / Claude-family models.
+  // Responses-first is reserved for explicit Codex/preferResponses sites and
+  // native openai/codex platforms.
+  const base = ['chat', 'messages', 'responses'] as UpstreamEndpoint[];
   if (oauthProvider === 'codex' && base.includes('responses')) {
     return ['responses', ...base.filter((endpoint) => endpoint !== 'responses')];
   }
