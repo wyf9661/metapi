@@ -7,22 +7,22 @@ describe('proxyRequestAggregateMetrics', () => {
       {
         requestTraceId: 'r_first',
         attemptCount: 1,
-        firstAttemptAt: '2026-07-22 01:00:00',
-        firstSuccessAt: '2026-07-22 01:00:00',
+        firstAttemptRetry: 0,
+        firstSuccessRetry: 0,
         successCount: 1,
       },
       {
         requestTraceId: 'r_rescued',
         attemptCount: '3',
-        firstAttemptAt: '2026-07-22 01:01:00',
-        firstSuccessAt: '2026-07-22 01:01:02',
+        firstAttemptRetry: 0,
+        firstSuccessRetry: 2,
         successCount: '1',
       },
       {
         requestTraceId: 'r_failed',
         attemptCount: 2,
-        firstAttemptAt: '2026-07-22 01:02:00',
-        firstSuccessAt: null,
+        firstAttemptRetry: 0,
+        firstSuccessRetry: null,
         successCount: 0,
       },
     ])).toEqual({
