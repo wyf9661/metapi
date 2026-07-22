@@ -147,6 +147,7 @@ export type MappedUpstreamError = {
   code: string;
   message: string;
   retryable: boolean;
+  status?: number;
 };
 
 /**
@@ -155,6 +156,20 @@ export type MappedUpstreamError = {
 export function mapUpstreamErrorForClient(status: number, upstreamErrorText?: string | null): MappedUpstreamError {
   const text = (upstreamErrorText || '').trim();
   const lower = text.toLowerCase();
+
+  if (
+    /sensitive[_\s-]*words?[_\s-]*detected/i.test(text)
+    || /敏感词(?:检测|拦截|命中)/i.test(text)
+  ) {
+    return {
+      code: 'sensitive_words_detected',
+      message: '请求内容命中了上游站点的敏感词规则，已被拦截。请修改输入内容后重试。',
+      retryable: false,
+      // NewAPI currently reports this policy rejection as 500, but it is a
+      // request-content error rather than an upstream service outage.
+      status: 400,
+    };
+  }
 
   if (
     lower.includes('codex_requires_responses_protocol')

@@ -62,7 +62,6 @@ type SiteRow = {
   id: number;
   name: string;
   url: string;
-  externalCheckinUrl?: string | null;
   platform?: string;
   status?: string;
   proxyUrl?: string | null;
@@ -776,7 +775,6 @@ export default function Sites() {
     const payload = {
       name: form.name.trim(),
       url: primarySiteUrlAnalysis.persistedUrl || form.url.trim(),
-      externalCheckinUrl: form.externalCheckinUrl.trim(),
       platform: form.platform.trim(),
       initializationPresetId: selectedInitializationPresetId,
       proxyUrl: form.proxyUrl.trim(),
@@ -1403,12 +1401,6 @@ export default function Sites() {
                 placeholder="平台类型（可自动检测）"
               />
             </div>
-            <input
-              placeholder="外部签到/福利站点 URL（可选）"
-              value={form.externalCheckinUrl}
-              onChange={(e) => setForm((prev) => ({ ...prev, externalCheckinUrl: e.target.value }))}
-              style={formInputStyle}
-            />
           </ResponsiveFormGrid>
           {activeInitializationPreset && (
             <div className="alert alert-info animate-scale-in">
@@ -2178,26 +2170,6 @@ export default function Sites() {
                           )}
                         />
                         <MobileField
-                          label="外部签到站URL"
-                          value={site.externalCheckinUrl ? (
-                            <a
-                              href={site.externalCheckinUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="sites-url-link"
-                              style={{
-                                fontSize: 12,
-                                fontFamily: 'var(--font-mono)',
-                                color: 'var(--color-primary)',
-                                textDecoration: 'underline',
-                                wordBreak: 'break-all',
-                              }}
-                            >
-                              {site.externalCheckinUrl}
-                            </a>
-                          ) : '-'}
-                        />
-                        <MobileField
                           label="自定义头"
                           value={hasConfiguredCustomHeaders(site.customHeaders) ? '已配置' : '-'}
                         />
@@ -2258,7 +2230,6 @@ export default function Sites() {
                     />
                   </th>
                   <th>名称</th>
-                  <th>外部签到站URL</th>
                   <th>总余额</th>
                   <th>状态</th>
                   <th>系统代理</th>
@@ -2310,25 +2281,6 @@ export default function Sites() {
                           API 地址: {buildSiteApiEndpointSummary(site)}
                         </span>
                       </div>
-                    </td>
-                    <td className="sites-url-cell" style={{ maxWidth: 300 }}>
-                      {site.externalCheckinUrl ? (
-                        <a
-                          href={site.externalCheckinUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="sites-url-link"
-                          style={{
-                            fontSize: 12,
-                            fontFamily: 'var(--font-mono)',
-                            color: 'var(--color-primary)',
-                            textDecoration: 'underline',
-                            wordBreak: 'break-all',
-                          }}
-                        >
-                          {site.externalCheckinUrl}
-                        </a>
-                      ) : null}
                     </td>
                     <td className="site-balance-cell">
                       <SiteBalanceDisplay

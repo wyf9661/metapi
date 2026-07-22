@@ -606,7 +606,7 @@ export function createSurfaceFailureToolkit(input: {
       const mapped = mapUpstreamErrorForClient(args.status, args.errText);
       return {
         action: 'respond',
-        status: args.status,
+        status: mapped.status ?? args.status,
         payload: {
           error: {
             message: mapped.message,
@@ -670,7 +670,7 @@ export function createSurfaceFailureToolkit(input: {
       const mappedDetected = mapUpstreamErrorForClient(args.failure.status, args.failure.reason);
       return {
         action: 'respond',
-        status: args.failure.status,
+        status: mappedDetected.status ?? args.failure.status,
         payload: {
           error: {
             message: mappedDetected.message,

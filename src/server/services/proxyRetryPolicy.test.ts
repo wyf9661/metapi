@@ -66,6 +66,18 @@ describe('proxyRetryPolicy', () => {
     expect(shouldRetryProxyRequest(403, payload)).toBe(false);
   });
 
+  it('does not retry or cascade NewAPI sensitive-word policy rejections reported as 500', () => {
+    const payload = JSON.stringify({
+      error: {
+        code: 'sensitive_words_detected',
+        message: 'sensitive words detected',
+      },
+    });
+    expect(isNonRetryableProtocolPolicyError(payload)).toBe(true);
+    expect(shouldRetryProxyRequest(500, payload)).toBe(false);
+    expect(shouldAbortSameSiteEndpointFallback(500, payload)).toBe(true);
+  });
+
   it('does not retry client-side timeout validation errors', () => {
     expect(
       shouldRetryProxyRequest(400, '{"error":{"message":"timeout must be <= 60"}}'),

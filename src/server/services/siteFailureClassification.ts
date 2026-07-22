@@ -53,6 +53,8 @@ export const SITE_VALIDATION_FAILURE_PATTERNS: RegExp[] = [
   /invalid\s+json/i,
   /cannot\s+parse/i,
   /unsupported\s+media\s+type/i,
+  /sensitive[_\s-]*words?[_\s-]*detected/i,
+  /敏感词(?:检测|拦截|命中)/i,
 ];
 
 export const SITE_TRANSIENT_FAILURE_PATTERNS: RegExp[] = [

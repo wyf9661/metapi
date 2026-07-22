@@ -2053,7 +2053,7 @@ body {
 
 .accounts-table th:nth-child(2),
 .accounts-table td:nth-child(2) {
-  width: 14%;
+  width: 18%;
 }
 
 .accounts-table th:nth-child(3),
@@ -2063,14 +2063,14 @@ body {
 
 .accounts-table th:nth-child(4),
 .accounts-table td:nth-child(4) {
-  width: 16%;
+  width: 20%;
 }
 
 .accounts-table th:nth-child(5),
 .accounts-table td:nth-child(5),
 .accounts-table th:nth-child(6),
 .accounts-table td:nth-child(6) {
-  width: 8%;
+  width: 9%;
 }
 
 .accounts-table th:nth-child(7),
@@ -2079,10 +2079,10 @@ body {
   white-space: nowrap;
 }
 
-/* Last column is always the action buttons under 「操作」. */
+/* Last column = actions: fit button row, no huge right void. */
 .accounts-actions-col,
 .accounts-actions-cell {
-  width: 30%;
+  width: 22%;
   white-space: nowrap !important;
   overflow: visible;
   text-align: left;
@@ -2106,11 +2106,51 @@ body {
 .sites-table {
   width: 100%;
   table-layout: fixed;
+  min-width: 0;
 }
 
+/* checkbox | name | balance | status | proxy | weight | platform | created | actions */
+.sites-table th:nth-child(1),
+.sites-table td:nth-child(1) {
+  width: 40px;
+}
+
+.sites-table th:nth-child(2),
+.sites-table td:nth-child(2) {
+  width: 22%;
+}
+
+.sites-table th:nth-child(3),
+.sites-table td:nth-child(3) {
+  width: 12%;
+}
+
+.sites-table th:nth-child(4),
+.sites-table td:nth-child(4),
+.sites-table th:nth-child(5),
+.sites-table td:nth-child(5) {
+  width: 8%;
+}
+
+.sites-table th:nth-child(6),
+.sites-table td:nth-child(6) {
+  width: 7%;
+}
+
+.sites-table th:nth-child(7),
+.sites-table td:nth-child(7) {
+  width: 10%;
+}
+
+.sites-table th:nth-child(8),
+.sites-table td:nth-child(8) {
+  width: 12%;
+}
+
+/* Keep 置顶/添加 Key/编辑/禁用/删除 on one left-aligned row under 「操作」. */
 .sites-actions-col,
 .sites-actions-cell {
-  width: 22%;
+  width: 28%;
   white-space: nowrap !important;
   text-align: left;
   overflow: visible;
@@ -2125,14 +2165,58 @@ body {
   max-width: 100%;
 }
 
+.sites-row-actions .btn-link {
+  white-space: nowrap;
+  padding: 2px 3px;
+  font-size: 11px;
+}
+
 .token-table {
   width: 100%;
   table-layout: fixed;
+  min-width: 0;
+}
+
+/* checkbox | name | value | site | account | group | status | default | updated | actions */
+.token-table th:nth-child(1),
+.token-table td:nth-child(1) {
+  width: 40px;
+}
+
+.token-table th:nth-child(2),
+.token-table td:nth-child(2) {
+  width: 14%;
+}
+
+.token-table th:nth-child(3),
+.token-table td:nth-child(3) {
+  width: 16%;
+}
+
+.token-table th:nth-child(4),
+.token-table td:nth-child(4),
+.token-table th:nth-child(5),
+.token-table td:nth-child(5) {
+  width: 12%;
+}
+
+.token-table th:nth-child(6),
+.token-table td:nth-child(6),
+.token-table th:nth-child(7),
+.token-table td:nth-child(7),
+.token-table th:nth-child(8),
+.token-table td:nth-child(8) {
+  width: 8%;
+}
+
+.token-table th:nth-child(9),
+.token-table td:nth-child(9) {
+  width: 12%;
 }
 
 .token-table-actions-col,
 .token-actions-cell {
-  width: 20%;
+  width: 16%;
   white-space: nowrap !important;
   text-align: left;
   overflow: visible;
@@ -2143,8 +2227,14 @@ body {
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 2px 4px;
+  gap: 0;
   max-width: 100%;
+}
+
+.token-table-actions .btn-link {
+  white-space: nowrap;
+  padding: 2px 3px;
+  font-size: 11px;
 }
 
 .site-balance-cell {
@@ -2192,13 +2282,6 @@ body {
 .site-balance-subscription:hover,
 .site-balance-subscription:focus-visible {
   color: var(--color-text-secondary);
-}
-
-.sites-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 2px;
 }
 
 .sites-url-cell {
@@ -5670,12 +5753,12 @@ textarea {
 
   .accounts-actions-col,
   .accounts-actions-cell {
-    width: 32%;
+    width: 24%;
   }
 
   .token-table-actions-col,
   .token-actions-cell {
-    width: 22%;
+    width: 18%;
   }
 
   .accounts-table th,
@@ -5701,7 +5784,7 @@ textarea {
 
   .sites-actions-col,
   .sites-actions-cell {
-    width: 24%;
+    width: 30%;
   }
 
   .sites-table th,
@@ -6393,12 +6476,12 @@ textarea {
 
   .accounts-actions-col,
   .accounts-actions-cell {
-    width: 32%;
+    width: 24%;
   }
 
   .token-table-actions-col,
   .token-actions-cell {
-    width: 22%;
+    width: 18%;
   }
 
   .accounts-table th:nth-child(5),
@@ -6424,13 +6507,13 @@ textarea {
 
   .sites-actions-col,
   .sites-actions-cell {
-    width: 24%;
+    width: 32%;
   }
 
-  .sites-table th:nth-child(2),
-  .sites-table td:nth-child(2),
-  .sites-table th:nth-child(6),
-  .sites-table td:nth-child(6) {
+  .sites-table th:nth-child(5),
+  .sites-table td:nth-child(5),
+  .sites-table th:nth-child(8),
+  .sites-table td:nth-child(8) {
     display: none;
   }
 

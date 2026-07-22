@@ -20,7 +20,6 @@ describe('buildSiteSaveAction', () => {
       {
         name: 'site-a',
         url: 'https://a.example.com/',
-        externalCheckinUrl: 'https://checkin.a.example.com',
         platform: 'new-api',
         proxyUrl: 'socks5://127.0.0.1:1080',
         apiEndpoints: [
@@ -43,7 +42,6 @@ describe('buildSiteSaveAction', () => {
       payload: {
         name: 'site-a',
         url: 'https://a.example.com/',
-        externalCheckinUrl: 'https://checkin.a.example.com',
         platform: 'new-api',
         proxyUrl: 'socks5://127.0.0.1:1080',
         apiEndpoints: [
@@ -68,7 +66,6 @@ describe('buildSiteSaveAction', () => {
       {
         name: 'site-b',
         url: 'https://b.example.com',
-        externalCheckinUrl: '',
         platform: 'one-api',
         proxyUrl: '',
         useSystemProxy: true,
@@ -85,7 +82,6 @@ describe('buildSiteSaveAction', () => {
       payload: {
         name: 'site-b',
         url: 'https://b.example.com',
-        externalCheckinUrl: '',
         platform: 'one-api',
         proxyUrl: '',
         useSystemProxy: true,
@@ -104,8 +100,7 @@ describe('buildSiteSaveAction', () => {
         {
           name: 'site-c',
           url: 'https://c.example.com',
-          externalCheckinUrl: '',
-          platform: '',
+            platform: '',
           proxyUrl: '',
           useSystemProxy: false,
           apiEndpoints: [],
@@ -121,7 +116,6 @@ describe('buildSiteSaveAction', () => {
     const legacySite = {
       name: 'site-d',
       url: 'https://d.example.com',
-      externalCheckinUrl: null,
       platform: 'new-api',
       proxyUrl: 'http://127.0.0.1:8080',
       apiEndpoints: [
