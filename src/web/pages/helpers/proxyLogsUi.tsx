@@ -268,6 +268,7 @@ export function StreamModeIcon({
     );
   }
 
+  // Three horizontal lines — pairs with the wave glyph as "complete / non-stream".
   return (
     <span
       data-testid="proxy-log-nonstream-icon"
@@ -280,18 +281,21 @@ export function StreamModeIcon({
         color: "var(--color-text-muted)",
       }}
     >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect
-          x="5"
-          y="4"
-          width="14"
-          height="16"
-          rx="2"
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M5 8h14"
           stroke="currentColor"
           strokeWidth="1.8"
+          strokeLinecap="round"
         />
         <path
-          d="M8 9h8M8 13h8M8 17h5"
+          d="M5 12h14"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M5 16h14"
           stroke="currentColor"
           strokeWidth="1.8"
           strokeLinecap="round"
