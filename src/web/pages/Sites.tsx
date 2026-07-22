@@ -254,6 +254,7 @@ export default function Sites() {
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('custom');
+  const [page, setPage] = useState(1);
   const [highlightSiteId, setHighlightSiteId] = useState<number | null>(null);
   const [editor, setEditor] = useState<SiteEditorState | null>(null);
   const apiEndpointDraftIdRef = useRef(0);
@@ -418,7 +419,14 @@ export default function Sites() {
     () => sortItemsForDisplay(sites, sortMode, (site) => site.totalBalance || 0),
     [sites, sortMode],
   );
-  const allVisibleSitesSelected = sortedSites.length > 0 && sortedSites.every((site) => selectedSiteIds.includes(site.id));
+  const totalPages = Math.max(1, Math.ceil(sortedSites.length / 8));
+  const safePage = Math.min(page, totalPages);
+  const pagedSites = sortedSites.slice((safePage - 1) * 8, safePage * 8);
+  const allVisibleSitesSelected = pagedSites.length > 0 && pagedSites.every((site) => selectedSiteIds.includes(site.id));
+
+  useEffect(() => {
+    setPage(1);
+  }, [sortMode, sites.length]);
 
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
@@ -457,10 +465,20 @@ export default function Sites() {
     const focusSiteId = readFocusSiteId(location.search);
     if (!focusSiteId || !loaded) return;
 
-    const row = rowRefs.current.get(focusSiteId);
     const cleanedSearch = clearFocusParams(location.search);
-    if (!row) {
+    const targetIndex = sortedSites.findIndex((site) => site.id === focusSiteId);
+    if (targetIndex < 0) {
       navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
+      return;
+    }
+    const targetPage = Math.floor(targetIndex / 8) + 1;
+    if (targetPage !== safePage) {
+      setPage(targetPage);
+      return;
+    }
+
+    const row = rowRefs.current.get(focusSiteId);
+    if (!row) {
       return;
     }
 
@@ -472,7 +490,7 @@ export default function Sites() {
     }, 2200);
 
     navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
-  }, [loaded, location.pathname, location.search, navigate, sortedSites]);
+  }, [loaded, location.pathname, location.search, navigate, safePage, sortedSites]);
 
   const closeEditor = () => {
     setEditor(null);
@@ -1068,10 +1086,10 @@ export default function Sites() {
 
   const toggleSelectAllVisible = (checked: boolean) => {
     if (!checked) {
-      setSelectedSiteIds((current) => current.filter((id) => !sortedSites.some((site) => site.id === id)));
+      setSelectedSiteIds((current) => current.filter((id) => !pagedSites.some((site) => site.id === id)));
       return;
     }
-    setSelectedSiteIds((current) => Array.from(new Set([...current, ...sortedSites.map((site) => site.id)])));
+    setSelectedSiteIds((current) => Array.from(new Set([...current, ...pagedSites.map((site) => site.id)])));
   };
 
   const toggleSiteDetails = (siteId: number) => {
@@ -1256,7 +1274,7 @@ export default function Sites() {
       )}
 
       <div className="info-tip" style={{ marginBottom: 12 }}>
-        站点权重说明：最终站点倍率 = 站点全局权重 × 设置页中下游 API Key 的站点倍率。它会与路由策略因子（基础权重、价值分、成本、余额、使用频次）共同作用。数值越大，该站点在同优先级下越容易被选中。建议范围 0.5-3，默认 1；长期不建议超过 5。
+        站点倍率 = 全局权重 × 下游 API Key 站点倍率；数值越大越容易被选中。建议 0.5-3，默认 1，长期不超过 5。
       </div>
 
       <DeleteConfirmModal
@@ -2009,7 +2027,7 @@ export default function Sites() {
         {sites.length > 0 ? (
           isMobile ? (
             <div className="mobile-card-list">
-              {sortedSites.map((site) => {
+              {pagedSites.map((site) => {
                 const isExpanded = expandedSiteIds.includes(site.id);
                 return (
                   <MobileCard
@@ -2248,7 +2266,7 @@ export default function Sites() {
                 </tr>
               </thead>
               <tbody>
-                {sortedSites.map((site, i) => (
+                {pagedSites.map((site, i) => (
                   <tr
                     key={site.id}
                     data-testid={`site-row-${site.id}`}
@@ -2425,6 +2443,13 @@ export default function Sites() {
             <div className="empty-state-desc">点击“+ 添加站点”开始使用。</div>
           </div>
         )}
+        {sortedSites.length > 8 ? (
+          <div className="pagination" style={{ marginTop: 12 }}>
+            <button className="pagination-btn" disabled={safePage <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
+            <span>第 {safePage} / {totalPages} 页</span>
+            <button className="pagination-btn" disabled={safePage >= totalPages} onClick={() => setPage((current) => current + 1)}>下一页</button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
