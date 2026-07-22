@@ -25,13 +25,17 @@ export function getProxyMaxChannelRetries(): number {
   return Math.max(0, getProxyMaxChannelAttempts() - 1);
 }
 
-/** Wall-clock budget for multi-channel failover (ms). 0 = disabled. */
+/**
+ * Legacy static wall-clock budget (ms). 0 = disabled.
+ * Prefer getProxyEffectiveFailoverBudgetMs / resolveProxyFailoverLimits — the
+ * live path always disables aggregate wall-clock truncation.
+ */
 export function getProxyChannelFailoverBudgetMs(): number {
   const budget = Math.trunc((config as { proxyChannelFailoverBudgetMs?: number }).proxyChannelFailoverBudgetMs || 0);
   return budget > 0 ? budget : 0;
 }
 
-/** Channel failover follows the complete eligible pool; no wall-clock truncation. */
+/** Always 0: full eligible pool traversal; no aggregate wall-clock cutoff. */
 export function getProxyEffectiveFailoverBudgetMs(candidateCount: number): number {
   void candidateCount;
   return 0;
