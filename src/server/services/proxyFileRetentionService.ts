@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { checkpointSqliteWal } from '../db/index.js';
 import { getLogCleanupCutoffUtc } from './logCleanupService.js';
 import { purgeExpiredProxyFiles } from './proxyFileStore.js';
 
@@ -45,6 +46,7 @@ export function startProxyFileRetentionService(): void {
     try {
       const result = await cleanupExpiredProxyFiles();
       if (!result.enabled || result.deleted <= 0) return;
+      checkpointSqliteWal('PASSIVE');
       console.info(`[proxy-file-retention] deleted ${result.deleted} files before ${result.cutoffUtc}`);
     } catch (error) {
       console.warn('[proxy-file-retention] cleanup failed', error);

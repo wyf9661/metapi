@@ -1496,6 +1496,8 @@ function initSqliteDb() {
   ensureDownstreamApiKeySchema();
   ensureProxyLogBillingDetailsSchema();
   ensureProxyLogClientSchema();
+  ensureProxyLogStreamTimingSchema();
+  ensureProxyLogRequestTraceIdSchema();
   ensureProxyVideoTaskSchema();
   ensureProxyFileSchema();
 
