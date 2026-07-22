@@ -363,7 +363,7 @@ export default function Settings() {
     proxySessionChannelConcurrencyLimit: 2,
     proxySessionChannelQueueWaitMs: 1500,
     routingFallbackUnitCost: 1,
-    proxyFirstByteTimeoutSec: 0,
+    proxyFirstByteTimeoutSec: 15,
     routeFailureCooldownMaxValue: 30,
     routeFailureCooldownMaxUnit: 'day',
     routingWeights: defaultWeights,
@@ -2139,7 +2139,7 @@ export default function Settings() {
               style={inputStyle}
             />
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
-              `0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换，已经开始输出的请求不会被这项超时打断。
+              默认 15 秒；`0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换渠道，已经开始输出的请求不会被这项超时打断。
             </div>
           </div>
 

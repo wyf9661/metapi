@@ -167,7 +167,8 @@ export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErro
   // 502/503/504 describe an unhealthy relay/origin, not an endpoint protocol
   // mismatch. Trying chat/messages on the same site only adds latency and can
   // turn an explicit responses-capable site into a misleading protocol chase.
-  if (status === 502 || status === 503 || status === 504) return true;
+  // 524 is Cloudflare's "origin timeout" — same class as 504, not a protocol mismatch.
+  if (status === 502 || status === 503 || status === 504 || status === 524) return true;
   // Model/tool/function missing is not protocol recovery material.
   if (matchesAnyPattern(SAME_SITE_MODEL_OR_FUNCTION_MISSING_PATTERNS, upstreamErrorText)) {
     return true;
