@@ -15,6 +15,9 @@ import {
 import ModernSelect from '../../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../../components/MobileCard.js';
 import { useIsMobile } from '../../components/useIsMobile.js';
+import { pageForItemIndex } from '../../components/clientPagination.js';
+import PaginationControls from '../../components/PaginationControls.js';
+import { useClientPagination } from '../../components/useClientPagination.js';
 import DeleteConfirmModal from '../../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from '../helpers/navigationFocus.js';
 import { shouldIgnoreRowSelectionClick } from '../helpers/rowSelection.js';
@@ -60,7 +63,6 @@ type SyncableAccount = {
 };
 
 const ACCOUNT_SELECT_SEARCH_PLACEHOLDER = '筛选账号（名称 / 站点）';
-const TOKEN_PAGE_SIZE = 8;
 
 const isAccountSyncable = (account: any) =>
   resolveAccountCredentialMode(account) === 'session'
@@ -131,7 +133,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
   };
 
   const [tokens, setTokens] = useState<any[]>([]);
-  const [page, setPage] = useState(1);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -313,18 +314,16 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       return Number(left?.id || 0) - Number(right?.id || 0);
     });
   }, [tokens]);
-  const totalPages = Math.max(1, Math.ceil(accountClusteredTokens.length / TOKEN_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pagedTokens = accountClusteredTokens.slice(
-    (safePage - 1) * TOKEN_PAGE_SIZE,
-    safePage * TOKEN_PAGE_SIZE,
-  );
+  const {
+    page: safePage,
+    setPage,
+    totalPages,
+    pageSize,
+    pagedItems: pagedTokens,
+    showControls: showTokenPagination,
+  } = useClientPagination(accountClusteredTokens, tokens.length);
   const allVisibleTokensSelected = pagedTokens.length > 0
     && pagedTokens.every((token) => selectedTokenIds.includes(token.id));
-
-  useEffect(() => {
-    setPage(1);
-  }, [tokens.length]);
 
   const activeAccounts = useMemo(() => accounts.filter(isAccountSyncable), [accounts]);
   const activeAccountSelectOptions = useMemo(() => (
@@ -387,7 +386,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
       return;
     }
-    const targetPage = Math.floor(targetIndex / TOKEN_PAGE_SIZE) + 1;
+    const targetPage = pageForItemIndex(targetIndex, pageSize);
     if (targetPage !== safePage) {
       setPage(targetPage);
       return;
@@ -404,7 +403,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     }, 2200);
 
     navigate({ pathname: location.pathname, search: cleanedSearch }, { replace: true });
-  }, [accountClusteredTokens, loading, location.pathname, location.search, navigate, safePage]);
+  }, [accountClusteredTokens, loading, location.pathname, location.search, navigate, pageSize, safePage]);
 
   const focusTokenRow = useCallback((tokenId: number) => {
     const row = rowRefs.current.get(tokenId);
@@ -1471,12 +1470,13 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
             <div className="empty-state-desc">可先同步站点令牌，或直接在站点创建新令牌。</div>
           </div>
         )}
-        {!loading && accountClusteredTokens.length > TOKEN_PAGE_SIZE ? (
-          <div className="pagination" style={{ marginTop: 12 }}>
-            <button className="pagination-btn" disabled={safePage <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
-            <span>第 {safePage} / {totalPages} 页</span>
-            <button className="pagination-btn" disabled={safePage >= totalPages} onClick={() => setPage((current) => current + 1)}>下一页</button>
-          </div>
+        {!loading ? (
+          <PaginationControls
+            page={safePage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            visible={showTokenPagination}
+          />
         ) : null}
       </div>
     </div>

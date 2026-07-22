@@ -9,6 +9,9 @@ import { useToast } from "../components/Toast.js";
 import ModernSelect from "../components/ModernSelect.js";
 import { MobileCard, MobileField } from "../components/MobileCard.js";
 import { useIsMobile } from "../components/useIsMobile.js";
+import { pageForItemIndex } from "../components/clientPagination.js";
+import PaginationControls from "../components/PaginationControls.js";
+import { useClientPagination } from "../components/useClientPagination.js";
 import DeleteConfirmModal from "../components/DeleteConfirmModal.js";
 import SiteBadgeLink from "../components/SiteBadgeLink.js";
 import AccountModelsModal from "./accounts/AccountModelsModal.js";
@@ -115,7 +118,6 @@ export default function Accounts() {
   const [sites, setSites] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("custom");
-  const [page, setPage] = useState(1);
   const [highlightAccountId, setHighlightAccountId] = useState<number | null>(
     null,
   );
@@ -302,15 +304,20 @@ export default function Accounts() {
       (account) => resolveAccountCredentialMode(account) === activeSegment,
     );
   }, [activeSegment, sortedAccounts]);
-  const totalPages = Math.max(1, Math.ceil(visibleAccounts.length / 8));
-  const safePage = Math.min(page, totalPages);
-  const pagedAccounts = visibleAccounts.slice((safePage - 1) * 8, safePage * 8);
+  const {
+    page: safePage,
+    setPage,
+    totalPages,
+    pageSize,
+    pagedItems: pagedAccounts,
+    showControls: showAccountPagination,
+  } = useClientPagination(
+    visibleAccounts,
+    `${activeSegment}:${sortMode}:${accounts.length}`,
+  );
   const allVisibleAccountsSelected =
     pagedAccounts.length > 0 &&
     pagedAccounts.every((account) => selectedAccountIds.includes(account.id));
-  useEffect(() => {
-    setPage(1);
-  }, [activeSegment, sortMode, accounts.length]);
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
 
@@ -1228,7 +1235,7 @@ export default function Accounts() {
       );
       return;
     }
-    const targetPage = Math.floor(targetIndex / 8) + 1;
+    const targetPage = pageForItemIndex(targetIndex, pageSize);
     if (targetPage !== safePage) {
       setPage(targetPage);
       return;
@@ -1269,6 +1276,7 @@ export default function Accounts() {
     location.search,
     navigate,
     openRebindPanel,
+    pageSize,
     rebindTarget,
     safePage,
     visibleAccounts,
@@ -3458,13 +3466,12 @@ export default function Accounts() {
                     })}
                   </tbody>
                 </table>
-                {visibleAccounts.length > 8 ? (
-                  <div className="pagination" style={{ marginTop: 12 }}>
-                    <button className="pagination-btn" disabled={safePage <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
-                    <span>第 {safePage} / {totalPages} 页</span>
-                    <button className="pagination-btn" disabled={safePage >= totalPages} onClick={() => setPage((current) => current + 1)}>下一页</button>
-                  </div>
-                ) : null}
+                <PaginationControls
+                  page={safePage}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                  visible={showAccountPagination}
+                />
                   </div>
               )
             ) : (
@@ -3498,12 +3505,13 @@ export default function Accounts() {
                 </div>
               </div>
             )}
-            {isMobile && visibleAccounts.length > 8 ? (
-              <div className="pagination" style={{ marginTop: 12 }}>
-                <button className="pagination-btn" disabled={safePage <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
-                <span>第 {safePage} / {totalPages} 页</span>
-                <button className="pagination-btn" disabled={safePage >= totalPages} onClick={() => setPage((current) => current + 1)}>下一页</button>
-              </div>
+            {isMobile ? (
+              <PaginationControls
+                page={safePage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                visible={showAccountPagination}
+              />
             ) : null}
           </div>
         </>
