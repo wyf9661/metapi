@@ -218,6 +218,13 @@
       "when": 1784549728889,
       "tag": "0031_downstream_api_key_daily_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1784550000000,
+      "tag": "0032_proxy_logs_request_trace_id",
+      "breakpoints": true
     }
   ]
 }

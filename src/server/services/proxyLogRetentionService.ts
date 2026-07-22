@@ -1,40 +1,14 @@
 import { config } from '../config.js';
+import { checkpointSqliteWal } from '../db/index.js';
 import { cleanupUsageLogs, getLogCleanupCutoffUtc } from './logCleanupService.js';
 
 let retentionTimer: ReturnType<typeof setInterval> | null = null;
 
-let lastVacuumAtMs = 0;
-const VACUUM_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const VACUUM_MIN_DELETED = 500;
-
-async function maybeVacuumAfterCleanup(deleted: number): Promise<void> {
-  if (deleted < VACUUM_MIN_DELETED) return;
-  const now = Date.now();
-  if (now - lastVacuumAtMs < VACUUM_MIN_INTERVAL_MS) return;
-  // Only SQLite benefits from explicit VACUUM here; skip other dialects.
-  try {
-    const { config } = await import('../config.js');
-    const dialect = String((config as { dbType?: string }).dbType || process.env.DB_TYPE || 'sqlite').toLowerCase();
-    if (dialect && dialect !== 'sqlite') return;
-    const { db } = await import('../db/index.js');
-    // drizzle/better-sqlite session: run raw vacuum through $client when available
-    const client = (db as any)?.$client || (db as any)?.session?.client;
-    if (client && typeof client.exec === 'function') {
-      client.exec('VACUUM');
-      lastVacuumAtMs = now;
-      console.info(`[proxy-log-retention] VACUUM completed after deleting ${deleted} rows`);
-      return;
-    }
-    if (typeof (db as any)?.run === 'function') {
-      await (db as any).run('VACUUM');
-      lastVacuumAtMs = now;
-      console.info(`[proxy-log-retention] VACUUM completed after deleting ${deleted} rows`);
-    }
-  } catch (error) {
-    console.warn('[proxy-log-retention] VACUUM skipped/failed', error);
-  }
+function maybeCheckpointAfterCleanup(deleted: number): void {
+  if (deleted <= 0) return;
+  // Prefer non-blocking WAL checkpoint over full VACUUM on the live request path.
+  checkpointSqliteWal('PASSIVE');
 }
-
 
 export function getProxyLogRetentionCutoffUtc(nowMs = Date.now()): string | null {
   const days = Math.max(0, Math.trunc(config.proxyLogRetentionDays));
@@ -79,7 +53,7 @@ export function startProxyLogRetentionService(): void {
       const result = await cleanupExpiredProxyLogs();
       if (!result.enabled || result.deleted <= 0) return;
       console.info(`[proxy-log-retention] deleted ${result.deleted} logs before ${result.cutoffUtc}`);
-      await maybeVacuumAfterCleanup(result.deleted);
+      maybeCheckpointAfterCleanup(result.deleted);
     } catch (error) {
       console.warn('[proxy-log-retention] cleanup failed', error);
     }
