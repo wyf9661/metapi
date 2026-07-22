@@ -1069,8 +1069,8 @@ export async function statsRoutes(app: FastifyInstance) {
             .select({
               requestTraceId: schema.proxyLogs.requestTraceId,
               attemptCount: sql<number>`count(*)`,
-              firstAttemptAt: sql<string>`min(${schema.proxyLogs.createdAt})`,
-              firstSuccessAt: sql<string | null>`min(case when ${schema.proxyLogs.status} = 'success' then ${schema.proxyLogs.createdAt} end)`,
+              firstAttemptRetry: sql<number>`min(coalesce(${schema.proxyLogs.retryCount}, 0))`,
+              firstSuccessRetry: sql<number | null>`min(case when ${schema.proxyLogs.status} = 'success' then coalesce(${schema.proxyLogs.retryCount}, 0) end)`,
               successCount: sql<number>`sum(case when ${schema.proxyLogs.status} = 'success' then 1 else 0 end)`,
             })
             .from(schema.proxyLogs)

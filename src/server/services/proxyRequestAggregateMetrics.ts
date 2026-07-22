@@ -1,8 +1,8 @@
 export type ProxyRequestAggregateRow = {
   requestTraceId?: string | null;
   attemptCount?: number | string | null;
-  firstAttemptAt?: string | null;
-  firstSuccessAt?: string | null;
+  firstAttemptRetry?: number | string | null;
+  firstSuccessRetry?: number | string | null;
   successCount?: number | string | null;
 };
 
@@ -41,9 +41,9 @@ export function calculateProxyRequestLevelMetricsFromAggregates(
     requestCount += 1;
     attemptTotal += Math.max(0, numeric(row.attemptCount));
     const successCount = Math.max(0, numeric(row.successCount));
-    if (successCount <= 0 || !row.firstSuccessAt) {
+    if (successCount <= 0 || row.firstSuccessRetry == null) {
       exhaustedCount += 1;
-    } else if (row.firstSuccessAt === row.firstAttemptAt) {
+    } else if (numeric(row.firstSuccessRetry) === numeric(row.firstAttemptRetry)) {
       firstTrySuccessCount += 1;
     } else {
       rescuedCount += 1;
