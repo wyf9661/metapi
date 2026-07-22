@@ -212,11 +212,18 @@ export async function resolveUpstreamEndpointCandidates(
 
   // Explicit Codex/Responses compatibility only — never infer from client alone.
   // Order: responses first, then messages, then chat (messages remains preferred fallback).
+  // Runtime endpoint memory may promote a previously successful chat/messages
+  // endpoint; for Codex-compat sites that must never demote responses.
   if (siteProtocolPrefersResponses({
     protocolProfile: (context.site as any).protocolProfile,
     customHeaders: (context.site as any).customHeaders,
   })) {
-    return finalizeCandidates(['responses', 'messages', 'chat']);
+    const candidates = finalizeCandidates(['responses', 'messages', 'chat']);
+    if (!candidates.includes('responses')) return candidates;
+    return [
+      'responses',
+      ...candidates.filter((endpoint) => endpoint !== 'responses'),
+    ];
   }
 
   const preferred = preferredEndpointOrder(
