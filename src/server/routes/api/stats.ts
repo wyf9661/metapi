@@ -36,7 +36,7 @@ import {
   parseProxyLogBillingDetails,
   withProxyLogSelectFields,
 } from "../../services/proxyLogStore.js";
-import { calculateProxyRequestLevelMetrics } from "../../services/proxyRequestLevelMetrics.js";
+import { calculateProxyRequestLevelMetricsFromAggregates } from "../../services/proxyRequestAggregateMetrics.js";
 import {
   clearAllProxyDebugTraces,
   getProxyDebugTraceDetail,
@@ -1044,54 +1044,53 @@ export async function statsRoutes(app: FastifyInstance) {
     "/api/stats/proxy-request-metrics",
     async (request) => {
       const query = (request.query || {}) as Record<string, unknown>;
-      const since = typeof query.since === "string" ? query.since : null;
+      // Keep unbounded scans opt-in: request-level metrics default to the last 24h.
+      const defaultSince = formatUtcSqlDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      const since = typeof query.since === "string" ? query.since : defaultSince;
       const until = typeof query.until === "string" ? query.until : null;
       const model = typeof query.model === "string" ? query.model.trim() : "";
-      const conditions: any[] = [];
-      if (since) conditions.push(gte(schema.proxyLogs.createdAt, since));
+      const conditions: any[] = [
+        sql`${schema.proxyLogs.requestTraceId} is not null`,
+        sql`${schema.proxyLogs.requestTraceId} <> ''`,
+        gte(schema.proxyLogs.createdAt, since),
+      ];
       if (until) conditions.push(lte(schema.proxyLogs.createdAt, until));
       if (model) {
-        conditions.push(
-          or(
-            eq(schema.proxyLogs.modelActual, model),
-            eq(schema.proxyLogs.modelRequested, model),
-          ),
-        );
+        conditions.push(or(
+          eq(schema.proxyLogs.modelActual, model),
+          eq(schema.proxyLogs.modelRequested, model),
+        ));
       }
 
       const rows = await withProxyLogSelectFields(
-        async ({ fields, includeRequestTraceId }) => {
-          if (!includeRequestTraceId) {
-            return [] as Array<{
-              requestTraceId: string | null;
-              status: string | null;
-              retryCount: number | null;
-              createdAt: string | null;
-            }>;
-          }
-          const selection = {
-            requestTraceId: schema.proxyLogs.requestTraceId,
-            status: fields.status,
-            retryCount: fields.retryCount,
-            createdAt: fields.createdAt,
-          };
-          const base = db.select(selection).from(schema.proxyLogs);
-          if (conditions.length === 0) {
-            return await base.all();
-          }
-          return await base.where(and(...conditions)).all();
+        async ({ includeRequestTraceId }) => {
+          if (!includeRequestTraceId) return [];
+          return await db
+            .select({
+              requestTraceId: schema.proxyLogs.requestTraceId,
+              attemptCount: sql<number>`count(*)`,
+              firstAttemptAt: sql<string>`min(${schema.proxyLogs.createdAt})`,
+              firstSuccessAt: sql<string | null>`min(case when ${schema.proxyLogs.status} = 'success' then ${schema.proxyLogs.createdAt} end)`,
+              successCount: sql<number>`sum(case when ${schema.proxyLogs.status} = 'success' then 1 else 0 end)`,
+            })
+            .from(schema.proxyLogs)
+            .where(and(...conditions))
+            .groupBy(schema.proxyLogs.requestTraceId)
+            .all();
         },
         { includeRequestTraceId: true },
       );
 
-      const requestLevel = calculateProxyRequestLevelMetrics(rows as Array<{
-        requestTraceId?: string | null;
-        status?: string | null;
-        retryCount?: number | null;
-        createdAt?: string | null;
-      }>);
+      const requestLevel = calculateProxyRequestLevelMetricsFromAggregates(rows);
       return {
-        attemptCount: Array.isArray(rows) ? rows.length : 0,
+        since,
+        until,
+        attemptCount: rows.reduce(
+          (total: number, row: { attemptCount?: number | string | null }) => (
+            total + Number(row.attemptCount || 0)
+          ),
+          0,
+        ),
         requestLevel,
       };
     },
