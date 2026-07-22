@@ -1770,7 +1770,7 @@ export default function ProxyLogs() {
                     <th>上游路径</th>
                     <th>客户端</th>
                     <th>{tr("状态")}</th>
-                    <th style={{ textAlign: "right" }}>操作</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1817,7 +1817,7 @@ export default function ProxyLogs() {
                         {trace.clientKind || "-"}
                       </td>
                       <td>{renderTraceStatusBadge(trace)}</td>
-                      <td style={{ textAlign: "right" }}>
+                      <td>
                         <button
                           type="button"
                           className="btn btn-link"
@@ -2183,16 +2183,16 @@ export default function ProxyLogs() {
                 <th>时间</th>
                 <th>模型</th>
                 <th>站点</th>
-                <th style={{ textAlign: "center", width: 48, minWidth: 48 }} title="流式 / 非流">
+                <th style={{ width: 48, minWidth: 48 }} title="流式 / 非流">
                   模式
                 </th>
-                <th style={{ textAlign: "center" }}>{tr("状态")}</th>
-                <th style={{ textAlign: "center" }}>首字</th>
-                <th style={{ textAlign: "center" }}>用时</th>
-                <th style={{ textAlign: "center" }}>输入</th>
-                <th style={{ textAlign: "center" }}>输出</th>
-                <th style={{ textAlign: "center" }}>花费</th>
-                <th style={{ textAlign: "center" }}>重试</th>
+                <th>{tr("状态")}</th>
+                <th>首字</th>
+                <th>用时</th>
+                <th>输入</th>
+                <th>输出</th>
+                <th>花费</th>
+                <th>重试</th>
               </tr>
             </thead>
             <tbody>
@@ -2286,10 +2286,10 @@ export default function ProxyLogs() {
                           badgeStyle={{ fontSize: 11 }}
                         />
                       </td>
-                      <td style={{ textAlign: "center", width: 48, minWidth: 48 }}>
+                      <td style={{ width: 48, minWidth: 48 }}>
                         <StreamModeIcon isStream={detailLog.isStream} />
                       </td>
-                      <td style={{ textAlign: "center" }}>
+                      <td>
                         <span
                           className={`badge ${log.status === "success" ? "badge-success" : "badge-error"}`}
                           style={{ fontSize: 11, fontWeight: 600 }}
@@ -2308,7 +2308,7 @@ export default function ProxyLogs() {
                           {log.status === "success" ? "成功" : "失败"}
                         </span>
                       </td>
-                      <td style={{ textAlign: "center" }}>
+                      <td>
                         {Number.isFinite(detailLog.firstByteLatencyMs)
                           && typeof detailLog.firstByteLatencyMs === "number"
                           && detailLog.firstByteLatencyMs >= 0 ? (
@@ -2331,7 +2331,7 @@ export default function ProxyLogs() {
                           <span style={{ color: "var(--color-text-muted)" }}>-</span>
                         )}
                       </td>
-                      <td style={{ textAlign: "center" }}>
+                      <td>
                         <span
                           style={{
                             fontVariantNumeric: "tabular-nums",
@@ -2348,7 +2348,6 @@ export default function ProxyLogs() {
                       </td>
                       <td
                         style={{
-                          textAlign: "center",
                           fontSize: 12,
                           fontVariantNumeric: "tabular-nums",
                           color: "var(--color-text-secondary)",
@@ -2358,7 +2357,6 @@ export default function ProxyLogs() {
                       </td>
                       <td
                         style={{
-                          textAlign: "center",
                           fontSize: 12,
                           fontVariantNumeric: "tabular-nums",
                           color: "var(--color-text-secondary)",
@@ -2368,7 +2366,6 @@ export default function ProxyLogs() {
                       </td>
                       <td
                         style={{
-                          textAlign: "center",
                           fontSize: 12,
                           fontVariantNumeric: "tabular-nums",
                           fontWeight: 500,
@@ -2378,7 +2375,7 @@ export default function ProxyLogs() {
                           ? `$${log.estimatedCost.toFixed(6)}`
                           : "-"}
                       </td>
-                      <td style={{ textAlign: "center" }}>
+                      <td>
                         {log.retryCount > 0 ? (
                           <span
                             className="badge badge-warning"

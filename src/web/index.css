@@ -1752,6 +1752,7 @@ body {
   white-space: nowrap;
   vertical-align: middle;
   line-height: 1.4;
+  text-align: left;
 }
 
 .data-table tbody tr {
@@ -2032,22 +2033,25 @@ body {
 }
 
 .token-table-actions-col {
-  width: 24%;
+  width: 1%;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .token-actions-cell {
+  width: 1%;
   min-width: 0;
-  white-space: normal !important;
+  white-space: nowrap !important;
 }
 
 .token-table-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 4px 6px;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
 }
 
 .token-table-actions .btn-link {
@@ -2062,32 +2066,44 @@ body {
 .accounts-table {
   width: 100%;
   table-layout: fixed;
-  min-width: 1180px;
+  min-width: 1080px;
 }
 
 .accounts-table th,
 .accounts-table td {
   white-space: normal;
   overflow-wrap: break-word;
+  text-align: left;
 }
 
+/* Keep check-in compact so it does not open a void before actions. */
+.accounts-table th:nth-child(7),
+.accounts-table td:nth-child(7) {
+  width: 72px;
+  white-space: nowrap;
+}
+
+/* Shrink-to-fit action column (avoids 签到 ↔ 操作 huge whitespace). */
 .accounts-actions-col {
-  width: 38%;
-  min-width: 430px;
+  width: 1%;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .accounts-actions-cell {
-  min-width: 430px;
+  width: 1%;
+  min-width: 0;
   white-space: nowrap !important;
 }
 
 .accounts-row-actions {
   display: flex;
   flex-wrap: nowrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 2px;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
 }
 
 .accounts-row-actions .btn-link {
@@ -2097,11 +2113,25 @@ body {
 }
 
 .sites-actions-col {
-  min-width: 200px;
+  width: 1%;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .sites-actions-cell {
-  white-space: normal !important;
+  width: 1%;
+  min-width: 0;
+  white-space: nowrap !important;
+}
+
+.sites-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  width: max-content;
+  max-width: 100%;
 }
 
 .site-balance-cell {
@@ -3093,21 +3123,24 @@ textarea {
 
 .oauth-table-actions-col {
   width: 1%;
-  min-width: 180px;
-  text-align: right;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .oauth-actions-cell {
-  min-width: 180px;
-  white-space: normal !important;
+  width: 1%;
+  min-width: 0;
+  white-space: nowrap !important;
 }
 
 .oauth-row-actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
   gap: 2px 4px;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
 }
 
 .oauth-row-actions .btn-link {
@@ -5623,15 +5656,17 @@ textarea {
   }
 
   .accounts-actions-col {
-    width: 38%;
-    min-width: 430px;
+    width: 1%;
+    min-width: 0;
   }
 
   .token-table-actions-col {
-    width: 28%;
+    width: 1%;
+    min-width: 0;
   }
 
   .accounts-actions-cell {
+    width: 1%;
     min-width: 0;
   }
 
@@ -5661,7 +5696,8 @@ textarea {
   }
 
   .sites-actions-col {
-    min-width: 165px;
+    width: 1%;
+    min-width: 0;
   }
 
   .sites-table th,
@@ -6352,18 +6388,22 @@ textarea {
   }
 
   .accounts-actions-col {
-    width: 30%;
+    width: 1%;
+    min-width: 0;
   }
 
   .token-table-actions-col {
-    width: 30%;
+    width: 1%;
+    min-width: 0;
   }
 
   .accounts-actions-cell {
+    width: 1%;
     min-width: 0;
   }
 
   .token-actions-cell {
+    width: 1%;
     min-width: 0;
   }
 
@@ -6389,7 +6429,8 @@ textarea {
   }
 
   .sites-actions-col {
-    min-width: 140px;
+    width: 1%;
+    min-width: 0;
   }
 
   .sites-table th:nth-child(2),
