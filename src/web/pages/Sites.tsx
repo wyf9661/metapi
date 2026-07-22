@@ -2265,7 +2265,7 @@ export default function Sites() {
                   <th>权重</th>
                   <th>平台</th>
                   <th>创建时间</th>
-                  <th className="sites-actions-col" style={{ textAlign: 'right' }}>操作</th>
+                  <th className="sites-actions-col">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -2371,7 +2371,7 @@ export default function Sites() {
                         {formatDateTimeLocal(site.createdAt)}
                       </a>
                     </td>
-                    <td className="sites-actions-cell" style={{ textAlign: 'right' }}>
+                    <td className="sites-actions-cell">
                       <div className="sites-row-actions">
                         <button
                           onClick={() => handleTogglePin(site)}

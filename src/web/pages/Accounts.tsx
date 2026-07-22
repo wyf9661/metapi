@@ -3148,10 +3148,7 @@ export default function Accounts() {
                       <th>余额</th>
                       <th>已用</th>
                       <th>签到</th>
-                      <th
-                        className="accounts-actions-col"
-                        style={{ textAlign: "right" }}
-                      >
+                      <th className="accounts-actions-col">
                         操作
                       </th>
                     </tr>
@@ -3338,10 +3335,7 @@ export default function Accounts() {
                               </span>
                             )}
                           </td>
-                          <td
-                            className="accounts-actions-cell"
-                            style={{ textAlign: "right" }}
-                          >
+                          <td className="accounts-actions-cell">
                             <div className="accounts-row-actions">
                               <button
                                 onClick={() => handleTogglePin(a)}

@@ -1343,7 +1343,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                 <th>状态</th>
                 <th>默认</th>
                 <th>更新时间</th>
-                <th className="token-table-actions-col" style={{ textAlign: 'right' }}>操作</th>
+                <th className="token-table-actions-col">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -1404,7 +1404,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                     </td>
                     <td>{token.isDefault ? <span className="badge badge-warning" style={{ fontSize: 11 }}>默认</span> : '-'}</td>
                     <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatDateTimeLocal(token.updatedAt)}</td>
-                    <td className="token-actions-cell" style={{ textAlign: 'right' }}>
+                    <td className="token-actions-cell">
                       <div className="token-table-actions">
                         {!isPending && !token.isDefault && (
                           <button

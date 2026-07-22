@@ -355,7 +355,7 @@ export default function ProgramLogs() {
                 <th>标题</th>
                 <th>内容</th>
                 <th>状态</th>
-                <th style={{ textAlign: 'right' }}>操作</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -388,7 +388,7 @@ export default function ProgramLogs() {
                         {eventStatus.label}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         {row.read ? (
                           <span className="badge badge-muted" style={{ fontSize: 11 }}>已读</span>
