@@ -25,6 +25,7 @@ import {
   buildForcedChannelUnavailableMessage,
   canRetryChannelSelection,
   getTesterForcedChannelId,
+  resolveProxyFailoverLimits,
   selectProxyChannelForAttempt,
 } from '../../proxy-core/channelSelection.js';
 
@@ -51,10 +52,20 @@ export async function completionsProxyRoute(app: FastifyInstance) {
 
     const isStream = body.stream === true;
     const firstByteTimeoutMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+    let maxRetries = getProxyMaxChannelRetries();
+    let failoverBudgetMs = 0;
+    try {
+      const eligibleCount = await tokenRouter.countEligibleChannels(requestedModel, downstreamPolicy);
+      const limits = resolveProxyFailoverLimits(eligibleCount);
+      maxRetries = limits.maxRetries;
+      failoverBudgetMs = limits.budgetMs;
+    } catch {
+      // Keep the static fallback when candidate counting is unavailable.
+    }
     const excludeChannelIds: number[] = [];
     let retryCount = 0;
 
-    while (retryCount <= getProxyMaxChannelRetries()) {
+    while (retryCount <= maxRetries) {
       const selected = await selectProxyChannelForAttempt({
         requestedModel,
         downstreamPolicy,
@@ -253,7 +264,7 @@ export async function completionsProxyRoute(app: FastifyInstance) {
             firstByteLatencyMs,
           );
 
-          if (shouldRetryProxyRequest(failure.status, errText) && canRetryChannelSelection(retryCount, forcedChannelId)) {
+          if (shouldRetryProxyRequest(failure.status, errText) && canRetryChannelSelection(retryCount, forcedChannelId, null, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount += 1;
             continue;
           }
@@ -353,7 +364,7 @@ export async function completionsProxyRoute(app: FastifyInstance) {
             detail: `HTTP ${status}`,
           });
         }
-        if ((status > 0 ? shouldRetryProxyRequest(status, errorText) : true) && canRetryChannelSelection(retryCount, forcedChannelId)) {
+        if ((status > 0 ? shouldRetryProxyRequest(status, errorText) : true) && canRetryChannelSelection(retryCount, forcedChannelId, null, { maxRetries, budgetMs: failoverBudgetMs })) {
           retryCount++;
           continue;
         }
