@@ -88,6 +88,7 @@ import {
   formSectionLabelStyle,
   formSectionStyle,
   renderProxyLogClientCell,
+  StreamModeIcon,
 } from "./helpers/proxyLogsUi.js";
 import { tr } from "../i18n.js";
 
@@ -2006,7 +2007,6 @@ export default function ProxyLogs() {
               const downstreamKeySummary =
                 renderDownstreamKeySummary(detailLog);
               const isExpanded = expanded === log.id;
-              const clientDisplay = resolveProxyLogClientDisplay(detailLog);
               const streamModeLabel = formatStreamModeLabel(detailLog.isStream);
               const firstByteLabel = formatFirstByteLabel(
                 detailLog.firstByteLatencyMs,
@@ -2044,49 +2044,19 @@ export default function ProxyLogs() {
                       siteName={log.siteName}
                       badgeStyle={{ fontSize: 11 }}
                     />
-                    {clientDisplay.primary ? (
-                      <span
-                        className="badge badge-muted"
-                        style={{ fontSize: 10 }}
-                      >
-                        {clientDisplay.primary}
-                      </span>
-                    ) : null}
-                    {clientDisplay.secondary ? (
-                      <span
-                        className="badge badge-muted"
-                        style={{ fontSize: 10 }}
-                      >
-                        {clientDisplay.secondary}
-                      </span>
-                    ) : null}
-                    {streamModeLabel ? (
-                      <span
-                        className="badge badge-muted"
-                        style={{ fontSize: 10 }}
-                      >
-                        {streamModeLabel}
-                      </span>
-                    ) : null}
-                    {firstByteLabel ? (
-                      <span
-                        className="badge"
-                        style={{
-                          fontSize: 10,
-                          color: firstByteColor(
-                            detailLog.firstByteLatencyMs ?? 0,
-                          ),
-                          background: firstByteBgColor(
-                            detailLog.firstByteLatencyMs ?? 0,
-                          ),
-                          borderColor: "transparent",
-                        }}
-                      >
-                        {firstByteLabel}
-                      </span>
-                    ) : null}
+                    <StreamModeIcon isStream={detailLog.isStream} />
                   </div>
                   <div className="mobile-summary-grid">
+                    <div className="mobile-summary-metric">
+                      <div className="mobile-summary-metric-label">首字</div>
+                      <div className="mobile-summary-metric-value">
+                        {Number.isFinite(detailLog.firstByteLatencyMs)
+                          && typeof detailLog.firstByteLatencyMs === "number"
+                          && detailLog.firstByteLatencyMs >= 0
+                          ? formatLatency(detailLog.firstByteLatencyMs)
+                          : "-"}
+                      </div>
+                    </div>
                     <div className="mobile-summary-metric">
                       <div className="mobile-summary-metric-label">用时</div>
                       <div className="mobile-summary-metric-value">
@@ -2213,8 +2183,11 @@ export default function ProxyLogs() {
                 <th>时间</th>
                 <th>模型</th>
                 <th>站点</th>
-                <th>客户端</th>
+                <th style={{ textAlign: "center", width: 44 }} title="流式 / 非流">
+                  模式
+                </th>
                 <th>{tr("状态")}</th>
+                <th style={{ textAlign: "center" }}>首字</th>
                 <th style={{ textAlign: "center" }}>用时</th>
                 <th style={{ textAlign: "right" }}>输入</th>
                 <th style={{ textAlign: "right" }}>输出</th>
@@ -2294,64 +2267,10 @@ export default function ProxyLogs() {
                         {formatDateTimeLocal(log.createdAt)}
                       </td>
                       <td>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 4,
-                          }}
-                        >
-                          <ModelBadge
-                            model={log.modelRequested}
-                            style={{ alignSelf: "flex-start" }}
-                          />
-                          {downstreamKeySummary ? (
-                            <div
-                              style={{
-                                fontSize: 11,
-                                lineHeight: 1.45,
-                                color: "var(--color-text-muted)",
-                              }}
-                            >
-                              {downstreamKeySummary}
-                            </div>
-                          ) : null}
-                          {streamModeLabel || firstByteLabel ? (
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: 6,
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              {streamModeLabel ? (
-                                <span
-                                  className="badge badge-muted"
-                                  style={{ fontSize: 10 }}
-                                >
-                                  {streamModeLabel}
-                                </span>
-                              ) : null}
-                              {firstByteLabel ? (
-                                <span
-                                  className="badge"
-                                  style={{
-                                    fontSize: 10,
-                                    color: firstByteColor(
-                                      detailLog.firstByteLatencyMs ?? 0,
-                                    ),
-                                    background: firstByteBgColor(
-                                      detailLog.firstByteLatencyMs ?? 0,
-                                    ),
-                                    borderColor: "transparent",
-                                  }}
-                                >
-                                  {firstByteLabel}
-                                </span>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
+                        <ModelBadge
+                          model={log.modelRequested}
+                          style={{ alignSelf: "flex-start" }}
+                        />
                       </td>
                       <td
                         style={{
@@ -2367,13 +2286,8 @@ export default function ProxyLogs() {
                           badgeStyle={{ fontSize: 11 }}
                         />
                       </td>
-                      <td
-                        style={{
-                          fontSize: 12,
-                          color: "var(--color-text-secondary)",
-                        }}
-                      >
-                        {renderProxyLogClientCell(detailLog)}
+                      <td style={{ textAlign: "center" }}>
+                        <StreamModeIcon isStream={detailLog.isStream} />
                       </td>
                       <td>
                         <span
@@ -2393,6 +2307,29 @@ export default function ProxyLogs() {
                           />
                           {log.status === "success" ? "成功" : "失败"}
                         </span>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {Number.isFinite(detailLog.firstByteLatencyMs)
+                          && typeof detailLog.firstByteLatencyMs === "number"
+                          && detailLog.firstByteLatencyMs >= 0 ? (
+                          <span
+                            style={{
+                              fontVariantNumeric: "tabular-nums",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: firstByteColor(detailLog.firstByteLatencyMs),
+                              background: firstByteBgColor(
+                                detailLog.firstByteLatencyMs,
+                              ),
+                              padding: "2px 8px",
+                              borderRadius: 4,
+                            }}
+                          >
+                            {formatLatency(detailLog.firstByteLatencyMs)}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--color-text-muted)" }}>-</span>
+                        )}
                       </td>
                       <td style={{ textAlign: "center" }}>
                         <span
