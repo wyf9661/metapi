@@ -2023,7 +2023,7 @@ body {
 
 .token-table {
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .token-table th,
@@ -2032,14 +2032,9 @@ body {
   overflow-wrap: break-word;
 }
 
-.token-table-actions-col {
-  width: 1%;
-  min-width: 0;
-  white-space: nowrap;
-}
-
+.token-table-actions-col,
 .token-actions-cell {
-  width: 1%;
+  width: auto;
   min-width: 0;
   white-space: nowrap !important;
 }
@@ -2063,10 +2058,15 @@ body {
   font-size: 12px;
 }
 
+.accounts-desktop-table-wrap {
+  width: 100%;
+  overflow-x: hidden;
+}
+
 .accounts-table {
   width: 100%;
-  table-layout: fixed;
-  min-width: 1080px;
+  table-layout: auto;
+  min-width: 0;
 }
 
 .accounts-table th,
@@ -2079,19 +2079,14 @@ body {
 /* Keep check-in compact so it does not open a void before actions. */
 .accounts-table th:nth-child(7),
 .accounts-table td:nth-child(7) {
-  width: 72px;
+  width: auto;
   white-space: nowrap;
 }
 
-/* Shrink-to-fit action column (avoids 签到 ↔ 操作 huge whitespace). */
-.accounts-actions-col {
-  width: 1%;
-  min-width: 0;
-  white-space: nowrap;
-}
-
+/* Actions: wide enough for button row, not a % void after 签到. */
+.accounts-actions-col,
 .accounts-actions-cell {
-  width: 1%;
+  width: auto;
   min-width: 0;
   white-space: nowrap !important;
 }
@@ -2101,25 +2096,19 @@ body {
   flex-wrap: nowrap;
   justify-content: flex-start;
   align-items: center;
-  gap: 2px;
-  width: max-content;
-  max-width: 100%;
+  gap: 0;
+  width: auto;
 }
 
 .accounts-row-actions .btn-link {
   white-space: nowrap;
-  padding: 4px 5px;
-  font-size: 12px;
+  padding: 3px 3px;
+  font-size: 11px;
 }
 
-.sites-actions-col {
-  width: 1%;
-  min-width: 0;
-  white-space: nowrap;
-}
-
+.sites-actions-col,
 .sites-actions-cell {
-  width: 1%;
+  width: auto;
   min-width: 0;
   white-space: nowrap !important;
 }
@@ -2129,9 +2118,8 @@ body {
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 2px;
-  width: max-content;
-  max-width: 100%;
+  gap: 0;
+  width: auto;
 }
 
 .site-balance-cell {
@@ -5655,22 +5643,20 @@ textarea {
     font-size: 12px;
   }
 
-  .accounts-actions-col {
-    width: 1%;
+  .accounts-actions-col,
+  .accounts-actions-cell {
+    width: auto;
     min-width: 0;
   }
 
   .token-table-actions-col {
     width: 1%;
-    min-width: 0;
+    min-width: 220px;
   }
 
-  .accounts-actions-cell {
-    width: 1%;
-    min-width: 0;
-  }
-
+  .token-table-actions-col,
   .token-actions-cell {
+    width: auto;
     min-width: 0;
   }
 
@@ -5695,8 +5681,9 @@ textarea {
     font-size: 11px;
   }
 
-  .sites-actions-col {
-    width: 1%;
+  .sites-actions-col,
+  .sites-actions-cell {
+    width: auto;
     min-width: 0;
   }
 
@@ -6387,23 +6374,20 @@ textarea {
     justify-content: center;
   }
 
-  .accounts-actions-col {
-    width: 1%;
+  .accounts-actions-col,
+  .accounts-actions-cell {
+    width: auto;
     min-width: 0;
   }
 
   .token-table-actions-col {
     width: 1%;
-    min-width: 0;
+    min-width: 220px;
   }
 
-  .accounts-actions-cell {
-    width: 1%;
-    min-width: 0;
-  }
-
+  .token-table-actions-col,
   .token-actions-cell {
-    width: 1%;
+    width: auto;
     min-width: 0;
   }
 
@@ -6428,8 +6412,9 @@ textarea {
     justify-content: center;
   }
 
-  .sites-actions-col {
-    width: 1%;
+  .sites-actions-col,
+  .sites-actions-cell {
+    width: auto;
     min-width: 0;
   }
 
