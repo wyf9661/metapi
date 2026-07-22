@@ -1,5 +1,6 @@
 import {
   isTransientSiteRuntimeFailure,
+  isWafBlockedRuntimeFailure,
   resolveSiteRuntimeFailurePenalty,
   type SiteRuntimeFailureContext,
 } from './siteFailureClassification.js';
@@ -37,7 +38,13 @@ export const SITE_RUNTIME_LATENCY_WINDOW_MS = 30_000;
 export const SITE_RUNTIME_MAX_LATENCY_PENALTY = 0.35;
 export const SITE_RUNTIME_LATENCY_EMA_ALPHA = 0.3;
 export const SITE_RUNTIME_BREAKER_STREAK_THRESHOLD = 3;
+/** WAF 403 is sticky enough that two hits within the streak window should short-circuit the site+model. */
+export const SITE_WAF_BREAKER_STREAK_THRESHOLD = 2;
 export const SITE_TRANSIENT_STREAK_WINDOW_MS = 5 * 60 * 1000;
+/** First WAF model breaker level (metadata only; duration uses SITE_WAF_BREAKER_TTL_MS). */
+export const SITE_WAF_BREAKER_LEVEL = 2;
+/** Fixed 10-minute cool-down for site+model WAF blocks. */
+export const SITE_WAF_BREAKER_TTL_MS = 10 * 60 * 1000;
 export const SITE_RUNTIME_HEALTH_PERSIST_STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SITE_RUNTIME_HEALTH_PERSIST_IDLE_TTL_MS = 12 * 60 * 60 * 1000;
 export const SITE_RUNTIME_HEALTH_PERSIST_MIN_PENALTY = 0.02;
@@ -171,10 +178,23 @@ export function applyRuntimeHealthFailure(
       && (nowMs - state.lastTransientFailureAtMs) <= SITE_TRANSIENT_STREAK_WINDOW_MS;
     state.transientFailureStreak = shouldContinueStreak ? state.transientFailureStreak + 1 : 1;
     state.lastTransientFailureAtMs = nowMs;
-    if (state.transientFailureStreak >= SITE_RUNTIME_BREAKER_STREAK_THRESHOLD) {
-      state.breakerLevel = Math.min(state.breakerLevel + 1, SITE_RUNTIME_BREAKER_LEVELS_MS.length - 1);
-      const breakerMs = resolveSiteRuntimeBreakerMs(state.breakerLevel);
-      state.breakerUntilMs = breakerMs > 0 ? nowMs + breakerMs : null;
+    const wafBlocked = isWafBlockedRuntimeFailure(context);
+    const streakThreshold = wafBlocked
+      ? SITE_WAF_BREAKER_STREAK_THRESHOLD
+      : SITE_RUNTIME_BREAKER_STREAK_THRESHOLD;
+    if (state.transientFailureStreak >= streakThreshold) {
+      if (wafBlocked) {
+        // Fixed 10-minute site+model cool-down; level is only for escalation metadata.
+        state.breakerLevel = Math.min(
+          Math.max(state.breakerLevel + 1, SITE_WAF_BREAKER_LEVEL),
+          SITE_RUNTIME_BREAKER_LEVELS_MS.length - 1,
+        );
+        state.breakerUntilMs = nowMs + SITE_WAF_BREAKER_TTL_MS;
+      } else {
+        state.breakerLevel = Math.min(state.breakerLevel + 1, SITE_RUNTIME_BREAKER_LEVELS_MS.length - 1);
+        const breakerMs = resolveSiteRuntimeBreakerMs(state.breakerLevel);
+        state.breakerUntilMs = breakerMs > 0 ? nowMs + breakerMs : null;
+      }
       state.transientFailureStreak = 0;
     }
   } else {
@@ -202,6 +222,23 @@ export function applyRuntimeHealthSuccess(
     ? normalizedLatencyMs
     : (state.latencyEmaMs * (1 - SITE_RUNTIME_LATENCY_EMA_ALPHA))
       + (normalizedLatencyMs * SITE_RUNTIME_LATENCY_EMA_ALPHA);
+}
+
+/**
+ * Soft failure: score/recent-window only. Used for site-global WAF hits so the
+ * model-scoped bucket can open a hard breaker without blackholing every model
+ * on the same site.
+ */
+export function applyRuntimeHealthSoftFailure(
+  state: SiteRuntimeHealthState,
+  context: SiteRuntimeFailureContext = {},
+  nowMs = Date.now(),
+): void {
+  refreshRecentOutcomeWindow(state, nowMs);
+  state.recentFailureCount += 1;
+  state.penaltyScore += resolveSiteRuntimeFailurePenalty(context);
+  state.lastFailureAtMs = nowMs;
+  state.lastUpdatedAtMs = nowMs;
 }
 
 export function shouldPersistSiteRuntimeHealthState(

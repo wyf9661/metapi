@@ -4,6 +4,7 @@ import { upsertSetting } from '../db/upsertSetting.js';
 import { blendRecentOutcomeSnapshots as blendRecentOutcomeSnapshotsMath, clampNumber, isRecord, type RecentOutcomeSnapshot } from './tokenRouterMath.js';
 import {
   applyRuntimeHealthFailure,
+  applyRuntimeHealthSoftFailure,
   applyRuntimeHealthSuccess,
   cloneSiteRuntimeHealthState,
   createSiteRuntimeHealthState,
@@ -16,7 +17,7 @@ import {
   SITE_RUNTIME_MIN_MULTIPLIER,
   type SiteRuntimeHealthState,
 } from './siteRuntimeHealth.js';
-import type { SiteRuntimeFailureContext } from './siteFailureClassification.js';
+import { isWafBlockedRuntimeFailure, type SiteRuntimeFailureContext } from './siteFailureClassification.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { isExactRouteModelPattern } from './tokenRouterModelPatterns.js';
 
@@ -257,7 +258,15 @@ export async function ensureSiteRuntimeHealthStateLoaded(): Promise<void> {
 }
 
 export function recordSiteRuntimeFailure(siteId: number, context: SiteRuntimeFailureContext = {}, nowMs = Date.now()): void {
-  applyRuntimeHealthFailure(getOrCreateSiteRuntimeHealthState(siteId, nowMs), context, nowMs);
+  // WAF 403 is usually model/path scoped. Soft-penalize the site-global bucket
+  // but open the hard short breaker only on the site+model bucket so other models
+  // on the same site remain eligible.
+  const globalState = getOrCreateSiteRuntimeHealthState(siteId, nowMs);
+  if (isWafBlockedRuntimeFailure(context)) {
+    applyRuntimeHealthSoftFailure(globalState, context, nowMs);
+  } else {
+    applyRuntimeHealthFailure(globalState, context, nowMs);
+  }
   const modelState = getOrCreateSiteModelRuntimeHealthState(siteId, context.modelName, nowMs);
   if (modelState) {
     applyRuntimeHealthFailure(modelState, context, nowMs);
