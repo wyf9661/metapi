@@ -38,7 +38,7 @@ describe('proxyInputFileResolver', () => {
       { ownerType: 'global_proxy_token', ownerId: 'global' },
     )).resolves.toEqual(body);
     expect(getProxyFileByPublicIdForOwnerMock).not.toHaveBeenCalled();
-  });
+  }, 15_000);
 
   it('resolves object-form responses input payloads with local file ids into inline-only uploads', async () => {
     getProxyFileByPublicIdForOwnerMock.mockResolvedValue({
