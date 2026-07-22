@@ -5,6 +5,7 @@ import {
   isTransientSiteRuntimeFailure,
   isUsageLimitRateLimitFailure,
   isValidationRuntimeFailure,
+  isWafBlockedRuntimeFailure,
   matchesAnyPattern,
   resolveSiteRuntimeFailurePenalty,
   SITE_TRANSIENT_FAILURE_PATTERNS,
@@ -49,7 +50,6 @@ describe('siteFailureClassification', () => {
     expect(matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, 'ECONNRESET')).toBe(true);
     expect(matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, 'overloaded')).toBe(true);
   });
-});
 
   it('treats site endpoint-pool exhaustion as transient with high penalty', () => {
     const ctx = { errorText: '当前站点的 API 请求地址均不可用' };
@@ -57,3 +57,12 @@ describe('siteFailureClassification', () => {
     expect(resolveSiteRuntimeFailurePenalty(ctx)).toBeGreaterThanOrEqual(2.5);
   });
 
+  it('classifies Cloudflare WAF 403 as transient with high penalty', () => {
+    const ctx = { status: 403, errorText: 'Your request was blocked. Error code: 1010. CF-RAY: abc' };
+    expect(isWafBlockedRuntimeFailure(ctx)).toBe(true);
+    expect(isTransientSiteRuntimeFailure(ctx)).toBe(true);
+    expect(resolveSiteRuntimeFailurePenalty(ctx)).toBe(2.4);
+    // Plain auth 403 without WAF vocabulary stays non-transient.
+    expect(isTransientSiteRuntimeFailure({ status: 403, errorText: 'invalid api key' })).toBe(false);
+  });
+});

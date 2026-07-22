@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyRuntimeHealthFailure,
+  applyRuntimeHealthSoftFailure,
   applyRuntimeHealthSuccess,
   createSiteRuntimeHealthState,
   getDecayedSiteRuntimePenalty,
@@ -9,6 +10,8 @@ import {
   hydrateSiteRuntimeHealthState,
   isRuntimeHealthBreakerOpen,
   shouldPersistSiteRuntimeHealthState,
+  SITE_WAF_BREAKER_LEVEL,
+  SITE_WAF_BREAKER_TTL_MS,
 } from './siteRuntimeHealth.js';
 
 describe('siteRuntimeHealth', () => {
@@ -75,7 +78,6 @@ describe('siteRuntimeHealth', () => {
     recent.recentFailureCount = 1;
     expect(shouldPersistSiteRuntimeHealthState(recent, now)).toBe(true);
   });
-});
 
   it('opens a short breaker immediately when endpoint pool is exhausted', () => {
     const state = createSiteRuntimeHealthState(0);
@@ -83,3 +85,35 @@ describe('siteRuntimeHealth', () => {
     expect(isRuntimeHealthBreakerOpen(state, 1_000)).toBe(true);
     expect(state.breakerLevel).toBeGreaterThanOrEqual(1);
   });
+
+  it('opens a ~10-minute model breaker after two WAF 403 hits and clears on success', () => {
+    const now = 5_000_000;
+    const state = createSiteRuntimeHealthState(now);
+    const waf = { status: 403, errorText: 'Your request was blocked. Error code: 1010' };
+
+    applyRuntimeHealthFailure(state, waf, now);
+    expect(isRuntimeHealthBreakerOpen(state, now)).toBe(false);
+
+    applyRuntimeHealthFailure(state, waf, now + 1_000);
+    expect(isRuntimeHealthBreakerOpen(state, now + 1_000)).toBe(true);
+    expect(state.breakerLevel).toBe(SITE_WAF_BREAKER_LEVEL);
+    expect(state.breakerUntilMs).toBe(now + 1_000 + SITE_WAF_BREAKER_TTL_MS);
+    expect(SITE_WAF_BREAKER_TTL_MS).toBe(10 * 60_000);
+
+    applyRuntimeHealthSuccess(state, 400, now + 2_000);
+    expect(isRuntimeHealthBreakerOpen(state, now + 2_000)).toBe(false);
+    expect(state.breakerLevel).toBe(0);
+  });
+
+  it('soft failure raises penalty without opening a breaker', () => {
+    const now = 6_000_000;
+    const state = createSiteRuntimeHealthState(now);
+    applyRuntimeHealthSoftFailure(state, {
+      status: 403,
+      errorText: 'Your request was blocked. Error code: 1010',
+    }, now);
+    expect(isRuntimeHealthBreakerOpen(state, now)).toBe(false);
+    expect(state.recentFailureCount).toBe(1);
+    expect(state.penaltyScore).toBeGreaterThan(0);
+  });
+});

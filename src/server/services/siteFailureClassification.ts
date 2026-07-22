@@ -73,6 +73,15 @@ export const SITE_TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
   /all\s+(?:api\s+)?endpoints?\s+(?:are\s+)?unavailable/i,
 ];
 
+/** Cloudflare / edge WAF blocks — short model-scoped cooldown, not permanent auth failure. */
+export const SITE_WAF_BLOCK_FAILURE_PATTERNS: RegExp[] = [
+  /your\s+request\s+was\s+blocked/i,
+  /error\s+code:\s*1010/i,
+  /cf-ray/i,
+  /access\s+denied.*cloudflare/i,
+  /attention\s+required.*cloudflare/i,
+];
+
 export const USAGE_LIMIT_RATE_LIMIT_PATTERNS: RegExp[] = [
   /usage_limit_reached/i,
   /usage\s+limit\s+has\s+been\s+reached/i,
@@ -103,6 +112,24 @@ export function isProtocolRuntimeFailure(context: SiteRuntimeFailureContext = {}
 
 export function isValidationRuntimeFailure(context: SiteRuntimeFailureContext = {}): boolean {
   return matchesAnyPattern(SITE_VALIDATION_FAILURE_PATTERNS, context.errorText);
+}
+
+/**
+ * Edge / Cloudflare WAF blocks. These are often model- or path-scoped and recover
+ * within minutes; treat them as short cooldowns rather than permanent 403 auth fails.
+ */
+export function isWafBlockedRuntimeFailure(context: SiteRuntimeFailureContext = {}): boolean {
+  const status = typeof context.status === 'number' ? context.status : 0;
+  const errorText = (context.errorText || '').trim();
+  if (!errorText) return false;
+  // Prefer explicit WAF vocabulary; status is usually 403 but some proxies rewrite it.
+  if (!matchesAnyPattern(SITE_WAF_BLOCK_FAILURE_PATTERNS, errorText)) {
+    return false;
+  }
+  if (status === 0 || status === 403 || status === 401 || status >= 500) {
+    return true;
+  }
+  return status >= 400 && status < 500;
 }
 
 /**
@@ -137,6 +164,12 @@ export function resolveSiteRuntimeFailurePenalty(context: SiteRuntimeFailureCont
     || /all\s+(?:api\s+)?endpoints?\s+(?:are\s+)?unavailable/i.test(errorText)
   ) {
     return 3.0;
+  }
+
+  // WAF blocks should rank high enough to open a model-scoped breaker quickly,
+  // but stay below hard 5xx so genuine gateway outages still outrank them.
+  if (isWafBlockedRuntimeFailure({ status, errorText })) {
+    return 2.4;
   }
 
   if (status >= 500 || matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, errorText)) {
@@ -176,6 +209,10 @@ export function isTransientSiteRuntimeFailure(context: SiteRuntimeFailureContext
   }
   if (isValidationRuntimeFailure({ status, errorText })) {
     return false;
+  }
+  // WAF 403 is temporary edge filtering — count toward the short model breaker.
+  if (isWafBlockedRuntimeFailure({ status, errorText })) {
+    return true;
   }
   if (matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, errorText)) {
     return true;
