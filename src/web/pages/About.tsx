@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-
 import { api } from '../api.js';
 import { tr } from '../i18n.js';
-import { SITE_DOCS_URL } from '../docsLink.js';
 import { buildUpdateReminder } from './helpers/updateCenterPresentation.js';
 
-const VERSION = '1.3.0';
+const VERSION = '1.3.7';
 
 const FEATURES = [
   { icon: '🌐', title: '统一代理网关', desc: '一个 Key、一个入口，兼容 OpenAI / Claude 下游格式' },
@@ -29,15 +26,12 @@ const TECH_STACK = [
 ];
 
 const LINKS = [
-  { label: 'GitHub', href: 'https://github.com/cita-777/metapi', icon: '📂' },
-  { label: 'Docker Hub', href: 'https://hub.docker.com/r/1467078763/metapi', icon: '🐳' },
-  { label: '站点文档', href: SITE_DOCS_URL, icon: '📚' },
+  { label: 'GitHub', href: 'https://github.com/wyf9661/metapi', icon: '📂' },
 ];
 
 export default function About() {
   const [currentVersion, setCurrentVersion] = useState(`v${VERSION}`);
   const [latestGitHubVersion, setLatestGitHubVersion] = useState('');
-  const [latestDockerHubVersion, setLatestDockerHubVersion] = useState('');
   const [updateReminder, setUpdateReminder] = useState(() => buildUpdateReminder({
     currentVersion: VERSION,
     helper: null,
@@ -60,7 +54,6 @@ export default function About() {
         if (cancelled) return;
         setCurrentVersion(`v${resolvedCurrentVersion}`);
         setLatestGitHubVersion(String(status.githubRelease?.displayVersion || status.githubRelease?.normalizedVersion || ''));
-        setLatestDockerHubVersion(String(status.dockerHubTag?.displayVersion || status.dockerHubTag?.normalizedVersion || ''));
         setUpdateReminder(buildUpdateReminder({
           currentVersion: resolvedCurrentVersion,
           helper: status.helper,
@@ -115,12 +108,6 @@ export default function About() {
         </div>
         <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
           <div>GitHub 稳定版：{latestGitHubVersion || '暂无数据'}</div>
-          <div>Docker Hub：{latestDockerHubVersion || '暂无数据'}</div>
-          <div>
-            <Link to="/settings" style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}>
-              前往更新中心
-            </Link>
-          </div>
         </div>
       </div>
 

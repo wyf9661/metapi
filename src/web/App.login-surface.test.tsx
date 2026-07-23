@@ -12,11 +12,11 @@ function collectText(node: ReactTestInstance): string {
 
 describe('Login surface', () => {
   it('uses the site root as the documentation URL', () => {
-    expect(SITE_DOCS_URL).toBe('https://metapi.cita777.me');
+    expect(SITE_DOCS_URL).toBe('https://github.com/wyf9661/metapi');
   });
 
   it('uses the author github profile for the login github shortcut', () => {
-    expect(SITE_GITHUB_URL).toBe('https://github.com/cita-777');
+    expect(SITE_GITHUB_URL).toBe('https://github.com/wyf9661/metapi');
   });
 
   it('renders a poster-style hero with a floating admin login panel', () => {
@@ -57,6 +57,8 @@ describe('Login surface', () => {
       const docsLink = root.root.find((node) => (
         node.type === 'a'
         && node.props.href === SITE_DOCS_URL
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('login-doc-link')
       ));
       const tokenInput = root.root.find((node) => (
         node.type === 'input'
@@ -65,6 +67,7 @@ describe('Login surface', () => {
       const githubLink = root.root.find((node) => (
         node.type === 'a'
         && node.props.href === SITE_GITHUB_URL
+        && node.props['aria-label'] === 'GitHub'
       ));
 
       expect(docsLink.props.target).toBe('_blank');

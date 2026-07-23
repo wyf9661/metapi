@@ -36,7 +36,7 @@ describe('About update center', () => {
       githubRelease: {
         normalizedVersion: '1.3.0',
         displayVersion: '1.3.0',
-        url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
+        url: 'https://github.com/wyf9661/metapi/releases/tag/v1.3.0',
       },
       dockerHubTag: {
         normalizedVersion: 'latest',
@@ -69,10 +69,9 @@ describe('About update center', () => {
       expect(text).toContain('v1.2.3');
       expect(text).toContain('GitHub 稳定版');
       expect(text).toContain('1.3.0');
-      expect(text).toContain('Docker Hub');
-      expect(text).toContain('latest @ sha256:efb2ee655386');
       expect(text).toContain('发现新版本');
-      expect(text).toContain('前往更新中心');
+      expect(text).not.toContain('Docker Hub');
+      expect(text).not.toContain('站点文档');
 
       const highlightedReminder = root.root.find((node) => (
         typeof node.props.className === 'string'
