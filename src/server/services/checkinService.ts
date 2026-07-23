@@ -281,11 +281,18 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
   }
 
   if (!effectiveSuccess) {
-    setAccountRuntimeHealth(account.id, {
-      state: 'unhealthy',
-      reason: result.message || '\u7b7e\u5230\u5931\u8d25',
-      source: 'checkin',
-    });
+      // Only mark truly unhealthy for confirmed credential failures.
+      // Transient issues (timeout, 5xx, network, Cloudflare) should degrade,
+      // not mark the account as permanently dead — many sites recover on the
+      // next scheduled checkin.
+      const healthState = isTokenExpiredError({ message: result.message })
+        ? 'unhealthy'
+        : 'degraded';
+      setAccountRuntimeHealth(account.id, {
+        state: healthState,
+        reason: result.message || '签到失败',
+        source: 'checkin',
+      });
     if (isTokenExpiredError({ message: result.message })) {
       await reportTokenExpired({
         accountId: account.id,
