@@ -3180,8 +3180,8 @@ export default function Accounts() {
                               }
                             />
                           </td>
-                          <td style={{ color: "var(--color-text-primary)" }}>
-                            <div style={{ fontWeight: 600 }}>
+                          <td className="accounts-name-cell" style={{ color: "var(--color-text-primary)" }}>
+                            <div className="inventory-name-title" style={{ fontWeight: 600 }} title={resolveAccountDisplayName(a)}>
                               {resolveAccountDisplayName(a)}
                             </div>
                             <div
@@ -3205,7 +3205,7 @@ export default function Accounts() {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className="accounts-site-cell">
                             <SiteBadgeLink
                               siteId={a.site?.id}
                               siteName={a.site?.name}
@@ -3240,15 +3240,13 @@ export default function Accounts() {
                                     {health.label}
                                   </span>
                                   <span
+                                    className="accounts-health-reason"
                                     style={{
                                       fontSize: 11,
                                       color: "var(--color-text-muted)",
-                                      maxWidth: 200,
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
                                     }}
                                     data-tooltip={health.reason}
+                                    title={health.reason}
                                   >
                                     {health.reason}
                                   </span>

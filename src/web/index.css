@@ -2026,12 +2026,22 @@ body {
   font-size: 12px;
 }
 
+/* Inventory tables: fixed layout, content-bounded name/site cols, compact balance, no horizontal scroll. */
 .accounts-desktop-table-wrap {
   width: 100%;
   overflow-x: hidden;
 }
 
-/* Fixed layout keeps header/body columns locked; no horizontal scroll. */
+.inventory-name-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  letter-spacing: normal;
+  word-spacing: normal;
+}
+
 .accounts-table {
   width: 100%;
   table-layout: fixed;
@@ -2049,40 +2059,73 @@ body {
 .accounts-table th:nth-child(1),
 .accounts-table td:nth-child(1) {
   width: 40px;
+  white-space: nowrap;
 }
 
 .accounts-table th:nth-child(2),
-.accounts-table td:nth-child(2) {
-  width: 18%;
+.accounts-table td.accounts-name-cell {
+  width: 16%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.accounts-name-cell .inventory-name-title {
+  max-width: 100%;
 }
 
 .accounts-table th:nth-child(3),
-.accounts-table td:nth-child(3) {
+.accounts-table td.accounts-site-cell {
   width: 12%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.accounts-site-cell .badge-link {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.accounts-site-cell .badge {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .accounts-table th:nth-child(4),
 .accounts-table td:nth-child(4) {
-  width: 20%;
+  width: 14%;
+  min-width: 0;
+  white-space: normal;
+}
+
+.accounts-health-reason {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .accounts-table th:nth-child(5),
 .accounts-table td:nth-child(5),
 .accounts-table th:nth-child(6),
 .accounts-table td:nth-child(6) {
-  width: 9%;
+  width: 8%;
+  white-space: nowrap;
 }
 
 .accounts-table th:nth-child(7),
 .accounts-table td:nth-child(7) {
-  width: 64px;
+  width: 56px;
   white-space: nowrap;
 }
 
-/* Last column = actions: fit button row, no huge right void. */
 .accounts-actions-col,
 .accounts-actions-cell {
-  width: 22%;
+  width: 24%;
   white-space: nowrap !important;
   overflow: visible;
   text-align: left;
@@ -2093,13 +2136,13 @@ body {
   flex-wrap: nowrap;
   justify-content: flex-start;
   align-items: center;
-  gap: 0;
+  gap: 6px 10px;
   max-width: 100%;
 }
 
 .accounts-row-actions .btn-link {
   white-space: nowrap;
-  padding: 2px 3px;
+  padding: 3px 6px;
   font-size: 11px;
 }
 
@@ -2113,44 +2156,83 @@ body {
 .sites-table th:nth-child(1),
 .sites-table td:nth-child(1) {
   width: 40px;
+  white-space: nowrap;
 }
 
 .sites-table th:nth-child(2),
-.sites-table td:nth-child(2) {
-  width: 22%;
+.sites-table td.sites-name-col {
+  width: 20%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.sites-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sites-name-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sites-name-link {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sites-name-tag {
+  flex: 0 0 auto;
 }
 
 .sites-table th:nth-child(3),
-.sites-table td:nth-child(3) {
-  width: 12%;
+.sites-table td.site-balance-cell {
+  width: 9%;
+  max-width: 7.5rem;
+  white-space: nowrap;
 }
 
 .sites-table th:nth-child(4),
 .sites-table td:nth-child(4),
 .sites-table th:nth-child(5),
 .sites-table td:nth-child(5) {
-  width: 8%;
+  width: 7%;
+  white-space: nowrap;
 }
 
 .sites-table th:nth-child(6),
 .sites-table td:nth-child(6) {
-  width: 7%;
+  width: 6%;
+  white-space: nowrap;
 }
 
 .sites-table th:nth-child(7),
 .sites-table td:nth-child(7) {
-  width: 10%;
+  width: 8%;
+  white-space: nowrap;
 }
 
 .sites-table th:nth-child(8),
 .sites-table td:nth-child(8) {
-  width: 12%;
+  width: 10%;
+  white-space: nowrap;
 }
 
-/* Keep 置顶/添加 Key/编辑/禁用/删除 on one left-aligned row under 「操作」. */
 .sites-actions-col,
 .sites-actions-cell {
-  width: 28%;
+  width: 24%;
   white-space: nowrap !important;
   text-align: left;
   overflow: visible;
@@ -2161,13 +2243,13 @@ body {
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 0;
+  gap: 6px 10px;
   max-width: 100%;
 }
 
 .sites-row-actions .btn-link {
   white-space: nowrap;
-  padding: 2px 3px;
+  padding: 3px 6px;
   font-size: 11px;
 }
 
@@ -2181,23 +2263,52 @@ body {
 .token-table th:nth-child(1),
 .token-table td:nth-child(1) {
   width: 40px;
+  white-space: nowrap;
 }
 
 .token-table th:nth-child(2),
-.token-table td:nth-child(2) {
+.token-table td.token-name-cell {
   width: 14%;
+  min-width: 0;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.token-name-cell .inventory-name-title {
+  max-width: 100%;
 }
 
 .token-table th:nth-child(3),
 .token-table td:nth-child(3) {
-  width: 16%;
+  width: 14%;
+  white-space: nowrap;
 }
 
 .token-table th:nth-child(4),
-.token-table td:nth-child(4),
+.token-table td.token-site-cell {
+  width: 12%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.token-site-cell .badge-link {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.token-site-cell .badge {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .token-table th:nth-child(5),
 .token-table td:nth-child(5) {
-  width: 12%;
+  width: 10%;
+  white-space: nowrap;
 }
 
 .token-table th:nth-child(6),
@@ -2206,17 +2317,19 @@ body {
 .token-table td:nth-child(7),
 .token-table th:nth-child(8),
 .token-table td:nth-child(8) {
-  width: 8%;
+  width: 7%;
+  white-space: nowrap;
 }
 
 .token-table th:nth-child(9),
 .token-table td:nth-child(9) {
-  width: 12%;
+  width: 10%;
+  white-space: nowrap;
 }
 
 .token-table-actions-col,
 .token-actions-cell {
-  width: 16%;
+  width: 18%;
   white-space: nowrap !important;
   text-align: left;
   overflow: visible;
@@ -2227,28 +2340,32 @@ body {
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 0;
+  gap: 6px 10px;
   max-width: 100%;
 }
 
 .token-table-actions .btn-link {
   white-space: nowrap;
-  padding: 2px 3px;
+  padding: 3px 6px;
   font-size: 11px;
 }
 
+/* Balance: compact, single-line, no multi-line wrap bloating the column. */
 .site-balance-cell {
-  white-space: normal !important;
+  white-space: nowrap !important;
+  max-width: 7.5rem;
+  overflow: hidden;
 }
 
 .site-balance-inline {
   display: flex;
   width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
   max-width: 100%;
-  line-height: 1.35;
+  overflow: hidden;
 }
 
 .site-balance-inline.align-end {
@@ -2256,32 +2373,36 @@ body {
 }
 
 .site-balance-primary {
-  font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .site-balance-divider {
   color: var(--color-text-muted);
-  font-size: 12px;
+  flex: 0 0 auto;
 }
 
 .site-balance-subscription {
-  font-size: 11px;
   color: var(--color-text-muted);
-  line-height: 1.35;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  white-space: normal;
-  text-wrap: pretty;
-  cursor: help;
-  transition: color 0.15s ease;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
 }
 
 .site-balance-subscription:hover,
 .site-balance-subscription:focus-visible {
-  color: var(--color-text-secondary);
+  color: var(--color-primary);
+  text-decoration: underline;
 }
 
 .sites-url-cell {
@@ -5784,7 +5905,7 @@ textarea {
 
   .sites-actions-col,
   .sites-actions-cell {
-    width: 30%;
+    width: 24%;
   }
 
   .sites-table th,
@@ -6507,7 +6628,7 @@ textarea {
 
   .sites-actions-col,
   .sites-actions-cell {
-    width: 32%;
+    width: 24%;
   }
 
   .sites-table th:nth-child(5),

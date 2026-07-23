@@ -2259,24 +2259,24 @@ export default function Sites() {
                         onChange={(e) => toggleSiteSelection(site.id, e.target.checked)}
                       />
                     </td>
-                    <td style={{ fontWeight: 600 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-                        <a
-                          href={site.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: 'var(--color-text-primary)',
-                            textDecoration: 'underline',
-                          }}
-                        >
-                          {site.name}
-                        </a>
-                        {hasConfiguredCustomHeaders(site.customHeaders) ? (
-                          <span className="badge badge-info" style={{ fontSize: 11 }}>
-                            自定义头
-                          </span>
-                        ) : null}
+                    <td className="sites-name-col" style={{ fontWeight: 600 }}>
+                      <div className="sites-name-cell">
+                        <div className="sites-name-primary">
+                          <a
+                            href={site.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="sites-name-link"
+                            title={site.name}
+                          >
+                            {site.name}
+                          </a>
+                          {hasConfiguredCustomHeaders(site.customHeaders) ? (
+                            <span className="badge badge-info sites-name-tag" style={{ fontSize: 11 }}>
+                              自定义头
+                            </span>
+                          ) : null}
+                        </div>
                         <span className={`badge ${getConfiguredSiteApiEndpoints(site).length > 0 ? 'badge-warning' : 'badge-muted'}`} style={{ fontSize: 11 }}>
                           API 地址: {buildSiteApiEndpointSummary(site)}
                         </span>
