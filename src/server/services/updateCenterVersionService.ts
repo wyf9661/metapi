@@ -45,7 +45,7 @@ export type DockerHubTagCandidates = {
 };
 
 const STABLE_SEMVER_PATTERN = /^v?(\d+)\.(\d+)\.(\d+)(?:\+[\w.-]+)?$/i;
-const GITHUB_RELEASES_URL = 'https://api.github.com/repos/cita-777/metapi/releases';
+const GITHUB_RELEASES_URL = 'https://api.github.com/repos/wyf9661/metapi/releases';
 const DOCKER_HUB_TAGS_URL = 'https://hub.docker.com/v2/repositories/1467078763/metapi/tags?page_size=100';
 const UPDATE_CENTER_VERSION_FETCH_TIMEOUT_MS = 5_000;
 const PREFERRED_DOCKER_HUB_TAG_ALIASES = ['latest', 'main'] as const;

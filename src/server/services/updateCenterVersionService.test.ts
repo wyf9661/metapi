@@ -268,7 +268,7 @@ describe('update center version service', () => {
         normalizedVersion: '1.10.0',
         url: 'https://example.com/latest',
       });
-      expect(String(fetchMock.mock.calls[0]?.[0] || '')).toContain('/repos/cita-777/metapi/releases');
+      expect(String(fetchMock.mock.calls[0]?.[0] || '')).toContain('/repos/wyf9661/metapi/releases');
     });
 
     it('maps aborted GitHub lookups to a timeout error', async () => {
