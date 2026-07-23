@@ -51,7 +51,7 @@ describe('Inventory table actions layout', () => {
     const accBrace = css.indexOf('{', accStart);
     const accEnd = css.indexOf('}', accBrace);
     const accBody = css.slice(accBrace + 1, accEnd);
-    expect(accBody).toContain('width: 22%');
+    expect(accBody).toContain('width: 24%');
     expect(accBody).not.toContain('width: 30%');
     expect(accBody).not.toContain('width: 38%');
 
@@ -59,7 +59,7 @@ describe('Inventory table actions layout', () => {
     const tokBrace = css.indexOf('{', tokStart);
     const tokEnd = css.indexOf('}', tokBrace);
     const tokBody = css.slice(tokBrace + 1, tokEnd);
-    expect(tokBody).toContain('width: 16%');
+    expect(tokBody).toContain('width: 18%');
     expect(tokBody).not.toContain('width: 20%');
   });
 });

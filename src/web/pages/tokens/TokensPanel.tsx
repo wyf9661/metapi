@@ -1370,9 +1370,13 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                         onClick={(e) => e.stopPropagation()}
                       />
                     </td>
-                    <td style={{ fontWeight: 600 }}>{token.name || '-'}</td>
+                    <td className="token-name-cell">
+                      <span className="inventory-name-title" title={token.name || undefined}>
+                        {token.name || '-'}
+                      </span>
+                    </td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{token.tokenMasked || '***'}</td>
-                    <td>
+                    <td className="token-site-cell">
                       {token.site?.url ? (
                         <a
                           href={token.site.url}
@@ -1380,13 +1384,14 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                           rel="noopener noreferrer"
                           className="badge-link"
                           onClick={(e) => e.stopPropagation()}
+                          title={token.site?.name || undefined}
                         >
                           <span className="badge badge-muted" style={{ fontSize: 11 }}>
                             {token.site?.name || 'unknown'}
                           </span>
                         </a>
                       ) : (
-                        <span className="badge badge-muted" style={{ fontSize: 11 }}>
+                        <span className="badge badge-muted" style={{ fontSize: 11 }} title={token.site?.name || undefined}>
                           {token.site?.name || 'unknown'}
                         </span>
                       )}
