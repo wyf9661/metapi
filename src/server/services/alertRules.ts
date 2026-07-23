@@ -24,7 +24,31 @@ export function isTokenExpiredError(input: { status?: number; message?: string |
   const rawMessage = input.message || '';
   const text = (input.message || '').toLowerCase();
   if (isEndpointDispatchDeniedMessage(rawMessage)) return false;
-  if (input.status === 401 || containsHttpStatus(rawMessage, 401)) return true;
+
+  const is401 = input.status === 401 || containsHttpStatus(rawMessage, 401);
+
+  // 401 alone is not sufficient evidence of token expiration. Many transient
+  // issues (WAF blocks, missing headers, network blips) also produce 401.
+  // Require explicit credential/token-related language in the message.
+  if (is401) {
+    if (!text) return false;
+    // Filter out HTML pages / WAF challenge content
+    if (text.startsWith('<!doctype') || text.startsWith('<html') || text.includes('<script')) return false;
+    if (text.includes('未登录且未提供 access token')) return false;
+    return (
+      text.includes('token') ||
+      text.includes('令牌') ||
+      text.includes('访问令牌') ||
+      text.includes('access') ||
+      text.includes('unauthorized') ||
+      text.includes('invalid') ||
+      text.includes('无效') ||
+      text.includes('expired') ||
+      text.includes('过期') ||
+      text.includes('auth')
+    );
+  }
+
   if (!text) return false;
 
   // NewAPI-like sites may return this when session context is missing for an action,
