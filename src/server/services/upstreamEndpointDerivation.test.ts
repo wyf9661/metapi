@@ -171,6 +171,17 @@ describe('upstreamEndpointDerivation', () => {
     expect(order).toEqual(['chat', 'messages', 'responses']);
   });
 
+  it('uses messages-first for claude-family models on generic new-api sites', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      baseContext,
+      'claude-opus-4-6',
+      'openai',
+    );
+    // Claude-family still prefers messages first; cascade must recover to chat
+    // when messages returns NewAPI "no available channel" (liWAN-class relays).
+    expect(order).toEqual(['messages', 'chat', 'responses']);
+  });
+
   it('uses responses-first only when site explicitly prefers responses (Codex compat)', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {

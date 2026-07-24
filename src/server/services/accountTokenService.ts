@@ -342,24 +342,26 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
       continue;
     }
 
-    const matchingReadyByMaskedValue = nextValueStatus === ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
-      ? existing.filter((row) => (
+    const matchingReadyByMaskedValue: AccountTokenRow[] = nextValueStatus === ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
+      ? existing.filter((row: AccountTokenRow) => (
         resolveAccountTokenValueStatus(row) === ACCOUNT_TOKEN_VALUE_STATUS_READY
         && matchesMaskedTokenValue(row.token, tokenValue)
         && row.name === tokenName
-        && sameTokenGroup(row.tokenGroup, row.name, tokenGroup, tokenName)
       ))
       : [];
-    const readyMaskedMatch = matchingReadyByMaskedValue.length === 1
-      ? matchingReadyByMaskedValue[0]
-      : null;
+    // Prefer same-group match when multiple ready rows share the masked identity.
+    const sameGroupReady = matchingReadyByMaskedValue.filter((row: AccountTokenRow) => (
+      sameTokenGroup(row.tokenGroup, row.name, tokenGroup, tokenName)
+    ));
+    const readyMaskedMatch = sameGroupReady.length === 1
+      ? sameGroupReady[0]
+      : (matchingReadyByMaskedValue.length === 1 ? matchingReadyByMaskedValue[0] : null);
     if (readyMaskedMatch) {
-      const staleMaskedPlaceholders = existing.filter((row) => (
+      const staleMaskedPlaceholders = existing.filter((row: AccountTokenRow) => (
         row.id !== readyMaskedMatch.id
         && resolveAccountTokenValueStatus(row) === ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
         && matchesMaskedTokenValue(row.token, tokenValue)
         && row.name === tokenName
-        && sameTokenGroup(row.tokenGroup, row.name, tokenGroup, tokenName)
       ));
 
       await db.update(schema.accountTokens)
@@ -398,10 +400,14 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
       continue;
     }
 
-    const matchingPlaceholder = existing.find((row) => (
+    const matchingPlaceholder = existing.find((row: AccountTokenRow) => (
       isMaskedPendingAccountToken(row)
       && row.name === tokenName
       && sameTokenGroup(row.tokenGroup, row.name, tokenGroup, tokenName)
+    )) || existing.find((row: AccountTokenRow) => (
+      isMaskedPendingAccountToken(row)
+      && row.name === tokenName
+      && matchesMaskedTokenValue(row.token, tokenValue)
     ));
 
     if (matchingPlaceholder) {

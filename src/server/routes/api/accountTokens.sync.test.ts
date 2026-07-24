@@ -261,6 +261,56 @@ describe('account tokens sync routes with site status', () => {
     expect((tokenRows[0] as any).valueStatus).toBe('ready');
   });
 
+  it('updates local token_group when upstream masked sync reports a new group', async () => {
+    const { account } = await seedAccount({ siteStatus: 'active' });
+    const fullToken = 'sk-group-change-full-token-value-001';
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'key',
+      token: fullToken,
+      source: 'manual',
+      enabled: true,
+      isDefault: true,
+      tokenGroup: 'vip',
+      valueStatus: 'ready' as any,
+    }).run();
+
+    getApiTokensMock.mockResolvedValue([
+      { name: 'key', key: maskToken(fullToken), enabled: true, tokenGroup: 'claude' },
+    ]);
+    getApiTokenMock.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/account-tokens/sync/${account.id}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      synced: true,
+      status: 'synced',
+      created: 0,
+      updated: 1,
+      maskedPending: 0,
+      total: 1,
+    });
+
+    const tokenRows = await db.select()
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .all();
+    expect(tokenRows).toHaveLength(1);
+    expect(tokenRows[0]).toMatchObject({
+      name: 'key',
+      token: fullToken,
+      source: 'sync',
+      enabled: true,
+      isDefault: true,
+      tokenGroup: 'claude',
+    });
+  });
+
   it('removes matching masked_pending placeholders after reusing a ready token', async () => {
     const { account } = await seedAccount({ siteStatus: 'active' });
     const fullToken = 'sk-real-token-1234';

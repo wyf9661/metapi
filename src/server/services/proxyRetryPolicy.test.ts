@@ -106,6 +106,21 @@ describe('proxyRetryPolicy', () => {
     expect(shouldAbortSameSiteEndpointFallback(524, 'A timeout occurred')).toBe(true);
   });
 
+  it('keeps same-site cascade when NewAPI reports no available channel on one protocol path', () => {
+    const body = JSON.stringify({
+      error: {
+        code: 'model_not_found',
+        message: 'No available channel for model claude-opus-4-6 under group claude (distributor)',
+        type: 'new_api_error',
+      },
+    });
+    // messages-first probe hits 503 here, but chat/completions can still 200.
+    expect(shouldAbortSameSiteEndpointFallback(503, body)).toBe(false);
+    expect(shouldAbortSameSiteEndpointFallback(503, '无可用渠道')).toBe(false);
+    // Real site overload still aborts.
+    expect(shouldAbortSameSiteEndpointFallback(503, 'system cpu overloaded')).toBe(true);
+  });
+
   it('aborts same-site protocol cascade on WAF blocks but keeps generic forbidden eligible for protocol recovery', () => {
     expect(shouldAbortSameSiteEndpointFallback(403, 'Your request was blocked.')).toBe(true);
     expect(shouldAbortSameSiteEndpointFallback(403, 'error code: 1010')).toBe(true);
