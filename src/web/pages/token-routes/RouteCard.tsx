@@ -795,21 +795,36 @@ function RouteCardInner({
           ) : (
             <span className="badge badge-info" style={{ fontSize: 10, flexShrink: 0 }}>
               {route.channelCount} {tr('通道')}
-                {(route.cooldownChannelCount || 0) > 0 ? (
-                  <span
-                    className="badge"
-                    style={{
-                      marginLeft: 6,
-                      fontSize: 10,
-                      background: 'var(--color-warning-soft)',
-                      color: 'var(--color-warning)',
-                      fontWeight: 600,
-                    }}
-                    data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
-                  >
-                    冷却 {route.cooldownChannelCount}
-                  </span>
-                ) : null}
+              {route.channelCount === 1 ? (
+                <span
+                  className="badge"
+                  style={{
+                    marginLeft: 6,
+                    fontSize: 10,
+                    background: 'var(--color-warning-soft)',
+                    color: 'var(--color-warning)',
+                    fontWeight: 600,
+                  }}
+                  data-tooltip="单通道路由：无冗余，该通道冷却即整路由不可用"
+                >
+                  单通道
+                </span>
+              ) : null}
+              {(route.cooldownChannelCount || 0) > 0 ? (
+                <span
+                  className="badge"
+                  style={{
+                    marginLeft: 6,
+                    fontSize: 10,
+                    background: 'var(--color-warning-soft)',
+                    color: 'var(--color-warning)',
+                    fontWeight: 600,
+                  }}
+                  data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
+                >
+                  冷却 {route.cooldownChannelCount}
+                </span>
+              ) : null}
             </span>
           )}
           {hasCachedDecisionSnapshot ? (

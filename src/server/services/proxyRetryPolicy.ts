@@ -112,6 +112,18 @@ const SAME_SITE_MODEL_OR_FUNCTION_MISSING_PATTERNS: RegExp[] = [
   /渠道不存在/i,
 ];
 
+/**
+ * NewAPI-class relays often return HTTP 503 +
+ * "No available channel for model X under group Y (distributor)" for one
+ * protocol path while another path (chat vs messages) still works. Treat as
+ * protocol-local capacity, not a site-wide origin outage — allow cascade.
+ */
+const PROTOCOL_LOCAL_CHANNEL_UNAVAILABLE_PATTERNS: RegExp[] = [
+  /no\s+available\s+channel/i,
+  /分组下.*无可用渠道/i,
+  /无可用渠道/i,
+];
+
 function isModelUnsupportedErrorMessage(rawMessage?: string | null): boolean {
   const text = (rawMessage || '').trim();
   if (!text) return false;
@@ -122,6 +134,10 @@ function matchesAnyPattern(patterns: RegExp[], rawMessage?: string | null): bool
   const text = (rawMessage || '').trim();
   if (!text) return false;
   return patterns.some((pattern) => pattern.test(text));
+}
+
+function isProtocolLocalChannelUnavailable(upstreamErrorText?: string | null): boolean {
+  return matchesAnyPattern(PROTOCOL_LOCAL_CHANNEL_UNAVAILABLE_PATTERNS, upstreamErrorText);
 }
 
 export function isNonRetryableProtocolPolicyError(upstreamErrorText?: string | null): boolean {
@@ -169,13 +185,23 @@ export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErro
   // Content-policy rejection is caused by the request content. Trying another
   // protocol path on the same site cannot recover it and may duplicate logs.
   if (isNonRetryableProtocolPolicyError(upstreamErrorText)) return true;
+  // NewAPI "no available channel under group" on one path (often messages) is
+  // not a site-wide outage — chat/completions may still work on the same key.
+  if (status === 503 && isProtocolLocalChannelUnavailable(upstreamErrorText)) {
+    return false;
+  }
   // 502/503/504 describe an unhealthy relay/origin, not an endpoint protocol
   // mismatch. Trying chat/messages on the same site only adds latency and can
   // turn an explicit responses-capable site into a misleading protocol chase.
   // 524 is Cloudflare's "origin timeout" — same class as 504, not a protocol mismatch.
   if (status === 502 || status === 503 || status === 504 || status === 524) return true;
   // Model/tool/function missing is not protocol recovery material.
-  if (matchesAnyPattern(SAME_SITE_MODEL_OR_FUNCTION_MISSING_PATTERNS, upstreamErrorText)) {
+  // "No available channel" is handled above (503 exception) and is not pure
+  // model-missing: another endpoint on the same site may still route.
+  if (
+    matchesAnyPattern(SAME_SITE_MODEL_OR_FUNCTION_MISSING_PATTERNS, upstreamErrorText)
+    && !isProtocolLocalChannelUnavailable(upstreamErrorText)
+  ) {
     return true;
   }
   // Cloudflare/WAF blocks are likewise site/request-fingerprint local. Move to
