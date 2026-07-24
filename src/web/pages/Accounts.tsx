@@ -360,6 +360,8 @@ export default function Accounts() {
         credentialMode === "apikey" &&
         initializationPreset?.recommendedSkipModelFetch === true,
     });
+    // Refresh snapshot so the selected new site is present in siteSelectOptions.
+    void load(true);
 
     params.delete("create");
     params.delete("siteId");
@@ -1289,6 +1291,9 @@ export default function Accounts() {
                 closeRebindPanel();
                 setShowAdd(true);
                 resetAddForms(activeAddCredentialMode);
+                // Force-refresh sites so newly created stations appear in the dropdown
+                // without requiring a full page reload (accounts-snapshot can lag briefly).
+                void load(true);
               }}
               className="btn btn-primary"
             >

@@ -600,6 +600,8 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: 'Create site failed' });
     }
     invalidateSiteCaches();
+    // Connection management site dropdown reads accounts-snapshot.
+    await invalidateAccountsSnapshot();
     return result;
   });
 
@@ -747,6 +749,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     invalidateSiteCaches();
+    await invalidateAccountsSnapshot();
 
     return await loadSiteWithApiEndpoints(id);
   });
@@ -868,6 +871,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     invalidateSiteCaches();
+    await invalidateAccountsSnapshot();
     return {
       success: true,
       successIds,
