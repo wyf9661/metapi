@@ -105,6 +105,9 @@ describe('Accounts create intent handling', () => {
       });
       await flushMicrotasks();
 
+      // Opening the add panel should force-refresh accounts snapshot so new sites appear.
+      expect(apiMock.getAccountsSnapshot).toHaveBeenCalledWith({ refresh: true });
+
       const selects = root.root.findAllByType(ModernSelect);
       expect(selects[1]?.props.searchable).toBe(true);
       expect(selects[1]?.props.searchPlaceholder).toBe('筛选站点（名称 / 平台 / URL）');

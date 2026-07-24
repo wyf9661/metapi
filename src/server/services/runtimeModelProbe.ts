@@ -11,6 +11,10 @@ import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/or
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
 import { insertProxyLog } from './proxyLogStore.js';
+import { formatUtcSqlDateTime } from './localTimeService.js';
+import { composeProxyLogMessage } from './proxyLogMessage.js';
+import { parseProxyUsage } from './proxyUsageParser.js';
+import { estimateProxyCost } from './modelPricingService.js';
 import type { schema } from '../db/index.js';
 
 export type RuntimeModelProbeStatus = 'supported' | 'unsupported' | 'inconclusive' | 'skipped';
@@ -138,9 +142,31 @@ async function writeProbeProxyLog(input: {
   latencyMs: number | null;
   errorMessage?: string | null;
   path?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  totalTokens?: number | null;
+  estimatedCost?: number | null;
+  usageSource?: 'upstream' | 'self-log' | 'unknown' | null;
 }): Promise<void> {
   try {
-    const pathHint = input.path ? ` [upstream:${input.path}]` : '';
+    const hasUsage = (
+      (input.promptTokens ?? 0) > 0
+      || (input.completionTokens ?? 0) > 0
+      || (input.totalTokens ?? 0) > 0
+    );
+    const usageSource = input.usageSource
+      ?? (hasUsage ? 'upstream' : input.status === 'success' ? 'unknown' : null);
+    // Align with normal proxy logs: success uses path/usage tags only (no "error" text).
+    // Failure keeps real error text after the same structured prefixes.
+    const composed = composeProxyLogMessage({
+      clientKind: 'probe',
+      downstreamPath: null,
+      upstreamPath: input.path || null,
+      usageSource,
+      errorMessage: input.status === 'success'
+        ? null
+        : (input.errorMessage || 'probe failed'),
+    });
     await insertProxyLog({
       accountId: input.accountId,
       modelRequested: input.modelName,
@@ -149,14 +175,17 @@ async function writeProbeProxyLog(input: {
       httpStatus: input.httpStatus,
       latencyMs: input.latencyMs,
       isStream: false,
+      promptTokens: hasUsage ? (input.promptTokens ?? null) : null,
+      completionTokens: hasUsage ? (input.completionTokens ?? null) : null,
+      totalTokens: hasUsage ? (input.totalTokens ?? null) : null,
+      estimatedCost: input.estimatedCost ?? 0,
       clientFamily: 'probe',
       clientAppId: 'model-probe',
       clientAppName: 'Model Probe',
       clientConfidence: 'high',
-      errorMessage: input.status === 'success'
-        ? `[probe]${pathHint} supported`
-        : `[probe]${pathHint} ${input.errorMessage || 'probe failed'}`,
+      errorMessage: composed,
       retryCount: 0,
+      createdAt: formatUtcSqlDateTime(new Date()),
     });
   } catch (error) {
     console.warn('[probe] failed to write proxy log', error);
@@ -310,7 +339,38 @@ export async function probeRuntimeModel(input: {
     const latencyMs = Date.now() - startedAt;
 
     if (result.ok) {
-      await result.upstream.text().catch(() => undefined);
+      const rawBody = await result.upstream.text().catch(() => '');
+      let promptTokens: number | null = null;
+      let completionTokens: number | null = null;
+      let totalTokens: number | null = null;
+      let estimatedCost = 0;
+      let usageSource: 'upstream' | 'unknown' = 'unknown';
+      try {
+        const parsedJson = rawBody ? JSON.parse(rawBody) as unknown : null;
+        const usage = parseProxyUsage(parsedJson);
+        if (usage.promptTokens > 0 || usage.completionTokens > 0 || usage.totalTokens > 0) {
+          promptTokens = usage.promptTokens || null;
+          completionTokens = usage.completionTokens || null;
+          totalTokens = usage.totalTokens
+            || ((usage.promptTokens || 0) + (usage.completionTokens || 0))
+            || null;
+          usageSource = 'upstream';
+          try {
+            estimatedCost = await estimateProxyCost({
+              site: input.site,
+              account: input.account,
+              modelName: input.modelName,
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+              totalTokens: usage.totalTokens,
+            });
+          } catch {
+            estimatedCost = 0;
+          }
+        }
+      } catch {
+        // Non-JSON / empty body: keep tokens unknown (same as normal proxy without usage).
+      }
       await writeProbeProxyLog({
         accountId: input.account.id,
         modelName: input.modelName,
@@ -318,6 +378,11 @@ export async function probeRuntimeModel(input: {
         httpStatus: (result.upstream as { status?: number } | undefined)?.status || 200,
         latencyMs,
         path: result.upstreamPath || null,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        estimatedCost,
+        usageSource,
       });
       return {
         status: 'supported',
