@@ -1006,7 +1006,23 @@ export async function accountTokensRoutes(app: FastifyInstance) {
       return reply.code(502).send({ success: false, message: result.message || '同步失败' });
     }
     const coverageRefresh = await refreshCoverageForAccounts([accountId]);
-    return { success: true, ...result, coverageRefresh };
+    // Return post-sync token rows so the UI can paint group/model state without
+    // waiting for a second GET that might still show a stale client view.
+    const tokens = await listTokensWithRelations(accountId);
+    return {
+      success: true,
+      ...result,
+      coverageRefresh,
+      tokens: tokens.map((token: Awaited<ReturnType<typeof listTokensWithRelations>>[number]) => ({
+        id: token.id,
+        name: token.name,
+        tokenGroup: token.tokenGroup || 'default',
+        enabled: token.enabled,
+        isDefault: token.isDefault,
+        valueStatus: token.valueStatus,
+        updatedAt: token.updatedAt,
+      })),
+    };
   });
 
   app.post<{ Body: unknown }>('/api/account-tokens/sync-all', async (request, reply) => {
