@@ -85,11 +85,18 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     animation: true, background: 'transparent',
   }), [spendDistribution, labelColor]);
 
-  const trendSpec = useMemo(() => {
+  const tokenDistribution = useMemo(() => {
     // With 1-day window, trend is meaningless — show per-model tokens instead
-    const tokenData = (data?.callRanking || data?.spendDistribution || []).slice(0, 10).map(d => ({
+    return (data?.callRanking || data?.spendDistribution || []).slice(0, 10).map((d) => ({
+      model: d.model,
+      tokens: 'tokens' in d ? toSafeNumber((d as CallRankingItem).tokens) : 0,
+    }));
+  }, [data?.callRanking, data?.spendDistribution]);
+
+  const trendSpec = useMemo(() => {
+    const tokenData = tokenDistribution.map((d) => ({
       model: d.model.length > 20 ? d.model.slice(0, 20) + '...' : d.model,
-      value: 'tokens' in d ? toSafeNumber((d as CallRankingItem).tokens) : 0,
+      value: d.tokens,
     })).reverse();
     return {
       type: 'bar' as const,
@@ -100,7 +107,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
       animation: true, background: 'transparent',
     };
-  }, [data?.callRanking, data?.spendDistribution, labelColor]);
+  }, [tokenDistribution, labelColor]);
 
   const callsPieSpec = useMemo(() => ({
     type: 'pie' as const,
@@ -169,8 +176,19 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       )}
 
       {activeTab === 'trend' && (
-        <div style={{ height: 300 }}>
-          <VChart spec={trendSpec} />
+        <div>
+          <div style={{ height: 300 }}>
+            <VChart spec={trendSpec} />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px' }}>
+            {tokenDistribution.map((d) => (
+              <span key={d.model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                <InlineBrandIcon model={d.model} size={13} />
+                <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.model}</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>{formatCompactTokenMetric(d.tokens)}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
