@@ -296,8 +296,6 @@ export default function Dashboard({
     Record<string, SiteSpeedState>
   >({});
   const [trendDays, setTrendDays] = useState(7);
-  const [showInactiveSites, setShowInactiveSites] = useState(false);
-  const [showInactiveModels, setShowInactiveModels] = useState(false);
   const [observabilityTab, setObservabilityTab] = useState<"sites" | "models">("sites");
   const toast = useToast();
   const normalizedAdminName = (adminName || "").trim() || "\u7ba1\u7406\u5458";
@@ -646,12 +644,7 @@ export default function Dashboard({
   const activeSites = rawSiteAvailability
     .filter((s) => s.totalRequests > 0)
     .sort((a, b) => (b.totalRequests || 0) - (a.totalRequests || 0));
-  const inactiveSites = rawSiteAvailability.filter(
-    (s) => !s.totalRequests || s.totalRequests === 0,
-  );
-  const siteAvailability = showInactiveSites
-    ? [...activeSites, ...inactiveSites]
-    : activeSites;
+  const siteAvailability = activeSites;
 
   const rawModelAvailability: ModelAvailabilitySummary[] = Array.isArray(
     insightsData?.modelAvailability,
@@ -661,12 +654,7 @@ export default function Dashboard({
   const activeModels = rawModelAvailability
     .filter((m) => m.totalRequests > 0)
     .sort((a, b) => (b.totalRequests || 0) - (a.totalRequests || 0));
-  const inactiveModels = rawModelAvailability.filter(
-    (m) => !m.totalRequests || m.totalRequests === 0,
-  );
-  const modelAvailability = showInactiveModels
-    ? [...activeModels, ...inactiveModels]
-    : activeModels;
+  const modelAvailability = activeModels;
 
   const getLatencyColor = (ms: number) =>
     ms <= 500
@@ -1242,8 +1230,8 @@ export default function Dashboard({
               24 小时可用性观测
               <span className="site-observability-count-badge">
                 {observabilityTab === "sites"
-                  ? `${activeSites.length}/${rawSiteAvailability.length}`
-                  : `${activeModels.length}/${rawModelAvailability.length}`}
+                  ? activeSites.length
+                  : activeModels.length}
               </span>
             </div>
             <div className="site-observability-subtitle">
@@ -1283,26 +1271,6 @@ export default function Dashboard({
               />
               <span className="site-observability-legend-text">高</span>
             </div>
-            {observabilityTab === "sites" && inactiveSites.length > 0 && (
-              <button
-                className="site-observability-toggle-btn"
-                onClick={() => setShowInactiveSites((v) => !v)}
-              >
-                {showInactiveSites
-                  ? "隐藏未使用"
-                  : `显示未使用 (${inactiveSites.length})`}
-              </button>
-            )}
-            {observabilityTab === "models" && inactiveModels.length > 0 && (
-              <button
-                className="site-observability-toggle-btn"
-                onClick={() => setShowInactiveModels((v) => !v)}
-              >
-                {showInactiveModels
-                  ? "隐藏未使用"
-                  : `显示未使用 (${inactiveModels.length})`}
-              </button>
-            )}
           </div>
         </div>
 
