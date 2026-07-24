@@ -196,7 +196,8 @@ function normalizeProxyLogSearch(raw?: string): string {
 function normalizeProxyLogModelFilter(raw?: string): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
-  return trimmed || null;
+  if (!trimmed) return null;
+  return canonicalizeModelName(trimmed) || trimmed;
 }
 
 function normalizeProxyLogSiteId(raw?: string): number | null {
@@ -292,11 +293,12 @@ function buildProxyLogWhereClause(params: {
 }) {
   const modelCondition = params.model
     ? sql<boolean>`(
-        ${schema.proxyLogs.modelActual} = ${params.model}
-        or (
-          (coalesce(${schema.proxyLogs.modelActual}, '') = '')
-          and ${schema.proxyLogs.modelRequested} = ${params.model}
-        )
+        lower(trim(coalesce(nullif(${schema.proxyLogs.modelActual}, ''), ${schema.proxyLogs.modelRequested}, ''))) = ${params.model}
+        or lower(trim(coalesce(nullif(${schema.proxyLogs.modelActual}, ''), ${schema.proxyLogs.modelRequested}, ''))) = ${`${params.model}:free`}
+        or lower(trim(coalesce(nullif(${schema.proxyLogs.modelActual}, ''), ${schema.proxyLogs.modelRequested}, ''))) = ${`${params.model}-free`}
+        or lower(trim(coalesce(nullif(${schema.proxyLogs.modelActual}, ''), ${schema.proxyLogs.modelRequested}, ''))) like ${`%/${params.model}`}
+        or lower(trim(coalesce(nullif(${schema.proxyLogs.modelActual}, ''), ${schema.proxyLogs.modelRequested}, ''))) like ${`%/${params.model}:free`}
+        or lower(trim(coalesce(nullif(${schema.proxyLogs.modelActual}, ''), ${schema.proxyLogs.modelRequested}, ''))) like ${`%/${params.model}-free`}
       )`
     : null;
   const conditions = [
@@ -1005,8 +1007,9 @@ export async function statsRoutes(app: FastifyInstance) {
       models: (() => {
         const names = new Set<string>();
         for (const row of modelOptionRows || []) {
-          const name = String(row.modelActual || row.modelRequested || "").trim();
-          if (name) names.add(name);
+          const raw = String(row.modelActual || row.modelRequested || "").trim();
+          if (!raw) continue;
+          names.add(canonicalizeModelName(raw) || raw);
         }
         return Array.from(names).sort((left: string, right: string) =>
           left.localeCompare(right, "zh-CN"),
