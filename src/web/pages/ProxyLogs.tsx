@@ -131,6 +131,8 @@ export default function ProxyLogs() {
   const [siteFilter, setSiteFilter] = useState<number | null>(
     initialRouteState.siteId,
   );
+  const [modelFilter, setModelFilter] = useState(initialRouteState.model);
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [fromInput, setFromInput] = useState(initialRouteState.from);
   const [toInput, setToInput] = useState(initialRouteState.to);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -200,6 +202,9 @@ export default function ProxyLogs() {
     setSiteFilter((current) =>
       current === next.siteId ? current : next.siteId,
     );
+    setModelFilter((current) =>
+      current === next.model ? current : next.model,
+    );
     setFromInput((current) => (current === next.from ? current : next.from));
     setToInput((current) => (current === next.to ? current : next.to));
     setPage((current) => (current === next.page ? current : next.page));
@@ -216,6 +221,7 @@ export default function ProxyLogs() {
       search: searchInput,
       client: clientFilter,
       siteId: siteFilter,
+      model: modelFilter,
       from: fromInput,
       to: toInput,
     });
@@ -233,6 +239,7 @@ export default function ProxyLogs() {
     page,
     pageSize,
     searchInput,
+    modelFilter,
     siteFilter,
     statusFilter,
     toInput,
@@ -292,6 +299,20 @@ export default function ProxyLogs() {
     return [{ value: "", label: "全部站点" }, ...options];
   }, [siteFilter, sites]);
 
+  const modelSelectOptions = useMemo(() => {
+    const options = modelOptions.map((model) => ({
+      value: model,
+      label: model,
+    }));
+    if (modelFilter && !options.some((option) => option.value === modelFilter)) {
+      options.unshift({
+        value: modelFilter,
+        label: modelFilter,
+      });
+    }
+    return [{ value: "", label: "全部模型" }, ...options];
+  }, [modelFilter, modelOptions]);
+
   const resolvedClientOptions = useMemo(() => {
     const options = [...clientOptions];
     if (
@@ -349,6 +370,7 @@ export default function ProxyLogs() {
           search: deferredSearchInput,
           ...(clientFilter ? { client: clientFilter } : {}),
           ...(siteFilter ? { siteId: siteFilter } : {}),
+          ...(modelFilter ? { model: modelFilter } : {}),
           ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
           ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
         };
@@ -370,6 +392,7 @@ export default function ProxyLogs() {
       fromApiBoundary,
       hasInvalidTimeRange,
       pageSize,
+      modelFilter,
       siteFilter,
       statusFilter,
       toApiBoundaryValue,
@@ -392,6 +415,7 @@ export default function ProxyLogs() {
           search: deferredSearchInput,
           ...(clientFilter ? { client: clientFilter } : {}),
           ...(siteFilter ? { siteId: siteFilter } : {}),
+          ...(modelFilter ? { model: modelFilter } : {}),
           ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
           ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
           ...(forceRefresh ? { refresh: 1 } : {}),
@@ -415,6 +439,7 @@ export default function ProxyLogs() {
               left.name.localeCompare(right.name, "zh-CN"),
           );
         setSites(normalized);
+        setModelOptions(Array.isArray(data.models) ? data.models : []);
       } catch (error) {
         if (seq !== metaLoadSeq.current) return;
         console.error("Failed to load proxy log meta:", error);
@@ -1086,6 +1111,18 @@ export default function ProxyLogs() {
           placeholder="全部站点"
         />
       </div>
+      <div className="proxy-logs-filter-select">
+        <ModernSelect
+          size="sm"
+          value={modelFilter || ""}
+          onChange={(nextValue) => {
+            setModelFilter(nextValue || "");
+            setPage(1);
+          }}
+          options={modelSelectOptions}
+          placeholder="全部模型"
+        />
+      </div>
       <label className="proxy-logs-time-field">
         <span>开始</span>
         <input
@@ -1141,6 +1178,7 @@ export default function ProxyLogs() {
           setStatusFilter("all");
           setClientFilter("");
           setSiteFilter(null);
+          setModelFilter("");
           setFromInput("");
           setToInput("");
           setSearchInput("");

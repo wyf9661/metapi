@@ -269,3 +269,142 @@ export function buildSiteAvailabilitySummariesFromHourlyAggregates(
 
   return finalizeSiteAvailabilitySummaries(sites, siteMap);
 }
+
+
+export type ModelAvailabilityLogRow = {
+  model: string | null;
+  createdAt: StoredUtcDateTimeInput;
+  status: string | null;
+  latencyMs: number | null;
+};
+
+type ModelAvailabilityBucketAccumulator = SiteAvailabilityBucketAccumulator;
+
+function createModelAvailabilityBucketTemplate(startMs: number) {
+  return createSiteAvailabilityBucketTemplate(startMs);
+}
+
+function finalizeModelAvailabilitySummaries(
+  modelMap: Map<
+    string,
+    {
+      model: string;
+      totalRequests: number;
+      successCount: number;
+      failedCount: number;
+      latencyTotalMs: number;
+      latencyCount: number;
+      buckets: ModelAvailabilityBucketAccumulator[];
+    }
+  >,
+) {
+  return Array.from(modelMap.values())
+    .map((aggregate) => ({
+      model: aggregate.model,
+      totalRequests: aggregate.totalRequests,
+      successCount: aggregate.successCount,
+      failedCount: aggregate.failedCount,
+      availabilityPercent:
+        aggregate.totalRequests > 0
+          ? roundPercent((aggregate.successCount / aggregate.totalRequests) * 100)
+          : null,
+      averageLatencyMs:
+        aggregate.latencyCount > 0
+          ? Math.round(aggregate.latencyTotalMs / aggregate.latencyCount)
+          : null,
+      buckets: aggregate.buckets.map((bucket) => ({
+        startUtc: bucket.startUtc,
+        label: bucket.label,
+        totalRequests: bucket.totalRequests,
+        successCount: bucket.successCount,
+        failedCount: bucket.failedCount,
+        availabilityPercent:
+          bucket.totalRequests > 0
+            ? roundPercent((bucket.successCount / bucket.totalRequests) * 100)
+            : null,
+        averageLatencyMs:
+          bucket.latencyCount > 0
+            ? Math.round(bucket.latencyTotalMs / bucket.latencyCount)
+            : null,
+      })),
+    }))
+    .sort((left, right) => {
+      if (right.totalRequests !== left.totalRequests) {
+        return right.totalRequests - left.totalRequests;
+      }
+      return left.model.localeCompare(right.model, 'zh-CN');
+    });
+}
+
+export function buildModelAvailabilitySummaries(
+  logs: ModelAvailabilityLogRow[],
+  now = new Date(),
+) {
+  const endLocal = getLocalHourAnchor(now);
+  const startLocal = new Date(
+    endLocal.getTime() -
+      (SITE_AVAILABILITY_BUCKET_COUNT - 1) * SITE_AVAILABILITY_BUCKET_MS,
+  );
+  const startMs = startLocal.getTime();
+  const rangeMs = SITE_AVAILABILITY_BUCKET_COUNT * SITE_AVAILABILITY_BUCKET_MS;
+  const modelMap = new Map<
+    string,
+    {
+      model: string;
+      totalRequests: number;
+      successCount: number;
+      failedCount: number;
+      latencyTotalMs: number;
+      latencyCount: number;
+      buckets: ModelAvailabilityBucketAccumulator[];
+    }
+  >();
+
+  for (const log of logs) {
+    const model = String(log.model || '').trim();
+    if (!model) continue;
+    let target = modelMap.get(model);
+    if (!target) {
+      target = {
+        model,
+        totalRequests: 0,
+        successCount: 0,
+        failedCount: 0,
+        latencyTotalMs: 0,
+        latencyCount: 0,
+        buckets: createModelAvailabilityBucketTemplate(startMs),
+      };
+      modelMap.set(model, target);
+    }
+
+    const parsed = parseStoredUtcDateTime(log.createdAt);
+    if (!parsed) continue;
+    const diffMs = parsed.getTime() - startMs;
+    if (diffMs < 0 || diffMs >= rangeMs) continue;
+
+    const bucketIndex = Math.floor(diffMs / SITE_AVAILABILITY_BUCKET_MS);
+    const bucket = target.buckets[bucketIndex];
+    const isSuccess = (log.status || '').trim().toLowerCase() === 'success';
+
+    target.totalRequests += 1;
+    bucket.totalRequests += 1;
+    if (isSuccess) {
+      target.successCount += 1;
+      bucket.successCount += 1;
+    } else {
+      target.failedCount += 1;
+      bucket.failedCount += 1;
+    }
+
+    const latencyMs = Number(log.latencyMs);
+    if (Number.isFinite(latencyMs) && latencyMs >= 0) {
+      target.latencyTotalMs += latencyMs;
+      target.latencyCount += 1;
+      bucket.latencyTotalMs += latencyMs;
+      bucket.latencyCount += 1;
+    }
+  }
+
+  return finalizeModelAvailabilitySummaries(modelMap);
+}
+

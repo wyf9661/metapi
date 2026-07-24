@@ -71,6 +71,23 @@ describe('Dashboard site observability panel', () => {
           averageLatencyMs: index < 8 ? 320 : null,
         })),
       }],
+      modelAvailability: [{
+        model: 'gpt-4o',
+        totalRequests: 5,
+        successCount: 4,
+        failedCount: 1,
+        availabilityPercent: 80,
+        averageLatencyMs: 200,
+        buckets: Array.from({ length: 24 }, (_, index) => ({
+          startUtc: new Date(Date.UTC(2026, 2, 11, index, 0, 0)).toISOString(),
+          label: `2026-03-11 ${String(index).padStart(2, '0')}:00:00`,
+          totalRequests: index < 5 ? 1 : 0,
+          successCount: index < 4 ? 1 : 0,
+          failedCount: index === 4 ? 1 : 0,
+          availabilityPercent: index < 4 ? 100 : index === 4 ? 0 : null,
+          averageLatencyMs: index < 5 ? 200 : null,
+        })),
+      }],
       modelAnalysis: null,
     });
     apiMock.getSiteDistribution.mockResolvedValue({ distribution: [] });
@@ -121,7 +138,7 @@ describe('Dashboard site observability panel', () => {
         && node.props.className.includes('site-observability-log-link')
       ));
 
-      expect(collectText(panel)).toContain('站点可用性观测');
+      expect(collectText(panel)).toContain('24 小时可用性观测');
       expect(collectText(panel)).toContain('Demo Site');
       expect(collectText(panel)).toContain('75%');
       expect(collectText(panel)).toContain('320ms');
@@ -133,6 +150,46 @@ describe('Dashboard site observability panel', () => {
       expect(String(cells[0]?.props['data-tooltip'] || '')).toContain('可用性：100%');
       expect(String(cells[0]?.props['data-tooltip'] || '')).toContain('成功/失败：1/0');
       expect(String(logLink.props.href || logLink.props.to || '')).toContain('/logs?siteId=1');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('switches to model availability tab', async () => {
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/']}>
+            <ToastProvider>
+              <Dashboard />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const panel = root!.root.find((node) => (
+        typeof node.props.className === 'string'
+        && node.props.className.includes('site-observability-panel')
+      ));
+      const modelTab = panel.find((node) => (
+        node.type === 'button' && collectText(node).includes('模型')
+      ));
+      await act(async () => {
+        modelTab.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(collectText(panel)).toContain('gpt-4o');
+      expect(collectText(panel)).toContain('80%');
+      const logLink = panel.find((node) => (
+        node.type === 'a'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('site-observability-log-link')
+      ));
+      expect(String(logLink.props.href || logLink.props.to || '')).toContain('/logs?model=gpt-4o');
     } finally {
       root?.unmount();
     }

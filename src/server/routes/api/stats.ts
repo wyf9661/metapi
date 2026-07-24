@@ -193,6 +193,12 @@ function normalizeProxyLogSearch(raw?: string): string {
   return (raw || "").trim().toLowerCase();
 }
 
+function normalizeProxyLogModelFilter(raw?: string): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed || null;
+}
+
 function normalizeProxyLogSiteId(raw?: string): number | null {
   const parsed = Number.parseInt(raw || "", 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -280,14 +286,25 @@ function buildProxyLogWhereClause(params: {
   search?: string;
   client?: ProxyLogClientFilter;
   siteId?: number | null;
+  model?: string | null;
   fromUtc?: string | null;
   toUtc?: string | null;
 }) {
+  const modelCondition = params.model
+    ? sql<boolean>`(
+        ${schema.proxyLogs.modelActual} = ${params.model}
+        or (
+          (coalesce(${schema.proxyLogs.modelActual}, '') = '')
+          and ${schema.proxyLogs.modelRequested} = ${params.model}
+        )
+      )`
+    : null;
   const conditions = [
     params.status ? buildProxyLogStatusCondition(params.status) : null,
     params.search ? buildProxyLogSearchCondition(params.search) : null,
     params.client ? buildProxyLogClientCondition(params.client) : null,
     params.siteId ? eq(schema.sites.id, params.siteId) : null,
+    modelCondition,
     params.fromUtc ? gte(schema.proxyLogs.createdAt, params.fromUtc) : null,
     params.toUtc ? lt(schema.proxyLogs.createdAt, params.toUtc) : null,
   ].filter(
@@ -707,6 +724,7 @@ export async function statsRoutes(app: FastifyInstance) {
     search?: string;
     client?: string;
     siteId?: string;
+    model?: string;
     from?: string;
     to?: string;
   }) {
@@ -716,6 +734,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const search = normalizeProxyLogSearch(params.search);
     const client = normalizeProxyLogClientFilter(params.client);
     const siteId = normalizeProxyLogSiteId(params.siteId);
+    const model = normalizeProxyLogModelFilter(params.model);
     const fromUtc = normalizeProxyLogTimeBoundary(params.from);
     const toUtc = normalizeProxyLogTimeBoundary(params.to);
     const listWhere = buildProxyLogWhereClause({
@@ -723,6 +742,7 @@ export async function statsRoutes(app: FastifyInstance) {
       search,
       client,
       siteId,
+      model,
       fromUtc,
       toUtc,
     });
@@ -820,6 +840,7 @@ export async function statsRoutes(app: FastifyInstance) {
     search?: string;
     client?: string;
     siteId?: string;
+    model?: string;
     from?: string;
     to?: string;
   }) {
@@ -827,18 +848,29 @@ export async function statsRoutes(app: FastifyInstance) {
     const search = normalizeProxyLogSearch(params.search);
     const client = normalizeProxyLogClientFilter(params.client);
     const siteId = normalizeProxyLogSiteId(params.siteId);
+    const model = normalizeProxyLogModelFilter(params.model);
     const fromUtc = normalizeProxyLogTimeBoundary(params.from);
     const toUtc = normalizeProxyLogTimeBoundary(params.to);
     const summaryWhere = buildProxyLogWhereClause({
       search,
       client,
       siteId,
+      model,
       fromUtc,
       toUtc,
     });
     const clientOptionsWhere = buildProxyLogWhereClause({
       status,
       search,
+      siteId,
+      model,
+      fromUtc,
+      toUtc,
+    });
+    const modelOptionsWhere = buildProxyLogWhereClause({
+      status,
+      search,
+      client,
       siteId,
       fromUtc,
       toUtc,
@@ -891,7 +923,34 @@ export async function statsRoutes(app: FastifyInstance) {
       }>
     >;
 
-    const [clientOptionRows, summaryRow, siteRows] = await Promise.all([
+    const modelOptionRowsPromise = (async () => {
+      let query = db
+        .select({
+          modelActual: schema.proxyLogs.modelActual,
+          modelRequested: schema.proxyLogs.modelRequested,
+        })
+        .from(schema.proxyLogs)
+        .leftJoin(
+          schema.accounts,
+          eq(schema.proxyLogs.accountId, schema.accounts.id),
+        )
+        .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+        .leftJoin(
+          schema.downstreamApiKeys,
+          eq(
+            schema.proxyLogs.downstreamApiKeyId,
+            schema.downstreamApiKeys.id,
+          ),
+        );
+      if (modelOptionsWhere) {
+        query = query.where(modelOptionsWhere) as typeof query;
+      }
+      return query
+        .groupBy(schema.proxyLogs.modelActual, schema.proxyLogs.modelRequested)
+        .all();
+    })();
+
+    const [clientOptionRows, summaryRow, siteRows, modelOptionRows] = await Promise.all([
       clientOptionRowsPromise,
       (async () => {
         let summaryQuery = db
@@ -930,6 +989,7 @@ export async function statsRoutes(app: FastifyInstance) {
         })
         .from(schema.sites)
         .all(),
+      modelOptionRowsPromise,
     ]);
 
     return {
@@ -942,6 +1002,16 @@ export async function statsRoutes(app: FastifyInstance) {
         totalTokensAll: Number(summaryRow?.totalTokensAll || 0),
       },
       sites: siteRows,
+      models: (() => {
+        const names = new Set<string>();
+        for (const row of modelOptionRows || []) {
+          const name = String(row.modelActual || row.modelRequested || "").trim();
+          if (name) names.add(name);
+        }
+        return Array.from(names).sort((left: string, right: string) =>
+          left.localeCompare(right, "zh-CN"),
+        );
+      })(),
     };
   }
 
@@ -954,6 +1024,7 @@ export async function statsRoutes(app: FastifyInstance) {
       search?: string;
       client?: string;
       siteId?: string;
+      model?: string;
       from?: string;
       to?: string;
       view?: string;
@@ -975,6 +1046,7 @@ export async function statsRoutes(app: FastifyInstance) {
       clientOptions: metaPayload.clientOptions,
       summary: metaPayload.summary,
       sites: metaPayload.sites,
+      models: metaPayload.models,
     };
   });
 

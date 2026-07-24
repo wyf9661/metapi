@@ -509,6 +509,7 @@ export type ProxyLogsQuery = {
   status?: ProxyLogStatusFilter;
   search?: string;
   client?: string;
+  model?: string;
   siteId?: number;
   from?: string;
   to?: string;
@@ -1090,6 +1091,7 @@ export const api = {
       clientOptions: ProxyLogsResponse["clientOptions"];
       summary: ProxyLogsResponse["summary"];
       sites: Array<{ id: number; name: string; status?: string | null }>;
+      models: string[];
     }>;
   },
   getProxyLogDetail: (id: number) =>
