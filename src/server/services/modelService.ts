@@ -1207,10 +1207,18 @@ export async function refreshModelsForAccount(
     mergeDiscoveredModels(models, latencyMs);
   };
 
-  // Prefer account-level credential discovery so model availability does not rely on managed tokens.
+  // Prefer account-level credential discovery so model availability does not rely
+  // on managed tokens — but when usable managed tokens exist, do NOT discover via
+  // the session access token first. NewAPI-class `/api/user/models` returns every
+  // model the login can access across groups, which overstates what each API key
+  // can actually route after group binding (e.g. sk in "grok" group → only grok-*).
+  const preferManagedTokenDiscovery = usesManagedTokens && enabledTokens.length > 0;
+
   await discoverModelsWithCredential(account.apiToken);
   await discoverModelsWithCredential(discoveredApiToken);
-  await discoverModelsWithCredential(account.accessToken);
+  if (!preferManagedTokenDiscovery) {
+    await discoverModelsWithCredential(account.accessToken);
+  }
 
   for (const token of enabledTokens) {
     const startedAt = Date.now();
@@ -1247,6 +1255,12 @@ export async function refreshModelsForAccount(
 
     scannedTokenCount++;
     mergeDiscoveredModels(models, latencyMs);
+  }
+
+  // Last resort: managed-token discovery produced nothing (masked keys / network).
+  // Fall back to session models so the account is not left empty.
+  if (preferManagedTokenDiscovery && accountModels.size === 0) {
+    await discoverModelsWithCredential(account.accessToken);
   }
 
   if (accountModels.size === 0) {

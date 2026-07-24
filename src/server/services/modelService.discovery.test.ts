@@ -137,6 +137,129 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(tokenRows).toHaveLength(0);
   });
 
+  it('does not merge session /api/user/models when ready managed tokens exist', async () => {
+    // NewAPI session models are account-wide (all groups); sk /v1/models is group-bound.
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockImplementation(async (_baseUrl: string, token: string) => {
+      if (token === 'session-token') {
+        return [
+          'grok-4.5',
+          'deepseek-v4-pro',
+          'glm-5.2',
+          'gpt-5.4',
+        ];
+      }
+      if (token === 'sk-grok-group') {
+        return ['grok-4.5'];
+      }
+      return [];
+    });
+
+    const site = await db.insert(schema.sites).values({
+      name: 'liwan-group-bound',
+      url: 'https://liwan.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'wyf9661',
+      accessToken: 'session-token',
+      apiToken: 'sk-grok-group',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'session', platformUserId: 2209 }),
+    }).returning().get();
+
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'key',
+      token: 'sk-grok-group',
+      tokenGroup: 'grok',
+      source: 'sync',
+      enabled: true,
+      isDefault: true,
+      valueStatus: 'ready',
+    }).run();
+
+    const result = await refreshModelsForAccount(account.id);
+    expect(result).toMatchObject({
+      accountId: account.id,
+      refreshed: true,
+      status: 'success',
+      modelCount: 1,
+      modelsPreview: ['grok-4.5'],
+      tokenScanned: 1,
+      discoveredByCredential: true,
+    });
+
+    const accountRows = await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, account.id))
+      .all();
+    expect(accountRows.map((row) => row.modelName)).toEqual(['grok-4.5']);
+
+    const token = await db.select().from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .get();
+    const tokenRows = await db.select().from(schema.tokenModelAvailability)
+      .where(eq(schema.tokenModelAvailability.tokenId, token!.id))
+      .all();
+    expect(tokenRows.map((row) => row.modelName)).toEqual(['grok-4.5']);
+
+    // Session credential must not be queried while managed keys already yielded models.
+    expect(getModelsMock.mock.calls.some((call) => call[1] === 'session-token')).toBe(false);
+  });
+
+  it('falls back to session models when managed tokens return no models', async () => {
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockImplementation(async (_baseUrl: string, token: string) => (
+      token === 'session-token' ? ['gpt-4.1', 'claude-opus-4-6'] : []
+    ));
+
+    const site = await db.insert(schema.sites).values({
+      name: 'session-fallback',
+      url: 'https://session-fallback.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'fallback-user',
+      accessToken: 'session-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'session' }),
+    }).returning().get();
+
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'masked-key',
+      token: 'sk-xxxx',
+      source: 'sync',
+      enabled: true,
+      isDefault: true,
+      valueStatus: 'ready',
+    }).run();
+
+    const result = await refreshModelsForAccount(account.id);
+    expect(result).toMatchObject({
+      refreshed: true,
+      status: 'success',
+      modelCount: 2,
+      tokenScanned: 0,
+      discoveredByCredential: true,
+    });
+    const rows = await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, account.id))
+      .all();
+    expect(rows.map((row) => row.modelName).sort()).toEqual([
+      'claude-opus-4-6',
+      'gpt-4.1',
+    ]);
+    expect(getModelsMock.mock.calls.some((call) => call[1] === 'session-token')).toBe(true);
+  });
+
   it('uses the configured ai endpoint for direct model discovery credentials', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockImplementation(async (baseUrl: string, token: string) => (
