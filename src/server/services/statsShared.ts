@@ -6,6 +6,7 @@ import {
   parseStoredUtcDateTime,
   type StoredUtcDateTimeInput,
 } from "./localTimeService.js";
+import { canonicalizeModelName } from "../shared/modelCanonicalization.js";
 
 export function proxyCostSqlExpression() {
   return sql<number>`
@@ -361,8 +362,10 @@ export function buildModelAvailabilitySummaries(
   >();
 
   for (const log of logs) {
-    const model = String(log.model || '').trim();
-    if (!model) continue;
+    const rawModel = String(log.model || '').trim();
+    if (!rawModel) continue;
+    // Same marketplace merge rules: case / vendor prefix / :free|-free.
+    const model = canonicalizeModelName(rawModel) || rawModel;
     let target = modelMap.get(model);
     if (!target) {
       target = {
