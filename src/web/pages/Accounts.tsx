@@ -4,7 +4,6 @@ import { api } from "../api.js";
 import CenteredModal from "../components/CenteredModal.js";
 import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";
 import ResponsiveFormGrid from "../components/ResponsiveFormGrid.js";
-import ResponsiveBatchActionBar from "../components/ResponsiveBatchActionBar.js";
 import { useToast } from "../components/Toast.js";
 import ModernSelect from "../components/ModernSelect.js";
 import { MobileCard, MobileField } from "../components/MobileCard.js";
@@ -36,7 +35,6 @@ import {
   sortItemsForDisplay,
   type SortMode,
 } from "./helpers/listSorting.js";
-import { shouldIgnoreRowSelectionClick } from "./helpers/rowSelection.js";
 import { SITE_DOCS_URL } from "../docsLink.js";
 import { getSiteInitializationPreset } from "../../shared/siteInitializationPresets.js";
 import { parseBatchApiKeys } from "../../shared/apiKeyBatch.js";
@@ -140,13 +138,10 @@ export default function Accounts() {
   );
   const [embeddedTokenActions, setEmbeddedTokenActions] =
     useState<React.ReactNode>(null);
-  const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([]);
-  const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
-    mode: "single" | "batch";
+    mode: "single";
     accountId?: number;
     accountName?: string;
-    count?: number;
   }>(null);
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({
@@ -214,11 +209,6 @@ export default function Accounts() {
       const nextSites = Array.isArray(snapshot?.sites) ? snapshot.sites : [];
       setAccounts(nextAccounts);
       setSites(nextSites);
-      setSelectedAccountIds((current) =>
-        current.filter((id) =>
-          nextAccounts.some((account: any) => account.id === id),
-        ),
-      );
     } catch (error: any) {
       toast.error(error?.message || "加载账号列表失败");
     } finally {
@@ -315,9 +305,6 @@ export default function Accounts() {
     visibleAccounts,
     `${activeSegment}:${sortMode}:${accounts.length}`,
   );
-  const allVisibleAccountsSelected =
-    pagedAccounts.length > 0 &&
-    pagedAccounts.every((account) => selectedAccountIds.includes(account.id));
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
 
@@ -1024,29 +1011,7 @@ export default function Accounts() {
     }
   };
 
-  const toggleAccountSelection = (accountId: number, checked: boolean) => {
-    setSelectedAccountIds((current) =>
-      checked
-        ? Array.from(new Set([...current, accountId]))
-        : current.filter((id) => id !== accountId),
-    );
-  };
 
-  const toggleSelectAllVisibleAccounts = (checked: boolean) => {
-    if (!checked) {
-      setSelectedAccountIds((current) =>
-        current.filter(
-          (id) => !pagedAccounts.some((account) => account.id === id),
-        ),
-      );
-      return;
-    }
-    setSelectedAccountIds((current) =>
-      Array.from(
-        new Set([...current, ...pagedAccounts.map((account) => account.id)]),
-      ),
-    );
-  };
 
   const toggleAccountDetails = (accountId: number) => {
     setExpandedAccountIds((current) =>
@@ -1056,73 +1021,19 @@ export default function Accounts() {
     );
   };
 
-  const runBatchAccountAction = async (
-    action: "enable" | "disable" | "delete" | "refreshBalance",
-    skipDeleteConfirm = false,
-  ) => {
-    if (selectedAccountIds.length === 0) return;
-    if (action === "delete" && !skipDeleteConfirm) {
-      setDeleteConfirm({ mode: "batch", count: selectedAccountIds.length });
-      return;
-    }
-
-    setBatchActionLoading(true);
-    try {
-      const result = await api.batchUpdateAccounts({
-        ids: selectedAccountIds,
-        action,
-      });
-      const successIds = Array.isArray(result?.successIds)
-        ? result.successIds.map((id: unknown) => Number(id))
-        : [];
-      const failedItems = Array.isArray(result?.failedItems)
-        ? result.failedItems
-        : [];
-      if (failedItems.length > 0) {
-        toast.info(
-          `批量操作完成：成功 ${successIds.length}，失败 ${failedItems.length}`,
-        );
-      } else {
-        toast.success(`批量操作完成：成功 ${successIds.length}`);
-      }
-      setSelectedAccountIds(
-        failedItems
-          .map((item: any) => Number(item.id))
-          .filter((id: number) => Number.isFinite(id) && id > 0),
-      );
-      load(true);
-    } catch (e: any) {
-      toast.error(e.message || "批量操作失败");
-    } finally {
-      setBatchActionLoading(false);
-    }
-  };
 
   const confirmDelete = async () => {
     const target = deleteConfirm;
-    if (!target) return;
+    if (!target?.accountId) return;
 
     setDeleteConfirm(null);
-    if (target.mode === "single" && target.accountId) {
-      await withLoading(
-        `delete-${target.accountId}`,
-        () => api.deleteAccount(target.accountId!),
-        "已删除",
-      );
-      return;
-    }
-
-    await runBatchAccountAction("delete", true);
+    await withLoading(
+      `delete-${target.accountId}`,
+      () => api.deleteAccount(target.accountId!),
+      "已删除",
+    );
   };
 
-  const handleAccountRowClick = (
-    accountId: number,
-    event: React.MouseEvent<HTMLTableRowElement>,
-  ) => {
-    if (shouldIgnoreRowSelectionClick(event.target)) return;
-    const isSelected = selectedAccountIds.includes(accountId);
-    toggleAccountSelection(accountId, !isSelected);
-  };
 
   const extractPlatformUserId = (account: any): string => {
     const parsed = parseAccountExtraConfig(account);
@@ -1309,17 +1220,6 @@ export default function Accounts() {
                   style={{ border: "1px solid var(--color-border)" }}
                 >
                   排序与操作
-                </button>
-                <button
-                  type="button"
-                  data-testid="accounts-mobile-select-all"
-                  onClick={() =>
-                    toggleSelectAllVisibleAccounts(!allVisibleAccountsSelected)
-                  }
-                  className="btn btn-ghost"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {allVisibleAccountsSelected ? "取消全选" : "全选可见项"}
                 </button>
               </>
             ) : (
@@ -1517,69 +1417,21 @@ export default function Accounts() {
         onConfirm={confirmDelete}
         title="确认删除连接"
         confirmText="确认删除"
-        loading={
-          batchActionLoading ||
-          (deleteConfirm?.mode === "single" &&
-            !!actionLoading[`delete-${deleteConfirm?.accountId}`])
-        }
+        loading={Boolean(
+          deleteConfirm?.accountId &&
+            actionLoading[`delete-${deleteConfirm.accountId}`],
+        )}
         description={
-          deleteConfirm?.mode === "single" ? (
-            <>
-              确定要删除连接{" "}
-              <strong>
-                {deleteConfirm.accountName || `#${deleteConfirm.accountId}`}
-              </strong>{" "}
-              吗？
-            </>
-          ) : (
-            <>
-              确定要删除选中的 <strong>{deleteConfirm?.count || 0}</strong>{" "}
-              个连接吗？
-            </>
-          )
+          <>
+            确定要删除连接{" "}
+            <strong>
+              {deleteConfirm?.accountName || `#${deleteConfirm?.accountId}`}
+            </strong>{" "}
+            吗？
+          </>
         }
       />
 
-      {activeSegment !== "tokens" && selectedAccountIds.length > 0 && (
-        <ResponsiveBatchActionBar
-          isMobile={isMobile}
-          info={`已选 ${selectedAccountIds.length} 项`}
-          desktopStyle={{ marginBottom: 12 }}
-        >
-          <button
-            data-testid="accounts-batch-refresh-balance"
-            onClick={() => runBatchAccountAction("refreshBalance")}
-            disabled={batchActionLoading}
-            className="btn btn-ghost"
-            style={{ border: "1px solid var(--color-border)" }}
-          >
-            批量刷新余额
-          </button>
-          <button
-            onClick={() => runBatchAccountAction("enable")}
-            disabled={batchActionLoading}
-            className="btn btn-ghost"
-            style={{ border: "1px solid var(--color-border)" }}
-          >
-            批量启用
-          </button>
-          <button
-            onClick={() => runBatchAccountAction("disable")}
-            disabled={batchActionLoading}
-            className="btn btn-ghost"
-            style={{ border: "1px solid var(--color-border)" }}
-          >
-            批量禁用
-          </button>
-          <button
-            onClick={() => runBatchAccountAction("delete")}
-            disabled={batchActionLoading}
-            className="btn btn-link btn-link-danger"
-          >
-            批量删除
-          </button>
-        </ResponsiveBatchActionBar>
-      )}
 
       {activeSegment === "tokens" ? (
         <TokensPanel
@@ -2809,17 +2661,6 @@ export default function Accounts() {
                               gap: 6,
                             }}
                           >
-                            <input
-                              type="checkbox"
-                              aria-label={`选择账号 ${resolveAccountDisplayName(a)}`}
-                              checked={selectedAccountIds.includes(a.id)}
-                              onChange={(event) =>
-                                toggleAccountSelection(
-                                  a.id,
-                                  event.target.checked,
-                                )
-                              }
-                            />
                             <span
                               className={`badge ${connectionMode === "apikey" ? "badge-warning" : "badge-info"}`}
                               style={{ fontSize: 10 }}
@@ -3133,15 +2974,6 @@ export default function Accounts() {
                 <table className="data-table accounts-table">
                   <thead>
                     <tr>
-                      <th style={{ width: 44 }}>
-                        <input
-                          type="checkbox"
-                          checked={allVisibleAccountsSelected}
-                          onChange={(e) =>
-                            toggleSelectAllVisibleAccounts(e.target.checked)
-                          }
-                        />
-                      </th>
                       <th>连接名称</th>
                       <th>站点</th>
                       <th>运行健康状态</th>
@@ -3165,21 +2997,8 @@ export default function Accounts() {
                             if (node) rowRefs.current.set(a.id, node);
                             else rowRefs.current.delete(a.id);
                           }}
-                          onClick={(event) =>
-                            handleAccountRowClick(a.id, event)
-                          }
-                          className={`animate-slide-up stagger-${Math.min(i + 1, 5)} row-selectable ${selectedAccountIds.includes(a.id) ? "row-selected" : ""} ${highlightAccountId === a.id ? "row-focus-highlight" : ""}`.trim()}
+                          className={`animate-slide-up stagger-${Math.min(i + 1, 5)} ${highlightAccountId === a.id ? "row-focus-highlight" : ""}`.trim()}
                         >
-                          <td>
-                            <input
-                              data-testid={`account-select-${a.id}`}
-                              type="checkbox"
-                              checked={selectedAccountIds.includes(a.id)}
-                              onChange={(e) =>
-                                toggleAccountSelection(a.id, e.target.checked)
-                              }
-                            />
-                          </td>
                           <td className="accounts-name-cell" style={{ color: "var(--color-text-primary)" }}>
                             <div className="inventory-name-title" style={{ fontWeight: 600 }} title={resolveAccountDisplayName(a)}>
                               {resolveAccountDisplayName(a)}

@@ -22,7 +22,7 @@ async function flushMicrotasks() {
   });
 }
 
-describe('Sites system proxy bulk actions', () => {
+describe('Sites multi-select removal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMock.getSites.mockResolvedValue([
@@ -43,18 +43,13 @@ describe('Sites system proxy bulk actions', () => {
         useSystemProxy: false,
       },
     ]);
-    apiMock.batchUpdateSites.mockResolvedValue({
-      success: true,
-      successIds: [1, 2],
-      failedItems: [],
-    });
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('sends selected site ids to enable system proxy', async () => {
+  it('does not render row checkboxes or bulk system-proxy actions', async () => {
     let root!: WebTestRenderer;
     try {
       await act(async () => {
@@ -68,51 +63,10 @@ describe('Sites system proxy bulk actions', () => {
       });
       await flushMicrotasks();
 
-      const checkboxA = root.root.find((node) => node.props['data-testid'] === 'site-select-1');
-      const checkboxB = root.root.find((node) => node.props['data-testid'] === 'site-select-2');
-
-      await act(async () => {
-        checkboxA.props.onChange({ target: { checked: true } });
-        checkboxB.props.onChange({ target: { checked: true } });
-      });
-
-      const batchButton = root.root.find((node) => node.props['data-testid'] === 'sites-batch-enable-system-proxy');
-      await act(async () => {
-        batchButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.batchUpdateSites).toHaveBeenCalledWith({
-        ids: [1, 2],
-        action: 'enableSystemProxy',
-      });
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('selects a site when clicking the row instead of only the checkbox', async () => {
-    let root!: WebTestRenderer;
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/sites']}>
-            <ToastProvider>
-              <Sites />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
+      expect(() => root.root.find((node) => node.props['data-testid'] === 'site-select-1')).toThrow();
+      expect(() => root.root.find((node) => node.props['data-testid'] === 'sites-batch-enable-system-proxy')).toThrow();
       const row = root.root.find((node) => node.props['data-testid'] === 'site-row-1');
-      await act(async () => {
-        row.props.onClick({ target: { closest: () => null } });
-      });
-      await flushMicrotasks();
-
-      const checkbox = root.root.find((node) => node.props['data-testid'] === 'site-select-1');
-      expect(checkbox.props.checked).toBe(true);
+      expect(row.props.onClick).toBeUndefined();
     } finally {
       root?.unmount();
     }

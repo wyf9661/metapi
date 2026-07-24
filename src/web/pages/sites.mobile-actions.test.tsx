@@ -38,27 +38,14 @@ describe('Sites mobile actions', () => {
         status: 'active',
         useSystemProxy: false,
       },
-      {
-        id: 2,
-        name: 'Site B',
-        url: 'https://b.example.com',
-        platform: 'new-api',
-        status: 'active',
-        useSystemProxy: false,
-      },
     ]);
-    apiMock.batchUpdateSites.mockResolvedValue({
-      success: true,
-      successIds: [1, 2],
-      failedItems: [],
-    });
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('supports select-all-visible and preserves the primary site url in mobile cards', async () => {
+  it('does not render multi-select controls and keeps primary site url on mobile cards', async () => {
     let root!: WebTestRenderer;
     try {
       await act(async () => {
@@ -72,36 +59,9 @@ describe('Sites mobile actions', () => {
       });
       await flushMicrotasks();
 
-      const selectAllButton = root.root.find((node) => node.props['data-testid'] === 'sites-mobile-select-all');
-      await act(async () => {
-        selectAllButton.props.onClick();
-      });
-      await flushMicrotasks();
-      expect(Array.isArray(selectAllButton.children) ? selectAllButton.children.join('') : '').toContain('取消全选');
-
-      const clearVisibleButton = root.root.find((node) => node.props['data-testid'] === 'sites-mobile-select-all');
-      await act(async () => {
-        clearVisibleButton.props.onClick();
-      });
-      await flushMicrotasks();
-      expect(Array.isArray(clearVisibleButton.children) ? clearVisibleButton.children.join('') : '').toContain('全选可见项');
-
-      const reselectVisibleButton = root.root.find((node) => node.props['data-testid'] === 'sites-mobile-select-all');
-      await act(async () => {
-        reselectVisibleButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      const batchButton = root.root.find((node) => node.props['data-testid'] === 'sites-batch-enable-system-proxy');
-      await act(async () => {
-        batchButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.batchUpdateSites).toHaveBeenCalledWith({
-        ids: [1, 2],
-        action: 'enableSystemProxy',
-      });
+      expect(() => root.root.find((node) => node.props['data-testid'] === 'sites-mobile-select-all')).toThrow();
+      expect(() => root.root.find((node) => node.props['data-testid'] === 'site-select-1')).toThrow();
+      expect(() => root.root.find((node) => node.props['data-testid'] === 'sites-batch-enable-system-proxy')).toThrow();
 
       const primaryLink = root.root.find((node) => node.type === 'a' && node.props.href === 'https://a.example.com');
       expect(primaryLink.props.target).toBe('_blank');
