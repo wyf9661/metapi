@@ -10,6 +10,7 @@ import {
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/orchestration/endpointFlow.js';
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
+import { insertProxyLog } from './proxyLogStore.js';
 import type { schema } from '../db/index.js';
 
 export type RuntimeModelProbeStatus = 'supported' | 'unsupported' | 'inconclusive' | 'skipped';
@@ -126,6 +127,40 @@ function resolveRemainingTimeoutMs(deadlineAtMs: number, timeoutLabel: string): 
     throw new Error(timeoutLabel);
   }
   return remainingMs;
+}
+
+
+async function writeProbeProxyLog(input: {
+  accountId: number;
+  modelName: string;
+  status: 'success' | 'failed';
+  httpStatus: number | null;
+  latencyMs: number | null;
+  errorMessage?: string | null;
+  path?: string | null;
+}): Promise<void> {
+  try {
+    const pathHint = input.path ? ` [upstream:${input.path}]` : '';
+    await insertProxyLog({
+      accountId: input.accountId,
+      modelRequested: input.modelName,
+      modelActual: input.modelName,
+      status: input.status,
+      httpStatus: input.httpStatus,
+      latencyMs: input.latencyMs,
+      isStream: false,
+      clientFamily: 'probe',
+      clientAppId: 'model-probe',
+      clientAppName: 'Model Probe',
+      clientConfidence: 'high',
+      errorMessage: input.status === 'success'
+        ? `[probe]${pathHint} supported`
+        : `[probe]${pathHint} ${input.errorMessage || 'probe failed'}`,
+      retryCount: 0,
+    });
+  } catch (error) {
+    console.warn('[probe] failed to write proxy log', error);
+  }
 }
 
 export async function probeRuntimeModel(input: {
@@ -276,6 +311,14 @@ export async function probeRuntimeModel(input: {
 
     if (result.ok) {
       await result.upstream.text().catch(() => undefined);
+      await writeProbeProxyLog({
+        accountId: input.account.id,
+        modelName: input.modelName,
+        status: 'success',
+        httpStatus: (result.upstream as { status?: number } | undefined)?.status || 200,
+        latencyMs,
+        path: result.upstreamPath || null,
+      });
       return {
         status: 'supported',
         latencyMs,
@@ -284,16 +327,37 @@ export async function probeRuntimeModel(input: {
     }
 
     const rawErrorText = String(result.rawErrText || result.errText || '').trim();
-    return {
-      status: classifyUnsupportedFailure(result.status || 0, rawErrorText) ? 'unsupported' : 'inconclusive',
+    const statusLabel = classifyUnsupportedFailure(result.status || 0, rawErrorText) ? 'unsupported' : 'inconclusive';
+    const reason = classifyProbeFailureReason(result.status || 0, rawErrorText);
+    await writeProbeProxyLog({
+      accountId: input.account.id,
+      modelName: input.modelName,
+      status: 'failed',
+      httpStatus: result.status || null,
       latencyMs,
-      reason: classifyProbeFailureReason(result.status || 0, rawErrorText),
+      errorMessage: reason,
+      path: null,
+    });
+    return {
+      status: statusLabel,
+      latencyMs,
+      reason,
     };
   } catch (error) {
+    const reason = error instanceof Error ? error.message : 'probe failed';
+    const latencyMs = Date.now() - startedAt;
+    await writeProbeProxyLog({
+      accountId: input.account.id,
+      modelName: input.modelName,
+      status: 'failed',
+      httpStatus: null,
+      latencyMs,
+      errorMessage: reason,
+    });
     return {
       status: 'inconclusive',
-      latencyMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.message : 'probe failed',
+      latencyMs,
+      reason,
     };
   }
 }

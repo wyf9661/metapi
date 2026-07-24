@@ -40,6 +40,10 @@ import {
 } from './platformDiscoveryRegistry.js';
 import { probeRuntimeModel, type RuntimeModelProbeStatus } from './runtimeModelProbe.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
+import {
+  isModelDisabledForSite,
+  loadSiteDisabledModelsIndex,
+} from './siteDisabledModels.js';
 
 const API_TOKEN_DISCOVERY_TIMEOUT_MS = 8_000;
 const MODEL_DISCOVERY_TIMEOUT_MS = 12_000;
@@ -1351,18 +1355,8 @@ export async function rebuildTokenRoutesFromAvailability() {
     )
     .all();
 
-  // Load site-level disabled models
-  const disabledModelRows = await db.select().from(schema.siteDisabledModels).all();
-  const disabledModelsBySite = new Map<number, Set<string>>();
-  for (const row of disabledModelRows) {
-    if (!disabledModelsBySite.has(row.siteId)) disabledModelsBySite.set(row.siteId, new Set());
-    disabledModelsBySite.get(row.siteId)!.add(row.modelName.toLowerCase());
-  }
-
-  function isModelDisabledForSite(siteId: number, modelName: string): boolean {
-    const disabled = disabledModelsBySite.get(siteId);
-    return !!disabled && disabled.has(modelName.toLowerCase());
-  }
+  // Load site-level disabled models (raw + canonical match)
+  const disabledModelsIndex = await loadSiteDisabledModelsIndex();
 
   // Load global brand filter
   const blockedBrandRules = getBlockedBrandRules(config.globalBlockedBrands);
@@ -1427,7 +1421,7 @@ export async function rebuildTokenRoutesFromAvailability() {
     const sourceModel = (modelNameRaw || '').trim();
     if (!sourceModel) return;
     if (!isModelAllowedByWhitelist(sourceModel)) return;
-    if (isModelDisabledForSite(siteId, sourceModel)) return;
+    if (isModelDisabledForSite(disabledModelsIndex, siteId, sourceModel)) return;
     if (blockedBrandRules.length > 0 && isModelBlockedByBrand(sourceModel, blockedBrandRules)) return;
     const modelName = canonicalizeModelName(sourceModel) || sourceModel;
     if (!modelCandidates.has(modelName)) modelCandidates.set(modelName, new Map());
@@ -1506,13 +1500,29 @@ export async function rebuildTokenRoutesFromAvailability() {
       desiredKeys.add(candidateKey);
     }
 
+    // accountId -> siteId for disabled-model force removal (include all active accounts)
+    const accountSiteIds = new Map<number, number>();
+    const allAccounts = await db.select({
+      id: schema.accounts.id,
+      siteId: schema.accounts.siteId,
+    }).from(schema.accounts).all();
+    for (const row of allAccounts) {
+      accountSiteIds.set(row.id, row.siteId);
+    }
+
     for (const channel of routeChannels) {
       const channelKey = buildChannelKey(channel);
-      if (desiredKeys.has(channelKey)) {
+      const channelSiteId = accountSiteIds.get(channel.accountId) ?? null;
+      const forceRemoveDisabled = isModelDisabledForSite(
+        disabledModelsIndex,
+        channelSiteId,
+        channel.sourceModel,
+      );
+      if (desiredKeys.has(channelKey) && !forceRemoveDisabled) {
         continue;
       }
 
-      if (!channel.tokenId) {
+      if (!forceRemoveDisabled && !channel.tokenId) {
         const preferred = await getPreferredAccountToken(channel.accountId);
         if (preferred && desiredKeys.has(`${channel.accountId}:${preferred.id}`)) {
           await db.update(schema.routeChannels)
@@ -1523,7 +1533,7 @@ export async function rebuildTokenRoutesFromAvailability() {
         }
       }
 
-      if (!channel.manualOverride) {
+      if (forceRemoveDisabled || !channel.manualOverride) {
         await db.delete(schema.routeChannels).where(eq(schema.routeChannels.id, channel.id)).run();
         removedChannels++;
       }

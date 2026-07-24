@@ -4,6 +4,10 @@ import { db, schema } from '../db/index.js';
 import { startBackgroundTask } from './backgroundTaskService.js';
 import { isUsableAccountToken, ACCOUNT_TOKEN_VALUE_STATUS_READY } from './accountTokenService.js';
 import { probeRuntimeModel } from './runtimeModelProbe.js';
+import {
+  isModelDisabledForSite,
+  loadSiteDisabledModelsIndex,
+} from './siteDisabledModels.js';
 import * as routeRefreshWorkflow from './routeRefreshWorkflow.js';
 
 type ProbeStatus = 'supported' | 'unsupported' | 'inconclusive' | 'skipped';
@@ -158,6 +162,7 @@ async function loadActiveProbeAccountContext(accountId: number): Promise<ProbeAc
 
 async function loadProbeTargetsForAccount(context: ProbeAccountContext): Promise<ProbeTarget[]> {
   const targets: ProbeTarget[] = [];
+  const disabledModelsIndex = await loadSiteDisabledModelsIndex();
   const accountModels = await db.select()
     .from(schema.modelAvailability)
     .where(eq(schema.modelAvailability.accountId, context.account.id))
@@ -165,6 +170,7 @@ async function loadProbeTargetsForAccount(context: ProbeAccountContext): Promise
     .all();
   for (const row of accountModels) {
     if (row.isManual) continue;
+    if (isModelDisabledForSite(disabledModelsIndex, context.site.id, row.modelName)) continue;
     targets.push({
       kind: 'account',
       rowId: row.id,
@@ -189,6 +195,7 @@ async function loadProbeTargetsForAccount(context: ProbeAccountContext): Promise
     if (!isUsableAccountToken(row.account_tokens)) continue;
     const tokenValue = String(row.account_tokens.token || '').trim();
     if (!tokenValue) continue;
+    if (isModelDisabledForSite(disabledModelsIndex, context.site.id, row.token_model_availability.modelName)) continue;
     targets.push({
       kind: 'token',
       rowId: row.token_model_availability.id,
@@ -644,6 +651,7 @@ async function collectMarketplaceProbeTargets(
   normalized: string,
   options: MarketplaceModelProbeOptions,
 ): Promise<MarketplaceProbeTarget[]> {
+  const disabledModelsIndex = await loadSiteDisabledModelsIndex();
 
   const siteId = Number.isFinite(options.siteId as number) && Number(options.siteId) > 0
     ? Math.trunc(Number(options.siteId))
@@ -675,6 +683,10 @@ async function collectMarketplaceProbeTargets(
   const targetsByAccount = new Map<number, MarketplaceProbeTarget>();
   for (const hit of accountHits) {
     if (targetsByAccount.has(hit.account.id)) continue;
+    if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName)
+      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, normalized)) {
+      continue;
+    }
     targetsByAccount.set(hit.account.id, {
       accountRowId: hit.rowId,
       tokenRowId: null,
@@ -710,6 +722,10 @@ async function collectMarketplaceProbeTargets(
 
   for (const hit of tokenHits) {
     if (!isUsableAccountToken(hit.token)) continue;
+    if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName)
+      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, normalized)) {
+      continue;
+    }
     if (targetsByAccount.has(hit.account.id)) {
       const existing = targetsByAccount.get(hit.account.id)!;
       if (!existing.tokenValue) {
