@@ -1,16 +1,35 @@
 import { config } from '../config.js';
 
+/** Soft ceiling so huge free-pool models (20+ channels) cannot thrash for minutes. */
+export const PROXY_CHANNEL_FAILOVER_SOFT_ATTEMPT_CAP_DEFAULT = 8;
+/** Soft wall-clock budget for multi-channel failover when env leaves budget unset (0). */
+export const PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT = 45_000;
+
 export function getProxyMaxChannelAttempts(): number {
   const attempts = Math.trunc(config.proxyMaxChannelAttempts || 0);
   return attempts > 0 ? attempts : 1;
 }
 
 /**
+ * Soft cap for live multi-channel failover.
+ * Env: PROXY_CHANNEL_FAILOVER_MAX_ATTEMPTS (default 8). Always at least 1.
+ */
+export function getProxyChannelFailoverSoftAttemptCap(): number {
+  const raw = Math.trunc(
+    (config as { proxyChannelFailoverMaxAttempts?: number }).proxyChannelFailoverMaxAttempts
+      ?? PROXY_CHANNEL_FAILOVER_SOFT_ATTEMPT_CAP_DEFAULT,
+  );
+  return raw > 0 ? raw : PROXY_CHANNEL_FAILOVER_SOFT_ATTEMPT_CAP_DEFAULT;
+}
+
+/**
  * Total channel attempts (not retries) for a known eligible candidate pool.
+ * Uses min(pool, softCap) so exhaustive walk still covers small pools fully.
  */
 export function getProxyEffectiveMaxChannelAttempts(candidateCount: number): number {
   const count = Math.max(0, Math.trunc(candidateCount || 0));
-  return count > 0 ? count : getProxyMaxChannelAttempts();
+  if (count <= 0) return getProxyMaxChannelAttempts();
+  return Math.min(count, getProxyChannelFailoverSoftAttemptCap());
 }
 
 /**
@@ -26,19 +45,25 @@ export function getProxyMaxChannelRetries(): number {
 }
 
 /**
- * Legacy static wall-clock budget (ms). 0 = disabled.
- * Prefer getProxyEffectiveFailoverBudgetMs / resolveProxyFailoverLimits — the
- * live path always disables aggregate wall-clock truncation.
+ * Configured aggregate wall-clock budget (ms). 0 means "use soft default on live path".
+ * Set PROXY_CHANNEL_FAILOVER_BUDGET_MS explicitly to override.
  */
 export function getProxyChannelFailoverBudgetMs(): number {
   const budget = Math.trunc((config as { proxyChannelFailoverBudgetMs?: number }).proxyChannelFailoverBudgetMs || 0);
   return budget > 0 ? budget : 0;
 }
 
-/** Always 0: full eligible pool traversal; no aggregate wall-clock cutoff. */
+/**
+ * Live-path wall-clock budget:
+ * - single candidate → 0 (no multi-channel wait)
+ * - multi candidate → explicit env budget if >0, else soft default 45s
+ */
 export function getProxyEffectiveFailoverBudgetMs(candidateCount: number): number {
-  void candidateCount;
-  return 0;
+  const count = Math.max(0, Math.trunc(candidateCount || 0));
+  if (count <= 1) return 0;
+  const explicit = getProxyChannelFailoverBudgetMs();
+  if (explicit > 0) return explicit;
+  return PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT;
 }
 
 export function canRetryProxyChannel(

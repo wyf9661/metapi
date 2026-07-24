@@ -99,6 +99,7 @@ import {
   isGeminiNativeRuntimePath,
   isRecord,
 } from './chatSurfaceHelpers.js';
+import { isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 
 export async function handleChatSurfaceRequest(
   request: FastifyRequest,
@@ -1041,7 +1042,8 @@ export async function handleChatSurfaceRequest(
           };
         }
         await finalizeDebugFailure(endpointFailureStatus || 400, payload, null);
-        return reply.code(endpointFailureStatus || 400).send(payload);
+        sendReplyIfWritable(reply, endpointFailureStatus || 400, payload);
+        return;
       }
       if (isSiteApiEndpointFailure) {
         const failureOutcome = await failureToolkit.handleUpstreamFailure({
@@ -1069,7 +1071,8 @@ export async function handleChatSurfaceRequest(
           terminalFailureOutcome.payload,
           null,
         );
-        return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+        sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+        return;
       }
       const failureOutcome = await failureToolkit.handleExecutionError({
         selected,
@@ -1094,7 +1097,8 @@ export async function handleChatSurfaceRequest(
         terminalFailureOutcome.payload,
         null,
       );
-      return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+      sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+      return;
       } finally {
         channelLease.release();
       }

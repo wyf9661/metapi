@@ -148,13 +148,16 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
       parseNumber(env.TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC, TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING),
     ) ?? TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING,
     tokenRouterCacheTtlMs: Math.max(100, Math.trunc(parseNumber(env.TOKEN_ROUTER_CACHE_TTL_MS, 1_500))),
-    // Fallback only when countEligibleChannels fails. Normal path uses the full
-    // eligible pool (resolveProxyFailoverLimits), not this static ceiling.
+    // Fallback when countEligibleChannels fails (static path).
     proxyMaxChannelAttempts: Math.max(1, Math.trunc(parseNumber(env.PROXY_MAX_CHANNEL_ATTEMPTS, 5))),
-    // Legacy aggregate wall-clock budget. Effective failover always uses 0
-    // (full candidate traversal). Default 0; non-zero only affects the rare
-    // static-fallback path that still calls canRetryProxyChannelWithBudget
-    // without an explicit budgetMs override.
+    // Soft cap on live multi-channel failover (min(pool, cap)). Default 8 —
+    // prevents 20+ free-pool channels from thrashing one client request.
+    proxyChannelFailoverMaxAttempts: Math.max(
+      1,
+      Math.trunc(parseNumber(env.PROXY_CHANNEL_FAILOVER_MAX_ATTEMPTS, 8)),
+    ),
+    // Explicit wall-clock budget (ms). 0 = live path uses soft default 45s for
+    // multi-channel pools (see getProxyEffectiveFailoverBudgetMs).
     proxyChannelFailoverBudgetMs: Math.max(0, Math.trunc(parseNumber(env.PROXY_CHANNEL_FAILOVER_BUDGET_MS, 0))),
     proxyStickySessionEnabled: parseBoolean(env.PROXY_STICKY_SESSION_ENABLED, true),
     proxyStickySessionTtlMs: Math.max(30_000, Math.trunc(parseNumber(env.PROXY_STICKY_SESSION_TTL_MS, 30 * 60 * 1000))),
