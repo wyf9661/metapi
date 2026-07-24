@@ -17,7 +17,8 @@ import {
 } from '../../contracts/siteRoutePayloads.js';
 import { normalizeSiteApiEndpointBaseUrl } from '../../services/siteApiEndpointService.js';
 import { analyzePrimarySiteUrl } from '../../../shared/sitePrimaryUrl.js';
-import { probeSiteModels } from '../../services/modelService.js';
+import { probeSiteModels, rebuildTokenRoutesFromAvailability } from '../../services/modelService.js';
+import { clearModelsMarketplaceCache } from './stats.js';
 import { rebuildRoutesBestEffort } from '../../services/routeRefreshWorkflow.js';
 import { invalidateAccountsSnapshot } from '../../services/accountsOverviewService.js';
 
@@ -927,6 +928,11 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     invalidateSiteCaches();
+    clearModelsMarketplaceCache();
+    // Drop channels/routes that now hit site-disabled models immediately.
+    rebuildTokenRoutesFromAvailability().catch((err) => {
+      console.warn('[sites] rebuild routes after disabled-models update failed', err);
+    });
     return { siteId: id, models: uniqueModels };
   });
 

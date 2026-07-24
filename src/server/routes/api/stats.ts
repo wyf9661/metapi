@@ -47,6 +47,10 @@ import { requiresManagedAccountTokens } from "../../services/accountExtraConfig.
 import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from "../../services/accountTokenService.js";
 import { canonicalizeModelName } from "../../shared/modelCanonicalization.js";
 import {
+  isModelDisabledForSite,
+  loadSiteDisabledModelsIndex,
+} from "../../services/siteDisabledModels.js";
+import {
   formatLocalDateTime,
   formatUtcSqlDateTime,
   getLocalDayRangeUtc,
@@ -1234,6 +1238,8 @@ export async function statsRoutes(app: FastifyInstance) {
         )
         .all();
 
+      const disabledModelsIndex = await loadSiteDisabledModelsIndex();
+
       const last7d = getLocalRangeStartUtc(7);
 
       // SQL pushdown: aggregate simple per-model stats (total, success, avg
@@ -1466,6 +1472,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
         const sourceModel = String(m.modelName || "").trim();
         if (!sourceModel) continue;
+        if (isModelDisabledForSite(disabledModelsIndex, s.id, sourceModel)) continue;
         const canonicalName = canonicalizeModelName(sourceModel) || sourceModel;
         if (!modelMap[canonicalName]) {
           modelMap[canonicalName] = {
@@ -1527,6 +1534,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
         const sourceModel = String(m.modelName || "").trim();
         if (!sourceModel) continue;
+        if (isModelDisabledForSite(disabledModelsIndex, s.id, sourceModel)) continue;
         const canonicalName = canonicalizeModelName(sourceModel) || sourceModel;
         if (!modelMap[canonicalName]) {
           modelMap[canonicalName] = {
@@ -1569,6 +1577,13 @@ export async function statsRoutes(app: FastifyInstance) {
         } else if (existingAccount.connectivity == null && (m as any).connectivity != null) {
           existingAccount.connectivity = !!(m as any).connectivity;
           existingAccount.checkedAt = incomingCheckedAt || existingAccount.checkedAt;
+        }
+      }
+
+      // Drop models that lost every supplier after site-disabled filtering.
+      for (const [name, entry] of Object.entries(modelMap)) {
+        if (entry.accountsById.size === 0) {
+          delete modelMap[name];
         }
       }
 
@@ -1734,6 +1749,8 @@ export async function statsRoutes(app: FastifyInstance) {
         )
         .all();
 
+      const disabledModelsIndex = await loadSiteDisabledModelsIndex();
+
       const result: Record<
         string,
         Array<{
@@ -1779,6 +1796,7 @@ export async function statsRoutes(app: FastifyInstance) {
       for (const row of rows) {
         const modelName = (row.token_model_availability.modelName || "").trim();
         if (!modelName) continue;
+        if (isModelDisabledForSite(disabledModelsIndex, row.sites.id, modelName)) continue;
         const accountModelKey = `${row.accounts.id}::${modelName.toLowerCase()}`;
         coveredAccountModelSet.add(accountModelKey);
 
@@ -1828,6 +1846,7 @@ export async function statsRoutes(app: FastifyInstance) {
         if (!requiresManagedAccountTokens(row)) continue;
         const modelName = (row.modelName || "").trim();
         if (!modelName) continue;
+        if (isModelDisabledForSite(disabledModelsIndex, row.siteId, modelName)) continue;
         const coverageKey = `${row.accountId}::${modelName.toLowerCase()}`;
         if (coveredAccountModelSet.has(coverageKey)) continue;
         if (!modelsWithoutToken[modelName]) modelsWithoutToken[modelName] = [];
