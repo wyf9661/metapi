@@ -25,6 +25,8 @@ import {
   convergeAccountMutation,
   refreshAccountCoverageBatch,
 } from '../../services/accountMutationWorkflow.js';
+import { invalidateAccountsSnapshot } from '../../services/accountsOverviewService.js';
+import { clearModelsMarketplaceCache } from './stats.js';
 import {
   parseAccountTokenBatchPayload,
   parseAccountTokenCreatePayload,
@@ -443,6 +445,16 @@ async function refreshCoverageForAccounts(accountIds: number[]) {
   });
   if (result.rebuild && !result.rebuild.success) {
     console.warn(`[account-tokens] token route rebuild failed after coverage refresh: ${result.rebuild.error}`);
+  }
+
+  // Token/group changes rewrite model_availability and routes. Drop marketplace and
+  // accounts snapshots so connection/model-square UI cannot keep showing the old group.
+  const touched = Array.from(new Set(
+    accountIds.filter((id) => Number.isFinite(id) && id > 0),
+  ));
+  if (touched.length > 0) {
+    clearModelsMarketplaceCache();
+    await invalidateAccountsSnapshot();
   }
 
   return {
