@@ -91,4 +91,42 @@ describe('ModelAnalysisPanel token summaries', () => {
 
     root?.unmount();
   });
+
+  it('renders token distribution legend under the bar chart', async () => {
+    let root!: WebTestRenderer;
+
+    await act(async () => {
+      root = create(
+        <ModelAnalysisPanel
+          data={{
+            totals: { spend: 3, calls: 30, tokens: 900_000 },
+            spendDistribution: [
+              { model: 'gpt-4o', spend: 2, calls: 20 },
+              { model: 'claude-sonnet', spend: 1, calls: 10 },
+            ],
+            callRanking: [
+              { model: 'gpt-4o', calls: 20, successRate: 99, avgLatencyMs: 800, spend: 2, tokens: 600_000 },
+              { model: 'claude-sonnet', calls: 10, successRate: 98, avgLatencyMs: 900, spend: 1, tokens: 300_000 },
+            ],
+          }}
+        />,
+      );
+    });
+
+    const tokenTab = root!.root.find((node) => (
+      node.type === 'button' && collectText(node).includes('Token 分布')
+    ));
+    await act(async () => {
+      tokenTab.props.onClick();
+    });
+
+    const rendered = collectText(root!.root);
+    expect(rendered).toContain('gpt-4o');
+    expect(rendered).toContain('claude-sonnet');
+    expect(rendered).toContain('600K');
+    expect(rendered).toContain('300K');
+
+    root?.unmount();
+  });
+
 });
