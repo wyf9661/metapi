@@ -10,7 +10,6 @@ import { getAuthToken } from '../authSession.js';
 import { getBrand } from '../components/BrandIcon.js';
 import CenteredModal from '../components/CenteredModal.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
-import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
@@ -25,7 +24,6 @@ import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { clearFocusParams, readFocusSiteId } from './helpers/navigationFocus.js';
 import { tr } from '../i18n.js';
 import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
-import { shouldIgnoreRowSelectionClick } from './helpers/rowSelection.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
 import {
   applyCodexCompatibilityMode,
@@ -285,7 +283,6 @@ export default function Sites() {
   const [togglingSiteId, setTogglingSiteId] = useState<number | null>(null);
   const [orderingSiteId, setOrderingSiteId] = useState<number | null>(null);
   const [pinningSiteId, setPinningSiteId] = useState<number | null>(null);
-  const [selectedSiteIds, setSelectedSiteIds] = useState<number[]>([]);
   const [expandedSiteIds, setExpandedSiteIds] = useState<number[]>([]);
   const [createdSiteForChoice, setCreatedSiteForChoice] = useState<{
     id: number;
@@ -296,12 +293,10 @@ export default function Sites() {
   const [selectedInitializationPresetId, setSelectedInitializationPresetId] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const [showMobileTools, setShowMobileTools] = useState(false);
-  const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
-    mode: 'single' | 'batch';
+    mode: 'single';
     siteId?: number;
     siteName?: string;
-    count?: number;
   }>(null);
   const lastEditorRef = useRef<SiteEditorState | null>(null);
   const loadingModelsSiteIdRef = useRef<number | null>(null);
@@ -404,7 +399,6 @@ export default function Sites() {
     try {
       const rows = await api.getSites();
       setSites(rows || []);
-      setSelectedSiteIds((current) => current.filter((id) => (rows || []).some((site: SiteRow) => site.id === id)));
     } catch {
       toast.error('加载站点列表失败');
     } finally {
@@ -428,7 +422,6 @@ export default function Sites() {
     pagedItems: pagedSites,
     showControls: showSitePagination,
   } = useClientPagination(sortedSites, `${sortMode}:${sites.length}`);
-  const allVisibleSitesSelected = pagedSites.length > 0 && pagedSites.every((site) => selectedSiteIds.includes(site.id));
 
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
@@ -1077,22 +1070,6 @@ export default function Sites() {
     }
   };
 
-  const toggleSiteSelection = (siteId: number, checked: boolean) => {
-    setSelectedSiteIds((current) => (
-      checked
-        ? Array.from(new Set([...current, siteId]))
-        : current.filter((id) => id !== siteId)
-    ));
-  };
-
-  const toggleSelectAllVisible = (checked: boolean) => {
-    if (!checked) {
-      setSelectedSiteIds((current) => current.filter((id) => !pagedSites.some((site) => site.id === id)));
-      return;
-    }
-    setSelectedSiteIds((current) => Array.from(new Set([...current, ...pagedSites.map((site) => site.id)])));
-  };
-
   const toggleSiteDetails = (siteId: number) => {
     setExpandedSiteIds((current) => (
       current.includes(siteId)
@@ -1101,61 +1078,21 @@ export default function Sites() {
     ));
   };
 
-  const runBatchAction = async (action: 'enable' | 'disable' | 'delete' | 'enableSystemProxy' | 'disableSystemProxy', skipDeleteConfirm = false) => {
-    if (selectedSiteIds.length === 0) return;
-    if (action === 'delete' && !skipDeleteConfirm) {
-      setDeleteConfirm({ mode: 'batch', count: selectedSiteIds.length });
-      return;
-    }
-
-    setBatchActionLoading(true);
-    try {
-      const result = await api.batchUpdateSites({
-        ids: selectedSiteIds,
-        action,
-      });
-      const successIds = Array.isArray(result?.successIds) ? result.successIds.map((id: unknown) => Number(id)) : [];
-      const failedItems = Array.isArray(result?.failedItems) ? result.failedItems : [];
-      if (failedItems.length > 0) {
-        toast.info(`批量操作完成：成功 ${successIds.length}，失败 ${failedItems.length}`);
-      } else {
-        toast.success(`批量操作完成：成功 ${successIds.length}`);
-      }
-      setSelectedSiteIds(failedItems.map((item: any) => Number(item.id)).filter((id: number) => Number.isFinite(id) && id > 0));
-      await load();
-    } catch (e: any) {
-      toast.error(e.message || '批量操作失败');
-    } finally {
-      setBatchActionLoading(false);
-    }
-  };
-
   const confirmDelete = async () => {
     const target = deleteConfirm;
-    if (!target) return;
+    if (!target?.siteId) return;
 
     setDeleteConfirm(null);
-    if (target.mode === 'single' && target.siteId) {
-      setDeleting(target.siteId);
-      try {
-        await api.deleteSite(target.siteId);
-        toast.success(`站点 "${target.siteName || target.siteId}" 已删除`);
-        await load();
-      } catch (e: any) {
-        toast.error(e.message || '删除失败');
-      } finally {
-        setDeleting(null);
-      }
-      return;
+    setDeleting(target.siteId);
+    try {
+      await api.deleteSite(target.siteId);
+      toast.success(`站点 "${target.siteName || target.siteId}" 已删除`);
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || '删除失败');
+    } finally {
+      setDeleting(null);
     }
-
-    await runBatchAction('delete', true);
-  };
-
-  const handleSiteRowClick = (siteId: number, event: React.MouseEvent<HTMLTableRowElement>) => {
-    if (shouldIgnoreRowSelectionClick(event.target)) return;
-    const isSelected = selectedSiteIds.includes(siteId);
-    toggleSiteSelection(siteId, !isSelected);
   };
 
   return (
@@ -1172,15 +1109,6 @@ export default function Sites() {
                 style={{ border: '1px solid var(--color-border)' }}
               >
                 排序与操作
-              </button>
-              <button
-                type="button"
-                data-testid="sites-mobile-select-all"
-                onClick={() => toggleSelectAllVisible(!allVisibleSitesSelected)}
-                className="btn btn-ghost"
-                style={{ border: '1px solid var(--color-border)' }}
-              >
-                {allVisibleSitesSelected ? '取消全选' : '全选可见项'}
               </button>
             </>
           ) : (
@@ -1224,55 +1152,10 @@ export default function Sites() {
                 placeholder="自定义排序"
               />
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                toggleSelectAllVisible(!allVisibleSitesSelected);
-                setShowMobileTools(false);
-              }}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
-            >
-              {allVisibleSitesSelected ? '取消全选可见项' : '全选可见项'}
-            </button>
           </div>
         )}
       />
 
-      {selectedSiteIds.length > 0 && (
-        <ResponsiveBatchActionBar
-          isMobile={isMobile}
-          info={`已选 ${selectedSiteIds.length} 项`}
-          desktopStyle={{ marginBottom: 12 }}
-        >
-          <button
-            data-testid="sites-batch-enable-system-proxy"
-            onClick={() => runBatchAction('enableSystemProxy')}
-            disabled={batchActionLoading}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
-          >
-            批量开启系统代理
-          </button>
-          <button
-            onClick={() => runBatchAction('disableSystemProxy')}
-            disabled={batchActionLoading}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
-          >
-            批量关闭系统代理
-          </button>
-          <button onClick={() => runBatchAction('enable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-            批量启用
-          </button>
-          <button onClick={() => runBatchAction('disable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-            批量禁用
-          </button>
-          <button onClick={() => runBatchAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
-            批量删除
-          </button>
-        </ResponsiveBatchActionBar>
-      )}
 
       <div className="info-tip" style={{ marginBottom: 12 }}>
         站点倍率 = 全局权重 × 下游 API Key 站点倍率；数值越大越容易被选中。建议 0.5-3，默认 1，长期不超过 5。
@@ -1284,10 +1167,8 @@ export default function Sites() {
         onConfirm={confirmDelete}
         title="确认删除站点"
         confirmText="确认删除"
-        loading={batchActionLoading || (deleteConfirm?.mode === 'single' && deleting === deleteConfirm?.siteId)}
-        description={deleteConfirm?.mode === 'single'
-          ? <>确定要删除站点 <strong>{deleteConfirm.siteName || `#${deleteConfirm.siteId}`}</strong> 吗？</>
-          : <>确定要删除选中的 <strong>{deleteConfirm?.count || 0}</strong> 个站点吗？</>}
+        loading={Boolean(deleteConfirm?.siteId && deleting === deleteConfirm.siteId)}
+        description={<>确定要删除站点 <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> 吗？</>}
       />
 
       {createdSiteForChoice && (
@@ -2049,14 +1930,6 @@ export default function Sites() {
                         ) : null}
                       </div>
                     )}
-                    headerActions={(
-                      <input
-                        type="checkbox"
-                        aria-label={`选择站点 ${site.name || site.id}`}
-                        checked={selectedSiteIds.includes(site.id)}
-                        onChange={(event) => toggleSiteSelection(site.id, event.target.checked)}
-                      />
-                    )}
                     footerActions={(
                       <>
                         <button
@@ -2222,13 +2095,6 @@ export default function Sites() {
             <table className="data-table sites-table">
               <thead>
                 <tr>
-                  <th style={{ width: 44 }}>
-                    <input
-                      type="checkbox"
-                      checked={allVisibleSitesSelected}
-                      onChange={(e) => toggleSelectAllVisible(e.target.checked)}
-                    />
-                  </th>
                   <th>名称</th>
                   <th>总余额</th>
                   <th>状态</th>
@@ -2248,17 +2114,8 @@ export default function Sites() {
                       if (node) rowRefs.current.set(site.id, node);
                       else rowRefs.current.delete(site.id);
                     }}
-                    onClick={(event) => handleSiteRowClick(site.id, event)}
-                    className={`animate-slide-up stagger-${Math.min(i + 1, 5)} row-selectable ${selectedSiteIds.includes(site.id) ? 'row-selected' : ''} ${highlightSiteId === site.id ? 'row-focus-highlight' : ''}`.trim()}
+                    className={`animate-slide-up stagger-${Math.min(i + 1, 5)} ${highlightSiteId === site.id ? 'row-focus-highlight' : ''}`.trim()}
                   >
-                    <td>
-                      <input
-                        data-testid={`site-select-${site.id}`}
-                        type="checkbox"
-                        checked={selectedSiteIds.includes(site.id)}
-                        onChange={(e) => toggleSiteSelection(site.id, e.target.checked)}
-                      />
-                    </td>
                     <td className="sites-name-col" style={{ fontWeight: 600 }}>
                       <div className="sites-name-cell">
                         <div className="sites-name-primary">

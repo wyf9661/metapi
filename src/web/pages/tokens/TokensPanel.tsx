@@ -4,7 +4,6 @@ import { api } from '../../api.js';
 import CenteredModal from '../../components/CenteredModal.js';
 import ResponsiveFilterPanel from '../../components/ResponsiveFilterPanel.js';
 import ResponsiveFormGrid from '../../components/ResponsiveFormGrid.js';
-import ResponsiveBatchActionBar from '../../components/ResponsiveBatchActionBar.js';
 import { useToast } from '../../components/Toast.js';
 import { formatDateTimeLocal } from '../helpers/checkinLogTime.js';
 import {
@@ -20,7 +19,6 @@ import PaginationControls from '../../components/PaginationControls.js';
 import { useClientPagination } from '../../components/useClientPagination.js';
 import DeleteConfirmModal from '../../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from '../helpers/navigationFocus.js';
-import { shouldIgnoreRowSelectionClick } from '../helpers/rowSelection.js';
 import { tr } from '../../i18n.js';
 
 type SyncStatus = 'success' | 'skipped' | 'failed';
@@ -148,15 +146,12 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
   const [highlightTokenId, setHighlightTokenId] = useState<number | null>(null);
   const [pendingAutoOpenTokenId, setPendingAutoOpenTokenId] = useState<number | null>(null);
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
-  const [selectedTokenIds, setSelectedTokenIds] = useState<number[]>([]);
   const [expandedTokenIds, setExpandedTokenIds] = useState<number[]>([]);
   const [showMobileTools, setShowMobileTools] = useState(false);
-  const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
-    mode: 'single' | 'batch';
+    mode: 'single';
     tokenId?: number;
     tokenName?: string;
-    count?: number;
   }>(null);
   const [form, setForm] = useState(initialCreateForm);
   const [editForm, setEditForm] = useState({
@@ -184,7 +179,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       ]);
       const nextTokens = tokenRows || [];
       setTokens(nextTokens);
-      setSelectedTokenIds((current) => current.filter((id) => nextTokens.some((token: any) => token.id === id)));
       const latestAccounts: SyncableAccount[] = Array.isArray(accountSnapshot?.accounts)
         ? accountSnapshot.accounts
         : [];
@@ -322,8 +316,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     pagedItems: pagedTokens,
     showControls: showTokenPagination,
   } = useClientPagination(accountClusteredTokens, tokens.length);
-  const allVisibleTokensSelected = pagedTokens.length > 0
-    && pagedTokens.every((token) => selectedTokenIds.includes(token.id));
 
   const activeAccounts = useMemo(() => accounts.filter(isAccountSyncable), [accounts]);
   const activeAccountSelectOptions = useMemo(() => (
@@ -426,21 +418,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     }
   };
 
-  const toggleTokenSelection = (tokenId: number, checked: boolean) => {
-    setSelectedTokenIds((current) => (
-      checked
-        ? Array.from(new Set([...current, tokenId]))
-        : current.filter((id) => id !== tokenId)
-    ));
-  };
 
-  const toggleSelectAllTokens = (checked: boolean) => {
-    if (!checked) {
-      setSelectedTokenIds((current) => current.filter((id) => !pagedTokens.some((token) => token.id === id)));
-      return;
-    }
-    setSelectedTokenIds((current) => Array.from(new Set([...current, ...pagedTokens.map((token) => token.id)])));
-  };
 
   const toggleTokenDetails = (tokenId: number) => {
     setExpandedTokenIds((current) => (
@@ -450,50 +428,17 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     ));
   };
 
-  const runBatchTokenAction = async (action: 'enable' | 'disable' | 'delete', skipDeleteConfirm = false) => {
-    if (selectedTokenIds.length === 0) return;
-    if (action === 'delete' && !skipDeleteConfirm) {
-      setDeleteConfirm({ mode: 'batch', count: selectedTokenIds.length });
-      return;
-    }
-
-    setBatchActionLoading(true);
-    try {
-      const result = await api.batchUpdateAccountTokens({
-        ids: selectedTokenIds,
-        action,
-      });
-      const successIds = Array.isArray(result?.successIds) ? result.successIds.map((id: unknown) => Number(id)) : [];
-      const failedItems = Array.isArray(result?.failedItems) ? result.failedItems : [];
-      if (failedItems.length > 0) {
-        toast.info(`批量操作完成：成功 ${successIds.length}，失败 ${failedItems.length}`);
-      } else {
-        toast.success(`批量操作完成：成功 ${successIds.length}`);
-      }
-      setSelectedTokenIds(failedItems.map((item: any) => Number(item.id)).filter((id: number) => Number.isFinite(id) && id > 0));
-      await load();
-    } catch (e: any) {
-      toast.error(e.message || '批量操作失败');
-    } finally {
-      setBatchActionLoading(false);
-    }
-  };
 
   const confirmDelete = async () => {
     const target = deleteConfirm;
-    if (!target) return;
+    if (!target?.tokenId) return;
 
     setDeleteConfirm(null);
-    if (target.mode === 'single' && target.tokenId) {
-      await withRowLoading(`token-${target.tokenId}-delete`, async () => {
-        await api.deleteAccountToken(target.tokenId!);
-        toast.success('令牌已删除');
-        await load();
-      });
-      return;
-    }
-
-    await runBatchTokenAction('delete', true);
+    await withRowLoading(`token-${target.tokenId}-delete`, async () => {
+      await api.deleteAccountToken(target.tokenId!);
+      toast.success('令牌已删除');
+      await load();
+    });
   };
 
   const openEditPanel = useCallback((token: any) => {
@@ -588,11 +533,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     setPendingAutoOpenTokenId(null);
   }, [focusTokenRow, loading, openEditPanel, pendingAutoOpenTokenId, tokens]);
 
-  const handleTokenRowClick = (tokenId: number, event: React.MouseEvent<HTMLTableRowElement>) => {
-    if (shouldIgnoreRowSelectionClick(event.target)) return;
-    const isSelected = selectedTokenIds.includes(tokenId);
-    toggleTokenSelection(tokenId, !isSelected);
-  };
 
   const handleCopyToken = async (tokenId: number, tokenName: string) => {
     try {
@@ -806,15 +746,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
           >
             同步与筛选
           </button>
-          <button
-            type="button"
-            data-testid="tokens-mobile-select-all"
-            onClick={() => toggleSelectAllTokens(!allVisibleTokensSelected)}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
-          >
-            {allVisibleTokensSelected ? '取消全选' : '全选可见项'}
-          </button>
         </>
       ) : (
         <>
@@ -857,7 +788,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         {showAdd ? '取消' : '+ 新增令牌'}
       </button>
     </div>
-  ), [activeAccountSelectOptions, activeAccounts.length, allVisibleTokensSelected, embedded, handleSync, handleSyncAll, handleToggleAdd, isMobile, showAdd, syncing, syncingAccountId, syncingAll]);
+  ), [activeAccountSelectOptions, activeAccounts.length, embedded, handleSync, handleSyncAll, handleToggleAdd, isMobile, showAdd, syncing, syncingAccountId, syncingAll]);
 
   useEffect(() => {
     if (!embedded || !onEmbeddedActionsChange) return;
@@ -927,10 +858,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         onConfirm={confirmDelete}
         title="确认删除令牌"
         confirmText="确认删除"
-        loading={batchActionLoading || (deleteConfirm?.mode === 'single' && !!rowLoading[`token-${deleteConfirm?.tokenId}-delete`])}
-        description={deleteConfirm?.mode === 'single'
-          ? <>确定要删除令牌 <strong>{deleteConfirm.tokenName || `#${deleteConfirm.tokenId}`}</strong> 吗？</>
-          : <>确定要删除选中的 <strong>{deleteConfirm?.count || 0}</strong> 个令牌吗？</>}
+        loading={Boolean(deleteConfirm?.tokenId && rowLoading[`token-${deleteConfirm.tokenId}-delete`])}
+        description={<>确定要删除令牌 <strong>{deleteConfirm?.tokenName || `#${deleteConfirm?.tokenId}`}</strong> 吗？</>}
       />
 
       <CenteredModal
@@ -1052,23 +981,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         ) : null}
       </CenteredModal>
 
-      {selectedTokenIds.length > 0 && (
-        <ResponsiveBatchActionBar
-          isMobile={isMobile}
-          info={`已选 ${selectedTokenIds.length} 项`}
-          desktopStyle={{ marginBottom: 12 }}
-        >
-          <button onClick={() => runBatchTokenAction('enable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-            批量启用
-          </button>
-          <button onClick={() => runBatchTokenAction('disable')} disabled={batchActionLoading} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-            批量禁用
-          </button>
-          <button data-testid="tokens-batch-delete" onClick={() => runBatchTokenAction('delete')} disabled={batchActionLoading} className="btn btn-link btn-link-danger">
-            批量删除
-          </button>
-        </ResponsiveBatchActionBar>
-      )}
 
       <CenteredModal
         open={showAdd}
@@ -1206,14 +1118,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                   <MobileCard
                     key={token.id}
                     title={token.name || '-'}
-                    headerActions={(
-                      <input
-                        type="checkbox"
-                        aria-label={`选择令牌 ${token.name || token.id}`}
-                        checked={selectedTokenIds.includes(token.id)}
-                        onChange={(event) => toggleTokenSelection(token.id, event.target.checked)}
-                      />
-                    )}
                     footerActions={(
                       <>
                         <button
@@ -1328,13 +1232,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
             <table className="data-table token-table">
             <thead>
               <tr>
-                <th style={{ width: 44 }}>
-                  <input
-                    type="checkbox"
-                    checked={allVisibleTokensSelected}
-                    onChange={(e) => toggleSelectAllTokens(e.target.checked)}
-                  />
-                </th>
                 <th>令牌名称</th>
                 <th>令牌值</th>
                 <th>来源站点</th>
@@ -1358,18 +1255,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                       if (node) rowRefs.current.set(token.id, node);
                       else rowRefs.current.delete(token.id);
                     }}
-                    onClick={(event) => handleTokenRowClick(token.id, event)}
-                    className={`animate-slide-up stagger-${Math.min(i + 1, 5)} row-selectable ${selectedTokenIds.includes(token.id) ? 'row-selected' : ''} ${highlightTokenId === token.id ? 'row-focus-highlight' : ''}`.trim()}
+                    className={`animate-slide-up stagger-${Math.min(i + 1, 5)} ${highlightTokenId === token.id ? 'row-focus-highlight' : ''}`.trim()}
                   >
-                    <td>
-                      <input
-                        data-testid={`token-select-${token.id}`}
-                        type="checkbox"
-                        checked={selectedTokenIds.includes(token.id)}
-                        onChange={(e) => toggleTokenSelection(token.id, e.target.checked)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </td>
                     <td className="token-name-cell">
                       <span className="inventory-name-title" title={token.name || undefined}>
                         {token.name || '-'}
