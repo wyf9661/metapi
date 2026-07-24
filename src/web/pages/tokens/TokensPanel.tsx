@@ -43,6 +43,24 @@ type AccountTokenSyncResult = {
     id?: number;
     username?: string;
   };
+  coverageRefresh?: {
+    refresh?: Array<{
+      accountId?: number;
+      refreshed?: boolean;
+      status?: string;
+      modelCount?: number;
+      modelsPreview?: string[];
+      errorMessage?: string;
+    }>;
+    rebuild?: {
+      success?: boolean;
+      result?: {
+        createdChannels?: number;
+        removedChannels?: number;
+      } | null;
+      error?: string;
+    } | null;
+  };
 };
 
 type SyncableAccount = {
@@ -617,7 +635,17 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
       } else if (status === 'skipped') {
         toast.info(`同步已跳过：${resolveSyncMessage(res, '账号缺少可用 Session Cookie')}`);
       } else {
-        toast.success(`同步完成：新增 ${res.created || 0}，更新 ${res.updated || 0}`);
+        const coverage = res.coverageRefresh?.refresh?.[0];
+        const modelCount = Number(coverage?.modelCount);
+        const preview = Array.isArray(coverage?.modelsPreview)
+          ? coverage!.modelsPreview!.filter(Boolean).slice(0, 4).join('、')
+          : '';
+        const coverageText = coverage?.refreshed
+          ? (Number.isFinite(modelCount)
+            ? `；模型已刷新 ${modelCount} 个${preview ? `（${preview}${modelCount > 4 ? '…' : ''}）` : ''}`
+            : '；模型已刷新')
+          : (coverage?.errorMessage ? `；模型刷新失败：${coverage.errorMessage}` : '');
+        toast.success(`同步完成：新增 ${res.created || 0}，更新 ${res.updated || 0}${coverageText}`);
       }
       await load();
     } catch (e: any) {
