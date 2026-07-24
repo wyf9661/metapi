@@ -2092,6 +2092,7 @@ export default function Sites() {
               })}
             </div>
           ) : (
+            <div className="sites-desktop-table-wrap">
             <table className="data-table sites-table">
               <thead>
                 <tr>
@@ -2240,6 +2241,7 @@ export default function Sites() {
                 ))}
               </tbody>
             </table>
+            </div>
           )
         ) : (
           <div className="empty-state">

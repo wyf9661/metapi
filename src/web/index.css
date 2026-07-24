@@ -1734,7 +1734,7 @@ body {
 
 .data-table th {
   padding: 10px 14px;
-  text-align: left;
+  text-align: center;
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-muted);
@@ -2026,10 +2026,17 @@ body {
   font-size: 12px;
 }
 
-/* Inventory tables: fixed layout, content-bounded name/site cols, compact balance, no horizontal scroll. */
+/* Inventory tables: fixed layout with min width so narrow viewports scroll instead of crushing action buttons. */
 .accounts-desktop-table-wrap {
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sites-desktop-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .inventory-name-title {
@@ -2045,14 +2052,21 @@ body {
 .accounts-table {
   width: 100%;
   table-layout: fixed;
-  min-width: 0;
+  min-width: 1040px;
 }
 
 .accounts-table th,
 .accounts-table td {
-  text-align: left;
   vertical-align: middle;
   overflow: hidden;
+}
+
+.accounts-table th {
+  text-align: center;
+}
+
+.accounts-table td {
+  text-align: left;
 }
 
 /* name | site | health | balance | used | checkin | actions */
@@ -2120,9 +2134,17 @@ body {
 
 .accounts-actions-col,
 .accounts-actions-cell {
-  width: 24%;
+  width: 30%;
+  min-width: 220px;
   white-space: nowrap !important;
   overflow: visible;
+}
+
+.accounts-actions-col {
+  text-align: center;
+}
+
+.accounts-actions-cell {
   text-align: left;
 }
 
@@ -2144,7 +2166,15 @@ body {
 .sites-table {
   width: 100%;
   table-layout: fixed;
-  min-width: 0;
+  min-width: 1120px;
+}
+
+.sites-table th {
+  text-align: center;
+}
+
+.sites-table td {
+  text-align: left;
 }
 
 /* name | balance | status | proxy | weight | platform | created | actions */
@@ -2222,10 +2252,18 @@ body {
 
 .sites-actions-col,
 .sites-actions-cell {
-  width: 24%;
+  width: 30%;
+  min-width: 240px;
   white-space: nowrap !important;
-  text-align: left;
   overflow: visible;
+}
+
+.sites-actions-col {
+  text-align: center;
+}
+
+.sites-actions-cell {
+  text-align: left;
 }
 
 .sites-row-actions {
@@ -5859,7 +5897,8 @@ textarea {
 
   .accounts-actions-col,
   .accounts-actions-cell {
-    width: 24%;
+    width: 30%;
+    min-width: 220px;
   }
 
   .token-table-actions-col,
@@ -5890,7 +5929,8 @@ textarea {
 
   .sites-actions-col,
   .sites-actions-cell {
-    width: 24%;
+    width: 30%;
+    min-width: 240px;
   }
 
   .sites-table th,
@@ -6582,7 +6622,8 @@ textarea {
 
   .accounts-actions-col,
   .accounts-actions-cell {
-    width: 24%;
+    width: 30%;
+    min-width: 220px;
   }
 
   .token-table-actions-col,
@@ -6613,7 +6654,8 @@ textarea {
 
   .sites-actions-col,
   .sites-actions-cell {
-    width: 24%;
+    width: 30%;
+    min-width: 240px;
   }
 
   .sites-table th:nth-child(5),
