@@ -82,6 +82,16 @@ type SiteAvailabilitySummary = {
   buckets: SiteAvailabilityBucket[];
 };
 
+type ModelAvailabilitySummary = {
+  model: string;
+  totalRequests: number;
+  successCount: number;
+  failedCount: number;
+  availabilityPercent: number | null;
+  averageLatencyMs: number | null;
+  buckets: SiteAvailabilityBucket[];
+};
+
 function formatAvailabilityPercent(value: number | null | undefined): string {
   if (
     typeof value !== "number" ||
@@ -206,6 +216,45 @@ function formatAvailabilityBucketLabel(bucket: SiteAvailabilityBucket): string {
   return `${parsed.getFullYear()}-${padDateTimeSegment(parsed.getMonth() + 1)}-${padDateTimeSegment(parsed.getDate())} ${padDateTimeSegment(parsed.getHours())}:${padDateTimeSegment(parsed.getMinutes())}:${padDateTimeSegment(parsed.getSeconds())}`;
 }
 
+function buildModelLogsRoute(
+  model: string,
+  range?: { from: Date; to: Date },
+): string {
+  const params = new URLSearchParams();
+  params.set("model", model);
+  if (range) {
+    params.set("from", formatDateTimeRouteValue(range.from));
+    params.set("to", formatDateTimeRouteValue(range.to));
+  }
+  return `/logs?${params.toString()}`;
+}
+
+function buildModelLast24hLogsRoute(model: string): string {
+  const now = new Date();
+  const from = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    now.getHours() - 23,
+    0,
+    0,
+    0,
+  );
+  return buildModelLogsRoute(model, { from, to: now });
+}
+
+function buildModelAvailabilityBucketLogsRoute(
+  model: string,
+  bucket: SiteAvailabilityBucket,
+): string {
+  const start = bucket.startUtc ? new Date(bucket.startUtc) : null;
+  if (!start || Number.isNaN(start.getTime())) {
+    return buildModelLast24hLogsRoute(model);
+  }
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  return buildModelLogsRoute(model, { from: start, to: end });
+}
+
 function buildAvailabilityBucketLogsRoute(
   siteId: number,
   bucket: SiteAvailabilityBucket,
@@ -248,6 +297,8 @@ export default function Dashboard({
   >({});
   const [trendDays, setTrendDays] = useState(7);
   const [showInactiveSites, setShowInactiveSites] = useState(false);
+  const [showInactiveModels, setShowInactiveModels] = useState(false);
+  const [observabilityTab, setObservabilityTab] = useState<"sites" | "models">("sites");
   const toast = useToast();
   const normalizedAdminName = (adminName || "").trim() || "\u7ba1\u7406\u5458";
 
@@ -601,6 +652,21 @@ export default function Dashboard({
   const siteAvailability = showInactiveSites
     ? [...activeSites, ...inactiveSites]
     : activeSites;
+
+  const rawModelAvailability: ModelAvailabilitySummary[] = Array.isArray(
+    insightsData?.modelAvailability,
+  )
+    ? insightsData.modelAvailability
+    : [];
+  const activeModels = rawModelAvailability
+    .filter((m) => m.totalRequests > 0)
+    .sort((a, b) => (b.totalRequests || 0) - (a.totalRequests || 0));
+  const inactiveModels = rawModelAvailability.filter(
+    (m) => !m.totalRequests || m.totalRequests === 0,
+  );
+  const modelAvailability = showInactiveModels
+    ? [...activeModels, ...inactiveModels]
+    : activeModels;
 
   const getLatencyColor = (ms: number) =>
     ms <= 500
@@ -1155,7 +1221,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className="chart-container animate-slide-up stagger-8 site-observability-panel">
+            <div className="chart-container animate-slide-up stagger-8 site-observability-panel">
         <div className="site-observability-header">
           <div>
             <div className="site-observability-title">
@@ -1173,16 +1239,34 @@ export default function Dashboard({
                   d="M3 12h4l3 8 4-16 3 8h4"
                 />
               </svg>
-              站点可用性观测
+              24 小时可用性观测
               <span className="site-observability-count-badge">
-                {activeSites.length}/{rawSiteAvailability.length}
+                {observabilityTab === "sites"
+                  ? `${activeSites.length}/${rawSiteAvailability.length}`
+                  : `${activeModels.length}/${rawModelAvailability.length}`}
               </span>
             </div>
             <div className="site-observability-subtitle">
               最近 24 小时 · 每色块 = 1h · 按使用量排序
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div className="pill-tabs">
+              <button
+                type="button"
+                className={`pill-tab ${observabilityTab === "sites" ? "active" : ""}`}
+                onClick={() => setObservabilityTab("sites")}
+              >
+                站点
+              </button>
+              <button
+                type="button"
+                className={`pill-tab ${observabilityTab === "models" ? "active" : ""}`}
+                onClick={() => setObservabilityTab("models")}
+              >
+                模型
+              </button>
+            </div>
             <div className="site-observability-legend">
               <span className="site-observability-legend-text">低</span>
               <span
@@ -1199,7 +1283,7 @@ export default function Dashboard({
               />
               <span className="site-observability-legend-text">高</span>
             </div>
-            {inactiveSites.length > 0 && (
+            {observabilityTab === "sites" && inactiveSites.length > 0 && (
               <button
                 className="site-observability-toggle-btn"
                 onClick={() => setShowInactiveSites((v) => !v)}
@@ -1209,10 +1293,21 @@ export default function Dashboard({
                   : `显示未使用 (${inactiveSites.length})`}
               </button>
             )}
+            {observabilityTab === "models" && inactiveModels.length > 0 && (
+              <button
+                className="site-observability-toggle-btn"
+                onClick={() => setShowInactiveModels((v) => !v)}
+              >
+                {showInactiveModels
+                  ? "隐藏未使用"
+                  : `显示未使用 (${inactiveModels.length})`}
+              </button>
+            )}
           </div>
         </div>
 
-        {insightsLoading && rawSiteAvailability.length === 0 ? (
+        {observabilityTab === "sites" ? (
+          insightsLoading && rawSiteAvailability.length === 0 ? (
           <div style={{ display: "grid", gap: 12 }}>
             {[...Array(4)].map((_, index) => (
               <div
@@ -1347,6 +1442,139 @@ export default function Dashboard({
             </div>
             <div className="site-observability-empty-note">
               有代理请求后，这里会自动生成每个站点的可用性条和平均响应速度。
+            </div>
+          </div>
+        )
+        ) : insightsLoading && rawModelAvailability.length === 0 ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            {[...Array(4)].map((_, index) => (
+              <div
+                key={index}
+                className="card"
+                style={{ minHeight: 88, padding: 16 }}
+              >
+                <div
+                  className="skeleton"
+                  style={{ width: 160, height: 14, marginBottom: 10 }}
+                />
+                <div
+                  className="skeleton"
+                  style={{ width: "100%", height: 12, marginBottom: 8 }}
+                />
+                <div
+                  className="skeleton"
+                  style={{ width: "100%", height: 18, borderRadius: 8 }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : modelAvailability.length > 0 ? (
+          <div className="site-observability-grid">
+            {modelAvailability.map((modelRow) => (
+              <div
+                key={modelRow.model}
+                className={`site-observability-card${modelRow.totalRequests > 0 ? "" : " site-observability-card--inactive"}`}
+              >
+                <div className="site-observability-card-top">
+                  <div className="site-observability-card-title">
+                    <span className="site-observability-site-name">
+                      {modelRow.model}
+                    </span>
+                  </div>
+                  <Link
+                    to={buildModelLast24hLogsRoute(modelRow.model)}
+                    className="site-observability-log-link-compact"
+                    title="查看日志"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </Link>
+                </div>
+                <div className="site-observability-card-metrics">
+                  <span
+                    className="site-observability-metric-main"
+                    style={{
+                      color: getAvailabilityColor(modelRow.availabilityPercent),
+                    }}
+                  >
+                    {formatAvailabilityPercent(modelRow.availabilityPercent)}
+                  </span>
+                  <span className="site-observability-metric-sep">·</span>
+                  <span
+                    style={
+                      modelRow.averageLatencyMs != null
+                        ? { color: getLatencyColor(modelRow.averageLatencyMs) }
+                        : undefined
+                    }
+                  >
+                    {modelRow.averageLatencyMs != null
+                      ? formatDashboardLatency(modelRow.averageLatencyMs)
+                      : "—"}
+                  </span>
+                  <span className="site-observability-metric-sep">·</span>
+                  <span>{Math.round(modelRow.totalRequests || 0)} 次</span>
+                </div>
+                <div className="site-availability-strip-compact">
+                  {modelRow.buckets.map((bucket, index) => (
+                    bucket.totalRequests > 0 ? (
+                      <Link
+                        key={`${modelRow.model}-${index}`}
+                        to={buildModelAvailabilityBucketLogsRoute(modelRow.model, bucket)}
+                        className="site-availability-cell site-availability-cell-link site-availability-cell-pill"
+                        style={{
+                          background: getAvailabilityColor(bucket.availabilityPercent),
+                        }}
+                        data-tooltip={[
+                          `时间：${formatAvailabilityBucketLabel(bucket)}`,
+                          `可用性：${formatAvailabilityPercent(bucket.availabilityPercent)}`,
+                          `请求：${bucket.totalRequests} 次`,
+                          `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
+                          bucket.averageLatencyMs != null
+                            ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
+                            : "平均响应：—",
+                        ].join(" · ")}
+                        data-tooltip-align="start"
+                        title={[
+                          formatAvailabilityBucketLabel(bucket),
+                          `可用性 ${formatAvailabilityPercent(bucket.availabilityPercent)}`,
+                          `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
+                          bucket.averageLatencyMs != null
+                            ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
+                            : "平均响应 —",
+                        ].join(" | ")}
+                        aria-label={`${modelRow.model} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
+                      />
+                    ) : (
+                      <span
+                        key={`${modelRow.model}-${index}`}
+                        className="site-availability-cell site-availability-cell-empty"
+                        aria-hidden="true"
+                      />
+                    )
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="site-observability-empty">
+            <div className="site-observability-empty-title">
+              暂无模型观测数据
+            </div>
+            <div className="site-observability-empty-note">
+              有代理请求后，这里会按使用模型生成最近 24 小时的可用性条。
             </div>
           </div>
         )}

@@ -15,6 +15,7 @@ import {
 } from "./snapshotCacheService.js";
 import {
   buildSiteAvailabilitySummariesFromHourlyAggregates,
+  buildModelAvailabilitySummaries,
   proxyCostSqlExpression,
   type SiteAvailabilitySiteRow,
   toRoundedMicroNumber,
@@ -54,6 +55,9 @@ export type DashboardSummaryPayload = {
 export type DashboardInsightsPayload = {
   siteAvailability: ReturnType<
     typeof buildSiteAvailabilitySummariesFromHourlyAggregates
+  >;
+  modelAvailability: ReturnType<
+    typeof buildModelAvailabilitySummaries
   >;
   modelAnalysis: ReturnType<typeof buildModelAnalysisFromDailyUsage>;
 };
@@ -309,7 +313,7 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
   const modelAnalysisSinceDay = getLocalRangeStartDayKey(1);
   await runUsageAggregationProjectionPass();
 
-  const [activeSites, siteAvailabilityRows, modelDayRows] =
+  const [activeSites, siteAvailabilityRows, modelDayRows, modelAvailabilityLogs] =
     await Promise.all([
       db
         .select({
@@ -332,6 +336,17 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
         .select()
         .from(schema.modelDayUsage)
         .where(gte(schema.modelDayUsage.localDay, modelAnalysisSinceDay))
+        .all(),
+      db
+        .select({
+          modelActual: schema.proxyLogs.modelActual,
+          modelRequested: schema.proxyLogs.modelRequested,
+          createdAt: schema.proxyLogs.createdAt,
+          status: schema.proxyLogs.status,
+          latencyMs: schema.proxyLogs.latencyMs,
+        })
+        .from(schema.proxyLogs)
+        .where(gte(schema.proxyLogs.createdAt, siteAvailabilitySinceUtc))
         .all(),
     ]);
 
@@ -362,6 +377,15 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
           totalLatencyMs: row.totalLatencyMs,
           latencyCount: row.latencyCount,
         })),
+      siteAvailabilityNow,
+    ),
+    modelAvailability: buildModelAvailabilitySummaries(
+      modelAvailabilityLogs.map((row) => ({
+        model: String(row.modelActual || row.modelRequested || '').trim() || null,
+        createdAt: row.createdAt,
+        status: row.status,
+        latencyMs: row.latencyMs,
+      })),
       siteAvailabilityNow,
     ),
     modelAnalysis: buildModelAnalysisFromDailyUsage(

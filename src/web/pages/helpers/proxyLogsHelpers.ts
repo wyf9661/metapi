@@ -254,6 +254,11 @@ export function normalizeRouteDateTimeInput(raw: string | null): string {
   return formatDateTimeInputValue(parsed);
 }
 
+function normalizeRouteModel(raw: string | null): string {
+  if (!raw) return "";
+  return raw.trim();
+}
+
 export function readProxyLogsRouteState(search: string) {
   const params = new URLSearchParams(search);
   return {
@@ -263,6 +268,7 @@ export function readProxyLogsRouteState(search: string) {
     search: normalizeRouteSearch(params.get("q")),
     client: normalizeRouteClient(params.get("client")),
     siteId: normalizeRouteSiteId(params.get("siteId")),
+    model: normalizeRouteModel(params.get("model")),
     from: normalizeRouteDateTimeInput(params.get("from")),
     to: normalizeRouteDateTimeInput(params.get("to")),
   };
@@ -275,6 +281,7 @@ export function buildProxyLogsRouteSearch(input: {
   search: string;
   client: string;
   siteId: number | null;
+  model: string;
   from: string;
   to: string;
 }) {
@@ -286,6 +293,7 @@ export function buildProxyLogsRouteSearch(input: {
   if (input.search.trim()) params.set("q", input.search.trim());
   if (input.client.trim()) params.set("client", input.client.trim());
   if (input.siteId) params.set("siteId", String(input.siteId));
+  if (input.model.trim()) params.set("model", input.model.trim());
   if (input.from.trim()) params.set("from", input.from.trim());
   if (input.to.trim()) params.set("to", input.to.trim());
   const next = params.toString();
