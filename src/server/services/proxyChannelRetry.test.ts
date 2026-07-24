@@ -52,17 +52,30 @@ describe('proxyChannelRetry', () => {
     expect(canRetryProxyChannelWithBudget(2, 100)).toBe(false); // attempts exhausted
   });
 
-  it('uses every eligible candidate and disables the aggregate wall-clock cutoff', () => {
+  it('caps multi-channel pools at the soft attempt ceiling', () => {
     config.proxyMaxChannelAttempts = 5;
-    (config as any).proxyChannelFailoverBudgetMs = 8_000;
 
-    expect(getProxyEffectiveMaxChannelAttempts(14)).toBe(14);
-    expect(getProxyEffectiveMaxChannelRetries(14)).toBe(13);
-    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(0);
+    // 14 candidates → min(14, softCap 8) = 8
+    expect(getProxyEffectiveMaxChannelAttempts(14)).toBe(8);
+    expect(getProxyEffectiveMaxChannelRetries(14)).toBe(7);
+    // multi-channel → explicit budget if set, else soft default 45s
+    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(45_000);
 
+    // 2 candidates → min(2, 8) = 2 (small pool fully covered)
     expect(getProxyEffectiveMaxChannelAttempts(2)).toBe(2);
     expect(getProxyEffectiveMaxChannelRetries(2)).toBe(1);
-    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(0);
+    // multi-channel → soft default 45s
+    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(45_000);
+
+    // single candidate → unlimited budget
+    expect(getProxyEffectiveFailoverBudgetMs(1)).toBe(0);
+  });
+
+  it('respects explicit failover budget override', () => {
+    (config as any).proxyChannelFailoverBudgetMs = 20_000;
+    // explicit budget overrides soft default
+    expect(getProxyEffectiveFailoverBudgetMs(3)).toBe(20_000);
+    expect(getProxyEffectiveFailoverBudgetMs(1)).toBe(0);
   });
 
   it('accepts explicit maxRetries override in budget gate', () => {

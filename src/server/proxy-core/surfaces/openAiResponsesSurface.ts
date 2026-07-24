@@ -106,6 +106,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
+import { sendReplyIfWritable } from '../replySafety.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -1416,7 +1417,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
               terminalFailureOutcome.payload,
               null,
             );
-            return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+            sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+            return;
           }
 	        const failureOutcome = await failureToolkit.handleExecutionError({
 	          selected,
@@ -1440,8 +1442,9 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	            terminalFailureOutcome.status,
 	            terminalFailureOutcome.payload,
 	            null,
-	          );
-		        return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+          );
+		        sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+		        return;
 	      } finally {
 	        channelLease.release();
 	      }

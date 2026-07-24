@@ -63,6 +63,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
+import { sendReplyIfWritable } from '../replySafety.js';
 const GEMINI_MODEL_PROBES = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
@@ -1491,7 +1492,8 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           continue;
         }
         await finalizeDebugFailure(lastStatus, parseSurfaceProxyDebugTextPayload(lastText), upstreamPath || null);
-        return reply.code(lastStatus).type(lastContentType).send(lastText);
+        sendReplyIfWritable(reply, lastStatus, lastText);
+        return;
       }
     }
   };
