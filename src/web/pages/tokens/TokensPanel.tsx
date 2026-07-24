@@ -14,6 +14,7 @@ import {
 import ModernSelect from '../../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../../components/MobileCard.js';
 import { useIsMobile } from '../../components/useIsMobile.js';
+import { emitTokenCoverageChanged } from '../../dataEvents.js';
 import { pageForItemIndex } from '../../components/clientPagination.js';
 import PaginationControls from '../../components/PaginationControls.js';
 import { useClientPagination } from '../../components/useClientPagination.js';
@@ -43,6 +44,15 @@ type AccountTokenSyncResult = {
     id?: number;
     username?: string;
   };
+  tokens?: Array<{
+    id?: number;
+    name?: string;
+    tokenGroup?: string | null;
+    enabled?: boolean;
+    isDefault?: boolean;
+    valueStatus?: string;
+    updatedAt?: string;
+  }>;
   coverageRefresh?: {
     refresh?: Array<{
       accountId?: number;
@@ -188,12 +198,12 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
   const editingTokenIdRef = useRef<number | null>(null);
   const toast = useToast();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { forceSnapshot?: boolean }) => {
     setLoading(true);
     try {
       const [tokenRows, accountSnapshot] = await Promise.all([
         api.getAccountTokens(),
-        api.getAccountsSnapshot(),
+        api.getAccountsSnapshot(options?.forceSnapshot ? { refresh: true } : undefined),
       ]);
       const nextTokens = tokenRows || [];
       setTokens(nextTokens);
@@ -640,14 +650,41 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         const preview = Array.isArray(coverage?.modelsPreview)
           ? coverage!.modelsPreview!.filter(Boolean).slice(0, 4).join('、')
           : '';
+        const groupFromSync = Array.isArray(res.tokens)
+          ? (res.tokens.find((token) => token?.id)?.tokenGroup || res.tokens[0]?.tokenGroup || '')
+          : '';
+        const groupText = groupFromSync ? `；分组 ${groupFromSync}` : '';
         const coverageText = coverage?.refreshed
           ? (Number.isFinite(modelCount)
             ? `；模型已刷新 ${modelCount} 个${preview ? `（${preview}${modelCount > 4 ? '…' : ''}）` : ''}`
             : '；模型已刷新')
           : (coverage?.errorMessage ? `；模型刷新失败：${coverage.errorMessage}` : '');
-        toast.success(`同步完成：新增 ${res.created || 0}，更新 ${res.updated || 0}${coverageText}`);
+        toast.success(`同步完成：新增 ${res.created || 0}，更新 ${res.updated || 0}${groupText}${coverageText}`);
       }
-      await load();
+      // Apply post-sync token rows immediately so group column updates before any follow-up GET.
+      if (Array.isArray(res.tokens) && res.tokens.length > 0) {
+        setTokens((prev: any[]) => {
+          const byId = new Map(res.tokens!.map((token) => [Number(token?.id), token]));
+          return prev.map((token: any) => {
+            const patch = byId.get(Number(token?.id));
+            if (!patch) return token;
+            return {
+              ...token,
+              tokenGroup: patch.tokenGroup ?? token.tokenGroup,
+              enabled: patch.enabled ?? token.enabled,
+              isDefault: patch.isDefault ?? token.isDefault,
+              valueStatus: patch.valueStatus ?? token.valueStatus,
+              updatedAt: patch.updatedAt ?? token.updatedAt,
+              name: patch.name ?? token.name,
+            };
+          });
+        });
+      }
+      await load({ forceSnapshot: true });
+      emitTokenCoverageChanged({
+        accountIds: [syncingAccountId],
+        source: 'account-token-sync',
+      });
     } catch (e: any) {
       toast.error(e.message || '同步令牌失败');
     } finally {
@@ -707,7 +744,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         }
       }
 
-      await load();
+      await load({ forceSnapshot: true });
+      emitTokenCoverageChanged({ source: 'account-token-sync-all' });
     } catch (e: any) {
       toast.error(e.message || '全部同步失败');
     } finally {

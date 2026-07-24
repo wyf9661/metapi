@@ -11,6 +11,7 @@ import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { mergeMarketplaceMetadata, shouldHydrateMarketplaceMetadata } from './helpers/modelsMarketplaceMetadata.js';
 import { tr } from '../i18n.js';
+import { TOKEN_COVERAGE_CHANGED_EVENT } from '../dataEvents.js';
 
 type SortColumn = 'name' | 'accountCount' | 'tokenCount' | 'avgLatency' | 'avgFirstByteMs' | 'avgThroughputTps' | 'successRate';
 type ViewMode = 'card' | 'table';
@@ -358,6 +359,25 @@ export default function Models() {
       cancelled = true;
       if (metadataTimer) clearTimeout(metadataTimer);
       latestMetadataRequestRef.current += 1;
+    };
+  }, [hydrateMarketplaceMetadata, loadBaseMarketplace]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    const onCoverageChanged = () => {
+      // Token sync already rewrote model_availability; reload marketplace without
+      // queueing a full upstream model probe (refresh=true).
+      void (async () => {
+        const next = await loadBaseMarketplace(false);
+        if (!next) return;
+        setTimeout(() => {
+          void hydrateMarketplaceMetadata(next.models);
+        }, 400);
+      })();
+    };
+    window.addEventListener(TOKEN_COVERAGE_CHANGED_EVENT, onCoverageChanged as EventListener);
+    return () => {
+      window.removeEventListener(TOKEN_COVERAGE_CHANGED_EVENT, onCoverageChanged as EventListener);
     };
   }, [hydrateMarketplaceMetadata, loadBaseMarketplace]);
 

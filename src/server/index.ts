@@ -237,6 +237,17 @@ app.addHook('onRequest', async (request, reply) => {
   }
 });
 
+// Admin JSON APIs must not be cached by browsers / intermediate proxies.
+// Token group and marketplace views go stale if GET /api/* is served from cache after sync.
+app.addHook('onSend', async (request, reply, payload) => {
+  const urlPath = (request.url || '').split('?')[0] || '/';
+  if (urlPath.startsWith('/api/')) {
+    reply.header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    reply.header('Pragma', 'no-cache');
+  }
+  return payload;
+});
+
 // Register API routes
 await app.register(registerDesktopRoutes);
 await app.register(sitesRoutes);

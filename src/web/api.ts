@@ -116,6 +116,8 @@ async function fetchAuthenticatedResponse(
   const token = requireAuthToken();
   const headers = new Headers(fetchOptions.headers ?? {});
   headers.set("Authorization", `Bearer ${token}`);
+  headers.set("Cache-Control", "no-cache");
+  headers.set("Pragma", "no-cache");
   if (fetchOptions.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -123,6 +125,7 @@ async function fetchAuthenticatedResponse(
   try {
     const res = await fetch(url, {
       ...fetchOptions,
+      cache: "no-store",
       signal: controller.signal,
       headers,
     });
@@ -802,6 +805,7 @@ export const api = {
   getAccountsSnapshot: (options?: { refresh?: boolean }) =>
     request(
       `/api/accounts${buildQueryString(options?.refresh ? { refresh: 1 } : undefined)}`,
+      { cache: "no-store" },
     ) as Promise<{
       generatedAt: string;
       accounts: any[];
@@ -870,7 +874,9 @@ export const api = {
 
   // Account tokens
   getAccountTokens: (accountId?: number) =>
-    request(`/api/account-tokens${accountId ? `?accountId=${accountId}` : ""}`),
+    request(`/api/account-tokens${accountId ? `?accountId=${accountId}` : ""}`, {
+      cache: "no-store",
+    }),
   addAccountToken: (data: any) =>
     request("/api/account-tokens", {
       method: "POST",
@@ -1446,6 +1452,7 @@ export const api = {
     const query = params.toString();
     return request(`/api/models/marketplace${query ? `?${query}` : ""}`, {
       timeoutMs: options?.refresh ? 45_000 : 15_000,
+      cache: "no-store",
     });
   },
   getModelTokenCandidates: () => request("/api/models/token-candidates"),
