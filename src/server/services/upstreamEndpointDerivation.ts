@@ -219,6 +219,9 @@ export async function resolveUpstreamEndpointCandidates(
     customHeaders: (context.site as any).customHeaders,
   })) {
     const candidates = finalizeCandidates(['responses', 'messages', 'chat']);
+    // count_tokens is a native Anthropic operation; preserve its messages-only
+    // constraint even for sites that otherwise require Responses.
+    if (hints?.requestKind === 'claude-count-tokens') return candidates;
     // Always keep responses first for Codex-compat sites — runtime memory
     // must not remove it because the upstream requires it.
     return [
