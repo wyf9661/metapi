@@ -219,7 +219,8 @@ export async function resolveUpstreamEndpointCandidates(
     customHeaders: (context.site as any).customHeaders,
   })) {
     const candidates = finalizeCandidates(['responses', 'messages', 'chat']);
-    if (!candidates.includes('responses')) return candidates;
+    // Always keep responses first for Codex-compat sites — runtime memory
+    // must not remove it because the upstream requires it.
     return [
       'responses',
       ...candidates.filter((endpoint) => endpoint !== 'responses'),
