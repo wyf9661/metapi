@@ -69,6 +69,8 @@ const zhToEn: Record<string, string> = {
   '没有找到匹配结果': 'No matching results',
   '搜索站点、账号、模型、日志...': 'Search sites, accounts, models, logs...',
   '模型操练场': 'Model Playground',
+  '上游探针': 'Upstream Probe',
+  '模型检测': 'Model Check',
   '模型测试': 'Model Testing',
   '关于': 'About',
   '关于 Metapi': 'About Metapi',

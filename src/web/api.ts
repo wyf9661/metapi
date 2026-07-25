@@ -1541,6 +1541,32 @@ export const api = {
     return () => controller.abort();
   },
 
+  // Ad-hoc remote upstream probe (URL + key) for playground.
+  listRemoteUpstreamModels: (data: {
+    baseUrl: string;
+    apiKey: string;
+    timeoutMs?: number;
+  }) =>
+    request("/api/test/remote/models", {
+      method: "POST",
+      body: JSON.stringify(data),
+      timeoutMs: data.timeoutMs ?? 30_000,
+    }),
+  probeRemoteUpstream: (data: {
+    baseUrl: string;
+    apiKey: string;
+    protocol: "completion" | "anthropic" | "responses";
+    model: string;
+    prompt?: string;
+    maxTokens?: number;
+    timeoutMs?: number;
+  }) =>
+    request("/api/test/remote/probe", {
+      method: "POST",
+      body: JSON.stringify(data),
+      timeoutMs: data.timeoutMs ?? 30_000,
+    }),
+
   // Simple chat test from admin panel
   startTestChatJob: (data: TestChatRequestPayload) =>
     request("/api/test/chat/jobs", {
