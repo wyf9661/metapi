@@ -232,8 +232,30 @@ describe('upstreamEndpointDerivation', () => {
       'openai',
     );
 
-    expect(order[0]).toBe('responses');
-    expect(order).toContain('chat');
+    expect(order).toEqual(['responses', 'messages', 'chat']);
+  });
+
+  it('keeps Claude count_tokens messages-only on preferResponses sites', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          protocolProfile: JSON.stringify({
+            preferResponses: true,
+            requireCodexClient: true,
+            credentialMode: 'auto',
+          }),
+        } as any,
+      },
+      'claude-opus-4-6',
+      'claude',
+      undefined,
+      undefined,
+      { requestKind: 'claude-count-tokens' },
+    );
+
+    expect(order).toEqual(['messages']);
   });
 
   it('infers preferResponses from Codex custom headers alone', async () => {
