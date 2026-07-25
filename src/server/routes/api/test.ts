@@ -9,8 +9,29 @@ import {
   TESTER_FORCED_CHANNEL_HEADER,
   TESTER_REQUEST_HEADER,
 } from '../../proxy-core/channelSelection.js';
+import {
+  listRemoteUpstreamModels,
+  testRemoteUpstreamProtocol,
+  type RemoteUpstreamProtocol,
+} from '../../services/remoteUpstreamTester.js';
 
 type UndiciRequestInit = Parameters<typeof fetch>[1];
+
+type RemoteUpstreamModelsBody = {
+  baseUrl?: string;
+  apiKey?: string;
+  timeoutMs?: number;
+};
+
+type RemoteUpstreamProbeBody = {
+  baseUrl?: string;
+  apiKey?: string;
+  protocol?: RemoteUpstreamProtocol;
+  model?: string;
+  prompt?: string;
+  maxTokens?: number;
+  timeoutMs?: number;
+};
 
 type TestChatMessage = { role: string; content: string };
 type TestTargetFormat = 'openai' | 'claude' | 'responses' | 'gemini';
@@ -778,6 +799,55 @@ export async function testRoutes(app: FastifyInstance) {
   app.addHook('onClose', async () => {
     clearInterval(cleanupTimer);
   });
+
+  // Ad-hoc remote upstream probe (URL + key) used by the playground redesign.
+  // Does not go through MetAPI routing; hits the remote endpoint directly.
+  // Always returns HTTP 200 with { ok, ... } so the UI can show full probe
+  // detail even when the remote endpoint fails. Validation errors stay 400.
+  app.post<{ Body: RemoteUpstreamModelsBody }>(
+    '/api/test/remote/models',
+    async (request, reply) => {
+      try {
+        const body = request.body || {};
+        const result = await listRemoteUpstreamModels({
+          baseUrl: String(body.baseUrl || ''),
+          apiKey: String(body.apiKey || ''),
+          timeoutMs: typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
+        });
+        return reply.send(result);
+      } catch (error: any) {
+        return reply.code(400).send({
+          ok: false,
+          error: error?.message || 'invalid remote models request',
+        });
+      }
+    },
+  );
+
+  app.post<{ Body: RemoteUpstreamProbeBody }>(
+    '/api/test/remote/probe',
+    async (request, reply) => {
+      try {
+        const body = request.body || {};
+        const protocol = body.protocol as RemoteUpstreamProtocol;
+        const result = await testRemoteUpstreamProtocol({
+          baseUrl: String(body.baseUrl || ''),
+          apiKey: String(body.apiKey || ''),
+          protocol,
+          model: String(body.model || ''),
+          prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
+          maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : undefined,
+          timeoutMs: typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
+        });
+        return reply.send(result);
+      } catch (error: any) {
+        return reply.code(400).send({
+          ok: false,
+          error: error?.message || 'invalid remote probe request',
+        });
+      }
+    },
+  );
 
   app.post<{ Body: ProxyTestEnvelope }>(
     '/api/test/proxy',

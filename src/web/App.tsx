@@ -433,7 +433,7 @@ export const sidebarGroups = [
 const topNavItems = [
   { label: '控制台', to: '/' },
   { label: '模型广场', to: '/models' },
-  { label: '模型操练场', to: '/playground' },
+  { label: '模型检测', to: '/playground' },
   { label: '关于', to: '/about' },
 ];
 

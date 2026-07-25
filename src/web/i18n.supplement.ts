@@ -318,6 +318,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '模型': 'Model',
   '模型=${params.model}, 原因=${params.reason}': 'model=${params.model}, reason=${params.reason}',
   '模型操练场': 'Model training ground',
+  '上游探针': 'Upstream Probe',
+  '模型检测': 'Model Check',
   '模型测试': 'Model testing',
   '模型广场': 'model square',
   '模型广场刷新进行中': 'Model square refresh in progress',
