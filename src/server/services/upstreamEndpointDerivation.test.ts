@@ -201,13 +201,15 @@ describe('upstreamEndpointDerivation', () => {
     expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 
-  it('keeps preferResponses sites responses-first even when runtime memory prefers chat', async () => {
-    const { recordUpstreamEndpointSuccess } = await import('./upstreamEndpointRuntimeMemory.js');
-    recordUpstreamEndpointSuccess({
+  it('keeps preferResponses sites responses-first even when runtime memory blocks responses', async () => {
+    const { recordUpstreamEndpointFailure } = await import('./upstreamEndpointRuntimeMemory.js');
+    recordUpstreamEndpointFailure({
       siteId: baseContext.site.id,
-      endpoint: 'chat',
+      endpoint: 'responses',
       downstreamFormat: 'openai',
       modelName: 'gpt-5.6-sol',
+      status: 404,
+      errorText: 'endpoint not found',
     });
 
     const order = await resolveUpstreamEndpointCandidates(
