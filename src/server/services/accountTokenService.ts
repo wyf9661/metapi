@@ -158,6 +158,28 @@ function sameTokenGroup(
   return normalizeTokenGroup(leftGroup, leftName) === normalizeTokenGroup(rightGroup, rightName);
 }
 
+/** Synthetic names created by ensureDefault / empty-name fallback — safe to rebind to upstream names. */
+function isSyntheticTokenName(name: string | null | undefined): boolean {
+  const normalized = (name || '').trim().toLowerCase();
+  if (!normalized) return true;
+  if (normalized === 'default' || normalized === '默认') return true;
+  return /^token-\d+$/.test(normalized);
+}
+
+/**
+ * When upstream only returns a masked secret, reusing a ready row across different
+ * display names is only safe if the local name is synthetic (e.g. ensureDefault
+ * wrote "default") or the names already match. Otherwise two different keys can
+ * share the same mask (prefix+suffix) and must stay separate.
+ */
+function canReuseReadyTokenAcrossNames(
+  readyName: string | null | undefined,
+  upstreamName: string | null | undefined,
+): boolean {
+  if ((readyName || '').trim() === (upstreamName || '').trim()) return true;
+  return isSyntheticTokenName(readyName) || isSyntheticTokenName(upstreamName);
+}
+
 async function updateAccountApiToken(accountId: number, tokenValue: string | null) {
   await db.update(schema.accounts)
     .set({ apiToken: tokenValue || null, updatedAt: new Date().toISOString() })
@@ -200,7 +222,27 @@ export async function ensureDefaultTokenForAccount(
     .where(eq(schema.accountTokens.accountId, accountId))
     .all();
 
+  // Prefer exact secret match, then a unique masked match (same key, different display form).
   let target = tokens.find((t) => t.token === normalizedToken) || null;
+  if (!target) {
+    const maskedMatches = tokens.filter((t) => (
+      isReadyAccountToken(t)
+      && matchesMaskedTokenValue(t.token, normalizedToken)
+    ));
+    if (maskedMatches.length === 1) {
+      target = maskedMatches[0];
+    }
+  }
+  if (!target) {
+    const maskedPendingMatches = tokens.filter((t) => (
+      isMaskedPendingAccountToken(t)
+      && matchesMaskedTokenValue(normalizedToken, t.token)
+    ));
+    if (maskedPendingMatches.length === 1) {
+      target = maskedPendingMatches[0];
+    }
+  }
+
   if (!target) {
     const inserted = await db.insert(schema.accountTokens)
       .values({
@@ -222,10 +264,20 @@ export async function ensureDefaultTokenForAccount(
       : null;
     if (!target) return null;
   } else {
+    // Keep an existing upstream/sync name. Forcing "default" here is what creates
+    // default(manual) + token(masked_pending) duplicates on every later sync.
+    const requestedName = options?.name ? normalizeTokenName(options.name) : null;
+    const keepExistingName = Boolean(target.name?.trim())
+      && (!requestedName || requestedName === 'default' || requestedName === target.name);
+    const nextName = keepExistingName ? target.name : (requestedName || target.name);
+    const nextGroup = options?.tokenGroup != null
+      ? tokenGroup
+      : (normalizeTokenGroup(target.tokenGroup, nextName) || tokenGroup);
     await db.update(schema.accountTokens)
       .set({
-        name: options?.name ? normalizeTokenName(options.name) : target.name,
-        tokenGroup,
+        name: nextName,
+        token: normalizedToken,
+        tokenGroup: nextGroup,
         valueStatus: ACCOUNT_TOKEN_VALUE_STATUS_READY,
         source: options?.source || target.source || 'manual',
         enabled: options?.enabled ?? target.enabled,
@@ -234,6 +286,14 @@ export async function ensureDefaultTokenForAccount(
       })
       .where(eq(schema.accountTokens.id, target.id))
       .run();
+    target = {
+      ...target,
+      name: nextName,
+      token: normalizedToken,
+      tokenGroup: nextGroup,
+      valueStatus: ACCOUNT_TOKEN_VALUE_STATUS_READY,
+      isDefault: true,
+    };
   }
 
   await db.update(schema.accountTokens)
@@ -342,26 +402,40 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
       continue;
     }
 
+    // Masked upstream keys often use a different display name than the local
+    // ready row (e.g. manual/ensureDefault name=default vs upstream name=token).
+    // Prefer same name, then same group among reusable candidates, then a unique
+    // mask match — but only rebind across names when the local name is synthetic.
     const matchingReadyByMaskedValue: AccountTokenRow[] = nextValueStatus === ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
       ? existing.filter((row: AccountTokenRow) => (
         resolveAccountTokenValueStatus(row) === ACCOUNT_TOKEN_VALUE_STATUS_READY
         && matchesMaskedTokenValue(row.token, tokenValue)
-        && row.name === tokenName
+        && canReuseReadyTokenAcrossNames(row.name, tokenName)
       ))
       : [];
-    // Prefer same-group match when multiple ready rows share the masked identity.
+    const sameNameReady = matchingReadyByMaskedValue.filter((row: AccountTokenRow) => row.name === tokenName);
     const sameGroupReady = matchingReadyByMaskedValue.filter((row: AccountTokenRow) => (
       sameTokenGroup(row.tokenGroup, row.name, tokenGroup, tokenName)
     ));
-    const readyMaskedMatch = sameGroupReady.length === 1
-      ? sameGroupReady[0]
-      : (matchingReadyByMaskedValue.length === 1 ? matchingReadyByMaskedValue[0] : null);
+    const readyMaskedMatch = sameNameReady.length === 1
+      ? sameNameReady[0]
+      : (sameGroupReady.length === 1
+        ? sameGroupReady[0]
+        : (matchingReadyByMaskedValue.length === 1 ? matchingReadyByMaskedValue[0] : null));
     if (readyMaskedMatch) {
+      // Drop any pending placeholder for the same secret, even if the name differs.
       const staleMaskedPlaceholders = existing.filter((row: AccountTokenRow) => (
         row.id !== readyMaskedMatch.id
         && resolveAccountTokenValueStatus(row) === ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
-        && matchesMaskedTokenValue(row.token, tokenValue)
-        && row.name === tokenName
+        && (
+          matchesMaskedTokenValue(readyMaskedMatch.token, row.token)
+          || matchesMaskedTokenValue(readyMaskedMatch.token, tokenValue)
+          || row.token === tokenValue
+          || (row.name === tokenName && (
+            matchesMaskedTokenValue(row.token, tokenValue)
+            || row.token === tokenValue
+          ))
+        )
       ));
 
       await db.update(schema.accountTokens)
@@ -408,6 +482,10 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
       isMaskedPendingAccountToken(row)
       && row.name === tokenName
       && matchesMaskedTokenValue(row.token, tokenValue)
+    )) || existing.find((row: AccountTokenRow) => (
+      // Same secret already stored as a pending placeholder under another name.
+      isMaskedPendingAccountToken(row)
+      && (row.token === tokenValue || matchesMaskedTokenValue(tokenValue, row.token) || matchesMaskedTokenValue(row.token, tokenValue))
     ));
 
     if (matchingPlaceholder) {
