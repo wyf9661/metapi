@@ -4,9 +4,9 @@
  * stay free of module state and easy to unit-test.
  */
 
-export const FAILURE_BACKOFF_BASE_SEC = 15;
-/** Keep weighted-route backoff within the JavaScript Date range when fail counts grow large. */
-export const MAX_FAILURE_BACKOFF_SEC = 30 * 24 * 60 * 60;
+export const FAILURE_BACKOFF_BASE_SEC = 5;
+/** Keep weighted-route backoff within a sensible range (1h ceiling). */
+export const MAX_FAILURE_BACKOFF_SEC = 60 * 60;
 export const ROUND_ROBIN_COOLDOWN_LEVELS_SEC = [0, 10 * 60, 60 * 60, 24 * 60 * 60] as const;
 export const SITE_RUNTIME_BREAKER_LEVELS_MS = [0, 60_000, 5 * 60_000, 30 * 60 * 1000] as const;
 export const STABLE_FIRST_SITE_SCORE_RATIO = 0.92;

@@ -280,11 +280,13 @@ function clampFailureCooldownMs(cooldownMs: number): number {
 }
 
 function resolveEffectiveFailureCooldownMs(failCount?: number | null, weight = 1): number {
-  const baseMs = resolveEffectiveFailureCooldownMsMath(failCount, resolveConfiguredFailureCooldownMaxMs());
+  const maxMs = resolveConfiguredFailureCooldownMaxMs();
+  const rawBackoffMs = resolveEffectiveFailureCooldownMsMath(failCount, maxMs);
   const normalizedWeight = Number.isFinite(weight)
     ? Math.max(0.1, Math.min(3, Number(weight)))
     : 1;
-  return clampFailureCooldownMs(baseMs * normalizedWeight);
+  // Apply weight BEFORE clamping so the ceiling cannot be exceeded by weight
+  return clampFailureCooldownMsMath(rawBackoffMs * normalizedWeight, maxMs);
 }
 
 function resolveFailureCooldownWeight(context: SiteRuntimeFailureContext = {}): {
@@ -2226,25 +2228,18 @@ export class TokenRouter {
       const ranked = rankShadowCandidates(inputs);
       const active = ranked.candidates.filter((c) => !c.factors.exclusion && c.score > 0 && c.probability > 0);
       let selectedId = ranked.selectedChannelId;
-      // Stable-first with light exploration: only explore when the top band is close.
-      // Exploration rate ~8% overall, and only among candidates within 85% of top score.
+      // Probability-proportional selection: sample from ALL active candidates
+      // weighted by score. This ensures displayed probabilities match behavior.
       if (active.length > 1) {
-        const top = active[0]!;
-        const exploreBand = active.filter((row) => row.score >= top.score * 0.85);
-        const shouldExplore = exploreBand.length > 1 && Math.random() < 0.08;
-        if (shouldExplore) {
-          const bandTotal = exploreBand.reduce((sum, row) => sum + row.score, 0);
-          let rand = Math.random() * bandTotal;
-          selectedId = exploreBand[exploreBand.length - 1]!.channelId;
-          for (const row of exploreBand) {
-            rand -= row.score;
-            if (rand <= 0) {
-              selectedId = row.channelId;
-              break;
-            }
+        const total = active.reduce((sum, row) => sum + row.score, 0);
+        let rand = Math.random() * total;
+        selectedId = active[active.length - 1]!.channelId;
+        for (const row of active) {
+          rand -= row.score;
+          if (rand <= 0) {
+            selectedId = row.channelId;
+            break;
           }
-        } else {
-          selectedId = top.channelId;
         }
       }
       const selected = candidates.find((c) => c.channel.id === selectedId) ?? candidates[0] ?? null;

@@ -211,7 +211,7 @@ export function applyRuntimeHealthSuccess(
 ): void {
   refreshRecentOutcomeWindow(state, nowMs);
   state.recentSuccessCount += 1;
-  state.penaltyScore = Math.max(0, state.penaltyScore * 0.2 - 0.3);
+  state.penaltyScore = Math.max(0, state.penaltyScore * 0.5 - 0.1);
   state.transientFailureStreak = 0;
   state.lastTransientFailureAtMs = null;
   state.breakerLevel = 0;

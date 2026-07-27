@@ -66,10 +66,13 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     tokens: toSafeNumber(data?.totals?.tokens),
   };
 
-  const spendDistribution = (data?.spendDistribution || []).slice(0, 10);
+  const spendDistribution = (data?.spendDistribution || [])
+    .filter((d) => toSafeNumber(d.spend) > 0)
+    .sort((a, b) => toSafeNumber(b.spend) - toSafeNumber(a.spend))
+    .slice(0, 10);
   const spendTrend = data?.spendTrend || [];
-  const callsDistribution = (data?.callsDistribution || []).slice(0, 10);
-  const callRanking = (data?.callRanking || []).slice(0, 10);
+  const callsDistribution = (data?.callsDistribution || []).filter((d) => toSafeNumber(d.calls) > 0).slice(0, 10);
+  const callRanking = (data?.callRanking || []).filter((d) => toSafeNumber(d.calls) > 0).slice(0, 10);
 
   const hasData = totals.calls > 0
     || spendDistribution.length > 0
@@ -80,17 +83,21 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     data: [{ id: 'data', values: spendDistribution.map(d => ({ model: d.model.length > 25 ? d.model.slice(0, 25) + '...' : d.model, value: toSafeNumber(d.spend) })).reverse() }],
     xField: 'value', yField: 'model', direction: 'horizontal' as const,
     bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#4f46e5' }, { offset: 1, color: '#818cf8' }] } } },
-    label: { visible: true, position: 'right', formatter: '{value}', style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
+    label: { visible: true, position: 'right', formatter: (datum: { value: number }) => formatCurrency(datum.value), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
     axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
     animation: true, background: 'transparent',
   }), [spendDistribution, labelColor]);
 
   const tokenDistribution = useMemo(() => {
     // With 1-day window, trend is meaningless — show per-model tokens instead
-    return (data?.callRanking || data?.spendDistribution || []).slice(0, 10).map((d) => ({
-      model: d.model,
-      tokens: 'tokens' in d ? toSafeNumber((d as CallRankingItem).tokens) : 0,
-    }));
+    return (data?.callRanking || data?.spendDistribution || [])
+      .map((d) => ({
+        model: d.model,
+        tokens: 'tokens' in d ? toSafeNumber((d as CallRankingItem).tokens) : 0,
+      }))
+      .filter((d) => d.tokens > 0)
+      .sort((a, b) => b.tokens - a.tokens)
+      .slice(0, 10);
   }, [data?.callRanking, data?.spendDistribution]);
 
   const trendSpec = useMemo(() => {
@@ -103,7 +110,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       data: [{ id: 'data', values: tokenData }],
       xField: 'value', yField: 'model', direction: 'horizontal' as const,
       bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#06b6d4' }, { offset: 1, color: '#22d3ee' }] } } },
-      label: { visible: true, position: 'right', formatter: '{value}', style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
+      label: { visible: true, position: 'right', formatter: (datum: { value: number }) => formatCompactTokenMetric(datum.value), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
       axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
       animation: true, background: 'transparent',
     };
