@@ -95,12 +95,14 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
 
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
-    return data.map((item) => ({
-      siteName: item.siteName,
-      platform: item.platform,
-      value: safeNumber(viewMode === 'balance' ? item.totalBalance : item.totalSpend),
-      accountCount: safeNumber(item.accountCount),
-    }));
+    return data
+      .map((item) => ({
+        siteName: String(item.siteName || '-'),
+        platform: String(item.platform || ''),
+        value: safeNumber(viewMode === 'balance' ? item.totalBalance : item.totalSpend),
+        accountCount: safeNumber(item.accountCount),
+      }))
+      .filter((d) => d.value > 0);
   }, [data, viewMode]);
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
@@ -112,13 +114,13 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
 
     return {
       type: 'pie' as const,
-      data: [{ id: 'siteData', values: chartData }],
+      data: [{ id: 'siteData', values: (() => { const total = chartData.reduce((s, d) => s + d.value, 0); return chartData.map(d => ({ ...d, pctLabel: total > 0 ? (d.value / total * 100).toFixed(1) : '0.0' })); })() }],
       valueField: 'value',
       categoryField: 'siteName',
       outerRadius: 0.8,
       innerRadius: 0.55,
       pie: { style: { cornerRadius: 4, padAngle: 0.02 } },
-      label: { visible: true, position: 'outside', formatter: '{_percent_}%', style: { fill: labelColor } },
+      label: { visible: true, position: 'outside', format: '{pctLabel}%', style: { fill: labelColor } },
       legends: { visible: false },
       tooltip: {
         mark: {
