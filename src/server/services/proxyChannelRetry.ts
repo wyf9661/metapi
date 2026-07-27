@@ -8,7 +8,7 @@ import {
 /** Soft ceiling so huge free-pool models (20+ channels) cannot thrash for minutes. */
 export const PROXY_CHANNEL_FAILOVER_SOFT_ATTEMPT_CAP_DEFAULT = 8;
 /** Soft wall-clock budget for multi-channel failover when env leaves budget unset (0). */
-export const PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT = 45_000;
+export const PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT = 30_000;
 /** After the first channel, use a shorter first-byte probe for remaining candidates. */
 export const PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT = 8_000;
 /** Stop after this many consecutive low-value failure classes (WAF/model/quota/ambiguous). */
@@ -65,7 +65,7 @@ export function getProxyChannelFailoverBudgetMs(): number {
 /**
  * Live-path wall-clock budget:
  * - single candidate → 0 (no multi-channel wait)
- * - multi candidate → explicit env budget if >0, else soft default 45s
+ * - multi candidate → explicit env budget if >0, else soft default 30s
  */
 export function getProxyEffectiveFailoverBudgetMs(candidateCount: number): number {
   const count = Math.max(0, Math.trunc(candidateCount || 0));

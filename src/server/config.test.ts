@@ -11,6 +11,14 @@ describe('buildConfig', () => {
     expect(config.dataDir).toBe('./data');
   });
 
+  it('defaults sticky / first-byte / probe timeouts to 30s', () => {
+    const config = buildConfig({});
+
+    expect(config.proxyStickySessionTtlMs).toBe(30_000);
+    expect(config.proxyFirstByteTimeoutSec).toBe(30);
+    expect(config.modelAvailabilityProbeTimeoutMs).toBe(30_000);
+  });
+
   it('aligns desktop deployments with server deployments for listen host', () => {
     const config = buildConfig({
       HOST: '0.0.0.0',

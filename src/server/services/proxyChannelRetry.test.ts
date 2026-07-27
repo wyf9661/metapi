@@ -58,14 +58,14 @@ describe('proxyChannelRetry', () => {
     // 14 candidates → min(14, softCap 8) = 8
     expect(getProxyEffectiveMaxChannelAttempts(14)).toBe(8);
     expect(getProxyEffectiveMaxChannelRetries(14)).toBe(7);
-    // multi-channel → explicit budget if set, else soft default 45s
-    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(45_000);
+    // multi-channel → explicit budget if set, else soft default 30s
+    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(30_000);
 
     // 2 candidates → min(2, 8) = 2 (small pool fully covered)
     expect(getProxyEffectiveMaxChannelAttempts(2)).toBe(2);
     expect(getProxyEffectiveMaxChannelRetries(2)).toBe(1);
-    // multi-channel → soft default 45s
-    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(45_000);
+    // multi-channel → soft default 30s
+    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(30_000);
 
     // single candidate → unlimited budget
     expect(getProxyEffectiveFailoverBudgetMs(1)).toBe(0);
