@@ -209,7 +209,7 @@ export function scoreShadowCandidate(
       * health
       * (reliability ** 1.5)
       * (cost ** 1.1)
-      * (balance.factor ** 0.9)
+      * (Math.min(balance.factor, 2.0) ** 0.9)
       * credential
       * (load ** 0.8)
       * connectivity

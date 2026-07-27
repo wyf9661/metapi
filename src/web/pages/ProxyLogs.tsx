@@ -1453,13 +1453,7 @@ export default function ProxyLogs() {
             justifyContent: "flex-end",
           }}
         >
-          <span className="kpi-chip">{activeSiteLabel}</span>
-          <span className="kpi-chip kpi-chip-success">
-            消耗总额 ${summary.totalCost.toFixed(4)}
-          </span>
-          <span className="kpi-chip kpi-chip-warning">
-            {summary.totalTokensAll.toLocaleString()} tokens
-          </span>
+          {siteFilter ? <span className="kpi-chip">{activeSiteLabel}</span> : null}
           <button
             onClick={() => setAutoRefresh((v) => !v)}
             className={`btn btn-ghost${autoRefresh ? " btn-ghost-active" : ""}`}
@@ -1536,6 +1530,31 @@ export default function ProxyLogs() {
         }
       />
 
+      {!debugTracePanelExpanded ? (
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{ border: "1px solid var(--color-border)", marginBottom: 12 }}
+          onClick={() => setDebugTracePanelExpanded(true)}
+        >
+          <svg
+            width="14"
+            height="14"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+          展开追踪面板
+        </button>
+      ) : (
+      <>
       <div
         className="card"
         style={{
@@ -1940,6 +1959,8 @@ export default function ProxyLogs() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {isMobile ? (
         <MobileDrawer

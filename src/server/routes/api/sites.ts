@@ -401,12 +401,25 @@ export async function sitesRoutes(app: FastifyInstance) {
         .where(eq(schema.accounts.siteId, siteId))
         .run();
 
+      // Also disable all route channels belonging to this site's accounts.
+      const siteAccountIds = await db.select({ id: schema.accounts.id })
+        .from(schema.accounts)
+        .where(eq(schema.accounts.siteId, siteId))
+        .all();
+      if (siteAccountIds.length > 0) {
+        await db.update(schema.routeChannels)
+          .set({ enabled: false, updatedAt: now })
+          .where(inArray(schema.routeChannels.accountId, siteAccountIds.map((row) => row.id)))
+          .run();
+        invalidateTokenRouterCache();
+      }
+
       try {
         const createdAt = formatUtcSqlDateTime(new Date());
         await db.insert(schema.events).values({
           type: 'status',
           title: '站点已禁用',
-          message: `${existingSiteName} 已禁用，关联账号已全部置为禁用`,
+          message: `${existingSiteName} 已禁用，关联账号及路由通道已全部置为禁用`,
           level: 'warning',
           relatedId: siteId,
           relatedType: 'site',
@@ -421,12 +434,28 @@ export async function sitesRoutes(app: FastifyInstance) {
       .where(and(eq(schema.accounts.siteId, siteId), eq(schema.accounts.status, 'disabled')))
       .run();
 
+    // Re-enable route channels for this site's accounts that are now active.
+    const activeAccountIds = await db.select({ id: schema.accounts.id })
+      .from(schema.accounts)
+      .where(and(eq(schema.accounts.siteId, siteId), eq(schema.accounts.status, 'active')))
+      .all();
+    if (activeAccountIds.length > 0) {
+      await db.update(schema.routeChannels)
+        .set({ enabled: true, updatedAt: now })
+        .where(and(
+          inArray(schema.routeChannels.accountId, activeAccountIds.map((row) => row.id)),
+          eq(schema.routeChannels.enabled, false),
+        ))
+        .run();
+      invalidateTokenRouterCache();
+    }
+
     try {
       const createdAt = formatUtcSqlDateTime(new Date());
       await db.insert(schema.events).values({
         type: 'status',
         title: '站点已启用',
-        message: `${existingSiteName} 已启用，关联禁用账号已恢复为活跃`,
+        message: `${existingSiteName} 已启用，关联禁用账号及路由通道已恢复`,
         level: 'info',
         relatedId: siteId,
         relatedType: 'site',
