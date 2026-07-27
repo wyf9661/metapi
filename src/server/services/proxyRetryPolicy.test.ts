@@ -143,4 +143,17 @@ describe('proxyRetryPolicy', () => {
     // Generic path Not Found still allows endpoint recovery.
     expect(shouldAbortSameSiteEndpointFallback(404, 'Not Found')).toBe(false);
   });
+
+  it('aborts same-site cascade on ambiguous openai_error but still retries other channels', () => {
+    expect(shouldAbortSameSiteEndpointFallback(400, 'openai_error')).toBe(true);
+    expect(shouldRetryProxyRequest(400, 'openai_error')).toBe(true);
+    expect(
+      shouldAbortSameSiteEndpointFallback(400, 'failed to deserialize the provided data'),
+    ).toBe(true);
+  });
+
+  it('aborts same-site cascade and retries other channels on first-byte timeout', () => {
+    expect(shouldAbortSameSiteEndpointFallback(408, 'first byte timeout')).toBe(true);
+    expect(shouldRetryProxyRequest(408, 'first byte timeout')).toBe(true);
+  });
 });

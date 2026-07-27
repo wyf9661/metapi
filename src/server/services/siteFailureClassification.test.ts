@@ -9,6 +9,8 @@ import {
   matchesAnyPattern,
   resolveSiteRuntimeFailurePenalty,
   SITE_TRANSIENT_FAILURE_PATTERNS,
+  classifyProxyFailure,
+  isLowValueFailoverFailureClass,
 } from './siteFailureClassification.js';
 
 describe('siteFailureClassification', () => {
@@ -64,5 +66,38 @@ describe('siteFailureClassification', () => {
     expect(resolveSiteRuntimeFailurePenalty(ctx)).toBe(2.4);
     // Plain auth 403 without WAF vocabulary stays non-transient.
     expect(isTransientSiteRuntimeFailure({ status: 403, errorText: 'invalid api key' })).toBe(false);
+  });
+
+  it('classifyProxyFailure drives cascade/retry/cooldown consistently', () => {
+    const ambiguous = classifyProxyFailure({ status: 400, errorText: 'openai_error' });
+    expect(ambiguous.class).toBe('ambiguous_client');
+    expect(ambiguous.cascadeEndpoint).toBe(false);
+    expect(ambiguous.retryChannel).toBe(true);
+
+    const protocolHint = classifyProxyFailure({
+      status: 400,
+      errorText: 'Unsupported legacy protocol: please use /v1/responses',
+    });
+    expect(protocolHint.class).toBe('protocol_hint');
+    expect(protocolHint.cascadeEndpoint).toBe(true);
+
+    const timeout = classifyProxyFailure({ status: 408, errorText: 'first byte timeout' });
+    expect(timeout.class).toBe('timeout');
+    expect(timeout.cascadeEndpoint).toBe(false);
+    expect(timeout.retryChannel).toBe(true);
+
+    expect(isLowValueFailoverFailureClass('waf_blocked')).toBe(true);
+    expect(isLowValueFailoverFailureClass('timeout')).toBe(true);
+    expect(isLowValueFailoverFailureClass('transient_upstream')).toBe(true);
+    expect(isLowValueFailoverFailureClass('protocol_hint')).toBe(false);
+  });
+
+  it('shouldExcludeSiteForRequestFailure short-circuits operational site failures', async () => {
+    const { shouldExcludeSiteForRequestFailure } = await import('./siteFailureClassification.js');
+    expect(shouldExcludeSiteForRequestFailure({ status: 408, errorText: 'first byte timeout' })).toBe(true);
+    expect(shouldExcludeSiteForRequestFailure({ status: 503, errorText: 'bad gateway' })).toBe(true);
+    expect(shouldExcludeSiteForRequestFailure({ status: 403, errorText: 'Your request was blocked. CF-RAY' })).toBe(true);
+    expect(shouldExcludeSiteForRequestFailure({ status: 400, errorText: 'please use /v1/responses' })).toBe(false);
+    expect(shouldExcludeSiteForRequestFailure({ status: 400, errorText: 'invalid json' })).toBe(false);
   });
 });

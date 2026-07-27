@@ -9,6 +9,11 @@ type StickyEntry = {
   expiresAtMs: number;
 };
 
+type LastSuccessEntry = {
+  channelId: number;
+  expiresAtMs: number;
+};
+
 type ActiveLeaseState = {
   release: () => void;
 };
@@ -46,6 +51,8 @@ export type AcquireProxyChannelLeaseResult =
   | { status: 'timeout'; waitMs: number };
 
 const stickySessionBindings = new Map<string, StickyEntry>();
+/** key+model last-success affinity (independent of client session / path). */
+const lastSuccessByModelKey = new Map<string, LastSuccessEntry>();
 const channelRuntimeStates = new Map<number, ChannelRuntimeState>();
 let nextLeaseId = 1;
 type SessionScopedChannelInput =
@@ -69,6 +76,28 @@ function cleanupExpiredStickyBindings(nowMs = Date.now()): void {
       stickySessionBindings.delete(key);
     }
   }
+  for (const [key, entry] of lastSuccessByModelKey.entries()) {
+    if (entry.expiresAtMs <= nowMs) {
+      lastSuccessByModelKey.delete(key);
+    }
+  }
+}
+
+function getLastSuccessTtlMs(): number {
+  // Prefer sticky TTL when configured; keep at least 5 minutes of affinity.
+  return Math.max(5 * 60_000, getStickySessionTtlMs());
+}
+
+function buildLastSuccessKey(input: {
+  requestedModel?: string | null;
+  downstreamApiKeyId?: number | null;
+}): string | null {
+  const model = String(input.requestedModel || '').trim().toLowerCase();
+  if (!model) return null;
+  const owner = typeof input.downstreamApiKeyId === 'number' && Number.isFinite(input.downstreamApiKeyId)
+    ? `key:${Math.trunc(input.downstreamApiKeyId)}`
+    : 'key:anonymous';
+  return `${owner}|${model}`;
 }
 
 function getSessionScopedExtraConfig(input?: SessionScopedChannelInput): string | null | undefined {
@@ -141,13 +170,11 @@ class ProxyChannelCoordinator {
   buildStickySessionKey(input: {
     clientKind?: string | null;
     sessionId?: string | null;
-    requestedModel: string;
-    downstreamPath: string;
+    requestedModel?: string | null;
+    downstreamPath?: string | null;
     downstreamApiKeyId?: number | null;
   }): string | null {
     if (!config.proxyStickySessionEnabled) return null;
-    const sessionId = String(input.sessionId || '').trim();
-    if (!sessionId) return null;
     const requestedModel = String(input.requestedModel || '').trim().toLowerCase();
     if (!requestedModel) return null;
     const downstreamPath = String(input.downstreamPath || '').trim().toLowerCase() || 'unknown';
@@ -155,6 +182,10 @@ class ProxyChannelCoordinator {
     const owner = typeof input.downstreamApiKeyId === 'number' && Number.isFinite(input.downstreamApiKeyId)
       ? `key:${Math.trunc(input.downstreamApiKeyId)}`
       : 'key:anonymous';
+    // Prefer real client session when present. Without it, still keep a soft affinity
+    // key so successful free/API routes stick across consecutive turns of the same
+    // key+model (personal hubs otherwise re-roll every request).
+    const sessionId = String(input.sessionId || '').trim() || 'soft';
     return [owner, clientKind, downstreamPath, requestedModel, sessionId].join('|');
   }
 
@@ -170,9 +201,12 @@ class ProxyChannelCoordinator {
     return entry.channelId;
   }
 
-  bindStickyChannel(stickySessionKey: string | null | undefined, channelId: number, accountIdentity?: SessionScopedChannelInput): void {
+  bindStickyChannel(stickySessionKey: string | null | undefined, channelId: number, _accountIdentity?: SessionScopedChannelInput): void {
     if (!config.proxyStickySessionEnabled) return;
-    if (!isSessionScopedChannel(accountIdentity)) return;
+    // Sticky preference applies to every channel type (API key + OAuth).
+    // Concurrency leases remain session-scoped only — sticky here is pure routing memory
+    // so a just-working free/API site is not abandoned on the next turn.
+    void _accountIdentity;
     const normalizedKey = String(stickySessionKey || '').trim();
     if (!normalizedKey || !Number.isFinite(channelId) || channelId <= 0) return;
     cleanupExpiredStickyBindings();
@@ -191,6 +225,57 @@ class ProxyChannelCoordinator {
       return;
     }
     stickySessionBindings.delete(normalizedKey);
+  }
+
+  /**
+   * Model-level last-success affinity (key + model), independent of client session/path.
+   * Prefer this on the next primary hop when sticky is missing or stale.
+   */
+  getLastSuccessChannelId(input: {
+    requestedModel?: string | null;
+    downstreamApiKeyId?: number | null;
+  }, nowMs = Date.now()): number | null {
+    cleanupExpiredStickyBindings(nowMs);
+    const key = buildLastSuccessKey(input);
+    if (!key) return null;
+    const entry = lastSuccessByModelKey.get(key);
+    if (!entry || entry.expiresAtMs <= nowMs) {
+      lastSuccessByModelKey.delete(key);
+      return null;
+    }
+    return entry.channelId;
+  }
+
+  rememberLastSuccessChannel(input: {
+    requestedModel?: string | null;
+    downstreamApiKeyId?: number | null;
+    channelId: number;
+  }): void {
+    if (!config.proxyStickySessionEnabled) return;
+    const key = buildLastSuccessKey(input);
+    const channelId = Math.trunc(input.channelId || 0);
+    if (!key || channelId <= 0) return;
+    cleanupExpiredStickyBindings();
+    lastSuccessByModelKey.set(key, {
+      channelId,
+      expiresAtMs: Date.now() + getLastSuccessTtlMs(),
+    });
+  }
+
+  clearLastSuccessChannel(input: {
+    requestedModel?: string | null;
+    downstreamApiKeyId?: number | null;
+    channelId?: number | null;
+  }): void {
+    const key = buildLastSuccessKey(input);
+    if (!key) return;
+    const existing = lastSuccessByModelKey.get(key);
+    if (!existing) return;
+    if (typeof input.channelId === 'number' && Number.isFinite(input.channelId)
+      && existing.channelId !== Math.trunc(input.channelId)) {
+      return;
+    }
+    lastSuccessByModelKey.delete(key);
   }
 
   getActiveChannelIds(): number[] {
@@ -376,6 +461,7 @@ class ProxyChannelCoordinator {
 
 export function resetProxyChannelCoordinatorState(): void {
   stickySessionBindings.clear();
+  lastSuccessByModelKey.clear();
   channelRuntimeStates.clear();
   nextLeaseId = 1;
 }

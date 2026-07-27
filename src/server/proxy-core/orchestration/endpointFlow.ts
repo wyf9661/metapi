@@ -176,7 +176,16 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       finalStatus = response.status || 408;
       finalErrText = errText;
       finalRawErrText = rawErrText;
+      // Timeouts are site/origin latency. Surfaces pass shouldAbortRemainingEndpoints
+      // from the shared taxonomy so production aborts cascade; callers without a
+      // hook keep legacy fall-through for protocol recovery experiments/tests.
       if (input.disableCrossProtocolFallback) {
+        break;
+      }
+      if (input.shouldAbortRemainingEndpoints?.({
+        ...baseContext,
+        errText,
+      })) {
         break;
       }
       continue;

@@ -51,7 +51,7 @@ describe('proxyChannelCoordinator', () => {
     expect(proxyChannelCoordinator.getStickyChannelId(key)).toBeNull();
   });
 
-  it('does not store sticky bindings for apikey-only channels', () => {
+  it('stores sticky bindings for apikey channels so successful free routes stick across turns', () => {
     const key = proxyChannelCoordinator.buildStickySessionKey({
       clientKind: 'codex',
       sessionId: 'turn-456',
@@ -61,7 +61,42 @@ describe('proxyChannelCoordinator', () => {
     });
 
     proxyChannelCoordinator.bindStickyChannel(key, 42, JSON.stringify({ credentialMode: 'apikey' }));
-    expect(proxyChannelCoordinator.getStickyChannelId(key)).toBeNull();
+    expect(proxyChannelCoordinator.getStickyChannelId(key)).toBe(42);
+  });
+
+  it('keeps soft sticky affinity when client has no session id', () => {
+    const key = proxyChannelCoordinator.buildStickySessionKey({
+      clientKind: 'generic',
+      sessionId: null,
+      requestedModel: 'grok-4.5',
+      downstreamPath: '/v1/chat/completions',
+      downstreamApiKeyId: 3,
+    });
+    expect(key).toContain('|soft');
+    proxyChannelCoordinator.bindStickyChannel(key, 77, JSON.stringify({ credentialMode: 'apikey' }));
+    expect(proxyChannelCoordinator.getStickyChannelId(key)).toBe(77);
+  });
+
+  it('remembers last-success channel by key+model independent of path/session', () => {
+    proxyChannelCoordinator.rememberLastSuccessChannel({
+      requestedModel: 'grok-4.5',
+      downstreamApiKeyId: 3,
+      channelId: 88,
+    });
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'grok-4.5',
+      downstreamApiKeyId: 3,
+    })).toBe(88);
+    // Different path/session sticky key must not be required for last-success.
+    proxyChannelCoordinator.clearLastSuccessChannel({
+      requestedModel: 'grok-4.5',
+      downstreamApiKeyId: 3,
+      channelId: 88,
+    });
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'grok-4.5',
+      downstreamApiKeyId: 3,
+    })).toBeNull();
   });
 
   it('treats structured oauth providers as session-scoped even when extraConfig omits oauth.provider', () => {

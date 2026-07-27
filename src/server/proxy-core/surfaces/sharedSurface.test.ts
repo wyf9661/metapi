@@ -23,6 +23,9 @@ const resolveProxyUsageWithSelfLogFallbackMock = vi.fn();
 const resolveProxyLogBillingMock = vi.fn();
 const refreshOauthAccessTokenSingleflightMock = vi.fn();
 const getStickyChannelIdMock = vi.fn();
+const getLastSuccessChannelIdMock = vi.fn();
+const rememberLastSuccessChannelMock = vi.fn();
+const clearLastSuccessChannelMock = vi.fn();
 const bindStickyChannelMock = vi.fn();
 const clearStickyChannelMock = vi.fn();
 const acquireChannelLeaseMock = vi.fn();
@@ -43,6 +46,9 @@ vi.mock('../../services/tokenRouter.js', () => ({
 vi.mock('../../services/proxyChannelCoordinator.js', () => ({
   proxyChannelCoordinator: {
     getStickyChannelId: (...args: unknown[]) => getStickyChannelIdMock(...args),
+    getLastSuccessChannelId: (...args: unknown[]) => getLastSuccessChannelIdMock(...args),
+    rememberLastSuccessChannel: (...args: unknown[]) => rememberLastSuccessChannelMock(...args),
+    clearLastSuccessChannel: (...args: unknown[]) => clearLastSuccessChannelMock(...args),
     bindStickyChannel: (...args: unknown[]) => bindStickyChannelMock(...args),
     clearStickyChannel: (...args: unknown[]) => clearStickyChannelMock(...args),
     acquireChannelLease: (...args: unknown[]) => acquireChannelLeaseMock(...args),
@@ -135,12 +141,16 @@ describe('selectSurfaceChannelForAttempt', () => {
     resolveProxyLogBillingMock.mockReset();
     refreshOauthAccessTokenSingleflightMock.mockReset();
     getStickyChannelIdMock.mockReset();
+    getLastSuccessChannelIdMock.mockReset();
+    rememberLastSuccessChannelMock.mockReset();
+    clearLastSuccessChannelMock.mockReset();
     bindStickyChannelMock.mockReset();
     clearStickyChannelMock.mockReset();
     acquireChannelLeaseMock.mockReset();
     buildStickySessionKeyMock.mockReset();
     consoleWarnMock.mockClear();
     consoleErrorMock.mockClear();
+    getLastSuccessChannelIdMock.mockReturnValue(null);
   });
 
   it('refreshes models and retries selectChannel on the first attempt when no channel is available', async () => {
@@ -492,7 +502,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       retryCount: 0,
     });
 
-    expect(result).toEqual({ action: 'retry' });
+    expect(result).toEqual({ action: 'retry', excludeSiteId: null });
     expect(recordFailureMock).toHaveBeenCalledWith(11, {
       status: 429,
       errorText: '{"error":"quota exceeded"}',
@@ -549,7 +559,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       rawErrText: '{"error":"quota exceeded"}',
       latencyMs: 1200,
       retryCount: 0,
-    })).resolves.toEqual({ action: 'retry' });
+    })).resolves.toEqual({ action: 'retry', excludeSiteId: null });
   });
 
   it('returns a terminal upstream error response and reports token expiration when retries stop', async () => {

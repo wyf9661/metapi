@@ -4,6 +4,7 @@ export type RouteDecisionCandidate = {
     channelId: number;
     accountId: number;
     username: string;
+    siteId: number;
     siteName: string;
     tokenName: string;
     priority: number;

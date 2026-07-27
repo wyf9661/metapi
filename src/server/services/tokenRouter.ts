@@ -10,6 +10,7 @@ import { getCachedModelRoutingReferenceCost, refreshModelPricingCatalog } from '
 import { proxyChannelCoordinator, type ProxyChannelLoadSnapshot } from './proxyChannelCoordinator.js';
 import { RETRYABLE_TIMEOUT_PATTERNS } from './proxyRetryPolicy.js';
 import {
+  classifyProxyFailure,
   isTransientSiteRuntimeFailure,
   isUsageLimitRateLimitFailure,
   resolveSiteRuntimeFailurePenalty,
@@ -278,8 +279,24 @@ function clampFailureCooldownMs(cooldownMs: number): number {
   return clampFailureCooldownMsMath(cooldownMs, resolveConfiguredFailureCooldownMaxMs());
 }
 
-function resolveEffectiveFailureCooldownMs(failCount?: number | null): number {
-  return resolveEffectiveFailureCooldownMsMath(failCount, resolveConfiguredFailureCooldownMaxMs());
+function resolveEffectiveFailureCooldownMs(failCount?: number | null, weight = 1): number {
+  const baseMs = resolveEffectiveFailureCooldownMsMath(failCount, resolveConfiguredFailureCooldownMaxMs());
+  const normalizedWeight = Number.isFinite(weight)
+    ? Math.max(0.1, Math.min(3, Number(weight)))
+    : 1;
+  return clampFailureCooldownMs(baseMs * normalizedWeight);
+}
+
+function resolveFailureCooldownWeight(context: SiteRuntimeFailureContext = {}): {
+  weight: number;
+  skipCooldown: boolean;
+} {
+  const decision = classifyProxyFailure(context);
+  return {
+    weight: decision.cooldownWeight,
+    // Client/policy rejections should not park the channel out of the pool.
+    skipCooldown: decision.cooldownScope === 'none',
+  };
 }
 
 function resolveStableFirstSuccessRate(
@@ -1045,6 +1062,25 @@ export class TokenRouter {
     return await this.selectFromMatch(match, requestedModel, downstreamPolicy, excludeChannelIds);
   }
 
+  /**
+   * Expand a failed site into all route channel IDs for the same model match.
+   * Used for same-request site short-circuit after WAF/timeout/5xx/pool-down.
+   */
+  async listChannelIdsForSite(
+    requestedModel: string,
+    siteId: number,
+    downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
+  ): Promise<number[]> {
+    const normalizedSiteId = Math.trunc(siteId || 0);
+    if (normalizedSiteId <= 0) return [];
+    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return [];
+    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    if (!match) return [];
+    return match.channels
+      .filter((candidate) => candidate.site.id === normalizedSiteId)
+      .map((candidate) => candidate.channel.id);
+  }
+
   async selectPreferredChannel(
     requestedModel: string,
     preferredChannelId: number,
@@ -1191,6 +1227,7 @@ export class TokenRouter {
         channelId: row.channel.id,
         accountId: row.account.id,
         username: row.account.username || `account-${row.account.id}`,
+        siteId: row.site.id,
         siteName: row.site.name || 'unknown',
         tokenName: row.token?.name || 'default',
         priority: row.channel.priority ?? 0,
@@ -1971,8 +2008,13 @@ export class TokenRouter {
         let consecutiveFailCount = Math.max(0, memberRow.member.consecutiveFailCount ?? 0) + 1;
         let cooldownLevel = Math.max(0, memberRow.member.cooldownLevel ?? 0);
 
+        const cooldownPolicy = resolveFailureCooldownWeight(normalizedContext);
         if (shortWindowLimitCooldownUntil) {
           cooldownUntil = shortWindowLimitCooldownUntil;
+          consecutiveFailCount = 0;
+          cooldownLevel = 0;
+        } else if (cooldownPolicy.skipCooldown) {
+          cooldownUntil = null;
           consecutiveFailCount = 0;
           cooldownLevel = 0;
         } else if (routeUnitStrategy === 'round_robin') {
@@ -1980,12 +2022,12 @@ export class TokenRouter {
             cooldownLevel = Math.min(cooldownLevel + 1, ROUND_ROBIN_COOLDOWN_LEVELS_SEC.length - 1);
             const cooldownSec = resolveRoundRobinCooldownSec(cooldownLevel);
             cooldownUntil = cooldownSec > 0
-              ? new Date(nowMs + clampFailureCooldownMs(cooldownSec * 1000)).toISOString()
+              ? new Date(nowMs + clampFailureCooldownMs(cooldownSec * 1000 * cooldownPolicy.weight)).toISOString()
               : null;
             consecutiveFailCount = 0;
           }
         } else {
-          cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount)).toISOString();
+          cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
           consecutiveFailCount = 0;
           cooldownLevel = 0;
         }
@@ -2014,8 +2056,13 @@ export class TokenRouter {
     let consecutiveFailCount = Math.max(0, ch.consecutiveFailCount ?? 0) + 1;
     let cooldownLevel = Math.max(0, ch.cooldownLevel ?? 0);
 
+    const cooldownPolicy = resolveFailureCooldownWeight(normalizedContext);
     if (shortWindowLimitCooldownUntil) {
       cooldownUntil = shortWindowLimitCooldownUntil;
+      consecutiveFailCount = 0;
+      cooldownLevel = 0;
+    } else if (cooldownPolicy.skipCooldown) {
+      cooldownUntil = null;
       consecutiveFailCount = 0;
       cooldownLevel = 0;
     } else if (routeStrategy === 'round_robin') {
@@ -2023,12 +2070,12 @@ export class TokenRouter {
         cooldownLevel = Math.min(cooldownLevel + 1, ROUND_ROBIN_COOLDOWN_LEVELS_SEC.length - 1);
         const cooldownSec = resolveRoundRobinCooldownSec(cooldownLevel);
         cooldownUntil = cooldownSec > 0
-          ? new Date(nowMs + clampFailureCooldownMs(cooldownSec * 1000)).toISOString()
+          ? new Date(nowMs + clampFailureCooldownMs(cooldownSec * 1000 * cooldownPolicy.weight)).toISOString()
           : null;
         consecutiveFailCount = 0;
       }
     } else {
-      cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount)).toISOString();
+      cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
       consecutiveFailCount = 0;
       cooldownLevel = 0;
     }
@@ -2154,7 +2201,8 @@ export class TokenRouter {
 
   /**
    * Live balanced-v2 selection (formerly shadow-only).
-   * Probability-weighted pick among positive scores; falls back to first candidate.
+   * Default: stable top-1 pick. Small exploration rate keeps long-term discovery
+   * without burning most primary hops on lower-ranked free/noisy candidates.
    */
   private selectByBalancedV2(
     candidates: RouteChannelCandidate[],
@@ -2178,15 +2226,25 @@ export class TokenRouter {
       const ranked = rankShadowCandidates(inputs);
       const active = ranked.candidates.filter((c) => !c.factors.exclusion && c.score > 0 && c.probability > 0);
       let selectedId = ranked.selectedChannelId;
-      if (active.length > 0) {
-        let rand = Math.random();
-        selectedId = active[active.length - 1]!.channelId;
-        for (const row of active) {
-          rand -= row.probability;
-          if (rand <= 0) {
-            selectedId = row.channelId;
-            break;
+      // Stable-first with light exploration: only explore when the top band is close.
+      // Exploration rate ~8% overall, and only among candidates within 85% of top score.
+      if (active.length > 1) {
+        const top = active[0]!;
+        const exploreBand = active.filter((row) => row.score >= top.score * 0.85);
+        const shouldExplore = exploreBand.length > 1 && Math.random() < 0.08;
+        if (shouldExplore) {
+          const bandTotal = exploreBand.reduce((sum, row) => sum + row.score, 0);
+          let rand = Math.random() * bandTotal;
+          selectedId = exploreBand[exploreBand.length - 1]!.channelId;
+          for (const row of exploreBand) {
+            rand -= row.score;
+            if (rand <= 0) {
+              selectedId = row.channelId;
+              break;
+            }
           }
+        } else {
+          selectedId = top.channelId;
         }
       }
       const selected = candidates.find((c) => c.channel.id === selectedId) ?? candidates[0] ?? null;
