@@ -67,6 +67,7 @@ vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
 }));
 
 vi.mock('../../services/proxyChannelCoordinator.js', () => ({
+  ensureProxyChannelAffinityLoaded: vi.fn(async () => {}),
   proxyChannelCoordinator: {
     buildStickySessionKey: vi.fn(),
     getStickyChannelId: vi.fn(),

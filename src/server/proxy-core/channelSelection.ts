@@ -1,5 +1,8 @@
 import * as routeRefreshWorkflow from '../services/routeRefreshWorkflow.js';
-import { proxyChannelCoordinator } from '../services/proxyChannelCoordinator.js';
+import {
+  ensureProxyChannelAffinityLoaded,
+  proxyChannelCoordinator,
+} from '../services/proxyChannelCoordinator.js';
 import {
   canRetryProxyChannelWithBudget,
   getProxyEffectiveFailoverBudgetMs,
@@ -121,6 +124,7 @@ export async function selectProxyChannelForAttempt(input: {
   forcedChannelId?: number | null;
   downstreamApiKeyId?: number | null;
 }): Promise<SelectedChannel> {
+  await ensureProxyChannelAffinityLoaded();
   const normalizedForcedChannelId = normalizeForcedChannelId(input.forcedChannelId);
   if (normalizedForcedChannelId !== null) {
     if (input.retryCount > 0) return null;

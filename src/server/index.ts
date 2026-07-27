@@ -62,6 +62,9 @@ import {
   startRouteDecisionRefreshScheduler,
   stopRouteDecisionRefreshScheduler,
 } from './services/routeDecisionRefreshScheduler.js';
+import {
+  ensureProxyChannelAffinityLoaded,
+} from './services/proxyChannelCoordinator.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
 import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
 import { tunnelRoutes } from './routes/api/tunnel.js';
@@ -202,6 +205,8 @@ try {
   await ensureDefaultSitesSeeded();
   await ensureOauthIdentityBackfill();
   await routeRefreshWorkflow.rebuildRoutesOnly();
+
+  await ensureProxyChannelAffinityLoaded();
 
   console.log('Loaded runtime settings overrides');
 } catch (error) {

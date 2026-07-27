@@ -1,4 +1,7 @@
+import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
+import { db, schema } from '../db/index.js';
+import { upsertSetting } from '../db/upsertSetting.js';
 import {
   getCredentialModeFromExtraConfig,
   hasOauthProvider,
@@ -55,6 +58,23 @@ const stickySessionBindings = new Map<string, StickyEntry>();
 const lastSuccessByModelKey = new Map<string, LastSuccessEntry>();
 const channelRuntimeStates = new Map<number, ChannelRuntimeState>();
 let nextLeaseId = 1;
+
+const PROXY_CHANNEL_AFFINITY_SETTING_KEY = 'proxy_channel_affinity_v1';
+const PROXY_CHANNEL_AFFINITY_PERSIST_DEBOUNCE_MS = 500;
+const PROXY_CHANNEL_AFFINITY_MAX_ENTRIES = 2_000;
+
+type AffinityPersistencePayload = {
+  version: 1;
+  savedAtMs: number;
+  sticky: Record<string, StickyEntry>;
+  lastSuccess: Record<string, LastSuccessEntry>;
+};
+
+let affinityLoaded = false;
+let affinityLoadPromise: Promise<void> | null = null;
+let affinitySaveTimer: ReturnType<typeof setTimeout> | null = null;
+let affinityPersistInFlight: Promise<void> | null = null;
+
 type SessionScopedChannelInput =
   | string
   | null
@@ -166,6 +186,135 @@ function createNoopLease(channelId: number): ProxyChannelLease {
   };
 }
 
+function isFinitePositiveChannelId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function isAffinityEntry(value: unknown): value is StickyEntry {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return isFinitePositiveChannelId(record.channelId)
+    && typeof record.expiresAtMs === 'number'
+    && Number.isFinite(record.expiresAtMs);
+}
+
+function hydrateAffinityMap(
+  target: Map<string, StickyEntry>,
+  raw: unknown,
+  nowMs: number,
+): void {
+  if (!raw || typeof raw !== 'object') return;
+  for (const [key, entryRaw] of Object.entries(raw as Record<string, unknown>)) {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey || !isAffinityEntry(entryRaw)) continue;
+    if (entryRaw.expiresAtMs <= nowMs) continue;
+    target.set(normalizedKey, {
+      channelId: Math.trunc(entryRaw.channelId),
+      expiresAtMs: Math.trunc(entryRaw.expiresAtMs),
+    });
+  }
+}
+
+function serializeAffinityMap(source: Map<string, StickyEntry>, nowMs: number): Record<string, StickyEntry> {
+  const out: Record<string, StickyEntry> = {};
+  // Prefer freshest entries when over the hard cap.
+  const live = [...source.entries()]
+    .filter(([, entry]) => entry.expiresAtMs > nowMs)
+    .sort((a, b) => b[1].expiresAtMs - a[1].expiresAtMs)
+    .slice(0, PROXY_CHANNEL_AFFINITY_MAX_ENTRIES);
+  for (const [key, entry] of live) {
+    out[key] = {
+      channelId: entry.channelId,
+      expiresAtMs: entry.expiresAtMs,
+    };
+  }
+  return out;
+}
+
+function buildAffinityPersistencePayload(nowMs = Date.now()): AffinityPersistencePayload {
+  cleanupExpiredStickyBindings(nowMs);
+  return {
+    version: 1,
+    savedAtMs: nowMs,
+    sticky: serializeAffinityMap(stickySessionBindings, nowMs),
+    lastSuccess: serializeAffinityMap(lastSuccessByModelKey, nowMs),
+  };
+}
+
+async function loadProxyChannelAffinityFromSettings(): Promise<void> {
+  const row = await db.select({ value: schema.settings.value })
+    .from(schema.settings)
+    .where(eq(schema.settings.key, PROXY_CHANNEL_AFFINITY_SETTING_KEY))
+    .get();
+  if (!row?.value) return;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.value);
+  } catch {
+    return;
+  }
+  if (!parsed || typeof parsed !== 'object') return;
+  const record = parsed as Record<string, unknown>;
+  const nowMs = Date.now();
+  hydrateAffinityMap(stickySessionBindings, record.sticky, nowMs);
+  hydrateAffinityMap(lastSuccessByModelKey, record.lastSuccess, nowMs);
+}
+
+export async function ensureProxyChannelAffinityLoaded(): Promise<void> {
+  if (affinityLoaded) return;
+  if (affinityLoadPromise) {
+    await affinityLoadPromise;
+    return;
+  }
+  const loadTask = (async () => {
+    try {
+      await loadProxyChannelAffinityFromSettings();
+    } catch (error) {
+      console.warn(
+        `[proxyChannelCoordinator] failed to load affinity state: ${(error as Error)?.message || 'unknown error'}`,
+      );
+    } finally {
+      affinityLoaded = true;
+      affinityLoadPromise = null;
+    }
+  })();
+  affinityLoadPromise = loadTask;
+  await loadTask;
+}
+
+export async function persistProxyChannelAffinityState(): Promise<void> {
+  if (affinityPersistInFlight) {
+    await affinityPersistInFlight;
+    return;
+  }
+  const persistTask = (async () => {
+    const payload = buildAffinityPersistencePayload();
+    await upsertSetting(PROXY_CHANNEL_AFFINITY_SETTING_KEY, payload);
+  })();
+  affinityPersistInFlight = persistTask.finally(() => {
+    if (affinityPersistInFlight === persistTask) {
+      affinityPersistInFlight = null;
+    }
+  });
+  try {
+    await affinityPersistInFlight;
+  } catch (error) {
+    console.warn(
+      `[proxyChannelCoordinator] failed to persist affinity state: ${(error as Error)?.message || 'unknown error'}`,
+    );
+  }
+}
+
+function scheduleProxyChannelAffinityPersistence(): void {
+  if (affinitySaveTimer) return;
+  affinitySaveTimer = setTimeout(() => {
+    affinitySaveTimer = null;
+    void persistProxyChannelAffinityState();
+  }, PROXY_CHANNEL_AFFINITY_PERSIST_DEBOUNCE_MS);
+  shouldUnrefTimer(affinitySaveTimer);
+}
+
 class ProxyChannelCoordinator {
   buildStickySessionKey(input: {
     clientKind?: string | null;
@@ -214,6 +363,7 @@ class ProxyChannelCoordinator {
       channelId: Math.trunc(channelId),
       expiresAtMs: Date.now() + getStickySessionTtlMs(),
     });
+    scheduleProxyChannelAffinityPersistence();
   }
 
   clearStickyChannel(stickySessionKey?: string | null, channelId?: number | null): void {
@@ -225,6 +375,7 @@ class ProxyChannelCoordinator {
       return;
     }
     stickySessionBindings.delete(normalizedKey);
+    scheduleProxyChannelAffinityPersistence();
   }
 
   /**
@@ -260,6 +411,7 @@ class ProxyChannelCoordinator {
       channelId,
       expiresAtMs: Date.now() + getLastSuccessTtlMs(),
     });
+    scheduleProxyChannelAffinityPersistence();
   }
 
   clearLastSuccessChannel(input: {
@@ -276,6 +428,7 @@ class ProxyChannelCoordinator {
       return;
     }
     lastSuccessByModelKey.delete(key);
+    scheduleProxyChannelAffinityPersistence();
   }
 
   getActiveChannelIds(): number[] {
@@ -464,6 +617,20 @@ export function resetProxyChannelCoordinatorState(): void {
   lastSuccessByModelKey.clear();
   channelRuntimeStates.clear();
   nextLeaseId = 1;
+  if (affinitySaveTimer) {
+    clearTimeout(affinitySaveTimer);
+    affinitySaveTimer = null;
+  }
+  // Tests/reset should not race a later settings reload unless explicitly re-enabled.
+  affinityLoaded = true;
+  affinityLoadPromise = null;
+  affinityPersistInFlight = null;
+}
+
+/** Test helper: force next ensure() to reload from settings. */
+export function markProxyChannelAffinityUnloadedForTests(): void {
+  affinityLoaded = false;
+  affinityLoadPromise = null;
 }
 
 export function isProxyChannelSessionScoped(input?: SessionScopedChannelInput): boolean {
