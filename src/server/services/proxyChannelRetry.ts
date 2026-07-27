@@ -8,9 +8,9 @@ import {
 /** Soft ceiling so huge free-pool models (20+ channels) cannot thrash for minutes. */
 export const PROXY_CHANNEL_FAILOVER_SOFT_ATTEMPT_CAP_DEFAULT = 8;
 /** Soft wall-clock budget for multi-channel failover when env leaves budget unset (0). */
-export const PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT = 30_000;
+export const PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT = 45_000;
 /** After the first channel, use a shorter first-byte probe for remaining candidates. */
-export const PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT = 8_000;
+export const PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT = 15_000;
 /** Stop after this many consecutive low-value failure classes (WAF/model/quota/ambiguous). */
 export const PROXY_CHANNEL_FAILOVER_LOW_VALUE_STREAK_STOP_DEFAULT = 2;
 
