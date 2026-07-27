@@ -44,6 +44,7 @@ vi.mock('../../services/tokenRouter.js', () => ({
 }));
 
 vi.mock('../../services/proxyChannelCoordinator.js', () => ({
+  ensureProxyChannelAffinityLoaded: vi.fn(async () => {}),
   proxyChannelCoordinator: {
     getStickyChannelId: (...args: unknown[]) => getStickyChannelIdMock(...args),
     getLastSuccessChannelId: (...args: unknown[]) => getLastSuccessChannelIdMock(...args),

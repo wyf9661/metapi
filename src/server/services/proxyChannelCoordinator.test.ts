@@ -1,9 +1,46 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../config.js';
 import {
+  ensureProxyChannelAffinityLoaded,
+  markProxyChannelAffinityUnloadedForTests,
+  persistProxyChannelAffinityState,
   proxyChannelCoordinator,
   resetProxyChannelCoordinatorState,
 } from './proxyChannelCoordinator.js';
+
+const settingsStore = new Map<string, string>();
+const upsertSettingMock = vi.fn(async (key: string, value: unknown) => {
+  settingsStore.set(key, JSON.stringify(value));
+});
+
+vi.mock('../db/upsertSetting.js', () => ({
+  upsertSetting: (...args: unknown[]) => upsertSettingMock(...(args as [string, unknown])),
+}));
+
+vi.mock('../db/index.js', () => ({
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          get: async () => {
+            const value = settingsStore.get('proxy_channel_affinity_v1');
+            return value ? { value } : undefined;
+          },
+        }),
+      }),
+    }),
+  },
+  schema: {
+    settings: {
+      key: 'key',
+      value: 'value',
+    },
+  },
+}));
+
+vi.mock('drizzle-orm', () => ({
+  eq: () => ({}),
+}));
 
 describe('proxyChannelCoordinator', () => {
   const originalStickyEnabled = config.proxyStickySessionEnabled;
@@ -21,6 +58,8 @@ describe('proxyChannelCoordinator', () => {
     config.proxySessionChannelQueueWaitMs = 200;
     config.proxySessionChannelLeaseTtlMs = 100;
     config.proxySessionChannelLeaseKeepaliveMs = 30;
+    settingsStore.clear();
+    upsertSettingMock.mockClear();
     resetProxyChannelCoordinatorState();
   });
 
@@ -97,6 +136,43 @@ describe('proxyChannelCoordinator', () => {
       requestedModel: 'grok-4.5',
       downstreamApiKeyId: 3,
     })).toBeNull();
+  });
+
+  it('persists sticky + last-success affinity and reloads after process-local reset', async () => {
+    const stickyKey = proxyChannelCoordinator.buildStickySessionKey({
+      clientKind: 'generic',
+      sessionId: 'sess-1',
+      requestedModel: 'glm-5.2',
+      downstreamPath: '/v1/chat/completions',
+      downstreamApiKeyId: 2,
+    });
+    proxyChannelCoordinator.bindStickyChannel(stickyKey, 501, JSON.stringify({ credentialMode: 'apikey' }));
+    proxyChannelCoordinator.rememberLastSuccessChannel({
+      requestedModel: 'glm-5.2',
+      downstreamApiKeyId: 2,
+      channelId: 502,
+    });
+
+    await vi.advanceTimersByTimeAsync(600);
+    await persistProxyChannelAffinityState();
+    expect(upsertSettingMock).toHaveBeenCalled();
+    expect(settingsStore.has('proxy_channel_affinity_v1')).toBe(true);
+
+    resetProxyChannelCoordinatorState();
+    expect(proxyChannelCoordinator.getStickyChannelId(stickyKey)).toBeNull();
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'glm-5.2',
+      downstreamApiKeyId: 2,
+    })).toBeNull();
+
+    markProxyChannelAffinityUnloadedForTests();
+    await ensureProxyChannelAffinityLoaded();
+
+    expect(proxyChannelCoordinator.getStickyChannelId(stickyKey)).toBe(501);
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'glm-5.2',
+      downstreamApiKeyId: 2,
+    })).toBe(502);
   });
 
   it('treats structured oauth providers as session-scoped even when extraConfig omits oauth.provider', () => {
