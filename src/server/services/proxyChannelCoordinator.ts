@@ -104,8 +104,9 @@ function cleanupExpiredStickyBindings(nowMs = Date.now()): void {
 }
 
 function getLastSuccessTtlMs(): number {
-  // Prefer sticky TTL when configured; keep at least 5 minutes of affinity.
-  return Math.max(5 * 60_000, getStickySessionTtlMs());
+  // Keep last-success in the same short window as sticky so dense same-key
+  // traffic rebalances instead of pinning one site for minutes.
+  return getStickySessionTtlMs();
 }
 
 function buildLastSuccessKey(input: {
