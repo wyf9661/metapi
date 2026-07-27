@@ -80,10 +80,10 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
 
   const spendBarSpec = useMemo(() => ({
     type: 'bar' as const,
-    data: [{ id: 'data', values: spendDistribution.map(d => ({ model: d.model.length > 25 ? d.model.slice(0, 25) + '...' : d.model, value: toSafeNumber(d.spend) })).reverse() }],
+    data: [{ id: 'data', values: spendDistribution.map(d => ({ model: String(d.model || '-').slice(0, 25), value: toSafeNumber(d.spend) })).reverse() }],
     xField: 'value', yField: 'model', direction: 'horizontal' as const,
     bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#4f46e5' }, { offset: 1, color: '#818cf8' }] } } },
-    label: { visible: true, position: 'right', formatter: (datum: { value: number }) => formatCurrency(datum.value), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
+    label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCurrency(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
     axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
     animation: true, background: 'transparent',
   }), [spendDistribution, labelColor]);
@@ -92,7 +92,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     // With 1-day window, trend is meaningless — show per-model tokens instead
     return (data?.callRanking || data?.spendDistribution || [])
       .map((d) => ({
-        model: d.model,
+        model: String(d.model || '-'),
         tokens: 'tokens' in d ? toSafeNumber((d as CallRankingItem).tokens) : 0,
       }))
       .filter((d) => d.tokens > 0)
@@ -102,7 +102,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
 
   const trendSpec = useMemo(() => {
     const tokenData = tokenDistribution.map((d) => ({
-      model: d.model.length > 20 ? d.model.slice(0, 20) + '...' : d.model,
+      model: String(d.model || '-').slice(0, 20),
       value: d.tokens,
     })).reverse();
     return {
@@ -110,7 +110,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       data: [{ id: 'data', values: tokenData }],
       xField: 'value', yField: 'model', direction: 'horizontal' as const,
       bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#06b6d4' }, { offset: 1, color: '#22d3ee' }] } } },
-      label: { visible: true, position: 'right', formatter: (datum: { value: number }) => formatCompactTokenMetric(datum.value), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
+      label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCompactTokenMetric(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
       axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
       animation: true, background: 'transparent',
     };
@@ -118,11 +118,11 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
 
   const callsPieSpec = useMemo(() => ({
     type: 'pie' as const,
-    data: [{ id: 'data', values: callsDistribution.map(d => ({ model: d.model, calls: toSafeNumber(d.calls) })) }],
+    data: [{ id: 'data', values: (() => { const total = callsDistribution.reduce((s, d) => s + toSafeNumber(d.calls), 0); return callsDistribution.map(d => ({ model: String(d.model || '-'), calls: toSafeNumber(d.calls), pctLabel: total > 0 ? (toSafeNumber(d.calls) / total * 100).toFixed(1) : '0.0' })); })() }],
     valueField: 'calls', categoryField: 'model',
     outerRadius: 0.8, innerRadius: 0.55,
     pie: { style: { cornerRadius: 4, padAngle: 0.02 } },
-    label: { visible: true, position: 'outside', formatter: '{_percent_}%', style: { fill: labelColor } },
+    label: { visible: true, position: 'outside', format: '{pctLabel}%', style: { fill: labelColor } },
     legends: { visible: false },
     animation: true,
     color: ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'],
