@@ -374,7 +374,71 @@ describe('account tokens sync routes with site status', () => {
     expect((tokenRows[0] as any).valueStatus).toBe('ready');
   });
 
-  it('does not reuse a different ready token when another logical token shares the same masked value', async () => {
+  
+  it('reuses a synthetic default ready token when upstream returns the same masked key under another name', async () => {
+    const { account } = await seedAccount({ siteStatus: 'active' });
+    const fullToken = 'sk-CImzq0Svzjd1zjwU6232EczwyB';
+    const upstreamMasked = 'CImz**********zwyB';
+
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'default',
+      token: fullToken,
+      source: 'manual',
+      enabled: true,
+      isDefault: true,
+      tokenGroup: 'default',
+      valueStatus: 'ready' as any,
+    }).run();
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'token',
+      token: upstreamMasked,
+      source: 'sync',
+      enabled: false,
+      isDefault: false,
+      tokenGroup: 'default',
+      valueStatus: 'masked_pending' as any,
+    }).run();
+
+    getApiTokensMock.mockResolvedValue([
+      { name: 'token', key: upstreamMasked, enabled: true, tokenGroup: 'default' },
+    ]);
+    getApiTokenMock.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/account-tokens/sync/${account.id}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      synced: true,
+      status: 'synced',
+      created: 0,
+      updated: 1,
+      maskedPending: 0,
+      total: 1,
+    });
+
+    const tokenRows = await db.select()
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .all();
+    expect(tokenRows).toHaveLength(1);
+    expect(tokenRows[0]).toMatchObject({
+      name: 'token',
+      token: fullToken,
+      source: 'sync',
+      enabled: true,
+      isDefault: true,
+      tokenGroup: 'default',
+    });
+    expect((tokenRows[0] as any).valueStatus).toBe('ready');
+  });
+
+it('does not reuse a different ready token when another logical token shares the same masked value', async () => {
     const { account } = await seedAccount({ siteStatus: 'active' });
     const firstFullToken = 'sk-real-token-1234';
     const secondFullToken = 'sk-real-zzzzz-1234';

@@ -1,3 +1,5 @@
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { fetch, type RequestInit as UndiciRequestInit } from 'undici';
 import { config } from '../config.js';
 import { readRuntimeResponseText } from '../proxy-core/executors/types.js';
@@ -44,15 +46,66 @@ export type RemoteUpstreamHttpResult = {
 };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_TIMEOUT_MS = 60_000;
 const DEFAULT_PROMPT = 'Reply with a single word: ok';
 const DEFAULT_MAX_TOKENS = 16;
+const MAX_MAX_TOKENS = 128;
 const ANTHROPIC_VERSION = '2023-06-01';
+const MAX_RESPONSE_BYTES = 1_048_576; // 1 MB
+
+const PRIVATE_IPV4_RANGES: Array<[number, number]> = [
+  [0x0a000000, 0x0affffff],        // 10.0.0.0/8
+  [0x7f000000, 0x7f000000],        // 127.0.0.0/8 (loopback)
+  [0xa9fe0000, 0xa9feffff],        // 169.254.0.0/16 (link-local)
+  [0xac100000, 0xac1fffff],        // 172.16.0.0/12
+  [0xc0a80000, 0xc0a8ffff],        // 192.168.0.0/16
+  [0x00000000, 0x00ffffff],        // 0.0.0.0/8
+  [0xe0000000, 0xefffffff],        // 224.0.0.0/4 (multicast)
+  [0xf0000000, 0xffffffff],        // 240.0.0.0/4 (reserved)
+];
+
+function ipv4ToNumber(ip: string): number | null {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => p < 0 || p > 255)) return null;
+  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+}
+
+function isPrivateOrReservedIpv4(ip: string): boolean {
+  const num = ipv4ToNumber(ip);
+  if (num === null) return false;
+  return PRIVATE_IPV4_RANGES.some(([start, end]) => num >= start && num <= end);
+}
+
+function isPrivateOrReservedIpv6(ip: string): boolean {
+  if (ip === '::1') return true; // loopback
+  if (ip.startsWith('fe80:')) return true; // link-local
+  if (ip.startsWith('fc00:')) return true; // ULA
+  if (ip.startsWith('ff00:')) return true; // multicast
+  return false;
+}
+
+async function verifyHostAllowed(hostname: string): Promise<void> {
+  let ips: string[];
+  try {
+    const result = await lookup(hostname, { all: true });
+    ips = result.map((r: { address: string }) => r.address);
+  } catch {
+    throw new Error('DNS lookup failed');
+  }
+  for (const ip of ips) {
+    if (isIP(ip) === 4) {
+      if (isPrivateOrReservedIpv4(ip)) throw new Error(`Refused non-public IP ${ip}`);
+    } else if (isIP(ip) === 6) {
+      if (isPrivateOrReservedIpv6(ip)) throw new Error(`Refused non-public IP ${ip}`);
+    }
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function normalizeRemoteBaseUrl(input: string): string {
+export async function normalizeRemoteBaseUrl(input: string): Promise<string> {
   const trimmed = (input || '').trim();
   if (!trimmed) {
     throw new Error('baseUrl is required');
@@ -74,6 +127,12 @@ export function normalizeRemoteBaseUrl(input: string): string {
     throw new Error('baseUrl must use http or https');
   }
 
+  if (url.username || url.password) {
+    throw new Error('baseUrl must not contain credentials');
+  }
+
+  await verifyHostAllowed(url.hostname);
+
   // If the user pasted a full endpoint (…/v1/models or …/chat/completions),
   // strip known leaf paths back to the API root used for joining.
   let pathname = url.pathname.replace(/\/+$/, '') || '';
@@ -94,15 +153,15 @@ export function normalizeRemoteBaseUrl(input: string): string {
   return normalizePlatformBaseUrl(url.toString());
 }
 
-export function resolveRemoteModelsUrl(baseUrl: string): string {
-  return resolveVersionedModelsUrl(normalizeRemoteBaseUrl(baseUrl));
+export async function resolveRemoteModelsUrl(baseUrl: string): Promise<string> {
+  return resolveVersionedModelsUrl(await normalizeRemoteBaseUrl(baseUrl));
 }
 
-export function resolveRemoteProtocolUrl(
+export async function resolveRemoteProtocolUrl(
   baseUrl: string,
   protocol: RemoteUpstreamProtocol,
-): string {
-  const normalized = normalizeRemoteBaseUrl(baseUrl);
+): Promise<string> {
+  const normalized = await normalizeRemoteBaseUrl(baseUrl);
   if (protocol === 'anthropic') {
     if (/\/v\d+(?:\.\d+)?(?:beta)?$/i.test(normalized)) {
       return `${normalized}/messages`;
@@ -284,6 +343,56 @@ function extractPreviewText(protocol: RemoteUpstreamProtocol, body: unknown): st
   return '';
 }
 
+function clampTimeout(timeoutMs: number | undefined): number {
+  if (!timeoutMs || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return DEFAULT_TIMEOUT_MS;
+  }
+  return Math.min(Math.floor(timeoutMs), MAX_TIMEOUT_MS);
+}
+
+function clampMaxTokens(maxTokens: number | undefined): number {
+  if (!maxTokens || !Number.isFinite(maxTokens) || maxTokens <= 0) {
+    return DEFAULT_MAX_TOKENS;
+  }
+  return Math.min(Math.floor(maxTokens), MAX_MAX_TOKENS);
+}
+
+async function readBoundedResponseText(response: any): Promise<string> {
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    // No stream — fall back to full text but capped at MAX_RESPONSE_BYTES.
+    const text = await readRuntimeResponseText(response);
+    return text.length > MAX_RESPONSE_BYTES
+      ? text.slice(0, MAX_RESPONSE_BYTES) + '\n[truncated]'
+      : text;
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  let received = 0;
+  let output = '';
+  let truncated = false;
+
+  while (received < MAX_RESPONSE_BYTES) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    const chunk = decoder.decode(value, { stream: true });
+    const remaining = MAX_RESPONSE_BYTES - received;
+    if (chunk.length > remaining) {
+      output += chunk.slice(0, remaining);
+      received = MAX_RESPONSE_BYTES;
+      truncated = true;
+      break;
+    }
+    output += chunk;
+    received += chunk.length;
+  }
+
+  if (truncated) output += '\n[truncated]';
+  try { await reader.cancel(); } catch { /* ignore */ }
+  return output;
+}
+
 async function requestRemote(options: {
   url: string;
   method: 'GET' | 'POST';
@@ -309,11 +418,26 @@ async function requestRemote(options: {
       headers: options.headers,
       body: options.body == null ? undefined : JSON.stringify(options.body),
       signal: controller.signal,
+      redirect: 'manual',
     };
     const proxyUrl = normalizeSiteProxyUrl(config.systemProxyUrl);
     const proxied = withExplicitProxyRequestInit(proxyUrl, requestInit);
     const response = await fetch(options.url, proxied);
-    const responseText = await readRuntimeResponseText(response as any);
+    // Refuse redirects (manual redirect mode returns 3xx without following);
+    // following them would risk leaking the auth header to attacker-controlled hosts.
+    if (response.status >= 300 && response.status < 400) {
+      try { await response.body?.cancel?.(); } catch { /* ignore */ }
+      return {
+        statusCode: response.status,
+        latencyMs: Date.now() - started,
+        responseHeaders: headersToRecord(response.headers as any),
+        responseText: '',
+        responseBody: null,
+        ok: false,
+        error: `redirects are not allowed (HTTP ${response.status})`,
+      };
+    }
+    const responseText = await readBoundedResponseText(response as any);
     const latencyMs = Date.now() - started;
     return {
       statusCode: response.status,
@@ -349,11 +473,9 @@ export async function listRemoteUpstreamModels(
   const apiKey = (input.apiKey || '').trim();
   if (!apiKey) throw new Error('apiKey is required');
 
-  const requestUrl = resolveRemoteModelsUrl(input.baseUrl);
+  const requestUrl = await resolveRemoteModelsUrl(input.baseUrl);
   const requestHeaders = buildRemoteAuthHeaders(apiKey, 'completion');
-  const timeoutMs = input.timeoutMs && input.timeoutMs > 0
-    ? Math.floor(input.timeoutMs)
-    : DEFAULT_TIMEOUT_MS;
+  const timeoutMs = clampTimeout(input.timeoutMs);
 
   const response = await requestRemote({
     url: requestUrl,
@@ -392,17 +514,15 @@ export async function testRemoteUpstreamProtocol(
     throw new Error('protocol must be completion, anthropic, or responses');
   }
 
-  const requestUrl = resolveRemoteProtocolUrl(input.baseUrl, protocol);
+  const requestUrl = await resolveRemoteProtocolUrl(input.baseUrl, protocol);
   const requestHeaders = buildRemoteAuthHeaders(apiKey, protocol);
   const requestBody = buildRemoteProtocolBody(
     protocol,
     model,
     input.prompt || DEFAULT_PROMPT,
-    input.maxTokens ?? DEFAULT_MAX_TOKENS,
+    clampMaxTokens(input.maxTokens),
   );
-  const timeoutMs = input.timeoutMs && input.timeoutMs > 0
-    ? Math.floor(input.timeoutMs)
-    : DEFAULT_TIMEOUT_MS;
+  const timeoutMs = clampTimeout(input.timeoutMs);
 
   const response = await requestRemote({
     url: requestUrl,
