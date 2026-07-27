@@ -52,7 +52,10 @@ import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/con
 import { getObservedResponseMeta } from '../firstByteTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
-import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
+import {
+  getProxyMaxChannelRetries,
+  resolveProxyChannelFirstByteTimeoutMs,
+} from '../../services/proxyChannelRetry.js';
 import { shouldAbortSameSiteEndpointFallback } from '../../services/proxyRetryPolicy.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
@@ -228,6 +231,21 @@ export async function handleChatSurfaceRequest(
 
   const excludeChannelIds: number[] = [];
   const requestStartedAtMs = Date.now();
+  const appendExcludedSiteChannels = async (siteId?: number | null) => {
+    const normalizedSiteId = typeof siteId === 'number' && Number.isFinite(siteId) ? Math.trunc(siteId) : 0;
+    if (normalizedSiteId <= 0) return;
+    try {
+      const channelIds = await tokenRouter.listChannelIdsForSite(requestedModel, normalizedSiteId, downstreamPolicy);
+      for (const channelId of channelIds) {
+        if (!excludeChannelIds.includes(channelId)) {
+          excludeChannelIds.push(channelId);
+        }
+      }
+    } catch {
+      // best-effort site short-circuit; channel-level exclude still applies
+    }
+  };
+
     let retryCount = 0;
 
   while (retryCount <= maxRetries) {
@@ -241,6 +259,7 @@ export async function handleChatSurfaceRequest(
       retryCount,
       stickySessionKey,
       forcedChannelId,
+      downstreamApiKeyId,
     });
 
     if (!selected) {
@@ -423,7 +442,7 @@ export async function handleChatSurfaceRequest(
       return executeEndpointFlow({
         siteUrl: siteApiBaseUrl,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
-        firstByteTimeoutMs: Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000)),
+        firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
         endpointCandidates,
         buildRequest: (endpoint) => buildEndpointRequest(endpoint),
         dispatchRequest,
@@ -510,16 +529,18 @@ export async function handleChatSurfaceRequest(
     const leaseResult = await acquireSurfaceChannelLease({
       stickySessionKey,
       selected,
-    });
+            });
     if (leaseResult.status === 'timeout') {
       clearSurfaceStickyChannel({
-        stickySessionKey,
-        selected,
-      });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
       const busyMessage = buildSurfaceChannelBusyMessage(leaseResult.waitMs);
       await failureToolkit.log({
         selected,
-        modelRequested: requestedModel,
+            modelRequested: requestedModel,
         status: 'failed',
         httpStatus: 503,
         latencyMs: leaseResult.waitMs,
@@ -667,6 +688,8 @@ export async function handleChatSurfaceRequest(
           bindSurfaceStickyChannel({
             stickySessionKey,
             selected,
+            requestedModel,
+            downstreamApiKeyId,
           });
           return;
         }
@@ -681,12 +704,14 @@ export async function handleChatSurfaceRequest(
             const latency = Date.now() - startTime;
             if (streamResult.status === 'failed') {
               clearSurfaceStickyChannel({
-                stickySessionKey,
-                selected,
-              });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
               await failureToolkit.recordStreamFailure({
                 selected,
-                requestedModel,
+            requestedModel,
                 modelName,
                 errorMessage: streamResult.errorMessage,
                 latencyMs: latency,
@@ -725,9 +750,11 @@ export async function handleChatSurfaceRequest(
                 },
             );
             bindSurfaceStickyChannel({
-              stickySessionKey,
-              selected,
-            });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
             return;
           }
           let fallbackData: unknown = null;
@@ -745,12 +772,14 @@ export async function handleChatSurfaceRequest(
           const failure = detectProxyFailure({ rawText, usage: parsedUsage });
           if (failure) {
             clearSurfaceStickyChannel({
-              stickySessionKey,
-              selected,
-            });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
             const failureOutcome = await failureToolkit.handleDetectedFailure({
               selected,
-              requestedModel,
+            requestedModel,
               modelName,
               failure,
               latencyMs: latency,
@@ -766,6 +795,9 @@ export async function handleChatSurfaceRequest(
                 : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
               : failureOutcome;
             if (!terminalFailureOutcome) {
+              if (failureOutcome.action === 'retry') {
+                await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
+              }
               retryCount += 1;
               continue;
             }
@@ -780,12 +812,14 @@ export async function handleChatSurfaceRequest(
           const streamResult = streamSession.consumeUpstreamFinalPayload(fallbackData, fallbackText, streamResponse);
           if (streamResult.status === 'failed') {
             clearSurfaceStickyChannel({
-              stickySessionKey,
-              selected,
-            });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
             await failureToolkit.recordStreamFailure({
               selected,
-              requestedModel,
+            requestedModel,
               modelName,
               errorMessage: streamResult.errorMessage,
               latencyMs: latency,
@@ -827,6 +861,8 @@ export async function handleChatSurfaceRequest(
           bindSurfaceStickyChannel({
             stickySessionKey,
             selected,
+            requestedModel,
+            downstreamApiKeyId,
           });
           return;
         } else {
@@ -858,12 +894,14 @@ export async function handleChatSurfaceRequest(
           const latency = Date.now() - startTime;
           if (streamResult.status === 'failed') {
             clearSurfaceStickyChannel({
-              stickySessionKey,
-              selected,
-            });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
             await failureToolkit.recordStreamFailure({
               selected,
-              requestedModel,
+            requestedModel,
               modelName,
               errorMessage: streamResult.errorMessage,
               latencyMs: latency,
@@ -911,9 +949,11 @@ export async function handleChatSurfaceRequest(
             },
         );
         bindSurfaceStickyChannel({
-          stickySessionKey,
-          selected,
-        });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
         return;
       }
 
@@ -947,12 +987,14 @@ export async function handleChatSurfaceRequest(
       const failure = detectProxyFailure({ rawText, usage: parsedUsage });
       if (failure) {
         clearSurfaceStickyChannel({
-          stickySessionKey,
-          selected,
-        });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
         const failureOutcome = await failureToolkit.handleDetectedFailure({
           selected,
-          requestedModel,
+            requestedModel,
           modelName,
           failure,
           latencyMs: latency,
@@ -968,6 +1010,9 @@ export async function handleChatSurfaceRequest(
             : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
           : failureOutcome;
         if (!terminalFailureOutcome) {
+          if (failureOutcome.action === 'retry') {
+            await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
+          }
           retryCount += 1;
           continue;
         }
@@ -985,7 +1030,7 @@ export async function handleChatSurfaceRequest(
 
       await recordSurfaceSuccess({
         selected,
-        requestedModel,
+            requestedModel,
         modelName,
         parsedUsage,
         upstreamUsagePresent,
@@ -1011,16 +1056,20 @@ export async function handleChatSurfaceRequest(
         downstreamResponse,
       );
       bindSurfaceStickyChannel({
-        stickySessionKey,
-        selected,
-      });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
 
       return reply.send(downstreamResponse);
     } catch (err: any) {
       clearSurfaceStickyChannel({
-        stickySessionKey,
-        selected,
-      });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
       const endpointFailureStatus = typeof err?.status === 'number' ? err.status : null;
       const isSiteApiEndpointFailure = (
         err instanceof SiteApiEndpointRequestError
@@ -1048,7 +1097,7 @@ export async function handleChatSurfaceRequest(
       if (isSiteApiEndpointFailure) {
         const failureOutcome = await failureToolkit.handleUpstreamFailure({
           selected,
-          requestedModel,
+            requestedModel,
           modelName,
           status: endpointFailureStatus || 502,
           errText: err.message || 'unknown error',
@@ -1063,6 +1112,9 @@ export async function handleChatSurfaceRequest(
             : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err.message || 'unknown error'))
           : failureOutcome;
         if (!terminalFailureOutcome) {
+          if (failureOutcome.action === 'retry') {
+            await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
+          }
           retryCount += 1;
           continue;
         }
@@ -1076,7 +1128,7 @@ export async function handleChatSurfaceRequest(
       }
       const failureOutcome = await failureToolkit.handleExecutionError({
         selected,
-        requestedModel,
+            requestedModel,
         modelName,
         errorMessage: err?.message || 'network failure',
         isStream,
@@ -1089,6 +1141,9 @@ export async function handleChatSurfaceRequest(
           : finalizeRetryAsExecutionFailure(err?.message || 'network failure'))
         : failureOutcome;
       if (!terminalFailureOutcome) {
+        if (failureOutcome.action === 'retry') {
+          await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
+        }
         retryCount += 1;
         continue;
       }

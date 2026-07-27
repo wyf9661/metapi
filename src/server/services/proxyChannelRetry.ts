@@ -1,9 +1,18 @@
 import { config } from '../config.js';
+import {
+  classifyProxyFailure,
+  isLowValueFailoverFailureClass,
+  type ProxyFailureClass,
+} from './siteFailureClassification.js';
 
 /** Soft ceiling so huge free-pool models (20+ channels) cannot thrash for minutes. */
 export const PROXY_CHANNEL_FAILOVER_SOFT_ATTEMPT_CAP_DEFAULT = 8;
 /** Soft wall-clock budget for multi-channel failover when env leaves budget unset (0). */
 export const PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT = 45_000;
+/** After the first channel, use a shorter first-byte probe for remaining candidates. */
+export const PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT = 8_000;
+/** Stop after this many consecutive low-value failure classes (WAF/model/quota/ambiguous). */
+export const PROXY_CHANNEL_FAILOVER_LOW_VALUE_STREAK_STOP_DEFAULT = 2;
 
 export function getProxyMaxChannelAttempts(): number {
   const attempts = Math.trunc(config.proxyMaxChannelAttempts || 0);
@@ -87,4 +96,45 @@ export function canRetryProxyChannelWithBudget(
   if (!budgetMs || budgetMs <= 0) return true;
   if (typeof elapsedMs !== 'number' || !Number.isFinite(elapsedMs)) return true;
   return elapsedMs < budgetMs;
+}
+
+/**
+ * First-byte timeout for channel attempt N.
+ * First attempt uses full config timeout; later attempts use a short probe so
+ * failover does not spend a full generation timeout validating bad channels.
+ */
+export function resolveProxyChannelFirstByteTimeoutMs(retryCount: number): number {
+  const fullMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+  if (retryCount <= 0) return fullMs;
+  if (fullMs <= 0) return PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT;
+  return Math.min(fullMs, PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT);
+}
+
+export type FailoverStreakState = {
+  lowValueStreak: number;
+  lastClass: ProxyFailureClass | null;
+};
+
+export function createFailoverStreakState(): FailoverStreakState {
+  return { lowValueStreak: 0, lastClass: null };
+}
+
+/**
+ * Update streak from a channel failure. Returns whether failover should stop
+ * (no more channel switches) even if attempt budget remains.
+ */
+export function noteFailoverFailureAndShouldStop(
+  state: FailoverStreakState,
+  status: number,
+  errorText?: string | null,
+  stopAfter: number = PROXY_CHANNEL_FAILOVER_LOW_VALUE_STREAK_STOP_DEFAULT,
+): boolean {
+  const decision = classifyProxyFailure({ status, errorText });
+  state.lastClass = decision.class;
+  if (isLowValueFailoverFailureClass(decision.class)) {
+    state.lowValueStreak += 1;
+  } else {
+    state.lowValueStreak = 0;
+  }
+  return state.lowValueStreak >= Math.max(1, Math.trunc(stopAfter));
 }

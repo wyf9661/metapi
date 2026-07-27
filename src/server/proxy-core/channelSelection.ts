@@ -119,6 +119,7 @@ export async function selectProxyChannelForAttempt(input: {
   retryCount: number;
   stickySessionKey?: string | null;
   forcedChannelId?: number | null;
+  downstreamApiKeyId?: number | null;
 }): Promise<SelectedChannel> {
   const normalizedForcedChannelId = normalizeForcedChannelId(input.forcedChannelId);
   if (normalizedForcedChannelId !== null) {
@@ -133,6 +134,7 @@ export async function selectProxyChannelForAttempt(input: {
 
   let selected: SelectedChannel = null;
   let refreshedRoutes = false;
+  let preferredSource: 'sticky' | 'last_success' | null = null;
 
   const refreshRoutesForFirstAttempt = async (): Promise<boolean> => {
     if (input.retryCount > 0 || refreshedRoutes) return false;
@@ -146,26 +148,58 @@ export async function selectProxyChannelForAttempt(input: {
     }
   };
 
-  if (input.retryCount === 0 && input.stickySessionKey) {
-    const preferredChannelId = proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey);
-    if (preferredChannelId && !input.excludeChannelIds.includes(preferredChannelId)) {
-      selected = await tokenRouter.selectPreferredChannel(
+  const tryPreferredChannel = async (
+    preferredChannelId: number,
+    source: 'sticky' | 'last_success',
+  ): Promise<SelectedChannel> => {
+    if (preferredChannelId <= 0 || input.excludeChannelIds.includes(preferredChannelId)) {
+      return null;
+    }
+    let preferred = await tokenRouter.selectPreferredChannel(
+      input.requestedModel,
+      preferredChannelId,
+      input.downstreamPolicy,
+      input.excludeChannelIds,
+    );
+    if (!preferred) {
+      const refreshSucceeded = await refreshRoutesForFirstAttempt();
+      preferred = await tokenRouter.selectPreferredChannel(
         input.requestedModel,
         preferredChannelId,
         input.downstreamPolicy,
         input.excludeChannelIds,
       );
-      if (!selected) {
-        const refreshSucceeded = await refreshRoutesForFirstAttempt();
-        selected = await tokenRouter.selectPreferredChannel(
-          input.requestedModel,
-          preferredChannelId,
-          input.downstreamPolicy,
-          input.excludeChannelIds,
-        );
-        if (!selected && refreshSucceeded) {
+      if (!preferred && refreshSucceeded) {
+        if (source === 'sticky' && input.stickySessionKey) {
           proxyChannelCoordinator.clearStickyChannel(input.stickySessionKey, preferredChannelId);
         }
+        if (source === 'last_success') {
+          proxyChannelCoordinator.clearLastSuccessChannel({
+            requestedModel: input.requestedModel,
+            downstreamApiKeyId: input.downstreamApiKeyId,
+            channelId: preferredChannelId,
+          });
+        }
+      }
+    }
+    if (preferred) preferredSource = source;
+    return preferred;
+  };
+
+  if (input.retryCount === 0) {
+    if (input.stickySessionKey) {
+      const stickyChannelId = proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey);
+      if (stickyChannelId) {
+        selected = await tryPreferredChannel(stickyChannelId, 'sticky');
+      }
+    }
+    if (!selected) {
+      const lastSuccessChannelId = proxyChannelCoordinator.getLastSuccessChannelId({
+        requestedModel: input.requestedModel,
+        downstreamApiKeyId: input.downstreamApiKeyId,
+      });
+      if (lastSuccessChannelId) {
+        selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
       }
     }
   }
@@ -185,7 +219,7 @@ export async function selectProxyChannelForAttempt(input: {
     selected = await tokenRouter.selectChannel(input.requestedModel, input.downstreamPolicy);
   }
 
-  const stickyHit = !!(
+  const stickyHit = preferredSource === 'sticky' || !!(
     input.stickySessionKey
     && selected
     && proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey) === selected.channel.id
@@ -194,13 +228,15 @@ export async function selectProxyChannelForAttempt(input: {
     requestedModel: input.requestedModel,
     selected,
     retryCount: input.retryCount,
-    sticky: stickyHit,
+    sticky: stickyHit || preferredSource === 'last_success',
     forcedChannelId: input.forcedChannelId,
     reason: input.forcedChannelId
       ? 'forced'
-      : stickyHit
+      : preferredSource === 'sticky'
         ? 'sticky'
-        : (input.retryCount > 0 ? 'failover' : 'primary'),
+        : preferredSource === 'last_success'
+          ? 'last_success'
+          : (input.retryCount > 0 ? 'failover' : 'primary'),
   });
 
   return selected;

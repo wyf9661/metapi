@@ -159,6 +159,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       retryCount,
       stickySessionKey,
       forcedChannelId,
+      downstreamApiKeyId,
     });
 
     if (!selected) {
@@ -245,16 +246,18 @@ export async function handleClaudeCountTokensSurfaceRequest(
     const leaseResult = await acquireSurfaceChannelLease({
       stickySessionKey,
       selected,
-    });
+            });
     if (leaseResult.status === 'timeout') {
       clearSurfaceStickyChannel({
-        stickySessionKey,
-        selected,
-      });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
       const busyMessage = buildSurfaceChannelBusyMessage(leaseResult.waitMs);
       await failureToolkit.log({
         selected,
-        modelRequested: requestedModel,
+            modelRequested: requestedModel,
         status: 'failed',
         httpStatus: 503,
         latencyMs: leaseResult.waitMs,
@@ -387,7 +390,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       recordDownstreamCostUsage(request, 0);
       await failureToolkit.log({
         selected,
-        modelRequested: requestedModel,
+            modelRequested: requestedModel,
         status: 'success',
         httpStatus: upstream.status,
         latencyMs: latency,
@@ -396,9 +399,11 @@ export async function handleClaudeCountTokensSurfaceRequest(
         upstreamPath: upstreamRequest.path,
       });
       bindSurfaceStickyChannel({
-        stickySessionKey,
-        selected,
-      });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
       await finalizeDebugSuccess(
         upstream.status,
         upstreamRequest.path,
@@ -408,9 +413,11 @@ export async function handleClaudeCountTokensSurfaceRequest(
       return reply.code(upstream.status).type(contentType).send(payload);
     } catch (error: any) {
       clearSurfaceStickyChannel({
-        stickySessionKey,
-        selected,
-      });
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
       const endpointFailureStatus = typeof error?.status === 'number' ? error.status : null;
       const isSiteApiEndpointFailure = (
         error instanceof SiteApiEndpointRequestError
@@ -437,7 +444,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       if (isSiteApiEndpointFailure) {
         const failureOutcome = await failureToolkit.handleUpstreamFailure({
           selected,
-          requestedModel,
+            requestedModel,
           modelName,
           status: endpointFailureStatus || 502,
           errText: error.message || 'unknown error',
@@ -460,7 +467,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       }
       const failureOutcome = await failureToolkit.handleExecutionError({
         selected,
-        requestedModel,
+            requestedModel,
         modelName,
         errorMessage: error?.message || 'network failure',
         isStream: false,

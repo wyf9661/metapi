@@ -7,6 +7,12 @@ import type { DownstreamRoutingPolicy } from '../../services/downstreamPolicyTyp
 import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
+import {
+  createFailoverStreakState,
+  noteFailoverFailureAndShouldStop,
+  type FailoverStreakState,
+} from '../../services/proxyChannelRetry.js';
+import { shouldExcludeSiteForRequestFailure } from '../../services/siteFailureClassification.js';
 import { mapUpstreamErrorForClient } from '../../shared/siteProtocolProfile.js';
 import { composeProxyLogMessage } from '../../services/proxyLogMessage.js';
 import { resolveProxyLogBilling } from '../../services/proxyBilling.js';
@@ -27,7 +33,7 @@ type SurfaceWarningScope = 'chat' | 'responses';
 type SurfaceSelectedChannel = {
   channel: { routeId: number | null; id: number };
   account: { id: number; username?: string | null };
-  site: { name?: string | null };
+  site: { id?: number | null; name?: string | null };
   actualModel?: string | null;
 };
 
@@ -44,7 +50,7 @@ type SurfaceFailureResponse = {
 };
 
 type SurfaceFailureOutcome =
-  | { action: 'retry' }
+  | { action: 'retry'; excludeSiteId?: number | null }
   | SurfaceFailureResponse;
 
 type SurfaceOauthRefreshSelectedChannel = {
@@ -110,6 +116,7 @@ export async function selectSurfaceChannelForAttempt(input: {
   retryCount: number;
   stickySessionKey?: string | null;
   forcedChannelId?: number | null;
+  downstreamApiKeyId?: number | null;
 }): Promise<SelectedChannel> {
   return await selectProxyChannelForAttempt(input);
 }
@@ -140,12 +147,19 @@ export function bindSurfaceStickyChannel(input: {
     channel: { id: number };
     account?: { extraConfig?: string | null; oauthProvider?: string | null } | null;
   };
+  requestedModel?: string | null;
+  downstreamApiKeyId?: number | null;
 }): void {
   proxyChannelCoordinator.bindStickyChannel(
     input.stickySessionKey,
     input.selected.channel.id,
     input.selected.account || undefined,
   );
+  proxyChannelCoordinator.rememberLastSuccessChannel({
+    requestedModel: input.requestedModel,
+    downstreamApiKeyId: input.downstreamApiKeyId,
+    channelId: input.selected.channel.id,
+  });
 }
 
 export function clearSurfaceStickyChannel(input: {
@@ -153,11 +167,18 @@ export function clearSurfaceStickyChannel(input: {
   selected: {
     channel: { id: number };
   };
+  requestedModel?: string | null;
+  downstreamApiKeyId?: number | null;
 }): void {
   proxyChannelCoordinator.clearStickyChannel(
     input.stickySessionKey,
     input.selected.channel.id,
   );
+  proxyChannelCoordinator.clearLastSuccessChannel({
+    requestedModel: input.requestedModel,
+    downstreamApiKeyId: input.downstreamApiKeyId,
+    channelId: input.selected.channel.id,
+  });
 }
 
 export async function acquireSurfaceChannelLease(input: {
@@ -486,7 +507,13 @@ export function createSurfaceFailureToolkit(input: {
   clientContext?: DownstreamClientContext | null;
   downstreamApiKeyId?: number | null;
   traceId?: string | null;
+  /**
+   * Optional request-scoped failover streak. When consecutive low-value failures
+   * accumulate, stop channel failover early even if maxRetries remain.
+   */
+  failoverStreak?: FailoverStreakState;
 }) {
+  const failoverStreak = input.failoverStreak ?? createFailoverStreakState();
   const log = async (args: {
     selected: SurfaceSelectedChannel;
     modelRequested: string;
@@ -530,9 +557,20 @@ export function createSurfaceFailureToolkit(input: {
     });
   };
 
-  const maybeRetry = (retryCount: number) => retryCount < input.maxRetries
-    ? { action: 'retry' as const }
-    : null;
+  const maybeRetry = (retryCount: number, status: number, errorText?: string | null, selected?: SurfaceSelectedChannel) => {
+    if (retryCount >= input.maxRetries) return null;
+    if (!shouldRetryProxyRequest(status, errorText)) return null;
+    if (noteFailoverFailureAndShouldStop(failoverStreak, status, errorText)) {
+      return null;
+    }
+    const excludeSiteId = selected && shouldExcludeSiteForRequestFailure({
+      status,
+      errorText,
+    })
+      ? (selected.site?.id ?? null)
+      : null;
+    return { action: 'retry' as const, excludeSiteId };
+  };
 
   const runBestEffort = (label: string, fn: () => Promise<unknown>) => {
     void Promise.resolve()
@@ -588,10 +626,8 @@ export function createSurfaceFailureToolkit(input: {
         }));
       }
 
-      if (shouldRetryProxyRequest(args.status, args.errText)) {
-        const retry = maybeRetry(args.retryCount);
-        if (retry) return retry;
-      }
+      const retry = maybeRetry(args.retryCount, args.status, args.errText, args.selected);
+      if (retry) return retry;
 
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
@@ -652,10 +688,8 @@ export function createSurfaceFailureToolkit(input: {
         upstreamPath: args.upstreamPath,
       });
 
-      if (shouldRetryProxyRequest(args.failure.status, args.failure.reason)) {
-        const retry = maybeRetry(args.retryCount);
-        if (retry) return retry;
-      }
+      const retryDetected = maybeRetry(args.retryCount, args.failure.status, args.failure.reason, args.selected);
+      if (retryDetected) return retryDetected;
 
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
@@ -707,8 +741,8 @@ export function createSurfaceFailureToolkit(input: {
         retryCount: args.retryCount,
       });
 
-      const retry = maybeRetry(args.retryCount);
-      if (retry) return retry;
+      const retryExec = maybeRetry(args.retryCount, 0, args.errorMessage, args.selected);
+      if (retryExec) return retryExec;
 
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
         model: args.requestedModel,
