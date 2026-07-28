@@ -9,6 +9,7 @@ describe('buildConfig', () => {
     expect(config.listenHost).toBe('0.0.0.0');
     expect(config.port).toBe(4000);
     expect(config.dataDir).toBe('./data');
+    expect(config.trustProxy).toBe(false);
   });
 
   it('defaults sticky / first-byte / probe timeouts to 30s', () => {
@@ -95,7 +96,7 @@ describe('buildConfig', () => {
   });
 
   it('trusts forwarded client IP headers for reverse-proxy deployments', async () => {
-    const app = Fastify(buildFastifyOptions(buildConfig({})));
+    const app = Fastify(buildFastifyOptions(buildConfig({ TRUST_PROXY: 'true' })));
 
     app.get('/ip', async (request) => ({
       ip: request.ip,

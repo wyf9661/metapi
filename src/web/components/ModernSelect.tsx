@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
 type ModernSelectOption = {
   value: string;
@@ -41,6 +41,7 @@ export default function ModernSelect({
 }: ModernSelectProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const selected = useMemo(
@@ -64,6 +65,35 @@ export default function ModernSelect({
       return haystack.includes(query);
     });
   }, [options, searchQuery, searchable]);
+
+  const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const enabledOptions = visibleOptions.filter((item) => !item.disabled);
+    if (enabledOptions.length === 0) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setOpen(true);
+      setActiveIndex((current) => {
+        if (current < 0) {
+          const selectedIndex = enabledOptions.findIndex((item) => item.value === value);
+          const base = selectedIndex >= 0 ? selectedIndex : 0;
+          return event.key === 'ArrowDown'
+            ? Math.min(base + 1, enabledOptions.length - 1)
+            : Math.max(base - 1, 0);
+        }
+        return event.key === 'ArrowDown'
+          ? Math.min(current + 1, enabledOptions.length - 1)
+          : Math.max(current - 1, 0);
+      });
+      return;
+    }
+    if (event.key === 'Enter' && open && activeIndex >= 0) {
+      event.preventDefault();
+      const selectedOption = enabledOptions[activeIndex];
+      if (selectedOption) onChange(selectedOption.value);
+      setOpen(false);
+      setActiveIndex(-1);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -123,7 +153,9 @@ export default function ModernSelect({
         onClick={() => {
           if (!disabled) setOpen((prev) => !prev);
         }}
+        onKeyDown={handleTriggerKeyDown}
         aria-expanded={open}
+        aria-haspopup="listbox"
         disabled={disabled}
       >
         <span className={`modern-select-value ${selected ? '' : 'is-placeholder'}`.trim()}>
@@ -148,7 +180,7 @@ export default function ModernSelect({
         </svg>
       </button>
 
-      <div className="modern-select-panel" style={{ maxHeight: menuMaxHeight }}>
+      <div className="modern-select-panel" role="listbox" style={{ maxHeight: menuMaxHeight }}>
         {searchable && (
           <div className="modern-select-search-shell">
             <input
@@ -171,6 +203,8 @@ export default function ModernSelect({
                 key={item.value}
                 type="button"
                 className={`modern-select-option ${active ? 'is-active' : ''} ${item.disabled ? 'is-disabled' : ''}`.trim()}
+                role="option"
+                aria-selected={active}
                 onClick={() => {
                   if (item.disabled) return;
                   onChange(item.value);

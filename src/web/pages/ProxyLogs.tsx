@@ -2284,6 +2284,14 @@ export default function ProxyLogs() {
                     <tr
                       data-testid={`proxy-log-row-${log.id}`}
                       onClick={() => handleToggleExpand(log.id)}
+                      tabIndex={0}
+                      aria-expanded={expanded === log.id}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleToggleExpand(log.id);
+                        }
+                      }}
                       style={{
                         cursor: "pointer",
                         background:

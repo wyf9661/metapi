@@ -68,11 +68,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={t.id}
             className={`toast toast-${t.type} ${t.exiting ? 'toast-exit' : ''}`}
-            onClick={() => removeToast(t.id)}
-            style={{ cursor: 'pointer' }}
+            role={t.type === 'error' ? 'alert' : 'status'}
+            aria-live={t.type === 'error' ? 'assertive' : 'polite'}
           >
             <span style={{ flexShrink: 0, marginTop: 1 }}>{icons[t.type]}</span>
             <span style={{ fontSize: 13, lineHeight: 1.5 }}>{t.message}</span>
+            <button type="button" className="toast-close" aria-label="关闭通知" onClick={() => removeToast(t.id)}>×</button>
             <div className="toast-progress" />
           </div>
         ))}

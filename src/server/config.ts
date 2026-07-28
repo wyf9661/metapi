@@ -134,7 +134,7 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     // When DB_SSL=true, verify certificates by default (set DB_SSL_REJECT_UNAUTHORIZED=false for self-signed).
     dbSslRejectUnauthorized: parseBoolean(env.DB_SSL_REJECT_UNAUTHORIZED, true),
     // trustProxy: honor X-Forwarded-For from reverse proxies. Set TRUST_PROXY=false when exposed directly.
-    trustProxy: parseBoolean(env.TRUST_PROXY, true),
+    trustProxy: parseBoolean(env.TRUST_PROXY, false),
     // Only constrain to N hops when explicitly configured; otherwise preserve legacy trust-all behavior.
     trustProxyHops: env.TRUST_PROXY_HOPS !== undefined
       ? Math.max(1, Math.trunc(parseNumber(env.TRUST_PROXY_HOPS, 1)))

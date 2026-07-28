@@ -20,6 +20,7 @@ export type SummaryItem = {
   maxDailyCost?: number | null;
   dailyUsedRequests?: number;
   dailyUsedCost?: number;
+  sensitiveWordDetection?: boolean | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAnimatedVisibility } from './useAnimatedVisibility.js';
 
@@ -28,6 +28,9 @@ export default function CenteredModal({
   showCloseButton = true,
 }: CenteredModalProps) {
   const presence = useAnimatedVisibility(open, 220);
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   // Skip the DOM portal under the test runner: web tests render this shell
   // through react-test-renderer, which cannot host a ReactDOM.createPortal
   // into jsdom's document.body ("another renderer is being used"). Vite
@@ -42,10 +45,16 @@ export default function CenteredModal({
 
   useEffect(() => {
     if (!open || !canUsePortal) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    queueMicrotask(() => {
+      const firstFocusable = dialogRef.current?.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      (firstFocusable || dialogRef.current)?.focus();
+    });
     return () => {
       document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus();
     };
   }, [canUsePortal, open]);
 
@@ -68,12 +77,17 @@ export default function CenteredModal({
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
+        ref={dialogRef}
         className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()}
         style={{ maxWidth }}
         onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
       >
         <div className="modal-header">
-          <div className="modal-title">{title}</div>
+          <div className="modal-title" id={titleId}>{title}</div>
           {showCloseButton ? (
             <button
               type="button"

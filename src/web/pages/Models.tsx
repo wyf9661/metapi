@@ -168,7 +168,7 @@ function renderGroupPricingValue(pricing: ModelGroupPricing): string {
   return `${pricing.perCallTotal ?? 0} USD / call`;
 }
 
-const PAGE_SIZES = [10, 20, 50];
+const PAGE_SIZES = [8, 16, 32];
 
 function compareModels(a: ModelRow, b: ModelRow, sortBy: SortColumn, sortDir: 'asc' | 'desc'): number {
   if (sortBy === 'name') {
@@ -206,6 +206,7 @@ export default function Models() {
   const toast = useToast();
   const [data, setData] = useState<ModelsMarketplaceResponse>({ models: [] });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortColumn>('accountCount');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -214,7 +215,7 @@ export default function Models() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(8);
   const [copied, setCopied] = useState<string | null>(null);
   const [probingKey, setProbingKey] = useState<string | null>(null);
   const [probingAccountIds, setProbingAccountIds] = useState<Set<number>>(new Set());
@@ -285,6 +286,7 @@ export default function Models() {
       if (requestId !== latestPrimaryRequestRef.current) return null;
       const next = res as ModelsMarketplaceResponse;
       setData(next);
+      setLoadError(null);
       if (refresh && next.meta?.refreshRequested) {
         if (next.meta.refreshReused) {
           toast.info(tr('模型广场刷新进行中'));
@@ -293,9 +295,9 @@ export default function Models() {
         }
       }
       return next;
-    } catch {
+    } catch (error: any) {
       if (requestId !== latestPrimaryRequestRef.current) return null;
-      setData({ models: [] });
+      setLoadError(error?.message || tr('加载模型广场失败'));
       return null;
     } finally {
       if (requestId === latestPrimaryRequestRef.current) {
@@ -1068,8 +1070,14 @@ export default function Models() {
           </div>
         </div>
 
-        {/* Empty */}
-        {detailModels.length === 0 ? (
+        {/* Empty / load error */}
+        {loadError ? (
+          <div className="empty-state">
+            <div className="empty-state-title">{tr('加载模型广场失败')}</div>
+            <div className="empty-state-desc">{loadError}</div>
+            <button type="button" className="btn btn-primary" onClick={() => void loadBaseMarketplace(false)}>{tr('重试')}</button>
+          </div>
+        ) : detailModels.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">
               <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1367,7 +1375,18 @@ export default function Models() {
                   const isExpanded = expanded === m.name;
                   return (
                   <React.Fragment key={m.name}>
-                    <tr onClick={() => setExpanded(isExpanded ? null : m.name)} style={{ cursor: 'pointer' }}>
+                    <tr
+                      onClick={() => setExpanded(isExpanded ? null : m.name)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setExpanded(isExpanded ? null : m.name);
+                        }
+                      }}
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <td>
                         <BrandIcon model={m.name} size={28} />
                       </td>

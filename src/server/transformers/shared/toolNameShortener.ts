@@ -5,17 +5,25 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export function shortenToolNameIfNeeded(name: string): string {
+export function normalizeToolName(name: string): string {
   const trimmed = asTrimmedString(name);
-  if (trimmed.length <= TOOL_NAME_LIMIT) return trimmed;
-  if (trimmed.startsWith(MCP_PREFIX)) {
-    const lastSeparator = trimmed.lastIndexOf('__');
+  const normalized = trimmed
+    .replace(/[^A-Za-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return normalized || 'tool';
+}
+
+export function shortenToolNameIfNeeded(name: string): string {
+  const normalized = normalizeToolName(name);
+  if (normalized.length <= TOOL_NAME_LIMIT) return normalized;
+  if (normalized.startsWith(MCP_PREFIX)) {
+    const lastSeparator = normalized.lastIndexOf('__');
     if (lastSeparator > 0) {
-      const candidate = `${MCP_PREFIX}${trimmed.slice(lastSeparator + 2)}`;
+      const candidate = `${MCP_PREFIX}${normalized.slice(lastSeparator + 2)}`;
       return candidate.length > TOOL_NAME_LIMIT ? candidate.slice(0, TOOL_NAME_LIMIT) : candidate;
     }
   }
-  return trimmed.slice(0, TOOL_NAME_LIMIT);
+  return normalized.slice(0, TOOL_NAME_LIMIT);
 }
 
 export function buildShortToolNameMap(names: string[]): Record<string, string> {
