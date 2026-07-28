@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, count, eq, like, sql, SQL } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db, schema } from '../db/index.js';
 import { startBackgroundTask } from './backgroundTaskService.js';
@@ -521,9 +521,167 @@ async function resolvePreferredTokenValue(accountId: number): Promise<string | u
   return undefined;
 }
 
+
+
+async function diagnoseNoProbeTargets(
+  modelName: string,
+  options: MarketplaceModelProbeOptions,
+): Promise<string> {
+  const siteId = Number.isFinite(options.siteId as number) && Number(options.siteId) > 0
+    ? Math.trunc(Number(options.siteId))
+    : null;
+  const accountId = Number.isFinite(options.accountId as number) && Number(options.accountId) > 0
+    ? Math.trunc(Number(options.accountId))
+    : null;
+
+  // 1. Check if ANY model_availability row exists for this exact name (ignore status filters)
+  const anyMa = await db.select({ count: count() })
+    .from(schema.modelAvailability)
+    .where(and(
+      eq(schema.modelAvailability.modelName, modelName),
+      ...(accountId ? [eq(schema.modelAvailability.accountId, accountId)] : []),
+    ))
+    .get();
+  const maCount = anyMa?.count ?? 0;
+
+  if (maCount === 0) {
+    // 1a. Check for similar model names (case-insensitive LIKE containing this substring)
+    const similar = await db.select({ modelName: schema.modelAvailability.modelName })
+      .from(schema.modelAvailability)
+      .where(and(
+        // Drizzle like is case-insensitive for SQLite if column is NOCASE
+        like(schema.modelAvailability.modelName, `%${modelName}%`),
+        ...(accountId ? [eq(schema.modelAvailability.accountId, accountId)] : []),
+      ))
+      .limit(5)
+      .all();
+    if (similar.length > 0) {
+      const names = [...new Set(similar.map(r => r.modelName))].join('、');
+      return `模型名 "${modelName}" 无精确匹配，但找到相似模型：${names}。请检查模型名是否一致（大小写/前缀/后缀）。`;
+    }
+
+    // 1b. Check if model_availability table has ANY data at all
+    const totalMa = await db.select({ count: count() }).from(schema.modelAvailability).get();
+    if (!totalMa || totalMa.count === 0) {
+      return '模型列表为空，没有任何站点同步过模型数据。请先添加站点并同步模型。';
+    }
+
+    // 1c. Check for token-level availability
+    const tokenMatch = await db.select({ count: count() })
+      .from(schema.tokenModelAvailability)
+      .where(eq(schema.tokenModelAvailability.modelName, modelName))
+      .get();
+    if (tokenMatch && tokenMatch.count > 0) {
+      return `该模型仅在 token_model_availability 中有记录（${tokenMatch.count} 条），但没有活跃且就绪的 token 对应。请确认下游令牌状态为 "ready"。`;
+    }
+
+    return `model_availability 表中找不到模型 "${modelName}"（已同步 ${totalMa?.count ?? 0} 个其他模型），请先同步该站点的模型列表。`;
+  }
+
+  // 2. Rows exist — check why they were filtered
+  // 2a. Accounts not active
+  const inactiveAccounts = await db.select({ count: count() })
+    .from(schema.modelAvailability)
+    .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
+    .where(and(
+      eq(schema.modelAvailability.modelName, modelName),
+      sql`${schema.accounts.status} != 'active'`,
+      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+    ))
+    .get();
+
+  // 2b. Sites not active
+  const inactiveSites = await db.select({ count: count() })
+    .from(schema.modelAvailability)
+    .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .where(and(
+      eq(schema.modelAvailability.modelName, modelName),
+      sql`${schema.sites.status} != 'active'`,
+      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+    ))
+    .get();
+
+  const inactiveAccountCount = inactiveAccounts?.count ?? 0;
+  const inactiveSiteCount = inactiveSites?.count ?? 0;
+
+  let diagParts: string[] = [];
+  if (inactiveAccountCount > 0) {
+    diagParts.push(`${inactiveAccountCount} 个账户状态非活跃`);
+  }
+  if (inactiveSiteCount > 0) {
+    diagParts.push(`${inactiveSiteCount} 个站点状态非活跃`);
+  }
+
+  // 2c. Check if all are disabled via site_disabled_models
+  const disabledModelsIndex = await loadSiteDisabledModelsIndex();
+  const allMa = await db.select({
+    siteId: schema.sites.id,
+    modelName: schema.modelAvailability.modelName,
+  })
+    .from(schema.modelAvailability)
+    .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .where(and(
+      eq(schema.modelAvailability.modelName, modelName),
+      eq(schema.accounts.status, 'active'),
+      eq(schema.sites.status, 'active'),
+      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+      ...(siteId ? [eq(schema.sites.id, siteId)] : []),
+    ))
+    .all();
+
+  if (allMa.length > 0) {
+    const disabled = allMa.filter(h => isModelDisabledForSite(disabledModelsIndex, h.siteId, h.modelName));
+    if (disabled.length === allMa.length) {
+      return `所有 ${allMa.length} 个活跃账户/站点均已通过「站点禁用模型」屏蔽该模型。请检查站点设置中的禁用模型列表。`;
+    }
+    if (disabled.length > 0) {
+      diagParts.push(`${disabled.length} 个被站点禁用模型排除`);
+    }
+
+    // Remaining = should be targets but something else went wrong
+    const remaining = allMa.length - disabled.length;
+    if (remaining > 0) {
+      diagParts.push(`其余 ${remaining} 个已进入测活但未返回有效结果`);
+    }
+  }
+
+  // 2d. Check token availability
+  const tokenRows = await db.select({ count: count() })
+    .from(schema.tokenModelAvailability)
+    .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
+    .where(and(
+      eq(schema.tokenModelAvailability.modelName, modelName),
+    ))
+    .get();
+  const tokenTotal = tokenRows?.count ?? 0;
+  if (tokenTotal > 0) {
+    const readyTokens = await db.select({ count: count() })
+      .from(schema.tokenModelAvailability)
+      .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
+      .where(and(
+        eq(schema.tokenModelAvailability.modelName, modelName),
+        eq(schema.accountTokens.enabled, true),
+        eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
+      ))
+      .get();
+    const readyCount = readyTokens?.count ?? 0;
+    if (readyCount < tokenTotal) {
+      diagParts.push(`${tokenTotal - readyCount} 个令牌未就绪（共计 ${tokenTotal} 个 token 记录）`);
+    }
+  }
+
+  if (diagParts.length === 0) {
+    return `模型 "${modelName}" 有 ${maCount} 条 model_availability 记录，但所有可测活目标均被过滤。请检查账户/站点状态。`;
+  }
+  return `模型 "${modelName}" 有 ${maCount} 条记录，但无法测活：${diagParts.join('；')}。`;
+}
+
 function summarizeMarketplaceProbeResults(
   modelName: string,
   results: SingleModelProbeResult[],
+  reasonOverride?: string,
 ): MarketplaceModelProbeResponse {
   const summary = {
     total: results.length,
@@ -540,7 +698,7 @@ function summarizeMarketplaceProbeResults(
       ok: false,
       status: 'not_found',
       latencyMs: null,
-      reason: 'no active account/token currently lists this model',
+      reason: reasonOverride || 'no active account/token currently lists this model',
       accountId: null,
       siteId: null,
       siteName: null,
@@ -608,7 +766,8 @@ export async function probeSingleModelAvailability(
 
   const targets = await collectMarketplaceProbeTargets(normalized, options);
   if (targets.length === 0) {
-    return summarizeMarketplaceProbeResults(normalized, []);
+    const reason = await diagnoseNoProbeTargets(normalized, options);
+    return summarizeMarketplaceProbeResults(normalized, [], reason);
   }
 
   const results = await mapWithConcurrency(targets, 2, async (target) => {
@@ -634,7 +793,8 @@ export async function probeSingleModelAvailabilityStream(
 
   const targets = await collectMarketplaceProbeTargets(normalized, options);
   if (targets.length === 0) {
-    return summarizeMarketplaceProbeResults(normalized, []);
+    const reason = await diagnoseNoProbeTargets(normalized, options);
+    return summarizeMarketplaceProbeResults(normalized, [], reason);
   }
 
   const results: SingleModelProbeResult[] = [];
