@@ -761,7 +761,7 @@ export default function Settings() {
     return compact;
   };
 
-  const parseProxyErrorKeywords = (raw: string) => raw
+    const parseProxyErrorKeywords = (raw: string) => raw
     .split(/\r?\n|,/g)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);

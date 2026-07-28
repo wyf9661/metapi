@@ -40,6 +40,7 @@ type DownstreamApiKeyItem = {
   tags: string[];
   enabled: boolean;
   expiresAt: string | null;
+  sensitiveWordDetection?: boolean;
   maxCost: number | null;
   usedCost: number;
   maxRequests: number | null;
@@ -355,6 +356,7 @@ function buildEditorForm(
     maxDailyCost: item?.maxDailyCost === null || item?.maxDailyCost === undefined ? '' : String(item.maxDailyCost),
     expiresAt: toDateTimeLocal(item?.expiresAt),
     enabled: item?.enabled ?? true,
+    sensitiveWordDetection: item?.sensitiveWordDetection !== false ? 'on' : 'off',
     selectedModels: uniqStrings(selectedModels),
     selectedGroupRouteIds: uniqIds(selectedGroupRouteIds),
     siteWeightMultipliersText: JSON.stringify(item?.siteWeightMultipliers || {}, null, 2),
@@ -839,6 +841,7 @@ export default function DownstreamKeys() {
         groupName: editorForm.groupName.trim() || null,
         tags: normalizeTags(editorForm.tags),
         enabled: editorForm.enabled,
+        sensitiveWordDetection: editorForm.sensitiveWordDetection === 'on',
         expiresAt: editorForm.expiresAt ? new Date(editorForm.expiresAt).toISOString() : null,
         maxCost: editorForm.maxCost.trim() ? Number(editorForm.maxCost.trim()) : null,
         maxRequests: editorForm.maxRequests.trim() ? Number(editorForm.maxRequests.trim()) : null,
