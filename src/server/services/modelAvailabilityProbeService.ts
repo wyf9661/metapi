@@ -1,4 +1,5 @@
 import { and, asc, count, eq, like, sql, SQL } from 'drizzle-orm';
+import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { config } from '../config.js';
 import { db, schema } from '../db/index.js';
 import { startBackgroundTask } from './backgroundTaskService.js';
@@ -533,122 +534,114 @@ async function diagnoseNoProbeTargets(
   const accountId = Number.isFinite(options.accountId as number) && Number(options.accountId) > 0
     ? Math.trunc(Number(options.accountId))
     : null;
+  const canonicalModel = canonicalizeModelName(modelName) || modelName.toLowerCase();
 
-  // Build the same base filter as collectMarketplaceProbeTargets
-  // (model name + optional site/account scope, joining through accounts→sites)
-  const baseConditions = [
-    eq(schema.modelAvailability.modelName, modelName),
-    ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
-    ...(siteId ? [eq(schema.sites.id, siteId)] : []),
-  ];
-
-  // 1. Check if any model_availability row exists at all (with site/account scope)
-  const scopedCount = await db.select({ count: count() })
+  // 1. Fetch all rows within site/account scope, then match by canonical name in JS
+  const allScopedRows = await db.select({
+    id: schema.modelAvailability.id,
+    modelName: schema.modelAvailability.modelName,
+    siteId: schema.sites.id,
+    siteName: schema.sites.name,
+    siteStatus: schema.sites.status,
+    accountStatus: schema.accounts.status,
+  })
     .from(schema.modelAvailability)
     .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-    .where(and(...baseConditions))
-    .get();
-  const scopedTotal = scopedCount?.count ?? 0;
+    .where(and(
+      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+      ...(siteId ? [eq(schema.sites.id, siteId)] : []),
+    ))
+    .all();
+
+  const matchingRows = allScopedRows.filter((row) => {
+    const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
+    return dbCanonical === canonicalModel;
+  });
+  const scopedTotal = matchingRows.length;
 
   if (scopedTotal === 0) {
-    // No rows at all within scope — check unscoped to determine cause
-    const unscopedCount = await db.select({ count: count() })
+    // No rows in scope — check if ANY model_availability row exists for this canonical name
+    const allRows = await db.select({
+      modelName: schema.modelAvailability.modelName,
+    })
       .from(schema.modelAvailability)
-      .where(eq(schema.modelAvailability.modelName, modelName))
-      .get();
+      .all() as Array<{ modelName: string }>;
+    const globalMatching = allRows.filter((row) => {
+      const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
+      return dbCanonical === canonicalModel;
+    });
+    const globalCount = globalMatching.length;
 
-    if (!unscopedCount || unscopedCount.count === 0) {
-      // Model name not in model_availability at all
+    if (globalCount === 0) {
+      // Model not found at all — check total and suggest similar
       const totalMa = await db.select({ count: count() }).from(schema.modelAvailability).get();
       if (!totalMa || totalMa.count === 0) {
         return '模型列表为空，没有任何站点同步过模型数据。请先添加站点并同步模型。';
       }
-      // Check for similar names
-      const similar = await db.select({ modelName: schema.modelAvailability.modelName })
-        .from(schema.modelAvailability)
-        .where(like(schema.modelAvailability.modelName, `%${modelName}%`))
-        .limit(5)
-        .all();
+      // Find similar canonical names
+      const allUniqueNames = [...new Set(allRows.map(r => r.modelName))];
+      const similar = allUniqueNames.filter((name) => {
+        const c = canonicalizeModelName(name) || name.toLowerCase();
+        return c !== canonicalModel && (c.includes(canonicalModel) || canonicalModel.includes(c));
+      });
       if (similar.length > 0) {
-        const names = [...new Set(similar.map(r => r.modelName))].slice(0, 3).join('、');
+        const names = similar.slice(0, 3).join('、');
         return `模型名 "${modelName}" 不存在，但有相似模型：${names}。请确认模型名是否正确。`;
       }
       return `模型 "${modelName}" 未在任何站点的模型列表中，请先同步站点模型。`;
     }
 
-    // Model exists but not in the specified scope
+    // Model exists globally but not in the specified scope
     if (siteId) {
-      return `模型 "${modelName}" 在其他站点有 ${unscopedCount.count} 条记录，但当前站点无记录。请先同步该站点的模型列表。`;
+      return `模型 "${modelName}" 在其他站点有 ${globalCount} 条记录，但当前站点无记录。请先同步该站点的模型列表。`;
     }
     if (accountId) {
-      return `模型 "${modelName}" 在其他账户有 ${unscopedCount.count} 条记录，但指定账户无记录。`;
+      return `模型 "${modelName}" 在其他账户有 ${globalCount} 条记录，但指定账户无记录。`;
     }
-    return `模型 "${modelName}" 有 ${unscopedCount.count} 条记录，但均不在当前作用域内。`;
+    return `模型 "${modelName}" 有 ${globalCount} 条记录，但均不在当前作用域内。`;
   }
 
   // 2. Rows exist in scope — determine why they were filtered out.
-  // Priority: site_disabled_models > inactive site > inactive account > token issues
-
-  // 2a. Check site_disabled_models FIRST (most actionable)
   const disabledModelsIndex = await loadSiteDisabledModelsIndex();
-  const allScopedRows = await db.select({
-    siteId: schema.sites.id,
-    siteName: schema.sites.name,
-    siteStatus: schema.sites.status,
-    accountStatus: schema.accounts.status,
-    modelName: schema.modelAvailability.modelName,
-  })
-    .from(schema.modelAvailability)
-    .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
-    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-    .where(and(...baseConditions))
-    .all();
-
-  const activeRows = allScopedRows.filter(r => r.siteStatus === 'active' && r.accountStatus === 'active');
+  const activeRows = matchingRows.filter(r => r.siteStatus === 'active' && r.accountStatus === 'active');
   const disabledBySiteModel = activeRows.filter(r =>
-    isModelDisabledForSite(disabledModelsIndex, r.siteId, r.modelName),
+    isModelDisabledForSite(disabledModelsIndex, r.siteId, r.modelName)
+    || isModelDisabledForSite(disabledModelsIndex, r.siteId, canonicalModel),
   );
 
   if (activeRows.length > 0 && disabledBySiteModel.length === activeRows.length) {
-    // All active rows blocked by site_disabled_models
     const siteName = activeRows[0]!.siteName || `站点 ${activeRows[0]!.siteId}`;
     return `模型 "${modelName}" 在 ${siteName} 被「站点禁用模型」屏蔽，请先在站点设置中移除该模型的禁用。`;
   }
 
-  // 2b. Inactive accounts
-  const inactiveAccounts = allScopedRows.filter(r => r.accountStatus !== 'active');
-  // 2c. Inactive sites
-  const inactiveSites = allScopedRows.filter(r => r.siteStatus !== 'active');
+  const inactiveAccounts = matchingRows.filter(r => r.accountStatus !== 'active');
+  const inactiveSites = matchingRows.filter(r => r.siteStatus !== 'active');
 
-  // 2d. Check token-level (if no account-level targets found)
+  // 2d. Check token-level
   let tokenDiag = '';
-  const tokenMatch = await db.select({ count: count() })
+  const allTokenRows = await db.select({
+    modelName: schema.tokenModelAvailability.modelName,
+    tokenEnabled: schema.accountTokens.enabled,
+    tokenValueStatus: schema.accountTokens.valueStatus,
+  })
     .from(schema.tokenModelAvailability)
     .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
     .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .where(and(
-      eq(schema.tokenModelAvailability.modelName, modelName),
       ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
       ...(siteId ? [eq(schema.sites.id, siteId)] : []),
     ))
-    .get();
-  if (tokenMatch && tokenMatch.count > 0) {
-    const readyTokens = await db.select({ count: count() })
-      .from(schema.tokenModelAvailability)
-      .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
-      .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
-      .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-      .where(and(
-        eq(schema.tokenModelAvailability.modelName, modelName),
-        eq(schema.accountTokens.enabled, true),
-        eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
-        ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
-        ...(siteId ? [eq(schema.sites.id, siteId)] : []),
-      ))
-      .get();
-    const notReady = (tokenMatch.count) - (readyTokens?.count ?? 0);
+    .all();
+  const matchingTokenRows = allTokenRows.filter((row) => {
+    const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
+    return dbCanonical === canonicalModel;
+  });
+  if (matchingTokenRows.length > 0) {
+    const notReady = matchingTokenRows.filter((r) =>
+      !r.tokenEnabled || r.tokenValueStatus !== ACCOUNT_TOKEN_VALUE_STATUS_READY,
+    ).length;
     if (notReady > 0) {
       tokenDiag = `${notReady} 个令牌未就绪`;
     }
@@ -674,7 +667,6 @@ async function diagnoseNoProbeTargets(
   }
   return `模型 "${modelName}" 有 ${scopedTotal} 条记录，但无法测活：${parts.join('；')}。`;
 }
-
 function summarizeMarketplaceProbeResults(
   modelName: string,
   results: SingleModelProbeResult[],
@@ -809,6 +801,7 @@ async function collectMarketplaceProbeTargets(
   options: MarketplaceModelProbeOptions,
 ): Promise<MarketplaceProbeTarget[]> {
   const disabledModelsIndex = await loadSiteDisabledModelsIndex();
+  const canonicalModel = canonicalizeModelName(normalized) || normalized.toLowerCase();
 
   const siteId = Number.isFinite(options.siteId as number) && Number(options.siteId) > 0
     ? Math.trunc(Number(options.siteId))
@@ -817,6 +810,8 @@ async function collectMarketplaceProbeTargets(
     ? Math.trunc(Number(options.accountId))
     : null;
 
+  // Fetch all active rows with site/account filters, then match by canonical model name in JS
+  // to handle provider-prefix, case, and free-suffix variants.
   const accountHits = await db.select({
     rowId: schema.modelAvailability.id,
     modelName: schema.modelAvailability.modelName,
@@ -828,20 +823,23 @@ async function collectMarketplaceProbeTargets(
     .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .where(and(
-      eq(schema.modelAvailability.modelName, normalized),
       eq(schema.accounts.status, 'active'),
       eq(schema.sites.status, 'active'),
       ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
       ...(siteId ? [eq(schema.sites.id, siteId)] : []),
     ))
     .orderBy(asc(schema.sites.id), asc(schema.accounts.id))
-    .all();
+    .all()
+    .then((rows) => rows.filter((row) => {
+      const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
+      return dbCanonical === canonicalModel;
+    }));
 
   const targetsByAccount = new Map<number, MarketplaceProbeTarget>();
   for (const hit of accountHits) {
     if (targetsByAccount.has(hit.account.id)) continue;
     if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName)
-      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, normalized)) {
+      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, canonicalModel)) {
       continue;
     }
     targetsByAccount.set(hit.account.id, {
@@ -866,7 +864,6 @@ async function collectMarketplaceProbeTargets(
     .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .where(and(
-      eq(schema.tokenModelAvailability.modelName, normalized),
       eq(schema.accounts.status, 'active'),
       eq(schema.sites.status, 'active'),
       eq(schema.accountTokens.enabled, true),
@@ -875,12 +872,16 @@ async function collectMarketplaceProbeTargets(
       ...(siteId ? [eq(schema.sites.id, siteId)] : []),
     ))
     .orderBy(asc(schema.sites.id), asc(schema.accounts.id))
-    .all();
+    .all()
+    .then((rows) => rows.filter((row) => {
+      const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
+      return dbCanonical === canonicalModel;
+    }));
 
   for (const hit of tokenHits) {
     if (!isUsableAccountToken(hit.token)) continue;
     if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName)
-      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, normalized)) {
+      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, canonicalModel)) {
       continue;
     }
     if (targetsByAccount.has(hit.account.id)) {
