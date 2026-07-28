@@ -87,7 +87,7 @@ export type DownstreamApiKeyPolicyView = {
 
 export type DownstreamTokenAuthSuccess = {
   ok: true;
-  source: 'managed' | 'global';
+  source: 'managed';
   token: string;
   key: DownstreamApiKeyPolicyView | null;
   policy: DownstreamRoutingPolicy;
@@ -97,7 +97,7 @@ export type DownstreamTokenAuthFailure = {
   ok: false;
   statusCode: number;
   error: string;
-  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests' | 'over_rpm' | 'over_daily_requests' | 'over_daily_cost' | 'global_proxy_token_disabled';
+  reason: 'missing' | 'invalid' | 'disabled' | 'expired' | 'over_cost' | 'over_requests' | 'over_rpm' | 'over_daily_requests' | 'over_daily_cost';
 };
 
 export type DownstreamTokenAuthResult = DownstreamTokenAuthSuccess | DownstreamTokenAuthFailure;
@@ -553,25 +553,6 @@ export async function authorizeDownstreamToken(token: string): Promise<Downstrea
       token: normalizedToken,
       key: managed,
       policy: toPolicyFromView(managed),
-    };
-  }
-
-  if (config.allowGlobalProxyToken && secretsEqualProxy(normalizedToken, config.proxyToken)) {
-    return {
-      ok: true,
-      source: 'global',
-      token: normalizedToken,
-      key: null,
-      policy: getDefaultGlobalPolicy(),
-    };
-  }
-
-  if (!config.allowGlobalProxyToken && secretsEqualProxy(normalizedToken, config.proxyToken)) {
-    return {
-      ok: false,
-      statusCode: 403,
-      error: 'Global PROXY_TOKEN is disabled. Create a managed API key in the Metapi UI (Downstream Keys).',
-      reason: 'global_proxy_token_disabled',
     };
   }
 

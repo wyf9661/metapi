@@ -7,7 +7,7 @@ import { EMPTY_DOWNSTREAM_ROUTING_POLICY, type DownstreamRoutingPolicy } from '.
 
 export interface ProxyAuthContext {
   token: string;
-  source: 'managed' | 'global' | 'playground';
+  source: 'managed' | 'playground';
   keyId: number | null;
   keyName: string;
   policy: DownstreamRoutingPolicy;
@@ -15,7 +15,7 @@ export interface ProxyAuthContext {
 }
 
 export interface ProxyResourceOwner {
-  ownerType: 'managed_key' | 'global_proxy_token' | 'playground';
+  ownerType: 'managed_key' | 'playground';
   ownerId: string;
 }
 
@@ -274,7 +274,7 @@ export function getProxyResourceOwner(request: FastifyRequest): ProxyResourceOwn
   }
 
   return {
-    ownerType: 'global_proxy_token',
-    ownerId: 'global',
+    ownerType: 'managed_key',
+    ownerId: 'unknown',
   };
 }

@@ -42,9 +42,6 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const authToken = parseSettingFromMap<string>(settingsMap, 'auth_token');
   if (typeof authToken === 'string' && authToken) config.authToken = authToken;
 
-  const proxyToken = parseSettingFromMap<string>(settingsMap, 'proxy_token');
-  if (typeof proxyToken === 'string' && proxyToken) config.proxyToken = proxyToken;
-
   const systemProxyUrl = parseSettingFromMap<string>(settingsMap, 'system_proxy_url');
   if (typeof systemProxyUrl === 'string') config.systemProxyUrl = systemProxyUrl;
 

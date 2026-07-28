@@ -259,13 +259,6 @@ export function assertProductionSecurity(
       `AUTH_TOKEN must be a strong unique value (>=${MIN_PRODUCTION_SECRET_LENGTH} chars), not the built-in default`,
     );
   }
-  if (appConfig.allowGlobalProxyToken) {
-    if (isInsecureDefaultSecret(appConfig.proxyToken) || appConfig.proxyToken.trim().length < MIN_PRODUCTION_SECRET_LENGTH) {
-      problems.push(
-        'PROXY_TOKEN is enabled (ALLOW_GLOBAL_PROXY_TOKEN) but still uses an insecure/default value — generate managed keys in the UI or set a strong PROXY_TOKEN',
-      );
-    }
-  }
   if (
     isInsecureDefaultSecret(appConfig.accountCredentialSecret)
     || appConfig.accountCredentialSecret.trim().length < MIN_PRODUCTION_SECRET_LENGTH
