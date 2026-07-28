@@ -53,6 +53,7 @@ const BOOTSTRAP_OWNED_LEGACY_COLUMNS = [
   'proxy_video_tasks.last_polled_at',
   'downstream_api_keys.group_name',
   'downstream_api_keys.tags',
+  'downstream_api_keys.sensitive_word_detection',
   'proxy_logs.billing_details',
   'proxy_logs.is_stream',
   'proxy_logs.first_byte_latency_ms',
