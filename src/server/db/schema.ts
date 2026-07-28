@@ -516,7 +516,7 @@ export const downstreamApiKeys = sqliteTable('downstream_api_keys', {
   dailyUsedRequests: integer('daily_used_requests').default(0),
   dailyUsedCost: real('daily_used_cost').default(0),
   dailyWindowDate: text('daily_window_date'),
-  sensitiveWordDetection: integer('sensitive_word_detection', { mode: 'boolean' }).default(null),
+  sensitiveWordDetection: integer('sensitive_word_detection', { mode: 'boolean' }),
   supportedModels: text('supported_models'), // JSON array<string>
   allowedRouteIds: text('allowed_route_ids'), // JSON array<number>
   siteWeightMultipliers: text('site_weight_multipliers'), // JSON object { [siteId]: multiplier }
