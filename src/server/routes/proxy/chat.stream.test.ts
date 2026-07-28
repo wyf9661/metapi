@@ -38,6 +38,7 @@ vi.mock('../../services/tokenRouter.js', () => ({
   tokenRouter: {
     selectChannel: (...args: unknown[]) => selectChannelMock(...args),
     selectNextChannel: (...args: unknown[]) => selectNextChannelMock(...args),
+    selectPreferredChannel: async () => null,
     recordSuccess: (...args: unknown[]) => recordSuccessMock(...args),
     recordFailure: (...args: unknown[]) => recordFailureMock(...args),
   },

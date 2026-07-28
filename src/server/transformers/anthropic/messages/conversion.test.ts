@@ -195,6 +195,27 @@ describe('sanitizeAnthropicMessagesBody', () => {
 });
 
 describe('convertOpenAiBodyToAnthropicMessagesBody', () => {
+  it('repairs malformed historical tool-call names before Anthropic forwarding', () => {
+    const body = convertOpenAiBodyToAnthropicMessagesBody(
+      {
+        model: 'gpt-5',
+        messages: [{
+          role: 'assistant',
+          content: '',
+          tool_calls: [{
+            id: 'call_bad',
+            type: 'function',
+            function: { name: '<name>terminal', arguments: '{}' },
+          }],
+        }],
+      },
+      'claude-sonnet-4-6',
+      false,
+    );
+
+    expect((body.messages as any[])[0].content[0].name).toBe('name_terminal');
+  });
+
   it('maps OpenAI file blocks into Anthropic document blocks', () => {
     const base64Pdf = Buffer.from('%PDF-hello').toString('base64');
     const body = convertOpenAiBodyToAnthropicMessagesBody(

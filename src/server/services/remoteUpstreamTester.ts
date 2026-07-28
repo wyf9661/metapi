@@ -55,7 +55,7 @@ const MAX_RESPONSE_BYTES = 1_048_576; // 1 MB
 
 const PRIVATE_IPV4_RANGES: Array<[number, number]> = [
   [0x0a000000, 0x0affffff],        // 10.0.0.0/8
-  [0x7f000000, 0x7f000000],        // 127.0.0.0/8 (loopback)
+  [0x7f000000, 0x7fffffff],        // 127.0.0.0/8 (loopback)
   [0xa9fe0000, 0xa9feffff],        // 169.254.0.0/16 (link-local)
   [0xac100000, 0xac1fffff],        // 172.16.0.0/12
   [0xc0a80000, 0xc0a8ffff],        // 192.168.0.0/16
@@ -77,10 +77,13 @@ function isPrivateOrReservedIpv4(ip: string): boolean {
 }
 
 function isPrivateOrReservedIpv6(ip: string): boolean {
-  if (ip === '::1') return true; // loopback
-  if (ip.startsWith('fe80:')) return true; // link-local
-  if (ip.startsWith('fc00:')) return true; // ULA
-  if (ip.startsWith('ff00:')) return true; // multicast
+  const normalized = ip.trim().toLowerCase();
+  if (normalized === '::' || normalized === '::1') return true; // unspecified / loopback
+  if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true; // fe80::/10
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // fc00::/7 ULA
+  if (normalized.startsWith('ff')) return true; // multicast
+  const mappedMatch = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (mappedMatch) return isPrivateOrReservedIpv4(mappedMatch[1]);
   return false;
 }
 

@@ -5,6 +5,8 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
+import PaginationControls from '../components/PaginationControls.js';
+import { resolveClientPagination } from '../components/clientPagination.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useIsMobile } from '../components/useIsMobile.js';
@@ -40,7 +42,7 @@ type DownstreamApiKeyItem = {
   tags: string[];
   enabled: boolean;
   expiresAt: string | null;
-  sensitiveWordDetection?: boolean;
+  sensitiveWordDetection?: boolean | null;
   maxCost: number | null;
   usedCost: number;
   maxRequests: number | null;
@@ -356,7 +358,11 @@ function buildEditorForm(
     maxDailyCost: item?.maxDailyCost === null || item?.maxDailyCost === undefined ? '' : String(item.maxDailyCost),
     expiresAt: toDateTimeLocal(item?.expiresAt),
     enabled: item?.enabled ?? true,
-    sensitiveWordDetection: item?.sensitiveWordDetection !== false ? 'on' : 'off',
+    sensitiveWordDetection: item?.sensitiveWordDetection === true
+      ? 'on'
+      : item?.sensitiveWordDetection === false
+        ? 'off'
+        : 'inherit',
     selectedModels: uniqStrings(selectedModels),
     selectedGroupRouteIds: uniqIds(selectedGroupRouteIds),
     siteWeightMultipliersText: JSON.stringify(item?.siteWeightMultipliers || {}, null, 2),
@@ -476,6 +482,8 @@ export default function DownstreamKeys() {
   const [rawItems, setRawItems] = useState<DownstreamApiKeyItem[]>([]);
   const [routeOptions, setRouteOptions] = useState<RouteSelectorItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const [saving, setSaving] = useState(false);
   const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
@@ -517,7 +525,9 @@ export default function DownstreamKeys() {
         displayName: row.displayName,
         enabled: !!row.enabled,
       })));
+      setLoadError(null);
     } catch (err: any) {
+      setLoadError(err?.message || '加载下游密钥列表失败');
       toast.error(err?.message || '加载下游密钥列表失败');
     } finally {
       setLoading(false);
@@ -701,6 +711,17 @@ export default function DownstreamKeys() {
     return a.name.localeCompare(b.name);
   }), [activeTagFilters, groupFilter, managedItems, routeMap, searchMatcher, status, tagMatchMode]);
 
+  const pagination = resolveClientPagination(visibleItems.length, page);
+  const pagedItems = visibleItems.slice(pagination.start, pagination.end);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTagFilters, deferredSearch, groupFilter, status, tagMatchMode]);
+
+  useEffect(() => {
+    if (page !== pagination.safePage) setPage(pagination.safePage);
+  }, [page, pagination.safePage]);
+
   const visibleIds = useMemo(() => visibleItems.map((item) => item.id), [visibleItems]);
   const selectedVisibleCount = useMemo(() => selectedIds.filter((id) => visibleIds.includes(id)).length, [selectedIds, visibleIds]);
   const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
@@ -841,7 +862,9 @@ export default function DownstreamKeys() {
         groupName: editorForm.groupName.trim() || null,
         tags: normalizeTags(editorForm.tags),
         enabled: editorForm.enabled,
-        sensitiveWordDetection: editorForm.sensitiveWordDetection === 'on',
+        sensitiveWordDetection: editorForm.sensitiveWordDetection === 'inherit'
+          ? null
+          : editorForm.sensitiveWordDetection === 'on',
         expiresAt: editorForm.expiresAt ? new Date(editorForm.expiresAt).toISOString() : null,
         maxCost: editorForm.maxCost.trim() ? Number(editorForm.maxCost.trim()) : null,
         maxRequests: editorForm.maxRequests.trim() ? Number(editorForm.maxRequests.trim()) : null,
@@ -1048,7 +1071,7 @@ export default function DownstreamKeys() {
     </div>
   );
 
-  const empty = !loading && visibleItems.length === 0;
+  const empty = !loading && !loadError && visibleItems.length === 0;
 
   return (
     <div className="animate-fade-in" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1140,8 +1163,14 @@ export default function DownstreamKeys() {
           />
         </div>
 
-        {loading ? (
+        {loading && visibleItems.length === 0 ? (
           <div className="skeleton" style={{ width: '100%', height: 280, borderRadius: 'var(--radius-sm)' }} />
+        ) : loadError ? (
+          <div className="empty-state" style={{ padding: 40 }}>
+            <div className="empty-state-title">加载下游密钥失败</div>
+            <div className="empty-state-desc">{loadError}</div>
+            <button type="button" className="btn btn-primary" onClick={() => void load()}>重试</button>
+          </div>
         ) : empty ? (
           <div className="empty-state" style={{ padding: 40 }}>
             <div className="empty-state-title">暂无下游密钥</div>
@@ -1149,7 +1178,7 @@ export default function DownstreamKeys() {
           </div>
         ) : isMobile ? (
           <div className="mobile-card-list">
-            {visibleItems.map((row) => {
+            {pagedItems.map((row) => {
               const loadingToggle = !!rowLoading[`toggle-${row.id}`];
               const loadingReset = !!rowLoading[`reset-${row.id}`];
               const loadingDelete = !!rowLoading[`delete-${row.id}`];
@@ -1219,13 +1248,26 @@ export default function DownstreamKeys() {
                 </tr>
               </thead>
               <tbody>
-                {visibleItems.map((row) => {
+                {pagedItems.map((row) => {
                   const loadingToggle = !!rowLoading[`toggle-${row.id}`];
                   const loadingReset = !!rowLoading[`reset-${row.id}`];
                   const loadingDelete = !!rowLoading[`delete-${row.id}`];
                   const checked = selectedIds.includes(row.id);
                   return (
-                    <tr key={row.id} className={`row-selectable ${checked ? 'row-selected' : ''}`.trim()} onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>
+                    <tr
+                      key={row.id}
+                      className={`row-selectable ${checked ? 'row-selected' : ''}`.trim()}
+                      onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedId(row.id);
+                          setDrawerOpen(true);
+                        }
+                      }}
+                      tabIndex={0}
+                      aria-label={`查看 ${row.name} 详情`}
+                    >
                       <td onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" checked={checked} onChange={(e) => toggleSelection(row.id, e.target.checked)} />
                       </td>
@@ -1281,6 +1323,12 @@ export default function DownstreamKeys() {
             </table>
           </div>
         )}
+        <PaginationControls
+          page={pagination.safePage}
+          totalPages={pagination.totalPages}
+          onPageChange={setPage}
+          visible={!loading && !loadError && visibleItems.length > 0}
+        />
       </div>
 
       <DownstreamKeyEditorModal

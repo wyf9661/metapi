@@ -2,6 +2,7 @@ import { normalizeInputFileBlock, toAnthropicDocumentBlock } from '../../shared/
 import {
   decodeAnthropicReasoningSignature,
 } from '../../shared/reasoningTransport.js';
+import { buildShortToolNameMap, getShortToolName } from '../../shared/toolNameShortener.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -816,6 +817,17 @@ function resolveOpenAiReasoningSettings(
 export function convertOpenAiToolsToAnthropic(rawTools: unknown): unknown {
   if (!Array.isArray(rawTools)) return rawTools;
 
+  const rawNames = rawTools.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    if (isRecord(item.function)) {
+      const name = asTrimmedString(item.function.name);
+      return name ? [name] : [];
+    }
+    const name = asTrimmedString(item.name);
+    return name ? [name] : [];
+  });
+  const toolNameMap = buildShortToolNameMap(rawNames);
+
   const converted = rawTools
     .map((item) => {
       if (!isRecord(item)) return null;
@@ -834,7 +846,7 @@ export function convertOpenAiToolsToAnthropic(rawTools: unknown): unknown {
         const name = asTrimmedString(fn.name);
         if (!name) return null;
 
-        const mapped: Record<string, unknown> = { name };
+        const mapped: Record<string, unknown> = { name: getShortToolName(name, toolNameMap) };
         const description = asTrimmedString(fn.description);
         if (description) mapped.description = description;
         if (fn.parameters !== undefined) mapped.input_schema = fn.parameters;
@@ -843,7 +855,10 @@ export function convertOpenAiToolsToAnthropic(rawTools: unknown): unknown {
       }
 
       if (asTrimmedString(item.name) && item.input_schema !== undefined) {
-        return item;
+        return {
+          ...item,
+          name: getShortToolName(asTrimmedString(item.name), toolNameMap),
+        };
       }
 
       return null;
@@ -880,7 +895,7 @@ export function convertOpenAiToolChoiceToAnthropic(rawToolChoice: unknown): unkn
     const type = asTrimmedString(rawToolChoice.type).toLowerCase();
     if (type === 'function' && isRecord(rawToolChoice.function)) {
       const name = asTrimmedString(rawToolChoice.function.name);
-      mappedValue = name ? { type: 'tool', name } : undefined;
+      mappedValue = name ? { type: 'tool', name: getShortToolName(name, {}) } : undefined;
     } else {
       mappedValue = rawToolChoice;
     }
@@ -924,11 +939,11 @@ export function convertOpenAiBodyToAnthropicMessagesBody(
       if (!isRecord(toolCall)) continue;
       const functionPart = isRecord(toolCall.function) ? toolCall.function : {};
       const id = asTrimmedString(toolCall.id) || `toolu_${Date.now()}_${index}`;
-      const name = (
+      const name = getShortToolName((
         asTrimmedString(functionPart.name)
         || asTrimmedString(toolCall.name)
         || `tool_${index}`
-      );
+      ), {});
       contentBlocks.push({
         type: 'tool_use',
         id,

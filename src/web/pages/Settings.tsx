@@ -1868,34 +1868,6 @@ export default function Settings() {
             </button>
           </div>
         </div>
-
-        <div className="card animate-slide-up stagger-4" style={settingsModernDangerCardStyle} data-settings-card="model-availability-probe">
-          <div style={settingsModernHeaderStyle}>
-            <div style={settingsModernTitleBlockStyle}>
-              <div style={{ ...settingsModernTitleStyle, color: 'var(--color-danger)' }}>批量测活</div>
-              <div style={settingsModernDescriptionStyle}>
-                当前版本已禁用后台批量测活，避免对中转站发起全量探测请求导致风控。
-              </div>
-            </div>
-            <div style={settingsModernPillRowStyle}>
-              <span style={getSettingsPillStyle('neutral')}>已禁用</span>
-              <span style={getSettingsPillStyle('danger')}>高风险操作</span>
-            </div>
-          </div>
-          <div
-            style={{
-              ...settingsModernCalloutStyle,
-              borderColor: 'color-mix(in srgb, var(--color-danger) 18%, var(--color-border-light))',
-              background: 'color-mix(in srgb, var(--color-danger-soft) 38%, var(--color-bg-card))',
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-danger)' }}>策略说明</div>
-            <div style={{ fontSize: 12, lineHeight: 1.75, color: 'var(--color-text-secondary)' }}>
-              请在模型广场对单个模型点击“探测”。如需恢复旧版后台批量扫测，必须设置环境变量 MODEL_AVAILABILITY_PROBE_ALLOW=true 并重启服务（默认不开放 UI 开关）。
-            </div>
-          </div>
-        </div>
-
         <div className="card animate-slide-up stagger-4" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>下游访问令牌（PROXY_TOKEN）</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>

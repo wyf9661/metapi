@@ -213,6 +213,58 @@ afterEach(() => {
 });
 
 describe('DownstreamKeys page', () => {
+  it('renders at most eight rows per page', async () => {
+    const summaries = Array.from({ length: 9 }, (_, index) => buildSummaryItem({
+      id: index + 1,
+      name: `key-${index + 1}`,
+    }));
+    const rawItems = Array.from({ length: 9 }, (_, index) => buildRawItem({
+      id: index + 1,
+      name: `key-${index + 1}`,
+    }));
+    apiMock.getDownstreamApiKeysSummary.mockResolvedValue({ success: true, items: summaries });
+    apiMock.getDownstreamApiKeys.mockResolvedValue({ success: true, items: rawItems });
+
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider><DownstreamKeys /></ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const renderedRows = root.root.findAll((node) => node.type === 'tr' && node.props.className?.includes('row-selectable'));
+      expect(renderedRows).toHaveLength(8);
+      expect(collectText(root.root)).toContain('第 1 / 2 页');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('keeps a persistent retryable error instead of showing an empty list', async () => {
+    apiMock.getDownstreamApiKeysSummary.mockRejectedValue(new Error('network failed'));
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider><DownstreamKeys /></ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root.root)).toContain('加载下游密钥失败');
+      expect(collectText(root.root)).toContain('重试');
+      expect(collectText(root.root)).not.toContain('暂无下游密钥');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('loads management data and renders merged row content', async () => {
     let root!: WebTestRenderer;
     try {
@@ -337,7 +389,7 @@ describe('DownstreamKeys page', () => {
 
       expect(apiMock.createDownstreamApiKey).toHaveBeenCalledWith(expect.objectContaining({
         name: 'new-key',
-        key: 'sk-new-key-0315',
+        sensitiveWordDetection: null,
         siteWeightMultipliers: {},
       }));
 

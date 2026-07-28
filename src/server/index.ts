@@ -246,6 +246,10 @@ app.addHook('onRequest', async (request, reply) => {
 // Token group and marketplace views go stale if GET /api/* is served from cache after sync.
 app.addHook('onSend', async (request, reply, payload) => {
   const urlPath = (request.url || '').split('?')[0] || '/';
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'DENY');
+  reply.header('Referrer-Policy', 'no-referrer');
+  reply.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:");
   if (urlPath.startsWith('/api/')) {
     reply.header('Cache-Control', 'no-store, no-cache, must-revalidate');
     reply.header('Pragma', 'no-cache');

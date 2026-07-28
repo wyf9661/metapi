@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock('node:dns/promises', () => ({ lookup: lookupMock }));
 import {
   buildRemoteAuthHeaders,
   buildRemoteProtocolBody,
@@ -9,20 +12,32 @@ import {
 } from './remoteUpstreamTester.js';
 
 describe('remoteUpstreamTester helpers', () => {
-  it('normalizes pasted leaf endpoints back to an API root', () => {
-    expect(normalizeRemoteBaseUrl('https://api.example.com/v1/models')).toBe('https://api.example.com');
-    expect(normalizeRemoteBaseUrl('https://api.example.com/v1/chat/completions')).toBe('https://api.example.com');
-    expect(normalizeRemoteBaseUrl('https://api.example.com/v1/messages')).toBe('https://api.example.com');
-    expect(normalizeRemoteBaseUrl('https://api.example.com/v1/responses')).toBe('https://api.example.com');
-    expect(normalizeRemoteBaseUrl('api.example.com/v1')).toBe('https://api.example.com/v1');
+  beforeEach(() => {
+    lookupMock.mockReset();
+    lookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
   });
 
-  it('resolves models and protocol endpoints from base urls with or without /v1', () => {
-    expect(resolveRemoteModelsUrl('https://api.example.com')).toBe('https://api.example.com/v1/models');
-    expect(resolveRemoteModelsUrl('https://api.example.com/v1')).toBe('https://api.example.com/v1/models');
-    expect(resolveRemoteProtocolUrl('https://api.example.com', 'completion')).toBe('https://api.example.com/v1/chat/completions');
-    expect(resolveRemoteProtocolUrl('https://api.example.com/v1', 'anthropic')).toBe('https://api.example.com/v1/messages');
-    expect(resolveRemoteProtocolUrl('https://api.example.com', 'responses')).toBe('https://api.example.com/v1/responses');
+  it('rejects private, ULA, unspecified and IPv4-mapped loopback destinations', async () => {
+    for (const address of ['127.0.0.1', 'fd00::1', '::', '::ffff:127.0.0.1']) {
+      lookupMock.mockResolvedValueOnce([{ address, family: address.includes(':') ? 6 : 4 }]);
+      await expect(normalizeRemoteBaseUrl('https://blocked.example')).rejects.toThrow(/non-public IP/);
+    }
+  });
+
+  it('normalizes pasted leaf endpoints back to an API root', async () => {
+    await expect(normalizeRemoteBaseUrl('https://api.example.com/v1/models')).resolves.toBe('https://api.example.com');
+    await expect(normalizeRemoteBaseUrl('https://api.example.com/v1/chat/completions')).resolves.toBe('https://api.example.com');
+    await expect(normalizeRemoteBaseUrl('https://api.example.com/v1/messages')).resolves.toBe('https://api.example.com');
+    await expect(normalizeRemoteBaseUrl('https://api.example.com/v1/responses')).resolves.toBe('https://api.example.com');
+    await expect(normalizeRemoteBaseUrl('api.example.com/v1')).resolves.toBe('https://api.example.com/v1');
+  });
+
+  it('resolves models and protocol endpoints from base urls with or without /v1', async () => {
+    await expect(resolveRemoteModelsUrl('https://api.example.com')).resolves.toBe('https://api.example.com/v1/models');
+    await expect(resolveRemoteModelsUrl('https://api.example.com/v1')).resolves.toBe('https://api.example.com/v1/models');
+    await expect(resolveRemoteProtocolUrl('https://api.example.com', 'completion')).resolves.toBe('https://api.example.com/v1/chat/completions');
+    await expect(resolveRemoteProtocolUrl('https://api.example.com/v1', 'anthropic')).resolves.toBe('https://api.example.com/v1/messages');
+    await expect(resolveRemoteProtocolUrl('https://api.example.com', 'responses')).resolves.toBe('https://api.example.com/v1/responses');
   });
 
   it('builds auth headers and minimal probe bodies per protocol', () => {

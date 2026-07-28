@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import ModernSelect from './ModernSelect.js';
 
@@ -18,6 +18,22 @@ function collectInstanceText(node: ReactTestInstance): string {
 }
 
 describe('ModernSelect', () => {
+  it('exposes listbox semantics and keyboard-selects an option', async () => {
+    const onChange = vi.fn();
+    const root = create(
+      <ModernSelect
+        value="one"
+        onChange={onChange}
+        options={[{ value: 'one', label: 'One' }, { value: 'two', label: 'Two' }]}
+      />,
+    );
+    const trigger = root.root.findAllByType('button').find((node) => node.props.className === 'modern-select-trigger')!;
+    expect(trigger.props['aria-haspopup']).toBe('listbox');
+    await act(async () => trigger.props.onKeyDown({ key: 'ArrowDown', preventDefault() {} }));
+    await act(async () => trigger.props.onKeyDown({ key: 'Enter', preventDefault() {} }));
+    expect(onChange).toHaveBeenCalledWith('two');
+  });
+
   it('renders icon nodes for the selected option', () => {
     const root = create(
       <ModernSelect

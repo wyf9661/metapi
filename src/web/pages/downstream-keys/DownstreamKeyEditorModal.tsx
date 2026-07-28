@@ -30,6 +30,7 @@ export type DownstreamKeyEditorForm = {
   maxDailyCost: string;
   expiresAt: string;
   enabled: boolean;
+  sensitiveWordDetection: 'inherit' | 'on' | 'off';
   selectedModels: string[];
   selectedGroupRouteIds: number[];
   siteWeightMultipliersText: string;
@@ -435,12 +436,24 @@ export default function DownstreamKeyEditorModal({
             <div className="downstream-key-modal-help">关闭后该密钥将无法继续分发请求</div>
           </div>
         </label>
-        <label className="downstream-key-modal-toggle">
-          <input type="checkbox" checked={form.sensitiveWordDetection === 'on'} onChange={(e) => onChange((prev) => ({ ...prev, sensitiveWordDetection: e.target.checked ? 'on' : 'off' }))} />
+        <label className="downstream-key-modal-field">
           <div>
             <div className="downstream-key-modal-toggle-title">敏感词检测（反探活）</div>
-            <div className="downstream-key-modal-help">拦截探活请求（hello/test/1+1 等）并返回 400 敏感词错误</div>
+            <div className="downstream-key-modal-help">可跟随全局策略，也可为当前密钥强制开启或关闭。</div>
           </div>
+          <select
+            aria-label="敏感词检测策略"
+            value={form.sensitiveWordDetection}
+            onChange={(event) => onChange((prev) => ({
+              ...prev,
+              sensitiveWordDetection: event.target.value as DownstreamKeyEditorForm['sensitiveWordDetection'],
+            }))}
+            style={inputStyle}
+          >
+            <option value="inherit">跟随全局</option>
+            <option value="on">强制开启</option>
+            <option value="off">强制关闭</option>
+          </select>
         </label>
       </div>
 
