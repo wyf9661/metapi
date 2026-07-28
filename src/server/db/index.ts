@@ -623,6 +623,10 @@ function ensureDownstreamApiKeySchema() {
   if (!tableColumnExists('downstream_api_keys', 'tags')) {
     execSqliteLegacyCompat('ALTER TABLE downstream_api_keys ADD COLUMN tags text;');
   }
+
+  if (!tableColumnExists('downstream_api_keys', 'sensitive_word_detection')) {
+    execSqliteLegacyCompat('ALTER TABLE downstream_api_keys ADD COLUMN sensitive_word_detection integer DEFAULT 0;');
+  }
 }
 
 function ensureProxyLogBillingDetailsSchema() {

@@ -528,6 +528,7 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
           dailyUsedRequests: 0,
           dailyUsedCost: 0,
           dailyWindowDate: null,
+          sensitiveWordDetection: normalized.sensitiveWordDetection,
           supportedModels: toPersistenceJson(normalized.supportedModels),
           allowedRouteIds: toPersistenceJson(normalized.allowedRouteIds),
           siteWeightMultipliers: toPersistenceJson(normalized.siteWeightMultipliers),
@@ -589,6 +590,9 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         maxRpm: hasOwn('maxRpm') ? body.maxRpm : existing.maxRpm,
         maxDailyRequests: hasOwn('maxDailyRequests') ? body.maxDailyRequests : existing.maxDailyRequests,
         maxDailyCost: hasOwn('maxDailyCost') ? body.maxDailyCost : existing.maxDailyCost,
+        sensitiveWordDetection: hasOwn('sensitiveWordDetection')
+          ? body.sensitiveWordDetection
+          : (existingView as any).sensitiveWordDetection,
         supportedModels: hasOwn('supportedModels') ? body.supportedModels : existingView.supportedModels,
         allowedRouteIds: hasOwn('allowedRouteIds') ? body.allowedRouteIds : existingView.allowedRouteIds,
         siteWeightMultipliers: hasOwn('siteWeightMultipliers') ? body.siteWeightMultipliers : existingView.siteWeightMultipliers,
@@ -631,6 +635,7 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         maxCost: normalized.maxCost,
         maxRequests: normalized.maxRequests,
         supportedModels: toPersistenceJson(normalized.supportedModels),
+        sensitiveWordDetection: normalized.sensitiveWordDetection,
         allowedRouteIds: toPersistenceJson(normalized.allowedRouteIds),
         siteWeightMultipliers: toPersistenceJson(normalized.siteWeightMultipliers),
         excludedSiteIds: toPersistenceJson(normalized.excludedSiteIds),

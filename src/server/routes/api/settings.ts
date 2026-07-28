@@ -54,6 +54,7 @@ interface RuntimeSettingsBody {
   systemProxyUrl?: string;
   payloadRules?: unknown;
   modelAvailabilityProbeEnabled?: boolean;
+  sensitiveWordDetectionEnabled?: boolean;
   codexUpstreamWebsocketEnabled?: boolean;
   responsesCompactFallbackToResponsesEnabled?: boolean;
   disableCrossProtocolFallback?: boolean;
@@ -720,7 +721,9 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
   }
 }
 
-function getRuntimeSettingsResponse(currentAdminIp = '') {
+async function getRuntimeSettingsResponse(currentAdminIp = '') {
+  const { resolveGlobalSensitiveWordDetection } = await import('../../services/sensitiveWordDetectionService.js');
+  const sensitiveWordDetectionEnabled = await resolveGlobalSensitiveWordDetection();
   return {
     checkinCron: config.checkinCron,
     checkinScheduleMode: config.checkinScheduleMode,
@@ -731,6 +734,7 @@ function getRuntimeSettingsResponse(currentAdminIp = '') {
     logCleanupProgramLogsEnabled: config.logCleanupProgramLogsEnabled,
     logCleanupRetentionDays: config.logCleanupRetentionDays,
     modelAvailabilityProbeEnabled: config.modelAvailabilityProbeEnabled,
+    sensitiveWordDetectionEnabled,
     codexUpstreamWebsocketEnabled: config.codexUpstreamWebsocketEnabled,
     responsesCompactFallbackToResponsesEnabled: config.responsesCompactFallbackToResponsesEnabled,
     disableCrossProtocolFallback: config.disableCrossProtocolFallback,
@@ -1212,6 +1216,16 @@ export async function settingsRoutes(app: FastifyInstance) {
       } else {
         stopModelAvailabilityProbeScheduler();
       }
+    }
+
+    if (body.sensitiveWordDetectionEnabled !== undefined) {
+      const nextValue = !!body.sensitiveWordDetectionEnabled;
+      const { setGlobalSensitiveWordDetection, resolveGlobalSensitiveWordDetection } = await import('../../services/sensitiveWordDetectionService.js');
+      const prevValue = await resolveGlobalSensitiveWordDetection();
+      if (nextValue !== prevValue) {
+        changedLabels.push(nextValue ? '开启敏感词检测' : '关闭敏感词检测');
+      }
+      await setGlobalSensitiveWordDetection(nextValue);
     }
 
     if (body.codexUpstreamWebsocketEnabled !== undefined) {

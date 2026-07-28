@@ -435,6 +435,13 @@ export default function DownstreamKeyEditorModal({
             <div className="downstream-key-modal-help">关闭后该密钥将无法继续分发请求</div>
           </div>
         </label>
+        <label className="downstream-key-modal-toggle">
+          <input type="checkbox" checked={form.sensitiveWordDetection === 'on'} onChange={(e) => onChange((prev) => ({ ...prev, sensitiveWordDetection: e.target.checked ? 'on' : 'off' }))} />
+          <div>
+            <div className="downstream-key-modal-toggle-title">敏感词检测（反探活）</div>
+            <div className="downstream-key-modal-help">拦截探活请求（hello/test/1+1 等）并返回 400 敏感词错误</div>
+          </div>
+        </label>
       </div>
 
       <div className="downstream-key-modal-field downstream-key-modal-field-full">

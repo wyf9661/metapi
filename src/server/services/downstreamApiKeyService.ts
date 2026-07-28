@@ -74,6 +74,7 @@ export type DownstreamApiKeyPolicyView = {
   dailyUsedRequests: number;
   dailyUsedCost: number;
   dailyWindowDate: string | null;
+  sensitiveWordDetection: boolean | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
@@ -418,6 +419,7 @@ export function toDownstreamApiKeyPolicyView(row: DownstreamApiKeyRow): Downstre
     dailyUsedRequests: resolveDailyUsage(row).dailyUsedRequests,
     dailyUsedCost: resolveDailyUsage(row).dailyUsedCost,
     dailyWindowDate: resolveDailyUsage(row).windowDate,
+    sensitiveWordDetection: row.sensitiveWordDetection === null || row.sensitiveWordDetection === undefined ? null : !!row.sensitiveWordDetection,
     supportedModels,
     allowedRouteIds,
     siteWeightMultipliers,
@@ -670,6 +672,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
   maxRpm?: unknown;
   maxDailyRequests?: unknown;
   maxDailyCost?: unknown;
+  sensitiveWordDetection?: unknown;
   supportedModels?: unknown;
   allowedRouteIds?: unknown;
   siteWeightMultipliers?: unknown;
@@ -702,6 +705,11 @@ export function normalizeDownstreamApiKeyPayload(input: {
   const maxRpm = normalizePositiveIntegerOrNull(input.maxRpm);
   const maxDailyRequests = normalizePositiveIntegerOrNull(input.maxDailyRequests);
   const maxDailyCost = normalizePositiveNumberOrNull(input.maxDailyCost);
+  const sensitiveWordDetection = input.sensitiveWordDetection === undefined
+    ? null
+    : input.sensitiveWordDetection === null
+      ? null
+      : !!input.sensitiveWordDetection;
   const supportedModels = normalizeSupportedModelsInput(input.supportedModels);
   const allowedRouteIds = normalizeAllowedRouteIdsInput(input.allowedRouteIds);
   const siteWeightMultipliers = normalizeSiteWeightMultipliersInput(input.siteWeightMultipliers);
@@ -721,6 +729,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
     maxRpm,
     maxDailyRequests,
     maxDailyCost,
+    sensitiveWordDetection,
     supportedModels,
     allowedRouteIds,
     siteWeightMultipliers,

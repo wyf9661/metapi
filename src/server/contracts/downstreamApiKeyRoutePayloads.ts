@@ -24,6 +24,7 @@ const downstreamApiKeyPayloadSchema = z.object({
   expiresAt: z.union([z.string(), z.null()]).optional(),
   maxCost: z.union([z.number(), z.string(), z.null()]).optional(),
   maxRequests: z.union([z.number(), z.string(), z.null()]).optional(),
+  sensitiveWordDetection: z.boolean().optional(),
   supportedModels: z.union([z.string(), z.array(z.string())]).optional(),
   allowedRouteIds: z.union([z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
   siteWeightMultipliers: z.union([
@@ -82,6 +83,9 @@ function formatDownstreamApiKeyPayloadError(error: z.ZodError): string {
   }
   if (firstPath === 'maxRequests') {
     return 'Invalid maxRequests. Expected number, string, or null.';
+  }
+  if (firstPath === 'sensitiveWordDetection') {
+    return 'Invalid sensitiveWordDetection. Expected boolean.';
   }
   if (firstPath === 'supportedModels') {
     return 'Invalid supportedModels. Expected string or string[].';

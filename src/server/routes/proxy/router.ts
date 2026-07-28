@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { proxyAuthMiddleware } from '../../middleware/auth.js';
+import { antiProbingMiddleware } from '../../middleware/antiProbing.js';
 import { chatProxyRoute, claudeMessagesProxyRoute } from './chat.js';
 import { modelsProxyRoute } from './models.js';
 import { embeddingsProxyRoute } from './embeddings.js';
@@ -15,6 +16,11 @@ export async function proxyRoutes(app: FastifyInstance) {
   // Auth middleware for all /v1 routes
   app.addHook('onRequest', async (request, reply) => {
     await proxyAuthMiddleware(request, reply);
+  });
+
+  // Anti-probing: reject probe-looking requests with a misleading "sensitive words" error
+  app.addHook('preHandler', async (request, reply) => {
+    await antiProbingMiddleware(request, reply);
   });
 
   await app.register(chatProxyRoute);

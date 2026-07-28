@@ -11,6 +11,7 @@ export interface ProxyAuthContext {
   keyId: number | null;
   keyName: string;
   policy: DownstreamRoutingPolicy;
+  sensitiveWordDetection: boolean | null;
 }
 
 export interface ProxyResourceOwner {
@@ -213,6 +214,7 @@ export async function proxyAuthMiddleware(request: FastifyRequest, reply: Fastif
       keyId: null,
       keyName: playground.name || 'playground',
       policy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      sensitiveWordDetection: null,
     });
     return;
   }
@@ -245,6 +247,7 @@ export async function proxyAuthMiddleware(request: FastifyRequest, reply: Fastif
     keyId: authResult.key?.id ?? null,
     keyName: authResult.key?.name || 'global',
     policy: authResult.policy || EMPTY_DOWNSTREAM_ROUTING_POLICY,
+    sensitiveWordDetection: authResult.key?.sensitiveWordDetection ?? null,
   });
 }
 
