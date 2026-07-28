@@ -438,7 +438,7 @@ export function toPolicyFromView(view: Pick<DownstreamApiKeyPolicyView, 'support
     siteWeightMultipliers: normalizeSiteWeightMultipliersInput(view.siteWeightMultipliers),
     excludedSiteIds: normalizeExcludedSiteIdsInput(view.excludedSiteIds),
     excludedCredentialRefs: normalizeExcludedCredentialRefsInput(view.excludedCredentialRefs),
-    denyAllWhenEmpty: true,
+    denyAllWhenEmpty: false,
   };
 }
 
