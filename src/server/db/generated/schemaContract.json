@@ -567,6 +567,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "sensitive_word_detection": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": "null",
+          "primaryKey": false
         }
       }
     },
