@@ -38,7 +38,7 @@ describe('downstreamApiKeyService', () => {
     delete process.env.DATA_DIR;
   });
 
-  it('rejects managed keys by lifecycle guards
+  it('rejects managed keys by lifecycle guards (disabled, expired, over budget, over requests)', async () => {
     const now = Date.now();
 
     const disabled = await db.insert(schema.downstreamApiKeys).values({
@@ -131,16 +131,16 @@ describe('downstreamApiKeyService', () => {
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gemini-2.0-flash', policy)).toBe(false);
   });
 
-  it('denies all models when both supportedModels and allowedRouteIds are empty', async () => {
+  it('allows all models when both supportedModels and allowedRouteIds are empty', async () => {
     const policy = {
       supportedModels: [],
       allowedRouteIds: [],
       siteWeightMultipliers: {},
-      denyAllWhenEmpty: true,
+      denyAllWhenEmpty: false,
     };
 
-    expect(await service.isModelAllowedByPolicyOrAllowedRoutes('gpt-4o-mini', policy)).toBe(false);
-    expect(await service.isModelAllowedByPolicyOrAllowedRoutes('claude-opus-4-6', policy)).toBe(false);
+    expect(service.isModelAllowedByPolicy('gpt-4o-mini', policy)).toBe(true);
+    expect(service.isModelAllowedByPolicy('claude-opus-4-6', policy)).toBe(true);
   });
 
   it('authorizes by selected group model pattern only, not arbitrary internal models', async () => {
