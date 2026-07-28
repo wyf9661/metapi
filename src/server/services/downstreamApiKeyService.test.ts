@@ -32,24 +32,13 @@ describe('downstreamApiKeyService', () => {
   beforeEach(async () => {
     await db.delete(schema.downstreamApiKeys).run();
     await db.delete(schema.tokenRoutes).run();
-    config.proxyToken = 'sk-global-proxy-token';
   });
 
   afterAll(() => {
     delete process.env.DATA_DIR;
   });
 
-  it('authorizes global proxy token when no managed key matches', async () => {
-    const result = await service.authorizeDownstreamToken('sk-global-proxy-token');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.key).toBeNull();
-      expect(result.policy.allowedRouteIds).toEqual([]);
-      expect(result.policy.supportedModels).toEqual([]);
-    }
-  });
-
-  it('rejects managed keys by lifecycle guards (disabled, expired, over budget, over requests)', async () => {
+  it('rejects managed keys by lifecycle guards
     const now = Date.now();
 
     const disabled = await db.insert(schema.downstreamApiKeys).values({

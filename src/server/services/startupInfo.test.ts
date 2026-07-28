@@ -7,7 +7,6 @@ describe('startupInfo', () => {
       port: 4000,
       host: '0.0.0.0',
       authToken: 'admin-token',
-      proxyToken: 'proxy-token',
     });
 
     expect(endpoints.baseUrl).toBe('http://127.0.0.1:4000');
@@ -21,7 +20,6 @@ describe('startupInfo', () => {
       port: 4000,
       host: '0.0.0.0',
       authToken: 'admin-token',
-      proxyToken: 'proxy-token',
     });
 
     expect(lines.some((line) => line.includes('metapi running'))).toBe(true);

@@ -1272,11 +1272,7 @@ function isSettingValueAcceptable(key: string, value: unknown): boolean {
     return isFiniteNumber(value) && value >= 1;
   }
 
-  if (key === 'proxy_token') {
-    return typeof value === 'string'
-      && value.trim().length >= 6
-      && value.trim().startsWith('sk-');
-  }
+
 
   if (key === 'smtp_port') {
     return isFiniteNumber(value) && value > 0;
