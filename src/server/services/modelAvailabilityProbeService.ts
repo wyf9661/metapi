@@ -534,148 +534,145 @@ async function diagnoseNoProbeTargets(
     ? Math.trunc(Number(options.accountId))
     : null;
 
-  // 1. Check if ANY model_availability row exists for this exact name (ignore status filters)
-  const anyMa = await db.select({ count: count() })
-    .from(schema.modelAvailability)
-    .where(and(
-      eq(schema.modelAvailability.modelName, modelName),
-      ...(accountId ? [eq(schema.modelAvailability.accountId, accountId)] : []),
-    ))
-    .get();
-  const maCount = anyMa?.count ?? 0;
+  // Build the same base filter as collectMarketplaceProbeTargets
+  // (model name + optional site/account scope, joining through accounts→sites)
+  const baseConditions = [
+    eq(schema.modelAvailability.modelName, modelName),
+    ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+    ...(siteId ? [eq(schema.sites.id, siteId)] : []),
+  ];
 
-  if (maCount === 0) {
-    // 1a. Check for similar model names (case-insensitive LIKE containing this substring)
-    const similar = await db.select({ modelName: schema.modelAvailability.modelName })
-      .from(schema.modelAvailability)
-      .where(and(
-        // Drizzle like is case-insensitive for SQLite if column is NOCASE
-        like(schema.modelAvailability.modelName, `%${modelName}%`),
-        ...(accountId ? [eq(schema.modelAvailability.accountId, accountId)] : []),
-      ))
-      .limit(5)
-      .all();
-    if (similar.length > 0) {
-      const names = [...new Set(similar.map(r => r.modelName))].join('、');
-      return `模型名 "${modelName}" 无精确匹配，但找到相似模型：${names}。请检查模型名是否一致（大小写/前缀/后缀）。`;
-    }
-
-    // 1b. Check if model_availability table has ANY data at all
-    const totalMa = await db.select({ count: count() }).from(schema.modelAvailability).get();
-    if (!totalMa || totalMa.count === 0) {
-      return '模型列表为空，没有任何站点同步过模型数据。请先添加站点并同步模型。';
-    }
-
-    // 1c. Check for token-level availability
-    const tokenMatch = await db.select({ count: count() })
-      .from(schema.tokenModelAvailability)
-      .where(eq(schema.tokenModelAvailability.modelName, modelName))
-      .get();
-    if (tokenMatch && tokenMatch.count > 0) {
-      return `该模型仅在 token_model_availability 中有记录（${tokenMatch.count} 条），但没有活跃且就绪的 token 对应。请确认下游令牌状态为 "ready"。`;
-    }
-
-    return `model_availability 表中找不到模型 "${modelName}"（已同步 ${totalMa?.count ?? 0} 个其他模型），请先同步该站点的模型列表。`;
-  }
-
-  // 2. Rows exist — check why they were filtered
-  // 2a. Accounts not active
-  const inactiveAccounts = await db.select({ count: count() })
-    .from(schema.modelAvailability)
-    .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
-    .where(and(
-      eq(schema.modelAvailability.modelName, modelName),
-      sql`${schema.accounts.status} != 'active'`,
-      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
-    ))
-    .get();
-
-  // 2b. Sites not active
-  const inactiveSites = await db.select({ count: count() })
+  // 1. Check if any model_availability row exists at all (with site/account scope)
+  const scopedCount = await db.select({ count: count() })
     .from(schema.modelAvailability)
     .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-    .where(and(
-      eq(schema.modelAvailability.modelName, modelName),
-      sql`${schema.sites.status} != 'active'`,
-      ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
-    ))
+    .where(and(...baseConditions))
     .get();
+  const scopedTotal = scopedCount?.count ?? 0;
 
-  const inactiveAccountCount = inactiveAccounts?.count ?? 0;
-  const inactiveSiteCount = inactiveSites?.count ?? 0;
+  if (scopedTotal === 0) {
+    // No rows at all within scope — check unscoped to determine cause
+    const unscopedCount = await db.select({ count: count() })
+      .from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.modelName, modelName))
+      .get();
 
-  let diagParts: string[] = [];
-  if (inactiveAccountCount > 0) {
-    diagParts.push(`${inactiveAccountCount} 个账户状态非活跃`);
+    if (!unscopedCount || unscopedCount.count === 0) {
+      // Model name not in model_availability at all
+      const totalMa = await db.select({ count: count() }).from(schema.modelAvailability).get();
+      if (!totalMa || totalMa.count === 0) {
+        return '模型列表为空，没有任何站点同步过模型数据。请先添加站点并同步模型。';
+      }
+      // Check for similar names
+      const similar = await db.select({ modelName: schema.modelAvailability.modelName })
+        .from(schema.modelAvailability)
+        .where(like(schema.modelAvailability.modelName, `%${modelName}%`))
+        .limit(5)
+        .all();
+      if (similar.length > 0) {
+        const names = [...new Set(similar.map(r => r.modelName))].slice(0, 3).join('、');
+        return `模型名 "${modelName}" 不存在，但有相似模型：${names}。请确认模型名是否正确。`;
+      }
+      return `模型 "${modelName}" 未在任何站点的模型列表中，请先同步站点模型。`;
+    }
+
+    // Model exists but not in the specified scope
+    if (siteId) {
+      return `模型 "${modelName}" 在其他站点有 ${unscopedCount.count} 条记录，但当前站点无记录。请先同步该站点的模型列表。`;
+    }
+    if (accountId) {
+      return `模型 "${modelName}" 在其他账户有 ${unscopedCount.count} 条记录，但指定账户无记录。`;
+    }
+    return `模型 "${modelName}" 有 ${unscopedCount.count} 条记录，但均不在当前作用域内。`;
   }
-  if (inactiveSiteCount > 0) {
-    diagParts.push(`${inactiveSiteCount} 个站点状态非活跃`);
-  }
 
-  // 2c. Check if all are disabled via site_disabled_models
+  // 2. Rows exist in scope — determine why they were filtered out.
+  // Priority: site_disabled_models > inactive site > inactive account > token issues
+
+  // 2a. Check site_disabled_models FIRST (most actionable)
   const disabledModelsIndex = await loadSiteDisabledModelsIndex();
-  const allMa = await db.select({
+  const allScopedRows = await db.select({
     siteId: schema.sites.id,
+    siteName: schema.sites.name,
+    siteStatus: schema.sites.status,
+    accountStatus: schema.accounts.status,
     modelName: schema.modelAvailability.modelName,
   })
     .from(schema.modelAvailability)
     .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .where(and(...baseConditions))
+    .all();
+
+  const activeRows = allScopedRows.filter(r => r.siteStatus === 'active' && r.accountStatus === 'active');
+  const disabledBySiteModel = activeRows.filter(r =>
+    isModelDisabledForSite(disabledModelsIndex, r.siteId, r.modelName),
+  );
+
+  if (activeRows.length > 0 && disabledBySiteModel.length === activeRows.length) {
+    // All active rows blocked by site_disabled_models
+    const siteName = activeRows[0]!.siteName || `站点 ${activeRows[0]!.siteId}`;
+    return `模型 "${modelName}" 在 ${siteName} 被「站点禁用模型」屏蔽，请先在站点设置中移除该模型的禁用。`;
+  }
+
+  // 2b. Inactive accounts
+  const inactiveAccounts = allScopedRows.filter(r => r.accountStatus !== 'active');
+  // 2c. Inactive sites
+  const inactiveSites = allScopedRows.filter(r => r.siteStatus !== 'active');
+
+  // 2d. Check token-level (if no account-level targets found)
+  let tokenDiag = '';
+  const tokenMatch = await db.select({ count: count() })
+    .from(schema.tokenModelAvailability)
+    .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
+    .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .where(and(
-      eq(schema.modelAvailability.modelName, modelName),
-      eq(schema.accounts.status, 'active'),
-      eq(schema.sites.status, 'active'),
+      eq(schema.tokenModelAvailability.modelName, modelName),
       ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
       ...(siteId ? [eq(schema.sites.id, siteId)] : []),
     ))
-    .all();
-
-  if (allMa.length > 0) {
-    const disabled = allMa.filter(h => isModelDisabledForSite(disabledModelsIndex, h.siteId, h.modelName));
-    if (disabled.length === allMa.length) {
-      return `所有 ${allMa.length} 个活跃账户/站点均已通过「站点禁用模型」屏蔽该模型。请检查站点设置中的禁用模型列表。`;
-    }
-    if (disabled.length > 0) {
-      diagParts.push(`${disabled.length} 个被站点禁用模型排除`);
-    }
-
-    // Remaining = should be targets but something else went wrong
-    const remaining = allMa.length - disabled.length;
-    if (remaining > 0) {
-      diagParts.push(`其余 ${remaining} 个已进入测活但未返回有效结果`);
-    }
-  }
-
-  // 2d. Check token availability
-  const tokenRows = await db.select({ count: count() })
-    .from(schema.tokenModelAvailability)
-    .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
-    .where(and(
-      eq(schema.tokenModelAvailability.modelName, modelName),
-    ))
     .get();
-  const tokenTotal = tokenRows?.count ?? 0;
-  if (tokenTotal > 0) {
+  if (tokenMatch && tokenMatch.count > 0) {
     const readyTokens = await db.select({ count: count() })
       .from(schema.tokenModelAvailability)
       .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
+      .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
+      .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
       .where(and(
         eq(schema.tokenModelAvailability.modelName, modelName),
         eq(schema.accountTokens.enabled, true),
         eq(schema.accountTokens.valueStatus, ACCOUNT_TOKEN_VALUE_STATUS_READY),
+        ...(accountId ? [eq(schema.accounts.id, accountId)] : []),
+        ...(siteId ? [eq(schema.sites.id, siteId)] : []),
       ))
       .get();
-    const readyCount = readyTokens?.count ?? 0;
-    if (readyCount < tokenTotal) {
-      diagParts.push(`${tokenTotal - readyCount} 个令牌未就绪（共计 ${tokenTotal} 个 token 记录）`);
+    const notReady = (tokenMatch.count) - (readyTokens?.count ?? 0);
+    if (notReady > 0) {
+      tokenDiag = `${notReady} 个令牌未就绪`;
     }
   }
 
-  if (diagParts.length === 0) {
-    return `模型 "${modelName}" 有 ${maCount} 条 model_availability 记录，但所有可测活目标均被过滤。请检查账户/站点状态。`;
+  // Build final message
+  const parts: string[] = [];
+  if (disabledBySiteModel.length > 0) {
+    parts.push(`${disabledBySiteModel.length} 个被站点禁用模型屏蔽`);
   }
-  return `模型 "${modelName}" 有 ${maCount} 条记录，但无法测活：${diagParts.join('；')}。`;
+  if (inactiveAccounts.length > 0) {
+    parts.push(`${inactiveAccounts.length} 个账户已禁用`);
+  }
+  if (inactiveSites.length > 0) {
+    parts.push(`${inactiveSites.length} 个站点已禁用`);
+  }
+  if (tokenDiag) {
+    parts.push(tokenDiag);
+  }
+
+  if (parts.length === 0) {
+    return `模型 "${modelName}" 有 ${scopedTotal} 条记录，但所有可测活目标均被过滤。`;
+  }
+  return `模型 "${modelName}" 有 ${scopedTotal} 条记录，但无法测活：${parts.join('；')}。`;
 }
 
 function summarizeMarketplaceProbeResults(
