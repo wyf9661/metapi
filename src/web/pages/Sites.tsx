@@ -1540,9 +1540,9 @@ export default function Sites() {
                   <option value="api_key">API Key（sk-...）</option>
                   <option value="session">Session Cookie</option>
                 </select>
-                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  添加账号时的凭证验证策略提示
-                </span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                添加账号时的凭证验证策略提示
               </div>
             </div>
             {isEditing && (
@@ -2069,11 +2069,11 @@ export default function Sites() {
               <thead>
                 <tr>
                   <th>名称</th>
+                  <th>创建时间</th>
                   <th>总余额</th>
                   <th>状态</th>
                   <th>权重</th>
                   <th>平台</th>
-                  <th>创建时间</th>
                   <th className="sites-actions-col">操作</th>
                 </tr>
               </thead>
@@ -2111,6 +2111,16 @@ export default function Sites() {
                         </span>
                       </div>
                     </td>
+                    <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                      <a
+                        href={site.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--color-text-muted)', textDecoration: 'underline' }}
+                      >
+                        {formatDateTimeLocal(site.createdAt)}
+                      </a>
+                    </td>
                     <td className="site-balance-cell">
                       <SiteBalanceDisplay
                         balance={site.totalBalance}
@@ -2135,16 +2145,6 @@ export default function Sites() {
                         <span className={`badge ${platformColors[site.platform || ''] || 'badge-muted'}`}>
                           {site.platform || '-'}
                         </span>
-                      </a>
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                      <a
-                        href={site.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: 'var(--color-text-muted)', textDecoration: 'underline' }}
-                      >
-                        {formatDateTimeLocal(site.createdAt)}
                       </a>
                     </td>
                     <td className="sites-actions-cell">

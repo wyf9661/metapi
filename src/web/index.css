@@ -2166,7 +2166,7 @@ body {
 }
 
 .sites-table th {
-  text-align: center;
+  text-align: left;
   font-weight: 600;
   padding: 12px 8px;
 }
