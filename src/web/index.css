@@ -1734,7 +1734,7 @@ body {
 
 .data-table th {
   padding: 10px 14px;
-  text-align: center;
+  text-align: left;
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-muted);
@@ -1933,8 +1933,16 @@ body {
 }
 
 .program-logs-table {
-  table-layout: fixed;
-  min-width: 1120px;
+  table-layout: auto;
+  width: 100%;
+}
+
+.program-logs-table th {
+  text-align: center;
+}
+
+.program-logs-table td {
+  text-align: center;
 }
 
 .program-logs-table .program-logs-title-cell {
@@ -1943,6 +1951,7 @@ body {
   overflow-wrap: anywhere;
   word-break: normal;
   line-height: 1.5;
+  text-align: left;
 }
 
 .program-logs-table .program-logs-content-cell {
@@ -1951,6 +1960,7 @@ body {
   word-break: normal;
   line-height: 1.6;
   color: var(--color-text-secondary);
+  text-align: left;
 }
 
 .program-logs-table td:nth-child(6),
@@ -2051,14 +2061,13 @@ body {
 
 .accounts-table {
   width: 100%;
-  table-layout: fixed;
-  min-width: 1040px;
+  border-collapse: collapse;
+  table-layout: auto;
 }
 
 .accounts-table th,
 .accounts-table td {
   vertical-align: middle;
-  overflow: hidden;
 }
 
 .accounts-table th {
@@ -2066,16 +2075,14 @@ body {
 }
 
 .accounts-table td {
-  text-align: left;
+  text-align: center;
 }
 
 /* name | site | health | balance | used | checkin | actions */
 .accounts-table th:nth-child(1),
 .accounts-table td.accounts-name-cell {
-  width: 16%;
-  min-width: 0;
-  white-space: nowrap;
-  padding-right: 8px;
+  text-align: left;
+  width: 12%;
 }
 
 .accounts-name-cell .inventory-name-title {
@@ -2084,9 +2091,7 @@ body {
 
 .accounts-table th:nth-child(2),
 .accounts-table td.accounts-site-cell {
-  width: 12%;
-  min-width: 0;
-  white-space: nowrap;
+  width: 10%;
 }
 
 .accounts-site-cell .badge-link {
@@ -2105,9 +2110,8 @@ body {
 
 .accounts-table th:nth-child(3),
 .accounts-table td:nth-child(3) {
-  width: 14%;
-  min-width: 0;
-  white-space: normal;
+  width: 15%;
+  text-align: left;
 }
 
 .accounts-health-reason {
@@ -2121,23 +2125,15 @@ body {
 .accounts-table th:nth-child(4),
 .accounts-table td:nth-child(4),
 .accounts-table th:nth-child(5),
-.accounts-table td:nth-child(5) {
-  width: 8%;
-  white-space: nowrap;
-}
-
+.accounts-table td:nth-child(5),
 .accounts-table th:nth-child(6),
 .accounts-table td:nth-child(6) {
-  width: 56px;
-  white-space: nowrap;
+  width: 10%;
 }
 
 .accounts-actions-col,
 .accounts-actions-cell {
-  width: 30%;
-  min-width: 220px;
-  white-space: nowrap !important;
-  overflow: visible;
+  width: 20%;
 }
 
 .accounts-actions-col {
@@ -2145,7 +2141,7 @@ body {
 }
 
 .accounts-actions-cell {
-  text-align: left;
+  text-align: center;
 }
 
 .accounts-row-actions {
@@ -2165,25 +2161,26 @@ body {
 
 .sites-table {
   width: 100%;
-  table-layout: fixed;
-  min-width: 1120px;
+  border-collapse: collapse;
+  table-layout: auto;
 }
 
 .sites-table th {
-  text-align: center;
+  text-align: left;
+  font-weight: 600;
+  padding: 12px 8px;
 }
 
 .sites-table td {
-  text-align: left;
+  padding: 12px 8px;
+  text-align: center;
 }
 
-/* name | balance | status | proxy | weight | platform | created | actions */
+/* name | balance | status | weight | platform | created | actions */
 .sites-table th:nth-child(1),
 .sites-table td.sites-name-col {
-  width: 16%;
-  min-width: 0;
-  white-space: nowrap;
-  padding-right: 8px;
+  text-align: left;
+  width: 18%;
 }
 
 .sites-name-cell {
@@ -2218,52 +2215,43 @@ body {
 }
 
 .sites-table th:nth-child(2),
-.sites-table td.site-balance-cell {
-  width: 9%;
-  max-width: 7.5rem;
+.sites-table td:nth-child(2) {
+  text-align: left;
   white-space: nowrap;
+  width: 14%;
 }
 
 .sites-table th:nth-child(3),
-.sites-table td:nth-child(3),
+.sites-table td.site-balance-cell {
+  text-align: left;
+  white-space: nowrap;
+  width: 14%;
+}
+
 .sites-table th:nth-child(4),
-.sites-table td:nth-child(4) {
-  width: 7%;
-  white-space: nowrap;
-}
-
+.sites-table td:nth-child(4),
 .sites-table th:nth-child(5),
-.sites-table td:nth-child(5) {
-  width: 6%;
-  white-space: nowrap;
-}
-
+.sites-table td:nth-child(5),
 .sites-table th:nth-child(6),
 .sites-table td:nth-child(6) {
-  width: 8%;
+  text-align: center;
   white-space: nowrap;
+  width: 10%;
 }
 
-.sites-table th:nth-child(7),
-.sites-table td:nth-child(7) {
-  width: 10%;
-  white-space: nowrap;
+.sites-table th.sites-actions-col {
+  text-align: center;
 }
 
 .sites-actions-col,
 .sites-actions-cell {
-  width: 30%;
-  min-width: 240px;
-  white-space: nowrap !important;
-  overflow: visible;
-}
-
-.sites-actions-col {
   text-align: center;
+  white-space: nowrap;
+  width: 23%;
 }
 
 .sites-actions-cell {
-  text-align: left;
+  text-align: center;
 }
 
 .sites-row-actions {
@@ -2283,18 +2271,23 @@ body {
 
 .token-table {
   width: 100%;
-  table-layout: fixed;
-  min-width: 0;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.token-table th {
+  text-align: center;
+}
+
+.token-table td {
+  text-align: center;
 }
 
 /* name | value | site | account | group | status | default | updated | actions */
 .token-table th:nth-child(1),
 .token-table td.token-name-cell {
-  width: 14%;
-  min-width: 0;
-  white-space: nowrap;
-  font-weight: 600;
-  padding-right: 8px;
+  text-align: left;
+  width: 12%;
 }
 
 .token-name-cell .inventory-name-title {
@@ -2303,15 +2296,13 @@ body {
 
 .token-table th:nth-child(2),
 .token-table td:nth-child(2) {
-  width: 14%;
-  white-space: nowrap;
+  width: 10%;
 }
 
 .token-table th:nth-child(3),
 .token-table td.token-site-cell {
-  width: 12%;
-  min-width: 0;
-  white-space: nowrap;
+  width: 10%;
+  text-align: left;
 }
 
 .token-site-cell .badge-link {
@@ -2329,40 +2320,29 @@ body {
 }
 
 .token-table th:nth-child(4),
-.token-table td:nth-child(4) {
-  width: 10%;
-  white-space: nowrap;
-}
-
+.token-table td:nth-child(4),
 .token-table th:nth-child(5),
 .token-table td:nth-child(5),
 .token-table th:nth-child(6),
 .token-table td:nth-child(6),
 .token-table th:nth-child(7),
-.token-table td:nth-child(7) {
-  width: 7%;
-  white-space: nowrap;
-}
-
+.token-table td:nth-child(7),
 .token-table th:nth-child(8),
 .token-table td:nth-child(8) {
-  width: 10%;
-  white-space: nowrap;
+  width: 8%;
 }
 
 .token-table-actions-col,
 .token-actions-cell {
-  width: 18%;
-  white-space: nowrap !important;
-  text-align: left;
-  overflow: visible;
+  width: 17%;
+  text-align: center;
 }
 
 .token-table-actions {
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 6px 10px;
   max-width: 100%;
 }
@@ -3337,18 +3317,18 @@ textarea {
 }
 
 .oauth-col-identity {
-  width: 28%;
-  min-width: 240px;
+  width: 20%;
+  min-width: 180px;
 }
 
 .oauth-col-site {
-  width: 18%;
-  min-width: 150px;
+  width: 15%;
+  min-width: 120px;
 }
 
 .oauth-col-status {
-  width: 20%;
-  min-width: 220px;
+  width: 25%;
+  min-width: 200px;
 }
 
 .oauth-col-quota {

@@ -1526,23 +1526,37 @@ export default function Sites() {
               按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。
             </div>
             <div style={{ marginTop: 12, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, minWidth: 80 }}>凭证提示</span>
-                <select
-                  value={form.protocolProfile.credentialMode}
-                  onChange={(e) => setForm((prev) => ({
-                    ...prev,
-                    protocolProfile: { ...prev.protocolProfile, credentialMode: e.target.value },
-                  }))}
-                  style={{ fontSize: 13, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg)' }}
-                >
-                  <option value="auto">自动</option>
-                  <option value="api_key">API Key（sk-...）</option>
-                  <option value="session">Session Cookie</option>
-                </select>
-                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  添加账号时的凭证验证策略提示
-                </span>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>凭证提示</div>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 4 }}>
+                {(['auto', 'api_key', 'session'] as const).map((mode) => (
+                  <label
+                    key={mode}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="credentialMode"
+                      value={mode}
+                      checked={form.protocolProfile.credentialMode === mode}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        protocolProfile: { ...prev.protocolProfile, credentialMode: e.target.value },
+                      }))}
+                      style={{ accentColor: 'var(--color-primary)', width: 14, height: 14 }}
+                    />
+                    {mode === 'auto' ? '自动' : mode === 'api_key' ? 'API Key（sk-...）' : 'Session Cookie'}
+                  </label>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                添加账号时的凭证验证策略提示
               </div>
             </div>
             {isEditing && (
@@ -2069,11 +2083,11 @@ export default function Sites() {
               <thead>
                 <tr>
                   <th>名称</th>
+                  <th>创建时间</th>
                   <th>总余额</th>
                   <th>状态</th>
                   <th>权重</th>
                   <th>平台</th>
-                  <th>创建时间</th>
                   <th className="sites-actions-col">操作</th>
                 </tr>
               </thead>
@@ -2111,6 +2125,16 @@ export default function Sites() {
                         </span>
                       </div>
                     </td>
+                    <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                      <a
+                        href={site.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--color-text-muted)', textDecoration: 'underline' }}
+                      >
+                        {formatDateTimeLocal(site.createdAt)}
+                      </a>
+                    </td>
                     <td className="site-balance-cell">
                       <SiteBalanceDisplay
                         balance={site.totalBalance}
@@ -2120,11 +2144,6 @@ export default function Sites() {
                     <td>
                       <span className={`badge ${site.status === 'disabled' ? 'badge-muted' : 'badge-success'}`} style={{ fontSize: 11 }}>
                         {site.status === 'disabled' ? '禁用' : '启用'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="badge badge-muted" style={{ fontSize: 11 }}>
-                        —
                       </span>
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
@@ -2140,16 +2159,6 @@ export default function Sites() {
                         <span className={`badge ${platformColors[site.platform || ''] || 'badge-muted'}`}>
                           {site.platform || '-'}
                         </span>
-                      </a>
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                      <a
-                        href={site.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: 'var(--color-text-muted)', textDecoration: 'underline' }}
-                      >
-                        {formatDateTimeLocal(site.createdAt)}
                       </a>
                     </td>
                     <td className="sites-actions-cell">
