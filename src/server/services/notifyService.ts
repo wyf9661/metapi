@@ -359,7 +359,7 @@ export async function sendNotification(
       channel: 'telegram',
       run: async () => {
         const telegramRequestInit = withExplicitProxyRequestInit(
-          config.telegramUseSystemProxy ? config.systemProxyUrl : null,
+          null,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -82,7 +82,6 @@ type SurfaceSuccessSelectedChannel = SurfaceSelectedChannel & {
     url: string;
     platform: string;
     apiKey?: string | null;
-    useSystemProxy?: boolean | null;
     proxyUrl?: string | null;
     name?: string | null;
   };

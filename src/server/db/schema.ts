@@ -8,7 +8,6 @@ export const sites = sqliteTable('sites', {
   externalCheckinUrl: text('external_checkin_url'),
   platform: text('platform').notNull(), // 'new-api' | 'one-api' | 'sub2api' | 'openai' | 'claude' | 'gemini' | 'codex' | 'gemini-cli' | 'antigravity'
   proxyUrl: text('proxy_url'),
-  useSystemProxy: integer('use_system_proxy', { mode: 'boolean' }).default(false),
   customHeaders: text('custom_headers'),
   customHeadersOverrideRequestHeaders: integer('custom_headers_override_request_headers', { mode: 'boolean' }).default(false),
   protocolProfile: text('protocol_profile'), // JSON: preferResponses/requireCodexClient/credentialMode

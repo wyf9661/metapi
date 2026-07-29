@@ -423,9 +423,7 @@ async function requestRemote(options: {
       signal: controller.signal,
       redirect: 'manual',
     };
-    const proxyUrl = normalizeSiteProxyUrl(config.systemProxyUrl);
-    const proxied = withExplicitProxyRequestInit(proxyUrl, requestInit);
-    const response = await fetch(options.url, proxied);
+    const response = await fetch(options.url, requestInit);
     // Refuse redirects (manual redirect mode returns 3xx without following);
     // following them would risk leaking the auth header to attacker-controlled hosts.
     if (response.status >= 300 && response.status < 400) {

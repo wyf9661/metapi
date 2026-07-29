@@ -35,7 +35,6 @@ const VALID_CREDENTIAL_MODES = new Set<AccountCredentialMode>([
 type AccountExtraConfig = {
   platformUserId?: unknown;
   credentialMode?: unknown;
-  useSystemProxy?: unknown;
   oauth?: {
     provider?: unknown;
     [key: string]: unknown;
@@ -144,19 +143,10 @@ export function getProxyUrlFromExtraConfig(extraConfig?: ExtraConfigInput): stri
   return normalizeNonEmptyString(parsed.proxyUrl) ?? null;
 }
 
-export function getUseSystemProxyFromExtraConfig(extraConfig?: ExtraConfigInput): boolean {
-  const parsed = parseExtraConfig(extraConfig);
-  return parsed.useSystemProxy === true;
-}
-
 export function resolveProxyUrlFromExtraConfig(
   extraConfig?: ExtraConfigInput,
-  systemProxyUrl = config.systemProxyUrl,
 ): string | null {
-  const explicitProxyUrl = getProxyUrlFromExtraConfig(extraConfig);
-  if (explicitProxyUrl) return explicitProxyUrl;
-  if (!getUseSystemProxyFromExtraConfig(extraConfig)) return null;
-  return normalizeNonEmptyString(systemProxyUrl) ?? null;
+  return getProxyUrlFromExtraConfig(extraConfig);
 }
 
 export function getPlatformUserIdFromExtraConfig(extraConfig?: ExtraConfigInput): number | undefined {

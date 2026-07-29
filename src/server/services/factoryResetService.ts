@@ -16,7 +16,6 @@ type FactoryResetDependencies = {
 
 type PreservedInfrastructureState = {
   authToken: string;
-  systemProxyUrl: string;
   dbType: 'sqlite' | 'mysql' | 'postgres';
   dbUrl: string;
   dbSsl: boolean;
@@ -44,7 +43,6 @@ async function clearAllBusinessData() {
 function captureInfrastructureState(): PreservedInfrastructureState {
   return {
     authToken: config.authToken,
-    systemProxyUrl: config.systemProxyUrl,
     dbType: config.dbType,
     dbUrl: config.dbUrl,
     dbSsl: config.dbSsl,
@@ -59,7 +57,6 @@ function resetRuntimeConfigToInitialState(preserved: PreservedInfrastructureStat
   const baseline = buildConfig(process.env);
   Object.assign(config, baseline);
   config.authToken = preserved.authToken || baseline.authToken || FACTORY_RESET_ADMIN_TOKEN;
-  config.systemProxyUrl = preserved.systemProxyUrl || baseline.systemProxyUrl;
   if (shouldPreserveExternalRuntime(preserved)) {
     config.dbType = preserved.dbType;
     config.dbUrl = preserved.dbUrl;
@@ -83,7 +80,6 @@ function resetRuntimeConfigToInitialState(preserved: PreservedInfrastructureStat
 
 async function restoreInfrastructureSettings(preserved: PreservedInfrastructureState): Promise<void> {
   await upsertSetting('auth_token', preserved.authToken || FACTORY_RESET_ADMIN_TOKEN);
-  await upsertSetting('system_proxy_url', preserved.systemProxyUrl);
 
   if (shouldPreserveExternalRuntime(preserved)) {
     await upsertSetting('db_type', preserved.dbType);

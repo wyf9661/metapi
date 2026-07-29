@@ -10,15 +10,10 @@ const runtimeSettingsPayloadSchema = z.object({
   barkEnabled: z.boolean().optional(),
   serverChanEnabled: z.boolean().optional(),
   telegramEnabled: z.boolean().optional(),
-  telegramUseSystemProxy: z.boolean().optional(),
   smtpEnabled: z.boolean().optional(),
   smtpSecure: z.boolean().optional(),
   logCleanupUsageLogsEnabled: z.boolean().optional(),
   logCleanupProgramLogsEnabled: z.boolean().optional(),
-}).passthrough();
-
-const systemProxyTestPayloadSchema = z.object({
-  proxyUrl: z.string().optional(),
 }).passthrough();
 
 const databaseMigrationPayloadSchema = z.object({
@@ -52,7 +47,6 @@ export type BackupWebdavExportPayload = z.output<typeof backupWebdavExportPayloa
 export type BackupImportPayload = z.output<typeof backupImportPayloadSchema>;
 export type DatabaseMigrationPayload = z.output<typeof databaseMigrationPayloadSchema>;
 export type RuntimeSettingsPayload = z.output<typeof runtimeSettingsPayloadSchema>;
-export type SystemProxyTestPayload = z.output<typeof systemProxyTestPayloadSchema>;
 
 function normalizeSettingsPayloadInput(input: unknown): unknown {
   return input === undefined ? {} : input;
@@ -100,9 +94,6 @@ function formatSettingsPayloadError(error: z.ZodError): string {
   if (firstPath === 'telegramEnabled') {
     return 'Telegram 开关格式无效：需要 boolean';
   }
-  if (firstPath === 'telegramUseSystemProxy') {
-    return 'Telegram 使用系统代理格式无效：需要 boolean';
-  }
   if (firstPath === 'smtpEnabled') {
     return 'SMTP 开关格式无效：需要 boolean';
   }
@@ -133,20 +124,6 @@ export function parseRuntimeSettingsPayload(input: unknown):
   };
 }
 
-export function parseSystemProxyTestPayload(input: unknown):
-{ success: true; data: SystemProxyTestPayload } | { success: false; error: string } {
-  const result = systemProxyTestPayloadSchema.safeParse(normalizeSettingsPayloadInput(input));
-  if (!result.success) {
-    return {
-      success: false,
-      error: formatSettingsPayloadError(result.error),
-    };
-  }
-  return {
-    success: true,
-    data: result.data,
-  };
-}
 
 export function parseDatabaseMigrationPayload(input: unknown):
 { success: true; data: DatabaseMigrationPayload } | { success: false; error: string } {

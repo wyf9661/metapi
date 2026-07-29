@@ -35,7 +35,6 @@ export async function ensureOauthProviderSite(definition: OAuthProviderDefinitio
         url: definition.site.url,
         platform: definition.site.platform,
         status: 'active',
-        useSystemProxy: false,
         isPinned: false,
         globalWeight: 1,
         sortOrder: await getNextSiteSortOrder(),

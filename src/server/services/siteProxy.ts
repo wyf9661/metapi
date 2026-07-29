@@ -35,14 +35,12 @@ const DEFAULT_PROXY_KEEPALIVE_INITIAL_DELAY_MS = 60_000;
 type SiteProxyRow = {
   siteUrl: string;
   proxyUrl: string | null;
-  useSystemProxy: boolean;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean;
 };
 type SiteProxyQueryRow = {
   siteUrl: string;
   proxyUrl: string | null;
-  useSystemProxy: boolean | null;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean | null;
 };
@@ -55,7 +53,6 @@ type ParsedSiteProxyInput = {
 
 export type SiteProxyConfigLike = {
   proxyUrl?: string | null;
-  useSystemProxy?: boolean | null;
   customHeaders?: unknown;
   customHeadersOverrideRequestHeaders?: boolean | null;
 };
@@ -63,11 +60,9 @@ export type SiteProxyConfigLike = {
 let siteProxyCache: {
   loadedAt: number;
   rows: SiteProxyRow[];
-  systemProxyUrl: string | null;
 } = {
   loadedAt: 0,
   rows: [],
-  systemProxyUrl: null,
 };
 
 const dispatcherCache = new Map<string, Dispatcher>();
@@ -123,47 +118,27 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
   }
 
   try {
-    const [rows, systemProxySetting] = await Promise.all([
-      db
-        .select({
-          siteUrl: schema.sites.url,
-          proxyUrl: schema.sites.proxyUrl,
-          useSystemProxy: schema.sites.useSystemProxy,
-          customHeaders: schema.sites.customHeaders,
-          customHeadersOverrideRequestHeaders: schema.sites.customHeadersOverrideRequestHeaders,
-        })
-        .from(schema.sites)
-        .all() as Promise<SiteProxyQueryRow[]>,
-      db.select({ value: schema.settings.value })
-        .from(schema.settings)
-        .where(eq(schema.settings.key, 'system_proxy_url'))
-        .get(),
-    ]);
-    const parsedSystemProxyUrl = normalizeSiteProxyUrl(
-      typeof systemProxySetting?.value === 'string'
-        ? (() => {
-          try {
-            return JSON.parse(systemProxySetting.value);
-          } catch {
-            return systemProxySetting.value;
-          }
-        })()
-        : systemProxySetting?.value,
-    );
+    const rows = await db
+      .select({
+        siteUrl: schema.sites.url,
+        proxyUrl: schema.sites.proxyUrl,
+        customHeaders: schema.sites.customHeaders,
+        customHeadersOverrideRequestHeaders: schema.sites.customHeadersOverrideRequestHeaders,
+      })
+      .from(schema.sites)
+      .all() as SiteProxyQueryRow[];
 
     siteProxyCache = {
       loadedAt: nowMs,
       rows: rows.map((row) => ({
         siteUrl: normalizeSiteUrl(row.siteUrl),
         proxyUrl: normalizeSiteProxyUrl(row.proxyUrl),
-        useSystemProxy: !!row.useSystemProxy,
         customHeaders: row.customHeaders ?? null,
         customHeadersOverrideRequestHeaders: !!row.customHeadersOverrideRequestHeaders,
       })),
-      systemProxyUrl: parsedSystemProxyUrl,
     };
   } catch {
-    siteProxyCache = { loadedAt: nowMs, rows: [], systemProxyUrl: null };
+    siteProxyCache = { loadedAt: nowMs, rows: [] };
   }
 
   return siteProxyCache.rows;
@@ -363,7 +338,7 @@ export function parseSiteProxyUrlInput(input: unknown): ParsedSiteProxyInput {
 }
 
 export function invalidateSiteProxyCache(): void {
-  siteProxyCache = { loadedAt: 0, rows: [], systemProxyUrl: null };
+  siteProxyCache = { loadedAt: 0, rows: [] };
 }
 
 function findBestMatchingSiteRow(rows: SiteProxyRow[], normalizedRequestUrl: string): SiteProxyRow | null {
@@ -401,8 +376,7 @@ async function resolveSiteRequestConfigByRequestUrl(requestUrl: string): Promise
 
   const rows = await getCachedSiteProxyRows();
   const matchedRow = findBestMatchingSiteRow(rows, normalizedRequestUrl);
-  const proxyUrl = matchedRow?.proxyUrl
-    || (matchedRow?.useSystemProxy ? siteProxyCache.systemProxyUrl : null);
+  const proxyUrl = matchedRow?.proxyUrl;
   return {
     proxyUrl: proxyUrl || null,
     customHeaders: matchedRow?.customHeaders ?? null,
@@ -536,10 +510,7 @@ export function withExplicitProxyRequestInit(
 }
 
 export function resolveProxyUrlForSite(site: SiteProxyConfigLike | null | undefined): string | null {
-  const explicitProxyUrl = normalizeSiteProxyUrl(site?.proxyUrl);
-  if (explicitProxyUrl) return explicitProxyUrl;
-  if (!site?.useSystemProxy) return null;
-  return normalizeSiteProxyUrl(config.systemProxyUrl);
+  return normalizeSiteProxyUrl(site?.proxyUrl);
 }
 
 export function withSiteRecordProxyRequestInit(
