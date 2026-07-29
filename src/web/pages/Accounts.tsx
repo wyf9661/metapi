@@ -2607,7 +2607,7 @@ export default function Accounts() {
                     marginTop: -4,
                   }}
                 >
-                  覆盖站点和系统代理，留空则使用站点设置。支持 http/https/socks5
+                  覆盖站点代理，留空则使用站点设置。支持 http/https/socks5
                   协议。
                 </div>
                 {(editingAccount?.site?.platform || "").toLowerCase() ===
