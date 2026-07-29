@@ -1734,7 +1734,7 @@ body {
 
 .data-table th {
   padding: 10px 14px;
-  text-align: center;
+  text-align: left;
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-muted);
@@ -2082,7 +2082,7 @@ body {
 .accounts-table th:nth-child(1),
 .accounts-table td.accounts-name-cell {
   text-align: left;
-  width: 15%;
+  width: 12%;
 }
 
 .accounts-name-cell .inventory-name-title {
@@ -2091,7 +2091,7 @@ body {
 
 .accounts-table th:nth-child(2),
 .accounts-table td.accounts-site-cell {
-  width: 12%;
+  width: 10%;
 }
 
 .accounts-site-cell .badge-link {
@@ -2110,7 +2110,7 @@ body {
 
 .accounts-table th:nth-child(3),
 .accounts-table td:nth-child(3) {
-  width: 20%;
+  width: 15%;
   text-align: left;
 }
 
@@ -2293,6 +2293,7 @@ body {
 .token-table th:nth-child(3),
 .token-table td.token-site-cell {
   width: 10%;
+  text-align: left;
 }
 
 .token-site-cell .badge-link {
