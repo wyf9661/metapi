@@ -762,7 +762,7 @@ export default function Dashboard({
 
       
 
-      {(sites.length === 0 || totalAccounts === 0) && (
+      {!loading && !siteLoading && (sites.length === 0 || totalAccounts === 0) && (
         <div
           className="card"
           style={{
