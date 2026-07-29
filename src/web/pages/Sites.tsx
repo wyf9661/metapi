@@ -2122,11 +2122,6 @@ export default function Sites() {
                         {site.status === 'disabled' ? '禁用' : '启用'}
                       </span>
                     </td>
-                    <td>
-                      <span className="badge badge-muted" style={{ fontSize: 11 }}>
-                        —
-                      </span>
-                    </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                       {(site.globalWeight || 1).toFixed(2)}
                     </td>
