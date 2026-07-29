@@ -1,6 +1,6 @@
 {
   "name": "metapi",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Meta-layer management and unified proxy for AI API aggregation platforms",
   "main": "dist/desktop/main.js",
   "keywords": [
