@@ -44,7 +44,6 @@ describe('oauth site registry', () => {
       url: 'https://api.anthropic.com',
       platform: 'claude',
       status: 'active',
-      useSystemProxy: true,
     }).run();
 
     const { ensureOauthProviderSite } = await import('./oauthSiteRegistry.js');

@@ -3,9 +3,9 @@ import { normalizeDefaultValue, normalizeSqlType, readMySqlField } from './schem
 
 describe('schema introspection normalization', () => {
   it('normalizes booleans consistently across dialects', () => {
-    expect(normalizeSqlType('sqlite', 'INTEGER', 'use_system_proxy')).toBe('boolean');
-    expect(normalizeSqlType('mysql', 'tinyint', 'use_system_proxy')).toBe('boolean');
-    expect(normalizeSqlType('postgres', 'boolean', 'use_system_proxy')).toBe('boolean');
+    expect(normalizeSqlType('sqlite', 'INTEGER', 'is_enabled')).toBe('boolean');
+    expect(normalizeSqlType('mysql', 'tinyint', 'is_enabled')).toBe('boolean');
+    expect(normalizeSqlType('postgres', 'boolean', 'is_enabled')).toBe('boolean');
   });
 
   it('normalizes common default values', () => {

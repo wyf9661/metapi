@@ -1289,7 +1289,6 @@ describe('OAuthManagement page', () => {
   it('supports selecting multiple json files, defaults import to system proxy, and sends one batch request', async () => {
     apiMock.getOAuthProviders.mockResolvedValue({
       defaults: {
-        systemProxyConfigured: true,
       },
       providers: [
         {
@@ -1423,7 +1422,6 @@ describe('OAuthManagement page', () => {
             email: 'workspace-b@example.com',
           },
         ],
-        useSystemProxy: true,
       });
       await act(async () => {
         vi.advanceTimersByTime(300);
@@ -1641,7 +1639,6 @@ describe('OAuthManagement page', () => {
       expect(apiMock.startOAuthProvider).toHaveBeenCalledWith('codex', {
         projectId: undefined,
         proxyUrl: 'http://127.0.0.1:7890',
-        useSystemProxy: false,
       });
       expect(openMock).toHaveBeenCalledWith(
         'https://auth.openai.com/oauth/authorize?state=oauth-state-123',
@@ -2111,7 +2108,6 @@ describe('OAuthManagement page', () => {
 
       expect(apiMock.rebindOAuthConnection).toHaveBeenCalledWith(11, {
         proxyUrl: 'http://127.0.0.1:7890',
-        useSystemProxy: false,
       });
     } finally {
       root?.unmount();
@@ -2245,7 +2241,6 @@ describe('OAuthManagement page', () => {
 
       expect(apiMock.updateOAuthConnectionProxy).toHaveBeenCalledWith(11, {
         proxyUrl: null,
-        useSystemProxy: false,
       });
       expect(apiMock.rebindOAuthConnection).not.toHaveBeenCalled();
       expect(openMock).not.toHaveBeenCalled();
@@ -2326,80 +2321,12 @@ describe('OAuthManagement page', () => {
 
       expect(apiMock.rebindOAuthConnection).toHaveBeenCalledWith(11, {
         proxyUrl: 'http://127.0.0.1:7890',
-        useSystemProxy: false,
       });
       expect(openMock).toHaveBeenCalledWith(
         'https://accounts.google.com/o/oauth2/v2/auth?state=gemini-rebind-save-and-reauthorize',
         'oauth-gemini-cli',
         expect.stringContaining('width=540'),
       );
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('starts oauth with the configured system proxy when selected', async () => {
-    apiMock.getOAuthProviders.mockResolvedValue({
-      providers: [
-        {
-          provider: 'codex',
-          label: 'ChatGPT Codex',
-          platform: 'codex',
-          enabled: true,
-          loginType: 'oauth',
-          requiresProjectId: false,
-          supportsDirectAccountRouting: true,
-          supportsCloudValidation: true,
-          supportsNativeProxy: true,
-        },
-      ],
-    });
-    apiMock.getOAuthConnections.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
-    apiMock.startOAuthProvider.mockResolvedValue({
-      provider: 'codex',
-      state: 'oauth-state-system-proxy',
-      authorizationUrl: 'https://auth.openai.com/oauth/authorize?state=oauth-state-system-proxy',
-      instructions: {
-        redirectUri: 'http://localhost:1455/auth/callback',
-        callbackPort: 1455,
-        callbackPath: '/auth/callback',
-        manualCallbackDelayMs: 15000,
-      },
-    });
-    apiMock.getOAuthSession.mockResolvedValue({
-      provider: 'codex',
-      state: 'oauth-state-system-proxy',
-      status: 'pending',
-    });
-
-    let root!: WebTestRenderer;
-    try {
-      await act(async () => {
-        root = create(
-          <ToastProvider>
-            <MemoryRouter>
-              <OAuthManagement />
-            </MemoryRouter>
-          </ToastProvider>,
-        );
-      });
-      await flushMicrotasks();
-
-      await clickButton(root!, '新建 OAuth 连接');
-      const systemProxyToggle = findOauthSettingInput(root!, 'use-system-proxy');
-
-      await act(async () => {
-        systemProxyToggle.props.onChange({ target: { checked: true } });
-      });
-
-      await clickButton(root!, '连接 ChatGPT Codex');
-      await flushMicrotasks();
-
-      expect(apiMock.startOAuthProvider).toHaveBeenCalledWith('codex', {
-        projectId: undefined,
-        proxyUrl: null,
-        useSystemProxy: true,
-      });
     } finally {
       root?.unmount();
     }
@@ -2497,16 +2424,13 @@ describe('OAuthManagement page', () => {
       expect(apiMock.startOAuthProvider).toHaveBeenNthCalledWith(1, 'codex', {
         projectId: undefined,
         proxyUrl: 'http://127.0.0.1:7890',
-        useSystemProxy: false,
       });
 
       const resetProxyToggle = findOauthSettingInput(root, 'use-custom-proxy');
       const resetProxyInput = findOauthSettingInput(root, 'proxy-url');
-      const resetSystemProxyToggle = findOauthSettingInput(root, 'use-system-proxy');
 
       expect(resetProxyToggle.props.checked).toBe(false);
       expect(resetProxyInput.props.value).toBe('');
-      expect(resetSystemProxyToggle.props.checked).toBe(false);
     } finally {
       root?.unmount();
     }

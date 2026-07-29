@@ -37,35 +37,10 @@ describe('siteProxy', () => {
     delete process.env.DATA_DIR;
   });
 
-  it('resolves system proxy only for sites that opt in', async () => {
-    await db.insert(schema.settings).values({
-      key: 'system_proxy_url',
-      value: JSON.stringify('http://127.0.0.1:7890'),
-    }).run();
-
+  it('resolves site-specific proxy url when configured', async () => {
     await db.run(sql`
-      INSERT INTO sites (name, url, platform, use_system_proxy)
-      VALUES
-        ('base-site', 'https://relay.example.com', 'new-api', 0),
-        ('openai-site', 'https://relay.example.com/openai', 'new-api', 1)
-    `);
-
-    const { resolveSiteProxyUrlByRequestUrl } = await import('./siteProxy.js');
-    expect(await resolveSiteProxyUrlByRequestUrl('https://relay.example.com/openai/v1/models'))
-      .toBe('http://127.0.0.1:7890');
-    expect(await resolveSiteProxyUrlByRequestUrl('https://relay.example.com/v1/models'))
-      .toBeNull();
-  });
-
-  it('prefers site-specific proxy url over the shared system proxy', async () => {
-    await db.insert(schema.settings).values({
-      key: 'system_proxy_url',
-      value: JSON.stringify('http://127.0.0.1:7890'),
-    }).run();
-
-    await db.run(sql`
-      INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy)
-      VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 'socks5://127.0.0.1:1080', 1)
+      INSERT INTO sites (name, url, platform, proxy_url)
+      VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 'socks5://127.0.0.1:1080')
     `);
 
     const { resolveSiteProxyUrlByRequestUrl } = await import('./siteProxy.js');
@@ -73,28 +48,10 @@ describe('siteProxy', () => {
       .toBe('socks5://127.0.0.1:1080');
   });
 
-  it('injects dispatcher when a site opts into the configured system proxy', async () => {
-    await db.insert(schema.settings).values({
-      key: 'system_proxy_url',
-      value: JSON.stringify('http://127.0.0.1:7890'),
-    }).run();
-    await db.run(sql`
-      INSERT INTO sites (name, url, platform, use_system_proxy)
-      VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 1)
-    `);
-
-    const { withSiteProxyRequestInit } = await import('./siteProxy.js');
-    const requestInit = await withSiteProxyRequestInit('https://proxy-site.example.com/v1/chat/completions', {
-      method: 'POST',
-    });
-
-    expect('dispatcher' in requestInit).toBe(true);
-  });
-
   it('injects dispatcher when a site defines its own proxy url', async () => {
     await db.run(sql`
-      INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy)
-      VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 'http://127.0.0.1:7890', 0)
+      INSERT INTO sites (name, url, platform, proxy_url)
+      VALUES ('proxy-site', 'https://proxy-site.example.com', 'new-api', 'http://127.0.0.1:7890')
     `);
 
     const { withSiteProxyRequestInit } = await import('./siteProxy.js');
@@ -103,72 +60,6 @@ describe('siteProxy', () => {
     });
 
     expect('dispatcher' in requestInit).toBe(true);
-  });
-
-  it('injects a working dispatcher for socks5 system proxies', async () => {
-    const upstreamServer = createServer((_request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ ok: true }));
-    });
-    upstreamServer.listen(0, '127.0.0.1');
-    await once(upstreamServer, 'listening');
-    const upstreamAddress = upstreamServer.address();
-    if (!upstreamAddress || typeof upstreamAddress === 'string') {
-      throw new Error('Failed to determine upstream server address');
-    }
-    const requestUrl = `http://proxy-site.example.com:${upstreamAddress.port}/v1/chat/completions`;
-
-    await db.insert(schema.settings).values({
-      key: 'system_proxy_url',
-      value: JSON.stringify('socks5h://127.0.0.1:1080'),
-    }).run();
-    await db.run(sql`
-      INSERT INTO sites (name, url, platform, use_system_proxy)
-      VALUES ('proxy-site', ${`http://proxy-site.example.com:${upstreamAddress.port}`}, 'new-api', 1)
-    `);
-
-    const createConnectionSpy = vi.spyOn(SocksClient, 'createConnection').mockImplementation(async () => {
-      const socket = connectSocket(upstreamAddress.port, '127.0.0.1');
-      await once(socket, 'connect');
-      return { socket } as Awaited<ReturnType<typeof SocksClient.createConnection>>;
-    });
-
-    try {
-      const { withSiteProxyRequestInit } = await import('./siteProxy.js');
-      const requestInit = await withSiteProxyRequestInit(requestUrl, {
-        method: 'GET',
-      });
-
-      expect('dispatcher' in requestInit).toBe(true);
-
-      const response = await fetch(requestUrl, requestInit);
-
-      expect(response.status).toBe(200);
-      expect(createConnectionSpy).toHaveBeenCalledTimes(1);
-      expect(createConnectionSpy).toHaveBeenCalledWith(expect.objectContaining({
-        command: 'connect',
-        proxy: expect.objectContaining({
-          host: '127.0.0.1',
-          port: 1080,
-          type: 5,
-        }),
-        destination: expect.objectContaining({
-          host: 'proxy-site.example.com',
-          port: upstreamAddress.port,
-        }),
-      }));
-    } finally {
-      createConnectionSpy.mockRestore();
-      await new Promise<void>((resolve, reject) => {
-        upstreamServer.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        });
-      });
-    }
   });
 
   it('merges site custom headers by matched request url and keeps explicit headers authoritative', async () => {
@@ -267,7 +158,6 @@ describe('siteProxy', () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
       proxyUrl: 'http://127.0.0.1:7890',
-      useSystemProxy: false,
       customHeaders: JSON.stringify({
         'x-site-scope': 'site-level',
       }),
@@ -288,7 +178,6 @@ describe('siteProxy', () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
       proxyUrl: null,
-      useSystemProxy: false,
       customHeaders: JSON.stringify({
         Authorization: 'Bearer site-token',
         'User-Agent': 'site-agent',
@@ -311,7 +200,6 @@ describe('siteProxy', () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
       proxyUrl: 'http://127.0.0.1:7890',
-      useSystemProxy: false,
       customHeaders: {
         'x-site-scope': 'site-level',
       },
@@ -331,7 +219,7 @@ describe('siteProxy', () => {
     const { resolveChannelProxyUrl } = await import('./siteProxy.js');
 
     const accountConfig = JSON.stringify({ proxyUrl: 'http://account-proxy:8080' });
-    const siteWithProxy = { useSystemProxy: true };
+    const siteWithProxy = {};
 
     expect(resolveChannelProxyUrl(siteWithProxy, accountConfig)).toBe('http://account-proxy:8080');
     expect(resolveChannelProxyUrl(siteWithProxy, null)).toBeNull();
@@ -341,9 +229,9 @@ describe('siteProxy', () => {
   it('withSiteRecordProxyRequestInit uses account proxy when provided', async () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const result = withSiteRecordProxyRequestInit(
-      { useSystemProxy: false },
-      { method: 'POST' },
-      'http://account-proxy:8080',
+    {},
+    { method: 'POST' },
+    'http://account-proxy:8080',
     );
     expect('dispatcher' in result).toBe(true);
   });
@@ -351,9 +239,9 @@ describe('siteProxy', () => {
   it('withSiteRecordProxyRequestInit ignores invalid account proxy', async () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const result = withSiteRecordProxyRequestInit(
-      { useSystemProxy: false },
-      { method: 'POST' },
-      'not-a-url',
+    {},
+    { method: 'POST' },
+    'not-a-url',
     );
     expect('dispatcher' in result).toBe(false);
   });

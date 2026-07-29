@@ -2,7 +2,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asc, eq } from 'drizzle-orm';
 
 type DbModule = typeof import('../db/index.js');
 type BackupServiceModule = typeof import('./backupService.js');
@@ -11,26 +10,21 @@ type AccountRow = DbModule['schema']['accounts']['$inferSelect'];
 type AccountTokenRow = DbModule['schema']['accountTokens']['$inferSelect'];
 type ModelAvailabilityRow = DbModule['schema']['modelAvailability']['$inferSelect'];
 type ProxyLogRow = DbModule['schema']['proxyLogs']['$inferSelect'];
-type SettingRow = DbModule['schema']['settings']['$inferSelect'];
 
 describe('backupService', () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let backupService: BackupServiceModule;
-  let dataDir = '';
 
   beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-backup-service-'));
-    process.env.DATA_DIR = dataDir;
 
     await import('../db/migrate.js');
     const dbModule = await import('../db/index.js');
-    const serviceModule = await import('./backupService.js');
 
     db = dbModule.db;
     schema = dbModule.schema;
     backupService = serviceModule;
-  });
 
   beforeEach(async () => {
     await db.delete(schema.routeChannels).run();
@@ -50,11 +44,9 @@ describe('backupService', () => {
     await db.delete(schema.proxyVideoTasks).run();
     await db.delete(schema.events).run();
     await db.delete(schema.settings).run();
-  });
 
   afterAll(() => {
     delete process.env.DATA_DIR;
-  });
 
   it('exports backup-owned config in v2.1 backups and still roundtrips core connection fields', async () => {
     const now = new Date().toISOString();
@@ -64,7 +56,6 @@ describe('backupService', () => {
       platform: 'new-api',
       externalCheckinUrl: 'https://checkin.roundtrip.example.com',
       proxyUrl: 'http://127.0.0.1:8080',
-      useSystemProxy: true,
       customHeaders: JSON.stringify({
         'cf-access-client-id': 'roundtrip-client',
       }),
@@ -75,7 +66,6 @@ describe('backupService', () => {
       apiKey: 'site-api-key',
       createdAt: now,
       updatedAt: now,
-    }).returning().get();
 
     const account = await db.insert(schema.accounts).values({
       siteId: site.id,
@@ -97,7 +87,6 @@ describe('backupService', () => {
       extraConfig: JSON.stringify({ platformUserId: 123 }),
       createdAt: now,
       updatedAt: now,
-    }).returning().get();
 
     const accountToken = await db.insert(schema.accountTokens).values({
       accountId: account.id,
@@ -108,7 +97,6 @@ describe('backupService', () => {
       isDefault: true,
       createdAt: now,
       updatedAt: now,
-    }).returning().get();
 
     const sourceRoute = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-source-*',
@@ -117,7 +105,6 @@ describe('backupService', () => {
       enabled: true,
       createdAt: now,
       updatedAt: now,
-    }).returning().get();
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-*',
@@ -131,12 +118,10 @@ describe('backupService', () => {
       enabled: true,
       createdAt: now,
       updatedAt: now,
-    }).returning().get();
 
     await db.insert(schema.routeGroupSources).values({
       groupRouteId: route.id,
       sourceRouteId: sourceRoute.id,
-    }).run();
 
     await db.insert(schema.routeChannels).values({
       routeId: route.id,
@@ -154,13 +139,11 @@ describe('backupService', () => {
       lastUsedAt: now,
       lastFailAt: now,
       cooldownUntil: now,
-    }).run();
 
     await db.insert(schema.siteDisabledModels).values({
       siteId: site.id,
       modelName: 'gpt-hidden',
       createdAt: now,
-    }).run();
 
     await db.insert(schema.siteApiEndpoints).values({
       siteId: site.id,
@@ -173,7 +156,6 @@ describe('backupService', () => {
       lastFailureReason: null,
       createdAt: now,
       updatedAt: now,
-    }).run();
 
     await db.insert(schema.modelAvailability).values([
       {
@@ -192,7 +174,6 @@ describe('backupService', () => {
         latencyMs: 42,
         checkedAt: now,
       },
-    ]).run();
 
     await db.insert(schema.downstreamApiKeys).values({
       name: 'Shared Downstream',
@@ -216,7 +197,6 @@ describe('backupService', () => {
       lastUsedAt: now,
       createdAt: now,
       updatedAt: now,
-    }).run();
 
     const exported = await backupService.exportBackup('all') as any;
     expect(exported.version).toBe('2.1');
@@ -261,14 +241,11 @@ describe('backupService', () => {
     expect(exported.accounts.routeChannels[0]).not.toHaveProperty('lastUsedAt');
     expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('usedCost');
     expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('usedRequests');
-    expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('lastUsedAt');
 
-    const result = await backupService.importBackup(exported as Record<string, unknown>);
 
     expect(result.allImported).toBe(true);
     expect(result.sections.accounts).toBe(true);
     expect(result.summary).toBeUndefined();
-    expect(result.warnings).toBeUndefined();
 
     const restoredSite = await db.select().from(schema.sites).where(eq(schema.sites.id, site.id)).get();
     const restoredAccount = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
@@ -276,21 +253,17 @@ describe('backupService', () => {
     const restoredChannel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.routeId, route.id)).get();
     const restoredDisabledModels = await db.select().from(schema.siteDisabledModels).all();
     const restoredModelAvailability = await db.select().from(schema.modelAvailability).all() as ModelAvailabilityRow[];
-    const restoredDownstreamKeys = await db.select().from(schema.downstreamApiKeys).all();
 
     expect(restoredSite?.proxyUrl).toBe('http://127.0.0.1:8080');
     expect(restoredSite?.externalCheckinUrl).toBe('https://checkin.roundtrip.example.com');
-    expect(restoredSite?.useSystemProxy).toBe(true);
     expect(restoredSite?.customHeaders).toBe('{"cf-access-client-id":"roundtrip-client"}');
     expect(restoredSite?.customHeadersOverrideRequestHeaders).toBe(true);
     expect(restoredSite?.isPinned).toBe(true);
-    expect(restoredSite?.sortOrder).toBe(9);
 
     expect(restoredAccount?.isPinned).toBe(true);
     expect(restoredAccount?.sortOrder).toBe(7);
     expect(restoredAccount?.oauthProvider).toBe('codex');
     expect(restoredAccount?.oauthAccountKey).toBe('roundtrip-account-key');
-    expect(restoredAccount?.oauthProjectId).toBe('roundtrip-project-id');
 
     expect(restoredRoute?.displayName).toBe('gpt-route');
     expect(restoredRoute?.displayIcon).toBe('icon-gpt');
@@ -299,7 +272,6 @@ describe('backupService', () => {
     expect(restoredRoute?.decisionRefreshedAt).toBe(now);
     expect(restoredRoute?.routingStrategy).toBe('round_robin');
     const restoredGroupSource = await db.select().from(schema.routeGroupSources).where(eq(schema.routeGroupSources.groupRouteId, route.id)).get();
-    expect(restoredGroupSource?.sourceRouteId).toBe(sourceRoute.id);
 
     expect(restoredChannel?.sourceModel).toBe('gpt-4o');
     expect(restoredDisabledModels).toEqual([
@@ -327,7 +299,6 @@ describe('backupService', () => {
         lastUsedAt: now,
       }),
     ]);
-  });
 
   it('does not export runtime database config in preferences backups', async () => {
     await db.insert(schema.settings).values([
@@ -335,16 +306,13 @@ describe('backupService', () => {
       { key: 'db_url', value: JSON.stringify('postgres://metapi:secret@db.example.com:5432/metapi') },
       { key: 'db_ssl', value: JSON.stringify(true) },
       { key: 'routing_fallback_unit_cost', value: JSON.stringify(0.25) },
-    ]).run();
 
     const exported = await backupService.exportBackup('preferences') as any;
-    const exportedSettingKeys = exported.preferences.settings.map((row: { key: string }) => row.key);
 
     expect(exportedSettingKeys).toContain('routing_fallback_unit_cost');
     expect(exportedSettingKeys).not.toContain('db_type');
     expect(exportedSettingKeys).not.toContain('db_url');
     expect(exportedSettingKeys).not.toContain('db_ssl');
-  });
 
   it('ignores imported runtime database config settings', async () => {
     const result = await backupService.importBackup({
@@ -359,21 +327,17 @@ describe('backupService', () => {
           { key: 'routing_fallback_unit_cost', value: 0.25 },
         ],
       },
-    });
 
     expect(result.sections.preferences).toBe(true);
     expect(result.appliedSettings).toEqual([
       { key: 'routing_fallback_unit_cost', value: 0.25 },
-    ]);
 
     const settingsRows = await db.select().from(schema.settings).all() as SettingRow[];
-    const savedKeys = settingsRows.map((row) => row.key);
 
     expect(savedKeys).toContain('routing_fallback_unit_cost');
     expect(savedKeys).not.toContain('db_type');
     expect(savedKeys).not.toContain('db_url');
     expect(savedKeys).not.toContain('db_ssl');
-  });
 
   it('preserves local logs and runtime stats when importing account backups', async () => {
     const exportedAt = '2026-03-20T09:00:00.000Z';
@@ -385,7 +349,6 @@ describe('backupService', () => {
       status: 'active',
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     const account = await db.insert(schema.accounts).values({
       siteId: site.id,
@@ -399,7 +362,6 @@ describe('backupService', () => {
       checkinEnabled: true,
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     const accountToken = await db.insert(schema.accountTokens).values({
       accountId: account.id,
@@ -410,7 +372,6 @@ describe('backupService', () => {
       isDefault: true,
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-preserve-*',
@@ -421,7 +382,6 @@ describe('backupService', () => {
       enabled: true,
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     await db.insert(schema.routeChannels).values({
       routeId: route.id,
@@ -442,31 +402,24 @@ describe('backupService', () => {
       consecutiveFailCount: 0,
       cooldownLevel: 0,
       cooldownUntil: null,
-    }).run();
 
     const insertedChannel = await db.select()
       .from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, route.id))
-      .get();
 
-    expect(insertedChannel).toBeTruthy();
 
-    const exported = await backupService.exportBackup('all');
 
     await db.update(schema.sites).set({
       name: 'mutated-local-site',
       updatedAt: localRuntimeAt,
-    }).where(eq(schema.sites.id, site.id)).run();
 
     await db.update(schema.tokenRoutes).set({
       displayName: 'mutated-local-route',
       updatedAt: localRuntimeAt,
-    }).where(eq(schema.tokenRoutes.id, route.id)).run();
 
     await db.update(schema.accounts).set({
       balanceUsed: 88,
       updatedAt: localRuntimeAt,
-    }).where(eq(schema.accounts.id, account.id)).run();
 
     await db.update(schema.routeChannels).set({
       successCount: 77,
@@ -479,7 +432,6 @@ describe('backupService', () => {
       consecutiveFailCount: 4,
       cooldownLevel: 2,
       cooldownUntil: localRuntimeAt,
-    }).where(eq(schema.routeChannels.id, insertedChannel!.id)).run();
 
     await db.insert(schema.checkinLogs).values({
       accountId: account.id,
@@ -487,7 +439,6 @@ describe('backupService', () => {
       message: 'local-checkin',
       reward: '1.5',
       createdAt: localRuntimeAt,
-    }).run();
 
     await db.insert(schema.proxyLogs).values({
       routeId: route.id,
@@ -499,19 +450,15 @@ describe('backupService', () => {
       totalTokens: 321,
       estimatedCost: 0.123,
       createdAt: localRuntimeAt,
-    }).run();
 
-    const result = await backupService.importBackup(exported as unknown as Record<string, unknown>);
 
     expect(result.allImported).toBe(true);
-    expect(result.sections.accounts).toBe(true);
 
     const restoredSite = await db.select().from(schema.sites).where(eq(schema.sites.id, site.id)).get();
     const restoredAccount = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
     const restoredRoute = await db.select().from(schema.tokenRoutes).where(eq(schema.tokenRoutes.id, route.id)).get();
     const restoredChannel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, insertedChannel!.id)).get();
     const restoredProxyLogs = await db.select().from(schema.proxyLogs).all();
-    const restoredCheckinLogs = await db.select().from(schema.checkinLogs).all();
 
     expect(restoredSite?.name).toBe('backup-site');
     expect(restoredRoute?.displayName).toBe('backup-route');
@@ -534,7 +481,6 @@ describe('backupService', () => {
     expect(restoredCheckinLogs).toHaveLength(1);
     expect(restoredCheckinLogs[0]?.accountId).toBe(account.id);
     expect(restoredCheckinLogs[0]?.message).toBe('local-checkin');
-  });
 
   it('preserves local-only state while replacing backup-owned config during account imports', async () => {
     const exportedAt = '2026-03-20T09:00:00.000Z';
@@ -546,7 +492,6 @@ describe('backupService', () => {
       status: 'active',
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     const account = await db.insert(schema.accounts).values({
       siteId: site.id,
@@ -560,7 +505,6 @@ describe('backupService', () => {
       checkinEnabled: true,
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     const accountToken = await db.insert(schema.accountTokens).values({
       accountId: account.id,
@@ -571,7 +515,6 @@ describe('backupService', () => {
       isDefault: true,
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-preserve-*',
@@ -582,7 +525,6 @@ describe('backupService', () => {
       enabled: true,
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     await db.insert(schema.routeChannels).values({
       routeId: route.id,
@@ -603,20 +545,16 @@ describe('backupService', () => {
       consecutiveFailCount: 0,
       cooldownLevel: 0,
       cooldownUntil: null,
-    }).run();
 
     const insertedChannel = await db.select()
       .from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, route.id))
-      .get();
 
-    expect(insertedChannel).toBeTruthy();
 
     await db.insert(schema.siteDisabledModels).values({
       siteId: site.id,
       modelName: 'gpt-backup-disabled',
       createdAt: exportedAt,
-    }).run();
 
     await db.insert(schema.siteApiEndpoints).values([
       {
@@ -643,7 +581,6 @@ describe('backupService', () => {
         createdAt: exportedAt,
         updatedAt: exportedAt,
       },
-    ]).run();
 
     await db.insert(schema.modelAvailability).values([
       {
@@ -662,7 +599,6 @@ describe('backupService', () => {
         latencyMs: 50,
         checkedAt: exportedAt,
       },
-    ]).run();
 
     await db.insert(schema.tokenModelAvailability).values({
       tokenId: accountToken.id,
@@ -670,7 +606,6 @@ describe('backupService', () => {
       available: false,
       latencyMs: 33,
       checkedAt: exportedAt,
-    }).run();
 
     await db.insert(schema.siteAnnouncements).values({
       siteId: site.id,
@@ -684,7 +619,6 @@ describe('backupService', () => {
       readAt: null,
       dismissedAt: null,
       rawPayload: '{"revision":"backup"}',
-    }).run();
 
     const downstreamKey = await db.insert(schema.downstreamApiKeys).values({
       name: 'Backup Downstream',
@@ -708,10 +642,8 @@ describe('backupService', () => {
       lastUsedAt: exportedAt,
       createdAt: exportedAt,
       updatedAt: exportedAt,
-    }).returning().get();
 
     const exported = await backupService.exportBackup('accounts') as any;
-    expect(exported.version).toBe('2.1');
 
     await db.insert(schema.events).values({
       type: 'status',
@@ -719,7 +651,6 @@ describe('backupService', () => {
       message: 'should stay after import',
       level: 'info',
       createdAt: localRuntimeAt,
-    }).run();
 
     await db.insert(schema.proxyVideoTasks).values({
       publicId: 'video-task-1',
@@ -728,7 +659,6 @@ describe('backupService', () => {
       tokenValue: account.accessToken,
       createdAt: localRuntimeAt,
       updatedAt: localRuntimeAt,
-    }).run();
 
     await db.insert(schema.proxyFiles).values({
       publicId: 'proxy-file-1',
@@ -741,12 +671,10 @@ describe('backupService', () => {
       contentBase64: 'e30=',
       createdAt: localRuntimeAt,
       updatedAt: localRuntimeAt,
-    }).run();
 
     await db.update(schema.sites).set({
       name: 'local-site-name',
       updatedAt: localRuntimeAt,
-    }).where(eq(schema.sites.id, site.id)).run();
 
     await db.delete(schema.siteApiEndpoints)
       .where(eq(schema.siteApiEndpoints.siteId, site.id))
@@ -762,19 +690,16 @@ describe('backupService', () => {
       lastFailureReason: null,
       createdAt: localRuntimeAt,
       updatedAt: localRuntimeAt,
-    }).run();
 
     await db.update(schema.tokenRoutes).set({
       displayName: 'local-route-name',
       updatedAt: localRuntimeAt,
-    }).where(eq(schema.tokenRoutes.id, route.id)).run();
 
     await db.update(schema.accounts).set({
       balanceUsed: 99,
       lastCheckinAt: localRuntimeAt,
       lastBalanceRefresh: localRuntimeAt,
       updatedAt: localRuntimeAt,
-    }).where(eq(schema.accounts.id, account.id)).run();
 
     await db.update(schema.routeChannels).set({
       successCount: 77,
@@ -787,7 +712,6 @@ describe('backupService', () => {
       consecutiveFailCount: 4,
       cooldownLevel: 2,
       cooldownUntil: localRuntimeAt,
-    }).where(eq(schema.routeChannels.id, insertedChannel!.id)).run();
 
     await db.delete(schema.siteDisabledModels)
       .where(eq(schema.siteDisabledModels.siteId, site.id))
@@ -796,7 +720,6 @@ describe('backupService', () => {
       siteId: site.id,
       modelName: 'gpt-local-disabled',
       createdAt: localRuntimeAt,
-    }).run();
 
     await db.delete(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
@@ -818,13 +741,11 @@ describe('backupService', () => {
         latencyMs: 777,
         checkedAt: localRuntimeAt,
       },
-    ]).run();
 
     await db.update(schema.tokenModelAvailability).set({
       available: true,
       latencyMs: 888,
       checkedAt: localRuntimeAt,
-    }).where(eq(schema.tokenModelAvailability.tokenId, accountToken.id)).run();
 
     await db.update(schema.siteAnnouncements).set({
       title: 'Local banner',
@@ -833,7 +754,6 @@ describe('backupService', () => {
       readAt: localRuntimeAt,
       dismissedAt: localRuntimeAt,
       rawPayload: '{"revision":"local"}',
-    }).where(eq(schema.siteAnnouncements.siteId, site.id)).run();
 
     await db.update(schema.downstreamApiKeys).set({
       name: 'Local Mutated Downstream',
@@ -853,7 +773,6 @@ describe('backupService', () => {
       excludedCredentialRefs: '[{"kind":"default_api_key","siteId":999,"accountId":999}]',
       lastUsedAt: localRuntimeAt,
       updatedAt: localRuntimeAt,
-    }).where(eq(schema.downstreamApiKeys.id, downstreamKey.id)).run();
 
     const localOnlyDownstreamKey = await db.insert(schema.downstreamApiKeys).values({
       name: 'Local Only Downstream',
@@ -863,7 +782,6 @@ describe('backupService', () => {
       lastUsedAt: localRuntimeAt,
       createdAt: localRuntimeAt,
       updatedAt: localRuntimeAt,
-    }).returning().get();
 
     await db.insert(schema.checkinLogs).values({
       accountId: account.id,
@@ -871,7 +789,6 @@ describe('backupService', () => {
       message: 'local-checkin',
       reward: '1.5',
       createdAt: localRuntimeAt,
-    }).run();
 
     await db.insert(schema.proxyLogs).values([
       {
@@ -898,12 +815,9 @@ describe('backupService', () => {
         estimatedCost: 0.456,
         createdAt: localRuntimeAt,
       },
-    ]).run();
 
-    const result = await backupService.importBackup(exported as Record<string, unknown>);
 
     expect(result.allImported).toBe(true);
-    expect(result.sections.accounts).toBe(true);
 
     const restoredSite = await db.select().from(schema.sites).where(eq(schema.sites.id, site.id)).get();
     const restoredAccount = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
@@ -923,7 +837,6 @@ describe('backupService', () => {
     const restoredCheckinLogs = await db.select().from(schema.checkinLogs).all();
     const restoredEvents = await db.select().from(schema.events).all();
     const restoredProxyVideoTasks = await db.select().from(schema.proxyVideoTasks).all();
-    const restoredProxyFiles = await db.select().from(schema.proxyFiles).all();
 
     expect(restoredSite?.name).toBe('backup-site');
     expect(restoredRoute?.displayName).toBe('backup-route');
@@ -939,7 +852,6 @@ describe('backupService', () => {
     expect(restoredChannel?.lastFailAt).toBe(localRuntimeAt);
     expect(restoredChannel?.consecutiveFailCount).toBe(4);
     expect(restoredChannel?.cooldownLevel).toBe(2);
-    expect(restoredChannel?.cooldownUntil).toBe(localRuntimeAt);
 
     expect(restoredSiteApiEndpoints).toEqual([
       expect.objectContaining({
@@ -958,11 +870,9 @@ describe('backupService', () => {
         cooldownUntil: exportedAt,
         lastFailureReason: 'HTTP 429',
       }),
-    ]);
 
     expect(restoredDisabledModels).toEqual([
       expect.objectContaining({ siteId: site.id, modelName: 'gpt-backup-disabled' }),
-    ]);
 
     const restoredManualModels = restoredAvailability
       .filter((row) => row.isManual)
@@ -974,7 +884,6 @@ describe('backupService', () => {
       available: true,
       latencyMs: 777,
       checkedAt: localRuntimeAt,
-    }));
 
     expect(restoredTokenAvailability).toEqual([
       expect.objectContaining({
@@ -984,7 +893,6 @@ describe('backupService', () => {
         latencyMs: 888,
         checkedAt: localRuntimeAt,
       }),
-    ]);
 
     expect(restoredAnnouncements).toEqual([
       expect.objectContaining({
@@ -996,7 +904,6 @@ describe('backupService', () => {
         dismissedAt: localRuntimeAt,
         rawPayload: '{"revision":"local"}',
       }),
-    ]);
 
     expect(restoredDownstreamKeys).toEqual([
       expect.objectContaining({
@@ -1018,7 +925,6 @@ describe('backupService', () => {
         excludedCredentialRefs: `[{"kind":"account_token","siteId":${site.id},"accountId":${account.id},"tokenId":${accountToken.id}}]`,
         lastUsedAt: localRuntimeAt,
       }),
-    ]);
 
     expect(restoredProxyLogs).toHaveLength(2);
     const matchedDownstreamLog = restoredProxyLogs.find((row) => row.totalTokens === 321);
@@ -1034,7 +940,6 @@ describe('backupService', () => {
     expect(restoredEvents).toHaveLength(1);
     expect(restoredProxyVideoTasks).toHaveLength(1);
     expect(restoredProxyFiles).toHaveLength(1);
-  });
 
   it('keeps importing native v2.0 backups without the new v2.1 config arrays', async () => {
     const localDownstreamKey = await db.insert(schema.downstreamApiKeys).values({
@@ -1044,7 +949,6 @@ describe('backupService', () => {
       usedRequests: 3,
       createdAt: '2026-03-21T08:00:00.000Z',
       updatedAt: '2026-03-21T08:00:00.000Z',
-    }).returning().get();
 
     const payload = {
       version: '2.0',
@@ -1059,8 +963,7 @@ describe('backupService', () => {
             externalCheckinUrl: null,
             platform: 'new-api',
             proxyUrl: null,
-            useSystemProxy: false,
-            customHeaders: null,
+                  customHeaders: null,
             status: 'active',
             isPinned: false,
             sortOrder: 0,
@@ -1095,16 +998,12 @@ describe('backupService', () => {
         routeChannels: [],
         routeGroupSources: [],
       },
-    } as Record<string, unknown>;
 
-    const result = await backupService.importBackup(payload);
 
     expect(result.allImported).toBe(true);
-    expect(result.sections.accounts).toBe(true);
 
     const restoredSites = await db.select().from(schema.sites).all();
     const restoredAccounts = await db.select().from(schema.accounts).all();
-    const restoredDownstreamKeys = await db.select().from(schema.downstreamApiKeys).all();
 
     expect(restoredSites).toHaveLength(1);
     expect(restoredAccounts).toHaveLength(1);
@@ -1112,7 +1011,6 @@ describe('backupService', () => {
     expect(restoredDownstreamKeys).toHaveLength(1);
     expect(restoredDownstreamKeys[0]?.id).toBe(localDownstreamKey.id);
     expect(restoredDownstreamKeys[0]?.key).toBe('local-downstream-key');
-  });
 
   it('imports ALL-API-Hub style payload with accounts and preferences', async () => {
     const payload = {
@@ -1152,29 +1050,24 @@ describe('backupService', () => {
       tagStore: {
         groups: ['test'],
       },
-    } as Record<string, unknown>;
 
     const result = await backupService.importBackup(payload);
     expect(result.allImported).toBe(true);
     expect(result.sections.accounts).toBe(true);
     expect(result.sections.preferences).toBe(true);
-    expect(result.appliedSettings.length).toBeGreaterThan(0);
 
     const sites = await db.select().from(schema.sites).all();
     const accounts = await db.select().from(schema.accounts).all();
-    const settings = await db.select().from(schema.settings).all() as SettingRow[];
 
     expect(sites.length).toBe(1);
     expect(accounts.length).toBe(1);
     expect(accounts[0].username).toBe('legacy-user');
     expect(settings.some((row) => row.key === 'legacy_preferences_ref_v2')).toBe(true);
-  });
 
   it('imports ALL-API-Hub V2 backups into native offline connections and summaries', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     fetchSpy.mockImplementation(async () => {
       throw new Error('network access should not happen during offline import');
-    });
 
     try {
       const payload = {
@@ -1348,11 +1241,9 @@ describe('backupService', () => {
           ],
           lastUpdated: 1735689609000,
         },
-      } as Record<string, unknown>;
 
       const result = await backupService.importBackup(payload);
       const summary = (result as any).summary;
-      const warnings = (result as any).warnings;
 
       expect(result.allImported).toBe(true);
       expect(result.sections.accounts).toBe(true);
@@ -1372,12 +1263,10 @@ describe('backupService', () => {
           expect.stringContaining('skipped-none-account'),
           expect.stringContaining('skipped-empty-account'),
         ]),
-      );
 
       const sites = await db.select().from(schema.sites).all() as SiteRow[];
       const accounts = await db.select().from(schema.accounts).all() as AccountRow[];
       const accountTokens = await db.select().from(schema.accountTokens).all() as AccountTokenRow[];
-      const settings = await db.select().from(schema.settings).all() as SettingRow[];
 
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(sites).toHaveLength(7);
@@ -1386,7 +1275,6 @@ describe('backupService', () => {
       expect(settings.some((row) => row.key === 'legacy_preferences_ref_v2')).toBe(true);
       expect(settings.some((row) => row.key === 'legacy_channel_configs_ref_v2')).toBe(true);
       expect(settings.some((row) => row.key === 'legacy_tag_store_ref_v2')).toBe(true);
-      expect(settings.some((row) => row.key === 'legacy_api_credential_profiles_ref_v2')).toBe(false);
 
       const managedAccount = accounts.find((row) => row.username === 'managed-user');
       const cookieAccount = accounts.find((row) => row.username === 'cookie-user');
@@ -1395,7 +1283,6 @@ describe('backupService', () => {
       const openAiProfileAccount = accounts.find((row) => row.username === 'OpenAI Profile');
       const claudeProfileAccount = accounts.find((row) => row.username === 'Claude Profile');
       const geminiProfileAccount = accounts.find((row) => row.username === 'Gemini Profile');
-      const compatProfileAccount = accounts.find((row) => row.username === 'Compat Profile');
 
       expect(managedAccount?.accessToken).toBe('managed-session-token');
       expect(managedAccount?.apiToken).toBeNull();
@@ -1403,20 +1290,17 @@ describe('backupService', () => {
       expect(JSON.parse(managedAccount?.extraConfig || '{}')).toMatchObject({
         credentialMode: 'session',
         platformUserId: 7788,
-      });
 
       expect(cookieAccount?.accessToken).toBe('sid=cookie-session');
       expect(cookieAccount?.checkinEnabled).toBe(false);
       expect(JSON.parse(cookieAccount?.extraConfig || '{}')).toMatchObject({
         credentialMode: 'session',
-      });
 
       expect(openAiAccount?.accessToken).toBe('');
       expect(openAiAccount?.apiToken).toBe('sk-openai-account');
       expect(openAiAccount?.checkinEnabled).toBe(false);
       expect(JSON.parse(openAiAccount?.extraConfig || '{}')).toMatchObject({
         credentialMode: 'apikey',
-      });
 
       expect(sub2apiAccount?.accessToken).toBe('sub2-session-token');
       expect(JSON.parse(sub2apiAccount?.extraConfig || '{}')).toMatchObject({
@@ -1426,7 +1310,6 @@ describe('backupService', () => {
           refreshToken: 'sub2-refresh-token',
           tokenExpiresAt: 1735689600000,
         },
-      });
 
       expect(openAiProfileAccount?.accessToken).toBe('');
       expect(openAiProfileAccount?.apiToken).toBe('sk-profile-openai');
@@ -1435,11 +1318,9 @@ describe('backupService', () => {
       });
       expect(claudeProfileAccount?.apiToken).toBe('sk-profile-claude');
       expect(geminiProfileAccount?.apiToken).toBe('gemini-profile-key');
-      expect(compatProfileAccount?.apiToken).toBe('sk-compat-profile');
 
       const openAiSite = sites.find((row) => row.platform === 'openai' && row.url === 'https://api.openai.com');
       expect(openAiSite).toBeTruthy();
-      expect(accounts.filter((row) => row.siteId === openAiSite?.id)).toHaveLength(2);
 
       expect(accountTokens.map((row) => row.token).sort()).toEqual([
         'gemini-profile-key',
@@ -1452,7 +1333,6 @@ describe('backupService', () => {
     } finally {
       fetchSpy.mockRestore();
     }
-  });
 
   it('backfills oauth columns from extraConfig when importing older backups', async () => {
     const payload = {
@@ -1472,8 +1352,7 @@ describe('backupService', () => {
             createdAt: '2026-03-01T00:00:00.000Z',
             updatedAt: '2026-03-01T00:00:00.000Z',
             externalCheckinUrl: null,
-            useSystemProxy: false,
-            globalWeight: 1,
+                  globalWeight: 1,
             customHeaders: null,
           },
         ],
@@ -1516,23 +1395,17 @@ describe('backupService', () => {
         tokenRoutes: [],
         routeChannels: [],
       },
-    } as Record<string, unknown>;
 
-    const result = await backupService.importBackup(payload);
 
     expect(result.allImported).toBe(true);
-    expect(result.sections.accounts).toBe(true);
 
-    const restoredAccount = await db.select().from(schema.accounts).where(eq(schema.accounts.id, 10)).get();
 
     expect(restoredAccount?.oauthProvider).toBe('gemini-cli');
     expect(restoredAccount?.oauthAccountKey).toBe('oauth-user@example.com');
     expect(restoredAccount?.oauthProjectId).toBe('oauth-project-id');
-  });
 
   it('exports configured backup payload to webdav and records sync state', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    fetchSpy.mockResolvedValue(new Response(null, { status: 201 }));
 
     await db.insert(schema.settings).values({
       key: 'backup_webdav_config_v1',
@@ -1549,9 +1422,7 @@ describe('backupService', () => {
     await db.insert(schema.settings).values({
       key: 'ui_locale',
       value: JSON.stringify('zh-CN'),
-    }).run();
 
-    const result = await (backupService as any).exportBackupToWebdav();
 
     expect(result).toMatchObject({
       success: true,
@@ -1572,14 +1443,11 @@ describe('backupService', () => {
       expect.arrayContaining([
         expect.objectContaining({ key: 'ui_locale', value: 'zh-CN' }),
       ]),
-    );
 
     const syncState = await db.select().from(schema.settings).where(eq(schema.settings.key, 'backup_webdav_state_v1')).get();
     expect(syncState?.value).toContain('"lastSyncAt"');
-    expect(syncState?.value).toContain('"lastError":null');
 
     fetchSpy.mockRestore();
-  });
 
   it('imports backup payload from webdav into local data', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
@@ -1595,8 +1463,7 @@ describe('backupService', () => {
             platform: 'new-api',
             externalCheckinUrl: null,
             proxyUrl: null,
-            useSystemProxy: false,
-            customHeaders: null,
+                  customHeaders: null,
             status: 'active',
             isPinned: false,
             sortOrder: 0,
@@ -1641,7 +1508,6 @@ describe('backupService', () => {
     fetchSpy.mockResolvedValue(new Response(JSON.stringify(remotePayload), {
       status: 200,
       headers: { 'content-type': 'application/json' },
-    }));
 
     await db.insert(schema.settings).values({
       key: 'backup_webdav_config_v1',
@@ -1654,9 +1520,7 @@ describe('backupService', () => {
         autoSyncEnabled: false,
         autoSyncCron: '0 * * * *',
       }),
-    }).run();
 
-    const result = await (backupService as any).importBackupFromWebdav();
 
     expect(result.success).toBe(true);
     expect(result.sections.accounts).toBe(true);
@@ -1670,10 +1534,8 @@ describe('backupService', () => {
       expect.objectContaining({
         method: 'GET',
       }),
-    );
 
     fetchSpy.mockRestore();
-  });
 
   it('times out stalled webdav export requests', async () => {
     vi.useFakeTimers();
@@ -1688,7 +1550,6 @@ describe('backupService', () => {
           reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
         }, { once: true });
       });
-    });
 
     try {
       await db.insert(schema.settings).values({
@@ -1702,7 +1563,6 @@ describe('backupService', () => {
           autoSyncEnabled: false,
           autoSyncCron: '0 */6 * * *',
         }),
-      }).run();
 
       const exportAssertion = expect(backupService.exportBackupToWebdav()).rejects.toThrow('WebDAV 请求超时');
       await vi.advanceTimersByTimeAsync(16_000);
@@ -1711,7 +1571,6 @@ describe('backupService', () => {
       fetchSpy.mockRestore();
       vi.useRealTimers();
     }
-  });
 
   it('times out stalled webdav import requests', async () => {
     vi.useFakeTimers();
@@ -1726,7 +1585,6 @@ describe('backupService', () => {
           reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
         }, { once: true });
       });
-    });
 
     try {
       await db.insert(schema.settings).values({
@@ -1740,7 +1598,6 @@ describe('backupService', () => {
           autoSyncEnabled: false,
           autoSyncCron: '0 */6 * * *',
         }),
-      }).run();
 
       const importAssertion = expect(backupService.importBackupFromWebdav()).rejects.toThrow('WebDAV 请求超时');
       await vi.advanceTimersByTimeAsync(16_000);
@@ -1749,12 +1606,10 @@ describe('backupService', () => {
       fetchSpy.mockRestore();
       vi.useRealTimers();
     }
-  });
 
   it('does not schedule malformed imported webdav config', async () => {
     const cronModule = await import('node-cron');
     const scheduleSpy = vi.spyOn(cronModule.default, 'schedule');
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
     try {
       await db.insert(schema.settings).values({
@@ -1768,7 +1623,6 @@ describe('backupService', () => {
           autoSyncEnabled: true,
           autoSyncCron: '0 */6 * * *',
         }),
-      }).run();
 
       await expect(backupService.reloadBackupWebdavScheduler()).resolves.toBeUndefined();
       expect(scheduleSpy).not.toHaveBeenCalled();
@@ -1779,4 +1633,3 @@ describe('backupService', () => {
       warnSpy.mockRestore();
     }
   });
-});

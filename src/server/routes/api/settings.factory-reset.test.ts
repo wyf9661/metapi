@@ -55,7 +55,6 @@ describe('settings factory reset api', () => {
     config.dbType = 'sqlite';
     config.dbUrl = '';
     config.dbSsl = true;
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
   });
 
   afterAll(async () => {
@@ -139,7 +138,6 @@ describe('settings factory reset api', () => {
       { key: 'db_type', value: JSON.stringify('postgres') },
       { key: 'db_url', value: JSON.stringify('postgres://user:pass@127.0.0.1:5432/metapi') },
       { key: 'db_ssl', value: JSON.stringify(true) },
-      { key: 'system_proxy_url', value: JSON.stringify('http://127.0.0.1:7890') },
     ]).run();
 
     const response = await app.inject({
@@ -153,7 +151,6 @@ describe('settings factory reset api', () => {
     expect(config.dbType).toBe('sqlite');
     expect(config.dbUrl).toBe('');
     expect(config.dbSsl).toBe(false);
-    expect(config.systemProxyUrl).toBe('http://127.0.0.1:7890');
 
     const sites = await db.select().from(schema.sites).all();
     expect(sites).toEqual([]);
@@ -162,12 +159,10 @@ describe('settings factory reset api', () => {
     const dbTypeSetting = await db.select().from(schema.settings).where(eq(schema.settings.key, 'db_type')).get();
     const dbUrlSetting = await db.select().from(schema.settings).where(eq(schema.settings.key, 'db_url')).get();
     const dbSslSetting = await db.select().from(schema.settings).where(eq(schema.settings.key, 'db_ssl')).get();
-    const systemProxySetting = await db.select().from(schema.settings).where(eq(schema.settings.key, 'system_proxy_url')).get();
     expect(authTokenSetting?.value).toBe(JSON.stringify('before-reset-token'));
     expect(dbTypeSetting?.value).toBe(JSON.stringify('sqlite'));
     expect(dbUrlSetting?.value).toBe(JSON.stringify(''));
     expect(dbSslSetting?.value).toBe(JSON.stringify(false));
-    expect(systemProxySetting?.value).toBe(JSON.stringify('http://127.0.0.1:7890'));
 
     expect(await db.select().from(schema.accounts).all()).toHaveLength(0);
     expect(await db.select().from(schema.accountTokens).all()).toHaveLength(0);

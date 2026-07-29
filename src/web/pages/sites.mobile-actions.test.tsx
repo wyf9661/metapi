@@ -36,7 +36,6 @@ describe('Sites mobile actions', () => {
         url: 'https://a.example.com',
         platform: 'new-api',
         status: 'active',
-        useSystemProxy: false,
       },
     ]);
   });

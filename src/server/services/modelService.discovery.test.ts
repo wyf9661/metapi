@@ -81,7 +81,6 @@ describe('refreshModelsForAccount credential discovery', () => {
     await db.delete(schema.settings).run();
     await db.delete(schema.sites).run();
     const { config } = await import('../config.js');
-    config.systemProxyUrl = '';
     const { invalidateSiteProxyCache } = await import('./siteProxy.js');
     invalidateSiteProxyCache();
   });
@@ -1575,14 +1574,11 @@ describe('refreshModelsForAccount credential discovery', () => {
     });
 
     const { config } = await import('../config.js');
-    config.systemProxyUrl = 'http://127.0.0.1:1081';
-
     const site = await db.insert(schema.sites).values({
       name: 'gemini-site-proxy-site',
       url: 'https://cloudcode-pa.googleapis.com',
       platform: 'gemini-cli',
       status: 'active',
-      useSystemProxy: true,
     }).returning().get();
 
     const account = await db.insert(schema.accounts).values({

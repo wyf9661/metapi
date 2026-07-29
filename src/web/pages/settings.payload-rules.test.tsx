@@ -60,7 +60,6 @@ describe('Settings payload rules', () => {
       routingWeights: {},
       tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
       adminIpAllowlist: [],
-      systemProxyUrl: '',
       payloadRules: {
         override: [
           {
@@ -250,7 +249,6 @@ describe('Settings payload rules', () => {
       routingWeights: {},
       tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
       adminIpAllowlist: [],
-      systemProxyUrl: '',
       payloadRules: {},
     });
 
@@ -342,7 +340,6 @@ describe('Settings payload rules', () => {
       routingWeights: {},
       tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
       adminIpAllowlist: [],
-      systemProxyUrl: '',
       payloadRules: {},
     });
 
