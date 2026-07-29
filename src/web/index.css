@@ -2215,14 +2215,19 @@ body {
 }
 
 .sites-table th:nth-child(2),
-.sites-table td.site-balance-cell {
+.sites-table td:nth-child(2) {
   text-align: left;
   white-space: nowrap;
   width: 14%;
 }
 
 .sites-table th:nth-child(3),
-.sites-table td:nth-child(3),
+.sites-table td.site-balance-cell {
+  text-align: left;
+  white-space: nowrap;
+  width: 14%;
+}
+
 .sites-table th:nth-child(4),
 .sites-table td:nth-child(4),
 .sites-table th:nth-child(5),
@@ -2232,6 +2237,10 @@ body {
   text-align: center;
   white-space: nowrap;
   width: 10%;
+}
+
+.sites-table th.sites-actions-col {
+  text-align: center;
 }
 
 .sites-actions-col,
