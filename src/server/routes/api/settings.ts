@@ -114,10 +114,6 @@ interface DatabaseMigrationBody {
   ssl?: unknown;
 }
 
-interface SystemProxyTestBody {
-  proxyUrl?: unknown;
-}
-
 interface BackupWebdavConfigBody {
   enabled?: unknown;
   fileUrl?: unknown;
@@ -138,9 +134,6 @@ type RuntimeDatabaseConfig = {
 const DB_TYPE_SETTING_KEY = 'db_type';
 const DB_URL_SETTING_KEY = 'db_url';
 const DB_SSL_SETTING_KEY = 'db_ssl';
-const SYSTEM_PROXY_TEST_PROBE_URL = 'https://www.gstatic.com/generate_204';
-const SYSTEM_PROXY_TEST_TIMEOUT_MS = 15_000;
-
 function maskSecret(value: string): string {
   if (!value) return '';
   if (value.length <= 8) return '****';
@@ -172,94 +165,6 @@ function toPositiveNumberOrFallback(value: unknown, fallback: number) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return fallback;
   return n;
-}
-
-function extractNestedErrorMessages(error: unknown): string[] {
-  const messages: string[] = [];
-  const visited = new Set<unknown>();
-  let current: any = error;
-
-  while (current && !visited.has(current)) {
-    visited.add(current);
-    const message = typeof current?.message === 'string' ? current.message.trim() : '';
-    if (message) {
-      messages.push(message);
-    }
-    current = current?.cause;
-  }
-
-  return messages;
-}
-
-function describeSystemProxyTestFailure(error: unknown): string {
-  const messages = extractNestedErrorMessages(error);
-  const detail = messages.find((message) => message && message !== 'fetch failed')
-    || messages[0]
-    || '未知错误';
-
-  if (/ECONNREFUSED/i.test(detail)) {
-    return '系统代理测试失败：连接被拒绝，请检查代理地址、端口和本地代理程序是否已启动';
-  }
-
-  if (/ETIMEDOUT|timed out|timeout/i.test(detail)) {
-    return '系统代理测试失败：连接超时，请检查代理服务或当前网络是否可用';
-  }
-
-  if (/ENOTFOUND|EAI_AGAIN/i.test(detail)) {
-    return '系统代理测试失败：域名解析失败，请检查网络或代理的 DNS 配置';
-  }
-
-  if (/ECONNRESET/i.test(detail)) {
-    return '系统代理测试失败：连接被对端重置，请检查代理链路是否稳定';
-  }
-
-  if (/407/.test(detail) || /proxy authentication/i.test(detail)) {
-    return '系统代理测试失败：代理要求认证，请检查用户名、密码或代理配置';
-  }
-
-  return `系统代理测试失败：${detail}`;
-}
-
-async function testSystemProxyConnectivity(proxyUrl: string) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SYSTEM_PROXY_TEST_TIMEOUT_MS);
-  const startedAt = Date.now();
-
-  try {
-    const response = await fetch(
-      SYSTEM_PROXY_TEST_PROBE_URL,
-      withExplicitProxyRequestInit(proxyUrl, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: {
-          'cache-control': 'no-cache',
-          'user-agent': 'metapi-system-proxy-tester/1.0',
-        },
-      }),
-    );
-
-    try {
-      await response.arrayBuffer();
-    } catch {
-      // Ignore body drain failures; reachability is determined by receiving a response.
-    }
-
-    return {
-      reachable: true,
-      ok: response.ok,
-      statusCode: response.status,
-      latencyMs: Math.max(1, Date.now() - startedAt),
-      probeUrl: SYSTEM_PROXY_TEST_PROBE_URL,
-      finalUrl: response.url || SYSTEM_PROXY_TEST_PROBE_URL,
-    };
-  } catch (error: any) {
-    if (error?.name === 'AbortError') {
-      throw new Error(`系统代理测试超时（${Math.round(SYSTEM_PROXY_TEST_TIMEOUT_MS / 1000)}s）`);
-    }
-    throw new Error(describeSystemProxyTestFailure(error));
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 function toStringList(value: unknown): string[] {

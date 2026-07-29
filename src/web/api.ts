@@ -340,17 +340,6 @@ export type ProxyTestJobResponse = {
 };
 
 
-export type SystemProxyTestResponse = {
-  success: true;
-  proxyUrl: string;
-  probeUrl: string;
-  finalUrl: string;
-  reachable: true;
-  ok: boolean;
-  statusCode: number;
-  latencyMs: number;
-};
-
 export type RuntimeRoutingWeightsPayload = {
   baseWeightFactor?: number;
   valueScoreFactor?: number;
