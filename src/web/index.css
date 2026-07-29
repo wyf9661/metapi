@@ -2111,6 +2111,7 @@ body {
 .accounts-table th:nth-child(3),
 .accounts-table td:nth-child(3) {
   width: 20%;
+  text-align: left;
 }
 
 .accounts-health-reason {
