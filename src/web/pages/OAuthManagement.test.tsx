@@ -1404,7 +1404,6 @@ describe('OAuthManagement page', () => {
       expect(importText).toContain('workspace-b.json');
       expect(importText).toContain('已识别 2 份 JSON');
       expect(importText).toContain('结构有效');
-      expect(findOauthImportSettingInput(root, 'use-system-proxy').props.checked).toBe(true);
 
       await clickButton(root, '添加');
 
@@ -2168,8 +2167,6 @@ describe('OAuthManagement page', () => {
 
       const proxyToggle = findOauthSettingInput(root!, 'use-custom-proxy');
       const proxyInput = findOauthSettingInput(root!, 'proxy-url');
-
-      expect(findOauthSettingInput(root!, 'use-system-proxy').props.checked).toBe(false);
 
       expect(proxyToggle).toBeTruthy();
       expect(proxyToggle.props.checked).toBe(true);

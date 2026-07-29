@@ -652,7 +652,6 @@ export default function OAuthManagement() {
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [autoRefreshSeconds, setAutoRefreshSeconds] = useState<number>(0);
   const [autoRefreshCountdown, setAutoRefreshCountdown] = useState<number>(0);
-  const [runtimeSystemProxyConfigured, setRuntimeSystemProxyConfigured] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const [importJsonText, setImportJsonText] = useState('');
@@ -660,7 +659,6 @@ export default function OAuthManagement() {
   const [importDragOver, setImportDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importCustomProxyEnabled, setImportCustomProxyEnabled] = useState(false);
-  const [importSystemProxyEnabled, setImportSystemProxyEnabled] = useState(false);
   const [importProxyUrl, setImportProxyUrl] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerIntent, setDrawerIntent] = useState<DrawerIntent>({ mode: 'create' });
@@ -671,7 +669,6 @@ export default function OAuthManagement() {
   const [manualCallbackUrl, setManualCallbackUrl] = useState('');
   const [manualCallbackSubmitting, setManualCallbackSubmitting] = useState(false);
   const [oauthCustomProxyEnabled, setOauthCustomProxyEnabled] = useState(false);
-  const [oauthSystemProxyEnabled, setOauthSystemProxyEnabled] = useState(false);
   const [oauthProxyUrl, setOauthProxyUrl] = useState('');
   const [modelsModal, setModelsModal] = useState<OAuthModelsModalState>({
     open: false,
@@ -732,13 +729,11 @@ export default function OAuthManagement() {
 
   const resetOauthProxySettings = useCallback(() => {
     setOauthCustomProxyEnabled(false);
-    setOauthSystemProxyEnabled(false);
     setOauthProxyUrl('');
   }, []);
 
-  const resetImportProxySettings = useCallback((defaultToSystem = false) => {
+  const resetImportProxySettings = useCallback(() => {
     setImportCustomProxyEnabled(false);
-    setImportSystemProxyEnabled(defaultToSystem);
     setImportProxyUrl('');
   }, []);
 
@@ -751,14 +746,14 @@ export default function OAuthManagement() {
   const closeImportModal = useCallback(() => {
     setImportOpen(false);
     resetImportState();
-    resetImportProxySettings(false);
+    resetImportProxySettings();
   }, [resetImportProxySettings, resetImportState]);
 
   const openImportModal = useCallback(() => {
     resetImportState();
-    resetImportProxySettings(runtimeSystemProxyConfigured);
+    resetImportProxySettings();
     setImportOpen(true);
-  }, [resetImportProxySettings, resetImportState, runtimeSystemProxyConfigured]);
+  }, [resetImportProxySettings, resetImportState]);
 
   const loadConnections = useCallback(async () => {
     const response = await api.getOAuthConnections({
@@ -1006,7 +1001,6 @@ export default function OAuthManagement() {
     setDrawerIntent({ mode: 'proxy', account: connection });
     setSelectedProviderKey(connection.provider);
     setDrawerProjectId(connection.projectId || '');
-    setOauthSystemProxyEnabled(false);
     setOauthCustomProxyEnabled(!!asTrimmedString(connection.proxyUrl));
     setOauthProxyUrl(asTrimmedString(connection.proxyUrl));
     setDrawerOpen(true);
@@ -1031,13 +1025,11 @@ export default function OAuthManagement() {
 
   const resolveProxySettingsPayload = ({
     customEnabled,
-    systemEnabled,
     proxyValue,
     fallbackAccount,
     clearToSiteFallback = false,
   }: {
     customEnabled: boolean;
-    systemEnabled: boolean;
     proxyValue: string;
     fallbackAccount?: OAuthConnectionInfo | null;
     clearToSiteFallback?: boolean;
@@ -1045,9 +1037,6 @@ export default function OAuthManagement() {
     const customProxyUrl = asTrimmedString(proxyValue);
     if (customEnabled) {
       return { proxyUrl: customProxyUrl };
-    }
-    if (systemEnabled) {
-      return { proxyUrl: null };
     }
     if (clearToSiteFallback) {
       return { proxyUrl: null };
@@ -1073,7 +1062,6 @@ export default function OAuthManagement() {
         drawerIntent.account.accountId,
         resolveProxySettingsPayload({
           customEnabled: oauthCustomProxyEnabled,
-          systemEnabled: oauthSystemProxyEnabled,
           proxyValue: oauthProxyUrl,
           clearToSiteFallback: true,
         }),
@@ -1115,7 +1103,6 @@ export default function OAuthManagement() {
 
     const proxySettings = resolveProxySettingsPayload({
       customEnabled: oauthCustomProxyEnabled,
-      systemEnabled: oauthSystemProxyEnabled,
       proxyValue: oauthProxyUrl,
       fallbackAccount: rebindAccount,
       clearToSiteFallback: drawerIntent.mode === 'proxy',
@@ -1402,7 +1389,6 @@ export default function OAuthManagement() {
         .map((item) => item.parsedData as Record<string, unknown>);
       const importProxySettings = resolveProxySettingsPayload({
           customEnabled: importCustomProxyEnabled,
-          systemEnabled: importSystemProxyEnabled,
           proxyValue: importProxyUrl,
         });
       const result = parsedItems.length === 1
@@ -2189,27 +2175,11 @@ export default function OAuthManagement() {
 
               <div className="oauth-form-note">
                 {drawerIntent.mode === 'proxy'
-                  ? '这里修改的是账号级 OAuth 代理。点击“保存代理”会立即落库并刷新列表；只有“保存并重新授权”才会重新走授权流程。若两项都不勾选，则回退到站点代理配置。'
-                  : '这里的设置会作用于下一次“连接”或“重新授权”。填写代理地址后，本次 OAuth 换 token 和后续生成的账号都会直接带上这份账号级代理配置；若不勾选，则回退到站点代理配置。'}
+                  ? '这里修改的是账号级 OAuth 代理。点击“保存代理”会立即落库并刷新列表；只有“保存并重新授权”才会重新走授权流程。不填代理地址则回退到站点代理配置。'
+                  : '这里的设置会作用于下一次“连接”或“重新授权”。填写代理地址后，本次 OAuth 换 token 和后续生成的账号都会直接带上这份账号级代理配置。不填则回退到站点代理配置。'}
               </div>
 
               <div className="oauth-toggle-group">
-                <label className="oauth-toggle">
-                  <input
-                    type="checkbox"
-                    checked={oauthSystemProxyEnabled}
-                    data-oauth-setting="use-system-proxy"
-                    onChange={(event) => {
-                      const checked = !!event.target.checked;
-                      setOauthSystemProxyEnabled(checked);
-                      if (checked) {
-                        setOauthCustomProxyEnabled(false);
-                        setOauthProxyUrl('');
-                      }
-                    }}
-                  />
-                  <span>使用系统级代理</span>
-                </label>
                 <label className="oauth-toggle">
                   <input
                     type="checkbox"
@@ -2218,7 +2188,6 @@ export default function OAuthManagement() {
                     onChange={(event) => {
                       const checked = !!event.target.checked;
                       setOauthCustomProxyEnabled(checked);
-                      if (checked) setOauthSystemProxyEnabled(false);
                     }}
                   />
                   <span>使用自定义代理</span>
@@ -2436,25 +2405,9 @@ export default function OAuthManagement() {
           )}
         </div>
         <div className="oauth-form-note">
-          导入后的账号代理可在这里一次性指定；如果当前运行时已配置系统代理，会默认预选“使用系统级代理”。
+          导入后的账号代理可在这里一次性指定。
         </div>
         <div className="oauth-toggle-group">
-          <label className="oauth-toggle">
-            <input
-              type="checkbox"
-              checked={importSystemProxyEnabled}
-              data-oauth-import-setting="use-system-proxy"
-              onChange={(event) => {
-                const checked = !!event.target.checked;
-                setImportSystemProxyEnabled(checked);
-                if (checked) {
-                  setImportCustomProxyEnabled(false);
-                  setImportProxyUrl('');
-                }
-              }}
-            />
-            <span>使用系统级代理</span>
-          </label>
           <label className="oauth-toggle">
             <input
               type="checkbox"
@@ -2463,7 +2416,6 @@ export default function OAuthManagement() {
               onChange={(event) => {
                 const checked = !!event.target.checked;
                 setImportCustomProxyEnabled(checked);
-                if (checked) setImportSystemProxyEnabled(false);
               }}
             />
             <span>使用自定义代理</span>
