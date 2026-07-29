@@ -2015,14 +2015,6 @@ export default function Sites() {
                           )}
                         />
                         <MobileField
-                          label="系统代理"
-                          value={(
-                            <span className="badge badge-muted" style={{ fontSize: 11 }}>
-                              —
-                            </span>
-                          )}
-                        />
-                        <MobileField
                           label="自定义头"
                           value={hasConfiguredCustomHeaders(site.customHeaders) ? '已配置' : '-'}
                         />
@@ -2079,7 +2071,6 @@ export default function Sites() {
                   <th>名称</th>
                   <th>总余额</th>
                   <th>状态</th>
-                  <th>系统代理</th>
                   <th>权重</th>
                   <th>平台</th>
                   <th>创建时间</th>

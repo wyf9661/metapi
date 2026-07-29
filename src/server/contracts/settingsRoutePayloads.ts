@@ -62,7 +62,7 @@ function formatSettingsPayloadError(error: z.ZodError): string {
     return 'Invalid type. Expected all/accounts/preferences.';
   }
   if (firstPath === 'proxyUrl') {
-    return '系统代理地址格式无效：需要 string';
+    return '代理地址格式无效：需要 string';
   }
   if (firstPath === 'dialect') {
     return 'Invalid dialect. Expected sqlite/mysql/postgres.';
