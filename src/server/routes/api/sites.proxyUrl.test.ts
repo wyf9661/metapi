@@ -45,7 +45,6 @@ describe('sites proxy settings', () => {
         url: 'https://proxy-site.example.com',
         platform: 'new-api',
         proxyUrl: 'socks5://127.0.0.1:1080',
-        useSystemProxy: true,
         customHeaders: JSON.stringify({
           'cf-access-client-id': 'site-client-id',
           'x-site-scope': 'internal',
@@ -59,14 +58,12 @@ describe('sites proxy settings', () => {
     expect(response.statusCode).toBe(200);
     const payload = response.json() as {
       proxyUrl?: string | null;
-      useSystemProxy?: boolean;
       customHeaders?: string | null;
       customHeadersOverrideRequestHeaders?: boolean | null;
       externalCheckinUrl?: string | null;
       globalWeight?: number;
     };
     expect(payload.proxyUrl).toBe('socks5://127.0.0.1:1080');
-    expect(payload.useSystemProxy).toBe(true);
     expect(payload.customHeaders).toBe('{"cf-access-client-id":"site-client-id","x-site-scope":"internal"}');
     expect(payload.customHeadersOverrideRequestHeaders).toBe(true);
     expect(payload.externalCheckinUrl).toBe('https://checkin.example.com/welfare');
@@ -125,22 +122,6 @@ describe('sites proxy settings', () => {
     expect((duplicate.json() as { error?: string }).error).toContain('already exists');
   });
 
-  it('rejects invalid useSystemProxy flag', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/sites',
-      payload: {
-        name: 'proxy-site',
-        url: 'https://proxy-site.example.com',
-        platform: 'new-api',
-        useSystemProxy: 'not-a-boolean',
-      },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect((response.json() as { error?: string }).error).toContain('Invalid useSystemProxy');
-  });
-
   it('rejects invalid proxy url', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -197,7 +178,6 @@ describe('sites proxy settings', () => {
         name: 'toggle-site',
         url: 'https://toggle-site.example.com',
         platform: 'new-api',
-        useSystemProxy: false,
       },
     });
     expect(created.statusCode).toBe(200);
@@ -208,14 +188,12 @@ describe('sites proxy settings', () => {
       url: `/api/sites/${site.id}`,
       payload: {
         proxyUrl: 'http://127.0.0.1:8080',
-        useSystemProxy: true,
       },
     });
 
     expect(response.statusCode).toBe(200);
-    const payload = response.json() as { proxyUrl?: string | null; useSystemProxy?: boolean };
+    const payload = response.json() as { proxyUrl?: string | null };
     expect(payload.proxyUrl).toBe('http://127.0.0.1:8080');
-    expect(payload.useSystemProxy).toBe(true);
   });
 
   it('updates custom header override priority for an existing site', async () => {
@@ -256,7 +234,6 @@ describe('sites proxy settings', () => {
         url: 'https://editable-site.example.com',
         platform: 'new-api',
         proxyUrl: 'http://127.0.0.1:8080',
-        useSystemProxy: true,
         customHeaders: JSON.stringify({
           'x-site-scope': 'internal',
         }),
@@ -271,7 +248,6 @@ describe('sites proxy settings', () => {
       url: `/api/sites/${site.id}`,
       payload: {
         proxyUrl: '',
-        useSystemProxy: false,
         customHeaders: '',
         externalCheckinUrl: '',
       },
@@ -280,12 +256,10 @@ describe('sites proxy settings', () => {
     expect(response.statusCode).toBe(200);
     const payload = response.json() as {
       proxyUrl?: string | null;
-      useSystemProxy?: boolean;
       customHeaders?: string | null;
       externalCheckinUrl?: string | null;
     };
     expect(payload.proxyUrl).toBeNull();
-    expect(payload.useSystemProxy).toBe(false);
     expect(payload.customHeaders).toBeNull();
     expect(payload.externalCheckinUrl).toBeNull();
   });

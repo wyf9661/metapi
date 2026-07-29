@@ -53,7 +53,6 @@ describe('insert helpers', () => {
         url: 'https://shared-helper.example.com',
         platform: 'codex',
         status: 'active',
-        useSystemProxy: false,
         isPinned: false,
         globalWeight: 1,
         sortOrder: 0,

@@ -153,7 +153,6 @@ describe('databaseMigrationService', () => {
   it.each(['postgres', 'mysql', 'sqlite'] as const)('creates or patches sites schema with custom header priority columns for %s', async (dialect) => {
     const executedSql: string[] = [];
     const liveContract = cloneContract(currentContract);
-    deleteContractColumn(liveContract, 'sites', 'use_system_proxy');
     deleteContractColumn(liveContract, 'sites', 'custom_headers');
     deleteContractColumn(liveContract, 'sites', 'custom_headers_override_request_headers');
 
@@ -175,11 +174,9 @@ describe('databaseMigrationService', () => {
       liveContract,
     });
 
-    const useSystemProxySql = executedSql.find((sqlText) => sqlText.includes('use_system_proxy'));
     const customHeadersSql = executedSql.find((sqlText) => sqlText.includes('custom_headers'));
     const customHeadersOverrideSql = executedSql.find((sqlText) => sqlText.includes('custom_headers_override_request_headers'));
 
-    expect(useSystemProxySql).toContain('use_system_proxy');
     expect(customHeadersSql).toContain('custom_headers');
     expect(customHeadersOverrideSql).toContain('custom_headers_override_request_headers');
   });
@@ -222,7 +219,6 @@ describe('databaseMigrationService', () => {
           name: 'demo',
           url: 'https://example.com',
           platform: 'openai',
-          useSystemProxy: true,
           customHeaders: '{"x-site-scope":"internal"}',
           customHeadersOverrideRequestHeaders: true,
           postRefreshProbeEnabled: true,
@@ -254,7 +250,6 @@ describe('databaseMigrationService', () => {
     });
 
     const siteStatement = statements.find((statement) => statement.table === 'sites');
-    const useSystemProxyIndex = siteStatement?.columns.indexOf('use_system_proxy') ?? -1;
     const customHeadersIndex = siteStatement?.columns.indexOf('custom_headers') ?? -1;
     const customHeadersOverrideIndex = siteStatement?.columns.indexOf('custom_headers_override_request_headers') ?? -1;
     const probeEnabledIndex = siteStatement?.columns.indexOf('post_refresh_probe_enabled') ?? -1;
@@ -262,8 +257,6 @@ describe('databaseMigrationService', () => {
     const probeScopeIndex = siteStatement?.columns.indexOf('post_refresh_probe_scope') ?? -1;
     const probeLatencyIndex = siteStatement?.columns.indexOf('post_refresh_probe_latency_threshold_ms') ?? -1;
 
-    expect(useSystemProxyIndex).toBeGreaterThanOrEqual(0);
-    expect(siteStatement?.values[useSystemProxyIndex]).toBe(true);
     expect(customHeadersIndex).toBeGreaterThanOrEqual(0);
     expect(siteStatement?.values[customHeadersIndex]).toBe('{"x-site-scope":"internal"}');
     expect(customHeadersOverrideIndex).toBeGreaterThanOrEqual(0);

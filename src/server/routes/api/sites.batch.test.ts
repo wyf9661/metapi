@@ -43,14 +43,12 @@ describe('sites batch routes', () => {
         name: 'site-1',
         url: 'https://site-1.example.com',
         platform: 'new-api',
-        useSystemProxy: false,
       },
       {
         id: 2,
         name: 'site-2',
         url: 'https://site-2.example.com',
         platform: 'new-api',
-        useSystemProxy: false,
       },
     ]).run();
 
@@ -72,8 +70,6 @@ describe('sites batch routes', () => {
     expect(body.failedItems).toHaveLength(1);
     expect(body.failedItems?.[0]?.id).toBe(999);
 
-    const rows = await db.select().from(schema.sites).all();
-    expect(rows.every((row) => row.useSystemProxy === true)).toBe(true);
   });
 
   it('rejects invalid sites batch action', async () => {

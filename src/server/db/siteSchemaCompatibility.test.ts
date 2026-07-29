@@ -37,8 +37,6 @@ describe('ensureSiteSchemaCompatibility', () => {
       dialect: 'sqlite' as const,
       expectedSql: [
         'ALTER TABLE sites ADD COLUMN proxy_url text;',
-        'ALTER TABLE sites ADD COLUMN use_system_proxy integer DEFAULT 0;',
-        'UPDATE sites SET use_system_proxy = 0 WHERE use_system_proxy IS NULL;',
         'ALTER TABLE sites ADD COLUMN custom_headers text;',
         'ALTER TABLE sites ADD COLUMN custom_headers_override_request_headers integer DEFAULT 0;',
         'UPDATE sites SET custom_headers_override_request_headers = 0 WHERE custom_headers_override_request_headers IS NULL;',
@@ -59,8 +57,6 @@ describe('ensureSiteSchemaCompatibility', () => {
       dialect: 'postgres' as const,
       expectedSql: [
         'ALTER TABLE "sites" ADD COLUMN "proxy_url" TEXT',
-        'ALTER TABLE "sites" ADD COLUMN "use_system_proxy" BOOLEAN DEFAULT FALSE',
-        'UPDATE "sites" SET "use_system_proxy" = FALSE WHERE "use_system_proxy" IS NULL',
         'ALTER TABLE "sites" ADD COLUMN "custom_headers" TEXT',
         'ALTER TABLE "sites" ADD COLUMN "custom_headers_override_request_headers" BOOLEAN DEFAULT FALSE',
         'UPDATE "sites" SET "custom_headers_override_request_headers" = FALSE WHERE "custom_headers_override_request_headers" IS NULL',
@@ -81,8 +77,6 @@ describe('ensureSiteSchemaCompatibility', () => {
       dialect: 'mysql' as const,
       expectedSql: [
         'ALTER TABLE `sites` ADD COLUMN `proxy_url` TEXT NULL',
-        'ALTER TABLE `sites` ADD COLUMN `use_system_proxy` BOOLEAN DEFAULT FALSE',
-        'UPDATE `sites` SET `use_system_proxy` = FALSE WHERE `use_system_proxy` IS NULL',
         'ALTER TABLE `sites` ADD COLUMN `custom_headers` TEXT NULL',
         'ALTER TABLE `sites` ADD COLUMN `custom_headers_override_request_headers` BOOLEAN DEFAULT FALSE',
         'UPDATE `sites` SET `custom_headers_override_request_headers` = FALSE WHERE `custom_headers_override_request_headers` IS NULL',

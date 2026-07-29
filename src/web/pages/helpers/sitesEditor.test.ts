@@ -28,7 +28,7 @@ describe('buildSiteSaveAction', () => {
         ],
         customHeaders: '{"x-site-token":"alpha"}',
         customHeadersOverrideRequestHeaders: true,
-        useSystemProxy: false,
+
         globalWeight: 1.2,
         postRefreshProbeEnabled: true,
         postRefreshProbeModel: 'gpt-4o',
@@ -50,7 +50,7 @@ describe('buildSiteSaveAction', () => {
         ],
         customHeaders: '{"x-site-token":"alpha"}',
         customHeadersOverrideRequestHeaders: true,
-        useSystemProxy: false,
+
         globalWeight: 1.2,
         postRefreshProbeEnabled: true,
         postRefreshProbeModel: 'gpt-4o',
@@ -68,7 +68,7 @@ describe('buildSiteSaveAction', () => {
         url: 'https://b.example.com',
         platform: 'one-api',
         proxyUrl: '',
-        useSystemProxy: true,
+
         apiEndpoints: [],
         customHeaders: '',
         customHeadersOverrideRequestHeaders: false,
@@ -84,7 +84,7 @@ describe('buildSiteSaveAction', () => {
         url: 'https://b.example.com',
         platform: 'one-api',
         proxyUrl: '',
-        useSystemProxy: true,
+
         apiEndpoints: [],
         customHeaders: '',
         customHeadersOverrideRequestHeaders: false,
@@ -102,7 +102,7 @@ describe('buildSiteSaveAction', () => {
           url: 'https://c.example.com',
             platform: '',
           proxyUrl: '',
-          useSystemProxy: false,
+  
           apiEndpoints: [],
           customHeaders: '',
           customHeadersOverrideRequestHeaders: false,

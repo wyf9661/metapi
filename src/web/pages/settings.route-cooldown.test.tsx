@@ -61,7 +61,6 @@ describe('Settings route cooldown cap', () => {
       routingWeights: {},
       tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
       adminIpAllowlist: [],
-      systemProxyUrl: '',
     });
     apiMock.getDownstreamApiKeys.mockResolvedValue({ items: [] });
     apiMock.getRoutesLite.mockResolvedValue([]);
@@ -152,7 +151,6 @@ describe('Settings route cooldown cap', () => {
       routingWeights: {},
       tokenRouterFailureCooldownMaxSec: 10,
       adminIpAllowlist: [],
-      systemProxyUrl: '',
     });
 
     let root!: ReactTestRenderer;

@@ -32,10 +32,6 @@ describe('schema contract generation', () => {
       notNull: true,
       defaultValue: '0',
     });
-    expect(contract.tables.sites.columns.use_system_proxy).toMatchObject({
-      logicalType: 'boolean',
-      defaultValue: 'false',
-    });
     expect(contract.tables.sites.columns.custom_headers_override_request_headers).toMatchObject({
       logicalType: 'boolean',
       defaultValue: 'false',

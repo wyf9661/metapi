@@ -44,7 +44,6 @@ describe('NotificationSettings', () => {
       telegramChatId: '-1001234567890',
       telegramMessageThreadId: '77',
       telegramBotTokenMasked: '1234****token',
-      telegramUseSystemProxy: false,
       smtpEnabled: false,
       smtpHost: '',
       smtpPort: 587,
@@ -111,75 +110,6 @@ describe('NotificationSettings', () => {
       expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith(expect.objectContaining({
         telegramApiBaseUrl: 'https://proxy.example.com/custom/',
         telegramMessageThreadId: '88',
-      }));
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('loads and saves telegram use system proxy toggle', async () => {
-    apiMock.getRuntimeSettings.mockResolvedValue({
-      webhookUrl: '',
-      barkUrl: '',
-      webhookEnabled: true,
-      barkEnabled: true,
-      serverChanEnabled: false,
-      telegramEnabled: true,
-      telegramApiBaseUrl: 'https://api.telegram.org',
-      telegramChatId: '-1001234567890',
-      telegramBotTokenMasked: '1234****token',
-      telegramUseSystemProxy: false,
-      smtpEnabled: false,
-      smtpHost: '',
-      smtpPort: 587,
-      smtpSecure: false,
-      smtpUser: '',
-      smtpFrom: '',
-      smtpTo: '',
-      notifyCooldownSec: 300,
-    });
-
-    let root!: WebTestRenderer;
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter>
-            <ToastProvider>
-              <NotificationSettings />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const allCheckboxes = root.root.findAll((node) => (
-        node.type === 'input' && node.props.type === 'checkbox'
-      ));
-      const proxyCheckbox = allCheckboxes.find((node) => {
-        const parent = node.parent;
-        if (!parent) return false;
-        const text = collectText(parent);
-        return text.includes('使用系统代理');
-      });
-      expect(proxyCheckbox).toBeTruthy();
-      expect(proxyCheckbox!.props.checked).toBe(false);
-
-      await act(async () => {
-        proxyCheckbox!.props.onChange({ target: { checked: true } });
-      });
-
-      const saveButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).includes('保存通知设置')
-      ));
-      await act(async () => {
-        saveButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith(expect.objectContaining({
-        telegramUseSystemProxy: true,
       }));
     } finally {
       root?.unmount();
