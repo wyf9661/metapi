@@ -7,10 +7,10 @@ import {
 
 /** Soft ceiling so huge free-pool models (20+ channels) cannot thrash for minutes. */
 export const PROXY_CHANNEL_FAILOVER_SOFT_ATTEMPT_CAP_DEFAULT = 8;
-/** Soft wall-clock budget for multi-channel failover when env leaves budget unset (0). */
-export const PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT = 45_000;
-/** After the first channel, use a shorter first-byte probe for remaining candidates. */
-export const PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT = 15_000;
+/** Probe timeout floor: avoid being too aggressive when full timeout is very small. */
+export const PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_FLOOR_MS = 10_000;
+/** Probe timeout ceiling: avoid waiting too long when full timeout is very large. */
+export const PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_CAP_MS = 30_000;
 /** Stop after this many consecutive low-value failure classes (WAF/model/quota/ambiguous). */
 export const PROXY_CHANNEL_FAILOVER_LOW_VALUE_STREAK_STOP_DEFAULT = 2;
 
@@ -61,18 +61,19 @@ export function getProxyChannelFailoverBudgetMs(): number {
   const budget = Math.trunc((config as { proxyChannelFailoverBudgetMs?: number }).proxyChannelFailoverBudgetMs || 0);
   return budget > 0 ? budget : 0;
 }
-
 /**
  * Live-path wall-clock budget:
  * - single candidate → 0 (no multi-channel wait)
- * - multi candidate → explicit env budget if >0, else soft default 30s
+ * - multi candidate → explicit env budget if >0, else derived from first-byte
+ *   timeout as `full + 2 * probe` so the first attempt plus two probe attempts
+ *   fit before we give up.
  */
 export function getProxyEffectiveFailoverBudgetMs(candidateCount: number): number {
   const count = Math.max(0, Math.trunc(candidateCount || 0));
   if (count <= 1) return 0;
   const explicit = getProxyChannelFailoverBudgetMs();
   if (explicit > 0) return explicit;
-  return PROXY_CHANNEL_FAILOVER_SOFT_BUDGET_MS_DEFAULT;
+  return resolveProxyFailoverDerivedBudgetMs();
 }
 
 export function canRetryProxyChannel(
@@ -100,14 +101,33 @@ export function canRetryProxyChannelWithBudget(
 
 /**
  * First-byte timeout for channel attempt N.
- * First attempt uses full config timeout; later attempts use a short probe so
- * failover does not spend a full generation timeout validating bad channels.
+ * - retryCount=0 (first attempt): use the full configured timeout.
+ * - retryCount>=1 (probe attempts): use `clamp(full/2, 10s, 30s)` so we do not
+ *   spend a full generation timeout validating bad channels, while still
+ *   tolerating slow-but-alive relay sites.
+ * - full<=0 (disabled): probes are also disabled so explicit opt-out is
+ *   respected end-to-end.
  */
 export function resolveProxyChannelFirstByteTimeoutMs(retryCount: number): number {
   const fullMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
   if (retryCount <= 0) return fullMs;
-  if (fullMs <= 0) return PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT;
-  return Math.min(fullMs, PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_MS_DEFAULT);
+  if (fullMs <= 0) return 0;
+  const halfMs = Math.floor(fullMs / 2);
+  return Math.min(
+    PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_CAP_MS,
+    Math.max(PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_FLOOR_MS, halfMs),
+  );
+}
+
+/**
+ * Derived failover budget when env does not pin an explicit value:
+ * `full + 2 * probe` covers the first attempt plus two probe attempts, which
+ * matches the default soft attempt cap of 8 for typical pool sizes.
+ */
+export function resolveProxyFailoverDerivedBudgetMs(): number {
+  const fullMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+  if (fullMs <= 0) return 0;
+  return fullMs + 2 * resolveProxyChannelFirstByteTimeoutMs(1);
 }
 
 export type FailoverStreakState = {

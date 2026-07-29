@@ -9,14 +9,18 @@ import {
   getProxyEffectiveMaxChannelRetries,
   getProxyMaxChannelAttempts,
   getProxyMaxChannelRetries,
+  resolveProxyChannelFirstByteTimeoutMs,
+  resolveProxyFailoverDerivedBudgetMs,
 } from './proxyChannelRetry.js';
 
 const originalProxyMaxChannelAttempts = config.proxyMaxChannelAttempts;
 const originalBudget = (config as any).proxyChannelFailoverBudgetMs;
+const originalFirstByteTimeoutSec = (config as any).proxyFirstByteTimeoutSec;
 
 afterEach(() => {
   config.proxyMaxChannelAttempts = originalProxyMaxChannelAttempts;
   (config as any).proxyChannelFailoverBudgetMs = originalBudget;
+  (config as any).proxyFirstByteTimeoutSec = originalFirstByteTimeoutSec;
 });
 
 describe('proxyChannelRetry', () => {
@@ -54,18 +58,20 @@ describe('proxyChannelRetry', () => {
 
   it('caps multi-channel pools at the soft attempt ceiling', () => {
     config.proxyMaxChannelAttempts = 5;
+    (config as any).proxyChannelFailoverBudgetMs = 0;
+    (config as any).proxyFirstByteTimeoutSec = 30;
 
     // 14 candidates → min(14, softCap 8) = 8
     expect(getProxyEffectiveMaxChannelAttempts(14)).toBe(8);
     expect(getProxyEffectiveMaxChannelRetries(14)).toBe(7);
-    // multi-channel → explicit budget if set, else soft default 30s
-    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(45_000);
+    // multi-channel → derived budget full + 2*probe = 30 + 2*15 = 60s
+    expect(getProxyEffectiveFailoverBudgetMs(14)).toBe(60_000);
 
     // 2 candidates → min(2, 8) = 2 (small pool fully covered)
     expect(getProxyEffectiveMaxChannelAttempts(2)).toBe(2);
     expect(getProxyEffectiveMaxChannelRetries(2)).toBe(1);
-    // multi-channel → soft default 30s
-    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(45_000);
+    // multi-channel → derived budget 60s
+    expect(getProxyEffectiveFailoverBudgetMs(2)).toBe(60_000);
 
     // single candidate → unlimited budget
     expect(getProxyEffectiveFailoverBudgetMs(1)).toBe(0);
@@ -83,5 +89,46 @@ describe('proxyChannelRetry', () => {
     (config as any).proxyChannelFailoverBudgetMs = 10_000;
     expect(canRetryProxyChannelWithBudget(2, 100, 10_000, 5)).toBe(true);
     expect(canRetryProxyChannelWithBudget(5, 100, 10_000, 5)).toBe(false);
+  });
+
+  it('derives probe first-byte timeout as clamp(full/2, 10s, 30s)', () => {
+    // full = 60s → probe = 30s (capped)
+    (config as any).proxyFirstByteTimeoutSec = 60;
+    expect(resolveProxyChannelFirstByteTimeoutMs(0)).toBe(60_000);
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(30_000);
+    expect(resolveProxyChannelFirstByteTimeoutMs(5)).toBe(30_000);
+
+    // full = 30s → probe = 15s (half, within bounds)
+    (config as any).proxyFirstByteTimeoutSec = 30;
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(15_000);
+
+    // full = 10s → probe = 10s (floor)
+    (config as any).proxyFirstByteTimeoutSec = 10;
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(10_000);
+
+    // full = 300s → probe = 30s (capped)
+    (config as any).proxyFirstByteTimeoutSec = 300;
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(30_000);
+
+    // full = 0 (disabled) → probes also disabled
+    (config as any).proxyFirstByteTimeoutSec = 0;
+    expect(resolveProxyChannelFirstByteTimeoutMs(0)).toBe(0);
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(0);
+  });
+
+  it('derives failover budget as full + 2*probe', () => {
+    (config as any).proxyFirstByteTimeoutSec = 60;
+    // 60s + 2*30s = 120s
+    expect(resolveProxyFailoverDerivedBudgetMs()).toBe(120_000);
+    expect(getProxyEffectiveFailoverBudgetMs(3)).toBe(120_000);
+
+    (config as any).proxyFirstByteTimeoutSec = 30;
+    // 30s + 2*15s = 60s
+    expect(resolveProxyFailoverDerivedBudgetMs()).toBe(60_000);
+
+    // disabled → 0 (no budget cap)
+    (config as any).proxyFirstByteTimeoutSec = 0;
+    expect(resolveProxyFailoverDerivedBudgetMs()).toBe(0);
+    expect(getProxyEffectiveFailoverBudgetMs(5)).toBe(0);
   });
 });
