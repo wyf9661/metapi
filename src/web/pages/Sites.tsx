@@ -1861,27 +1861,9 @@ export default function Sites() {
                 style={formInputStyle}
               />
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                这里只是 HTTP/SOCKS 代理地址，不是上游 API 请求地址。填写后优先使用站点代理；留空则使用系统代理或直连(取决于设置开关状态)。
+                HTTP/SOCKS 代理地址，填写后该站点的出站请求将通过此代理。留空则直连。
               </div>
             </div>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '10px 14px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: 13,
-              background: 'var(--color-bg)',
-              color: 'var(--color-text-primary)',
-            }}>
-              <input
-                type="checkbox"
-                checked={false}
-                disabled={true}
-              />
-              使用系统代理
-            </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input
                 placeholder="站点全局权重（默认 1）"
