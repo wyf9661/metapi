@@ -339,9 +339,6 @@ export type ProxyTestJobResponse = {
   expiresAt?: string;
 };
 
-export type SystemProxyTestRequest = {
-  proxyUrl?: string;
-};
 
 export type SystemProxyTestResponse = {
   success: true;
@@ -364,7 +361,6 @@ export type RuntimeRoutingWeightsPayload = {
 
 export type RuntimeSettingsPayload = {
   proxyToken?: string;
-  systemProxyUrl?: string;
   payloadRules?: Record<string, unknown> | null;
   modelAvailabilityProbeEnabled?: boolean;
   codexUpstreamWebsocketEnabled?: boolean;
@@ -400,7 +396,6 @@ export type RuntimeSettingsPayload = {
   telegramApiBaseUrl?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
-  telegramUseSystemProxy?: boolean;
   telegramMessageThreadId?: string;
   smtpEnabled?: boolean;
   smtpHost?: string;
@@ -610,7 +605,6 @@ export type OAuthProviderInfo = {
 export type OAuthProvidersResponse = {
   providers: OAuthProviderInfo[];
   defaults?: {
-    systemProxyConfigured?: boolean;
   };
 };
 
@@ -701,7 +695,6 @@ export type OAuthConnectionInfo = {
   lastModelSyncAt?: string | null;
   lastModelSyncError?: string | null;
   proxyUrl?: string | null;
-  useSystemProxy?: boolean;
   routeUnit?: OAuthRouteUnitSummary | null;
   routeParticipation?: OAuthRouteParticipation | null;
   site?: { id: number; name: string; url: string; platform: string } | null;
@@ -1152,7 +1145,6 @@ export const api = {
       accountId?: number;
       projectId?: string;
       proxyUrl?: string | null;
-      useSystemProxy?: boolean;
     },
   ) =>
     request(`/api/oauth/providers/${encodeURIComponent(provider)}/start`, {
@@ -1187,7 +1179,7 @@ export const api = {
     }) as Promise<OAuthQuotaBatchRefreshResponse>,
   updateOAuthConnectionProxy: (
     accountId: number,
-    data: { proxyUrl?: string | null; useSystemProxy?: boolean },
+    data: { proxyUrl?: string | null },
   ) =>
     request(`/api/oauth/connections/${accountId}/proxy`, {
       method: "PATCH",
@@ -1195,7 +1187,7 @@ export const api = {
     }) as Promise<{ success: true }>,
   rebindOAuthConnection: (
     accountId: number,
-    data?: { proxyUrl?: string | null; useSystemProxy?: boolean },
+    data?: { proxyUrl?: string | null },
   ) =>
     request(`/api/oauth/connections/${accountId}/rebind`, {
       method: "POST",
@@ -1318,12 +1310,7 @@ export const api = {
       `/api/update-center/tasks/${encodeURIComponent(taskId)}/stream`,
       handlers,
     ),
-  testSystemProxy: (data: SystemProxyTestRequest) =>
-    request("/api/settings/system-proxy/test", {
-      method: "POST",
-      body: JSON.stringify(data),
-      timeoutMs: 20_000,
-    }),
+
   getRuntimeDatabaseConfig: () => request("/api/settings/database/runtime"),
   updateRuntimeDatabaseConfig: (data: {
     dialect: "sqlite" | "mysql" | "postgres";

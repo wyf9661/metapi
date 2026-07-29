@@ -42,9 +42,6 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const authToken = parseSettingFromMap<string>(settingsMap, 'auth_token');
   if (typeof authToken === 'string' && authToken) config.authToken = authToken;
 
-  const systemProxyUrl = parseSettingFromMap<string>(settingsMap, 'system_proxy_url');
-  if (typeof systemProxyUrl === 'string') config.systemProxyUrl = systemProxyUrl;
-
   const modelAvailabilityProbeEnabled = parseSettingFromMap<boolean>(settingsMap, 'model_availability_probe_enabled');
   if (typeof modelAvailabilityProbeEnabled === 'boolean') {
     config.modelAvailabilityProbeEnabled = modelAvailabilityProbeEnabled && config.modelAvailabilityProbeAllow;
@@ -258,8 +255,6 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const telegramChatId = parseSettingFromMap<string>(settingsMap, 'telegram_chat_id');
   if (typeof telegramChatId === 'string') config.telegramChatId = telegramChatId;
 
-  const telegramUseSystemProxy = parseSettingFromMap<boolean>(settingsMap, 'telegram_use_system_proxy');
-  if (typeof telegramUseSystemProxy === 'boolean') config.telegramUseSystemProxy = telegramUseSystemProxy;
 
   const telegramMessageThreadId = parseSettingFromMap<string>(settingsMap, 'telegram_message_thread_id');
   if (typeof telegramMessageThreadId === 'string') config.telegramMessageThreadId = telegramMessageThreadId;

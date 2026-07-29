@@ -507,7 +507,6 @@ export async function sitesRoutes(app: FastifyInstance) {
       url,
       platform,
       proxyUrl,
-      useSystemProxy,
       customHeaders,
       customHeadersOverrideRequestHeaders,
       externalCheckinUrl,
@@ -520,10 +519,6 @@ export async function sitesRoutes(app: FastifyInstance) {
     const normalizedStatus = normalizeSiteStatus(status);
     if (status !== undefined && !normalizedStatus) {
       return reply.code(400).send({ error: 'Invalid site status. Expected active or disabled.' });
-    }
-    const normalizedUseSystemProxy = normalizeUseSystemProxyFlag(useSystemProxy);
-    if (useSystemProxy !== undefined && normalizedUseSystemProxy === null) {
-      return reply.code(400).send({ error: 'Invalid useSystemProxy value. Expected boolean.' });
     }
     const normalizedProxyUrl = parseSiteProxyUrlInput(proxyUrl);
     if (!normalizedProxyUrl.valid) {
@@ -591,7 +586,6 @@ export async function sitesRoutes(app: FastifyInstance) {
           url: canonicalUrl,
           platform: detectedPlatform,
           proxyUrl: normalizedProxyUrl.proxyUrl,
-          useSystemProxy: normalizedUseSystemProxy ?? false,
           customHeaders: normalizedCustomHeaders.customHeaders,
           customHeadersOverrideRequestHeaders: normalizedCustomHeadersOverrideRequestHeaders ?? false,
           protocolProfile: typeof (createBody as any).protocolProfile === 'string' ? (createBody as any).protocolProfile : null,
@@ -657,10 +651,6 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (body.status !== undefined && !normalizedStatus) {
       return reply.code(400).send({ error: 'Invalid site status. Expected active or disabled.' });
     }
-    const normalizedUseSystemProxy = normalizeUseSystemProxyFlag(body.useSystemProxy);
-    if (body.useSystemProxy !== undefined && normalizedUseSystemProxy === null) {
-      return reply.code(400).send({ error: 'Invalid useSystemProxy value. Expected boolean.' });
-    }
     const normalizedProxyUrl = parseSiteProxyUrlInput(body.proxyUrl);
     if (!normalizedProxyUrl.valid) {
       return reply.code(400).send({ error: 'Invalid proxyUrl. Expected a valid http(s)/socks proxy URL.' });
@@ -725,7 +715,6 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (body.url !== undefined) updates.url = nextUrl;
     if (body.platform !== undefined) updates.platform = nextPlatform;
     if (normalizedProxyUrl.present) updates.proxyUrl = normalizedProxyUrl.proxyUrl;
-    if (body.useSystemProxy !== undefined) updates.useSystemProxy = normalizedUseSystemProxy;
     if (normalizedCustomHeaders.present) updates.customHeaders = normalizedCustomHeaders.customHeaders;
     if (body.customHeadersOverrideRequestHeaders !== undefined) {
       updates.customHeadersOverrideRequestHeaders = normalizedCustomHeadersOverrideRequestHeaders;
@@ -877,12 +866,12 @@ export async function sitesRoutes(app: FastifyInstance) {
           await deleteSiteAndRelatedData(id);
         } else if (action === 'enableSystemProxy') {
           await db.update(schema.sites)
-            .set({ useSystemProxy: true, updatedAt: new Date().toISOString() })
+            .set({ updatedAt: new Date().toISOString() })
             .where(eq(schema.sites.id, id))
             .run();
         } else if (action === 'disableSystemProxy') {
           await db.update(schema.sites)
-            .set({ useSystemProxy: false, updatedAt: new Date().toISOString() })
+            .set({ updatedAt: new Date().toISOString() })
             .where(eq(schema.sites.id, id))
             .run();
         } else {

@@ -3,7 +3,6 @@ import { db, schema } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
 import {
   getProxyUrlFromExtraConfig,
-  getUseSystemProxyFromExtraConfig,
   mergeAccountExtraConfig,
   resolveProxyUrlFromExtraConfig,
 } from '../accountExtraConfig.js';
@@ -465,7 +464,6 @@ async function activatePersistedOauthAccount(input: {
   };
   rebindAccountId?: number;
   proxyUrl?: string | null;
-  useSystemProxy?: boolean;
   persistedStatus?: 'active' | 'disabled';
   activateExistingAfterRefresh?: boolean;
 }) {
@@ -479,7 +477,6 @@ async function activatePersistedOauthAccount(input: {
     exchange: input.exchange,
     rebindAccountId: input.rebindAccountId,
     proxyUrl: input.proxyUrl,
-    useSystemProxy: input.useSystemProxy,
     persistedStatus: input.persistedStatus,
   });
 
@@ -598,7 +595,6 @@ async function upsertOauthAccount(input: {
   };
   rebindAccountId?: number;
   proxyUrl?: string | null;
-  useSystemProxy?: boolean;
   persistedStatus?: 'active' | 'disabled';
 }) {
   const site = await ensureOauthSite(input.definition);
@@ -629,7 +625,6 @@ async function upsertOauthAccount(input: {
   const extraConfig = mergeAccountExtraConfig(existing?.extraConfig, {
     credentialMode: 'session',
     ...(input.proxyUrl !== undefined ? { proxyUrl: input.proxyUrl } : {}),
-    ...(input.useSystemProxy !== undefined ? { useSystemProxy: input.useSystemProxy } : {}),
     oauth: buildStoredOauthState(oauth),
   });
 
@@ -690,7 +685,6 @@ export function listOauthProviders() {
 
 export function getOauthProviderDefaults() {
   return {
-    systemProxyConfigured: !!resolveProxyUrlFromExtraConfig({ useSystemProxy: true }),
   };
 }
 
@@ -699,7 +693,6 @@ export async function startOauthProviderFlow(input: {
   rebindAccountId?: number;
   projectId?: string;
   proxyUrl?: string | null;
-  useSystemProxy?: boolean;
   requestOrigin?: string;
 }) {
   const definition = getOAuthProviderDefinition(input.provider);
@@ -717,7 +710,6 @@ export async function startOauthProviderFlow(input: {
     rebindAccountId: input.rebindAccountId,
     projectId: input.projectId,
     proxyUrl: input.proxyUrl,
-    useSystemProxy: input.useSystemProxy,
   });
   return {
     provider: input.provider,
@@ -775,9 +767,7 @@ export async function handleOauthCallback(input: {
   try {
     const resolvedProxyUrl = session.proxyUrl
       ? session.proxyUrl
-      : session.useSystemProxy
-        ? resolveProxyUrlFromExtraConfig({ useSystemProxy: true })
-        : await resolveOauthProviderProxyUrl(input.provider);
+      : await resolveOauthProviderProxyUrl(input.provider);
     const exchange = await definition.exchangeAuthorizationCode({
       code,
       state: input.state,
@@ -791,7 +781,6 @@ export async function handleOauthCallback(input: {
       exchange,
       rebindAccountId: session.rebindAccountId,
       proxyUrl: session.proxyUrl,
-      useSystemProxy: session.useSystemProxy,
       activateExistingAfterRefresh: true,
     });
     if (!account) {
@@ -955,7 +944,6 @@ export async function listOauthConnections(options: {
       lastModelSyncAt: oauth.lastModelSyncAt,
       lastModelSyncError: oauth.lastModelSyncError,
       proxyUrl: getProxyUrlFromExtraConfig(row.accounts.extraConfig),
-      useSystemProxy: getUseSystemProxyFromExtraConfig(row.accounts.extraConfig),
       routeParticipation,
       routeUnit,
       site: {
@@ -1029,7 +1017,6 @@ export async function importOauthConnectionsFromNativeJson(input: {
   data?: unknown;
   items?: unknown[];
   proxyUrl?: string | null;
-  useSystemProxy?: boolean;
 }) {
   const payloadItems = normalizeImportedOauthJsonItems(input);
   const continueOnItemFailure = Array.isArray(input.items);
@@ -1064,8 +1051,7 @@ export async function importOauthConnectionsFromNativeJson(input: {
         definition,
         exchange: resolvedIdentity.exchange,
         proxyUrl: input.proxyUrl,
-        useSystemProxy: input.useSystemProxy,
-        persistedStatus: resolvedIdentity.disabled ? 'disabled' : 'active',
+            persistedStatus: resolvedIdentity.disabled ? 'disabled' : 'active',
       });
       imported += 1;
       items.push({
@@ -1106,7 +1092,6 @@ export async function importOauthConnectionsFromNativeJson(input: {
 export async function updateOauthConnectionProxySettings(input: {
   accountId: number;
   proxyUrl?: string | null;
-  useSystemProxy?: boolean;
 }) {
   const account = await db.select().from(schema.accounts)
     .where(eq(schema.accounts.id, input.accountId))
@@ -1121,7 +1106,6 @@ export async function updateOauthConnectionProxySettings(input: {
 
   const extraConfig = mergeAccountExtraConfig(account.extraConfig, {
     ...(input.proxyUrl !== undefined ? { proxyUrl: input.proxyUrl } : {}),
-    ...(input.useSystemProxy !== undefined ? { useSystemProxy: input.useSystemProxy } : {}),
   });
   const updatedAt = new Date().toISOString();
 
@@ -1137,7 +1121,6 @@ export async function updateOauthConnectionProxySettings(input: {
     success: true as const,
     accountId: input.accountId,
     proxyUrl: getProxyUrlFromExtraConfig(extraConfig),
-    useSystemProxy: getUseSystemProxyFromExtraConfig(extraConfig),
     refreshedRoutes: true,
     modelRefresh: {
       success: refreshResult.status === 'success',
@@ -1151,9 +1134,9 @@ export async function updateOauthConnectionProxySettings(input: {
 
 export async function startOauthRebindFlow(
   accountId: number,
-  options?: { requestOrigin?: string; proxyUrl?: string | null; useSystemProxy?: boolean },
+  options?: { requestOrigin?: string; proxyUrl?: string | null },
 ) {
-  const { requestOrigin, proxyUrl, useSystemProxy } = options ?? {};
+  const { requestOrigin, proxyUrl } = options ?? {};
   const account = await db.select().from(schema.accounts)
     .where(eq(schema.accounts.id, accountId))
     .get();
@@ -1171,9 +1154,6 @@ export async function startOauthRebindFlow(
     proxyUrl: proxyUrl !== undefined
       ? proxyUrl
       : (getProxyUrlFromExtraConfig(account.extraConfig) ?? undefined),
-    useSystemProxy: useSystemProxy !== undefined
-      ? useSystemProxy
-      : (getUseSystemProxyFromExtraConfig(account.extraConfig) || undefined),
     requestOrigin,
   });
 }

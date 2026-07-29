@@ -324,7 +324,7 @@ function buildStatements(
   for (const row of snapshot.accounts.sites) {
     statements.push({
       table: 'sites',
-      columns: ['id', 'name', 'url', 'external_checkin_url', 'platform', 'proxy_url', 'use_system_proxy', 'custom_headers', 'custom_headers_override_request_headers', 'status', 'is_pinned', 'sort_order', 'global_weight', 'api_key', 'post_refresh_probe_enabled', 'post_refresh_probe_model', 'post_refresh_probe_scope', 'post_refresh_probe_latency_threshold_ms', 'created_at', 'updated_at'],
+      columns: ['id', 'name', 'url', 'external_checkin_url', 'platform', 'proxy_url', 'custom_headers', 'custom_headers_override_request_headers', 'status', 'is_pinned', 'sort_order', 'global_weight', 'api_key', 'post_refresh_probe_enabled', 'post_refresh_probe_model', 'post_refresh_probe_scope', 'post_refresh_probe_latency_threshold_ms', 'created_at', 'updated_at'],
       values: [
         asNumber(row.id, 0),
         asNullableString(row.name),
@@ -332,7 +332,6 @@ function buildStatements(
         asNullableString(row.externalCheckinUrl),
         asNullableString(row.platform),
         asNullableString(row.proxyUrl),
-        asBoolean(row.useSystemProxy, false),
         serializeColumnValue('sites', 'custom_headers', row.customHeaders, contract),
         asBoolean(row.customHeadersOverrideRequestHeaders, false),
         asNullableString(row.status) ?? 'active',

@@ -462,13 +462,12 @@ function resolveProxyProjectSummary(connection: OAuthConnectionInfo): string {
 }
 
 function resolveProxyDisplayText(connection: OAuthConnectionInfo): string {
-  if (connection.useSystemProxy) return '系统级代理';
   if (connection.proxyUrl) return redactProxyUrl(connection.proxyUrl);
   return '未设置代理';
 }
 
 function hasOauthProxySelection(connection: OAuthConnectionInfo): boolean {
-  return !!connection.useSystemProxy || !!asTrimmedString(connection.proxyUrl);
+  return !!asTrimmedString(connection.proxyUrl);
 }
 
 function resolveRouteUnitStrategyLabel(strategy?: OAuthRouteUnitStrategy | null): string {
@@ -779,7 +778,6 @@ export default function OAuthManagement() {
         loadConnections(),
       ]);
       const nextProviders = Array.isArray(providersResponse?.providers) ? providersResponse.providers : [];
-      setRuntimeSystemProxyConfigured(providersResponse?.defaults?.systemProxyConfigured === true);
       setProviders(nextProviders);
       setSelectedProviderKey((current) => current || nextProviders[0]?.provider || '');
     } catch (error: any) {
@@ -1008,9 +1006,9 @@ export default function OAuthManagement() {
     setDrawerIntent({ mode: 'proxy', account: connection });
     setSelectedProviderKey(connection.provider);
     setDrawerProjectId(connection.projectId || '');
-    setOauthSystemProxyEnabled(connection.useSystemProxy === true);
-    setOauthCustomProxyEnabled(connection.useSystemProxy !== true && !!asTrimmedString(connection.proxyUrl));
-    setOauthProxyUrl(connection.useSystemProxy ? '' : asTrimmedString(connection.proxyUrl));
+    setOauthSystemProxyEnabled(false);
+    setOauthCustomProxyEnabled(!!asTrimmedString(connection.proxyUrl));
+    setOauthProxyUrl(asTrimmedString(connection.proxyUrl));
     setDrawerOpen(true);
     setShowColumnMenu(false);
     setSessionInfo('已打开 OAuth 代理设置，修改后可直接保存代理，或保存后重新授权。');
@@ -1043,37 +1041,19 @@ export default function OAuthManagement() {
     proxyValue: string;
     fallbackAccount?: OAuthConnectionInfo | null;
     clearToSiteFallback?: boolean;
-  }): { proxyUrl?: string | null; useSystemProxy?: boolean } => {
+  }): { proxyUrl?: string | null } => {
     const customProxyUrl = asTrimmedString(proxyValue);
     if (customEnabled) {
-      return {
-        proxyUrl: customProxyUrl,
-        useSystemProxy: false,
-      };
+      return { proxyUrl: customProxyUrl };
     }
     if (systemEnabled) {
-      return {
-        proxyUrl: null,
-        useSystemProxy: true,
-      };
+      return { proxyUrl: null };
     }
     if (clearToSiteFallback) {
-      return {
-        proxyUrl: null,
-        useSystemProxy: false,
-      };
-    }
-    if (fallbackAccount?.useSystemProxy) {
-      return {
-        proxyUrl: null,
-        useSystemProxy: true,
-      };
+      return { proxyUrl: null };
     }
     if (fallbackAccount?.proxyUrl !== undefined) {
-      return {
-        proxyUrl: asTrimmedString(fallbackAccount.proxyUrl) || null,
-        useSystemProxy: false,
-      };
+      return { proxyUrl: asTrimmedString(fallbackAccount.proxyUrl) || null };
     }
     return {};
   };
@@ -1420,16 +1400,13 @@ export default function OAuthManagement() {
       const parsedItems = importPreviewSummary.items
         .filter((item) => item.valid && item.parsedData)
         .map((item) => item.parsedData as Record<string, unknown>);
-      const importProxySettings = importSystemProxyEnabled && !importCustomProxyEnabled
-        ? { useSystemProxy: true as const }
-        : resolveProxySettingsPayload({
+      const importProxySettings = resolveProxySettingsPayload({
           customEnabled: importCustomProxyEnabled,
           systemEnabled: importSystemProxyEnabled,
           proxyValue: importProxyUrl,
         });
       const result = parsedItems.length === 1
         && !('proxyUrl' in importProxySettings)
-        && !('useSystemProxy' in importProxySettings)
         ? await api.importOAuthConnections(parsedItems[0]!)
         : await api.importOAuthConnections({
           items: parsedItems,

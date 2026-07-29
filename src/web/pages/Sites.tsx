@@ -63,7 +63,6 @@ type SiteRow = {
   platform?: string;
   status?: string;
   proxyUrl?: string | null;
-  useSystemProxy?: boolean;
   customHeaders?: string | null;
   customHeadersOverrideRequestHeaders?: boolean | null;
   globalWeight?: number;
@@ -771,7 +770,6 @@ export default function Sites() {
       platform: form.platform.trim(),
       initializationPresetId: selectedInitializationPresetId,
       proxyUrl: form.proxyUrl.trim(),
-      useSystemProxy: !!form.useSystemProxy,
       apiEndpoints: serializedApiEndpoints.apiEndpoints,
       customHeaders: serializedCustomHeaders.customHeaders,
       customHeadersOverrideRequestHeaders: !!form.customHeadersOverrideRequestHeaders,
@@ -1879,8 +1877,8 @@ export default function Sites() {
             }}>
               <input
                 type="checkbox"
-                checked={form.useSystemProxy}
-                onChange={(e) => setForm((prev) => ({ ...prev, useSystemProxy: e.target.checked }))}
+                checked={false}
+                disabled={true}
               />
               使用系统代理
             </label>
@@ -2037,8 +2035,8 @@ export default function Sites() {
                         <MobileField
                           label="系统代理"
                           value={(
-                            <span className={`badge ${site.useSystemProxy ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11 }}>
-                              {site.useSystemProxy ? '已开启' : '未开启'}
+                            <span className="badge badge-muted" style={{ fontSize: 11 }}>
+                              —
                             </span>
                           )}
                         />
@@ -2152,8 +2150,8 @@ export default function Sites() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${site.useSystemProxy ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11 }}>
-                        {site.useSystemProxy ? '已开启' : '未开启'}
+                      <span className="badge badge-muted" style={{ fontSize: 11 }}>
+                        —
                       </span>
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>

@@ -16,7 +16,6 @@ export type SiteForm = {
   url: string;
   platform: string;
   proxyUrl: string;
-  useSystemProxy: boolean;
   apiEndpoints: SiteApiEndpointField[];
   customHeaders: SiteCustomHeaderField[];
   customHeadersOverrideRequestHeaders: boolean;
@@ -38,7 +37,6 @@ export type SiteSavePayload = {
   platform: string;
   initializationPresetId?: string | null;
   proxyUrl: string;
-  useSystemProxy: boolean;
   apiEndpoints: Array<{
     url: string;
     enabled: boolean;
@@ -178,7 +176,6 @@ export function emptySiteForm(): SiteForm {
     url: '',
     platform: '',
     proxyUrl: '',
-    useSystemProxy: false,
     apiEndpoints: [emptySiteApiEndpoint()],
     customHeaders: [emptySiteCustomHeader()],
     customHeadersOverrideRequestHeaders: false,
@@ -235,9 +232,8 @@ function parseApiEndpointsForEditor(raw: unknown): SiteApiEndpointField[] {
   return ensureSiteApiEndpointRows(rows);
 }
 
-export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | 'customHeaders' | 'customHeadersOverrideRequestHeaders' | 'globalWeight' | 'proxyUrl' | 'useSystemProxy'>> & {
+export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | 'customHeaders' | 'customHeadersOverrideRequestHeaders' | 'globalWeight' | 'proxyUrl'>> & {
   proxyUrl?: string | null;
-  useSystemProxy?: boolean | null;
   customHeadersOverrideRequestHeaders?: boolean | null;
   apiEndpoints?: Array<{
     url?: string | null;
@@ -255,7 +251,6 @@ export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | '
     url: site.url ?? '',
     platform: site.platform ?? '',
     proxyUrl: site.proxyUrl ?? '',
-    useSystemProxy: !!site.useSystemProxy,
     apiEndpoints: parseApiEndpointsForEditor(site.apiEndpoints),
     customHeaders: parseCustomHeadersForEditor(site.customHeaders),
     customHeadersOverrideRequestHeaders: !!site.customHeadersOverrideRequestHeaders,

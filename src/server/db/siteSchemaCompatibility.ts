@@ -29,19 +29,6 @@ export const SITE_COLUMN_COMPATIBILITY_SPECS: SiteColumnCompatibilitySpec[] = [
     },
   },
   {
-    column: 'use_system_proxy',
-    addSql: {
-      sqlite: 'ALTER TABLE sites ADD COLUMN use_system_proxy integer DEFAULT 0;',
-      mysql: 'ALTER TABLE `sites` ADD COLUMN `use_system_proxy` BOOLEAN DEFAULT FALSE',
-      postgres: 'ALTER TABLE "sites" ADD COLUMN "use_system_proxy" BOOLEAN DEFAULT FALSE',
-    },
-    normalizeSql: {
-      sqlite: 'UPDATE sites SET use_system_proxy = 0 WHERE use_system_proxy IS NULL;',
-      mysql: 'UPDATE `sites` SET `use_system_proxy` = FALSE WHERE `use_system_proxy` IS NULL',
-      postgres: 'UPDATE "sites" SET "use_system_proxy" = FALSE WHERE "use_system_proxy" IS NULL',
-    },
-  },
-  {
     column: 'custom_headers',
     addSql: {
       sqlite: 'ALTER TABLE sites ADD COLUMN custom_headers text;',

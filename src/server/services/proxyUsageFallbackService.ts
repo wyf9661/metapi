@@ -28,7 +28,6 @@ interface ProxyUsageFallbackInput {
     url: string;
     platform: string;
     apiKey?: string | null;
-    useSystemProxy?: boolean | null;
     proxyUrl?: string | null;
   };
   account: {

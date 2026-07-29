@@ -208,7 +208,6 @@ export async function oauthRoutes(app: FastifyInstance) {
           rebindAccountId: rebindAccountId ?? undefined,
           projectId: projectId ?? undefined,
           proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
-          useSystemProxy: body.useSystemProxy,
           requestOrigin: resolveRequestOrigin(request),
         });
       } catch (error: any) {
@@ -310,7 +309,6 @@ export async function oauthRoutes(app: FastifyInstance) {
           {
             requestOrigin: resolveRequestOrigin(request),
             proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
-            useSystemProxy: parsedBody.data.useSystemProxy,
           },
         );
       } catch (error: any) {
@@ -346,7 +344,6 @@ export async function oauthRoutes(app: FastifyInstance) {
         return await updateOauthConnectionProxySettings({
           accountId,
           proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
-          useSystemProxy: parsedBody.data.useSystemProxy,
         });
       } catch (error: any) {
         const message = error?.message || 'oauth account not found';
@@ -440,7 +437,6 @@ export async function oauthRoutes(app: FastifyInstance) {
           data,
           items: hasBatchItems ? parsedBody.data.items : undefined,
           proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
-          useSystemProxy: parsedBody.data.useSystemProxy,
         });
       } catch (error: any) {
         const message = error?.message || 'oauth import failed';

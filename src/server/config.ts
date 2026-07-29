@@ -84,7 +84,6 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     claudeClientSecret: parseOptionalSecret(env.CLAUDE_CLIENT_SECRET),
     geminiCliClientId: parseOptionalSecret(env.GEMINI_CLI_CLIENT_ID) || DEFAULT_GEMINI_CLI_CLIENT_ID,
     geminiCliClientSecret: parseOptionalSecret(env.GEMINI_CLI_CLIENT_SECRET) || DEFAULT_GEMINI_CLI_CLIENT_SECRET,
-    systemProxyUrl: env.SYSTEM_PROXY_URL || '',
     // Prefer a dedicated secret; fall back only for local/dev compatibility.
     accountCredentialSecret: env.ACCOUNT_CREDENTIAL_SECRET
       || env.AUTH_TOKEN
@@ -111,7 +110,6 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     telegramApiBaseUrl: 'https://api.telegram.org',
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || '',
     telegramChatId: env.TELEGRAM_CHAT_ID || '',
-    telegramUseSystemProxy: parseBoolean(env.TELEGRAM_USE_SYSTEM_PROXY, false),
     telegramMessageThreadId: (env.TELEGRAM_MESSAGE_THREAD_ID || '').trim(),
     smtpEnabled: parseBoolean(env.SMTP_ENABLED, false),
     smtpHost: env.SMTP_HOST || '',

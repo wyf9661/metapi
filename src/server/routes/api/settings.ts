@@ -28,7 +28,6 @@ import {
   type MigrationDialect,
 } from '../../services/databaseMigrationService.js';
 import {
-  parseSystemProxyTestPayload,
   parseDatabaseMigrationPayload,
   parseBackupImportPayload,
   parseRuntimeSettingsPayload,
@@ -50,7 +49,6 @@ import { parsePayloadRulesConfigInput } from '../../services/payloadRules.js';
 type RoutingWeights = typeof config.routingWeights;
 
 interface RuntimeSettingsBody {
-  systemProxyUrl?: string;
   payloadRules?: unknown;
   modelAvailabilityProbeEnabled?: boolean;
   sensitiveWordDetectionEnabled?: boolean;
@@ -87,7 +85,6 @@ interface RuntimeSettingsBody {
   telegramApiBaseUrl?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
-  telegramUseSystemProxy?: boolean;
   telegramMessageThreadId?: string;
   smtpEnabled?: boolean;
   smtpHost?: string;
@@ -399,11 +396,6 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       stopProxyLogRetentionService();
       return;
     }
-    case 'system_proxy_url': {
-      if (typeof value !== 'string') return;
-      config.systemProxyUrl = normalizeSiteProxyUrl(value) || '';
-      return;
-    }
     case 'model_availability_probe_enabled': {
       if (typeof value !== 'boolean') return;
       const enabled = value && config.modelAvailabilityProbeAllow;
@@ -611,10 +603,6 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.telegramChatId = value.trim();
       return;
     }
-    case 'telegram_use_system_proxy': {
-      config.telegramUseSystemProxy = !!value;
-      return;
-    }
     case 'telegram_message_thread_id': {
       if (typeof value !== 'string') return;
       config.telegramMessageThreadId = value.trim();
@@ -751,7 +739,6 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     telegramApiBaseUrl: config.telegramApiBaseUrl,
     telegramBotTokenMasked: maskSecret(config.telegramBotToken),
     telegramChatId: config.telegramChatId,
-    telegramUseSystemProxy: config.telegramUseSystemProxy,
     telegramMessageThreadId: config.telegramMessageThreadId,
     smtpEnabled: config.smtpEnabled,
     smtpHost: config.smtpHost,
@@ -767,7 +754,6 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     tunnelEnabled: config.tunnelEnabled,
     currentAdminIp,
     serverTimeZone: getResolvedTimeZone(),
-    systemProxyUrl: config.systemProxyUrl,
     payloadRules: config.payloadRules,
     proxyErrorKeywords: config.proxyErrorKeywords,
     proxyEmptyContentFailEnabled: config.proxyEmptyContentFailEnabled,
@@ -854,51 +840,6 @@ export async function settingsRoutes(app: FastifyInstance) {
     return { brands: getAllBrandNames() };
   });
 
-  app.post<{ Body: unknown }>('/api/settings/system-proxy/test', async (request, reply) => {
-    const parsedBody = parseSystemProxyTestPayload(request.body);
-    if (!parsedBody.success) {
-      return reply.code(400).send({
-        success: false,
-        message: parsedBody.error,
-      });
-    }
-
-    const rawProxyUrl = parsedBody.data.proxyUrl === undefined
-      ? config.systemProxyUrl
-      : String(parsedBody.data.proxyUrl || '').trim();
-    const normalizedProxyUrl = rawProxyUrl
-      ? normalizeSiteProxyUrl(rawProxyUrl)
-      : '';
-
-    if (!rawProxyUrl) {
-      return reply.code(400).send({
-        success: false,
-        message: '请先填写系统代理地址',
-      });
-    }
-
-    if (!normalizedProxyUrl) {
-      return reply.code(400).send({
-        success: false,
-        message: '系统代理地址无效，请填写合法的 http(s)/socks 代理 URL',
-      });
-    }
-
-    try {
-      const result = await testSystemProxyConnectivity(normalizedProxyUrl);
-      return {
-        success: true,
-        proxyUrl: normalizedProxyUrl,
-        ...result,
-      };
-    } catch (error: any) {
-      return reply.code(502).send({
-        success: false,
-        message: error?.message || '系统代理测试失败',
-      });
-    }
-  });
-
   app.put<{ Body: unknown }>('/api/settings/runtime', async (request, reply) => {
     const parsedBody = parseRuntimeSettingsPayload(request.body);
     if (!parsedBody.success) {
@@ -963,7 +904,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       || body.telegramApiBaseUrl !== undefined
       || body.telegramBotToken !== undefined
       || body.telegramChatId !== undefined
-      || body.telegramUseSystemProxy !== undefined
       || body.telegramMessageThreadId !== undefined;
     const nextTelegramEnabled = body.telegramEnabled !== undefined
       ? !!body.telegramEnabled
@@ -1123,22 +1063,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       upsertSetting('log_cleanup_usage_logs_enabled', nextUsageLogsEnabled);
       upsertSetting('log_cleanup_program_logs_enabled', nextProgramLogsEnabled);
       upsertSetting('log_cleanup_retention_days', nextLogCleanupRetentionDays);
-    }
-
-    if (body.systemProxyUrl !== undefined) {
-      const rawSystemProxyUrl = String(body.systemProxyUrl || '').trim();
-      const normalizedSystemProxyUrl = rawSystemProxyUrl
-        ? normalizeSiteProxyUrl(rawSystemProxyUrl)
-        : '';
-      if (rawSystemProxyUrl && !normalizedSystemProxyUrl) {
-        return reply.code(400).send({ success: false, message: '系统代理地址无效，请填写合法的 http(s)/socks 代理 URL' });
-      }
-      if (normalizedSystemProxyUrl !== config.systemProxyUrl) {
-        changedLabels.push('系统代理');
-      }
-      config.systemProxyUrl = normalizedSystemProxyUrl || '';
-      upsertSetting('system_proxy_url', config.systemProxyUrl);
-      invalidateSiteProxyCache();
     }
 
     if (body.payloadRules !== undefined) {
@@ -1575,14 +1499,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.telegramChatId = String(body.telegramChatId || '').trim();
       upsertSetting('telegram_chat_id', config.telegramChatId);
-    }
-
-    if (body.telegramUseSystemProxy !== undefined) {
-      if (!!body.telegramUseSystemProxy !== config.telegramUseSystemProxy) {
-        changedLabels.push('Telegram 使用系统代理');
-      }
-      config.telegramUseSystemProxy = !!body.telegramUseSystemProxy;
-      upsertSetting('telegram_use_system_proxy', config.telegramUseSystemProxy);
     }
 
     if (body.telegramMessageThreadId !== undefined) {

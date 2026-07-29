@@ -13,7 +13,6 @@ const oauthStartPayloadSchema = z.object({
   accountId: z.number().int().positive().optional(),
   projectId: z.string().optional(),
   proxyUrl: z.union([z.string(), z.null()]).optional(),
-  useSystemProxy: z.boolean().optional(),
 }).passthrough();
 
 const oauthManualCallbackPayloadSchema = z.object({
@@ -22,12 +21,10 @@ const oauthManualCallbackPayloadSchema = z.object({
 
 const oauthConnectionRebindPayloadSchema = z.object({
   proxyUrl: z.union([z.string(), z.null()]).optional(),
-  useSystemProxy: z.boolean().optional(),
 }).passthrough();
 
 const oauthConnectionProxyUpdatePayloadSchema = z.object({
   proxyUrl: z.union([z.string(), z.null()]).optional(),
-  useSystemProxy: z.boolean().optional(),
 }).passthrough();
 
 const oauthQuotaBatchRefreshPayloadSchema = z.object({
@@ -38,7 +35,6 @@ const oauthImportPayloadSchema = z.object({
   data: z.unknown().optional(),
   items: z.array(z.object({}).passthrough()).optional(),
   proxyUrl: z.union([z.string(), z.null()]).optional(),
-  useSystemProxy: z.boolean().optional(),
 }).passthrough();
 
 const oauthRouteUnitStrategySchema = z.preprocess((value) => {
@@ -121,9 +117,6 @@ function formatSupportRoutePayloadError(error: z.ZodError): string {
   }
   if (firstPath === 'proxyUrl') {
     return 'Invalid proxyUrl. Expected string or null.';
-  }
-  if (firstPath === 'useSystemProxy') {
-    return 'Invalid useSystemProxy. Expected boolean.';
   }
   if (firstPath === 'accountIds') {
     return 'Invalid accountIds. Expected positive number array.';
