@@ -476,23 +476,118 @@ export async function sitesRoutes(app: FastifyInstance) {
     const siteRows = await db.select().from(schema.sites).all();
     const siteRowsWithApiEndpoints = await attachSiteApiEndpoints(siteRows);
     const accountRows = await db.select({
+      id: schema.accounts.id,
       siteId: schema.accounts.siteId,
       balance: schema.accounts.balance,
       extraConfig: schema.accounts.extraConfig,
+      oauthProvider: schema.accounts.oauthProvider,
     }).from(schema.accounts).all();
 
+    // 获取所有 token 统计
+    const tokenRows = await db.select({
+      accountId: schema.accountTokens.accountId,
+    }).from(schema.accountTokens).all();
+
+    // 按站点统计连接信息
     const totalBalanceBySiteId: Record<number, number> = {};
     const subscriptionBySiteId: Record<number, SiteSubscriptionAggregate | undefined> = {};
+    const accountCountBySiteId: Record<number, number> = {};
+    const oauthCountBySiteId: Record<number, number> = {};
+    const accountIdToSiteId: Record<number, number> = {};
+
     for (const row of accountRows) {
       totalBalanceBySiteId[row.siteId] = roundMetric((totalBalanceBySiteId[row.siteId] || 0) + Number(row.balance || 0));
       subscriptionBySiteId[row.siteId] = aggregateSiteSubscription(subscriptionBySiteId[row.siteId], row.extraConfig);
+      accountCountBySiteId[row.siteId] = (accountCountBySiteId[row.siteId] || 0) + 1;
+      if (row.oauthProvider) {
+        oauthCountBySiteId[row.siteId] = (oauthCountBySiteId[row.siteId] || 0) + 1;
+      }
+      accountIdToSiteId[row.id] = row.siteId;
+    }
+
+    // 按站点统计 token 数量
+    const tokenCountBySiteId: Record<number, number> = {};
+    for (const row of tokenRows) {
+      const siteId = accountIdToSiteId[row.accountId];
+      if (siteId) {
+        tokenCountBySiteId[siteId] = (tokenCountBySiteId[siteId] || 0) + 1;
+      }
     }
 
     return siteRowsWithApiEndpoints.map((site) => ({
       ...site,
       totalBalance: Math.round((totalBalanceBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
       subscriptionSummary: subscriptionBySiteId[site.id] || null,
+      connectionStats: {
+        accounts: accountCountBySiteId[site.id] || 0,
+        apiKeys: (accountCountBySiteId[site.id] || 0) - (oauthCountBySiteId[site.id] || 0),
+        tokens: tokenCountBySiteId[site.id] || 0,
+        oauth: oauthCountBySiteId[site.id] || 0,
+      },
     }));
+  });
+
+  // Get a single site
+  app.get<{ Params: { id: string } }>('/api/sites/:id', async (request, reply) => {
+    const siteId = Number.parseInt(request.params.id, 10);
+    if (!Number.isFinite(siteId) || siteId <= 0) {
+      return reply.code(400).send({ error: 'Invalid site ID' });
+    }
+
+    const siteRow = await db.select().from(schema.sites).where(eq(schema.sites.id, siteId)).get();
+    if (!siteRow) {
+      return reply.code(404).send({ error: 'Site not found' });
+    }
+
+    const [siteWithApiEndpoints] = await attachSiteApiEndpoints([siteRow]);
+    const accountRows = await db.select({
+      id: schema.accounts.id,
+      siteId: schema.accounts.siteId,
+      balance: schema.accounts.balance,
+      extraConfig: schema.accounts.extraConfig,
+      oauthProvider: schema.accounts.oauthProvider,
+    }).from(schema.accounts).where(eq(schema.accounts.siteId, siteId)).all();
+
+    const tokenRows = await db.select({
+      accountId: schema.accountTokens.accountId,
+    }).from(schema.accountTokens)
+      .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
+      .where(eq(schema.accounts.siteId, siteId)).all();
+
+    let totalBalance = 0;
+    let subscriptionSummary: SiteSubscriptionAggregate | undefined;
+    let accountCount = 0;
+    let oauthCount = 0;
+    const accountIdToSiteId: Record<number, number> = {};
+
+    for (const row of accountRows) {
+      totalBalance += Number(row.balance || 0);
+      subscriptionSummary = aggregateSiteSubscription(subscriptionSummary, row.extraConfig);
+      accountCount += 1;
+      if (row.oauthProvider) {
+        oauthCount += 1;
+      }
+      accountIdToSiteId[row.id] = row.siteId;
+    }
+
+    let tokenCount = 0;
+    for (const row of tokenRows) {
+      if (accountIdToSiteId[row.accountId]) {
+        tokenCount += 1;
+      }
+    }
+
+    return {
+      ...siteWithApiEndpoints,
+      totalBalance: Math.round(totalBalance * 1_000_000) / 1_000_000,
+      subscriptionSummary: subscriptionSummary || null,
+      connectionStats: {
+        accounts: accountCount,
+        apiKeys: accountCount - oauthCount,
+        tokens: tokenCount,
+        oauth: oauthCount,
+      },
+    };
   });
 
   // Add a site

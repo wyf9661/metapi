@@ -3,12 +3,20 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('App sidebar config', () => {
-  it('uses 连接管理 for /accounts and removes standalone /tokens navigation item', () => {
+  it('uses 站点管理 for /sites and removes /accounts and /oauth sidebar entries', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
 
-    expect(source).toContain("{ to: '/accounts', label: '连接管理'");
-    expect(source).not.toContain("{ to: '/accounts', label: '账号'");
+    expect(source).toContain("{ to: '/sites', label: '站点管理'");
+    expect(source).not.toContain("{ to: '/accounts', label: '连接管理'");
     expect(source).not.toContain("{ to: '/tokens', label: '令牌管理'");
+  });
+
+  it('removes standalone OAuth 管理 navigation entry', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
+
+    expect(source).not.toContain("{ to: '/oauth', label: 'OAuth 管理'");
+    expect(source).not.toContain("const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'))");
+    expect(source).not.toContain('<Route path="/oauth" element={<OAuthManagement />} />');
   });
 
   it('places downstream key navigation under 控制台 instead of 系统', () => {
@@ -20,13 +28,5 @@ describe('App sidebar config', () => {
     expect(consoleGroupIndex).toBeGreaterThanOrEqual(0);
     expect(downstreamIndex).toBeGreaterThan(consoleGroupIndex);
     expect(systemGroupIndex).toBeGreaterThan(downstreamIndex);
-  });
-
-  it('adds standalone OAuth 管理 navigation entry', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
-
-    expect(source).toContain("{ to: '/oauth', label: 'OAuth 管理'");
-    expect(source).toContain("const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'));");
-    expect(source).toContain('<Route path="/oauth" element={<OAuthManagement />} />');
   });
 });

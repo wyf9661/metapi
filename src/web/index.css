@@ -2176,11 +2176,11 @@ body {
   text-align: center;
 }
 
-/* name | balance | status | weight | platform | created | actions */
+/* name | created | balance | status | weight | platform | connections | actions */
 .sites-table th:nth-child(1),
 .sites-table td.sites-name-col {
   text-align: left;
-  width: 18%;
+  width: 16%;
 }
 
 .sites-name-cell {
@@ -2218,14 +2218,14 @@ body {
 .sites-table td:nth-child(2) {
   text-align: left;
   white-space: nowrap;
-  width: 14%;
+  width: 12%;
 }
 
 .sites-table th:nth-child(3),
 .sites-table td.site-balance-cell {
   text-align: left;
   white-space: nowrap;
-  width: 14%;
+  width: 10%;
 }
 
 .sites-table th:nth-child(4),
@@ -2236,7 +2236,14 @@ body {
 .sites-table td:nth-child(6) {
   text-align: center;
   white-space: nowrap;
-  width: 10%;
+  width: 8%;
+}
+
+.sites-table th:nth-child(7),
+.sites-table td:nth-child(7) {
+  text-align: center;
+  white-space: nowrap;
+  width: 12%;
 }
 
 .sites-table th.sites-actions-col {

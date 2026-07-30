@@ -26,6 +26,7 @@ type SyncStatus = 'success' | 'skipped' | 'failed';
 type TokensPanelProps = {
   embedded?: boolean;
   onEmbeddedActionsChange?: (actions: React.ReactNode | null) => void;
+  siteId?: number;
 };
 
 type AccountTokenSyncResult = {
@@ -75,6 +76,7 @@ type AccountTokenSyncResult = {
 
 type SyncableAccount = {
   id: number;
+  siteId?: number;
   username?: string | null;
   accessToken?: string | null;
   status?: string | null;
@@ -83,6 +85,7 @@ type SyncableAccount = {
     proxyOnly?: boolean;
   } | null;
   site?: {
+    id?: number;
     status?: string | null;
     name?: string | null;
   } | null;
@@ -144,7 +147,7 @@ async function copyText(text: string) {
   document.body.removeChild(textarea);
 }
 
-export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: TokensPanelProps) {
+export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId: filterSiteId }: TokensPanelProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -205,21 +208,31 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
         api.getAccountTokens(),
         api.getAccountsSnapshot(options?.forceSnapshot ? { refresh: true } : undefined),
       ]);
-      const nextTokens = tokenRows || [];
-      setTokens(nextTokens);
       const latestAccounts: SyncableAccount[] = Array.isArray(accountSnapshot?.accounts)
         ? accountSnapshot.accounts
         : [];
-      setAccounts(latestAccounts);
+      const siteFilteredAccounts = filterSiteId
+        ? latestAccounts.filter(
+            (a: any) => a.siteId === filterSiteId || a.site?.id === filterSiteId,
+          )
+        : latestAccounts;
+      const siteFilteredTokens = filterSiteId
+        ? (tokenRows || []).filter((t: any) => {
+            const acct = latestAccounts.find((a: any) => a.id === t.accountId);
+            return acct && (acct.siteId === filterSiteId || acct.site?.id === filterSiteId);
+          })
+        : tokenRows || [];
+      setTokens(siteFilteredTokens);
+      setAccounts(siteFilteredAccounts);
 
-      const syncableAccounts = latestAccounts.filter(isAccountSyncable);
+      const syncableAccounts = siteFilteredAccounts.filter(isAccountSyncable);
       const hasCurrentSelected = syncableAccounts.some((account: SyncableAccount) => account.id === syncingAccountId);
       if (!hasCurrentSelected) {
         setSyncingAccountId(syncableAccounts[0]?.id || 0);
       }
       return {
-        tokens: nextTokens,
-        accounts: latestAccounts,
+        tokens: siteFilteredTokens,
+        accounts: siteFilteredAccounts,
       };
     } catch (e: any) {
       toast.error(e.message || '加载令牌失败');
@@ -230,7 +243,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
     } finally {
       setLoading(false);
     }
-  }, [syncingAccountId, toast]);
+  }, [syncingAccountId, toast, filterSiteId]);
 
   useEffect(() => {
     void load();
