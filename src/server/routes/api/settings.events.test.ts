@@ -93,7 +93,6 @@ describe('settings and auth events', () => {
       method: 'PUT',
       url: '/api/settings/runtime',
       payload: {
-        proxyToken: 'sk-new-proxy-token-456',
         checkinCron: '5 9 * * *',
       },
     });
@@ -103,11 +102,10 @@ describe('settings and auth events', () => {
     const events = await db.select().from(schema.events).all();
     expect(events.length).toBe(1);
     expect(events[0]).toMatchObject({
-      type: 'status',
+      type: 'checkin',
       title: '运行时设置已更新',
       relatedType: 'settings',
     });
-    expect(events[0].message || '').toContain('代理访问 Token');
     expect(events[0].message || '').toContain('签到 Cron');
   });
 
@@ -336,20 +334,6 @@ describe('settings and auth events', () => {
     expect(body.currentAdminIp).toBe('203.0.113.5');
     expect(typeof body.serverTimeZone).toBe('string');
     expect((body.serverTimeZone || '').length).toBeGreaterThan(0);
-  });
-
-  it('rejects proxy token that does not start with sk-', async () => {
-    const response = await app.inject({
-      method: 'PUT',
-      url: '/api/settings/runtime',
-      payload: {
-        proxyToken: 'new-proxy-token-456',
-      },
-    });
-
-    expect(response.statusCode).toBe(400);
-    const body = response.json() as { message?: string };
-    expect(body.message).toContain('sk-');
   });
 
   it('rejects invalid bark url when bark channel is enabled', async () => {

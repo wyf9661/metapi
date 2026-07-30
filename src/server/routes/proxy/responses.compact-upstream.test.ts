@@ -19,6 +19,8 @@ const resolveProxyUsageWithSelfLogFallbackMock = vi.fn(async ({ usage }: any) =>
   estimatedCostFromQuota: 0,
   recoveredFromSelfLog: false,
 }));
+const recordOauthQuotaHeadersSnapshotMock = vi.fn<(input: unknown) => Promise<void>>(async (_input) => undefined);
+const recordOauthQuotaResetHintMock = vi.fn<(input: unknown) => Promise<void>>(async (_input) => undefined);
 const dbInsertMock = vi.fn((_arg?: any) => ({
   values: () => ({
     run: () => undefined,
@@ -66,11 +68,16 @@ vi.mock('../../services/modelPricingService.js', () => ({
 vi.mock('../../services/proxyRetryPolicy.js', () => ({
   shouldRetryProxyRequest: () => false,
   shouldAbortSameSiteEndpointFallback: () => false,
-  RETRYABLE_TIMEOUT_PATTERNS: [/(request timed out|connection timed out|read timeout|\btimed out\b)/i],
+  RETRYABLE_TIMEOUT_PATTERNS: [/(request timed out|connection timed out|read timeout|\\btimed out\\b)/i],
 }));
 
 vi.mock('../../services/proxyUsageFallbackService.js', () => ({
   resolveProxyUsageWithSelfLogFallback: (arg: any) => resolveProxyUsageWithSelfLogFallbackMock(arg),
+}));
+
+vi.mock('../../services/oauth/quota.js', () => ({
+  recordOauthQuotaHeadersSnapshot: async (input: unknown) => recordOauthQuotaHeadersSnapshotMock(input),
+  recordOauthQuotaResetHint: async (input: unknown) => recordOauthQuotaResetHintMock(input),
 }));
 
 vi.mock('../../db/index.js', () => ({

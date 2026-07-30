@@ -1602,7 +1602,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return {
       success: true,
       message: '运行时设置已更新',
-      ...getRuntimeSettingsResponse(currentRequestIp),
+      ...await getRuntimeSettingsResponse(currentRequestIp),
     };
   });
 

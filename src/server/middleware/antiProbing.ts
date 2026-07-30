@@ -14,7 +14,15 @@ import { getProxyAuthContext } from './auth.js';
 // Messages matching any of these (case-insensitive, trimmed) are blocked.
 const PROBE_PATTERNS: RegExp[] = [
   // Minimal greetings / pings
-  /^(hi|hello|hey|yo|ping|test|testing|123|1\+1|2\+2|ok|ok\.)\s*$/i,
+  /^(hi|hello|hey|yo|ping|test|testing|123|1\+1|2\+2|ok|ok\.|hey)\s*$/i,
+  // Short numeric sequences (111, 222, 333, etc.)
+  /^(\d)\1{1,}\s*$/i,
+  // Repeated single chars ("在吗在吗", "哈哈", "嘿嘿")
+  /^(.)\1{1,}\s*$/,
+  // Single Chinese char + punctuation ("在吗？", "在吗?", "在。")
+  /^[\u4e00-\u9fff]{1,3}[?？!！。，、]*\s*$/,
+  // Very short mixed text (< 5 chars, no spaces)
+  /^[\w\u4e00-\u9fff]{1,4}$/,
   // "say X" / "repeat X" / "echo X" — classic probe
   /^(say|repeat|echo|print|output|write)\s+.{1,15}\s*$/i,
   // "what model" / "what are you" / "who are you"
@@ -23,6 +31,8 @@ const PROBE_PATTERNS: RegExp[] = [
   /(api[_\s-]?key|system[_\s-]?prompt|ignore\s+(previous|above|all)\s+instructions)/i,
   // "translate to English" — common minimal probe
   /^translate\s+.{1,30}\s*$/i,
+  // "can you" / "are you" — capability probing
+  /^(can you|are you|do you|will you|shall you)\s+/i,
 ];
 
 // ── Sensitive keyword list ──────────────────────────────────────────────────
@@ -31,10 +41,19 @@ const PROBE_PATTERNS: RegExp[] = [
 // to the prober, not relay detection.
 const SENSITIVE_KEYWORDS: string[] = [
   // ── 常见问候 / 探活词 ──
-  '你好', '您好', '在吗', '在不在', '有人吗',
-  'hello', 'hi', 'hey', 'yo', 'hola', 'bonjour',
-  'test', 'testing', 'ping', 'pong',
-  'ok', 'okay', '123', '1+1', '2+2',
+  '你好', '您好', '在吗', '在不在', '有人吗', '在么', '在不',
+  'hello', 'hi', 'hey', 'yo', 'hola', 'bonjour', 'hallo', 'ciao',
+  'test', 'testing', 'ping', 'pong', 'probe', 'check', 'alive',
+  'ok', 'okay', '123', '1+1', '2+2', '111', '222', '333',
+  '收到请回复', '看到请回复', '能听到吗', '听得见吗', '看得到吗',
+  '喂', '哈喽', '嗨', '嘿', '在吗在吗', '在吗？', '在吗?', '在吗？',
+  '有人么', '有没有人', '有人在线吗', '在线吗', '忙吗', '有空吗',
+  '可以说话吗', '能说话吗', '会中文吗', '说中文', '讲中文',
+  'who is there', 'anybody there', 'anyone there', 'are you there',
+  'can you hear me', 'can you see me', 'do you read me',
+  'are you online', 'are you available', 'are you busy',
+  'good morning', 'good afternoon', 'good evening', 'good night',
+  '早上好', '下午好', '晚上好', '晚安', '早安', '午安',
 
   // ── 常见探活指令 ──
   'say hello', 'say hi', 'say ok', 'say test',

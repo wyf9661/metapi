@@ -29,6 +29,7 @@ describe('tokenRouterMath', () => {
     expect(resolveFailureBackoffSec(1)).toBe(FAILURE_BACKOFF_BASE_SEC);
     expect(resolveFailureBackoffSec(5)).toBe(FAILURE_BACKOFF_BASE_SEC * 5);
     expect(resolveFailureBackoffSec(10_000)).toBe(MAX_FAILURE_BACKOFF_SEC);
+    expect(FAILURE_BACKOFF_BASE_SEC).toBe(15);
   });
 
   it('clamps failure cooldown to configured max', () => {
