@@ -127,7 +127,7 @@ export default function ProxyLogs() {
   );
   const [searchInput, setSearchInput] = useState(initialRouteState.search);
   const deferredSearchInput = useDeferredValue(searchInput.trim());
-  const [clientFilter, setClientFilter] = useState(initialRouteState.client);
+  const [downstreamKeyFilter, setDownstreamKeyFilter] = useState<number | null>(initialRouteState.downstreamKeyId ?? null);
   const [siteFilter, setSiteFilter] = useState<number | null>(
     initialRouteState.siteId,
   );
@@ -145,9 +145,9 @@ export default function ProxyLogs() {
   const [sites, setSites] = useState<
     Array<{ id: number; name: string; status?: string | null }>
   >([]);
-  const [clientOptions, setClientOptions] = useState<ProxyLogClientOption[]>(
-    [],
-  );
+  const [downstreamKeyOptions, setDownstreamKeyOptions] = useState<
+    Array<{ id: number; name: string; groupName?: string | null }>
+  >([]);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [showDebugSettingsModal, setShowDebugSettingsModal] = useState(false);
   const [debugPanelLoading, setDebugPanelLoading] = useState(false);
@@ -196,8 +196,8 @@ export default function ProxyLogs() {
     setSearchInput((current) =>
       current === next.search ? current : next.search,
     );
-    setClientFilter((current) =>
-      current === next.client ? current : next.client,
+    setDownstreamKeyFilter((current) =>
+      current === next.downstreamKeyId ? current : next.downstreamKeyId,
     );
     setSiteFilter((current) =>
       current === next.siteId ? current : next.siteId,
@@ -219,7 +219,7 @@ export default function ProxyLogs() {
       pageSize,
       status: statusFilter,
       search: searchInput,
-      client: clientFilter,
+      downstreamKeyId: downstreamKeyFilter,
       siteId: siteFilter,
       model: modelFilter,
       from: fromInput,
@@ -231,15 +231,7 @@ export default function ProxyLogs() {
       { replace: true },
     );
   }, [
-    clientFilter,
-    fromInput,
-    location.pathname,
-    location.search,
-    navigate,
-    page,
-    pageSize,
-    searchInput,
-    modelFilter,
+    downstreamKeyFilter,
     siteFilter,
     statusFilter,
     toInput,
@@ -313,19 +305,13 @@ export default function ProxyLogs() {
     return [{ value: "", label: "全部模型" }, ...options];
   }, [modelFilter, modelOptions]);
 
-  const resolvedClientOptions = useMemo(() => {
-    const options = [...clientOptions];
-    if (
-      clientFilter &&
-      !options.some((option) => option.value === clientFilter)
-    ) {
-      options.unshift({
-        value: clientFilter,
-        label: clientFilter,
-      });
-    }
-    return [{ value: "", label: "全部客户端" }, ...options];
-  }, [clientFilter, clientOptions]);
+  const resolvedDownstreamKeyOptions = useMemo(() => {
+    const options = downstreamKeyOptions.map((k) => ({
+      value: String(k.id),
+      label: k.name + (k.groupName ? ` (${k.groupName})` : ''),
+    }));
+    return [{ value: "", label: "全部密钥" }, ...options];
+  }, [downstreamKeyOptions]);
 
   const activeSiteLabel = useMemo(() => {
     if (!siteFilter) return "全部站点";
@@ -368,7 +354,7 @@ export default function ProxyLogs() {
           offset: currentOffset,
           status: statusFilter,
           search: deferredSearchInput,
-          ...(clientFilter ? { client: clientFilter } : {}),
+          ...(downstreamKeyFilter ? { downstreamKeyId: downstreamKeyFilter } : {}),
           ...(siteFilter ? { siteId: siteFilter } : {}),
           ...(modelFilter ? { model: modelFilter } : {}),
           ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
@@ -386,7 +372,7 @@ export default function ProxyLogs() {
       }
     },
     [
-      clientFilter,
+      downstreamKeyFilter,
       currentOffset,
       deferredSearchInput,
       fromApiBoundary,
@@ -405,7 +391,7 @@ export default function ProxyLogs() {
       const seq = ++metaLoadSeq.current;
       if (hasInvalidTimeRange) {
         setSummary(EMPTY_SUMMARY);
-        setClientOptions([]);
+        setDownstreamKeyOptions([]);
         return;
       }
 
@@ -413,7 +399,7 @@ export default function ProxyLogs() {
         const data = await api.getProxyLogsMeta({
           status: statusFilter,
           search: deferredSearchInput,
-          ...(clientFilter ? { client: clientFilter } : {}),
+          ...(downstreamKeyFilter ? { downstreamKeyId: downstreamKeyFilter } : {}),
           ...(siteFilter ? { siteId: siteFilter } : {}),
           ...(modelFilter ? { model: modelFilter } : {}),
           ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
@@ -422,8 +408,8 @@ export default function ProxyLogs() {
         });
         if (seq !== metaLoadSeq.current) return;
         setSummary(data.summary || EMPTY_SUMMARY);
-        setClientOptions(
-          Array.isArray(data.clientOptions) ? data.clientOptions : [],
+        setDownstreamKeyOptions(
+          Array.isArray(data.downstreamKeys) ? data.downstreamKeys : [],
         );
         const normalized: ProxyLogSiteFilterOption[] = (
           Array.isArray(data.sites) ? data.sites : []
@@ -446,7 +432,7 @@ export default function ProxyLogs() {
       }
     },
     [
-      clientFilter,
+      downstreamKeyFilter,
       deferredSearchInput,
       fromApiBoundary,
       hasInvalidTimeRange,
@@ -1090,13 +1076,13 @@ export default function ProxyLogs() {
       <div className="proxy-logs-filter-select">
         <ModernSelect
           size="sm"
-          value={clientFilter}
+          value={downstreamKeyFilter ? String(downstreamKeyFilter) : ""}
           onChange={(nextValue) => {
-            setClientFilter(nextValue);
+            setDownstreamKeyFilter(nextValue ? Number(nextValue) : null);
             setPage(1);
           }}
-          options={resolvedClientOptions}
-          placeholder="全部客户端"
+          options={resolvedDownstreamKeyOptions}
+          placeholder="全部密钥"
         />
       </div>
       <div className="proxy-logs-filter-select">
@@ -1176,7 +1162,7 @@ export default function ProxyLogs() {
         className="btn btn-ghost proxy-logs-filter-reset"
         onClick={() => {
           setStatusFilter("all");
-          setClientFilter("");
+          setDownstreamKeyFilter(null);
           setSiteFilter(null);
           setModelFilter("");
           setFromInput("");

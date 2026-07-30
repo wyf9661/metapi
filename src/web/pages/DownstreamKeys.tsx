@@ -1298,6 +1298,7 @@ export default function DownstreamKeys() {
                       </td>
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>
                         <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString()}</div>
+                        {row.maxRpm != null && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{row.maxRpm} RPM</div>}
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.maxCost == null ? '成本不限' : `成本 ${formatMoney(row.maxCost)}`}</div>
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.expiresAt ? `到期 ${formatIso(row.expiresAt)}` : '永久有效'}</div>
                       </td>

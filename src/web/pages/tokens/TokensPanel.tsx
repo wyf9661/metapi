@@ -766,6 +766,33 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     }
   }, [load, toast]);
 
+  const handleSyncSite = useCallback(async () => {
+    if (activeAccounts.length === 0) return;
+    setSyncingAll(true);
+    let success = 0, failed = 0;
+    try {
+      for (const account of activeAccounts) {
+        try {
+          await api.syncAccountTokens(account.id);
+          success++;
+        } catch {
+          failed++;
+        }
+      }
+      await load({ forceSnapshot: true });
+      emitTokenCoverageChanged({ source: 'account-token-sync-site' });
+      if (failed === 0) {
+        toast.success(`站点令牌同步完成：成功 ${success}`);
+      } else {
+        toast.info(`站点令牌同步完成：成功 ${success}，失败 ${failed}`);
+      }
+    } catch (e: any) {
+      toast.error(e.message || '同步站点令牌失败');
+    } finally {
+      setSyncingAll(false);
+    }
+  }, [activeAccounts, load, toast]);
+
   const handleToggleAdd = useCallback(() => {
     setShowAdd((prev) => {
       const nextOpen = !prev;
@@ -826,6 +853,17 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             同步与筛选
           </button>
         </>
+      ) : embedded ? (
+        <>
+          <button
+            onClick={handleSyncSite}
+            disabled={syncingAll || activeAccounts.length === 0}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
+          >
+            {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
+          </button>
+        </>
       ) : (
         <>
           <div style={{ minWidth: 220, position: 'relative', zIndex: 20 }}>
@@ -867,7 +905,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         {showAdd ? '取消' : '+ 新增令牌'}
       </button>
     </div>
-  ), [activeAccountSelectOptions, activeAccounts.length, embedded, handleSync, handleSyncAll, handleToggleAdd, isMobile, showAdd, syncing, syncingAccountId, syncingAll]);
+  ), [activeAccountSelectOptions, activeAccounts.length, embedded, handleSync, handleSyncAll, handleSyncSite, handleToggleAdd, isMobile, showAdd, syncing, syncingAccountId, syncingAll]);
 
   useEffect(() => {
     if (!embedded || !onEmbeddedActionsChange) return;

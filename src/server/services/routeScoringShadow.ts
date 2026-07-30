@@ -117,12 +117,11 @@ export function computeBalanceFactor(coverage: number | null): { factor: number;
     // Unknown (direct API-key/free/unread) is neutral. DB default 0 must not mean exhausted.
     return { factor: 0.85, exclusion: null };
   }
-  // Known balance is a SOFT continuous factor, not a hard exclusion. This gradually
-  // drains multiple paid sites together instead of repeatedly using one until zero.
-  if (coverage <= 0) return { factor: 0.005, exclusion: null };
-  if (coverage < 1) return { factor: 0.02, exclusion: null };
-  if (coverage < 5) return { factor: 0.10, exclusion: null };
-  if (coverage < 20) return { factor: 0.30, exclusion: null };
+  // Hard exclusion: balance known but insufficient for even a single request.
+  if (coverage <= 1) return { factor: 0, exclusion: '余额不足' };
+  // Low balance: strongly penalize but still eligible.
+  if (coverage < 5) return { factor: 0.05, exclusion: null };
+  if (coverage < 20) return { factor: 0.20, exclusion: null };
   const factor = clampNumber(
     Math.log1p(coverage) / Math.log1p(TARGET_BALANCE_COVERAGE),
     0.35,

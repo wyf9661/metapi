@@ -72,6 +72,7 @@ type SiteRow = {
   subscriptionSummary?: SiteSubscriptionSummary | null;
   connectionStats?: {
     accounts: number;
+    sessions: number;
     apiKeys: number;
     tokens: number;
     oauth: number;
@@ -1117,17 +1118,17 @@ export default function Sites() {
             </>
           ) : (
             <div className="sites-sort-select" style={{ minWidth: 156, position: 'relative', zIndex: 20 }}>
-              <ModernSelect
-                size="sm"
-                value={sortMode}
-                onChange={(nextValue) => setSortMode(nextValue as SortMode)}
-                options={[
-                  { value: 'custom', label: '自定义排序' },
-                  { value: 'balance-desc', label: '余额高到低' },
-                  { value: 'balance-asc', label: '余额低到高' },
-                ]}
-                placeholder="自定义排序"
-              />
+            <ModernSelect
+            size="sm"
+            value={sortMode}
+            onChange={(nextValue) => setSortMode(nextValue as SortMode)}
+            options={[
+            { value: 'custom', label: '默认排序' },
+            { value: 'balance-desc', label: '余额高到低' },
+            { value: 'balance-asc', label: '余额低到高' },
+            ]}
+            placeholder="默认排序"
+            />
             </div>
           )}
           <button
@@ -1160,6 +1161,23 @@ export default function Sites() {
           >
             刷新账户状态
           </button>
+          <button
+            onClick={async () => {
+              try {
+                const res = await api.syncAllAccountTokens();
+                if (res?.queued) {
+                  toast.info(res.message || '已开始同步令牌，请稍后查看日志');
+                } else {
+                  toast.success('同步全部账号令牌完成');
+                }
+              } catch (e: any) {
+                toast.error(e?.message || '同步失败');
+              }
+            }}
+            className="btn btn-soft-primary"
+          >
+            同步全部账号
+          </button>
           <button onClick={openAdd} className="btn btn-primary">
             {isAdding ? '取消' : '+ 添加站点'}
           </button>
@@ -1179,11 +1197,11 @@ export default function Sites() {
                 value={sortMode}
                 onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                 options={[
-                  { value: 'custom', label: '自定义排序' },
+                  { value: 'custom', label: '默认排序' },
                   { value: 'balance-desc', label: '余额高到低' },
                   { value: 'balance-asc', label: '余额低到高' },
                 ]}
-                placeholder="自定义排序"
+                placeholder="默认排序"
               />
             </div>
           </div>
@@ -2031,11 +2049,11 @@ export default function Sites() {
                         const stats = site.connectionStats;
                         if (!stats) return '-';
                         const parts = [];
-                        if (stats.accounts > 0) parts.push(`账号 ${stats.accounts}`);
-                        if (stats.apiKeys > 0) parts.push(`Key ${stats.apiKeys}`);
-                        if (stats.tokens > 0) parts.push(`令牌 ${stats.tokens}`);
-                        if (stats.oauth > 0) parts.push(`OAuth ${stats.oauth}`);
-                        return parts.length > 0 ? parts.join(' / ') : '-';
+                        if (stats.sessions > 0) parts.push(`👤${stats.sessions}`);
+                        if (stats.apiKeys > 0) parts.push(`🔑${stats.apiKeys}`);
+                        if (stats.tokens > 0) parts.push(`🎫${stats.tokens}`);
+                        if (stats.oauth > 0) parts.push(`🔓${stats.oauth}`);
+                        return parts.length > 0 ? parts.join(' ') : '-';
                       })()}
                     />
                     {isExpanded ? (
@@ -2219,31 +2237,20 @@ export default function Sites() {
                       </a>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px' }}>
-                        {site.connectionStats && (site.connectionStats.accounts > 0 || site.connectionStats.apiKeys > 0 || site.connectionStats.tokens > 0 || site.connectionStats.oauth > 0) ? (
-                          <>
-                            {site.connectionStats.accounts > 0 && (
-                              <span style={{ color: 'var(--color-text-secondary)' }}>
-                                账号: {site.connectionStats.accounts}
-                              </span>
-                            )}
-                            {site.connectionStats.apiKeys > 0 && (
-                              <span style={{ color: 'var(--color-text-secondary)' }}>
-                                Key: {site.connectionStats.apiKeys}
-                              </span>
-                            )}
-                            {site.connectionStats.tokens > 0 && (
-                              <span style={{ color: 'var(--color-text-secondary)' }}>
-                                令牌: {site.connectionStats.tokens}
-                              </span>
-                            )}
-                            {site.connectionStats.oauth > 0 && (
-                              <span style={{ color: 'var(--color-text-secondary)' }}>
-                                OAuth: {site.connectionStats.oauth}
-                              </span>
-                            )}
-                          </>
-                        ) : (
+                      <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--color-text-secondary)', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {site.connectionStats && site.connectionStats.sessions > 0 && (
+                          <span title="Session 账号">👤{site.connectionStats.sessions}</span>
+                        )}
+                        {site.connectionStats && site.connectionStats.apiKeys > 0 && (
+                          <span title="API Key">🔑{site.connectionStats.apiKeys}</span>
+                        )}
+                        {site.connectionStats && site.connectionStats.tokens > 0 && (
+                          <span title="令牌">🎫{site.connectionStats.tokens}</span>
+                        )}
+                        {site.connectionStats && site.connectionStats.oauth > 0 && (
+                          <span title="OAuth">🔓{site.connectionStats.oauth}</span>
+                        )}
+                        {(!site.connectionStats || (site.connectionStats.sessions === 0 && site.connectionStats.apiKeys === 0 && site.connectionStats.tokens === 0 && site.connectionStats.oauth === 0)) && (
                           <span style={{ color: 'var(--color-text-muted)' }}>-</span>
                         )}
                       </div>

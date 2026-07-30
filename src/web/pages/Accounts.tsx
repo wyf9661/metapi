@@ -1248,11 +1248,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       value={sortMode}
                       onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                       options={[
-                        { value: "custom", label: "自定义排序" },
+                        { value: "custom", label: "默认排序" },
                         { value: "balance-desc", label: "余额高到低" },
                         { value: "balance-asc", label: "余额低到高" },
                       ]}
-                      placeholder="自定义排序"
+                      placeholder="默认排序"
                     />
                   </div>
                 )}

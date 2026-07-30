@@ -266,7 +266,7 @@ export function readProxyLogsRouteState(search: string) {
     pageSize: normalizeRoutePageSize(params.get("pageSize")),
     status: normalizeRouteStatus(params.get("status")),
     search: normalizeRouteSearch(params.get("q")),
-    client: normalizeRouteClient(params.get("client")),
+    downstreamKeyId: normalizeRouteSiteId(params.get("downstreamKeyId")),
     siteId: normalizeRouteSiteId(params.get("siteId")),
     model: normalizeRouteModel(params.get("model")),
     from: normalizeRouteDateTimeInput(params.get("from")),
@@ -279,7 +279,7 @@ export function buildProxyLogsRouteSearch(input: {
   pageSize: number;
   status: ProxyLogStatusFilter;
   search: string;
-  client: string;
+  downstreamKeyId: number | null;
   siteId: number | null;
   model: string;
   from: string;
@@ -291,7 +291,7 @@ export function buildProxyLogsRouteSearch(input: {
     params.set("pageSize", String(input.pageSize));
   if (input.status !== "all") params.set("status", input.status);
   if (input.search.trim()) params.set("q", input.search.trim());
-  if (input.client.trim()) params.set("client", input.client.trim());
+  if (input.downstreamKeyId) params.set("downstreamKeyId", String(input.downstreamKeyId));
   if (input.siteId) params.set("siteId", String(input.siteId));
   if (input.model.trim()) params.set("model", input.model.trim());
   if (input.from.trim()) params.set("from", input.from.trim());
