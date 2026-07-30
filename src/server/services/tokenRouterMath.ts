@@ -4,7 +4,7 @@
  * stay free of module state and easy to unit-test.
  */
 
-export const FAILURE_BACKOFF_BASE_SEC = 5;
+export const FAILURE_BACKOFF_BASE_SEC = 15;
 /** Keep weighted-route backoff within a sensible range (1h ceiling). */
 export const MAX_FAILURE_BACKOFF_SEC = 60 * 60;
 export const ROUND_ROBIN_COOLDOWN_LEVELS_SEC = [0, 10 * 60, 60 * 60, 24 * 60 * 60] as const;

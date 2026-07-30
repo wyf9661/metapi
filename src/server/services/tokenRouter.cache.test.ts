@@ -152,9 +152,10 @@ describe('TokenRouter runtime cache', () => {
     }).returning().get();
 
     const router = new TokenRouter();
+    const failContext = { status: 409, errorText: 'conflict' };
 
     const firstStartedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
     const firstRecord = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
       .get();
@@ -163,7 +164,7 @@ describe('TokenRouter runtime cache', () => {
     expect(firstCooldownMs).toBeLessThanOrEqual(20_000);
 
     const secondStartedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
     const secondRecord = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
       .get();
@@ -172,7 +173,7 @@ describe('TokenRouter runtime cache', () => {
     expect(secondCooldownMs).toBeLessThanOrEqual(20_000);
 
     const thirdStartedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
     const thirdRecord = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
       .get();
@@ -223,12 +224,13 @@ describe('TokenRouter runtime cache', () => {
     }).returning().get();
 
     const router = new TokenRouter();
+    const failContext = { status: 409, errorText: 'conflict' };
 
-    await router.recordFailure(channel.id);
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
+    await router.recordFailure(channel.id, failContext);
 
     const startedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
 
     const record = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
@@ -536,8 +538,8 @@ describe('TokenRouter runtime cache', () => {
       .get();
     const cooldownMs = Date.parse(String(record?.cooldownUntil || '')) - startedAt;
 
-    expect(cooldownMs).toBeGreaterThanOrEqual(10_000);
-    expect(cooldownMs).toBeLessThanOrEqual(20_000);
+    expect(cooldownMs).toBeGreaterThanOrEqual(25_000);
+    expect(cooldownMs).toBeLessThanOrEqual(35_000);
     expect(record?.failCount).toBe(1);
   });
 
@@ -749,6 +751,8 @@ describe('TokenRouter runtime cache', () => {
   });
 
   it('applies staged cooldowns for round robin after every three consecutive failures', async () => {
+    config.tokenRouterFailureCooldownMaxSec = 24 * 60 * 60;
+
     const site = await db.insert(schema.sites).values({
       name: 'round-robin-cooldown-site',
       url: 'https://round-robin-cooldown-site.example.com',
@@ -788,9 +792,10 @@ describe('TokenRouter runtime cache', () => {
     }).returning().get();
 
     const router = new TokenRouter();
+    const failContext = { status: 409, errorText: 'conflict' };
 
     for (let index = 0; index < 2; index += 1) {
-      await router.recordFailure(channel.id);
+      await router.recordFailure(channel.id, failContext);
     }
     let current = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
@@ -800,7 +805,7 @@ describe('TokenRouter runtime cache', () => {
     expect(current?.cooldownLevel).toBe(0);
 
     let startedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
     current = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
       .get();
@@ -813,10 +818,10 @@ describe('TokenRouter runtime cache', () => {
     await db.update(schema.routeChannels).set({ cooldownUntil: null }).where(eq(schema.routeChannels.id, channel.id)).run();
 
     for (let index = 0; index < 2; index += 1) {
-      await router.recordFailure(channel.id);
+      await router.recordFailure(channel.id, failContext);
     }
     startedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
     current = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
       .get();
@@ -828,17 +833,18 @@ describe('TokenRouter runtime cache', () => {
     await db.update(schema.routeChannels).set({ cooldownUntil: null }).where(eq(schema.routeChannels.id, channel.id)).run();
 
     for (let index = 0; index < 2; index += 1) {
-      await router.recordFailure(channel.id);
+      await router.recordFailure(channel.id, failContext);
     }
     startedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
     current = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
       .get();
     cooldownMs = Date.parse(String(current?.cooldownUntil || '')) - startedAt;
     expect(current?.cooldownLevel).toBe(3);
-    expect(cooldownMs).toBeGreaterThanOrEqual(23 * 60 * 60 * 1000);
-    expect(cooldownMs).toBeLessThanOrEqual(25 * 60 * 60 * 1000);
+    // Round robin level 3 = 24h, but capped by TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING (1h)
+    expect(cooldownMs).toBeGreaterThanOrEqual(59 * 60 * 1000);
+    expect(cooldownMs).toBeLessThanOrEqual(61 * 60 * 1000);
 
     await router.recordSuccess(channel.id, 320, 0.12);
     current = await db.select().from(schema.routeChannels)
@@ -850,6 +856,8 @@ describe('TokenRouter runtime cache', () => {
   });
 
   it('caps weighted cooldowns before Date overflow for heavily failed channels', async () => {
+    config.tokenRouterFailureCooldownMaxSec = 30 * 24 * 60 * 60;
+
     const site = await db.insert(schema.sites).values({
       name: 'weighted-cooldown-cap-site',
       url: 'https://weighted-cooldown-cap.example.com',
@@ -891,9 +899,10 @@ describe('TokenRouter runtime cache', () => {
 
     // Weighted routes previously let Fibonacci backoff grow beyond the Date range.
     const router = new TokenRouter();
+    const failContext = { status: 409, errorText: 'conflict' };
 
     const startedAt = Date.now();
-    await router.recordFailure(channel.id);
+    await router.recordFailure(channel.id, failContext);
     const current = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.id, channel.id))
       .get();
@@ -901,7 +910,9 @@ describe('TokenRouter runtime cache', () => {
 
     expect(current?.failCount).toBe(58);
     expect(Number.isFinite(Date.parse(String(current?.cooldownUntil || '')))).toBe(true);
-    expect(cooldownMs).toBeGreaterThanOrEqual((30 * 24 * 60 * 60 - 5) * 1000);
-    expect(cooldownMs).toBeLessThanOrEqual((30 * 24 * 60 * 60 + 5) * 1000);
+    // failCount=58 fibonacci backoff would overflow Date range, but is capped by
+    // TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING (1h)
+    expect(cooldownMs).toBeGreaterThanOrEqual((60 * 60 - 5) * 1000);
+    expect(cooldownMs).toBeLessThanOrEqual((60 * 60 + 5) * 1000);
   });
 });

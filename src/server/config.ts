@@ -270,6 +270,11 @@ export function assertProductionSecurity(
       'ACCOUNT_CREDENTIAL_SECRET must differ from AUTH_TOKEN (encryption key and admin login must not share a secret)',
     );
   }
+  if (appConfig.allowGlobalProxyToken && isInsecureDefaultSecret(appConfig.proxyToken)) {
+    problems.push(
+      'PROXY_TOKEN must be a strong unique value when ALLOW_GLOBAL_PROXY_TOKEN=true (global proxy token is still the built-in default)',
+    );
+  }
 
   if (problems.length === 0) return;
 
