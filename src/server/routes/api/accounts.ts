@@ -35,7 +35,6 @@ import {
   isTokenExpiredError,
 } from "../../services/alertRules.js";
 import {
-  parseSiteProxyUrlInput,
   withAccountProxyOverride,
   withSiteRecordProxyRequestInit,
 } from "../../services/siteProxy.js";
@@ -1501,21 +1500,32 @@ export async function accountsRoutes(app: FastifyInstance) {
         updates.sortOrder = normalizedSortOrder;
       }
 
-      if (Object.prototype.hasOwnProperty.call(body, "proxyUrl")) {
+      if (Object.prototype.hasOwnProperty.call(body, "platformUserId")) {
         const baseExtraConfig =
           typeof updates.extraConfig === "string"
             ? updates.extraConfig
             : account.extraConfig;
-        const {
-          present,
-          valid,
-          proxyUrl: normalizedProxy,
-        } = parseSiteProxyUrlInput(body.proxyUrl);
-        if (present && !valid) {
-          return reply.code(400).send({ message: "Invalid proxy URL format" });
+        const rawPlatformUserId = body.platformUserId;
+        let nextPlatformUserId: number | undefined;
+        if (
+          rawPlatformUserId === null ||
+          rawPlatformUserId === "" ||
+          rawPlatformUserId === undefined
+        ) {
+          nextPlatformUserId = undefined;
+        } else if (
+          typeof rawPlatformUserId === "number" &&
+          Number.isFinite(rawPlatformUserId) &&
+          rawPlatformUserId > 0
+        ) {
+          nextPlatformUserId = Math.trunc(rawPlatformUserId);
+        } else {
+          return reply
+            .code(400)
+            .send({ message: "Invalid platformUserId value. Expected positive integer or null." });
         }
         updates.extraConfig = mergeAccountExtraConfig(baseExtraConfig, {
-          proxyUrl: normalizedProxy ?? undefined,
+          platformUserId: nextPlatformUserId,
         });
       }
 
@@ -1549,7 +1559,6 @@ export async function accountsRoutes(app: FastifyInstance) {
         Object.prototype.hasOwnProperty.call(body, "accessToken") ||
         Object.prototype.hasOwnProperty.call(body, "apiToken") ||
         Object.prototype.hasOwnProperty.call(body, "extraConfig") ||
-        Object.prototype.hasOwnProperty.call(body, "proxyUrl") ||
         wantsManagedSub2ApiAuthPatch;
       const isExpiredApiKeyAccount =
         account.status === "expired" &&

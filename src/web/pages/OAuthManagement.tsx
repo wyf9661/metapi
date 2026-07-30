@@ -625,7 +625,11 @@ function SideDrawer({
   return portalTarget ? createPortal(panel, portalTarget) : panel;
 }
 
-export default function OAuthManagement() {
+type OAuthManagementProps = {
+  siteId?: number;
+};
+
+export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagementProps = {}) {
   const location = useLocation();
   const isMobile = useIsMobile();
   const toast = useToast();
@@ -911,6 +915,7 @@ export default function OAuthManagement() {
   const filteredConnections = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
     return connections.filter((connection) => {
+      if (filterSiteId && connection.site?.id !== filterSiteId) return false;
       if (providerFilter && connection.provider !== providerFilter) return false;
       if (statusFilter && connection.status !== statusFilter) return false;
       if (siteFilter && String(connection.site?.id || '') !== siteFilter) return false;
@@ -927,7 +932,7 @@ export default function OAuthManagement() {
       ].join(' ').toLowerCase();
       return haystack.includes(search);
     });
-  }, [connections, providerFilter, searchQuery, siteFilter, statusFilter]);
+  }, [connections, filterSiteId, providerFilter, searchQuery, siteFilter, statusFilter]);
 
   const allVisibleSelected = filteredConnections.length > 0
     && filteredConnections.every((connection) => selectedConnectionIds.includes(connection.accountId));
@@ -1699,7 +1704,7 @@ export default function OAuthManagement() {
             />
           </th>
           {visibleColumns.identity ? <th className="oauth-col-identity">账号</th> : null}
-          {visibleColumns.site ? <th className="oauth-col-site">站点</th> : null}
+          {visibleColumns.site && !filterSiteId ? <th className="oauth-col-site">站点</th> : null}
           {visibleColumns.status ? <th className="oauth-col-status">状态</th> : null}
           {visibleColumns.quota ? <th className="oauth-col-quota">额度</th> : null}
           {visibleColumns.proxy ? <th className="oauth-col-proxy">计划 / 代理</th> : null}
@@ -1758,7 +1763,7 @@ export default function OAuthManagement() {
                   </div>
                 </td>
               ) : null}
-              {visibleColumns.site ? (
+              {visibleColumns.site && !filterSiteId ? (
                 <td className="oauth-col-site">
                   <div className="oauth-cell-stack">
                     <div className="oauth-cell-primary oauth-site-name" title={connection.site?.name || '--'}>
@@ -1982,7 +1987,8 @@ export default function OAuthManagement() {
   );
 
   return (
-    <div className="page-container animate-fade-in">
+    <div className={filterSiteId ? "" : "page-container animate-fade-in"}>
+      {!filterSiteId && (
       <div className="page-header">
         <div>
           <h2 className="page-title">OAuth 管理</h2>
@@ -2001,6 +2007,7 @@ export default function OAuthManagement() {
           </div>
         ) : null}
       </div>
+      )}
 
       {sessionFeedback ? (
         <div className={`card oauth-page-message oauth-page-message-${sessionFeedback.tone}`.trim()}>

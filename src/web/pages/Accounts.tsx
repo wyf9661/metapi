@@ -105,7 +105,11 @@ function resolveConnectionsSegment(search: string): ConnectionsSegment {
   return "session";
 }
 
-export default function Accounts() {
+type AccountsProps = {
+  siteId?: number;
+};
+
+export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
   const activeSegment = useMemo(
@@ -154,7 +158,7 @@ export default function Accounts() {
     isPinned: false,
     refreshToken: "",
     tokenExpiresAt: "",
-    proxyUrl: "",
+    platformUserId: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [rebindTarget, setRebindTarget] = useState<any | null>(null);
@@ -290,10 +294,13 @@ export default function Accounts() {
   );
   const visibleAccounts = useMemo(() => {
     if (activeSegment === "tokens") return [];
-    return sortedAccounts.filter(
-      (account) => resolveAccountCredentialMode(account) === activeSegment,
-    );
-  }, [activeSegment, sortedAccounts]);
+    return sortedAccounts.filter((account) => {
+      if (filterSiteId && account.siteId !== filterSiteId && account.site?.id !== filterSiteId) {
+        return false;
+      }
+      return resolveAccountCredentialMode(account) === activeSegment;
+    });
+  }, [activeSegment, sortedAccounts, filterSiteId]);
   const {
     page: safePage,
     setPage,
@@ -303,7 +310,7 @@ export default function Accounts() {
     showControls: showAccountPagination,
   } = useClientPagination(
     visibleAccounts,
-    `${activeSegment}:${sortMode}:${accounts.length}`,
+    `${activeSegment}:${sortMode}:${accounts.length}:${filterSiteId || 0}`,
   );
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
@@ -957,7 +964,6 @@ export default function Accounts() {
 
   const openEditPanel = (account: any) => {
     const managedAuth = extractManagedSub2ApiAuth(account);
-    const proxyUrl = parseAccountExtraConfig(account)?.proxyUrl || "";
     closeAddPanel();
     setRebindTarget(null);
     setEditingAccount(account);
@@ -974,7 +980,7 @@ export default function Accounts() {
       isPinned: !!account?.isPinned,
       refreshToken: managedAuth.refreshToken,
       tokenExpiresAt: managedAuth.tokenExpiresAt,
-      proxyUrl,
+      platformUserId: account?.platformUserId ? String(account.platformUserId) : "",
     });
   };
 
@@ -1001,7 +1007,9 @@ export default function Accounts() {
         tokenExpiresAt: editForm.tokenExpiresAt.trim()
           ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
           : null,
-        proxyUrl: editForm.proxyUrl.trim() || null,
+        platformUserId: editForm.platformUserId.trim()
+          ? Number.parseInt(editForm.platformUserId.trim(), 10)
+          : null,
       });
       toast.success("账号已更新");
       closeEditPanel();
@@ -1208,41 +1216,47 @@ export default function Accounts() {
       : canAddVerifiedConnection;
 
   return (
-    <div className="animate-fade-in">
+    <div className={filterSiteId ? "" : "animate-fade-in"}>
       <div className="page-header">
-        <h2 className="page-title">{tr("连接管理")}</h2>
+        {!filterSiteId && (
+          <h2 className="page-title">{tr("连接管理")}</h2>
+        )}
         {activeSegment !== "tokens" && (
           <div className="page-actions accounts-page-actions">
             {isMobile ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setShowMobileTools(true)}
-                  className="btn btn-ghost"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  排序与操作
-                </button>
+                {!filterSiteId && (
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileTools(true)}
+                    className="btn btn-ghost"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
+                    排序与操作
+                  </button>
+                )}
               </>
             ) : (
               <>
-                <div
-                  className="accounts-sort-select"
-                  style={{ minWidth: 156, position: "relative", zIndex: 20 }}
-                >
-                  <ModernSelect
-                    size="sm"
-                    value={sortMode}
-                    onChange={(nextValue) => setSortMode(nextValue as SortMode)}
-                    options={[
-                      { value: "custom", label: "自定义排序" },
-                      { value: "balance-desc", label: "余额高到低" },
-                      { value: "balance-asc", label: "余额低到高" },
-                    ]}
-                    placeholder="自定义排序"
-                  />
-                </div>
-                {activeSegment === "session" && (
+                {!filterSiteId && (
+                  <div
+                    className="accounts-sort-select"
+                    style={{ minWidth: 156, position: "relative", zIndex: 20 }}
+                  >
+                    <ModernSelect
+                      size="sm"
+                      value={sortMode}
+                      onChange={(nextValue) => setSortMode(nextValue as SortMode)}
+                      options={[
+                        { value: "custom", label: "自定义排序" },
+                        { value: "balance-desc", label: "余额高到低" },
+                        { value: "balance-asc", label: "余额低到高" },
+                      ]}
+                      placeholder="自定义排序"
+                    />
+                  </div>
+                )}
+                {!filterSiteId && activeSegment === "session" && (
                   <button
                     onClick={() =>
                       withLoading(
@@ -1264,20 +1278,22 @@ export default function Accounts() {
                     )}
                   </button>
                 )}
-                <button
-                  onClick={handleRefreshRuntimeHealth}
-                  disabled={actionLoading["health-refresh"]}
-                  className="btn btn-soft-primary"
-                >
-                  {actionLoading["health-refresh"] ? (
-                    <>
-                      <span className="spinner spinner-sm" />
-                      {tr("刷新状态中...")}
-                    </>
-                  ) : (
-                    tr("刷新账户状态")
-                  )}
-                </button>
+                {!filterSiteId && (
+                  <button
+                    onClick={handleRefreshRuntimeHealth}
+                    disabled={actionLoading["health-refresh"]}
+                    className="btn btn-soft-primary"
+                  >
+                    {actionLoading["health-refresh"] ? (
+                      <>
+                        <span className="spinner spinner-sm" />
+                        {tr("刷新状态中...")}
+                      </>
+                    ) : (
+                      tr("刷新账户状态")
+                    )}
+                  </button>
+                )}
               </>
             )}
             <button
@@ -1291,8 +1307,6 @@ export default function Accounts() {
                 closeRebindPanel();
                 setShowAdd(true);
                 resetAddForms(activeAddCredentialMode);
-                // Force-refresh sites so newly created stations appear in the dropdown
-                // without requiring a full page reload (accounts-snapshot can lag briefly).
                 void load(true);
               }}
               className="btn btn-primary"
@@ -1442,6 +1456,7 @@ export default function Accounts() {
         <TokensPanel
           embedded
           onEmbeddedActionsChange={setEmbeddedTokenActions}
+          siteId={filterSiteId}
         />
       ) : (
         <>
@@ -2578,6 +2593,20 @@ export default function Accounts() {
                   }
                   style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
                 />
+                {(editingAccount?.site?.platform || "").toLowerCase() ===
+                  "new-api" && (
+                  <input
+                    placeholder="用户 ID"
+                    value={editForm.platformUserId}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        platformUserId: e.target.value.replace(/\D/g, ""),
+                      }))
+                    }
+                    style={inputStyle}
+                  />
+                )}
                 <input
                   placeholder="API Token（可选）"
                   value={editForm.apiToken}
@@ -2589,32 +2618,11 @@ export default function Accounts() {
                   }
                   style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
                 />
-                <input
-                  placeholder="代理地址（可选，如 http://127.0.0.1:7890）"
-                  value={editForm.proxyUrl}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      proxyUrl: e.target.value,
-                    }))
-                  }
-                  style={inputStyle}
-                />
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--color-text-muted)",
-                    marginTop: -4,
-                  }}
-                >
-                  覆盖站点代理，留空则使用站点设置。支持 http/https/socks5
-                  协议。
-                </div>
                 {(editingAccount?.site?.platform || "").toLowerCase() ===
                   "sub2api" && (
                   <>
                     <input
-                      placeholder="Sub2API refresh_token（可选）"
+                      placeholder="refresh_token"
                       value={editForm.refreshToken}
                       onChange={(e) =>
                         setEditForm((prev) => ({
@@ -2625,7 +2633,7 @@ export default function Accounts() {
                       style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
                     />
                     <input
-                      placeholder="token_expires_at（可选）"
+                      placeholder="token_expires_at"
                       value={editForm.tokenExpiresAt}
                       onChange={(e) =>
                         setEditForm((prev) => ({
@@ -2674,14 +2682,6 @@ export default function Accounts() {
                                 ? "API Key"
                                 : "Session"}
                             </span>
-                            {parseAccountExtraConfig(a)?.proxyUrl && (
-                              <span
-                                className="badge badge-purple"
-                                style={{ fontSize: 10 }}
-                              >
-                                代理
-                              </span>
-                            )}
                           </div>
                         }
                         footerActions={
@@ -3019,14 +3019,6 @@ export default function Accounts() {
                                   ? "API Key"
                                   : "Session"}
                               </span>
-                              {parseAccountExtraConfig(a)?.proxyUrl && (
-                                <span
-                                  className="badge badge-purple"
-                                  style={{ fontSize: 10 }}
-                                >
-                                  代理
-                                </span>
-                              )}
                             </div>
                           </td>
                           <td className="accounts-site-cell">

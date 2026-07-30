@@ -752,6 +752,7 @@ export type DownstreamApiKeyTrendResponse = {
 export const api = {
   // Sites
   getSites: () => request("/api/sites"),
+  getSite: (id: number) => request(`/api/sites/${id}`),
   addSite: (data: any) =>
     request("/api/sites", { method: "POST", body: JSON.stringify(data) }),
   updateSite: (id: number, data: any) =>

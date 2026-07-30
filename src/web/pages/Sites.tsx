@@ -70,6 +70,12 @@ type SiteRow = {
   sortOrder?: number;
   totalBalance?: number;
   subscriptionSummary?: SiteSubscriptionSummary | null;
+  connectionStats?: {
+    accounts: number;
+    apiKeys: number;
+    tokens: number;
+    oauth: number;
+  } | null;
   createdAt?: string;
   postRefreshProbeEnabled?: boolean;
   postRefreshProbeModel?: string | null;
@@ -1124,6 +1130,36 @@ export default function Sites() {
               />
             </div>
           )}
+          <button
+            onClick={async () => {
+              try {
+                const res = await api.triggerCheckinAll();
+                toast.success(res?.message || '已触发全部签到');
+              } catch (e: any) {
+                toast.error(e?.message || '签到触发失败');
+              }
+            }}
+            className="btn btn-soft-primary"
+          >
+            全部签到
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const res = await api.refreshAccountHealth();
+                if (res?.queued) {
+                  toast.info(res.message || '账号状态刷新任务已提交');
+                } else {
+                  toast.success(res?.message || '账号状态已刷新');
+                }
+              } catch (e: any) {
+                toast.error(e?.message || '刷新状态失败');
+              }
+            }}
+            className="btn btn-soft-primary"
+          >
+            刷新账户状态
+          </button>
           <button onClick={openAdd} className="btn btn-primary">
             {isAdding ? '取消' : '+ 添加站点'}
           </button>
@@ -1928,10 +1964,17 @@ export default function Sites() {
                       <>
                         <button
                           type="button"
+                          onClick={() => navigate(`/sites/${site.id}`)}
+                          className="btn btn-link btn-link-primary"
+                        >
+                          详情
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => toggleSiteDetails(site.id)}
                           className="btn btn-link"
                         >
-                          {isExpanded ? '收起' : '详情'}
+                          {isExpanded ? '收起' : '展开'}
                         </button>
                         <button
                           onClick={() => handleOpenSiteApiKey(site)}
@@ -1982,6 +2025,19 @@ export default function Sites() {
                       )}
                     />
                     <MobileField label="权重" value={(site.globalWeight || 1).toFixed(2)} />
+                    <MobileField
+                      label="连接"
+                      value={(() => {
+                        const stats = site.connectionStats;
+                        if (!stats) return '-';
+                        const parts = [];
+                        if (stats.accounts > 0) parts.push(`账号 ${stats.accounts}`);
+                        if (stats.apiKeys > 0) parts.push(`Key ${stats.apiKeys}`);
+                        if (stats.tokens > 0) parts.push(`令牌 ${stats.tokens}`);
+                        if (stats.oauth > 0) parts.push(`OAuth ${stats.oauth}`);
+                        return parts.length > 0 ? parts.join(' / ') : '-';
+                      })()}
+                    />
                     {isExpanded ? (
                       <div className="mobile-card-extra">
                         <MobileField
@@ -2088,6 +2144,7 @@ export default function Sites() {
                   <th>状态</th>
                   <th>权重</th>
                   <th>平台</th>
+                  <th>连接</th>
                   <th className="sites-actions-col">操作</th>
                 </tr>
               </thead>
@@ -2161,8 +2218,44 @@ export default function Sites() {
                         </span>
                       </a>
                     </td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px' }}>
+                        {site.connectionStats && (site.connectionStats.accounts > 0 || site.connectionStats.apiKeys > 0 || site.connectionStats.tokens > 0 || site.connectionStats.oauth > 0) ? (
+                          <>
+                            {site.connectionStats.accounts > 0 && (
+                              <span style={{ color: 'var(--color-text-secondary)' }}>
+                                账号: {site.connectionStats.accounts}
+                              </span>
+                            )}
+                            {site.connectionStats.apiKeys > 0 && (
+                              <span style={{ color: 'var(--color-text-secondary)' }}>
+                                Key: {site.connectionStats.apiKeys}
+                              </span>
+                            )}
+                            {site.connectionStats.tokens > 0 && (
+                              <span style={{ color: 'var(--color-text-secondary)' }}>
+                                令牌: {site.connectionStats.tokens}
+                              </span>
+                            )}
+                            {site.connectionStats.oauth > 0 && (
+                              <span style={{ color: 'var(--color-text-secondary)' }}>
+                                OAuth: {site.connectionStats.oauth}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--color-text-muted)' }}>-</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="sites-actions-cell">
                       <div className="sites-row-actions">
+                        <button
+                          onClick={() => navigate(`/sites/${site.id}`)}
+                          className="btn btn-link btn-link-primary"
+                        >
+                          详情
+                        </button>
                         <button
                           onClick={() => handleTogglePin(site)}
                           disabled={pinningSiteId === site.id}
