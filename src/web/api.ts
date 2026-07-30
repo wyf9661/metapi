@@ -1,4 +1,34 @@
 import { clearAuthSession, getAuthToken } from "./authSession.js";
+import type {
+  AccountBatchPayload,
+  AccountCreatePayload,
+  AccountUpdatePayload,
+} from "../server/contracts/accountsRoutePayloads.js";
+import type {
+  AccountTokenBatchPayload,
+  AccountTokenCreatePayload,
+  AccountTokenUpdatePayload,
+} from "../server/contracts/accountTokensRoutePayloads.js";
+import type {
+  SiteBatchPayload,
+  SiteCreatePayload,
+  SiteUpdatePayload,
+} from "../server/contracts/siteRoutePayloads.js";
+import type {
+  TokenRouteCreatePayload,
+  TokenRouteUpdatePayload,
+  RouteChannelCreatePayload,
+  RouteChannelUpdatePayload,
+} from "../server/contracts/tokenRoutePayloads.js";
+import type {
+  DownstreamApiKeyPayload,
+} from "../server/contracts/downstreamApiKeyRoutePayloads.js";
+import type {
+  BackupImportPayload,
+} from "../server/contracts/settingsRoutePayloads.js";
+import type {
+  UpdateCenterConfigPayload,
+} from "../server/contracts/supportRoutePayloads.js";
 
 type BufferLike = {
   from(data: ArrayBuffer): { toString(encoding: "base64"): string };
@@ -753,12 +783,12 @@ export const api = {
   // Sites
   getSites: () => request("/api/sites"),
   getSite: (id: number) => request(`/api/sites/${id}`),
-  addSite: (data: any) =>
+  addSite: (data: SiteCreatePayload) =>
     request("/api/sites", { method: "POST", body: JSON.stringify(data) }),
-  updateSite: (id: number, data: any) =>
+  updateSite: (id: number, data: SiteUpdatePayload) =>
     request(`/api/sites/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteSite: (id: number) => request(`/api/sites/${id}`, { method: "DELETE" }),
-  batchUpdateSites: (data: any) =>
+  batchUpdateSites: (data: SiteBatchPayload) =>
     request("/api/sites/batch", { method: "POST", body: JSON.stringify(data) }),
   detectSite: (url: string) =>
     request("/api/sites/detect", {
@@ -795,7 +825,7 @@ export const api = {
       accounts: any[];
       sites: any[];
     }>,
-  addAccount: (data: any) =>
+  addAccount: (data: AccountCreatePayload) =>
     request("/api/accounts", { method: "POST", body: JSON.stringify(data) }),
   loginAccount: (data: {
     siteId: number;
@@ -829,14 +859,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateAccount: (id: number, data: any) =>
+  updateAccount: (id: number, data: AccountUpdatePayload) =>
     request(`/api/accounts/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
   deleteAccount: (id: number) =>
     request(`/api/accounts/${id}`, { method: "DELETE" }),
-  batchUpdateAccounts: (data: any) =>
+  batchUpdateAccounts: (data: AccountBatchPayload) =>
     request("/api/accounts/batch", {
       method: "POST",
       body: JSON.stringify(data),
@@ -861,19 +891,19 @@ export const api = {
     request(`/api/account-tokens${accountId ? `?accountId=${accountId}` : ""}`, {
       cache: "no-store",
     }),
-  addAccountToken: (data: any) =>
+  addAccountToken: (data: AccountTokenCreatePayload) =>
     request("/api/account-tokens", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateAccountToken: (id: number, data: any) =>
+  updateAccountToken: (id: number, data: AccountTokenUpdatePayload) =>
     request(`/api/account-tokens/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
   deleteAccountToken: (id: number) =>
     request(`/api/account-tokens/${id}`, { method: "DELETE" }),
-  batchUpdateAccountTokens: (data: any) =>
+  batchUpdateAccountTokens: (data: AccountTokenBatchPayload) =>
     request("/api/account-tokens/batch", {
       method: "POST",
       body: JSON.stringify(data),
@@ -926,9 +956,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ channels }),
     }),
-  addRoute: (data: any) =>
+  addRoute: (data: TokenRouteCreatePayload) =>
     request("/api/routes", { method: "POST", body: JSON.stringify(data) }),
-  updateRoute: (id: number, data: any) =>
+  updateRoute: (id: number, data: TokenRouteUpdatePayload) =>
     request(`/api/routes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteRoute: (id: number) =>
     request(`/api/routes/${id}`, { method: "DELETE" }),
@@ -944,12 +974,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  addChannel: (routeId: number, data: any) =>
+  addChannel: (routeId: number, data: RouteChannelCreatePayload) =>
     request(`/api/routes/${routeId}/channels`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateChannel: (id: number, data: any) =>
+  updateChannel: (id: number, data: RouteChannelUpdatePayload) =>
     request(`/api/channels/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1265,7 +1295,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   getUpdateCenterStatus: () => request("/api/update-center/status"),
-  saveUpdateCenterConfig: (data: any) =>
+  saveUpdateCenterConfig: (data: UpdateCenterConfigPayload) =>
     request("/api/update-center/config", {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1333,12 +1363,12 @@ export const api = {
       timeoutMs: 120_000,
     }),
   getDownstreamApiKeys: () => request("/api/downstream-keys"),
-  createDownstreamApiKey: (data: any) =>
+  createDownstreamApiKey: (data: DownstreamApiKeyPayload) =>
     request("/api/downstream-keys", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateDownstreamApiKey: (id: number, data: any) =>
+  updateDownstreamApiKey: (id: number, data: DownstreamApiKeyPayload) =>
     request(`/api/downstream-keys/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1379,7 +1409,7 @@ export const api = {
     ),
   exportBackup: (type: "all" | "accounts" | "preferences" = "all") =>
     request(`/api/settings/backup/export?type=${encodeURIComponent(type)}`),
-  importBackup: (data: any) =>
+  importBackup: (data: BackupImportPayload) =>
     request("/api/settings/backup/import", {
       method: "POST",
       body: JSON.stringify({ data }),

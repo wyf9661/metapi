@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
-import Accounts from './Accounts.js';
+
+const Accounts = lazy(() => import('./Accounts.js'));
 
 type SiteDetail = {
   id: number;
@@ -83,7 +84,9 @@ export default function SiteDetail() {
         </div>
       </div>
 
-      <Accounts siteId={site.id} />
+      <Suspense fallback={<div style={{ textAlign: 'center', padding: '40px' }}>加载中...</div>}>
+        <Accounts siteId={site.id} />
+      </Suspense>
     </div>
   );
 }
