@@ -492,7 +492,7 @@ export type ProxyLogsQuery = {
   offset?: number;
   status?: ProxyLogStatusFilter;
   search?: string;
-  client?: string;
+  downstreamKeyId?: number;
   model?: string;
   siteId?: number;
   from?: string;
@@ -1072,6 +1072,7 @@ export const api = {
       `/api/stats/proxy-logs${buildQueryString(queryParams)}`,
     ) as Promise<{
       clientOptions: ProxyLogsResponse["clientOptions"];
+      downstreamKeys: Array<{ id: number; name: string; groupName?: string | null }>;
       summary: ProxyLogsResponse["summary"];
       sites: Array<{ id: number; name: string; status?: string | null }>;
       models: string[];

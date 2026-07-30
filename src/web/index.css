@@ -2225,7 +2225,7 @@ body {
 .sites-table td.site-balance-cell {
   text-align: left;
   white-space: nowrap;
-  width: 10%;
+  width: 8%;
 }
 
 .sites-table th:nth-child(4),
@@ -2236,14 +2236,14 @@ body {
 .sites-table td:nth-child(6) {
   text-align: center;
   white-space: nowrap;
-  width: 8%;
+  width: 6%;
 }
 
 .sites-table th:nth-child(7),
 .sites-table td:nth-child(7) {
   text-align: center;
   white-space: nowrap;
-  width: 12%;
+  width: 14%;
 }
 
 .sites-table th.sites-actions-col {

@@ -7,7 +7,7 @@ import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
-import { getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
+import { getCredentialModeFromExtraConfig, getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
 import {
   parseSiteBatchPayload,
   parseSiteCreatePayload,
@@ -492,6 +492,8 @@ export async function sitesRoutes(app: FastifyInstance) {
     const totalBalanceBySiteId: Record<number, number> = {};
     const subscriptionBySiteId: Record<number, SiteSubscriptionAggregate | undefined> = {};
     const accountCountBySiteId: Record<number, number> = {};
+    const sessionCountBySiteId: Record<number, number> = {};
+    const apiKeyCountBySiteId: Record<number, number> = {};
     const oauthCountBySiteId: Record<number, number> = {};
     const accountIdToSiteId: Record<number, number> = {};
 
@@ -501,6 +503,13 @@ export async function sitesRoutes(app: FastifyInstance) {
       accountCountBySiteId[row.siteId] = (accountCountBySiteId[row.siteId] || 0) + 1;
       if (row.oauthProvider) {
         oauthCountBySiteId[row.siteId] = (oauthCountBySiteId[row.siteId] || 0) + 1;
+      } else {
+        const mode = getCredentialModeFromExtraConfig(row.extraConfig);
+        if (mode === 'apikey') {
+          apiKeyCountBySiteId[row.siteId] = (apiKeyCountBySiteId[row.siteId] || 0) + 1;
+        } else {
+          sessionCountBySiteId[row.siteId] = (sessionCountBySiteId[row.siteId] || 0) + 1;
+        }
       }
       accountIdToSiteId[row.id] = row.siteId;
     }
@@ -520,7 +529,8 @@ export async function sitesRoutes(app: FastifyInstance) {
       subscriptionSummary: subscriptionBySiteId[site.id] || null,
       connectionStats: {
         accounts: accountCountBySiteId[site.id] || 0,
-        apiKeys: (accountCountBySiteId[site.id] || 0) - (oauthCountBySiteId[site.id] || 0),
+        sessions: sessionCountBySiteId[site.id] || 0,
+        apiKeys: apiKeyCountBySiteId[site.id] || 0,
         tokens: tokenCountBySiteId[site.id] || 0,
         oauth: oauthCountBySiteId[site.id] || 0,
       },
@@ -557,6 +567,8 @@ export async function sitesRoutes(app: FastifyInstance) {
     let totalBalance = 0;
     let subscriptionSummary: SiteSubscriptionAggregate | undefined;
     let accountCount = 0;
+    let sessionCount = 0;
+    let apiKeyCount = 0;
     let oauthCount = 0;
     const accountIdToSiteId: Record<number, number> = {};
 
@@ -566,6 +578,13 @@ export async function sitesRoutes(app: FastifyInstance) {
       accountCount += 1;
       if (row.oauthProvider) {
         oauthCount += 1;
+      } else {
+        const mode = getCredentialModeFromExtraConfig(row.extraConfig);
+        if (mode === 'apikey') {
+          apiKeyCount += 1;
+        } else {
+          sessionCount += 1;
+        }
       }
       accountIdToSiteId[row.id] = row.siteId;
     }
@@ -583,7 +602,8 @@ export async function sitesRoutes(app: FastifyInstance) {
       subscriptionSummary: subscriptionSummary || null,
       connectionStats: {
         accounts: accountCount,
-        apiKeys: accountCount - oauthCount,
+        sessions: sessionCount,
+        apiKeys: apiKeyCount,
         tokens: tokenCount,
         oauth: oauthCount,
       },

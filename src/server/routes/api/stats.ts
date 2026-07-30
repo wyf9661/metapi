@@ -286,11 +286,15 @@ function buildProxyLogWhereClause(params: {
   status?: ProxyLogStatusFilter;
   search?: string;
   client?: ProxyLogClientFilter;
+  downstreamKeyId?: number | null;
   siteId?: number | null;
   model?: string | null;
   fromUtc?: string | null;
   toUtc?: string | null;
 }) {
+  const downstreamKeyCondition = params.downstreamKeyId
+    ? eq(schema.proxyLogs.downstreamApiKeyId, params.downstreamKeyId)
+    : null;
   const modelCondition = params.model
     ? sql<boolean>`(
         lower(trim(coalesce(nullif(${schema.proxyLogs.modelActual}, ''), ${schema.proxyLogs.modelRequested}, ''))) = ${params.model}
@@ -305,6 +309,7 @@ function buildProxyLogWhereClause(params: {
     params.status ? buildProxyLogStatusCondition(params.status) : null,
     params.search ? buildProxyLogSearchCondition(params.search) : null,
     params.client ? buildProxyLogClientCondition(params.client) : null,
+    downstreamKeyCondition,
     params.siteId ? eq(schema.sites.id, params.siteId) : null,
     modelCondition,
     params.fromUtc ? gte(schema.proxyLogs.createdAt, params.fromUtc) : null,
@@ -725,6 +730,7 @@ export async function statsRoutes(app: FastifyInstance) {
     status?: string;
     search?: string;
     client?: string;
+    downstreamKeyId?: string;
     siteId?: string;
     model?: string;
     from?: string;
@@ -735,6 +741,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const status = normalizeProxyLogStatusFilter(params.status);
     const search = normalizeProxyLogSearch(params.search);
     const client = normalizeProxyLogClientFilter(params.client);
+    const downstreamKeyId = normalizeProxyLogSiteId(params.downstreamKeyId);
     const siteId = normalizeProxyLogSiteId(params.siteId);
     const model = normalizeProxyLogModelFilter(params.model);
     const fromUtc = normalizeProxyLogTimeBoundary(params.from);
@@ -743,6 +750,7 @@ export async function statsRoutes(app: FastifyInstance) {
       status,
       search,
       client,
+      downstreamKeyId,
       siteId,
       model,
       fromUtc,
@@ -841,6 +849,7 @@ export async function statsRoutes(app: FastifyInstance) {
     status?: string;
     search?: string;
     client?: string;
+    downstreamKeyId?: string;
     siteId?: string;
     model?: string;
     from?: string;
@@ -849,6 +858,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const status = normalizeProxyLogStatusFilter(params.status);
     const search = normalizeProxyLogSearch(params.search);
     const client = normalizeProxyLogClientFilter(params.client);
+    const downstreamKeyId = normalizeProxyLogSiteId(params.downstreamKeyId);
     const siteId = normalizeProxyLogSiteId(params.siteId);
     const model = normalizeProxyLogModelFilter(params.model);
     const fromUtc = normalizeProxyLogTimeBoundary(params.from);
@@ -856,6 +866,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const summaryWhere = buildProxyLogWhereClause({
       search,
       client,
+      downstreamKeyId,
       siteId,
       model,
       fromUtc,
@@ -865,6 +876,7 @@ export async function statsRoutes(app: FastifyInstance) {
       status,
       search,
       siteId,
+      downstreamKeyId,
       model,
       fromUtc,
       toUtc,
@@ -873,6 +885,7 @@ export async function statsRoutes(app: FastifyInstance) {
       status,
       search,
       client,
+      downstreamKeyId,
       siteId,
       fromUtc,
       toUtc,
@@ -952,7 +965,7 @@ export async function statsRoutes(app: FastifyInstance) {
         .all();
     })();
 
-    const [clientOptionRows, summaryRow, siteRows, modelOptionRows] = await Promise.all([
+    const [clientOptionRows, summaryRow, siteRows, modelOptionRows, downstreamKeyRows] = await Promise.all([
       clientOptionRowsPromise,
       (async () => {
         let summaryQuery = db
@@ -992,10 +1005,23 @@ export async function statsRoutes(app: FastifyInstance) {
         .from(schema.sites)
         .all(),
       modelOptionRowsPromise,
+      db
+        .select({
+          id: schema.downstreamApiKeys.id,
+          name: schema.downstreamApiKeys.name,
+          groupName: schema.downstreamApiKeys.groupName,
+        })
+        .from(schema.downstreamApiKeys)
+        .all(),
     ]);
 
     return {
       clientOptions: buildProxyLogClientOptions(clientOptionRows),
+      downstreamKeys: downstreamKeyRows.map((row) => ({
+        id: row.id,
+        name: row.name || '',
+        groupName: row.groupName || null,
+      })),
       summary: {
         totalCount: Number(summaryRow?.totalCount || 0),
         successCount: Number(summaryRow?.successCount || 0),
