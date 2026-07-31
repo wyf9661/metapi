@@ -14,6 +14,8 @@ import {
 function createStubClient(dialect: RuntimeSchemaDialect, executedSql: string[]): RuntimeSchemaClient {
   return {
     dialect,
+    connectionString: 'stub://localhost',
+    ssl: false,
     begin: async () => {},
     commit: async () => {},
     rollback: async () => {},
@@ -56,7 +58,7 @@ describe('runtime schema bootstrap', () => {
 
     await ensureRuntimeDatabaseSchema(createStubClient(dialect, executedSql), {
       currentContract,
-      liveContract: baselineContract,
+      liveContract: baselineContract as SchemaContract,
     });
 
     expect(executedSql.slice(0, expectedUpgradeSql.length)).toEqual(expectedUpgradeSql);
@@ -72,7 +74,7 @@ describe('runtime schema bootstrap', () => {
 
     await ensureRuntimeDatabaseSchema(createStubClient('mysql', executedSql), {
       currentContract,
-      liveContract: currentContract,
+      liveContract: currentContract as SchemaContract,
     });
 
     expect(expectedUpgradeSql).toEqual([]);
@@ -130,7 +132,7 @@ describe('runtime schema bootstrap', () => {
       },
     }, {
       currentContract,
-      liveContract: baselineContract,
+      liveContract: baselineContract as SchemaContract,
     });
 
     expect(executedSql).toContain(duplicateColumnSql);
@@ -158,7 +160,7 @@ describe('runtime schema bootstrap', () => {
       },
     }, {
       currentContract,
-      liveContract: baselineContract,
+      liveContract: baselineContract as SchemaContract,
     });
 
     expect(executedSql).toContain(targetSql);

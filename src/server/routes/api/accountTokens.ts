@@ -403,7 +403,7 @@ async function executeSyncAllAccountTokens() {
   for (let offset = 0; offset < rows.length; offset += SYNC_ALL_BATCH_SIZE) {
     const batch = rows.slice(offset, offset + SYNC_ALL_BATCH_SIZE);
     const batchResults = await Promise.all(
-      batch.map(async (row) => {
+      batch.map(async (row: any) => {
         const result = await executeAccountTokenSync(row);
         appendTokenSyncEvent(result);
         return result;
@@ -545,7 +545,7 @@ export async function accountTokensRoutes(app: FastifyInstance) {
 
       if (valueStatus === ACCOUNT_TOKEN_VALUE_STATUS_READY && (body.isDefault || (existing.length === 0 && enabled))) {
         await setDefaultToken(created.id);
-      } else if (valueStatus === ACCOUNT_TOKEN_VALUE_STATUS_READY && existing.every((token) => !token.isDefault) && enabled) {
+      } else if (valueStatus === ACCOUNT_TOKEN_VALUE_STATUS_READY && existing.every((token: any) => !token.isDefault) && enabled) {
         await setDefaultToken(created.id);
       }
       const coverageRefresh = await refreshCoverageForAccounts([body.accountId]);

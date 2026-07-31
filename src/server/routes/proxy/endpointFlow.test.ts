@@ -143,11 +143,11 @@ describe('executeEndpointFlow', () => {
     const result = await executeEndpointFlow({
       siteUrl: 'https://example.com',
       endpointCandidates: ['responses', 'chat'],
-      buildRequest: (endpoint) => endpoint === 'responses'
+      buildRequest: (endpoint: any) => endpoint === 'responses'
         ? requestFor('/v1/responses')
         : { ...requestFor('/v1/chat/completions'), endpoint },
       shouldDowngrade: () => true,
-      onDowngrade: (ctx) => {
+      onDowngrade: (ctx: any) => {
         downgradedPaths.push(ctx.request.path);
       },
     });
@@ -177,7 +177,7 @@ describe('executeEndpointFlow', () => {
     const result = await executeEndpointFlow({
       siteUrl: 'https://example.com',
       endpointCandidates: ['responses', 'chat'],
-      buildRequest: (endpoint) => endpoint === 'responses'
+      buildRequest: (endpoint: any) => endpoint === 'responses'
         ? requestFor('/v1/responses')
         : { ...requestFor('/v1/chat/completions'), endpoint },
       shouldDowngrade: () => true,
@@ -213,7 +213,7 @@ describe('executeEndpointFlow', () => {
     const result = await executeEndpointFlow({
       siteUrl: 'https://example.com',
       endpointCandidates: ['responses', 'chat'],
-      buildRequest: (endpoint) => endpoint === 'responses'
+      buildRequest: (endpoint: any) => endpoint === 'responses'
         ? requestFor('/v1/responses')
         : { ...requestFor('/v1/chat/completions'), endpoint },
       shouldDowngrade: () => true,
@@ -244,7 +244,7 @@ describe('executeEndpointFlow', () => {
     const result = await executeEndpointFlow({
       siteUrl: 'https://example.com',
       endpointCandidates: ['responses', 'chat'],
-      buildRequest: (endpoint) => endpoint === 'responses'
+      buildRequest: (endpoint: any) => endpoint === 'responses'
         ? requestFor('/v1/responses')
         : { ...requestFor('/v1/chat/completions'), endpoint },
       shouldAbortRemainingEndpoints: () => true,
@@ -336,7 +336,7 @@ describe('executeEndpointFlow', () => {
     const result = await executeEndpointFlow({
       siteUrl: 'https://example.com',
       endpointCandidates: ['responses', 'chat'],
-      buildRequest: (endpoint) => endpoint === 'responses'
+      buildRequest: (endpoint: any) => endpoint === 'responses'
         ? requestFor('/v1/responses')
         : { ...requestFor('/v1/chat/completions'), endpoint },
       shouldDowngrade: () => true,

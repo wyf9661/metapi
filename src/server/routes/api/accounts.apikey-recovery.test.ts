@@ -104,10 +104,10 @@ describe('accounts api key recovery', { timeout: 15_000 }, () => {
     const availabilityRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(availabilityRows.map((row) => row.modelName)).toContain('gpt-4.1');
+    expect(availabilityRows.map((row: any) => row.modelName)).toContain('gpt-4.1');
 
     const routeChannels = await db.select().from(schema.routeChannels).all();
-    expect(routeChannels.some((channel) => channel.accountId === account.id)).toBe(true);
+    expect(routeChannels.some((channel: any) => channel.accountId === account.id)).toBe(true);
   });
 
   it('keeps an expired API key connection pinned when only status is edited', async () => {

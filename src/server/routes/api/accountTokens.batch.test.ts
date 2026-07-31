@@ -103,7 +103,7 @@ describe('account token batch routes', () => {
     expect(body.failedItems?.[0]?.id).toBe(999);
 
     const rows = await db.select().from(schema.accountTokens).all();
-    expect(rows.every((row) => row.enabled === true)).toBe(true);
+    expect(rows.every((row: any) => row.enabled === true)).toBe(true);
   });
 
   it('rejects enabling masked_pending placeholders until they are completed', async () => {
@@ -139,8 +139,8 @@ describe('account token batch routes', () => {
     ]);
 
     const rows = await db.select().from(schema.accountTokens).all();
-    expect(rows.find((row) => row.id === 1)?.enabled).toBe(false);
-    expect(rows.find((row) => row.id === 2)?.enabled).toBe(true);
+    expect(rows.find((row: any) => row.id === 1)?.enabled).toBe(false);
+    expect(rows.find((row: any) => row.id === 2)?.enabled).toBe(true);
   });
 
   it('deletes selected account tokens through the upstream adapter', async () => {
@@ -156,7 +156,7 @@ describe('account token batch routes', () => {
     expect(response.statusCode).toBe(200);
     expect(deleteApiTokenMock).toHaveBeenCalledTimes(1);
     const remaining = await db.select().from(schema.accountTokens).all();
-    expect(remaining.map((item) => item.id)).toEqual([2]);
+    expect(remaining.map((item: any) => item.id)).toEqual([2]);
   });
 
   it('accepts the edit-panel payload when updating account token metadata without changing token value', async () => {

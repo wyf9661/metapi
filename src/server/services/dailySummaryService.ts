@@ -76,10 +76,10 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .where(eq(schema.sites.status, 'active'))
     .all();
-  const accounts = accountRows.map((row) => row.accounts);
+  const accounts = accountRows.map((row: any) => row.accounts);
 
-  const activeAccounts = accounts.filter((account) => account.status === 'active').length;
-  const lowBalanceAccounts = accounts.filter((account) => (account.balance || 0) < 1).length;
+  const activeAccounts = accounts.filter((account: any) => account.status === 'active').length;
+  const lowBalanceAccounts = accounts.filter((account: any) => (account.balance || 0) < 1).length;
 
   const todayCheckinRows = await db.select().from(schema.checkinLogs)
     .innerJoin(schema.accounts, eq(schema.checkinLogs.accountId, schema.accounts.id))
@@ -92,7 +92,7 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
     .all();
 
   const siteCheckin = summarizeSiteCheckinOutcomes(
-    todayCheckinRows.map((row) => ({
+    todayCheckinRows.map((row: any) => ({
       siteId: row.sites.id,
       status: row.checkin_logs.status,
     })),
@@ -129,13 +129,13 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
       eq(schema.sites.status, 'active'),
     ))
     .all();
-  const todayProxyLogs = todayProxyRows.map((row) => row.proxy_logs);
-  const proxySuccess = todayProxyLogs.filter((log) => log.status === 'success').length;
-  const proxyFailed = todayProxyLogs.filter((log) => log.status === 'failed').length;
-  const proxyTotalTokens = todayProxyLogs.reduce((sum, log) => sum + (log.totalTokens || 0), 0);
-  const todaySpend = todayProxyLogs.reduce((sum, log) => sum + (typeof log.estimatedCost === 'number' ? log.estimatedCost : 0), 0);
+  const todayProxyLogs = todayProxyRows.map((row: any) => row.proxy_logs);
+  const proxySuccess = todayProxyLogs.filter((log: any) => log.status === 'success').length;
+  const proxyFailed = todayProxyLogs.filter((log: any) => log.status === 'failed').length;
+  const proxyTotalTokens = todayProxyLogs.reduce((sum: any, log: any) => sum + (log.totalTokens || 0), 0);
+  const todaySpend = todayProxyLogs.reduce((sum: any, log: any) => sum + (typeof log.estimatedCost === 'number' ? log.estimatedCost : 0), 0);
 
-  const todayReward = accounts.reduce((sum, account) => sum + estimateRewardWithTodayIncomeFallback({
+  const todayReward = accounts.reduce((sum: any, account: any) => sum + estimateRewardWithTodayIncomeFallback({
     day: localDay,
     successCount: successCountByAccount[account.id] || 0,
     parsedRewardCount: parsedRewardCountByAccount[account.id] || 0,

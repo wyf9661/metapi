@@ -684,7 +684,7 @@ function maskRuntimeConnection(dialect: MigrationDialect, connectionString: stri
 
 async function loadSavedRuntimeDatabaseConfig(): Promise<RuntimeDatabaseConfig | null> {
   const settingsRows = await db.select().from(schema.settings).all();
-  const map = new Map(settingsRows.map((row) => [row.key, row.value]));
+  const map = new Map(settingsRows.map((row: any) => [row.key, row.value]));
   const rawDialect = parseJsonValue(map.get(DB_TYPE_SETTING_KEY));
   const rawConnection = parseJsonValue(map.get(DB_URL_SETTING_KEY));
   const rawSsl = parseJsonValue(map.get(DB_SSL_SETTING_KEY));

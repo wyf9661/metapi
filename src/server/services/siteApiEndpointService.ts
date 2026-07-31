@@ -172,8 +172,8 @@ export async function selectSiteApiEndpointTarget(
   }
 
   const eligible = endpoints
-    .filter((endpoint) => (endpoint.enabled ?? true) && !isEndpointCoolingDown(endpoint, nowIso))
-    .sort((left, right) => {
+    .filter((endpoint: any) => (endpoint.enabled ?? true) && !isEndpointCoolingDown(endpoint, nowIso))
+    .sort((left: any, right: any) => {
       const sortOrder = (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
       if (sortOrder !== 0) return sortOrder;
       const selectionOrder = compareNullableTimeAsc(left.lastSelectedAt, right.lastSelectedAt);
@@ -200,8 +200,8 @@ export async function selectSiteApiEndpointTarget(
   // This prevents a single transient 5xx/timeout from hiding a one-endpoint site
   // for the full cooldown window. A successful request clears cooldown metadata.
   const halfOpen = endpoints
-    .filter((endpoint) => endpoint.enabled ?? true)
-    .sort((left, right) => {
+    .filter((endpoint: any) => endpoint.enabled ?? true)
+    .sort((left: any, right: any) => {
       const cooldownOrder = compareNullableTimeAsc(left.cooldownUntil, right.cooldownUntil);
       if (cooldownOrder !== 0) return cooldownOrder;
       const sortOrder = (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
@@ -287,7 +287,7 @@ export async function recordSiteApiEndpointSuccessByBaseUrl(
   const endpoints = await db.select().from(schema.siteApiEndpoints)
     .where(eq(schema.siteApiEndpoints.siteId, siteId))
     .all();
-  const matched = endpoints.find((endpoint) => (
+  const matched = endpoints.find((endpoint: any) => (
     normalizeSiteApiEndpointBaseUrl(endpoint.url) === normalized
   ));
   if (matched) await recordSiteApiEndpointSuccess(matched.id, now);

@@ -151,6 +151,6 @@ describe('proxyFileStore', () => {
     expect(deleted).toBe(1);
 
     const remainingRows = await db.select().from(schema.proxyFiles).all();
-    expect(remainingRows.map((row) => row.publicId)).toEqual(['file-metapi-new']);
+    expect(remainingRows.map((row: any) => row.publicId)).toEqual(['file-metapi-new']);
   });
 });

@@ -185,7 +185,7 @@ async function loadAccountsSnapshotPayload(): Promise<AccountsSnapshotPayload> {
   }
 
   return {
-    accounts: rows.map((row) => {
+    accounts: rows.map((row: any) => {
       const credentialMode = resolveStoredCredentialMode(row.accounts);
       const capabilities = buildCapabilitiesForAccount(row.accounts);
       return {

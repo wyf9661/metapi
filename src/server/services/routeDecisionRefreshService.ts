@@ -48,13 +48,13 @@ export async function refreshAllRouteDecisionSnapshots(options: RefreshOptions =
 
   const exactModels = normalizeModels(
     routes
-      .filter((route) => isExactModelPattern(route.modelPattern))
-      .map((route) => route.modelPattern),
+      .filter((route: any) => isExactModelPattern(route.modelPattern))
+      .map((route: any) => route.modelPattern),
   );
   const wildcardRouteIds = normalizeRouteIds(
     routes
-      .filter((route) => !isExactModelPattern(route.modelPattern))
-      .map((route) => route.id),
+      .filter((route: any) => !isExactModelPattern(route.modelPattern))
+      .map((route: any) => route.id),
   );
   const refreshedKeys = options.refreshPricingCatalog ? new Set<string>() : undefined;
 
@@ -62,7 +62,7 @@ export async function refreshAllRouteDecisionSnapshots(options: RefreshOptions =
 
   for (const [index, model] of exactModels.entries()) {
     options.onProgress?.(`刷新精确模型概率 ${index + 1}/${exactModels.length}：${model}`);
-    const matchingRoutes = routes.filter((route) => (
+    const matchingRoutes = routes.filter((route: any) => (
       isExactModelPattern(route.modelPattern) && matchesModelPattern(model, route.modelPattern)
     ));
     const snapshotWrites: Array<{ routeId: number; snapshot: unknown }> = [];

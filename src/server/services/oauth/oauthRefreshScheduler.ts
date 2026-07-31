@@ -58,7 +58,7 @@ export async function executeOauthTokenAutoRefreshPass(input: {
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .all();
 
-  const oauthRows = rows.filter((row) => !!getOauthInfoFromAccount(row.accounts));
+  const oauthRows = rows.filter((row: any) => !!getOauthInfoFromAccount(row.accounts));
   const refreshedAccountIds: number[] = [];
   const failedAccountIds: number[] = [];
   let skipped = 0;

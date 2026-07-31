@@ -217,7 +217,7 @@ describe('site announcements routes', () => {
     expect(bulkRead.statusCode).toBe(200);
 
     const rows = await db.select().from(schema.siteAnnouncements).all();
-    expect(rows.every((row) => typeof row.readAt === 'string' && row.readAt.length > 0)).toBe(true);
+    expect(rows.every((row: any) => typeof row.readAt === 'string' && row.readAt.length > 0)).toBe(true);
   });
 
   it('clears local announcement rows without touching program events', async () => {

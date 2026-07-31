@@ -146,7 +146,7 @@ async function validatePolicyReferences(input: {
       .from(schema.tokenRoutes)
       .where(inArray(schema.tokenRoutes.id, routeIds))
       .all();
-    const existingIds = new Set(rows.map((row) => Number(row.id)));
+    const existingIds = new Set(rows.map((row: any) => Number(row.id)));
     const missingIds = routeIds.filter((id) => !existingIds.has(id));
     if (missingIds.length > 0) {
       return `allowedRouteIds 包含不存在的路由: ${missingIds.join(', ')}`;
@@ -166,7 +166,7 @@ async function validatePolicyReferences(input: {
       .from(schema.sites)
       .where(inArray(schema.sites.id, siteIds))
       .all();
-    const existingIds = new Set(rows.map((row) => Number(row.id)));
+    const existingIds = new Set(rows.map((row: any) => Number(row.id)));
     const missingIds = siteIds.filter((id) => !existingIds.has(id));
     if (missingIds.length > 0) {
       return `策略中包含不存在的站点: ${missingIds.join(', ')}`;
@@ -187,7 +187,7 @@ async function validatePolicyReferences(input: {
       .where(inArray(schema.accountTokens.id, tokenIds))
       .all();
     const tokenById = new Map<number, { tokenId: number; accountId: number; siteId: number }>(
-      rows.map((row) => [Number(row.tokenId), {
+      rows.map((row: any) => [Number(row.tokenId), {
         tokenId: Number(row.tokenId),
         accountId: Number(row.accountId),
         siteId: Number(row.siteId),
@@ -216,7 +216,7 @@ async function validatePolicyReferences(input: {
       .where(inArray(schema.accounts.id, accountIds))
       .all();
     const accountById = new Map<number, { accountId: number; siteId: number; apiToken: string | null }>(
-      rows.map((row) => [Number(row.accountId), {
+      rows.map((row: any) => [Number(row.accountId), {
         accountId: Number(row.accountId),
         siteId: Number(row.siteId),
         apiToken: row.apiToken,
@@ -264,8 +264,8 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
       keysQuery = keysQuery.where(and(...whereClauses));
     }
     const keys = (await keysQuery.all())
-      .map((row) => toDownstreamApiKeyPolicyView(row))
-      .filter((item) => {
+      .map((row: any) => toDownstreamApiKeyPolicyView(row))
+      .filter((item: any) => {
         if (group === '__ungrouped__') {
           if (item.groupName) return false;
         } else if (group && item.groupName !== group) {
@@ -283,12 +283,12 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         ].join(' ').toLowerCase();
         if (search && !haystack.includes(search.toLowerCase())) return false;
         if (tags.length === 0) return true;
-        const itemTags = new Set(item.tags.map((tag) => tag.toLowerCase()));
+        const itemTags = new Set(item.tags.map((tag: any) => tag.toLowerCase()));
         return tagMatch === 'all'
           ? tags.every((tag) => itemTags.has(tag.toLowerCase()))
           : tags.some((tag) => itemTags.has(tag.toLowerCase()));
       })
-      .sort((a, b) => b.id - a.id);
+      .sort((a: any, b: any) => b.id - a.id);
 
     if (keys.length === 0) {
       return { success: true, range, status, search, group, tags, tagMatch, items: [] };
@@ -296,7 +296,7 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
 
     const columnReady = await hasProxyLogDownstreamApiKeyIdColumn();
     const sinceUtc = resolveRangeSinceUtc(range);
-    const ids = keys.map((k) => k.id);
+    const ids = keys.map((k: any) => k.id);
 
     const usageRows = columnReady
       ? await db.select({
@@ -344,7 +344,7 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
       group,
       tags,
       tagMatch,
-      items: keys.map((key) => {
+      items: keys.map((key: any) => {
         const usage = usageByKey.get(key.id) || {
           totalRequests: 0,
           successRequests: 0,

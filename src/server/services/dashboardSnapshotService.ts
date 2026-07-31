@@ -85,13 +85,13 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
     .where(eq(schema.sites.status, "active"))
     .all();
-  const accounts = accountRows.map((row) => row.accounts);
+  const accounts = accountRows.map((row: any) => row.accounts);
   const totalBalance = accounts.reduce(
-    (sum, account) => sum + (account.balance || 0),
+    (sum: any, account: any) => sum + (account.balance || 0),
     0,
   );
   const activeCount = accounts.filter(
-    (account) => account.status === "active",
+    (account: any) => account.status === "active",
   ).length;
 
   const {
@@ -260,7 +260,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
   const totalUsed = Number(totalUsedRow?.totalUsed || 0);
   const todaySpend = Number(todaySpendRow?.todaySpend || 0);
   const todayReward = accounts.reduce(
-    (sum, account) =>
+    (sum: any, account: any) =>
       sum +
       estimateRewardWithTodayIncomeFallback({
         day: today,
@@ -361,14 +361,14 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
       return String(left.name || "").localeCompare(String(right.name || ""));
     },
   );
-  const activeSiteIdSet = new Set(sortedSites.map((site) => site.id));
+  const activeSiteIdSet = new Set(sortedSites.map((site: any) => site.id));
 
   return {
     siteAvailability: buildSiteAvailabilitySummariesFromHourlyAggregates(
       sortedSites,
       siteAvailabilityRows
-        .filter((row) => activeSiteIdSet.has(row.siteId))
-        .map((row) => ({
+        .filter((row: any) => activeSiteIdSet.has(row.siteId))
+        .map((row: any) => ({
           siteId: row.siteId,
           hourStartUtc: row.bucketStartUtc,
           totalRequests: row.totalCalls,
@@ -380,7 +380,7 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
       siteAvailabilityNow,
     ),
     modelAvailability: buildModelAvailabilitySummaries(
-      modelAvailabilityLogs.map((row) => ({
+      modelAvailabilityLogs.map((row: any) => ({
         model: String(row.modelActual || row.modelRequested || '').trim() || null,
         createdAt: row.createdAt,
         status: row.status,
@@ -390,8 +390,8 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
     ),
     modelAnalysis: buildModelAnalysisFromDailyUsage(
       modelDayRows
-        .filter((row) => activeSiteIdSet.has(row.siteId))
-        .map((row) => ({
+        .filter((row: any) => activeSiteIdSet.has(row.siteId))
+        .map((row: any) => ({
           localDay: row.localDay,
           model: row.model,
           totalCalls: row.totalCalls,

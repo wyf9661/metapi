@@ -87,12 +87,12 @@ async function resolveCooldownClearRouteIds(route: RouteRow): Promise<number[]> 
     .all();
 
   return sourceRoutes
-    .filter((sourceRoute) => (
+    .filter((sourceRoute: any) => (
       sourceRoute.enabled
       && normalizeTokenRouteMode(sourceRoute.routeMode) !== 'explicit_group'
       && isExactModelPattern(sourceRoute.modelPattern)
     ))
-    .map((sourceRoute) => sourceRoute.id);
+    .map((sourceRoute: any) => sourceRoute.id);
 }
 
 async function clearDependentExplicitGroupSnapshotsBySourceRouteIds(sourceRouteIds: number[]): Promise<void> {
@@ -105,8 +105,8 @@ async function clearDependentExplicitGroupSnapshotsBySourceRouteIds(sourceRouteI
     .all();
   const dependentRouteIds: number[] = Array.from(new Set(
     rows
-      .map((row) => row.groupRouteId)
-      .filter((routeId): routeId is number => Number.isFinite(routeId) && routeId > 0),
+      .map((row: any) => row.groupRouteId)
+      .filter((routeId: any): routeId is number => Number.isFinite(routeId) && routeId > 0),
   ));
   if (dependentRouteIds.length === 0) return;
   await clearRouteDecisionSnapshots(dependentRouteIds);

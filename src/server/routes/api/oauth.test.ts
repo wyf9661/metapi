@@ -540,7 +540,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(codexStoredOauth).not.toHaveProperty('accountId');
 
     const models = await db.select().from(schema.modelAvailability).all();
-    const modelNames = models.map((row) => row.modelName);
+    const modelNames = models.map((row: any) => row.modelName);
     expect(modelNames.sort()).toEqual(['gpt-5', 'gpt-5.2-codex', 'gpt-5.4']);
   });
 
@@ -2450,7 +2450,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const accounts = await db.select().from(schema.accounts).all();
     expect(accounts).toHaveLength(2);
-    expect(accounts.map((row) => JSON.parse(row.extraConfig || '{}'))).toEqual(expect.arrayContaining([
+    expect(accounts.map((row: any) => JSON.parse(row.extraConfig || '{}'))).toEqual(expect.arrayContaining([
       expect.objectContaining({
         proxyUrl: null,
       }),
@@ -2862,7 +2862,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const splitChannels = await db.select().from(schema.routeChannels).all();
     expect(splitChannels).toHaveLength(2);
-    expect(splitChannels.every((row) => row.oauthRouteUnitId == null)).toBe(true);
+    expect(splitChannels.every((row: any) => row.oauthRouteUnitId == null)).toBe(true);
   });
 
   it('rolls back oauth route unit creation when route rebuild fails', async () => {
@@ -2939,7 +2939,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       expect(await db.select().from(schema.oauthRouteUnitMembers).all()).toHaveLength(0);
       const routeChannels = await db.select().from(schema.routeChannels).all();
       expect(routeChannels).toHaveLength(2);
-      expect(routeChannels.every((row) => row.oauthRouteUnitId == null)).toBe(true);
+      expect(routeChannels.every((row: any) => row.oauthRouteUnitId == null)).toBe(true);
     } finally {
       rebuildSpy.mockRestore();
     }
@@ -3681,7 +3681,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       .all();
 
     expect(accounts).toHaveLength(2);
-    expect(accounts.map((account) => account.oauthAccountKey)).toEqual([
+    expect(accounts.map((account: any) => account.oauthAccountKey)).toEqual([
       'chatgpt-team-account-a',
       'chatgpt-team-account-b',
     ]);

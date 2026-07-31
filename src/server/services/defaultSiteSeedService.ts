@@ -19,7 +19,7 @@ async function writeSeedMarker(tx: typeof db) {
 // Fork policy: do not auto-insert official/OAuth demo sites on install.
 // Only write the seed marker so upgrades never re-seed later.
 export async function ensureDefaultSitesSeeded(): Promise<SeedSummary> {
-  return db.transaction(async (tx) => {
+  return db.transaction(async (tx: any) => {
     const marker = await tx.select({ key: schema.settings.key })
       .from(schema.settings)
       .where(eq(schema.settings.key, DEFAULT_SITE_SEED_SETTING_KEY))

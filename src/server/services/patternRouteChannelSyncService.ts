@@ -158,7 +158,7 @@ async function getMatchedExactRouteChannelCandidates(
   exactModelNames: Set<string>;
 }> {
   const matchedExactRoutes = (await db.select().from(schema.tokenRoutes).all())
-    .filter((route) => (
+    .filter((route: any) => (
       normalizeTokenRouteMode(route.routeMode) !== 'explicit_group'
       && isExactModelPattern(route.modelPattern)
       && matchesModelPattern(route.modelPattern, modelPattern)
@@ -169,7 +169,7 @@ async function getMatchedExactRouteChannelCandidates(
     exactModelNames.add(normalizeModelKey(route.modelPattern));
   }
 
-  const enabledRoutes = matchedExactRoutes.filter((route) => route.enabled);
+  const enabledRoutes = matchedExactRoutes.filter((route: any) => route.enabled);
   if (enabledRoutes.length === 0) {
     return { candidates: [], exactModelNames };
   }
@@ -178,12 +178,12 @@ async function getMatchedExactRouteChannelCandidates(
   for (const route of enabledRoutes) routeMap.set(route.id, route);
 
   const channels = await db.select().from(schema.routeChannels)
-    .where(inArray(schema.routeChannels.routeId, enabledRoutes.map((route) => route.id)))
+    .where(inArray(schema.routeChannels.routeId, enabledRoutes.map((route: any) => route.id)))
     .all();
 
   return {
     exactModelNames,
-    candidates: channels.map((channel) => ({
+    candidates: channels.map((channel: any) => ({
       tokenId: channel.tokenId ?? null,
       accountId: channel.accountId,
       oauthRouteUnitId: channel.oauthRouteUnitId ?? null,
@@ -191,7 +191,7 @@ async function getMatchedExactRouteChannelCandidates(
       priority: channel.priority ?? 0,
       weight: channel.weight ?? 10,
       enabled: !!channel.enabled,
-    })).filter((candidate) => candidate.sourceModel.length > 0),
+    })).filter((candidate: any) => candidate.sourceModel.length > 0),
   };
 }
 
@@ -216,7 +216,7 @@ export async function populateRouteChannelsByModelPattern(
   const existingChannels = await db.select().from(schema.routeChannels)
     .where(eq(schema.routeChannels.routeId, routeId))
     .all();
-  const existingPairs = new Set(existingChannels.map((channel) => buildChannelPairKey({
+  const existingPairs = new Set(existingChannels.map((channel: any) => buildChannelPairKey({
     accountId: channel.accountId,
     tokenId: channel.tokenId ?? null,
     oauthRouteUnitId: channel.oauthRouteUnitId ?? null,
@@ -280,7 +280,7 @@ export async function rebuildAllPatternRouteChannels(
   options: RebuildPatternRouteOptions = {},
 ): Promise<PatternRouteChannelSyncResult> {
   const patternRoutes = (await db.select().from(schema.tokenRoutes).all())
-    .filter((route) => route.enabled && isPatternGroupRoute(route));
+    .filter((route: any) => route.enabled && isPatternGroupRoute(route));
 
   const result: PatternRouteChannelSyncResult = {
     rebuiltRoutes: 0,

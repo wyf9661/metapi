@@ -147,7 +147,7 @@ describe('account token coverage refresh', { timeout: 15_000 }, () => {
       .from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token!.id))
       .all();
-    expect(tokenAvailability.map((row) => row.modelName)).toContain(modelName);
+    expect(tokenAvailability.map((row: any) => row.modelName)).toContain(modelName);
 
     const candidates = await readTokenCandidates();
     expect(candidates.modelsWithoutToken[modelName]).toBeUndefined();
@@ -189,7 +189,7 @@ describe('account token coverage refresh', { timeout: 15_000 }, () => {
       .from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token!.id))
       .all();
-    expect(tokenAvailability.map((row) => row.modelName)).toContain(modelName);
+    expect(tokenAvailability.map((row: any) => row.modelName)).toContain(modelName);
 
     const candidates = await readTokenCandidates();
     expect(candidates.modelsWithoutToken[modelName]).toBeUndefined();

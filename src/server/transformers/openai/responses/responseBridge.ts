@@ -107,7 +107,7 @@ function extractToolCallsFromUpstream(payload: unknown): ResponsesToolCall[] {
           arguments: args,
         };
       })
-      .filter((item): item is ResponsesToolCall => !!item);
+      .filter((item: any): item is ResponsesToolCall => !!item);
   }
 
   if (payload.type === 'message' && Array.isArray(payload.content)) {
@@ -155,7 +155,7 @@ function extractAnnotationsFromUpstream(payload: unknown): unknown[] {
     const choice = payload.choices[0];
     const message = isRecord((choice as any)?.message) ? (choice as any).message : {};
     const annotations = Array.isArray((message as any).annotations) ? (message as any).annotations : [];
-    return annotations.map((item) => cloneJson(item));
+    return annotations.map((item: any) => cloneJson(item));
   }
 
   if (payload.type === 'message' && Array.isArray(payload.content)) {

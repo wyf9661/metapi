@@ -435,7 +435,7 @@ export async function probeSiteModels(
     .all();
 
   const scope = (options?.scope ?? (site.postRefreshProbeScope === 'all' ? 'all' : 'single')) as 'single' | 'all';
-  const availableModels = modelRows.map((r) => r.modelName.trim()).filter((m) => m.length > 0);
+  const availableModels = modelRows.map((r: any) => r.modelName.trim()).filter((m: any) => m.length > 0);
   if (availableModels.length === 0) {
     return empty(scope, '该站点暂无已发现模型，请先刷新模型列表');
   }
@@ -446,7 +446,7 @@ export async function probeSiteModels(
   } else {
     const configModel = ((options?.modelName ?? site.postRefreshProbeModel) || '').trim().toLowerCase();
     const found = configModel
-      ? (availableModels.find((m) => m.toLowerCase() === configModel) ?? availableModels[0])
+      ? (availableModels.find((m: any) => m.toLowerCase() === configModel) ?? availableModels[0])
       : availableModels[0];
     modelsToProbe = [found];
   }
@@ -651,7 +651,7 @@ export async function refreshModelsForAccount(
       .all()
     : [];
   const previousTokenModelAvailability = restoreAvailabilityOnFailure
-    ? (await Promise.all(previousAccountTokens.map(async (token) => db.select()
+    ? (await Promise.all(previousAccountTokens.map(async (token: any) => db.select()
       .from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token.id))
       .all()))).flat()
@@ -703,7 +703,7 @@ export async function refreshModelsForAccount(
         eq(schema.modelAvailability.isManual, true),
       ))
       .all()
-    ).map((r) => r.modelName.toLowerCase()),
+    ).map((r: any) => r.modelName.toLowerCase()),
   );
 
   if (isSiteDisabled(site.status)) {
@@ -1331,7 +1331,7 @@ async function refreshModelsForAllActiveAccounts(): Promise<ModelRefreshResult[]
   const results: ModelRefreshResult[] = [];
   for (let offset = 0; offset < accounts.length; offset += MODEL_REFRESH_BATCH_SIZE) {
     const batch = accounts.slice(offset, offset + MODEL_REFRESH_BATCH_SIZE);
-    const batchResults = await Promise.all(batch.map(async (account) => refreshModelsForAccount(account.id)));
+    const batchResults = await Promise.all(batch.map(async (account: any) => refreshModelsForAccount(account.id)));
     results.push(...batchResults);
   }
   return results;
@@ -1352,7 +1352,7 @@ export async function rebuildTokenRoutesFromAvailability() {
       ),
     )
     .all();
-  const usableTokenRows = tokenRows.filter((row) => (
+  const usableTokenRows = tokenRows.filter((row: any) => (
     isUsableAccountToken(row.account_tokens)
     && requiresManagedAccountTokens(row.accounts)
   ));
@@ -1472,7 +1472,7 @@ export async function rebuildTokenRoutesFromAvailability() {
   let removedRoutes = 0;
 
   for (const [modelName, candidateMap] of modelCandidates.entries()) {
-    let route = routes.find((r) => (r.routeMode || 'pattern') !== 'explicit_group' && r.modelPattern === modelName);
+    let route = routes.find((r: any) => (r.routeMode || 'pattern') !== 'explicit_group' && r.modelPattern === modelName);
     if (!route) {
       const inserted = await db.insert(schema.tokenRoutes).values({
         modelPattern: modelName,
@@ -1487,11 +1487,11 @@ export async function rebuildTokenRoutesFromAvailability() {
       createdRoutes++;
     }
 
-    const routeChannels = channels.filter((channel) => channel.routeId === route.id);
+    const routeChannels = channels.filter((channel: any) => channel.routeId === route.id);
     const desiredKeys = new Set(Array.from(candidateMap.keys()));
 
     for (const [candidateKey, candidate] of candidateMap.entries()) {
-      const exists = routeChannels.some((channel) => buildChannelKey(channel) === candidateKey);
+      const exists = routeChannels.some((channel: any) => buildChannelKey(channel) === candidateKey);
       if (exists) continue;
 
       const inserted = await db.insert(schema.routeChannels).values({
@@ -1564,7 +1564,7 @@ export async function rebuildTokenRoutesFromAvailability() {
       continue;
     }
 
-    const routeChannelCount = channels.filter((channel) => channel.routeId === route.id).length;
+    const routeChannelCount = channels.filter((channel: any) => channel.routeId === route.id).length;
     if (routeChannelCount > 0) {
       removedChannels += routeChannelCount;
     }

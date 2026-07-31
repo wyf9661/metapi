@@ -78,7 +78,7 @@ async function loadSiteStatsSnapshotPayload(
     spendBySiteId.set(row.siteId, Number(row.totalSpend || 0));
   }
 
-  const distribution = accountDistributionRows.map((row) => ({
+  const distribution = accountDistributionRows.map((row: any) => ({
     siteId: row.siteId,
     siteName: row.siteName,
     platform: row.platform,
@@ -92,7 +92,7 @@ async function loadSiteStatsSnapshotPayload(
     Record<string, { spend: number; calls: number }>
   > = {};
   const activeSiteById = new Map<number, (typeof schema.sites.$inferSelect)>(
-    sites.map((site) => [site.id, site]),
+    sites.map((site: any) => [site.id, site]),
   );
   for (const row of trendRows) {
     const site = activeSiteById.get(row.siteId);

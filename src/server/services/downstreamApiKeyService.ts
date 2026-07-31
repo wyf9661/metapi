@@ -372,7 +372,7 @@ async function isModelMatchedByAllowedRoutes(model: string, allowedRouteIds: num
     ))
     .all();
 
-  return routes.some((route) => getExposedRouteName(route) === model);
+  return routes.some((route: any) => getExposedRouteName(route) === model);
 }
 
 export async function isModelAllowedByPolicyOrAllowedRoutes(model: string, policy: DownstreamRoutingPolicy): Promise<boolean> {
@@ -445,8 +445,8 @@ export function toPolicyFromView(view: Pick<DownstreamApiKeyPolicyView, 'support
 export async function listDownstreamApiKeys(): Promise<DownstreamApiKeyPolicyView[]> {
   return (await db.select().from(schema.downstreamApiKeys)
     .all())
-    .map((row) => toDownstreamApiKeyPolicyView(row))
-    .sort((a, b) => b.id - a.id);
+    .map((row: any) => toDownstreamApiKeyPolicyView(row))
+    .sort((a: any, b: any) => b.id - a.id);
 }
 
 export async function getDownstreamApiKeyById(id: number): Promise<DownstreamApiKeyPolicyView | null> {

@@ -94,7 +94,7 @@ describe('sites api endpoints', () => {
       .where(eq(schema.siteApiEndpoints.siteId, payload.id))
       .orderBy(asc(schema.siteApiEndpoints.sortOrder), asc(schema.siteApiEndpoints.id))
       .all();
-    expect(stored.map((row) => row.url)).toEqual([
+    expect(stored.map((row: any) => row.url)).toEqual([
       'https://api-a.example.com',
       'https://api-b.example.com',
     ]);
@@ -146,7 +146,7 @@ describe('sites api endpoints', () => {
       .where(eq(schema.siteApiEndpoints.siteId, site.id))
       .orderBy(asc(schema.siteApiEndpoints.sortOrder), asc(schema.siteApiEndpoints.id))
       .all();
-    expect(stored.map((row) => row.url)).toEqual([
+    expect(stored.map((row: any) => row.url)).toEqual([
       'https://api-a.example.com',
       'https://api-b.example.com',
     ]);

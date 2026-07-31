@@ -44,13 +44,13 @@ export async function migrateSiteApiKeysToAccounts(): Promise<SiteApiKeyMigratio
   if (sites.length === 0) return summary;
 
   const accounts = await db.select().from(schema.accounts).all();
-  let nextSortOrder = accounts.reduce((max, account) => Math.max(max, account.sortOrder || 0), -1) + 1;
+  let nextSortOrder = accounts.reduce((max: any, account: any) => Math.max(max, account.sortOrder || 0), -1) + 1;
 
   for (const site of sites) {
     const siteApiKey = normalizeTokenValue(site.apiKey);
     if (!siteApiKey) continue;
 
-    let targetAccount = accounts.find((account) => (
+    let targetAccount = accounts.find((account: any) => (
       account.siteId === site.id
       && isApiKeyConnection(account)
       && normalizeTokenValue(account.apiToken) === siteApiKey

@@ -202,7 +202,7 @@ export async function getPreferredAccountToken(accountId: number) {
   const usableTokens = tokens.filter(isUsableAccountToken);
   if (usableTokens.length === 0) return null;
 
-  const preferred = usableTokens.find((t) => t.isDefault) || usableTokens[0];
+  const preferred = usableTokens.find((t: any) => t.isDefault) || usableTokens[0];
   return preferred;
 }
 
@@ -223,9 +223,9 @@ export async function ensureDefaultTokenForAccount(
     .all();
 
   // Prefer exact secret match, then a unique masked match (same key, different display form).
-  let target = tokens.find((t) => t.token === normalizedToken) || null;
+  let target = tokens.find((t: any) => t.token === normalizedToken) || null;
   if (!target) {
-    const maskedMatches = tokens.filter((t) => (
+    const maskedMatches = tokens.filter((t: any) => (
       isReadyAccountToken(t)
       && matchesMaskedTokenValue(t.token, normalizedToken)
     ));
@@ -234,7 +234,7 @@ export async function ensureDefaultTokenForAccount(
     }
   }
   if (!target) {
-    const maskedPendingMatches = tokens.filter((t) => (
+    const maskedPendingMatches = tokens.filter((t: any) => (
       isMaskedPendingAccountToken(t)
       && matchesMaskedTokenValue(normalizedToken, t.token)
     ));
@@ -336,7 +336,7 @@ export async function repairDefaultToken(accountId: number) {
     return null;
   }
 
-  const currentDefault = enabled.find((t) => t.isDefault) || enabled[0];
+  const currentDefault = enabled.find((t: any) => t.isDefault) || enabled[0];
   const now = new Date().toISOString();
 
   await db.update(schema.accountTokens)
@@ -376,7 +376,7 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
       ? ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
       : ACCOUNT_TOKEN_VALUE_STATUS_READY;
 
-    const byToken = existing.find((row) => (
+    const byToken = existing.find((row: any) => (
       row.token === tokenValue
       && resolveAccountTokenValueStatus(row) === ACCOUNT_TOKEN_VALUE_STATUS_READY
     ));
@@ -463,7 +463,7 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
             .run();
         }
         for (const placeholder of staleMaskedPlaceholders) {
-          const placeholderIndex = existing.findIndex((row) => row.id === placeholder.id);
+          const placeholderIndex = existing.findIndex((row: any) => row.id === placeholder.id);
           if (placeholderIndex >= 0) {
             existing.splice(placeholderIndex, 1);
           }
@@ -570,8 +570,8 @@ export async function listTokensWithRelations(accountId?: number) {
     : await base.all();
 
   return rows
-    .filter((row) => !isApiKeyConnection(row.accounts))
-    .map((row) => {
+    .filter((row: any) => !isApiKeyConnection(row.accounts))
+    .map((row: any) => {
     const { token, ...tokenMeta } = row.account_tokens;
     return {
       ...tokenMeta,

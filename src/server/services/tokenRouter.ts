@@ -351,7 +351,7 @@ async function loadCredentialScopedChannelIds(
       .from(schema.routeChannels)
       .where(eq(schema.routeChannels.tokenId, channel.tokenId))
       .all();
-    return rows.map((row) => row.id);
+    return rows.map((row: any) => row.id);
   }
 
   const rows = await db.select({ id: schema.routeChannels.id })
@@ -361,7 +361,7 @@ async function loadCredentialScopedChannelIds(
       isNull(schema.routeChannels.tokenId),
     ))
     .all();
-  return rows.map((row) => row.id);
+  return rows.map((row: any) => row.id);
 }
 
 type RouteRow = typeof schema.tokenRoutes.$inferSelect & {
@@ -416,8 +416,8 @@ async function loadEnabledRoutes(nowMs = Date.now()): Promise<RouteRow[]> {
       .where(eq(schema.tokenRoutes.enabled, true))
       .all();
     const explicitGroupRouteIds = rawRoutes
-      .filter((route) => normalizeRouteMode(route.routeMode) === 'explicit_group')
-      .map((route) => route.id);
+      .filter((route: any) => normalizeRouteMode(route.routeMode) === 'explicit_group')
+      .map((route: any) => route.id);
     const sourceRows = explicitGroupRouteIds.length > 0
       ? await db.select().from(schema.routeGroupSources)
         .where(inArray(schema.routeGroupSources.groupRouteId, explicitGroupRouteIds))
@@ -430,7 +430,7 @@ async function loadEnabledRoutes(nowMs = Date.now()): Promise<RouteRow[]> {
       }
       sourceIdsByRouteId.get(row.groupRouteId)!.push(row.sourceRouteId);
     }
-    const routes = rawRoutes.map((route) => ({
+    const routes = rawRoutes.map((route: any) => ({
       ...route,
       routeMode: normalizeRouteMode(route.routeMode),
       sourceRouteIds: Array.from(new Set(sourceIdsByRouteId.get(route.id) ?? [])),
@@ -495,15 +495,15 @@ async function loadRouteMatch(route: RouteRow, nowMs = Date.now()): Promise<Rout
 
     const oauthRouteUnitIds: number[] = Array.from(new Set<number>(
       channels
-        .map((row) => Number(row.route_channels.oauthRouteUnitId))
-        .filter((id): id is number => Number.isFinite(id) && id > 0),
+        .map((row: any) => Number(row.route_channels.oauthRouteUnitId))
+        .filter((id: any): id is number => Number.isFinite(id) && id > 0),
     ));
     const [routeUnitSummaries, routeUnitMembersByUnitId] = await Promise.all([
       loadOauthRouteUnitSummariesByIds(oauthRouteUnitIds),
       listOauthRouteUnitMembersByUnitIds(oauthRouteUnitIds),
     ]);
 
-    const mapped = channels.map((row) => ({
+    const mapped = channels.map((row: any) => ({
       channel: {
         ...row.route_channels,
         sourceModel: normalizeChannelSourceModel(row.route_channels.sourceModel)
@@ -718,80 +718,12 @@ function formatChannelRuntimeLoad(snapshot: ProxyChannelLoadSnapshot): string {
   return `${multiplier.toFixed(2)}（活跃=${snapshot.activeLeaseCount}/${snapshot.concurrencyLimit}，等待=${snapshot.waitingCount}）`;
 }
 
-/**
- * Sticky/last-success preferred hops skip the balanced-v2 score, so a session
- * account whose balance is nearly exhausted can otherwise be drained by dense
- * same-key traffic. Yield when known balance coverage drops below this many
- * expected requests (mirrors routeScoringShadow low-balance band < 5).
- */
-const STICKY_PREFERRED_YIELD_LOW_COVERAGE = 5;
-
-export type PreferredChannelSelectionOptions = {
-  /** Yield (return null) when the preferred channel's known balance coverage is low. */
-  yieldOnLowBalance?: boolean;
-};
-
-/**
- * Resolve how many expected requests the preferred channel's known session
- * balance can still cover. Returns null when balance is unknown (direct
- * API-key/free accounts) or not yet refreshed — callers must not yield then.
- */
-function resolvePreferredBalanceCoverage(
-  candidate: RouteChannelCandidate,
-  modelName: string,
-): number | null {
-  const account = candidate.account;
-  const credentialMode = getCredentialModeFromExtraConfig(account.extraConfig);
-  const hasApiToken = typeof account.apiToken === 'string' && account.apiToken.trim().length > 0;
-  const hasAccessToken = typeof account.accessToken === 'string' && account.accessToken.trim().length > 0;
-  const looksLikeDirectApiKey = credentialMode === 'apikey' || (hasApiToken && !hasAccessToken);
-  const isSessionCredential = !looksLikeDirectApiKey && (credentialMode === 'session' || hasAccessToken);
-  const lastBalanceRefresh = (account as { lastBalanceRefresh?: string | null }).lastBalanceRefresh;
-  const balanceRefreshed = typeof lastBalanceRefresh === 'string' && lastBalanceRefresh.trim().length > 0;
-  if (!isSessionCredential || !balanceRefreshed) return null;
-  const balanceRaw = account.balance;
-  const balance = typeof balanceRaw === 'number' && Number.isFinite(balanceRaw) ? balanceRaw : null;
-  if (balance == null) return null;
-  const cost = resolveEffectiveUnitCost(candidate, modelName);
-  return computeBalanceCoverage(balance, cost.unitCost);
-}
-
-function resolveEffectiveUnitCost(candidate: RouteChannelCandidate, modelName: string): CostSignal {
-  const successCount = Math.max(0, candidate.channel.successCount ?? 0);
-  const totalCost = Math.max(0, candidate.channel.totalCost ?? 0);
-  const configured = candidate.account.unitCost ?? null;
-
-  if (successCount > 0 && totalCost > 0) {
-    return {
-      unitCost: Math.max(totalCost / successCount, MIN_EFFECTIVE_UNIT_COST),
-      source: 'observed',
-    };
-  }
-
-  if (typeof configured === 'number' && Number.isFinite(configured) && configured > 0) {
-    return {
-      unitCost: Math.max(configured, MIN_EFFECTIVE_UNIT_COST),
-      source: 'configured',
-    };
-  }
-
-  const catalogCost = getCachedModelRoutingReferenceCost({
-    siteId: candidate.site.id,
-    accountId: candidate.account.id,
-    modelName,
-  });
-  if (typeof catalogCost === 'number' && Number.isFinite(catalogCost) && catalogCost > 0) {
-    return {
-      unitCost: Math.max(catalogCost, MIN_EFFECTIVE_UNIT_COST),
-      source: 'catalog',
-    };
-  }
-
-  return {
-    unitCost: Math.max(config.routingFallbackUnitCost || 1, MIN_EFFECTIVE_UNIT_COST),
-    source: 'fallback',
-  };
-}
+import {
+  STICKY_PREFERRED_YIELD_LOW_COVERAGE,
+  resolvePreferredBalanceCoverage,
+  resolveEffectiveUnitCost,
+  type PreferredChannelSelectionOptions,
+} from './routeStickyPreferencePolicy.js';
 
 type SiteHistoricalHealthMetrics = {
   multiplier: number;
@@ -1933,13 +1865,13 @@ export class TokenRouter {
         .where(inArray(schema.routeChannels.id, affectedChannelIds))
         .all();
       const siblingIdsToReset = scopedRows
-        .filter((candidate) => candidate.id !== channelId && (
+        .filter((candidate: any) => candidate.id !== channelId && (
           !!candidate.cooldownUntil
           || !!candidate.lastFailAt
           || (candidate.consecutiveFailCount ?? 0) > 0
           || (candidate.cooldownLevel ?? 0) > 0
         ))
-        .map((candidate) => candidate.id);
+        .map((candidate: any) => candidate.id);
 
       if (siblingIdsToReset.length > 0) {
         await db.update(schema.routeChannels).set({
@@ -2831,8 +2763,8 @@ export class TokenRouter {
       .all();
     const routeIds: number[] = Array.from(new Set<number>(
       routeRows
-        .map((row) => Number(row.routeId))
-        .filter((routeId): routeId is number => Number.isFinite(routeId) && routeId > 0),
+        .map((row: any) => Number(row.routeId))
+        .filter((routeId: any): routeId is number => Number.isFinite(routeId) && routeId > 0),
     ));
     for (const routeId of routeIds) {
       invalidateRouteScopedCache(routeId);

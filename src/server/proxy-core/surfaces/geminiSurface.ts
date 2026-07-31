@@ -228,8 +228,8 @@ async function readRouteAwareGeminiModels(request: FastifyRequest): Promise<Arra
     .where(eq(schema.tokenRoutes.enabled, true))
     .all();
   const deduped = Array.from(new Set([
-    ...rows.map((row) => String(row.modelName || '').trim()).filter(Boolean),
-    ...routeAliases.map((row) => String(row.displayName || '').trim()).filter(Boolean),
+    ...rows.map((row: any) => String(row.modelName || '').trim()).filter(Boolean),
+    ...routeAliases.map((row: any) => String(row.displayName || '').trim()).filter(Boolean),
   ])).sort();
 
   const allowed: Array<{ name: string; displayName: string }> = [];

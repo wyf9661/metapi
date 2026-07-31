@@ -73,7 +73,7 @@ describe('accounts manual models endpoint', () => {
     ).all();
     
     expect(models).toHaveLength(2);
-    expect(models.map(m => m.modelName).sort()).toEqual(['claude-3-manual', 'gpt-4-manual']);
+    expect(models.map((m: any) => m.modelName).sort()).toEqual(['claude-3-manual', 'gpt-4-manual']);
     expect(models[0]?.isManual).toBe(true);
     expect(models[1]?.isManual).toBe(true);
   });
@@ -112,8 +112,8 @@ describe('accounts manual models endpoint', () => {
       .all();
     
     expect(models).toHaveLength(2);
-    const existing = models.find(m => m.modelName === 'gpt-existing');
-    const newModel = models.find(m => m.modelName === 'gpt-new');
+    const existing = models.find((m: any) => m.modelName === 'gpt-existing');
+    const newModel = models.find((m: any) => m.modelName === 'gpt-new');
 
     expect(existing?.isManual).toBe(true); // Should be updated
     expect(newModel?.isManual).toBe(true);
