@@ -2605,47 +2605,28 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         <MobileField
                           label="余额"
                           value={
-                            <div>
-                              <div
-                                style={{
-                                  fontWeight: 600,
-                                  color: "var(--color-text-primary)",
-                                }}
-                              >
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "nowrap",
+                                alignItems: "baseline",
+                                gap: 4,
+                                justifyContent: "flex-end",
+                              }}
+                            >
+                              <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
                                 ${(a.balance || 0).toFixed(2)}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color:
-                                    (a.todayReward || 0) > 0
-                                      ? "var(--color-success)"
-                                      : "var(--color-text-muted)",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                +{(a.todayReward || 0).toFixed(2)}
-                              </div>
-                            </div>
-                          }
-                        />
-                        <MobileField
-                          label="已用"
-                          value={
-                            <div>
-                              <div>${(a.balanceUsed || 0).toFixed(2)}</div>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color:
-                                    (a.todaySpend || 0) > 0
-                                      ? "var(--color-danger)"
-                                      : "var(--color-text-muted)",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                -{(a.todaySpend || 0).toFixed(2)}
-                              </div>
+                              </span>
+                              {(a.todayReward || 0) > 0 && (
+                                <span className="site-balance-reward">
+                                  +{(a.todayReward || 0).toFixed(2)}
+                                </span>
+                              )}
+                              {(a.todaySpend || 0) > 0 && (
+                                <span className="site-balance-spend">
+                                  -{(a.todaySpend || 0).toFixed(2)}
+                                </span>
+                              )}
                             </div>
                           }
                         />
@@ -2833,8 +2814,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       <th>连接名称</th>
                       <th>站点</th>
                       <th>运行健康状态</th>
-                      <th>余额</th>
-                      <th>已用</th>
+                      <th style={{ textAlign: 'left' }}>余额</th>
                       <th>签到</th>
                       <th className="accounts-actions-col">
                         操作
@@ -2921,46 +2901,28 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               );
                             })()}
                           </td>
-                          <td style={{ fontVariantNumeric: "tabular-nums" }}>
+                          <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                             <div
                               style={{
-                                fontWeight: 600,
-                                color: "var(--color-text-primary)",
+                                display: "flex",
+                                flexWrap: "nowrap",
+                                alignItems: "baseline",
+                                gap: 4,
                               }}
                             >
-                              ${(a.balance || 0).toFixed(2)}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                color:
-                                  (a.todayReward || 0) > 0
-                                    ? "var(--color-success)"
-                                    : "var(--color-text-muted)",
-                                fontWeight: 500,
-                              }}
-                            >
-                              +{(a.todayReward || 0).toFixed(2)}
-                            </div>
-                          </td>
-                          <td
-                            style={{
-                              fontVariantNumeric: "tabular-nums",
-                              fontSize: 12,
-                            }}
-                          >
-                            <div>${(a.balanceUsed || 0).toFixed(2)}</div>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                color:
-                                  (a.todaySpend || 0) > 0
-                                    ? "var(--color-danger)"
-                                    : "var(--color-text-muted)",
-                                fontWeight: 500,
-                              }}
-                            >
-                              -{(a.todaySpend || 0).toFixed(2)}
+                              <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
+                                ${(a.balance || 0).toFixed(2)}
+                              </span>
+                              {(a.todayReward || 0) > 0 && (
+                                <span className="site-balance-reward">
+                                  +{(a.todayReward || 0).toFixed(2)}
+                                </span>
+                              )}
+                              {(a.todaySpend || 0) > 0 && (
+                                <span className="site-balance-spend">
+                                  -{(a.todaySpend || 0).toFixed(2)}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td>

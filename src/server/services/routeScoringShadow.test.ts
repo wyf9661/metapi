@@ -34,16 +34,15 @@ function base(partial: Partial<ShadowCandidateInput> & Pick<ShadowCandidateInput
 }
 
 describe('routeScoringShadow', () => {
-  it('softly penalizes known session zero balance accounts', () => {
+  it('excludes known session accounts whose balance cannot cover one request', () => {
     const result = rankShadowCandidates([
       base({ channelId: 1, siteId: 1, accountId: 1, balance: 0, balanceKnown: true, credentialKind: 'session', unitCost: 0.001 }),
       base({ channelId: 2, siteId: 2, accountId: 2, balance: 50, balanceKnown: true, credentialKind: 'session', unitCost: 0.02 }),
     ]);
     expect(result.selectedChannelId).toBe(2);
-    expect(result.excluded.some((e) => e.channelId === 1)).toBe(false);
+    expect(result.excluded).toContainEqual({ channelId: 1, reason: '余额不足' });
     const zero = result.candidates.find((c) => c.channelId === 1)!;
-    expect(zero.probability).toBeGreaterThan(0);
-    expect(zero.probability).toBeLessThan(0.15);
+    expect(zero.probability).toBe(0);
   });
 
   it('prefers direct API-key accounts over low session balances (shared keys)', () => {
@@ -127,7 +126,8 @@ describe('routeScoringShadow', () => {
 
   it('coverage and balance factor behave for edge balances', () => {
     expect(computeBalanceCoverage(0, 0.01)).toBe(0);
-    expect(computeBalanceFactor(0).factor).toBeCloseTo(0.005, 3);
+    expect(computeBalanceFactor(0).factor).toBe(0);
+    expect(computeBalanceFactor(0).exclusion).toBe('余额不足');
     expect(computeBalanceFactor(null).factor).toBeCloseTo(0.85, 2);
     expect(computeBalanceFactor(200).factor).toBeGreaterThan(0.8);
   });

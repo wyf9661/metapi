@@ -88,6 +88,7 @@ vi.mock('../../services/downstreamApiKeyService.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  runtimeDbDialect: 'sqlite',
   hasProxyLogRequestTraceIdColumn: async () => true,
   db: {
     select: (..._args: unknown[]) => createDbSelectChain(),

@@ -370,11 +370,22 @@ function isSitesPlatformUrlUniqueConflictError(error: unknown): boolean {
     === normalizeSqlForMatch('CREATE UNIQUE INDEX `sites_platform_url_unique` ON `sites` (`platform`,`url`);');
 }
 
+function isMissingUseSystemProxyColumnError(error: unknown): boolean {
+  const lowered = normalizeSchemaErrorMessage(error).toLowerCase();
+  return lowered.includes('no such column') && lowered.includes('use_system_proxy');
+}
+
 function replayMigrationStatements(sqlite: Database.Database, statements: string[]): void {
   for (const statement of statements) {
     try {
       sqlite.exec(statement);
     } catch (error) {
+      // Migration 0034 removes a column that was already absent in schemas
+      // created after the global system-proxy feature was removed. Treat that
+      // exact legacy state as applied; unrelated missing-column errors remain fatal.
+      if (isMissingUseSystemProxyColumnError(error) && statement.includes('DROP COLUMN `use_system_proxy`')) {
+        continue;
+      }
       if (isRecoverableSchemaConflictError(error)) {
         continue;
       }

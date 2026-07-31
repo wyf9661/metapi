@@ -67,6 +67,7 @@ vi.mock('../../services/proxyVideoTaskStore.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  runtimeDbDialect: 'sqlite',
   db: {
     select: () => ({
       from: () => ({

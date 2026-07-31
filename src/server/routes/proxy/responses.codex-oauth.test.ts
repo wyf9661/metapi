@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { config } from '../../config.js';
 import { resetCodexHttpSessionQueue } from '../../proxy-core/runtime/codexHttpSessionQueue.js';
 import { resetCodexSessionResponseStore } from '../../proxy-core/runtime/codexSessionResponseStore.js';
+import { resetProxyChannelCoordinatorState } from '../../services/proxyChannelCoordinator.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
@@ -95,6 +96,7 @@ vi.mock('../../services/oauth/quota.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  runtimeDbDialect: 'sqlite',
   hasProxyLogRequestTraceIdColumn: async () => true,
   db: {
     insert: (arg: any) => dbInsertMock(arg),
@@ -185,6 +187,7 @@ describe('responses proxy codex oauth refresh', () => {
   });
 
   beforeEach(() => {
+    resetProxyChannelCoordinatorState();
     resetCodexHttpSessionQueue();
     resetCodexSessionResponseStore();
     config.proxyEmptyContentFailEnabled = false;
@@ -998,7 +1001,7 @@ describe('responses proxy codex oauth refresh', () => {
     expect(secondResponse.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(selectChannelMock).toHaveBeenCalledTimes(2);
-    expect(selectPreferredChannelMock).toHaveBeenCalledTimes(2);
+    expect(selectPreferredChannelMock).toHaveBeenCalledTimes(4);
 
     const [, firstOptions] = fetchMock.mock.calls[0] as [string, any];
     const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
@@ -1187,7 +1190,7 @@ describe('responses proxy codex oauth refresh', () => {
     expect(secondOptions.headers.Session_id || secondOptions.headers.session_id).toBe('session-http-serial-1');
   });
 
-  it('does not gate codex responses requests without a downstream session id behind the session lease queue', async () => {
+  it('serializes codex responses requests without a downstream session id through the soft-session lease queue', async () => {
     config.proxyStickySessionEnabled = true;
     config.proxySessionChannelConcurrencyLimit = 1;
     config.proxySessionChannelQueueWaitMs = 20;
@@ -1227,7 +1230,7 @@ describe('responses proxy codex oauth refresh', () => {
       },
     });
 
-    await waitFor(() => fetchMock.mock.calls.length === 2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     firstUpstream.resolve(new Response(JSON.stringify({
       id: 'resp_codex_parallel_1',
@@ -1240,6 +1243,8 @@ describe('responses proxy codex oauth refresh', () => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
+
+    await waitFor(() => fetchMock.mock.calls.length === 2);
 
     const [firstResponse, secondResponse] = await Promise.all([
       firstResponsePromise,

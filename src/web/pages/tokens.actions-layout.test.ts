@@ -18,14 +18,13 @@ describe('Inventory table actions layout', () => {
   const accounts = readFileSync(resolve(process.cwd(), 'src/web/pages/Accounts.tsx'), 'utf8');
   const sitesEditor = readFileSync(resolve(process.cwd(), 'src/web/pages/helpers/sitesEditor.ts'), 'utf8');
 
-  it('keeps token row actions under a dedicated left-aligned actions column', () => {
+  it('keeps token row actions under a dedicated centered actions column', () => {
     expect(tokens).toContain('className="token-actions-cell"');
     expect(css).toContain('.token-actions-cell');
     expect(css).toContain('.token-table-actions {');
-    expect(cssRule(css, '.token-table-actions')).toContain('justify-content: flex-start');
+    expect(cssRule(css, '.token-table-actions')).toContain('justify-content: center');
     expect(cssRule(css, '.token-table-actions')).toContain('flex-wrap: nowrap');
     expect(css).toContain('.token-table {');
-    expect(css).toContain('table-layout: fixed;');
   });
 
   it('keeps site actions on one left-aligned row without external checkin UI', () => {
@@ -51,7 +50,7 @@ describe('Inventory table actions layout', () => {
     const accBrace = css.indexOf('{', accStart);
     const accEnd = css.indexOf('}', accBrace);
     const accBody = css.slice(accBrace + 1, accEnd);
-    expect(accBody).toContain('width: 24%');
+    expect(accBody).toContain('width: 20%');
     expect(accBody).not.toContain('width: 30%');
     expect(accBody).not.toContain('width: 38%');
 
@@ -59,7 +58,6 @@ describe('Inventory table actions layout', () => {
     const tokBrace = css.indexOf('{', tokStart);
     const tokEnd = css.indexOf('}', tokBrace);
     const tokBody = css.slice(tokBrace + 1, tokEnd);
-    expect(tokBody).toContain('width: 18%');
-    expect(tokBody).not.toContain('width: 20%');
+    expect(tokBody).toContain('width: 17%');
   });
 });

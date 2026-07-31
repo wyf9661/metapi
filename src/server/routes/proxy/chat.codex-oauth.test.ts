@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetProxyChannelCoordinatorState } from '../../services/proxyChannelCoordinator.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
@@ -74,6 +75,7 @@ vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  runtimeDbDialect: 'sqlite',
   hasProxyLogRequestTraceIdColumn: async () => true,
   db: {
     insert: (arg: any) => dbInsertMock(arg),
@@ -134,6 +136,7 @@ describe('chat proxy codex oauth compatibility', () => {
   });
 
   beforeEach(() => {
+    resetProxyChannelCoordinatorState();
     fetchMock.mockReset();
     selectChannelMock.mockReset();
     selectNextChannelMock.mockReset();

@@ -38,6 +38,8 @@ describe('/v1/models route', () => {
     invalidateTokenRouterCache = tokenRouterModule.invalidateTokenRouterCache;
     config = configModule.config;
     config.proxyToken = 'sk-global-proxy-token';
+    config.allowGlobalProxyToken = true;
+    process.env.ALLOW_GLOBAL_PROXY_TOKEN = 'true';
 
     app = Fastify();
     await app.register(tokensRoutes);
@@ -135,7 +137,7 @@ describe('/v1/models route', () => {
     expect(ids).not.toContain('orphan-model');
   });
 
-  it('keeps global proxy token unrestricted when no managed key matches', async () => {
+  it('rejects the legacy global proxy token when no managed key matches', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'global-site',
       url: 'https://global.example.com',
@@ -184,13 +186,7 @@ describe('/v1/models route', () => {
       },
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json() as {
-      object: 'list';
-      data: Array<{ id: string }>;
-    };
-
-    expect(body.data.map((item) => item.id)).toContain('global-routable-model');
+    expect(response.statusCode).toBe(403);
   });
 
   it('returns only whitelist models for managed key with supportedModels policy', async () => {

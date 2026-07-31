@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../config.js';
+import { resetProxyChannelCoordinatorState } from '../../services/proxyChannelCoordinator.js';
 import { resetUpstreamEndpointRuntimeState } from '../../services/upstreamEndpointRuntimeMemory.js';
 
 const fetchMock = vi.fn();
@@ -81,6 +82,7 @@ vi.mock('../../services/oauth/quota.js', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  runtimeDbDialect: 'sqlite',
   hasProxyLogRequestTraceIdColumn: async () => true,
   db: {
     insert: (arg: any) => dbInsertMock(arg),
@@ -126,6 +128,7 @@ describe('responses proxy compact upstream routing', () => {
   });
 
   beforeEach(() => {
+    resetProxyChannelCoordinatorState();
     resetUpstreamEndpointRuntimeState();
     config.responsesCompactFallbackToResponsesEnabled = false;
     fetchMock.mockReset();

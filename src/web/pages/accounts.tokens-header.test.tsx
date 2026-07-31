@@ -85,7 +85,6 @@ describe('Accounts tokens embedded header', () => {
         .findAll((node) => node.type === 'button')
         .map((node) => collectText(node));
       expect(buttonTexts).toContain('同步站点令牌');
-      expect(buttonTexts).toContain('同步全部账号');
       expect(buttonTexts).toContain('+ 新增令牌');
     } finally {
       root?.unmount();

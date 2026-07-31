@@ -571,7 +571,7 @@
         "sensitive_word_detection": {
           "logicalType": "integer",
           "notNull": false,
-          "defaultValue": "null",
+          "defaultValue": null,
           "primaryKey": false
         }
       }
@@ -2118,12 +2118,6 @@
           "logicalType": "text",
           "notNull": false,
           "defaultValue": null,
-          "primaryKey": false
-        },
-        "use_system_proxy": {
-          "logicalType": "boolean",
-          "notNull": false,
-          "defaultValue": "false",
           "primaryKey": false
         },
         "custom_headers": {

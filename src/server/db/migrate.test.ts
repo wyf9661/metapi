@@ -26,7 +26,17 @@ function applyMigrationSql(sqlite: Database.Database, sqlText: string) {
     .filter((statement) => statement.length > 0);
 
   for (const statement of statements) {
-    sqlite.exec(statement);
+    try {
+      sqlite.exec(statement);
+    } catch (error) {
+      // Fixtures created from the current contract no longer have this retired
+      // column, while migration 0034 must remain replayable for old databases.
+      if (statement.includes('DROP COLUMN `use_system_proxy`')
+        && String((error as Error)?.message || error).includes('no such column')) {
+        continue;
+      }
+      throw error;
+    }
   }
 }
 

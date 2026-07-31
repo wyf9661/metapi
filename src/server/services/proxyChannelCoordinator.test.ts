@@ -340,4 +340,41 @@ describe('proxyChannelCoordinator', () => {
       saturated: false,
     });
   });
+
+  it('increments sticky hit count across same-channel rebinds and resets on channel change', () => {
+    const key = proxyChannelCoordinator.buildStickySessionKey({
+      clientKind: 'codex',
+      sessionId: 'hit-count-1',
+      requestedModel: 'gpt-5.2',
+      downstreamPath: '/v1/responses',
+      downstreamApiKeyId: 9,
+    });
+
+    expect(proxyChannelCoordinator.incrementStickyHitCount(key)).toBe(0);
+
+    proxyChannelCoordinator.bindStickyChannel(key, 42, JSON.stringify({ credentialMode: 'session' }));
+    expect(proxyChannelCoordinator.incrementStickyHitCount(key)).toBe(1);
+    expect(proxyChannelCoordinator.incrementStickyHitCount(key)).toBe(2);
+    expect(proxyChannelCoordinator.incrementStickyHitCount(key)).toBe(3);
+
+    proxyChannelCoordinator.bindStickyChannel(key, 42, JSON.stringify({ credentialMode: 'session' }));
+    expect(proxyChannelCoordinator.incrementStickyHitCount(key)).toBe(4);
+
+    proxyChannelCoordinator.bindStickyChannel(key, 43, JSON.stringify({ credentialMode: 'session' }));
+    expect(proxyChannelCoordinator.incrementStickyHitCount(key)).toBe(1);
+  });
+
+  it('increments last-success hit count across same-channel rebinds and resets on channel change', () => {
+    const input = { requestedModel: 'grok-4.5', downstreamApiKeyId: 3 };
+    proxyChannelCoordinator.rememberLastSuccessChannel({ ...input, channelId: 77 });
+
+    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(1);
+    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(2);
+
+    proxyChannelCoordinator.rememberLastSuccessChannel({ ...input, channelId: 77 });
+    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(3);
+
+    proxyChannelCoordinator.rememberLastSuccessChannel({ ...input, channelId: 88 });
+    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(1);
+  });
 });

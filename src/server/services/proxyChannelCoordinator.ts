@@ -10,11 +10,15 @@ import {
 type StickyEntry = {
   channelId: number;
   expiresAtMs: number;
+  /** Consecutive affinity hits since the binding was (re)created. */
+  hitCount?: number;
 };
 
 type LastSuccessEntry = {
   channelId: number;
   expiresAtMs: number;
+  /** Consecutive affinity hits since the binding was (re)created. */
+  hitCount?: number;
 };
 
 type ActiveLeaseState = {
@@ -212,6 +216,7 @@ function hydrateAffinityMap(
     target.set(normalizedKey, {
       channelId: Math.trunc(entryRaw.channelId),
       expiresAtMs: Math.trunc(entryRaw.expiresAtMs),
+      hitCount: typeof entryRaw.hitCount === 'number' ? Math.max(0, Math.trunc(entryRaw.hitCount)) : 0,
     });
   }
 }
@@ -227,6 +232,7 @@ function serializeAffinityMap(source: Map<string, StickyEntry>, nowMs: number): 
     out[key] = {
       channelId: entry.channelId,
       expiresAtMs: entry.expiresAtMs,
+      ...(typeof entry.hitCount === 'number' ? { hitCount: entry.hitCount } : {}),
     };
   }
   return out;
@@ -289,21 +295,25 @@ export async function persistProxyChannelAffinityState(): Promise<void> {
     await affinityPersistInFlight;
     return;
   }
+
   const persistTask = (async () => {
-    const payload = buildAffinityPersistencePayload();
-    await upsertSetting(PROXY_CHANNEL_AFFINITY_SETTING_KEY, payload);
+    try {
+      const payload = buildAffinityPersistencePayload();
+      await upsertSetting(PROXY_CHANNEL_AFFINITY_SETTING_KEY, payload);
+    } catch (error) {
+      console.warn(
+        `[proxyChannelCoordinator] failed to persist affinity state: ${(error as Error)?.message || 'unknown error'}`,
+      );
+    }
   })();
-  affinityPersistInFlight = persistTask.finally(() => {
+
+  affinityPersistInFlight = persistTask;
+  try {
+    await persistTask;
+  } finally {
     if (affinityPersistInFlight === persistTask) {
       affinityPersistInFlight = null;
     }
-  });
-  try {
-    await affinityPersistInFlight;
-  } catch (error) {
-    console.warn(
-      `[proxyChannelCoordinator] failed to persist affinity state: ${(error as Error)?.message || 'unknown error'}`,
-    );
   }
 }
 
@@ -360,9 +370,13 @@ class ProxyChannelCoordinator {
     const normalizedKey = String(stickySessionKey || '').trim();
     if (!normalizedKey || !Number.isFinite(channelId) || channelId <= 0) return;
     cleanupExpiredStickyBindings();
+    const previous = stickySessionBindings.get(normalizedKey);
     stickySessionBindings.set(normalizedKey, {
       channelId: Math.trunc(channelId),
       expiresAtMs: Date.now() + getStickySessionTtlMs(),
+      // Successful sticky dispatch refreshes TTL after every turn; preserve its
+      // hit count when the channel has not changed so the cap can take effect.
+      hitCount: previous?.channelId === Math.trunc(channelId) ? (previous.hitCount ?? 0) : 0,
     });
     scheduleProxyChannelAffinityPersistence();
   }
@@ -408,9 +422,11 @@ class ProxyChannelCoordinator {
     const channelId = Math.trunc(input.channelId || 0);
     if (!key || channelId <= 0) return;
     cleanupExpiredStickyBindings();
+    const previous = lastSuccessByModelKey.get(key);
     lastSuccessByModelKey.set(key, {
       channelId,
       expiresAtMs: Date.now() + getLastSuccessTtlMs(),
+      hitCount: previous?.channelId === channelId ? (previous.hitCount ?? 0) : 0,
     });
     scheduleProxyChannelAffinityPersistence();
   }
@@ -430,6 +446,36 @@ class ProxyChannelCoordinator {
     }
     lastSuccessByModelKey.delete(key);
     scheduleProxyChannelAffinityPersistence();
+  }
+
+  /**
+   * Increment the consecutive-hit counter for a live sticky binding.
+   * Returns the new hit count (0 when no binding exists). The caller drops the
+   * binding when the count exceeds the configured max hits, so dense same-key
+   * traffic re-enters balanced-v2 instead of monopolizing one site.
+   */
+  incrementStickyHitCount(stickySessionKey?: string | null): number {
+    const normalizedKey = String(stickySessionKey || '').trim();
+    if (!normalizedKey) return 0;
+    const entry = stickySessionBindings.get(normalizedKey);
+    if (!entry) return 0;
+    entry.hitCount = Math.max(0, (entry.hitCount ?? 0)) + 1;
+    scheduleProxyChannelAffinityPersistence();
+    return entry.hitCount;
+  }
+
+  /** Increment the consecutive-hit counter for a live last-success binding. */
+  incrementLastSuccessHitCount(input: {
+    requestedModel?: string | null;
+    downstreamApiKeyId?: number | null;
+  }): number {
+    const key = buildLastSuccessKey(input);
+    if (!key) return 0;
+    const entry = lastSuccessByModelKey.get(key);
+    if (!entry) return 0;
+    entry.hitCount = Math.max(0, (entry.hitCount ?? 0)) + 1;
+    scheduleProxyChannelAffinityPersistence();
+    return entry.hitCount;
   }
 
   getActiveChannelIds(): number[] {

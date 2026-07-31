@@ -2110,6 +2110,12 @@ body {
 
 .accounts-table th:nth-child(3),
 .accounts-table td:nth-child(3) {
+  width: 12%;
+  text-align: left;
+}
+
+.accounts-table th:nth-child(4),
+.accounts-table td:nth-child(4) {
   width: 15%;
   text-align: left;
 }
@@ -2128,7 +2134,7 @@ body {
 .accounts-table td:nth-child(5),
 .accounts-table th:nth-child(6),
 .accounts-table td:nth-child(6) {
-  width: 10%;
+  width: 15%;
 }
 
 .accounts-actions-col,
@@ -2180,7 +2186,7 @@ body {
 .sites-table th:nth-child(1),
 .sites-table td.sites-name-col {
   text-align: left;
-  width: 16%;
+  width: 12%;
 }
 
 .sites-name-cell {
@@ -2225,18 +2231,23 @@ body {
 .sites-table td.site-balance-cell {
   text-align: left;
   white-space: nowrap;
-  width: 8%;
+  width: 15%;
 }
 
 .sites-table th:nth-child(4),
 .sites-table td:nth-child(4),
 .sites-table th:nth-child(5),
-.sites-table td:nth-child(5),
+.sites-table td:nth-child(5) {
+  text-align: center;
+  white-space: nowrap;
+  width: 6%;
+}
+
 .sites-table th:nth-child(6),
 .sites-table td:nth-child(6) {
   text-align: center;
   white-space: nowrap;
-  width: 6%;
+  width: 4%;
 }
 
 .sites-table th:nth-child(7),
@@ -2413,6 +2424,28 @@ body {
 .site-balance-subscription:focus-visible {
   color: var(--color-primary);
   text-decoration: underline;
+}
+
+.site-balance-reward {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.site-balance-spend {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .sites-url-cell {

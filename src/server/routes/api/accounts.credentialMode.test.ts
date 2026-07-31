@@ -488,7 +488,9 @@ describe('accounts credential mode', { timeout: 15_000 }, () => {
       apiToken: null,
       isPinned: false,
     });
-    expect(JSON.parse(updated?.extraConfig || '{}')).not.toHaveProperty('proxyUrl');
+    expect(JSON.parse(updated?.extraConfig || '{}')).toMatchObject({
+      proxyUrl: 'http://127.0.0.1:7890',
+    });
   });
 
   it('does not refresh models for pin-only account edits', async () => {

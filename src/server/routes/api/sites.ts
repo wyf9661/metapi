@@ -1,10 +1,10 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { db, schema } from '../../db/index.js';
 import { getInsertedRowId } from '../../db/insertHelpers.js';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, gte, lt, sql } from 'drizzle-orm';
 import { detectSite } from '../../services/siteDetector.js';
 import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services/siteProxy.js';
-import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
+import { formatUtcSqlDateTime, getLocalDayRangeUtc } from '../../services/localTimeService.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
 import { getCredentialModeFromExtraConfig, getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
@@ -479,6 +479,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       id: schema.accounts.id,
       siteId: schema.accounts.siteId,
       balance: schema.accounts.balance,
+      balanceUsed: schema.accounts.balanceUsed,
       extraConfig: schema.accounts.extraConfig,
       oauthProvider: schema.accounts.oauthProvider,
     }).from(schema.accounts).all();
@@ -488,8 +489,45 @@ export async function sitesRoutes(app: FastifyInstance) {
       accountId: schema.accountTokens.accountId,
     }).from(schema.accountTokens).all();
 
+    // 获取今日消费和签到奖励（按账号聚合，后面再按站点汇总）
+    const { startUtc, endUtc } = getLocalDayRangeUtc();
+    const [todaySpendRows, todayCheckinRows] = await Promise.all([
+      db.select({
+        accountId: schema.proxyLogs.accountId,
+        totalSpend: sql<number>`coalesce(sum(${schema.proxyLogs.estimatedCost}), 0)`,
+      }).from(schema.proxyLogs)
+        .where(and(gte(schema.proxyLogs.createdAt, startUtc), lt(schema.proxyLogs.createdAt, endUtc)))
+        .groupBy(schema.proxyLogs.accountId)
+        .all(),
+      db.select({
+        accountId: schema.checkinLogs.accountId,
+        reward: schema.checkinLogs.reward,
+        message: schema.checkinLogs.message,
+      }).from(schema.checkinLogs)
+        .where(and(gte(schema.checkinLogs.createdAt, startUtc), lt(schema.checkinLogs.createdAt, endUtc), eq(schema.checkinLogs.status, 'success')))
+        .all(),
+    ]);
+
+    const spendByAccount: Record<number, number> = {};
+    for (const row of todaySpendRows) {
+      if (row.accountId == null) continue;
+      spendByAccount[row.accountId] = Number(row.totalSpend || 0);
+    }
+
+    const rewardByAccount: Record<number, number> = {};
+    for (const log of todayCheckinRows) {
+      if (log.accountId == null) continue;
+      const rewardNum = parseFloat(log.reward || '') || 0;
+      if (rewardNum > 0) {
+        rewardByAccount[log.accountId] = (rewardByAccount[log.accountId] || 0) + rewardNum;
+      }
+    }
+
     // 按站点统计连接信息
     const totalBalanceBySiteId: Record<number, number> = {};
+    const totalBalanceUsedBySiteId: Record<number, number> = {};
+    const totalTodayRewardBySiteId: Record<number, number> = {};
+    const totalTodaySpendBySiteId: Record<number, number> = {};
     const subscriptionBySiteId: Record<number, SiteSubscriptionAggregate | undefined> = {};
     const accountCountBySiteId: Record<number, number> = {};
     const sessionCountBySiteId: Record<number, number> = {};
@@ -499,6 +537,9 @@ export async function sitesRoutes(app: FastifyInstance) {
 
     for (const row of accountRows) {
       totalBalanceBySiteId[row.siteId] = roundMetric((totalBalanceBySiteId[row.siteId] || 0) + Number(row.balance || 0));
+      totalBalanceUsedBySiteId[row.siteId] = roundMetric((totalBalanceUsedBySiteId[row.siteId] || 0) + Number(row.balanceUsed || 0));
+      totalTodayRewardBySiteId[row.siteId] = roundMetric((totalTodayRewardBySiteId[row.siteId] || 0) + (rewardByAccount[row.id] || 0));
+      totalTodaySpendBySiteId[row.siteId] = roundMetric((totalTodaySpendBySiteId[row.siteId] || 0) + (spendByAccount[row.id] || 0));
       subscriptionBySiteId[row.siteId] = aggregateSiteSubscription(subscriptionBySiteId[row.siteId], row.extraConfig);
       accountCountBySiteId[row.siteId] = (accountCountBySiteId[row.siteId] || 0) + 1;
       if (row.oauthProvider) {
@@ -526,6 +567,9 @@ export async function sitesRoutes(app: FastifyInstance) {
     return siteRowsWithApiEndpoints.map((site) => ({
       ...site,
       totalBalance: Math.round((totalBalanceBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
+      totalBalanceUsed: Math.round((totalBalanceUsedBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
+      todayReward: Math.round((totalTodayRewardBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
+      todaySpend: Math.round((totalTodaySpendBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
       subscriptionSummary: subscriptionBySiteId[site.id] || null,
       connectionStats: {
         accounts: accountCountBySiteId[site.id] || 0,
