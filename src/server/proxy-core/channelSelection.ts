@@ -3,6 +3,7 @@ import {
   ensureProxyChannelAffinityLoaded,
   proxyChannelCoordinator,
 } from '../services/proxyChannelCoordinator.js';
+import { config } from '../config.js';
 import {
   canRetryProxyChannelWithBudget,
   getProxyEffectiveFailoverBudgetMs,
@@ -159,11 +160,13 @@ export async function selectProxyChannelForAttempt(input: {
     if (preferredChannelId <= 0 || input.excludeChannelIds.includes(preferredChannelId)) {
       return null;
     }
+    const selectionOptions = { yieldOnLowBalance: true };
     let preferred = await tokenRouter.selectPreferredChannel(
       input.requestedModel,
       preferredChannelId,
       input.downstreamPolicy,
       input.excludeChannelIds,
+      selectionOptions,
     );
     if (!preferred) {
       const refreshSucceeded = await refreshRoutesForFirstAttempt();
@@ -172,6 +175,7 @@ export async function selectProxyChannelForAttempt(input: {
         preferredChannelId,
         input.downstreamPolicy,
         input.excludeChannelIds,
+        selectionOptions,
       );
       if (!preferred && refreshSucceeded) {
         if (source === 'sticky' && input.stickySessionKey) {
@@ -194,7 +198,20 @@ export async function selectProxyChannelForAttempt(input: {
     if (input.stickySessionKey) {
       const stickyChannelId = proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey);
       if (stickyChannelId) {
-        selected = await tryPreferredChannel(stickyChannelId, 'sticky');
+        const hitCount = proxyChannelCoordinator.incrementStickyHitCount(input.stickySessionKey);
+        if (hitCount > config.proxyStickyMaxHits) {
+          // Consecutive-hit cap reached: discard both affinity layers for this
+          // key+model, then let this very hop re-enter balanced-v2. Otherwise
+          // last-success would immediately re-pin the same channel.
+          proxyChannelCoordinator.clearStickyChannel(input.stickySessionKey, stickyChannelId);
+          proxyChannelCoordinator.clearLastSuccessChannel({
+            requestedModel: input.requestedModel,
+            downstreamApiKeyId: input.downstreamApiKeyId,
+            channelId: stickyChannelId,
+          });
+        } else {
+          selected = await tryPreferredChannel(stickyChannelId, 'sticky');
+        }
       }
     }
     if (!selected) {
@@ -203,7 +220,19 @@ export async function selectProxyChannelForAttempt(input: {
         downstreamApiKeyId: input.downstreamApiKeyId,
       });
       if (lastSuccessChannelId) {
-        selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
+        const hitCount = proxyChannelCoordinator.incrementLastSuccessHitCount({
+          requestedModel: input.requestedModel,
+          downstreamApiKeyId: input.downstreamApiKeyId,
+        });
+        if (hitCount > config.proxyStickyMaxHits) {
+          proxyChannelCoordinator.clearLastSuccessChannel({
+            requestedModel: input.requestedModel,
+            downstreamApiKeyId: input.downstreamApiKeyId,
+            channelId: lastSuccessChannelId,
+          });
+        } else {
+          selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
+        }
       }
     }
   }

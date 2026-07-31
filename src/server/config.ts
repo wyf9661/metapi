@@ -160,6 +160,10 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     proxyStickySessionEnabled: parseBoolean(env.PROXY_STICKY_SESSION_ENABLED, true),
     // Soft sticky default 30s so dense same-key traffic rebalances across sites.
     proxyStickySessionTtlMs: Math.max(30_000, Math.trunc(parseNumber(env.PROXY_STICKY_SESSION_TTL_MS, 30_000))),
+    // Consecutive sticky/last-success hits allowed before the binding is
+    // dropped and the next hop re-enters balanced-v2. Prevents one site from
+    // monopolizing dense same-key traffic (and draining its balance).
+    proxyStickyMaxHits: Math.max(1, Math.trunc(parseNumber(env.PROXY_STICKY_MAX_HITS, 5))),
     proxySessionChannelConcurrencyLimit: Math.max(0, Math.trunc(parseNumber(env.PROXY_SESSION_CHANNEL_CONCURRENCY_LIMIT, 3))),
     proxySessionChannelQueueWaitMs: Math.max(0, Math.trunc(parseNumber(env.PROXY_SESSION_CHANNEL_QUEUE_WAIT_MS, 1_500))),
     proxySessionChannelLeaseTtlMs: Math.max(5_000, Math.trunc(parseNumber(env.PROXY_SESSION_CHANNEL_LEASE_TTL_MS, 90_000))),

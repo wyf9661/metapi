@@ -121,7 +121,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       defaults: {
-        systemProxyConfigured: false,
       },
       providers: expect.arrayContaining([
         expect.objectContaining({
@@ -154,53 +153,11 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
   });
 
-  it('exposes system proxy defaults in oauth provider metadata when configured', async () => {
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
 
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/oauth/providers',
-    });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      defaults: {
-        systemProxyConfigured: true,
-      },
-    });
-  });
 
-  it('reports when runtime system proxy is configured in oauth provider defaults', async () => {
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
 
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/oauth/providers',
-    });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      defaults: {
-        systemProxyConfigured: true,
-      },
-    });
-  });
-
-  it('reports when the runtime system proxy is configured', async () => {
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/oauth/providers',
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      defaults: {
-        systemProxyConfigured: true,
-      },
-    });
-  });
 
   it('rejects malformed oauth payloads at the route boundary', async () => {
     const invalidStartResponse = await app.inject({
@@ -250,29 +207,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       message: 'Invalid proxyUrl. Expected string or null.',
     });
 
-    const invalidUseSystemProxyResponse = await app.inject({
-      method: 'POST',
-      url: '/api/oauth/providers/antigravity/start',
-      payload: {
-        useSystemProxy: 'yes',
-      },
-    });
-    expect(invalidUseSystemProxyResponse.statusCode).toBe(400);
-    expect(invalidUseSystemProxyResponse.json()).toMatchObject({
-      message: 'Invalid useSystemProxy. Expected boolean.',
-    });
-
-    const invalidProxyPatchResponse = await app.inject({
-      method: 'PATCH',
-      url: '/api/oauth/connections/1/proxy',
-      payload: {
-        useSystemProxy: 'yes',
-      },
-    });
-    expect(invalidProxyPatchResponse.statusCode).toBe(400);
-    expect(invalidProxyPatchResponse.json()).toMatchObject({
-      message: 'Invalid useSystemProxy. Expected boolean.',
-    });
   });
 
   it('starts an antigravity oauth session and returns provider metadata', async () => {
@@ -673,146 +607,11 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
   });
 
-  it('includes dispatcher for codex token exchange when oauth site enables the system proxy', async () => {
-    const jwt = buildJwt({
-      email: 'codex-proxy@example.com',
-      'https://api.openai.com/auth': {
-        chatgpt_account_id: 'chatgpt-account-proxy',
-        chatgpt_plan_type: 'plus',
-      },
-    });
-    await db.insert(schema.settings).values({
-      key: 'system_proxy_url',
-      value: JSON.stringify('http://127.0.0.1:7890'),
-    }).run();
-    await db.insert(schema.sites).values({
-      name: 'ChatGPT Codex OAuth',
-      url: 'https://chatgpt.com/backend-api/codex',
-      platform: 'codex',
-      status: 'active',
-      useSystemProxy: true,
-    }).run();
 
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          access_token: 'oauth-access-token',
-          refresh_token: 'oauth-refresh-token',
-          id_token: jwt,
-          expires_in: 3600,
-          token_type: 'Bearer',
-        }),
-        text: async () => JSON.stringify({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          models: [{ id: 'gpt-5.4' }],
-        }),
-        text: async () => JSON.stringify({ ok: true }),
-      });
 
-    const startResponse = await app.inject({
-      method: 'POST',
-      url: '/api/oauth/providers/codex/start',
-      headers: {
-        host: 'metapi.example',
-        'x-forwarded-proto': 'https',
-      },
-    });
-    expect(startResponse.statusCode).toBe(200);
-    const startBody = startResponse.json() as { state: string };
 
-    const callbackResponse = await app.inject({
-      method: 'POST',
-      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
-      payload: {
-        callbackUrl: `http://localhost:1455/auth/callback?state=${encodeURIComponent(startBody.state)}&code=oauth-code-proxy`,
-      },
-    });
-    expect(callbackResponse.statusCode).toBe(200);
-    const codexTokenCall = fetchMock.mock.calls.find((call) => String(call[0] || '') === 'https://auth.openai.com/oauth/token');
-    const codexTokenFetchInit = codexTokenCall?.[1] as Record<string, unknown> | undefined;
-    expect(codexTokenFetchInit).toEqual(expect.objectContaining({
-      dispatcher: expect.anything(),
-    }));
-  });
 
-  it('includes dispatcher for codex token exchange when oauth start explicitly requests the system proxy', async () => {
-    const jwt = buildJwt({
-      email: 'codex-system-proxy@example.com',
-      'https://api.openai.com/auth': {
-        chatgpt_account_id: 'chatgpt-account-system-proxy',
-        chatgpt_plan_type: 'plus',
-      },
-    });
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
-
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          access_token: 'oauth-access-token-system',
-          refresh_token: 'oauth-refresh-token-system',
-          id_token: jwt,
-          expires_in: 3600,
-          token_type: 'Bearer',
-        }),
-        text: async () => JSON.stringify({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          models: [{ id: 'gpt-5.4' }],
-        }),
-        text: async () => JSON.stringify({ ok: true }),
-      });
-
-    const startResponse = await app.inject({
-      method: 'POST',
-      url: '/api/oauth/providers/codex/start',
-      headers: {
-        host: 'metapi.example',
-        'x-forwarded-proto': 'https',
-      },
-      payload: {
-        useSystemProxy: true,
-      },
-    });
-    expect(startResponse.statusCode).toBe(200);
-    const startBody = startResponse.json() as { state: string };
-
-    const callbackResponse = await app.inject({
-      method: 'POST',
-      url: `/api/oauth/sessions/${encodeURIComponent(startBody.state)}/manual-callback`,
-      payload: {
-        callbackUrl: `http://localhost:1455/auth/callback?state=${encodeURIComponent(startBody.state)}&code=oauth-code-system-proxy`,
-      },
-    });
-    expect(callbackResponse.statusCode).toBe(200);
-
-    const codexTokenCall = fetchMock.mock.calls.find((call) => String(call[0] || '') === 'https://auth.openai.com/oauth/token');
-    const codexTokenFetchInit = codexTokenCall?.[1] as Record<string, unknown> | undefined;
-    expect(codexTokenFetchInit).toEqual(expect.objectContaining({
-      dispatcher: expect.anything(),
-    }));
-
-    const accounts = await db.select().from(schema.accounts).all();
-    expect(accounts).toHaveLength(1);
-    expect(JSON.parse(accounts[0]?.extraConfig || '{}')).toMatchObject({
-      useSystemProxy: true,
-      oauth: {
-        email: 'codex-system-proxy@example.com',
-      },
-    });
-  });
-
-  it('falls back to the site proxy during rebind exchange when clearing an account proxy override', async () => {
+  it('rebinds oauth without a dispatcher when clearing an account proxy override', async () => {
     const originalJwt = buildJwt({
       email: 'codex-clear@example.com',
       'https://api.openai.com/auth': {
@@ -836,7 +635,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       url: 'https://chatgpt.com/backend-api/codex',
       platform: 'codex',
       status: 'active',
-      useSystemProxy: true,
     }).returning().get();
     const existing = await db.insert(schema.accounts).values({
       siteId: site.id,
@@ -909,9 +707,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const codexTokenCall = fetchMock.mock.calls.find((call) => String(call[0] || '') === 'https://auth.openai.com/oauth/token');
     const codexTokenFetchInit = codexTokenCall?.[1] as Record<string, unknown> | undefined;
-    expect(codexTokenFetchInit).toEqual(expect.objectContaining({
-      dispatcher: expect.anything(),
-    }));
+    expect(codexTokenFetchInit).not.toHaveProperty('dispatcher');
 
     const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, existing.id)).get();
     expect(stored?.accessToken).toBe('rebound-access-token');
@@ -969,7 +765,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       url: `/api/oauth/connections/${account.id}/proxy`,
       payload: {
         proxyUrl: null,
-        useSystemProxy: true,
       },
     });
 
@@ -983,7 +778,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
     expect(JSON.parse(stored?.extraConfig || '{}')).toMatchObject({
-      useSystemProxy: true,
       proxyUrl: null,
     });
 
@@ -1008,7 +802,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       items: [
         expect.objectContaining({
           accountId: account.id,
-          useSystemProxy: true,
           routeChannelCount: 1,
         }),
       ],
@@ -1058,7 +851,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       url: `/api/oauth/connections/${account.id}/proxy`,
       payload: {
         proxyUrl: null,
-        useSystemProxy: true,
       },
     });
 
@@ -1067,7 +859,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(body).toMatchObject({
       success: true,
       accountId: account.id,
-      useSystemProxy: true,
       proxyUrl: null,
     });
     expect(body).not.toHaveProperty('state');
@@ -1075,7 +866,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
 
     const updated = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
     expect(JSON.parse(updated?.extraConfig || '{}')).toMatchObject({
-      useSystemProxy: true,
       proxyUrl: null,
       oauth: {
         email: 'proxy-update@example.com',
@@ -2646,7 +2436,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
             account_id: 'chatgpt-imported-b',
           },
         ],
-        useSystemProxy: true,
         proxyUrl: null,
       },
     });
@@ -2663,11 +2452,9 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(accounts).toHaveLength(2);
     expect(accounts.map((row) => JSON.parse(row.extraConfig || '{}'))).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        useSystemProxy: true,
         proxyUrl: null,
       }),
       expect.objectContaining({
-        useSystemProxy: true,
         proxyUrl: null,
       }),
     ]));
@@ -3410,60 +3197,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     });
   });
 
-  it('imports multiple oauth json objects in one batch and applies the explicit system proxy setting', async () => {
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        models: [{ id: 'gpt-5.4' }],
-      }),
-      text: async () => JSON.stringify({ ok: true }),
-    });
 
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/oauth/import',
-      payload: {
-        items: [
-          {
-            type: 'codex',
-            access_token: 'batch-active-access-token',
-            refresh_token: 'batch-active-refresh-token',
-            email: 'batch-active@example.com',
-            account_id: 'batch-active-account',
-          },
-          {
-            type: 'codex',
-            access_token: 'batch-disabled-access-token',
-            refresh_token: 'batch-disabled-refresh-token',
-            email: 'batch-disabled@example.com',
-            account_id: 'batch-disabled-account',
-            disabled: true,
-          },
-        ],
-        useSystemProxy: true,
-      },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      success: true,
-      imported: 2,
-      failed: 0,
-    });
-
-    const accounts = await db.select().from(schema.accounts).all();
-    expect(accounts).toHaveLength(2);
-    expect(accounts.map((account) => JSON.parse(account.extraConfig || '{}'))).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        useSystemProxy: true,
-      }),
-    ]));
-
-    const routeRows = await db.select().from(schema.routeChannels).all();
-    expect(routeRows).toHaveLength(1);
-  });
 
   it('creates and deletes an oauth route unit, collapsing and restoring route channels', async () => {
     const buildOauthExtraConfig = (email: string, accountKey: string) => JSON.stringify({
@@ -3624,7 +3358,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       method: 'PATCH',
       url: `/api/oauth/connections/${account.id}/proxy`,
       payload: {
-        useSystemProxy: true,
         proxyUrl: null,
       },
     });
@@ -3632,14 +3365,12 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       success: true,
-      useSystemProxy: true,
       proxyUrl: null,
       refreshedRoutes: true,
     });
 
     const stored = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
     expect(JSON.parse(stored?.extraConfig || '{}')).toMatchObject({
-      useSystemProxy: true,
       proxyUrl: null,
     });
 
@@ -3662,81 +3393,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     expect(routeChannels).toHaveLength(1);
   });
 
-  it('imports multiple native oauth json objects in one batch request and applies shared system proxy settings', async () => {
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          models: [{ id: 'gpt-5.4' }],
-        }),
-        text: async () => JSON.stringify({ ok: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          models: [{ id: 'gpt-5.4-mini' }],
-        }),
-        text: async () => JSON.stringify({ ok: true }),
-      });
 
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/oauth/import',
-      payload: {
-        items: [
-          {
-            type: 'codex',
-            access_token: 'batch-import-access-a',
-            refresh_token: 'batch-import-refresh-a',
-            id_token: buildJwt({
-              email: 'batch-a@example.com',
-              'https://api.openai.com/auth': {
-                chatgpt_account_id: 'batch-account-a',
-                chatgpt_plan_type: 'plus',
-              },
-            }),
-          },
-          {
-            type: 'codex',
-            access_token: 'batch-import-access-b',
-            refresh_token: 'batch-import-refresh-b',
-            id_token: buildJwt({
-              email: 'batch-b@example.com',
-              'https://api.openai.com/auth': {
-                chatgpt_account_id: 'batch-account-b',
-                chatgpt_plan_type: 'team',
-              },
-            }),
-          },
-        ],
-        useSystemProxy: true,
-      },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      success: true,
-      imported: 2,
-      failed: 0,
-    });
-
-    const accounts = await db.select().from(schema.accounts).all();
-    expect(accounts).toHaveLength(2);
-    expect(accounts.map((row) => JSON.parse(row.extraConfig || '{}').useSystemProxy)).toEqual([true, true]);
-
-    const modelRows = await db.select().from(schema.modelAvailability).all();
-    expect(modelRows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ modelName: 'gpt-5.4', available: true }),
-      expect.objectContaining({ modelName: 'gpt-5.4-mini', available: true }),
-    ]));
-
-    const routeRows = await db.select().from(schema.tokenRoutes).all();
-    expect(routeRows.map((row) => row.modelPattern).sort()).toEqual(['gpt-5.4', 'gpt-5.4-mini']);
-    const routeChannels = await db.select().from(schema.routeChannels).all();
-    expect(routeChannels).toHaveLength(2);
-  });
 
   it('creates an oauth route unit and collapses multiple oauth accounts into one route channel', async () => {
     const site = await db.insert(schema.sites).values({
@@ -4056,7 +3713,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       url: 'https://codex.example.com',
       platform: 'codex',
       status: 'active',
-      useSystemProxy: false,
       isPinned: false,
       globalWeight: 1,
       sortOrder: 0,

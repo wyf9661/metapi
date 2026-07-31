@@ -47,7 +47,9 @@ vi.mock('../../services/proxyChannelCoordinator.js', () => ({
   ensureProxyChannelAffinityLoaded: vi.fn(async () => {}),
   proxyChannelCoordinator: {
     getStickyChannelId: (...args: unknown[]) => getStickyChannelIdMock(...args),
+    incrementStickyHitCount: vi.fn(() => 1),
     getLastSuccessChannelId: (...args: unknown[]) => getLastSuccessChannelIdMock(...args),
+    incrementLastSuccessHitCount: vi.fn(() => 1),
     rememberLastSuccessChannel: (...args: unknown[]) => rememberLastSuccessChannelMock(...args),
     clearLastSuccessChannel: (...args: unknown[]) => clearLastSuccessChannelMock(...args),
     bindStickyChannel: (...args: unknown[]) => bindStickyChannelMock(...args),
@@ -216,6 +218,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       55,
       EMPTY_DOWNSTREAM_ROUTING_POLICY,
       [],
+      { yieldOnLowBalance: true },
     );
     expect(selectChannelMock).not.toHaveBeenCalled();
     expect(clearStickyChannelMock).not.toHaveBeenCalled();

@@ -69,6 +69,9 @@ type SiteRow = {
   isPinned?: boolean;
   sortOrder?: number;
   totalBalance?: number;
+  totalBalanceUsed?: number;
+  todayReward?: number;
+  todaySpend?: number;
   subscriptionSummary?: SiteSubscriptionSummary | null;
   connectionStats?: {
     accounts: number;
@@ -200,13 +203,17 @@ function buildSubscriptionTooltip(summary?: SiteSubscriptionSummary | null): str
 
 function SiteBalanceDisplay(props: {
   balance?: number | null;
+  todayReward?: number | null;
+  todaySpend?: number | null;
   summary?: SiteSubscriptionSummary | null;
   align?: 'start' | 'end';
 }) {
-  const { balance, summary, align = 'start' } = props;
+  const { balance, todayReward, todaySpend, summary, align = 'start' } = props;
   const walletBalanceText = formatUsd(balance);
   const subscriptionValue = buildSubscriptionInlineValue(summary);
   const tooltip = buildSubscriptionTooltip(summary);
+  const reward = todayReward || 0;
+  const spend = todaySpend || 0;
 
   return (
     <div
@@ -226,6 +233,16 @@ function SiteBalanceDisplay(props: {
             {subscriptionValue}
           </span>
         </>
+      ) : null}
+      {reward > 0 ? (
+        <span className="site-balance-reward" style={{ marginLeft: 4 }}>
+          +{reward.toFixed(2)}
+        </span>
+      ) : null}
+      {spend > 0 ? (
+        <span className="site-balance-spend" style={{ marginLeft: 4 }}>
+          -{spend.toFixed(2)}
+        </span>
       ) : null}
     </div>
   );
@@ -2037,6 +2054,8 @@ export default function Sites() {
                       value={(
                         <SiteBalanceDisplay
                           balance={site.totalBalance}
+                          todayReward={site.todayReward}
+                          todaySpend={site.todaySpend}
                           summary={site.subscriptionSummary}
                           align="end"
                         />
@@ -2158,7 +2177,7 @@ export default function Sites() {
                 <tr>
                   <th>名称</th>
                   <th>创建时间</th>
-                  <th>总余额</th>
+                  <th>余额</th>
                   <th>状态</th>
                   <th>权重</th>
                   <th>平台</th>
@@ -2213,6 +2232,8 @@ export default function Sites() {
                     <td className="site-balance-cell">
                       <SiteBalanceDisplay
                         balance={site.totalBalance}
+                        todayReward={site.todayReward}
+                        todaySpend={site.todaySpend}
                         summary={site.subscriptionSummary}
                       />
                     </td>

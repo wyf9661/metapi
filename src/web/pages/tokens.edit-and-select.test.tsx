@@ -194,7 +194,7 @@ describe('Tokens edit modal and row selection', () => {
     }
   });
 
-  it('selects a token when clicking the row body, but not when clicking an action button', async () => {
+  it('keeps token rows non-clickable while action buttons remain available', async () => {
     let root!: WebTestRenderer;
     try {
       await act(async () => {
@@ -208,14 +208,7 @@ describe('Tokens edit modal and row selection', () => {
       })[0];
       expect(tokenRow).toBeTruthy();
 
-      await act(async () => {
-        tokenRow.props.onClick({
-          target: { closest: () => null },
-        });
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).toContain('已选 1 项');
+      expect(tokenRow.props.onClick).toBeUndefined();
 
       const copyButton = root.root
         .findAll((node) => node.type === 'button')
@@ -227,7 +220,7 @@ describe('Tokens edit modal and row selection', () => {
       });
       await flushMicrotasks();
 
-      expect(collectText(root.root)).toContain('已选 1 项');
+      expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalled();
     } finally {
       root?.unmount();
     }

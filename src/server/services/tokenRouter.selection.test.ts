@@ -1718,4 +1718,129 @@ describe('TokenRouter selection scoring', () => {
       queuedLease.lease.release();
     }
   });
+
+describe('selectPreferredChannel low-balance yield', () => {
+  let localIdSeed = 10_000;
+
+  async function createYieldRoute(modelPattern: string) {
+    return await db.insert(schema.tokenRoutes).values({
+      modelPattern,
+      enabled: true,
+    }).returning().get();
+  }
+
+  async function createYieldSite(namePrefix: string) {
+    localIdSeed += 1;
+    return await db.insert(schema.sites).values({
+      name: `${namePrefix}-${localIdSeed}`,
+      url: `https://${namePrefix}-${localIdSeed}.example.com`,
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+  }
+
+  async function createYieldToken(accountId: number, name: string) {
+    return await db.insert(schema.accountTokens).values({
+      accountId,
+      name,
+      token: `token-${name}-${localIdSeed += 1}`,
+      enabled: true,
+      isDefault: false,
+    }).returning().get();
+  }
+
+  async function createSessionChannel(modelPattern: string, balance: number, namePrefix: string) {
+    const route = await createYieldRoute(modelPattern);
+    const site = await createYieldSite(namePrefix);
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: `${namePrefix}-${localIdSeed += 1}`,
+      accessToken: `access-${localIdSeed}`,
+      apiToken: null,
+      status: 'active',
+      balance,
+      lastBalanceRefresh: new Date().toISOString(),
+      extraConfig: JSON.stringify({ credentialMode: 'session' }),
+    }).returning().get();
+    const token = await createYieldToken(account.id, `${namePrefix}-token`);
+    return {
+      route,
+      channel: await db.insert(schema.routeChannels).values({
+        routeId: route.id,
+        accountId: account.id,
+        tokenId: token.id,
+        priority: 0,
+        weight: 10,
+        enabled: true,
+        successCount: 0,
+        failCount: 0,
+        totalCost: 0,
+      }).returning().get(),
+    };
+  }
+
+  it('yields the preferred channel when session balance coverage is low and yield is requested', async () => {
+    const { route, channel } = await createSessionChannel('yield-low-model', 3, 'yield-low');
+
+    const router = new TokenRouter();
+    const selected = await router.selectPreferredChannel('yield-low-model', channel.id, undefined, [], {
+      yieldOnLowBalance: true,
+    });
+    expect(selected).toBeNull();
+    void route;
+  });
+
+  it('keeps the preferred channel when session balance coverage is healthy', async () => {
+    const { route, channel } = await createSessionChannel('yield-healthy-model', 500, 'yield-healthy');
+
+    const router = new TokenRouter();
+    const selected = await router.selectPreferredChannel('yield-healthy-model', channel.id, undefined, [], {
+      yieldOnLowBalance: true,
+    });
+    expect(selected?.channel.id).toBe(channel.id);
+    void route;
+  });
+
+  it('does not yield for low balance when yield is not requested (forced path)', async () => {
+    const { route, channel } = await createSessionChannel('yield-forced-model', 1, 'yield-forced');
+
+    const router = new TokenRouter();
+    const selected = await router.selectPreferredChannel('yield-forced-model', channel.id);
+    expect(selected?.channel.id).toBe(channel.id);
+    void route;
+  });
+
+  it('never yields for direct API-key accounts (unknown balance)', async () => {
+    const route = await createYieldRoute('yield-apikey-model');
+    const site = await createYieldSite('yield-apikey');
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: `yield-apikey-${localIdSeed += 1}`,
+      accessToken: `apikey-placeholder-${localIdSeed}`,
+      apiToken: `sk-${localIdSeed}`,
+      status: 'active',
+      balance: 0,
+      lastBalanceRefresh: new Date().toISOString(),
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+    const token = await createYieldToken(account.id, 'yield-apikey-token');
+    const channel = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      tokenId: token.id,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+      successCount: 0,
+      failCount: 0,
+      totalCost: 0,
+    }).returning().get();
+
+    const router = new TokenRouter();
+    const selected = await router.selectPreferredChannel('yield-apikey-model', channel.id, undefined, [], {
+      yieldOnLowBalance: true,
+    });
+    expect(selected?.channel.id).toBe(channel.id);
+  });
+});
 });

@@ -227,9 +227,18 @@
       "breakpoints": true
     },
     {
+      "idx": 32,
+      "version": "6",
+      "when": 1785481581066,
+      "tag": "0033_downstream_key_sensitive_word_detection",
+      "breakpoints": true
+    },
+    {
       "idx": 33,
-      "when": 1722140000000,
-      "tag": "0033_downstream_key_sensitive_word_detection"
+      "version": "6",
+      "when": 1785481581067,
+      "tag": "0034_drop_use_system_proxy",
+      "breakpoints": true
     }
   ]
 }

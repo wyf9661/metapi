@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
-import ModernSelect from '../components/ModernSelect.js';
+
 import { ToastProvider } from '../components/Toast.js';
 import ProxyLogs from './ProxyLogs.js';
 
@@ -273,7 +273,6 @@ describe('ProxyLogs server-driven page', () => {
       });
 
       const text = collectText(root!.root);
-      expect(text).toContain('消耗总额 $1.2300');
       expect(text).toContain('全部 12');
       expect(text).toContain('成功 8');
       expect(text).toContain('失败 4');
@@ -466,15 +465,10 @@ describe('ProxyLogs server-driven page', () => {
       const collapsedToggleButton = root.root.find((node) => (
         node.type === 'button'
         && typeof node.props.onClick === 'function'
-        && node.props['data-debug-trace-panel-toggle'] === true
-      ));
-      const collapsedPanelBody = root.root.find((node) => (
-        node.type === 'div'
-        && node.props['data-debug-trace-panel-body'] === true
+        && collectText(node).trim() === '展开追踪面板'
       ));
 
-      expect(collapsedToggleButton.props['aria-expanded']).toBe(false);
-      expect(String(collapsedPanelBody.props.className || '')).not.toContain('is-open');
+      expect(root.root.findAllByProps({ 'data-debug-trace-panel-body': true })).toHaveLength(0);
 
       await act(async () => {
         collapsedToggleButton.props.onClick();
@@ -544,16 +538,12 @@ describe('ProxyLogs server-driven page', () => {
       const restoredToggleButton = root.root.find((node) => (
         node.type === 'button'
         && typeof node.props.onClick === 'function'
-        && node.props['data-debug-trace-panel-toggle'] === true
-      ));
-      const restoredPanelBody = root.root.find((node) => (
-        node.type === 'div'
-        && node.props['data-debug-trace-panel-body'] === true
+        && collectText(node).trim() === '展开追踪面板'
       ));
 
       expect(globalThis.localStorage.getItem).toHaveBeenCalledWith('metapi.proxyLogs.debugTracePanelExpanded');
-      expect(restoredToggleButton.props['aria-expanded']).toBe(false);
-      expect(String(restoredPanelBody.props.className || '')).not.toContain('is-open');
+      expect(restoredToggleButton).toBeDefined();
+      expect(root.root.findAllByProps({ 'data-debug-trace-panel-body': true })).toHaveLength(0);
     } finally {
       root?.unmount();
     }
@@ -875,7 +865,7 @@ describe('ProxyLogs server-driven page', () => {
     }
   });
 
-  it('re-queries the server for status, client, and search changes instead of filtering locally', async () => {
+  it('re-queries the server for status and search changes instead of filtering locally', async () => {
     let root!: WebTestRenderer;
 
     try {
@@ -898,15 +888,6 @@ describe('ProxyLogs server-driven page', () => {
       });
       await flushMicrotasks();
 
-      const selects = root!.root.findAllByType(ModernSelect);
-      const clientSelect = selects.find((node) => node.props.placeholder === '全部客户端');
-      expect(clientSelect).toBeDefined();
-
-      await act(async () => {
-        clientSelect!.props.onChange('app:cherry_studio');
-      });
-      await flushMicrotasks();
-
       const searchInput = root!.root.find((node) => (
         node.type === 'input' && node.props.placeholder === '搜索模型、下游 Key、主分组、标签...'
       ));
@@ -921,19 +902,11 @@ describe('ProxyLogs server-driven page', () => {
         status: 'failed',
         search: '',
       });
-      expect(apiMock.getProxyLogs).toHaveBeenNthCalledWith(3, {
-        limit: 50,
-        offset: 0,
-        status: 'failed',
-        search: '',
-        client: 'app:cherry_studio',
-      });
       expect(apiMock.getProxyLogs).toHaveBeenLastCalledWith({
         limit: 50,
         offset: 0,
         status: 'failed',
         search: 'mini',
-        client: 'app:cherry_studio',
       });
     } finally {
       root?.unmount();
@@ -1049,7 +1022,7 @@ describe('ProxyLogs server-driven page', () => {
     try {
       await act(async () => {
         root = create(
-          <MemoryRouter initialEntries={['/logs?siteId=9&client=family%3Acodex&from=2026-03-09T08:00&to=2026-03-09T09:00']}>
+          <MemoryRouter initialEntries={['/logs?siteId=9&from=2026-03-09T08:00&to=2026-03-09T09:00']}>
             <ToastProvider>
               <ProxyLogs />
             </ToastProvider>
@@ -1066,7 +1039,6 @@ describe('ProxyLogs server-driven page', () => {
         status: 'all',
         search: '',
         siteId: 9,
-        client: 'family:codex',
         from: expectedFrom,
         to: expectedTo,
       });

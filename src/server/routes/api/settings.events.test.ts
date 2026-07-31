@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { eq } from 'drizzle-orm';
+import { TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING } from '../../config.js';
 import { resetRequestRateLimitStore } from '../../middleware/requestRateLimit.js';
 
 type DbModule = typeof import('../../db/index.js');
@@ -514,17 +515,17 @@ describe('settings and auth events', () => {
       method: 'PUT',
       url: '/api/settings/runtime',
       payload: {
-        tokenRouterFailureCooldownMaxSec: 2 * 24 * 60 * 60,
+        tokenRouterFailureCooldownMaxSec: TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING,
       },
     });
 
     expect(updateResponse.statusCode).toBe(200);
     const updated = updateResponse.json() as { tokenRouterFailureCooldownMaxSec?: number };
-    expect(updated.tokenRouterFailureCooldownMaxSec).toBe(2 * 24 * 60 * 60);
-    expect((config as any).tokenRouterFailureCooldownMaxSec).toBe(2 * 24 * 60 * 60);
+    expect(updated.tokenRouterFailureCooldownMaxSec).toBe(TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING);
+    expect((config as any).tokenRouterFailureCooldownMaxSec).toBe(TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING);
 
     const saved = await db.select().from(schema.settings).where(eq(schema.settings.key, 'token_router_failure_cooldown_max_sec')).get();
-    expect(saved?.value).toBe(JSON.stringify(2 * 24 * 60 * 60));
+    expect(saved?.value).toBe(JSON.stringify(TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING));
 
     const getResponse = await app.inject({
       method: 'GET',
@@ -532,12 +533,12 @@ describe('settings and auth events', () => {
     });
     expect(getResponse.statusCode).toBe(200);
     const runtime = getResponse.json() as { tokenRouterFailureCooldownMaxSec?: number };
-    expect(runtime.tokenRouterFailureCooldownMaxSec).toBe(2 * 24 * 60 * 60);
+    expect(runtime.tokenRouterFailureCooldownMaxSec).toBe(TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING);
   });
 
   it('clamps token router failure cooldown cap to the supported ceiling', async () => {
     const ninetyDaysSec = 90 * 24 * 60 * 60;
-    const thirtyDaysSec = 30 * 24 * 60 * 60;
+    const supportedCeilingSec = TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING;
     const updateResponse = await app.inject({
       method: 'PUT',
       url: '/api/settings/runtime',
@@ -548,11 +549,11 @@ describe('settings and auth events', () => {
 
     expect(updateResponse.statusCode).toBe(200);
     const updated = updateResponse.json() as { tokenRouterFailureCooldownMaxSec?: number };
-    expect(updated.tokenRouterFailureCooldownMaxSec).toBe(thirtyDaysSec);
-    expect((config as any).tokenRouterFailureCooldownMaxSec).toBe(thirtyDaysSec);
+    expect(updated.tokenRouterFailureCooldownMaxSec).toBe(supportedCeilingSec);
+    expect((config as any).tokenRouterFailureCooldownMaxSec).toBe(supportedCeilingSec);
 
     const saved = await db.select().from(schema.settings).where(eq(schema.settings.key, 'token_router_failure_cooldown_max_sec')).get();
-    expect(saved?.value).toBe(JSON.stringify(thirtyDaysSec));
+    expect(saved?.value).toBe(JSON.stringify(supportedCeilingSec));
   });
 
   it('persists and returns first-byte timeout from runtime settings', async () => {
