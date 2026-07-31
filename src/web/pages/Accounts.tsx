@@ -14,6 +14,7 @@ import { useClientPagination } from "../components/useClientPagination.js";
 import DeleteConfirmModal from "../components/DeleteConfirmModal.js";
 import SiteBadgeLink from "../components/SiteBadgeLink.js";
 import AccountModelsModal from "./accounts/AccountModelsModal.js";
+import EditAccountModal from "./accounts/EditAccountModal.js";
 import {
   buildAddAccountPrereqHint,
   buildVerifyFailureHint,
@@ -2492,162 +2493,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             </CenteredModal>
           )}
 
-          <CenteredModal
+          <EditAccountModal
             open={Boolean(editingAccount)}
+            account={editingAccount}
             onClose={closeEditPanel}
-            title="编辑账号"
-            maxWidth={860}
-            bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
-            footer={
-              <>
-                <button onClick={closeEditPanel} className="btn btn-ghost">
-                  取消
-                </button>
-                <button
-                  onClick={saveEditPanel}
-                  disabled={savingEdit}
-                  className="btn btn-primary"
-                >
-                  {savingEdit ? (
-                    <>
-                      <span
-                        className="spinner spinner-sm"
-                        style={{
-                          borderTopColor: "white",
-                          borderColor: "rgba(255,255,255,0.3)",
-                        }}
-                      />{" "}
-                      保存中...
-                    </>
-                  ) : (
-                    "保存修改"
-                  )}
-                </button>
-              </>
-            }
-          >
-            {editingAccount ? (
-              <ResponsiveFormGrid>
-                <input
-                  placeholder="账号名称"
-                  value={editForm.username}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      username: e.target.value,
-                    }))
-                  }
-                  style={inputStyle}
-                />
-                <ModernSelect
-                  value={editForm.status}
-                  onChange={(value) =>
-                    setEditForm((prev) => ({ ...prev, status: value }))
-                  }
-                  options={[
-                    { value: "active", label: "active" },
-                    { value: "disabled", label: "disabled" },
-                    { value: "expired", label: "expired" },
-                  ]}
-                  placeholder="状态"
-                />
-                <input
-                  placeholder="单位成本（可选）"
-                  value={editForm.unitCost}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      unitCost: e.target.value,
-                    }))
-                  }
-                  style={inputStyle}
-                />
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    ...inputStyle,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editForm.checkinEnabled}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        checkinEnabled: e.target.checked,
-                      }))
-                    }
-                  />
-                  启用签到
-                </label>
-                <input
-                  placeholder="Access Token"
-                  value={editForm.accessToken}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      accessToken: e.target.value,
-                    }))
-                  }
-                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
-                />
-                {(editingAccount?.site?.platform || "").toLowerCase() ===
-                  "new-api" && (
-                  <input
-                    placeholder="用户 ID"
-                    value={editForm.platformUserId}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        platformUserId: e.target.value.replace(/\D/g, ""),
-                      }))
-                    }
-                    style={inputStyle}
-                  />
-                )}
-                <input
-                  placeholder="API Token（可选）"
-                  value={editForm.apiToken}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      apiToken: e.target.value,
-                    }))
-                  }
-                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
-                />
-                {(editingAccount?.site?.platform || "").toLowerCase() ===
-                  "sub2api" && (
-                  <>
-                    <input
-                      placeholder="refresh_token"
-                      value={editForm.refreshToken}
-                      onChange={(e) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          refreshToken: e.target.value,
-                        }))
-                      }
-                      style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
-                    />
-                    <input
-                      placeholder="token_expires_at"
-                      value={editForm.tokenExpiresAt}
-                      onChange={(e) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          tokenExpiresAt: e.target.value.replace(/\D/g, ""),
-                        }))
-                      }
-                      style={inputStyle}
-                    />
-                  </>
-                )}
-              </ResponsiveFormGrid>
-            ) : null}
-          </CenteredModal>
+            onSaved={() => load(true)}
+          />
 
           <div className="card">
             {visibleAccounts.length > 0 ? (
