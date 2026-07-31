@@ -4,7 +4,9 @@ import { db, runtimeDbDialect, schema } from '../db/index.js';
 import { requireInsertedRowId } from '../db/insertHelpers.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
 
-type HeadersLike = Headers | Record<string, unknown> | null | undefined;
+import type { Headers as UndiciHeaders } from 'undici';
+
+export type HeadersLike = Headers | UndiciHeaders | Record<string, unknown> | null | undefined;
 
 export type ProxyDebugCaptureOptions = {
   enabled: boolean;

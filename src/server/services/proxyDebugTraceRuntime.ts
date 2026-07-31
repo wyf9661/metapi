@@ -1,3 +1,4 @@
+import type { Response as UndiciResponse, Headers as UndiciHeaders } from 'undici';
 import { readRuntimeResponseText } from '../proxy-core/executors/types.js';
 import type {
   EndpointAttemptSuccessContext,
@@ -11,6 +12,7 @@ import {
   updateProxyDebugTraceCandidates,
   updateProxyDebugTraceSelection,
   type ProxyDebugTraceSession,
+  type HeadersLike,
 } from './proxyDebugTraceStore.js';
 
 type MutableProxyDebugTraceSession = ProxyDebugTraceSession & {
@@ -156,20 +158,22 @@ export async function captureSurfaceProxyDebugSuccessResponseBody(
 
 export function buildSurfaceProxyDebugResponseHeaders(
   response:
+    | UndiciResponse
+    | UndiciHeaders
     | Headers
     | Record<string, unknown>
-    | { headers?: Headers | Record<string, unknown> | null | undefined }
+    | { headers?: unknown }
     | null
     | undefined,
 ): Record<string, unknown> | null {
   if (!response) return null;
-  if (typeof response === 'object' && 'headers' in response) {
-    const responseHeaders = (response as {
-      headers?: Headers | Record<string, unknown> | null | undefined;
-    }).headers;
-    return normalizeProxyDebugResponseHeaders(responseHeaders ?? null);
+  // Response objects have a .headers property — extract it
+  const maybeHeaders = (response as { headers?: unknown }).headers;
+  if (maybeHeaders && typeof maybeHeaders === 'object') {
+    return normalizeProxyDebugResponseHeaders(maybeHeaders as HeadersLike);
   }
-  return normalizeProxyDebugResponseHeaders(response);
+  // Treat the value itself as headers-like
+  return normalizeProxyDebugResponseHeaders(response as HeadersLike);
 }
 
 export function parseSurfaceProxyDebugTextPayload(rawText: string): unknown {
