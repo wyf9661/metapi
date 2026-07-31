@@ -1,4 +1,4 @@
-import type { RequestInit as UndiciRequestInit } from 'undici';
+import type { RequestInit as UndiciRequestInit, Headers as UndiciHeaders } from 'undici';
 import { createContext, runInContext } from 'node:vm';
 import { withSiteProxyRequestInit } from '../siteProxy.js';
 
@@ -194,7 +194,7 @@ function parseJsonSafe<T>(text: string): T | null {
   }
 }
 
-function collectSetCookieHeaders(headers: Headers): string[] {
+function collectSetCookieHeaders(headers: Headers | UndiciHeaders): string[] {
   const getSetCookie = (headers as unknown as { getSetCookie?: () => string[] }).getSetCookie;
   if (typeof getSetCookie === 'function') {
     return getSetCookie.call(headers) || [];

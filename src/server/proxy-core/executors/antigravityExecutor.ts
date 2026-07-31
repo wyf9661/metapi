@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Response } from 'undici';
+import { Response, Headers } from 'undici';
 import { geminiGenerateContentTransformer } from '../../transformers/gemini/generate-content/index.js';
 import type { RuntimeDispatchInput, RuntimeExecutor, RuntimeResponse } from './types.js';
 import {
