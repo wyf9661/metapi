@@ -178,7 +178,7 @@ describe('syncPatternRouteChannelsAfterAffectedRouteChanges', () => {
     let patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRoute.id))
       .all();
-    expect(patternChannels.map((channel) => channel.sourceModel)).toEqual(['gpt-5-removed']);
+    expect(patternChannels.map((channel: any) => channel.sourceModel)).toEqual(['gpt-5-removed']);
 
     await db.delete(schema.tokenRoutes).where(eq(schema.tokenRoutes.id, exactRoute.id)).run();
 

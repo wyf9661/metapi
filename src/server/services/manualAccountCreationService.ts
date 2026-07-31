@@ -66,7 +66,7 @@ function buildAccountVerifyTimeoutMessage(): string {
 
 async function getNextAccountSortOrder(): Promise<number> {
   const rows = await db.select({ sortOrder: schema.accounts.sortOrder }).from(schema.accounts).all();
-  const max = rows.reduce((currentMax, row) => Math.max(currentMax, row.sortOrder || 0), -1);
+  const max = rows.reduce((currentMax: any, row: any) => Math.max(currentMax, row.sortOrder || 0), -1);
   return max + 1;
 }
 

@@ -493,7 +493,7 @@ it('does not reuse a different ready token when another logical token shares the
       .where(eq(schema.accountTokens.accountId, account.id))
       .all();
     expect(tokenRows).toHaveLength(2);
-    expect(tokenRows.find((row) => row.token === firstFullToken)).toMatchObject({
+    expect(tokenRows.find((row: any) => row.token === firstFullToken)).toMatchObject({
       name: 'first-token',
       token: firstFullToken,
       source: 'manual',
@@ -501,7 +501,7 @@ it('does not reuse a different ready token when another logical token shares the
       isDefault: true,
       tokenGroup: 'default',
     });
-    const maskedRow = tokenRows.find((row) => row.name === 'second-token');
+    const maskedRow = tokenRows.find((row: any) => row.name === 'second-token');
     expect(maskedRow).toMatchObject({
       token: sharedMaskedToken,
       source: 'sync',
@@ -553,8 +553,8 @@ it('does not reuse a different ready token when another logical token shares the
       .where(eq(schema.accountTokens.accountId, account.id))
       .all();
     expect(tokenRows).toHaveLength(2);
-    expect(tokenRows.find((row) => row.token === fullToken)).toBeDefined();
-    const maskedRow = tokenRows.find((row) => row.token === 'sk-***');
+    expect(tokenRows.find((row: any) => row.token === fullToken)).toBeDefined();
+    const maskedRow = tokenRows.find((row: any) => row.token === 'sk-***');
     expect(maskedRow).toMatchObject({
       name: 'short-token',
       source: 'sync',

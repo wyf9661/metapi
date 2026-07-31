@@ -289,7 +289,7 @@ describe('settings and auth events', () => {
     expect(config.payloadRules).toEqual(payload.payloadRules);
 
     const events = await db.select().from(schema.events).all();
-    expect(events.some((event) => (event.message || '').includes('Payload 规则'))).toBe(true);
+    expect(events.some((event: any) => (event.message || '').includes('Payload 规则'))).toBe(true);
   });
 
   it('rejects invalid payload raw rules with a clear message', async () => {
@@ -638,7 +638,7 @@ describe('settings and auth events', () => {
     expect(config.proxyEmptyContentFailEnabled).toBe(true);
 
     const rows = await db.select().from(schema.settings).all();
-    const settingsMap = new Map(rows.map((row) => [row.key, row.value]));
+    const settingsMap = new Map(rows.map((row: any) => [row.key, row.value]));
     expect(settingsMap.get('proxy_error_keywords')).toBe(JSON.stringify([
       'quota exceeded',
       'bad gateway',
@@ -682,7 +682,7 @@ describe('settings and auth events', () => {
     expect(updated.globalBlockedBrands).toEqual(['Codex', 'Gemini']);
 
     const rows = await db.select().from(schema.settings).all();
-    const settingsMap = new Map(rows.map((row) => [row.key, row.value]));
+    const settingsMap = new Map(rows.map((row: any) => [row.key, row.value]));
     expect(settingsMap.get('global_allowed_models')).toBe(JSON.stringify(['model-alpha', 'model-beta', 'model-gamma']));
     expect(JSON.parse(settingsMap.get('global_allowed_models') || 'null')).toEqual(['model-alpha', 'model-beta', 'model-gamma']);
     expect(settingsMap.get('global_blocked_brands')).toBe(JSON.stringify(['Codex', 'Gemini']));
@@ -718,7 +718,7 @@ describe('settings and auth events', () => {
     expect(config.logCleanupRetentionDays).toBe(14);
 
     const rows = await db.select().from(schema.settings).all();
-    const settingsMap = new Map(rows.map((row) => [row.key, row.value]));
+    const settingsMap = new Map(rows.map((row: any) => [row.key, row.value]));
     expect(settingsMap.get('log_cleanup_cron')).toBe(JSON.stringify('15 4 * * *'));
     expect(settingsMap.get('log_cleanup_usage_logs_enabled')).toBe(JSON.stringify(true));
     expect(settingsMap.get('log_cleanup_program_logs_enabled')).toBe(JSON.stringify(true));

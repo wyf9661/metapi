@@ -56,9 +56,9 @@ describe('oauth site registry', () => {
     expect(first.id).toBe(second.id);
 
     const rows = await db.select().from(schema.sites).all();
-    expect(rows.filter((row) => row.platform === 'claude')).toHaveLength(1);
-    expect(rows.filter((row) => row.platform === 'codex')).toHaveLength(0);
-    expect(rows.filter((row) => row.platform === 'gemini-cli')).toHaveLength(0);
-    expect(rows.filter((row) => row.platform === 'antigravity')).toHaveLength(0);
+    expect(rows.filter((row: any) => row.platform === 'claude')).toHaveLength(1);
+    expect(rows.filter((row: any) => row.platform === 'codex')).toHaveLength(0);
+    expect(rows.filter((row: any) => row.platform === 'gemini-cli')).toHaveLength(0);
+    expect(rows.filter((row: any) => row.platform === 'antigravity')).toHaveLength(0);
   });
 });

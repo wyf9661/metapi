@@ -1017,7 +1017,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
     return {
       clientOptions: buildProxyLogClientOptions(clientOptionRows),
-      downstreamKeys: downstreamKeyRows.map((row) => ({
+      downstreamKeys: downstreamKeyRows.map((row: any) => ({
         id: row.id,
         name: row.name || '',
         groupName: row.groupName || null,
@@ -1474,7 +1474,7 @@ export async function statsRoutes(app: FastifyInstance) {
           .all();
 
         const metadataResults = await Promise.all(
-          activeAccountRows.map(async (row) => {
+          activeAccountRows.map(async (row: any) => {
             const catalog = await fetchModelPricingCatalog({
               site: {
                 id: row.sites.id,
@@ -1967,8 +1967,8 @@ export async function statsRoutes(app: FastifyInstance) {
 
       const accountIdsForGroupHints = new Set(
         availableModelRows
-          .filter((row) => requiresManagedAccountTokens(row))
-          .map((row) => row.accountId),
+          .filter((row: any) => requiresManagedAccountTokens(row))
+          .map((row: any) => row.accountId),
       );
       const requiredGroupsByAccountModel = new Map<
         string,
@@ -1992,8 +1992,8 @@ export async function statsRoutes(app: FastifyInstance) {
 
         const metadataResults = await Promise.all(
           accountRows
-            .filter((row) => accountIdsForGroupHints.has(row.accounts.id))
-            .map(async (row) => {
+            .filter((row: any) => accountIdsForGroupHints.has(row.accounts.id))
+            .map(async (row: any) => {
               try {
                 const catalog = await fetchModelPricingCatalog({
                   site: {

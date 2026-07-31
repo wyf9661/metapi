@@ -225,7 +225,7 @@ async function getNextAccountSortOrder(): Promise<number> {
     .from(schema.accounts)
     .all();
   const max = rows.reduce(
-    (currentMax, row) => Math.max(currentMax, row.sortOrder || 0),
+    (currentMax: any, row: any) => Math.max(currentMax, row.sortOrder || 0),
     -1,
   );
   return max + 1;
@@ -470,7 +470,7 @@ async function executeRefreshAccountRuntimeHealth(accountId?: number) {
     .all();
 
   const targetRows = Number.isFinite(accountId as number)
-    ? rows.filter((row) => row.accounts.id === accountId)
+    ? rows.filter((row: any) => row.accounts.id === accountId)
     : rows;
 
   const results: AccountHealthRefreshResult[] = [];
@@ -1803,24 +1803,24 @@ export async function accountsRoutes(app: FastifyInstance) {
         .where(eq(schema.siteDisabledModels.siteId, siteId))
         .all();
 
-      const disabledSet = new Set(disabledRows.map((r) => r.modelName));
+      const disabledSet = new Set(disabledRows.map((r: any) => r.modelName));
 
       const models = modelRows
-        .filter((r) => r.available)
-        .map((r) => ({
+        .filter((r: any) => r.available)
+        .map((r: any) => ({
           name: r.modelName,
           latencyMs: r.latencyMs,
           disabled: disabledSet.has(r.modelName),
           isManual: !!r.isManual,
         }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
       return {
         siteId,
         siteName: account.sites.name,
         models,
         totalCount: models.length,
-        disabledCount: models.filter((m) => m.disabled).length,
+        disabledCount: models.filter((m: any) => m.disabled).length,
       };
     },
   );
@@ -1864,7 +1864,7 @@ export async function accountsRoutes(app: FastifyInstance) {
       }
 
       try {
-        await db.transaction(async (tx) => {
+        await db.transaction(async (tx: any) => {
           const checkedAt = new Date().toISOString();
           for (const modelName of normalizedModels) {
             if (runtimeDbDialect === "mysql") {

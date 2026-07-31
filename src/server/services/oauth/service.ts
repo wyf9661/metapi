@@ -376,7 +376,7 @@ async function revertPersistedOauthAccount(input: {
   }
 
   if (!input.previousAccount) return;
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.update(schema.accounts).set({
       siteId: input.previousAccount!.siteId,
       username: input.previousAccount!.username,
@@ -852,7 +852,7 @@ export async function listOauthConnections(options: {
     .offset(offset)
     .all();
 
-  const accountIds = rows.map((row) => row.accounts.id);
+  const accountIds = rows.map((row: any) => row.accounts.id);
   if (accountIds.length <= 0) {
     return { items: [], total, limit, offset };
   }
@@ -905,7 +905,7 @@ export async function listOauthConnections(options: {
     }
   }
 
-  const items = rows.flatMap((row) => {
+  const items = rows.flatMap((row: any) => {
     const oauth = getOauthInfoFromAccount(row.accounts);
     if (!oauth) return [];
     const models = modelMap.get(row.accounts.id) || [];

@@ -251,7 +251,7 @@ describe('rebuildTokenRoutesFromAvailability', () => {
     const channels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, route!.id))
       .all();
-    expect(channels.map((channel) => channel.sourceModel).sort()).toEqual([
+    expect(channels.map((channel: any) => channel.sourceModel).sort()).toEqual([
       'MiniMax-M2.7',
       'minimax/minimax-m2.7',
       'minimaxai/minimax-m2.7',
@@ -462,7 +462,7 @@ describe('rebuildTokenRoutesFromAvailability', () => {
     const patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRoute.id))
       .all();
-    expect(patternChannels.map((channel) => channel.sourceModel)).toEqual(['gpt-5-current']);
+    expect(patternChannels.map((channel: any) => channel.sourceModel)).toEqual(['gpt-5-current']);
   });
 
   it('adds matching pattern-group channels when automatic rebuild creates exact routes', async () => {

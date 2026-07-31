@@ -22,7 +22,7 @@ type PreservedInfrastructureState = {
 };
 
 async function clearAllBusinessData() {
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.delete(schema.routeChannels).run();
     await tx.delete(schema.tokenModelAvailability).run();
     await tx.delete(schema.modelAvailability).run();

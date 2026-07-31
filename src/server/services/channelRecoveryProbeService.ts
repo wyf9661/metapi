@@ -121,7 +121,7 @@ async function loadCoolingProbeCandidates(nowIso: string): Promise<RecoveryProbe
     ))
     .all();
 
-  return rows.flatMap((row) => {
+  return rows.flatMap((row: any) => {
     if (isProviderDirectedCooldown(row)) return [];
     const modelName = resolveProbeModelName(row);
     const tokenValue = resolveProbeTokenValue(row);
@@ -154,7 +154,7 @@ async function loadActiveProbeCandidates(activeChannelIds: number[]): Promise<Re
     ))
     .all();
 
-  return rows.flatMap((row) => {
+  return rows.flatMap((row: any) => {
     const modelName = resolveProbeModelName(row);
     const tokenValue = resolveProbeTokenValue(row);
     if (!modelName || !tokenValue) return [];

@@ -273,7 +273,7 @@ export async function executeModelAvailabilityProbe(input: {
     : (await db.select({ id: schema.accounts.id })
       .from(schema.accounts)
       .where(eq(schema.accounts.status, 'active'))
-      .all()).map((row) => row.id);
+      .all()).map((row: any) => row.id);
 
   const results: ModelAvailabilityProbeAccountResult[] = [];
   let shouldRebuildRoutes = false;
@@ -514,7 +514,7 @@ async function resolvePreferredTokenValue(accountId: number): Promise<string | u
       ))
       .orderBy(asc(schema.accountTokens.id))
       .all();
-    const preferredToken = tokenRows.find((row) => isUsableAccountToken(row) && String(row.token || '').trim());
+    const preferredToken = tokenRows.find((row: any) => isUsableAccountToken(row) && String(row.token || '').trim());
     if (preferredToken) return String(preferredToken.token || '').trim();
   } catch {
     // ignore and fall back to account credentials
@@ -554,7 +554,7 @@ async function diagnoseNoProbeTargets(
     ))
     .all();
 
-  const matchingRows = allScopedRows.filter((row) => {
+  const matchingRows = allScopedRows.filter((row: any) => {
     const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
     return dbCanonical === canonicalModel;
   });
@@ -604,8 +604,8 @@ async function diagnoseNoProbeTargets(
 
   // 2. Rows exist in scope — determine why they were filtered out.
   const disabledModelsIndex = await loadSiteDisabledModelsIndex();
-  const activeRows = matchingRows.filter(r => r.siteStatus === 'active' && r.accountStatus === 'active');
-  const disabledBySiteModel = activeRows.filter(r =>
+  const activeRows = matchingRows.filter((r: any) => r.siteStatus === 'active' && r.accountStatus === 'active');
+  const disabledBySiteModel = activeRows.filter((r: any) =>
     isModelDisabledForSite(disabledModelsIndex, r.siteId, r.modelName)
     || isModelDisabledForSite(disabledModelsIndex, r.siteId, canonicalModel),
   );
@@ -615,8 +615,8 @@ async function diagnoseNoProbeTargets(
     return `模型 "${modelName}" 在 ${siteName} 被「站点禁用模型」屏蔽，请先在站点设置中移除该模型的禁用。`;
   }
 
-  const inactiveAccounts = matchingRows.filter(r => r.accountStatus !== 'active');
-  const inactiveSites = matchingRows.filter(r => r.siteStatus !== 'active');
+  const inactiveAccounts = matchingRows.filter((r: any) => r.accountStatus !== 'active');
+  const inactiveSites = matchingRows.filter((r: any) => r.siteStatus !== 'active');
 
   // 2d. Check token-level
   let tokenDiag = '';
@@ -634,12 +634,12 @@ async function diagnoseNoProbeTargets(
       ...(siteId ? [eq(schema.sites.id, siteId)] : []),
     ))
     .all();
-  const matchingTokenRows = allTokenRows.filter((row) => {
+  const matchingTokenRows = allTokenRows.filter((row: any) => {
     const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
     return dbCanonical === canonicalModel;
   });
   if (matchingTokenRows.length > 0) {
-    const notReady = matchingTokenRows.filter((r) =>
+    const notReady = matchingTokenRows.filter((r: any) =>
       !r.tokenEnabled || r.tokenValueStatus !== ACCOUNT_TOKEN_VALUE_STATUS_READY,
     ).length;
     if (notReady > 0) {
@@ -830,7 +830,7 @@ async function collectMarketplaceProbeTargets(
     ))
     .orderBy(asc(schema.sites.id), asc(schema.accounts.id))
     .all()
-    .then((rows) => rows.filter((row) => {
+    .then((rows: any) => rows.filter((row: any) => {
       const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
       return dbCanonical === canonicalModel;
     }));
@@ -873,7 +873,7 @@ async function collectMarketplaceProbeTargets(
     ))
     .orderBy(asc(schema.sites.id), asc(schema.accounts.id))
     .all()
-    .then((rows) => rows.filter((row) => {
+    .then((rows: any) => rows.filter((row: any) => {
       const dbCanonical = canonicalizeModelName(row.modelName) || row.modelName.toLowerCase();
       return dbCanonical === canonicalModel;
     }));

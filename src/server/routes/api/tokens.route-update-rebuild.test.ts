@@ -140,10 +140,10 @@ describe('PUT /api/routes/:id route rebuild', () => {
       .where(eq(schema.routeChannels.routeId, route.id))
       .all();
 
-    expect(routeChannels.some((channel) => channel.id === manualChannel.id)).toBe(true);
-    expect(routeChannels.some((channel) => channel.id === autoChannel.id)).toBe(false);
+    expect(routeChannels.some((channel: any) => channel.id === manualChannel.id)).toBe(true);
+    expect(routeChannels.some((channel: any) => channel.id === autoChannel.id)).toBe(false);
 
-    const rebuiltAuto = routeChannels.find((channel) =>
+    const rebuiltAuto = routeChannels.find((channel: any) =>
       channel.accountId === newCandidate.account.id
       && channel.tokenId === newCandidate.token.id
       && channel.sourceModel === 'gemini-2.0-flash',
@@ -709,8 +709,8 @@ describe('PUT /api/routes/:id route rebuild', () => {
     const initialPatternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRouteId))
       .all();
-    const copiedB = initialPatternChannels.find((channel) => channel.sourceModel === 'gpt-5-mini');
-    expect(initialPatternChannels.map((channel) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'gpt-5-mini']);
+    const copiedB = initialPatternChannels.find((channel: any) => channel.sourceModel === 'gpt-5-mini');
+    expect(initialPatternChannels.map((channel: any) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'gpt-5-mini']);
     expect(copiedB?.priority).toBe(3);
     expect(copiedB?.weight).toBe(7);
     expect(copiedB?.manualOverride).toBe(false);
@@ -735,8 +735,8 @@ describe('PUT /api/routes/:id route rebuild', () => {
     let patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRouteId))
       .all();
-    expect(patternChannels.map((channel) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'manual-special']);
-    expect(patternChannels.some((channel) => channel.id === manualPatternChannel.id)).toBe(true);
+    expect(patternChannels.map((channel: any) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'manual-special']);
+    expect(patternChannels.some((channel: any) => channel.id === manualPatternChannel.id)).toBe(true);
 
     const addResponse = await app.inject({
       method: 'POST',
@@ -753,7 +753,7 @@ describe('PUT /api/routes/:id route rebuild', () => {
     patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRouteId))
       .all();
-    expect(patternChannels.map((channel) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'gpt-5-mini', 'manual-special']);
+    expect(patternChannels.map((channel: any) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'gpt-5-mini', 'manual-special']);
 
     const updateResponse = await app.inject({
       method: 'PUT',
@@ -768,7 +768,7 @@ describe('PUT /api/routes/:id route rebuild', () => {
     patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRouteId))
       .all();
-    const updatedPatternB = patternChannels.find((channel) => channel.sourceModel === 'gpt-5-mini');
+    const updatedPatternB = patternChannels.find((channel: any) => channel.sourceModel === 'gpt-5-mini');
     expect(updatedPatternB?.priority).toBe(6);
     expect(updatedPatternB?.weight).toBe(4);
     expect(updatedPatternB?.manualOverride).toBe(false);
@@ -786,8 +786,8 @@ describe('PUT /api/routes/:id route rebuild', () => {
     patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRouteId))
       .all();
-    expect(patternChannels.map((channel) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'manual-special']);
-    expect(patternChannels.some((channel) => channel.id === manualPatternChannel.id)).toBe(true);
+    expect(patternChannels.map((channel: any) => channel.sourceModel).sort()).toEqual(['gpt-5-alpha', 'manual-special']);
+    expect(patternChannels.some((channel: any) => channel.id === manualPatternChannel.id)).toBe(true);
   });
 
   it('preserves OAuth route-unit channels when rebuilding pattern groups from exact routes', async () => {
@@ -898,7 +898,7 @@ describe('PUT /api/routes/:id route rebuild', () => {
     let patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRouteId))
       .all();
-    expect(patternChannels.map((channel) => channel.sourceModel)).toEqual(['gpt-5-delete-me']);
+    expect(patternChannels.map((channel: any) => channel.sourceModel)).toEqual(['gpt-5-delete-me']);
 
     const deleteResponse = await app.inject({
       method: 'DELETE',

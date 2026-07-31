@@ -695,7 +695,7 @@ async function applyProjectionBatch(
     createdAt: checkpoint.createdAt ?? updatedAt,
   };
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     for (const row of delta.siteDayRows) {
       await upsertSiteDayUsage(tx as typeof db, row, updatedAt);
     }
@@ -738,7 +738,7 @@ async function applyPendingRecompute(checkpoint: ProjectionCheckpointRow) {
       leaseExpiresAt: checkpoint.leaseToken ? buildProjectionLeaseExpiry() : checkpoint.leaseExpiresAt,
       lastProjectedAt: new Date().toISOString(),
     };
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: any) => {
       await writeProjectionCheckpoint(tx as typeof db, nextCheckpoint as any);
     });
     return { ...checkpoint, ...nextCheckpoint };
@@ -771,7 +771,7 @@ async function applyPendingRecompute(checkpoint: ProjectionCheckpointRow) {
     lastProjectedAt: new Date().toISOString(),
   };
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.delete(schema.siteDayUsage).where(gte(schema.siteDayUsage.localDay, affectedDay)).run();
     await tx.delete(schema.siteHourUsage).where(gte(schema.siteHourUsage.bucketStartUtc, affectedDayStartUtc)).run();
     await tx.delete(schema.modelDayUsage).where(gte(schema.modelDayUsage.localDay, affectedDay)).run();
@@ -859,7 +859,7 @@ export async function requestUsageAggregatesRecompute(fromLogId = 1): Promise<vo
     ? Math.min(checkpoint.recomputeFromId, normalizedFromId)
     : normalizedFromId;
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await writeProjectionCheckpoint(tx as typeof db, {
       ...checkpoint,
       lastProxyLogId: checkpoint.lastProxyLogId,

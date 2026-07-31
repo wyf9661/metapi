@@ -141,8 +141,8 @@ describe('accounts api endpoint host selection', { timeout: 15_000 }, () => {
     expect(getModelsMock).toHaveBeenNthCalledWith(2, 'https://api-b.example.com', 'sk-rotate', undefined);
 
     const endpoints = await db.select().from(schema.siteApiEndpoints).all();
-    const firstEndpoint = endpoints.find((item) => item.url === 'https://api-a.example.com');
-    const secondEndpoint = endpoints.find((item) => item.url === 'https://api-b.example.com');
+    const firstEndpoint = endpoints.find((item: any) => item.url === 'https://api-a.example.com');
+    const secondEndpoint = endpoints.find((item: any) => item.url === 'https://api-b.example.com');
     expect(firstEndpoint?.cooldownUntil).toBeTruthy();
     expect(firstEndpoint?.lastFailureReason).toContain('HTTP 502');
     expect(secondEndpoint?.lastSelectedAt).toBeTruthy();
@@ -312,8 +312,8 @@ describe('accounts api endpoint host selection', { timeout: 15_000 }, () => {
 
     const accounts = await db.select().from(schema.accounts).all();
     expect(accounts).toHaveLength(2);
-    expect(accounts.map((item) => item.apiToken)).toEqual(['sk-batch-a', 'sk-batch-b']);
-    expect(accounts.map((item) => item.username)).toEqual(['batch-key #1', 'batch-key #2']);
+    expect(accounts.map((item: any) => item.apiToken)).toEqual(['sk-batch-a', 'sk-batch-b']);
+    expect(accounts.map((item: any) => item.username)).toEqual(['batch-key #1', 'batch-key #2']);
   });
 
   it('treats accessTokens payloads as batch API key creation even without credentialMode', async () => {
@@ -358,7 +358,7 @@ describe('accounts api endpoint host selection', { timeout: 15_000 }, () => {
 
     const accounts = await db.select().from(schema.accounts).all();
     expect(accounts).toHaveLength(2);
-    expect(accounts.map((item) => item.apiToken)).toEqual(['sk-array-a', 'sk-array-b']);
-    expect(accounts.map((item) => item.username)).toEqual(['array-key #1', 'array-key #2']);
+    expect(accounts.map((item: any) => item.apiToken)).toEqual(['sk-array-a', 'sk-array-b']);
+    expect(accounts.map((item: any) => item.username)).toEqual(['array-key #1', 'array-key #2']);
   });
 });

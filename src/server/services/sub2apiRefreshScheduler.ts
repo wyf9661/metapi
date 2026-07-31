@@ -66,7 +66,7 @@ export async function executeSub2ApiManagedRefreshPass(input: {
     ))
     .all();
 
-  const refreshCandidates = rows.filter((row) => shouldRefreshManagedSub2ApiAccount({
+  const refreshCandidates = rows.filter((row: any) => shouldRefreshManagedSub2ApiAccount({
     account: row.accounts,
     site: row.sites,
     nowMs,

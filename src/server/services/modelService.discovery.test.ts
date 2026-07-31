@@ -127,7 +127,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const rows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(rows.map((row) => row.modelName).sort()).toEqual([
+    expect(rows.map((row: any) => row.modelName).sort()).toEqual([
       'claude-opus-4-6',
       'claude-sonnet-4-5-20250929',
     ]);
@@ -195,7 +195,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const accountRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(accountRows.map((row) => row.modelName)).toEqual(['grok-4.5']);
+    expect(accountRows.map((row: any) => row.modelName)).toEqual(['grok-4.5']);
 
     const token = await db.select().from(schema.accountTokens)
       .where(eq(schema.accountTokens.accountId, account.id))
@@ -203,7 +203,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const tokenRows = await db.select().from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token!.id))
       .all();
-    expect(tokenRows.map((row) => row.modelName)).toEqual(['grok-4.5']);
+    expect(tokenRows.map((row: any) => row.modelName)).toEqual(['grok-4.5']);
 
     // Session credential must not be queried while managed keys already yielded models.
     expect(getModelsMock.mock.calls.some((call) => call[1] === 'session-token')).toBe(false);
@@ -252,7 +252,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const rows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(rows.map((row) => row.modelName).sort()).toEqual([
+    expect(rows.map((row: any) => row.modelName).sort()).toEqual([
       'claude-opus-4-6',
       'gpt-4.1',
     ]);
@@ -335,15 +335,15 @@ describe('refreshModelsForAccount credential discovery', () => {
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
 
-    expect(rows.map((row) => row.modelName).sort()).toEqual(['?', 'GPT-4.1']);
+    expect(rows.map((row: any) => row.modelName).sort()).toEqual(['?', 'GPT-4.1']);
   });
 
   it('reuses one in-flight full refresh when concurrent callers request a rebuild', async () => {
     getApiTokenMock.mockResolvedValue(null);
 
-    let releaseGate: (() => void) | null = null;
+    let releaseGate: (() => void) | undefined = undefined;
     const gate = new Promise<void>((resolve) => {
-      releaseGate = resolve;
+      releaseGate = () => resolve();
     });
 
     getModelsMock.mockImplementation(async () => {
@@ -380,7 +380,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const secondRefresh = refreshModelsAndRebuildRoutes();
     await Promise.resolve();
     await Promise.resolve();
-    releaseGate?.();
+    (releaseGate as (() => void) | undefined)?.();
 
     const results = await Promise.allSettled([firstRefresh, secondRefresh]);
     expect(results.every((item) => item.status === 'fulfilled')).toBe(true);
@@ -389,7 +389,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const modelRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(modelRows.map((row) => row.modelName)).toEqual(['gpt-5-nano']);
+    expect(modelRows.map((row: any) => row.modelName)).toEqual(['gpt-5-nano']);
 
     const token = await db.select().from(schema.accountTokens)
       .where(eq(schema.accountTokens.accountId, account.id))
@@ -397,7 +397,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const tokenRows = await db.select().from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token!.id))
       .all();
-    expect(tokenRows.map((row) => row.modelName)).toEqual(['gpt-5-nano']);
+    expect(tokenRows.map((row: any) => row.modelName)).toEqual(['gpt-5-nano']);
   });
 
   it('marks transient model discovery failures degraded instead of unhealthy', async () => {
@@ -812,7 +812,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const rows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    const modelNames = rows.map((row) => row.modelName);
+    const modelNames = rows.map((row: any) => row.modelName);
     expect(modelNames.sort()).toEqual([
       'gpt-5',
       'gpt-5-codex',
@@ -960,8 +960,8 @@ describe('refreshModelsForAccount credential discovery', () => {
     const endpoints = await db.select().from(schema.siteApiEndpoints)
       .where(eq(schema.siteApiEndpoints.siteId, site.id))
       .all();
-    const firstEndpoint = endpoints.find((item) => item.url === 'https://chatgpt.com/backend-api/codex-a');
-    const secondEndpoint = endpoints.find((item) => item.url === 'https://chatgpt.com/backend-api/codex-b');
+    const firstEndpoint = endpoints.find((item: any) => item.url === 'https://chatgpt.com/backend-api/codex-a');
+    const secondEndpoint = endpoints.find((item: any) => item.url === 'https://chatgpt.com/backend-api/codex-b');
     expect(firstEndpoint?.cooldownUntil).toBeTruthy();
     expect(firstEndpoint?.lastFailureReason).toContain('HTTP 502');
     expect(secondEndpoint?.lastSelectedAt).toBeTruthy();
@@ -1033,7 +1033,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const rows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(rows.map((row) => row.modelName).sort()).toEqual([
+    expect(rows.map((row: any) => row.modelName).sort()).toEqual([
       'claude-3-7-sonnet-latest',
       'claude-opus-4-1-20250805',
     ]);
@@ -1904,7 +1904,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     const rows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(rows.map((row) => row.modelName).sort()).toEqual([
+    expect(rows.map((row: any) => row.modelName).sort()).toEqual([
       'claude-sonnet-4-5-20250929',
       'gemini-3-pro-preview',
     ]);
@@ -2044,8 +2044,8 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(String(undiciFetchMock.mock.calls[1]?.[0] || '')).toBe('https://api-antigravity-b.example.com/v1internal:fetchAvailableModels');
 
     const endpoints = await db.select().from(schema.siteApiEndpoints).all();
-    const firstEndpoint = endpoints.find((item) => item.url === 'https://api-antigravity-a.example.com');
-    const secondEndpoint = endpoints.find((item) => item.url === 'https://api-antigravity-b.example.com');
+    const firstEndpoint = endpoints.find((item: any) => item.url === 'https://api-antigravity-a.example.com');
+    const secondEndpoint = endpoints.find((item: any) => item.url === 'https://api-antigravity-b.example.com');
     expect(firstEndpoint?.cooldownUntil).toBeTruthy();
     expect(firstEndpoint?.lastFailureReason).toContain('HTTP 503');
     expect(secondEndpoint?.lastSelectedAt).toBeTruthy();
@@ -2090,12 +2090,12 @@ describe('refreshModelsForAccount credential discovery', () => {
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
 
-    const modelNames = rows.map((r) => r.modelName).sort();
+    const modelNames = rows.map((r: any) => r.modelName).sort();
     expect(modelNames).toContain('my-custom-model');
     expect(modelNames).toContain('gpt-4.1');
     expect(modelNames).toContain('claude-opus-4-6');
 
-    const manualRow = rows.find((r) => r.modelName === 'my-custom-model');
+    const manualRow = rows.find((r: any) => r.modelName === 'my-custom-model');
     expect(manualRow?.isManual).toBe(true);
   });
 
@@ -2139,11 +2139,11 @@ describe('refreshModelsForAccount credential discovery', () => {
       .all();
 
     // Should have gpt-4.1 (discovered) and my-custom-model (manual, kept as-is)
-    const modelNames = rows.map((r) => r.modelName).sort();
+    const modelNames = rows.map((r: any) => r.modelName).sort();
     expect(modelNames).toEqual(['gpt-4.1', 'my-custom-model']);
 
     // The manual model should still have isManual=true (not overwritten by discovery)
-    const manualRow = rows.find((r) => r.modelName === 'my-custom-model');
+    const manualRow = rows.find((r: any) => r.modelName === 'my-custom-model');
     expect(manualRow?.isManual).toBe(true);
   });
 
@@ -2193,11 +2193,11 @@ describe('refreshModelsForAccount credential discovery', () => {
       .all();
 
     // Both manual model and restored synced model should exist
-    const modelNames = rows.map((r) => r.modelName).sort();
+    const modelNames = rows.map((r: any) => r.modelName).sort();
     expect(modelNames).toContain('my-custom-model');
     expect(modelNames).toContain('gpt-4.1');
 
-    const manualRow = rows.find((r) => r.modelName === 'my-custom-model');
+    const manualRow = rows.find((r: any) => r.modelName === 'my-custom-model');
     expect(manualRow?.isManual).toBe(true);
   });
 

@@ -409,7 +409,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       if (siteAccountIds.length > 0) {
         await db.update(schema.routeChannels)
           .set({ enabled: false, updatedAt: now })
-          .where(inArray(schema.routeChannels.accountId, siteAccountIds.map((row) => row.id)))
+          .where(inArray(schema.routeChannels.accountId, siteAccountIds.map((row: any) => row.id)))
           .run();
         invalidateTokenRouterCache();
       }
@@ -443,7 +443,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       await db.update(schema.routeChannels)
         .set({ enabled: true, updatedAt: now })
         .where(and(
-          inArray(schema.routeChannels.accountId, activeAccountIds.map((row) => row.id)),
+          inArray(schema.routeChannels.accountId, activeAccountIds.map((row: any) => row.id)),
           eq(schema.routeChannels.enabled, false),
         ))
         .run();
@@ -941,14 +941,14 @@ export async function sitesRoutes(app: FastifyInstance) {
     .from(schema.accounts)
     .where(eq(schema.accounts.siteId, siteId))
     .all();
-  const accountIds = accountRows.map((row) => row.id).filter((id) => Number.isFinite(id) && id > 0);
+  const accountIds = accountRows.map((row: any) => row.id).filter((id: any) => Number.isFinite(id) && id > 0);
 
   if (accountIds.length > 0) {
     const tokenRows = await db.select({ id: schema.accountTokens.id })
       .from(schema.accountTokens)
       .where(inArray(schema.accountTokens.accountId, accountIds))
       .all();
-    const tokenIds = tokenRows.map((row) => row.id).filter((id) => Number.isFinite(id) && id > 0);
+    const tokenIds = tokenRows.map((row: any) => row.id).filter((id: any) => Number.isFinite(id) && id > 0);
 
     if (tokenIds.length > 0) {
       await db.delete(schema.tokenModelAvailability)

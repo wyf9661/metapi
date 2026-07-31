@@ -137,7 +137,7 @@ export async function listOauthRouteUnitMembersByUnitIds(unitIds: number[]): Pro
 }
 
 async function rollbackCreatedOauthRouteUnit(routeUnitId: number): Promise<void> {
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.delete(schema.routeChannels)
       .where(eq(schema.routeChannels.oauthRouteUnitId, routeUnitId))
       .run();
@@ -155,7 +155,7 @@ async function restoreDeletedOauthRouteUnit(snapshot: {
   members: Array<typeof schema.oauthRouteUnitMembers.$inferSelect>;
   channels: Array<typeof schema.routeChannels.$inferSelect>;
 }): Promise<void> {
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.insert(schema.oauthRouteUnits).values({
       id: snapshot.unit.id,
       siteId: snapshot.unit.siteId,
@@ -214,8 +214,8 @@ export async function listEnabledOauthRouteUnitsWithMembers(): Promise<Array<{
     .all();
   if (units.length === 0) return [];
 
-  const membersByUnitId = await listOauthRouteUnitMembersByUnitIds(units.map((unit) => unit.id));
-  return units.map((unit) => ({
+  const membersByUnitId = await listOauthRouteUnitMembersByUnitIds(units.map((unit: any) => unit.id));
+  return units.map((unit: any) => ({
     unit,
     members: membersByUnitId.get(unit.id) || [],
   }));
@@ -263,7 +263,7 @@ export async function createOauthRouteUnit(input: {
 
   let created;
   try {
-    created = await db.transaction(async (tx) => {
+    created = await db.transaction(async (tx: any) => {
       const existingMembers = await tx.select({
         accountId: schema.oauthRouteUnitMembers.accountId,
       }).from(schema.oauthRouteUnitMembers)
