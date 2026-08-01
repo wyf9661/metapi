@@ -15,56 +15,55 @@ function isEndpointDispatchDeniedMessage(message?: string | null): boolean {
   );
 }
 
-function containsHttpStatus(message: string | null | undefined, status: number): boolean {
-  if (!message) return false;
-  return new RegExp(`(?:^|\\b)(?:http\\s*)?${status}(?:\\b|:)`, 'i').test(message);
-}
-
 export function isTokenExpiredError(input: { status?: number; message?: string | null }): boolean {
   const rawMessage = input.message || '';
   const text = (input.message || '').toLowerCase();
   if (isEndpointDispatchDeniedMessage(rawMessage)) return false;
-
-  const is401 = input.status === 401 || containsHttpStatus(rawMessage, 401);
-
-  // 401 alone is not sufficient evidence of token expiration. Many transient
-  // issues (WAF blocks, missing headers, network blips) also produce 401.
-  // Require explicit credential/token-related language in the message.
-  if (is401) {
-    if (!text) return false;
-    // Filter out HTML pages / WAF challenge content
-    if (text.startsWith('<!doctype') || text.startsWith('<html') || text.includes('<script')) return false;
-    if (text.includes('未登录且未提供 access token')) return false;
-    return (
-      text.includes('token') ||
-      text.includes('令牌') ||
-      text.includes('访问令牌') ||
-      text.includes('access') ||
-      text.includes('unauthorized') ||
-      text.includes('invalid') ||
-      text.includes('无效') ||
-      text.includes('expired') ||
-      text.includes('过期') ||
-      text.includes('auth')
-    );
-  }
-
   if (!text) return false;
+
+  // Filter out HTML pages / WAF challenge content.
+  if (text.startsWith('<!doctype') || text.startsWith('<html') || text.includes('<script')) return false;
 
   // NewAPI-like sites may return this when session context is missing for an action,
   // which does not always mean the account token is expired.
   if (text.includes('未登录且未提供 access token')) return false;
 
+  // HTTP status (especially 401) alone is NOT sufficient evidence of token expiry:
+  // WAF blocks, missing headers, gateway default wording ("Unauthorized"),
+  // rate-limit/fraud shields all produce 401 with generic text. Only explicit
+  // credential-invalid/expired language counts, identical for 401 and non-401 paths.
   const tokenPhrase = text.includes('token') || text.includes('令牌') || text.includes('访问令牌');
-  const hasInvalid = text.includes('invalid') || text.includes('无效');
-  const hasExpired = text.includes('expired') || text.includes('过期');
+  const hasInvalid = text.includes('invalid') || text.includes('无效') || text.includes('失效');
+  const hasExpired = text.includes('expired') || text.includes('expire') || text.includes('过期');
+
+  const explicitExpiredPhrase = (
+    text.includes('jwt expired')
+    || text.includes('token expired')
+    || text.includes('expired token')
+    || text.includes('token 已过期')
+    || text.includes('令牌已过期')
+    || text.includes('token 已失效')
+    || text.includes('令牌已失效')
+    || text.includes('登录已过期')
+    || text.includes('登录已失效')
+    || text.includes('登录状态已过期')
+    || text.includes('未登录或登录已过期')
+  );
+
+  const explicitInvalidPhrase = (
+    /invalid\s+access\s+token/.test(text)
+    || /access\s+token\s+is\s+invalid/.test(text)
+    || /invalid\s+token/.test(text)
+    || text.includes('access token 无效')
+    || text.includes('访问令牌无效')
+    || text.includes('token 无效')
+    || text.includes('令牌无效')
+  );
 
   return (
-    text.includes('jwt expired') ||
-    text.includes('token expired') ||
-    (tokenPhrase && (hasInvalid || hasExpired)) ||
-    /invalid\s+access\s+token/.test(text) ||
-    /access\s+token\s+is\s+invalid/.test(text)
+    explicitExpiredPhrase
+    || explicitInvalidPhrase
+    || (tokenPhrase && (hasInvalid || hasExpired))
   );
 }
 

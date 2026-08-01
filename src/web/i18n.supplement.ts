@@ -158,6 +158,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '访问令牌': 'access token',
   '访问令牌失效': 'Access token expired',
   '访问令牌失效：${params.detail}': 'Access token expired: ${params.detail}',
+  '连接状态异常': 'Connection status abnormal',
+  '连接状态异常：${params.detail}': 'Connection status abnormal: ${params.detail}',
   '访问令牌已过期': 'Access token has expired',
   '费用统计: 支出 $${metrics.todaySpend.toFixed(6)} | 奖励 $${metrics.todayReward.toFixed(6)} | 净值 $${net.toFixed(6)}': 'Cost statistics: Expenses $${metrics.todaySpend.toFixed(6)} | Rewards $${metrics.todayReward.toFixed(6)} | Net worth $${net.toFixed(6)}',
   '分组计费': 'Group charging',

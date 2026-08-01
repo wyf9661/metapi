@@ -15,6 +15,7 @@ const recordFailureMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const reportProxyAllFailedMock = vi.fn();
 const reportTokenExpiredMock = vi.fn();
+const resetTokenExpiredSightingsMock = vi.fn();
 const estimateProxyCostMock = vi.fn(async (_arg?: any) => 0);
 const buildProxyBillingDetailsMock = vi.fn(async (_arg?: any) => null);
 const fetchModelPricingCatalogMock = vi.fn(async (_arg?: any): Promise<any> => null);
@@ -49,6 +50,7 @@ vi.mock('../../services/modelService.js', () => ({
 vi.mock('../../services/alertService.js', () => ({
   reportProxyAllFailed: (...args: unknown[]) => reportProxyAllFailedMock(...args),
   reportTokenExpired: (...args: unknown[]) => reportTokenExpiredMock(...args),
+  resetTokenExpiredSightings: (...args: unknown[]) => resetTokenExpiredSightingsMock(...args),
 }));
 
 vi.mock('../../services/alertRules.js', () => ({
@@ -106,6 +108,7 @@ describe('chat proxy site api endpoint rotation', () => {
     refreshModelsAndRebuildRoutesMock.mockReset();
     reportProxyAllFailedMock.mockReset();
     reportTokenExpiredMock.mockReset();
+    resetTokenExpiredSightingsMock.mockReset();
     estimateProxyCostMock.mockClear();
     buildProxyBillingDetailsMock.mockClear();
     fetchModelPricingCatalogMock.mockReset();

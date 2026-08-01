@@ -4,7 +4,7 @@ import type { SiteProxyConfigLike } from '../../services/siteProxy.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageFallbackService.js';
 import type { DownstreamRoutingPolicy } from '../../services/downstreamPolicyTypes.js';
-import { reportProxyAllFailed, reportTokenExpired } from '../../services/alertService.js';
+import { reportProxyAllFailed, reportTokenExpired, resetTokenExpiredSightings } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
 import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
 import {
@@ -452,6 +452,11 @@ export async function recordSurfaceSuccess(input: {
     estimatedCost,
     input.modelName,
   );
+  // A successful upstream call proves the credential works; clear any
+  // pending token-expiry sightings for this account.
+  if (input.selected.account?.id != null) {
+    resetTokenExpiredSightings(input.selected.account.id);
+  }
   input.recordDownstreamCost?.(estimatedCost);
   const logTokens = resolvedUsage.usageSource === 'unknown'
     ? {
@@ -617,8 +622,10 @@ export function createSurfaceFailureToolkit(input: {
       }));
 
       if (isTokenExpiredError({ status: args.status, message: args.errText })) {
+        const siteId = args.selected.site.id ?? 0;
         runBestEffort('report token expired', () => reportTokenExpired({
           accountId: args.selected.account.id,
+          siteId,
           username: args.selected.account.username,
           siteName: args.selected.site.name,
           detail: `HTTP ${args.status}`,

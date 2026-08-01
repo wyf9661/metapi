@@ -24,6 +24,7 @@ import { downstreamApiKeysRoutes } from './routes/api/downstreamApiKeys.js';
 import { oauthRoutes } from './routes/api/oauth.js';
 import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { updateCenterRoutes } from './routes/api/updateCenter.js';
+import { registerProbeLogsRoutes } from './routes/api/probeLogs.js';
 import { proxyRoutes } from './routes/proxy/router.js';
 import { startScheduler } from './services/checkinScheduler.js';
 import * as routeRefreshWorkflow from './services/routeRefreshWorkflow.js';
@@ -41,8 +42,8 @@ import {
   stopModelAvailabilityProbeScheduler,
 } from './services/modelAvailabilityProbeService.js';
 import {
-  startChannelRecoveryProbeScheduler,
-  stopChannelRecoveryProbeScheduler,
+  startChannelProbeScheduler,
+  stopChannelProbeScheduler,
 } from './services/channelRecoveryProbeService.js';
 import {
   startSub2ApiManagedRefreshScheduler,
@@ -278,6 +279,9 @@ await app.register(testRoutes);
 await app.register(downstreamApiKeysRoutes);
 await app.register(oauthRoutes);
 
+// Register probe logs routes
+await app.register(registerProbeLogsRoutes);
+
 // Register OpenAI-compatible proxy routes
 await app.register(proxyRoutes);
 
@@ -313,7 +317,7 @@ await startScheduler();
 await reloadBackupWebdavScheduler();
 startSiteAnnouncementPolling();
 startModelAvailabilityProbeScheduler();
-startChannelRecoveryProbeScheduler();
+startChannelProbeScheduler();
 startSub2ApiManagedRefreshScheduler();
 startUpdateCenterPolling();
 startUsageAggregationProjectorScheduler();
@@ -332,7 +336,7 @@ app.addHook('onClose', async () => {
   stopProxyFileRetentionService();
   stopProxyLogRetentionService();
   stopModelAvailabilityProbeScheduler();
-  stopChannelRecoveryProbeScheduler();
+  stopChannelProbeScheduler();
   await stopUsageAggregationProjectorScheduler();
   await stopAdminSnapshotWarmScheduler();
   stopRouteDecisionRefreshScheduler();

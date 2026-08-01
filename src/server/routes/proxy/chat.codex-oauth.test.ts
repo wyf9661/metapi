@@ -10,6 +10,7 @@ const recordFailureMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const reportProxyAllFailedMock = vi.fn();
 const reportTokenExpiredMock = vi.fn();
+const resetTokenExpiredSightingsMock = vi.fn();
 const resolveProxyUsageWithSelfLogFallbackMock = vi.fn(async ({ usage }: any) => ({
   ...usage,
   estimatedCostFromQuota: 0,
@@ -48,6 +49,7 @@ vi.mock('../../services/modelService.js', () => ({
 vi.mock('../../services/alertService.js', () => ({
   reportProxyAllFailed: (...args: unknown[]) => reportProxyAllFailedMock(...args),
   reportTokenExpired: (...args: unknown[]) => reportTokenExpiredMock(...args),
+  resetTokenExpiredSightings: (...args: unknown[]) => resetTokenExpiredSightingsMock(...args),
 }));
 
 vi.mock('../../services/alertRules.js', () => ({
@@ -145,6 +147,7 @@ describe('chat proxy codex oauth compatibility', () => {
     refreshModelsAndRebuildRoutesMock.mockReset();
     reportProxyAllFailedMock.mockReset();
     reportTokenExpiredMock.mockReset();
+    resetTokenExpiredSightingsMock.mockReset();
     resolveProxyUsageWithSelfLogFallbackMock.mockClear();
     refreshOauthAccessTokenSingleflightMock.mockReset();
     dbInsertMock.mockClear();

@@ -10,16 +10,103 @@ export const PROXY_FAILURE_NOTIFY_COOLDOWN_MS = 10 * 60 * 1000;
 
 const proxyFailureNotifyState = new Map<string, { lastSentAtMs: number; suppressedCount: number }>();
 
-export async function reportTokenExpired(params: {
-  accountId: number;
-  username?: string | null;
-  siteName?: string | null;
-  detail?: string;
-}) {
+/**
+ * Token-expiry sightings need confirmation before full alerting. A single
+ * 401/token-looking error is often transient (upstream WAF, gateway default
+ * wording, rate-limit shield) and the account recovers on the next refresh.
+ * Only a second hit within the window triggers the full side effects
+ * (event + expired status + external push). Any successful balance refresh or
+ * proxy request clears the sightings.
+ */
+export const TOKEN_EXPIRED_CONFIRM_REQUIRED = 2;
+export const TOKEN_EXPIRED_CONFIRM_WINDOW_MS = 30 * 60 * 1000;
+
+const tokenExpiredSightingState = new Map<number, { count: number; firstSeenAtMs: number }>();
+
+export function noteTokenExpiredSighting(accountId: number, nowMs = Date.now()): boolean {
+  const current = tokenExpiredSightingState.get(accountId);
+  if (!current || nowMs - current.firstSeenAtMs > TOKEN_EXPIRED_CONFIRM_WINDOW_MS) {
+    tokenExpiredSightingState.set(accountId, { count: 1, firstSeenAtMs: nowMs });
+    return false;
+  }
+  const nextCount = current.count + 1;
+  if (nextCount >= TOKEN_EXPIRED_CONFIRM_REQUIRED) {
+    tokenExpiredSightingState.delete(accountId);
+    return true;
+  }
+  tokenExpiredSightingState.set(accountId, { count: nextCount, firstSeenAtMs: current.firstSeenAtMs });
+  return false;
+}
+
+export function resetTokenExpiredSightings(accountId: number): void {
+  tokenExpiredSightingState.delete(accountId);
+}
+
+export function __resetTokenExpiredSightingStateForTests(): void {
+  tokenExpiredSightingState.clear();
+}
+
+export async function reportTokenExpired(
+  params: {
+    accountId: number;
+    siteId: number;
+    username?: string | null;
+    siteName?: string | null;
+    detail?: string;
+  },
+  /**
+   * Optional live credential check, provided by callers that can perform a real
+   * request (e.g. balanceService). When it resolves successfully the sighting is
+   * treated as spurious: the account auto-recovers (status back to active,
+   * health back to healthy) and nothing is pushed.
+   */
+  verify?: () => Promise<unknown> | unknown,
+) {
   const accountLabel = params.username || `ID:${params.accountId}`;
   const siteLabel = params.siteName || 'unknown-site';
   const detailText = params.detail ? appendSessionTokenRebindHint(params.detail) : '';
   const detail = detailText ? ` (${detailText})` : '';
+
+  // First hit within the window is treated as a suspected transient failure:
+  // only downgrade runtime health, do not mark the account expired or push.
+  if (!noteTokenExpiredSighting(params.accountId)) {
+    setAccountRuntimeHealth(params.accountId, {
+      state: 'degraded',
+      reason: detailText ? `连接状态异常：${detailText}` : '连接状态异常',
+      source: 'auth',
+    });
+    return;
+  }
+
+  // Confirmed by a second sighting, but before committing to the full alert,
+  // run the caller's live credential check if one was provided. A successful
+  // check proves the token still works, so recover silently instead of
+  // marking the account expired and pushing.
+  if (verify) {
+    try {
+      const verified = await verify();
+      const skipped = !!verified
+        && typeof verified === 'object'
+        && 'skipped' in (verified as Record<string, unknown>)
+        && (verified as { skipped?: unknown }).skipped === true;
+      if (verified && !skipped) {
+        await db.update(schema.accounts)
+          .set({ status: 'active', updatedAt: new Date().toISOString() })
+          .where(eq(schema.accounts.id, params.accountId))
+          .run();
+        setAccountRuntimeHealth(params.accountId, {
+          state: 'healthy',
+          reason: '令牌验证通过',
+          source: 'balance',
+        });
+        resetTokenExpiredSightings(params.accountId);
+        return;
+      }
+    } catch {
+      // Re-verify failed, proceed with the full alert.
+    }
+  }
+
   const createdAt = formatUtcSqlDateTime(new Date());
 
   await db.insert(schema.events).values({
@@ -27,8 +114,8 @@ export async function reportTokenExpired(params: {
     title: 'Token 已失效',
     message: `${accountLabel} @ ${siteLabel} 的 Token 无效或已过期${detail}`,
     level: 'error',
-    relatedId: params.accountId,
-    relatedType: 'account',
+    relatedId: params.siteId,
+    relatedType: 'site',
     createdAt,
   }).run();
 

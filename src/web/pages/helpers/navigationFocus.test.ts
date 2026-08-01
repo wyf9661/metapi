@@ -46,11 +46,12 @@ describe('navigationFocus helpers', () => {
   });
 
   it('builds event navigation path by related entity', () => {
+    // Token-expired events now go to site detail page
     expect(buildEventNavigationPath({
-      relatedType: 'account',
+      relatedType: 'site',
       relatedId: 18,
       type: 'token',
-    })).toBe('/accounts?focusAccountId=18&openRebind=1');
+    })).toBe('/sites/18');
 
     expect(buildEventNavigationPath({
       relatedType: 'account',

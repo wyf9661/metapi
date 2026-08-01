@@ -424,13 +424,16 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
         : (matchingReadyByMaskedValue.length === 1 ? matchingReadyByMaskedValue[0] : null));
     if (readyMaskedMatch) {
       // Drop any pending placeholder for the same secret, even if the name differs.
+      // Only delete placeholders whose own masked token matches the ready row's
+      // plaintext — deleting based on `tokenValue` (the current upstream token)
+      // is wrong because it always matches the ready row (that's how it was found),
+      // which would nuke unrelated masked-pending rows for different keys.
       const staleMaskedPlaceholders = existing.filter((row: AccountTokenRow) => (
         row.id !== readyMaskedMatch.id
         && resolveAccountTokenValueStatus(row) === ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
         && (
           matchesMaskedTokenValue(readyMaskedMatch.token, row.token)
-          || matchesMaskedTokenValue(readyMaskedMatch.token, tokenValue)
-          || row.token === tokenValue
+          || row.token === readyMaskedMatch.token
           || (row.name === tokenName && (
             matchesMaskedTokenValue(row.token, tokenValue)
             || row.token === tokenValue

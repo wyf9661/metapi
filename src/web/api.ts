@@ -1110,6 +1110,22 @@ export const api = {
   },
   getProxyLogDetail: (id: number) =>
     request(`/api/stats/proxy-logs/${id}`) as Promise<ProxyLogDetail>,
+  getProbeLogs: (params?: string) =>
+    request(`/api/probe-logs${params ? `?${params}` : ''}`) as Promise<{
+      logs: any[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>,
+  getProbeLogStats: (params?: string) =>
+    request(`/api/probe-logs/stats${params ? `?${params}` : ''}`) as Promise<{
+      total: number;
+      success: number;
+      failed: number;
+      timeout: number;
+      avgLatencyMs: number;
+      totalTokens: number;
+    }>,
   getProxyDebugTraces: (params?: { limit?: number }) =>
     request(
       `/api/stats/proxy-debug/traces${buildQueryString(params)}`,

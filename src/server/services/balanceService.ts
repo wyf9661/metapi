@@ -1,8 +1,8 @@
 import { db, schema } from '../db/index.js';
 import { getAdapter } from './platforms/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { appendSessionTokenRebindHint, isTokenExpiredError } from './alertRules.js';
-import { reportTokenExpired } from './alertService.js';
+import { reportTokenExpired, resetTokenExpiredSightings } from './alertService.js';
 import {
   buildStoredSub2ApiSubscriptionSummary,
   getAutoReloginConfig,
@@ -331,12 +331,15 @@ export async function refreshBalance(accountId: number) {
       source: 'balance',
     });
     if (expired) {
+      // Pass a live credential check: if the token actually still works the
+      // report auto-recovers instead of marking the account expired/pushing.
       await reportTokenExpired({
         accountId: account.id,
+        siteId: site.id,
         username: account.username,
         siteName: site.name,
         detail: message,
-      });
+      }, () => readBalance(activeAccessToken));
     }
     throw new Error(message);
   };
@@ -442,14 +445,25 @@ export async function refreshBalance(accountId: number) {
       : 'balance',
   });
 
+  // A successful balance read proves the credential is still valid;
+  // clear any pending token-expiry sightings for this account.
+  resetTokenExpiredSightings(account.id);
+
   return balanceInfo;
 }
 
 export async function refreshAllBalances() {
+  // Include expired accounts so a spurious token-expired flag is re-verified on
+  // the next scheduled pass and auto-recovers (status flips back to active in
+  // refreshBalance when the credential actually works). Without this, an
+  // expired flag could only be cleared by a manual refresh in the UI.
   const rows = await db
     .select()
     .from(schema.accounts)
-    .where(eq(schema.accounts.status, 'active'))
+    .where(or(
+      eq(schema.accounts.status, 'active'),
+      eq(schema.accounts.status, 'expired'),
+    ))
     .all();
 
   const results: Array<{ accountId: number; balance: number | null }> = [];

@@ -27,6 +27,7 @@ vi.mock('../../services/proxyUsageFallbackService.js', () => ({
 vi.mock('../../services/alertService.js', () => ({
   reportProxyAllFailed: vi.fn(),
   reportTokenExpired: vi.fn(),
+  resetTokenExpiredSightings: vi.fn(),
 }));
 
 vi.mock('../../services/alertRules.js', () => ({

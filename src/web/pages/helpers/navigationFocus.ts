@@ -89,11 +89,17 @@ export function buildEventNavigationPath(event: {
   const relatedId = normalizePositiveId(event.relatedId);
   const eventType = (event.type || '').toLowerCase();
 
-  if (relatedType === 'account' && relatedId) {
-    return buildAccountFocusPath(relatedId, { openRebind: eventType === 'token' });
-  }
   if (relatedType === 'site' && relatedId) {
+    // Token-expired events navigate to the site detail page where connection
+    // management is embedded, not to the standalone accounts page.
+    if (eventType === 'token') {
+      return `/sites/${relatedId}`;
+    }
     return buildSiteFocusPath(relatedId);
+  }
+  // Fallback for account-related events (checkin, balance, etc.)
+  if (relatedType === 'account' && relatedId) {
+    return buildAccountFocusPath(relatedId);
   }
   if (relatedType === 'site_announcement' && relatedId) {
     return buildAnnouncementFocusPath(relatedId);
