@@ -14,6 +14,7 @@ const withSiteRecordProxyRequestInitMock = vi.fn();
 const dispatchRuntimeRequestMock = vi.fn();
 const reportProxyAllFailedMock = vi.fn();
 const reportTokenExpiredMock = vi.fn();
+const resetTokenExpiredSightingsMock = vi.fn();
 const isTokenExpiredErrorMock = vi.fn();
 const shouldRetryProxyRequestMock = vi.fn();
 const recordOauthQuotaHeadersSnapshotMock = vi.fn();
@@ -87,6 +88,7 @@ vi.mock('../../services/runtimeDispatch.js', () => ({
 vi.mock('../../services/alertService.js', () => ({
   reportProxyAllFailed: (...args: unknown[]) => reportProxyAllFailedMock(...args),
   reportTokenExpired: (...args: unknown[]) => reportTokenExpiredMock(...args),
+  resetTokenExpiredSightings: (...args: unknown[]) => resetTokenExpiredSightingsMock(...args),
 }));
 
 vi.mock('../../services/alertRules.js', () => ({
@@ -135,6 +137,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     dispatchRuntimeRequestMock.mockReset();
     reportProxyAllFailedMock.mockReset();
     reportTokenExpiredMock.mockReset();
+    resetTokenExpiredSightingsMock.mockReset();
     isTokenExpiredErrorMock.mockReset();
     shouldRetryProxyRequestMock.mockReset();
     recordOauthQuotaHeadersSnapshotMock.mockReset();
@@ -587,7 +590,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       selected: {
         channel: { id: 11, routeId: 22 },
         account: { id: 33, username: 'oauth-user' },
-        site: { name: 'Codex OAuth' },
+        site: { id: 55, name: 'Codex OAuth' },
         actualModel: 'upstream-model',
       },
       requestedModel: 'gpt-5.2',
@@ -610,6 +613,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     });
     expect(reportTokenExpiredMock).toHaveBeenCalledWith({
       accountId: 33,
+      siteId: 55,
       username: 'oauth-user',
       siteName: 'Codex OAuth',
       detail: 'HTTP 401',

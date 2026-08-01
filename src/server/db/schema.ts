@@ -379,6 +379,27 @@ export const proxyFiles = sqliteTable('proxy_files', {
   ownerLookupIdx: index('proxy_files_owner_lookup_idx').on(table.ownerType, table.ownerId, table.deletedAt),
 }));
 
+export const probeLogs = sqliteTable('probe_logs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  siteId: integer('site_id').notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  accountId: integer('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  modelName: text('model_name').notNull(),
+  questionCategory: text('question_category').notNull(), // 'math' | 'logic' | 'knowledge' | 'reasoning'
+  questionText: text('question_text').notNull(),
+  responseText: text('response_text'),
+  status: text('status').notNull(), // 'success' | 'failed' | 'timeout'
+  latencyMs: integer('latency_ms'),
+  tokensUsed: integer('tokens_used'),
+  errorMessage: text('error_message'),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+}, (table) => ({
+  createdAtIdx: index('probe_logs_created_at_idx').on(table.createdAt),
+  siteCreatedIdx: index('probe_logs_site_created_at_idx').on(table.siteId, table.createdAt),
+  accountCreatedIdx: index('probe_logs_account_created_at_idx').on(table.accountId, table.createdAt),
+  modelCreatedIdx: index('probe_logs_model_created_at_idx').on(table.modelName, table.createdAt),
+  statusCreatedIdx: index('probe_logs_status_created_at_idx').on(table.status, table.createdAt),
+}));
+
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value'), // JSON

@@ -260,9 +260,10 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const resetAddForms = (
     credentialMode: "session" | "apikey" = activeAddCredentialMode,
   ) => {
+    const currentSiteId = filterSiteId || 0;
     setAddMode("token");
-    setLoginForm(createLoginForm());
-    setTokenForm(createTokenForm(credentialMode));
+    setLoginForm({ ...createLoginForm(), siteId: currentSiteId });
+    setTokenForm({ ...createTokenForm(credentialMode), siteId: currentSiteId });
     setCreateIntentPresetId(null);
     setApplyCreatePresetModels(false);
     setVerifyResult(null);
@@ -1608,18 +1609,20 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         </div>
                       </div>
                     </div>
-                    <ModernSelect
-                      value={String(tokenForm.siteId || 0)}
-                      onChange={(nextValue) => {
-                        const nextSiteId = Number.parseInt(nextValue, 10) || 0;
-                        setTokenForm((f) => ({ ...f, siteId: nextSiteId }));
-                        setVerifyResult(null);
+                    <div
+                      style={{
+                        padding: "9px 12px",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "var(--radius-sm)",
+                        background: "var(--color-bg)",
+                        color: "var(--color-text)",
+                        fontSize: 13,
                       }}
-                      options={siteSelectOptions}
-                      placeholder="选择站点"
-                      searchable
-                      searchPlaceholder={SITE_SELECT_SEARCH_PLACEHOLDER}
-                    />
+                    >
+                      {selectedTokenSite
+                        ? `${selectedTokenSite.name} (${selectedTokenSite.platform})`
+                        : "当前站点"}
+                    </div>
                     <input
                       placeholder="连接名称（可选）"
                       value={tokenForm.username}
@@ -1919,17 +1922,20 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     <div className="info-tip">
                       输入目标站点的账号密码，将自动登录并获取访问令牌和 API Key
                     </div>
-                    <ModernSelect
-                      value={String(loginForm.siteId || 0)}
-                      onChange={(nextValue) => {
-                        const nextSiteId = Number.parseInt(nextValue, 10) || 0;
-                        setLoginForm((f) => ({ ...f, siteId: nextSiteId }));
+                    <div
+                      style={{
+                        padding: "9px 12px",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "var(--radius-sm)",
+                        background: "var(--color-bg)",
+                        color: "var(--color-text)",
+                        fontSize: 13,
                       }}
-                      options={siteSelectOptions}
-                      placeholder="选择站点"
-                      searchable
-                      searchPlaceholder={SITE_SELECT_SEARCH_PLACEHOLDER}
-                    />
+                    >
+                      {selectedTokenSite
+                        ? `${selectedTokenSite.name} (${selectedTokenSite.platform})`
+                        : "当前站点"}
+                    </div>
                     <input
                       placeholder="用户名"
                       value={loginForm.username}

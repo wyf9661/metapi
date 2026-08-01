@@ -9,16 +9,26 @@ describe('alertRules', () => {
   });
 
   it('detects token expiration by status or message', () => {
-    // 401 with credential-related language → true
-    expect(isTokenExpiredError({ status: 401, message: 'Unauthorized' })).toBe(true);
+    // Explicit credential-invalid/expired language → true (same for 401 and non-401)
+    expect(isTokenExpiredError({ status: 401, message: 'invalid token' })).toBe(true);
+    expect(isTokenExpiredError({ status: 401, message: 'token expired' })).toBe(true);
+    expect(isTokenExpiredError({ status: 401, message: 'invalid access token' })).toBe(true);
     expect(isTokenExpiredError({ status: 403, message: 'Forbidden' })).toBe(false);
-    expect(isTokenExpiredError({ message: 'HTTP 401: access token required' })).toBe(true);
     expect(isTokenExpiredError({ message: 'jwt expired' })).toBe(true);
     expect(isTokenExpiredError({ message: 'token invalid' })).toBe(true);
     expect(isTokenExpiredError({ message: 'invalid access token' })).toBe(true);
     expect(isTokenExpiredError({ message: 'Token 无效' })).toBe(true);
+    expect(isTokenExpiredError({ message: '令牌已失效' })).toBe(true);
+    expect(isTokenExpiredError({ message: '访问令牌无效' })).toBe(true);
     expect(isTokenExpiredError({ message: '无权进行此操作，未登录且未提供 access token' })).toBe(false);
     expect(isTokenExpiredError({ status: 500, message: 'upstream error' })).toBe(false);
+
+    // Gateway-default 401 wording / missing-credential messages are NOT token
+    // expiry: WAF blocks, rate-limit shields and header loss also produce them.
+    expect(isTokenExpiredError({ status: 401, message: 'Unauthorized' })).toBe(false);
+    expect(isTokenExpiredError({ status: 401, message: 'HTTP 401: access token required' })).toBe(false);
+    expect(isTokenExpiredError({ status: 401, message: 'invalid request' })).toBe(false);
+    expect(isTokenExpiredError({ status: 401, message: 'auth required' })).toBe(false);
 
     // Bare 401 without token language → false (transient / missing header)
     expect(isTokenExpiredError({ status: 401, message: '' })).toBe(false);

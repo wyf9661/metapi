@@ -296,6 +296,7 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
     if (isTokenExpiredError({ message: result.message })) {
       await reportTokenExpired({
         accountId: account.id,
+        siteId: site.id,
         username: account.username,
         siteName: site.name,
         detail: result.message,

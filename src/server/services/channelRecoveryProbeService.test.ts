@@ -19,8 +19,8 @@ type TokenRouterModule = typeof import('./tokenRouter.js');
 describe('channelRecoveryProbeService', () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
-  let runChannelRecoveryProbeSweep: RecoveryModule['runChannelRecoveryProbeSweep'];
-  let resetChannelRecoveryProbeState: RecoveryModule['resetChannelRecoveryProbeState'];
+  let runChannelProbeSweep: RecoveryModule['runChannelProbeSweep'];
+  let resetChannelProbeState: RecoveryModule['resetChannelProbeState'];
   let proxyChannelCoordinator: CoordinatorModule['proxyChannelCoordinator'];
   let resetProxyChannelCoordinatorState: CoordinatorModule['resetProxyChannelCoordinatorState'];
   let invalidateTokenRouterCache: TokenRouterModule['invalidateTokenRouterCache'];
@@ -44,8 +44,8 @@ describe('channelRecoveryProbeService', () => {
 
     db = dbModule.db;
     schema = dbModule.schema;
-    runChannelRecoveryProbeSweep = recoveryModule.runChannelRecoveryProbeSweep;
-    resetChannelRecoveryProbeState = recoveryModule.resetChannelRecoveryProbeState;
+    runChannelProbeSweep = recoveryModule.runChannelProbeSweep;
+    resetChannelProbeState = recoveryModule.resetChannelProbeState;
     proxyChannelCoordinator = coordinatorModule.proxyChannelCoordinator;
     resetProxyChannelCoordinatorState = coordinatorModule.resetProxyChannelCoordinatorState;
     invalidateTokenRouterCache = tokenRouterModule.invalidateTokenRouterCache;
@@ -62,7 +62,7 @@ describe('channelRecoveryProbeService', () => {
       reason: 'probe succeeded',
     });
     config.proxySessionChannelConcurrencyLimit = 1;
-    resetChannelRecoveryProbeState();
+    resetChannelProbeState();
     resetProxyChannelCoordinatorState();
     invalidateTokenRouterCache();
     resetSiteRuntimeHealthState();
@@ -77,7 +77,7 @@ describe('channelRecoveryProbeService', () => {
 
   afterAll(() => {
     config.proxySessionChannelConcurrencyLimit = originalConcurrencyLimit;
-    resetChannelRecoveryProbeState();
+    resetChannelProbeState();
     resetProxyChannelCoordinatorState();
     invalidateTokenRouterCache();
     resetSiteRuntimeHealthState();
@@ -129,7 +129,7 @@ describe('channelRecoveryProbeService', () => {
       cooldownLevel: 1,
     }).returning().get();
 
-    await runChannelRecoveryProbeSweep();
+    await runChannelProbeSweep();
 
     expect(probeRuntimeModelMock).toHaveBeenCalledTimes(1);
     expect(probeRuntimeModelMock.mock.calls[0]?.[0]).toMatchObject({
@@ -192,7 +192,7 @@ describe('channelRecoveryProbeService', () => {
     expect(lease.status).toBe('acquired');
     if (lease.status !== 'acquired') return;
 
-    await runChannelRecoveryProbeSweep();
+    await runChannelProbeSweep();
 
     expect(probeRuntimeModelMock).toHaveBeenCalledTimes(1);
     expect(probeRuntimeModelMock.mock.calls[0]?.[0]).toMatchObject({
@@ -265,7 +265,7 @@ describe('channelRecoveryProbeService', () => {
       },
     ]).run();
 
-    await runChannelRecoveryProbeSweep();
+    await runChannelProbeSweep();
 
     expect(probeRuntimeModelMock).toHaveBeenCalledTimes(1);
     expect(probeRuntimeModelMock.mock.calls[0]?.[0]).toMatchObject({
@@ -327,14 +327,14 @@ describe('channelRecoveryProbeService', () => {
       }
 
       const startedAt = Date.UTC(2026, 3, 1, 0, 0, 0);
-      await runChannelRecoveryProbeSweep(startedAt);
+      await runChannelProbeSweep(startedAt);
 
       expect(probeRuntimeModelMock).toHaveBeenCalledTimes(4);
       expect(probeRuntimeModelMock.mock.calls.map((call) => call[0]?.tokenValue)).not.toContain('sk-priority-token-5');
 
       probeRuntimeModelMock.mockClear();
 
-      await runChannelRecoveryProbeSweep(startedAt + 5 * 60 * 1000);
+      await runChannelProbeSweep(startedAt + 5 * 60 * 1000);
 
       expect(probeRuntimeModelMock).toHaveBeenCalledTimes(4);
       const secondSweepTokens = probeRuntimeModelMock.mock.calls.map((call) => call[0]?.tokenValue);

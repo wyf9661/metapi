@@ -11,6 +11,9 @@ import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/or
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
 import type { schema } from '../db/index.js';
+import { getRandomProbeQuestion, type ProbeQuestion } from './probeQuestionBank.js';
+import { db } from '../db/index.js';
+import { probeLogs } from '../db/schema.js';
 
 export type RuntimeModelProbeStatus = 'supported' | 'unsupported' | 'inconclusive' | 'skipped';
 
@@ -91,18 +94,35 @@ export function classifyProbeFailureReason(status: number, rawErrorText: string)
   return text || `probe failed with status ${status || 0}`;
 }
 
-function buildProbeBody(modelName: string): Record<string, unknown> {
-  return {
+function buildProbeBody(modelName: string): { body: Record<string, unknown>, question: ProbeQuestion } {
+  const question = getRandomProbeQuestion();
+  const body = {
     model: modelName,
     messages: [
       {
         role: 'user',
-        content: 'What is the capital of the United States?',
+        content: question.question,
       },
     ],
-    max_tokens: 8,
     stream: false,
   };
+  return { body, question };
+}
+
+/**
+ * 从 OpenAI 格式的响应中提取 token 使用量
+ */
+function extractTokensFromResponse(responseText: string | undefined): number | null {
+  if (!responseText) return null;
+  try {
+    const response = JSON.parse(responseText);
+    if (response.usage && typeof response.usage.total_tokens === 'number') {
+      return response.usage.total_tokens;
+    }
+  } catch {
+    // 解析失败，返回 null
+  }
+  return null;
 }
 
 async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
@@ -194,7 +214,7 @@ export async function probeRuntimeModel(input: {
       account: input.account,
       downstreamHeaders: {},
     });
-    const openaiBody = buildProbeBody(input.modelName);
+    const { body: openaiBody, question: probeQuestion } = buildProbeBody(input.modelName);
     const channelProxyUrl = resolveChannelProxyUrl(input.site, input.account.extraConfig);
     const abortController = new AbortController();
     const remainingExecutionTimeoutMs = resolveRemainingTimeoutMs(
@@ -275,7 +295,22 @@ export async function probeRuntimeModel(input: {
     const latencyMs = Date.now() - startedAt;
 
     if (result.ok) {
-      await result.upstream.text().catch(() => undefined);
+      const responseText = await result.upstream.text().catch(() => undefined);
+      const tokensUsed = extractTokensFromResponse(responseText);
+
+      // 记录成功的测活日志
+      await db.insert(probeLogs).values({
+        siteId: input.site.id,
+        accountId: input.account.id,
+        modelName: input.modelName,
+        questionCategory: probeQuestion.category,
+        questionText: probeQuestion.question,
+        responseText: responseText?.substring(0, 2000) || null, // 限制长度
+        status: 'success',
+        latencyMs,
+        tokensUsed,
+      }).catch(err => console.error('[probe-log] Failed to insert probe log:', err));
+
       return {
         status: 'supported',
         latencyMs,
@@ -284,16 +319,51 @@ export async function probeRuntimeModel(input: {
     }
 
     const rawErrorText = String(result.rawErrText || result.errText || '').trim();
+    const probeStatus = classifyUnsupportedFailure(result.status || 0, rawErrorText) ? 'unsupported' : 'inconclusive';
+    const logStatus = probeStatus === 'unsupported' ? 'failed' : 'failed';
+
+    // 记录失败的测活日志
+    await db.insert(probeLogs).values({
+      siteId: input.site.id,
+      accountId: input.account.id,
+      modelName: input.modelName,
+      questionCategory: probeQuestion.category,
+      questionText: probeQuestion.question,
+      responseText: null,
+      status: logStatus,
+      latencyMs,
+      tokensUsed: null,
+      errorMessage: classifyProbeFailureReason(result.status || 0, rawErrorText),
+    }).catch(err => console.error('[probe-log] Failed to insert probe log:', err));
+
     return {
-      status: classifyUnsupportedFailure(result.status || 0, rawErrorText) ? 'unsupported' : 'inconclusive',
+      status: probeStatus,
       latencyMs,
       reason: classifyProbeFailureReason(result.status || 0, rawErrorText),
     };
   } catch (error) {
+    const latencyMs = Date.now() - startedAt;
+    const errorMessage = error instanceof Error ? error.message : 'probe failed';
+    const isTimeout = errorMessage.includes('timeout');
+
+    // 记录异常的测活日志
+    await db.insert(probeLogs).values({
+      siteId: input.site.id,
+      accountId: input.account.id,
+      modelName: input.modelName,
+      questionCategory: 'math', // 默认分类
+      questionText: 'Probe failed before question selection',
+      responseText: null,
+      status: isTimeout ? 'timeout' : 'failed',
+      latencyMs,
+      tokensUsed: null,
+      errorMessage,
+    }).catch(err => console.error('[probe-log] Failed to insert probe log:', err));
+
     return {
       status: 'inconclusive',
-      latencyMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.message : 'probe failed',
+      latencyMs,
+      reason: errorMessage,
     };
   }
 }

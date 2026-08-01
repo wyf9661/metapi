@@ -189,6 +189,11 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     modelAvailabilityProbeIntervalMs: Math.max(60_000, Math.trunc(parseNumber(env.MODEL_AVAILABILITY_PROBE_INTERVAL_MS, 30 * 60 * 1000))),
     modelAvailabilityProbeTimeoutMs: Math.max(3_000, Math.trunc(parseNumber(env.MODEL_AVAILABILITY_PROBE_TIMEOUT_MS, 30_000))),
     modelAvailabilityProbeConcurrency: Math.max(1, Math.min(2, Math.trunc(parseNumber(env.MODEL_AVAILABILITY_PROBE_CONCURRENCY, 1)))),
+    // Channel probe (heartbeat for active channels)
+    probeHeartbeatIntervalMs: Math.max(60_000, Math.trunc(parseNumber(env.PROBE_HEARTBEAT_INTERVAL_MS, 2 * 60 * 1000))),
+    probeHeartbeatTimeoutMs: Math.max(3_000, Math.trunc(parseNumber(env.PROBE_HEARTBEAT_TIMEOUT_MS, 10_000))),
+    probeMaxBatch: Math.max(1, Math.min(4, Math.trunc(parseNumber(env.PROBE_MAX_BATCH, 2)))),
+    probeInitialRetriesAfterCooldown: Math.max(1, Math.min(5, Math.trunc(parseNumber(env.PROBE_INITIAL_RETRIES_AFTER_COOLDOWN, 2)))),
     proxyLogRetentionDays: Math.max(0, Math.trunc(parseNumber(env.PROXY_LOG_RETENTION_DAYS, 30))),
     proxyLogRetentionPruneIntervalMinutes: Math.max(1, Math.trunc(parseNumber(env.PROXY_LOG_RETENTION_PRUNE_INTERVAL_MINUTES, 30))),
     proxyFileRetentionDays: Math.max(0, Math.trunc(parseNumber(env.PROXY_FILE_RETENTION_DAYS, 30))),

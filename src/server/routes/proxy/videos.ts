@@ -183,8 +183,10 @@ export async function videosProxyRoute(app: FastifyInstance) {
           modelName: upstreamModel,
         }));
         if (status > 0 && isTokenExpiredError({ status, message: errorText })) {
+          const siteId = selected.site?.id ?? 0;
           await reportTokenExpired({
             accountId: selected.account.id,
+            siteId,
             username: selected.account.username,
             siteName: selected.site.name,
             detail: `HTTP ${status}`,

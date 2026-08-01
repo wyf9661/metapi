@@ -9,6 +9,7 @@ const selectAllMock = vi.fn();
 const updateSetMock = vi.fn();
 const insertValuesMock = vi.fn();
 const reportTokenExpiredMock = vi.fn();
+const resetTokenExpiredSightingsMock = vi.fn();
 const sendNotificationMock = vi.fn();
 const decryptPasswordMock = vi.fn();
 const setAccountRuntimeHealthMock = vi.fn();
@@ -64,6 +65,7 @@ vi.mock('./platforms/index.js', () => ({
 
 vi.mock('./alertService.js', () => ({
   reportTokenExpired: (...args: unknown[]) => reportTokenExpiredMock(...args),
+  resetTokenExpiredSightings: (...args: unknown[]) => resetTokenExpiredSightingsMock(...args),
 }));
 
 vi.mock('./notifyService.js', () => ({
@@ -91,6 +93,7 @@ describe('balanceService auto relogin', () => {
     updateSetMock.mockReset();
     insertValuesMock.mockReset();
     reportTokenExpiredMock.mockReset();
+    resetTokenExpiredSightingsMock.mockReset();
     sendNotificationMock.mockReset();
     decryptPasswordMock.mockReset();
     setAccountRuntimeHealthMock.mockReset();
@@ -144,7 +147,7 @@ describe('balanceService auto relogin', () => {
     expect(reportTokenExpiredMock).not.toHaveBeenCalled();
   });
 
-  it('reports token expired when relogin is unavailable', async () => {
+  it('does not report token expired for missing-token 401 responses', async () => {
     selectAllMock.mockReturnValue([
       {
         accounts: {
@@ -169,7 +172,9 @@ describe('balanceService auto relogin', () => {
     await expect(refreshBalance(2)).rejects.toThrow('access token');
 
     expect(adapterMock.login).not.toHaveBeenCalled();
-    expect(reportTokenExpiredMock).toHaveBeenCalledTimes(1);
+    // "access token required" means the request lacked a credential, not that the
+    // stored token is invalid — do not mark the account expired.
+    expect(reportTokenExpiredMock).not.toHaveBeenCalled();
   });
 
   it('does not report token expired for generic forbidden balance errors', async () => {
@@ -541,5 +546,42 @@ describe('balanceService auto relogin', () => {
     expect(result).toEqual({ balance: 0.5, used: 1, quota: 1.5 });
     expect(sendNotificationMock).not.toHaveBeenCalled();
     expect(insertValuesMock).not.toHaveBeenCalled();
+  });
+
+  it('refreshAllBalances re-verifies expired accounts so they auto-recover', async () => {
+    const expiredAccount = {
+      id: 30,
+      username: 'linuxdo_expired',
+      accessToken: 'stale-token',
+      status: 'expired',
+      extraConfig: null,
+      balance: 1,
+      balanceUsed: 0,
+      quota: 2,
+    };
+    const expiredRow = {
+      accounts: expiredAccount,
+      sites: {
+        id: 5,
+        name: 'kfc',
+        url: 'https://kfc-api.sxxe.net',
+        platform: 'new-api',
+      },
+    };
+    // First call: refreshAllBalances inventory query (flat account rows).
+    // Subsequent calls: refreshBalance's per-account joined query.
+    selectAllMock
+      .mockReturnValueOnce([expiredAccount])
+      .mockReturnValue([expiredRow]);
+    adapterMock.getBalance.mockResolvedValueOnce({ balance: 12, used: 1, quota: 13 });
+
+    const { refreshAllBalances } = await import('./balanceService.js');
+    const results = await refreshAllBalances();
+
+    expect(adapterMock.getBalance).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([{ accountId: 30, balance: 12 }]);
+    // A successful re-verify flips the flag back to active and clears sightings.
+    expect(updateSetMock.mock.calls.some((call) => call[0]?.status === 'active')).toBe(true);
+    expect(resetTokenExpiredSightingsMock).toHaveBeenCalledWith(30);
   });
 });
