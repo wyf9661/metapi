@@ -83,7 +83,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     .select()
     .from(schema.accounts)
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-    .where(eq(schema.sites.status, "active"))
     .all();
   const accounts = accountRows.map((row: any) => row.accounts);
   const totalBalance = accounts.reduce(
@@ -123,7 +122,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
         and(
           gte(schema.checkinLogs.createdAt, todayStartUtc),
           lt(schema.checkinLogs.createdAt, todayEndUtc),
-          eq(schema.sites.status, "active"),
         ),
       )
       .all(),
@@ -133,7 +131,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       })
       .from(schema.siteDayUsage)
       .innerJoin(schema.sites, eq(schema.siteDayUsage.siteId, schema.sites.id))
-      .where(eq(schema.sites.status, "active"))
       .get(),
     db
       .select({
@@ -151,7 +148,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           gte(schema.proxyLogs.createdAt, last24hDate),
-          eq(schema.sites.status, "active"),
         ),
       )
       .get(),
@@ -169,7 +165,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           gte(schema.proxyLogs.createdAt, lastMinuteDate),
-          eq(schema.sites.status, "active"),
         ),
       )
       .get(),
@@ -188,7 +183,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           gte(schema.proxyLogs.createdAt, last24hDate),
-          eq(schema.sites.status, "active"),
         ),
       )
       .orderBy(desc(schema.proxyLogs.createdAt))
@@ -203,7 +197,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           eq(schema.siteDayUsage.localDay, today),
-          eq(schema.sites.status, "active"),
         ),
       )
       .get(),
@@ -325,7 +318,6 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
           isPinned: schema.sites.isPinned,
         })
         .from(schema.sites)
-        .where(eq(schema.sites.status, "active"))
         .all(),
       db
         .select()
@@ -367,7 +359,6 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
     siteAvailability: buildSiteAvailabilitySummariesFromHourlyAggregates(
       sortedSites,
       siteAvailabilityRows
-        .filter((row: any) => activeSiteIdSet.has(row.siteId))
         .map((row: any) => ({
           siteId: row.siteId,
           hourStartUtc: row.bucketStartUtc,
@@ -389,9 +380,7 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
       siteAvailabilityNow,
     ),
     modelAnalysis: buildModelAnalysisFromDailyUsage(
-      modelDayRows
-        .filter((row: any) => activeSiteIdSet.has(row.siteId))
-        .map((row: any) => ({
+      modelDayRows.map((row: any) => ({
           localDay: row.localDay,
           model: row.model,
           totalCalls: row.totalCalls,
