@@ -7,10 +7,23 @@ import { isIP, type Socket } from 'node:net';
 import { connect as tlsConnect, type TLSSocket } from 'node:tls';
 import { SocksClient } from 'socks';
 import type { Dispatcher, RequestInit as UndiciRequestInit } from 'undici';
-import { Agent as UndiciAgent, ProxyAgent } from 'undici';
+import { Agent as UndiciAgent, ProxyAgent, setGlobalDispatcher, Agent } from 'undici';
 import { mergeHeadersWithSiteCustomHeaders, type SiteCustomHeadersMergePriority } from './siteCustomHeaders.js';
 import { resolveProxyUrlFromExtraConfig } from './accountExtraConfig.js';
 import { stripTrailingSlashes } from './urlNormalization.js';
+
+// Global keep-alive Agent for direct (non-proxy) upstream requests.
+// This enables HTTP/1.1 keep-alive across all upstream fetches that don't
+// go through a proxy dispatcher, reducing TLS handshake overhead.
+const globalNonProxyAgent = new Agent({
+  keepAliveTimeout: 30_000,
+  keepAliveMaxTimeout: 300_000,
+  connections: 128,
+  pipelining: 5,
+  connect: { rejectUnauthorized: true },
+});
+
+setGlobalDispatcher(globalNonProxyAgent);
 
 const SITE_PROXY_CACHE_TTL_MS = 3_000;
 const SUPPORTED_PROXY_PROTOCOLS = new Set([
