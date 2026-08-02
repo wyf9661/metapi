@@ -2113,28 +2113,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
                   支持换行、空格、逗号批量粘贴多个 API Key。
                 </div>
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
-                >
-                  <input
-                    placeholder="用户 ID（可选）"
-                    value={tokenForm.platformUserId}
-                    onChange={(e) => {
-                      setTokenForm((f) => ({
-                        ...f,
-                        platformUserId: e.target.value.replace(/\D/g, ""),
-                        credentialMode: "apikey",
-                      }));
-                      setVerifyResult(null);
-                    }}
-                    style={inputStyle}
-                  />
-                  <div
-                    style={{ fontSize: 12, color: "var(--color-text-muted)" }}
-                  >
-                    若站点要求 New-Api-User / User-ID，请在这里提前填写。
-                  </div>
-                </div>
                 <label
                   style={{
                     display: "flex",

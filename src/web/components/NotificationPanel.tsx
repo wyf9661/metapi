@@ -85,7 +85,7 @@ export default function NotificationPanel({
   return (
     <div
       ref={panelRef}
-      className={`user-dropdown ${presence.isVisible ? '' : 'is-closing'}`.trim()}
+      className={`user-dropdown notification-panel ${presence.isVisible ? '' : 'is-closing'}`.trim()}
       style={{ right: 0, top: '100%', width: 360, maxHeight: 480, padding: 0, marginTop: 4 }}
     >
       {/* Header */}

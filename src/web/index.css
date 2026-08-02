@@ -6236,6 +6236,15 @@ textarea {
     right: -8px;
     min-width: 150px;
   }
+  .notification-panel {
+    position: fixed;
+    left: 8px !important;
+    right: 8px !important;
+    top: var(--topbar-height) !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(100vh - var(--topbar-height) - 16px) !important;
+  }
 }
 
 .site-observability-panel {
