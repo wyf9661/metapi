@@ -1,4 +1,1 @@
-ALTER TABLE "proxy_logs" ADD COLUMN "request_trace_id" TEXT;
-CREATE INDEX "proxy_logs_request_trace_id_created_at_idx" ON "proxy_logs" ("request_trace_id", "created_at");
-
-ALTER TABLE "downstream_api_keys" ADD COLUMN "sensitive_word_detection" INTEGER NULL DEFAULT NULL;
+-- no schema changes detected for postgres
