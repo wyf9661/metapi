@@ -11,6 +11,7 @@ import { Agent as UndiciAgent, ProxyAgent, setGlobalDispatcher, Agent } from 'un
 import { mergeHeadersWithSiteCustomHeaders, type SiteCustomHeadersMergePriority } from './siteCustomHeaders.js';
 import { resolveProxyUrlFromExtraConfig } from './accountExtraConfig.js';
 import { stripTrailingSlashes } from './urlNormalization.js';
+import { parseSiteProtocolProfile } from '../shared/siteProtocolProfile.js';
 
 // Global keep-alive Agent for direct (non-proxy) upstream requests.
 // This enables HTTP/1.1 keep-alive across all upstream fetches that don't
@@ -50,12 +51,14 @@ type SiteProxyRow = {
   proxyUrl: string | null;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean;
+  protocolProfile: unknown;
 };
 type SiteProxyQueryRow = {
   siteUrl: string;
   proxyUrl: string | null;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean | null;
+  protocolProfile: unknown;
 };
 
 type ParsedSiteProxyInput = {
@@ -68,6 +71,7 @@ export type SiteProxyConfigLike = {
   proxyUrl?: string | null;
   customHeaders?: unknown;
   customHeadersOverrideRequestHeaders?: boolean | null;
+  protocolProfile?: unknown;
 };
 
 let siteProxyCache: {
@@ -137,6 +141,7 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
         proxyUrl: schema.sites.proxyUrl,
         customHeaders: schema.sites.customHeaders,
         customHeadersOverrideRequestHeaders: schema.sites.customHeadersOverrideRequestHeaders,
+        protocolProfile: schema.sites.protocolProfile,
       })
       .from(schema.sites)
       .all() as SiteProxyQueryRow[];
@@ -148,6 +153,7 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
         proxyUrl: normalizeSiteProxyUrl(row.proxyUrl),
         customHeaders: row.customHeaders ?? null,
         customHeadersOverrideRequestHeaders: !!row.customHeadersOverrideRequestHeaders,
+        protocolProfile: row.protocolProfile ?? null,
       })),
     };
   } catch {
@@ -381,10 +387,11 @@ async function resolveSiteRequestConfigByRequestUrl(requestUrl: string): Promise
   proxyUrl: string | null;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean;
+  protocolProfile: unknown;
 }> {
   const normalizedRequestUrl = normalizeSiteUrl(requestUrl);
   if (!normalizedRequestUrl) {
-    return { proxyUrl: null, customHeaders: null, customHeadersOverrideRequestHeaders: false };
+    return { proxyUrl: null, customHeaders: null, customHeadersOverrideRequestHeaders: false, protocolProfile: null };
   }
 
   const rows = await getCachedSiteProxyRows();
@@ -394,6 +401,7 @@ async function resolveSiteRequestConfigByRequestUrl(requestUrl: string): Promise
     proxyUrl: proxyUrl || null,
     customHeaders: matchedRow?.customHeaders ?? null,
     customHeadersOverrideRequestHeaders: !!matchedRow?.customHeadersOverrideRequestHeaders,
+    protocolProfile: matchedRow?.protocolProfile ?? null,
   };
 }
 
@@ -420,6 +428,50 @@ function shouldApplyCodexClientCustomHeaders(requestUrl: string): boolean {
 function isCodexClientCustomHeaderName(name: string): boolean {
   const key = name.trim().toLowerCase();
   return key === 'user-agent' || key === 'originator' || key.startsWith('x-codex-');
+}
+
+/**
+ * Strip Codex client fingerprint headers (user-agent / originator / x-codex-*)
+ * from a site's custom headers. When a site runs in Codex compatibility mode
+ * the runtime injects the complete, version-consistent Codex fingerprint
+ * (ensureCodexClientFingerprintHeaders). A stale user-agent/originator written
+ * in custom_headers would override that and produce an inconsistent upstream
+ * fingerprint (e.g. UA 0.39.0 + Version 0.101.0) that OpenAI rejects.
+ * Returns a new headers record without those keys, or null when empty.
+ */
+function stripCodexClientFingerprintHeaders(
+  customHeaders: unknown,
+): unknown {
+  if (customHeaders == null) return customHeaders;
+  let record: Record<string, unknown> | null = null;
+  let isString = false;
+  if (typeof customHeaders === 'string') {
+    const trimmed = customHeaders.trim();
+    if (!trimmed) return customHeaders;
+    try {
+      record = JSON.parse(trimmed) as Record<string, unknown>;
+      isString = true;
+    } catch {
+      return customHeaders;
+    }
+  } else if (typeof customHeaders === 'object' && !Array.isArray(customHeaders)) {
+    record = customHeaders as Record<string, unknown>;
+  } else {
+    return customHeaders;
+  }
+
+  let removed = false;
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (isCodexClientCustomHeaderName(key)) {
+      removed = true;
+      continue;
+    }
+    filtered[key] = value;
+  }
+  if (!removed) return customHeaders;
+  if (Object.keys(filtered).length === 0) return null;
+  return isString ? JSON.stringify(filtered) : filtered;
 }
 
 function filterCustomHeadersForRequestUrl(requestUrl: string, customHeaders: unknown): unknown {
@@ -476,8 +528,12 @@ export async function withSiteProxyRequestInit(
   const nextOptions: UndiciRequestInit = {
     ...(options || {}),
   };
+  const profile = parseSiteProtocolProfile(resolved.protocolProfile);
+  const effectiveCustomHeaders = profile.requireCodexClient
+    ? stripCodexClientFingerprintHeaders(resolved.customHeaders)
+    : resolved.customHeaders;
   const mergedHeaders = mergeHeadersWithSiteCustomHeaders(
-    filterCustomHeadersForRequestUrl(requestUrl, resolved.customHeaders),
+    filterCustomHeadersForRequestUrl(requestUrl, effectiveCustomHeaders),
     options?.headers,
     {
       priority: resolveSiteCustomHeadersMergePriority(resolved),
@@ -534,7 +590,11 @@ export function withSiteRecordProxyRequestInit(
   const nextOptions: UndiciRequestInit = {
     ...(options || {}),
   };
-  const mergedHeaders = mergeHeadersWithSiteCustomHeaders(site?.customHeaders, options?.headers, {
+  const profile = parseSiteProtocolProfile(site?.protocolProfile);
+  const effectiveCustomHeaders = profile.requireCodexClient
+    ? stripCodexClientFingerprintHeaders(site?.customHeaders)
+    : site?.customHeaders;
+  const mergedHeaders = mergeHeadersWithSiteCustomHeaders(effectiveCustomHeaders, options?.headers, {
     priority: resolveSiteCustomHeadersMergePriority(site),
   });
   if (mergedHeaders) {
