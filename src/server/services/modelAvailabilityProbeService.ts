@@ -498,6 +498,8 @@ export type MarketplaceModelProbeResponse = {
 type MarketplaceProbeTarget = {
   accountRowId: number | null;
   tokenRowId: number | null;
+  /** The model spelling actually discovered from this upstream account/token. */
+  upstreamModelName: string;
   account: typeof schema.accounts.$inferSelect;
   site: typeof schema.sites.$inferSelect;
   tokenValue?: string;
@@ -845,6 +847,7 @@ async function collectMarketplaceProbeTargets(
     targetsByAccount.set(hit.account.id, {
       accountRowId: hit.rowId,
       tokenRowId: null,
+      upstreamModelName: String(hit.modelName || normalized),
       account: hit.account,
       site: hit.site,
     });
@@ -895,6 +898,7 @@ async function collectMarketplaceProbeTargets(
     targetsByAccount.set(hit.account.id, {
       accountRowId: null,
       tokenRowId: hit.rowId,
+      upstreamModelName: String(hit.modelName || normalized),
       account: hit.account,
       site: hit.site,
       tokenValue: String(hit.token.token || '').trim() || undefined,
@@ -912,7 +916,11 @@ async function probeMarketplaceTarget(
   const probe = await probeRuntimeModel({
     site: target.site,
     account: target.account,
-    modelName: normalized,
+    // Canonical matching decides that aliases are equivalent, but the
+    // upstream may only accept the spelling it advertised (e.g.
+    // deepseek-v4-flash-free). Probe with that concrete spelling instead of
+    // sending the canonical marketplace name and losing the alias.
+    modelName: target.upstreamModelName || normalized,
     timeoutMs: config.modelAvailabilityProbeTimeoutMs,
     tokenValue,
   });
