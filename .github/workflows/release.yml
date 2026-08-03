@@ -63,12 +63,12 @@ jobs:
           - platform: mac-arm64
             runner: macos-15
             artifactLabel: mac-arm64
-            packageCommand: npm run package:desktop -- --mac --arm64
+            packageCommand: npx electron-builder --config electron-builder.yml --publish never --mac --arm64
             expectedMacArch: arm64
           - platform: mac-x64
             runner: macos-15-intel
             artifactLabel: mac-x64
-            packageCommand: npm run package:desktop:mac:intel
+            packageCommand: npx electron-builder --config electron-builder.yml --publish never --mac --x64
             expectedMacArch: x64
 
     steps:
@@ -121,8 +121,31 @@ jobs:
           restore-keys: |
             electron-cache-${{ runner.os }}-
 
+      # Desktop packaging only needs package sources + prebuilt native addons.
+      # Electron 42 no longer ships a postinstall binary download, and npm still
+      # invokes node-gyp for packages that ship binding.gyp (better-sqlite3) even
+      # when N-API prebuilds exist — that breaks Windows runners without a usable
+      # VS toolchain. Skip lifecycle scripts, then install Electron explicitly.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Electron binary
+        shell: bash
+        env:
+          electron_config_cache: ${{ runner.temp }}/.cache/electron
+          ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
+        run: |
+          set -euo pipefail
+          # mac-x64 matrix builds Intel packages; force the matching Electron arch.
+          if [ "${{ matrix.platform }}" = "mac-x64" ]; then
+            export npm_config_arch=x64
+            export ELECTRON_INSTALL_ARCH=x64
+          elif [ "${{ matrix.platform }}" = "mac-arm64" ]; then
+            export npm_config_arch=arm64
+            export ELECTRON_INSTALL_ARCH=arm64
+          fi
+          node node_modules/electron/install.js
+          test -d node_modules/electron/dist
 
       - name: Install Linux packaging dependencies
         if: runner.os == 'Linux'
@@ -153,7 +176,7 @@ jobs:
           if ($env:WIN_CSC_KEY_PASSWORD_INPUT) { $env:WIN_CSC_KEY_PASSWORD = $env:WIN_CSC_KEY_PASSWORD_INPUT }
           for ($attempt = 1; $attempt -le 2; $attempt++) {
             Write-Host "Desktop build attempt $attempt/2"
-            npm run package:desktop
+            npx electron-builder --config electron-builder.yml --publish never
             if ($LASTEXITCODE -eq 0) {
               break
             }
@@ -195,7 +218,7 @@ jobs:
           set -euo pipefail
           for attempt in 1 2; do
             echo "Desktop build attempt ${attempt}/2"
-            if npm run package:desktop; then
+            if npx electron-builder --config electron-builder.yml --publish never; then
               break
             fi
             if [ "$attempt" -eq 2 ]; then
