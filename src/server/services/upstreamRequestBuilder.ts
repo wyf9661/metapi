@@ -270,38 +270,18 @@ const CODEX_GATED_PLATFORMS = new Set([
   'openai',
 ]);
 
-function hasCodexClientFingerprint(headers: Record<string, string>): boolean {
-  const userAgent = (
-    headerValueToString(headers['user-agent'])
-    || headerValueToString((headers as Record<string, unknown>)['User-Agent'])
-    || ''
-  ).toLowerCase();
-  const originator = (
-    headerValueToString(headers.originator)
-    || headerValueToString((headers as Record<string, unknown>).Originator)
-    || ''
-  ).toLowerCase();
-  return (
-    userAgent.includes('codex_cli_rs')
-    || userAgent.includes('openai-codex')
-    || userAgent.includes('codex_vscode')
-    || userAgent.includes('codex_chatgpt_desktop')
-    || originator.includes('codex')
-  );
-}
-
 function ensureCodexClientFingerprintHeaders(
   headers: Record<string, string>,
   sitePlatform: string,
 ): Record<string, string> {
   if (!CODEX_GATED_PLATFORMS.has(sitePlatform)) return headers;
-  if (hasCodexClientFingerprint(headers)) return headers;
 
-  // Upstream "only allows Codex official clients" checks validate the full
-  // Codex CLI header signature, not just UA/originator. Reuse the canonical
-  // Codex runtime header builder, then merge its Codex-specific fields back
-  // onto the existing header set so transport headers (Accept, Authorization)
-  // are preserved as the surface layer set them.
+  // Do NOT early-return on an existing codex-like UA/originator: a partial
+  // fingerprint (e.g. custom_headers with only user-agent + originator) would
+  // still be rejected by upstream "only allows Codex official clients" checks.
+  // Always rebuild the complete Codex CLI header signature (Originator,
+  // Version, Session_id, Conversation_id, User-Agent, Connection). The builder
+  // preserves any existing UA/version it can, then fills the rest.
   const codexHeaders = buildCodexRuntimeHeaders({
     baseHeaders: headers,
     stream: headerValueToString(headers.accept)?.includes('text/event-stream') ?? true,
