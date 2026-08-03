@@ -17,6 +17,7 @@ import {
 } from '../transformers/gemini/generate-content/requestBridge.js';
 import {
   buildClaudeRuntimeHeaders,
+  buildCodexRuntimeHeaders,
   getInputHeader,
   headerValueToString,
 } from '../proxy-core/providers/headerUtils.js';
@@ -296,15 +297,28 @@ function ensureCodexClientFingerprintHeaders(
   if (!CODEX_GATED_PLATFORMS.has(sitePlatform)) return headers;
   if (hasCodexClientFingerprint(headers)) return headers;
 
+  // Upstream "only allows Codex official clients" checks validate the full
+  // Codex CLI header signature, not just UA/originator. Reuse the canonical
+  // Codex runtime header builder, then merge its Codex-specific fields back
+  // onto the existing header set so transport headers (Accept, Authorization)
+  // are preserved as the surface layer set them.
+  const codexHeaders = buildCodexRuntimeHeaders({
+    baseHeaders: headers,
+    stream: headerValueToString(headers.accept)?.includes('text/event-stream') ?? true,
+  });
   const next = { ...headers };
-  const configuredUa = asTrimmedString(config.codexHeaderDefaults?.userAgent);
-  if (!headerValueToString(next['user-agent']) && !headerValueToString((next as any)['User-Agent'])) {
-    next['User-Agent'] = configuredUa || 'codex_cli_rs/0.39.0';
-    delete next['user-agent'];
+  for (const key of [
+    'Originator',
+    'Version',
+    'Session_id',
+    'Conversation_id',
+    'User-Agent',
+    'Connection',
+  ]) {
+    if (codexHeaders[key]) next[key] = codexHeaders[key];
   }
-  if (!headerValueToString(next.originator) && !headerValueToString((next as any).Originator)) {
-    next.originator = 'codex_cli_rs';
-  }
+  delete next['user-agent'];
+  delete next.originator;
   return next;
 }
 
