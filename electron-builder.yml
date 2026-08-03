@@ -6,7 +6,10 @@ directories:
 electronDist: node_modules/electron/dist
 icon: build/desktop-icon.png
 asar: false
-n: false
+# better-sqlite3 13.x ships N-API prebuilds per platform; skip electron-builder's
+# native rebuild step (it invokes node-gyp for better-sqlite3 and fails on
+# Windows runners without a usable VS toolchain).
+npmRebuild: false
 files:
   - dist/**/*
   - drizzle/**/*
