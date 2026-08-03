@@ -3,6 +3,7 @@ productName: Metapi
 artifactName: ${name}-${version}-${os}-${arch}.${ext}
 directories:
   output: release
+electronDist: node_modules/electron/dist
 icon: build/desktop-icon.png
 asar: false
 files:
