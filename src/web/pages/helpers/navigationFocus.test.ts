@@ -13,9 +13,9 @@ describe('navigationFocus helpers', () => {
   it('builds focus paths for site and account', () => {
     expect(buildSiteFocusPath(12)).toBe('/sites?focusSiteId=12');
     expect(buildSiteFocusPath(0)).toBe('/sites');
-    expect(buildAccountFocusPath(34)).toBe('/accounts?focusAccountId=34');
-    expect(buildAccountFocusPath(34, { openRebind: true })).toBe('/accounts?focusAccountId=34&openRebind=1');
-    expect(buildAccountFocusPath(-1)).toBe('/accounts');
+    expect(buildAccountFocusPath(34)).toBe('/sites?focusAccountId=34');
+    expect(buildAccountFocusPath(34, { openRebind: true })).toBe('/sites?focusAccountId=34&openRebind=1');
+    expect(buildAccountFocusPath(-1)).toBe('/sites');
   });
 
   it('parses focus params from query string', () => {
@@ -57,7 +57,7 @@ describe('navigationFocus helpers', () => {
       relatedType: 'account',
       relatedId: 18,
       type: 'checkin',
-    })).toBe('/accounts?focusAccountId=18');
+    })).toBe('/sites?focusAccountId=18');
 
     expect(buildEventNavigationPath({
       relatedType: 'site',

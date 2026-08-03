@@ -74,7 +74,7 @@ async function createSiteAndClickModalChoice(
           <MemoryRouter initialEntries={['/sites']}>
             <Routes>
               <Route path="/sites" element={<Sites />} />
-              <Route path="/accounts" element={<LocationProbe />} />
+              <Route path="/sites/:id" element={<LocationProbe />} />
               <Route path="/oauth" element={<LocationProbe />} />
             </Routes>
           </MemoryRouter>
@@ -149,14 +149,14 @@ describe('Sites create redirect', () => {
   it('shows modal after creating a site and navigates to session account when user chooses it', async () => {
     const rendered = await createSiteAndClickModalChoice({ id: 21, name: 'Demo Site', platform: 'new-api' }, 'session');
 
-    expect(rendered).toContain('/accounts?create=1&siteId=21');
+    expect(rendered).toContain('/sites/21?create=1&siteId=21');
     expect(rendered).not.toContain('segment=apikey');
   });
 
   it('shows modal after creating a site and navigates to API key when user chooses it', async () => {
     const rendered = await createSiteAndClickModalChoice({ id: 22, name: 'Demo Site', platform: 'openai' }, 'apikey');
 
-    expect(rendered).toContain('/accounts?');
+    expect(rendered).toContain('/sites/22?');
     expect(rendered).toContain('segment=apikey');
     expect(rendered).toContain('create=1');
     expect(rendered).toContain('siteId=22');
@@ -197,7 +197,7 @@ describe('Sites create redirect', () => {
             <MemoryRouter initialEntries={['/sites']}>
               <Routes>
                 <Route path="/sites" element={<Sites />} />
-                <Route path="/accounts" element={<LocationProbe />} />
+                <Route path="/sites/:id" element={<LocationProbe />} />
               </Routes>
             </MemoryRouter>
           </ToastProvider>,
@@ -211,7 +211,7 @@ describe('Sites create redirect', () => {
       });
       await flushMicrotasks();
 
-      expect(JSON.stringify(root.toJSON())).toContain('/accounts?create=1&siteId=51&segment=apikey');
+      expect(JSON.stringify(root.toJSON())).toContain('/sites/51?create=1&siteId=51&segment=apikey');
     } finally {
       root?.unmount();
     }

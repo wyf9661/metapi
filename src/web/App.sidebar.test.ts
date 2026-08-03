@@ -15,8 +15,8 @@ describe('App sidebar config', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
 
     expect(source).not.toContain("{ to: '/oauth', label: 'OAuth 管理'");
-    expect(source).not.toContain("const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'))");
-    expect(source).not.toContain('<Route path="/oauth" element={<OAuthManagement />} />');
+    expect(source).toContain("const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'))");
+    expect(source).toContain('<Route path="/oauth" element={<OAuthManagement />} />');
   });
 
   it('places downstream key navigation under 控制台 instead of 系统', () => {

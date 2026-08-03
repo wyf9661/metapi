@@ -22,8 +22,7 @@ import CenteredModal from './components/CenteredModal.js';
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const Sites = lazy(() => import('./pages/Sites.js'));
 const SiteDetail = lazy(() => import('./pages/SiteDetail.js'));
-const Accounts = lazy(() => import('./pages/Accounts.js'));
-const Tokens = lazy(() => import('./pages/Tokens.js'));
+const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'));
 const CheckinLog = lazy(() => import('./pages/CheckinLog.js'));
 const TokenRoutes = lazy(() => import('./pages/TokenRoutes.js'));
 const ProxyLogs = lazy(() => import('./pages/ProxyLogs.js'));
@@ -451,6 +450,16 @@ function RouteLoadingFallback() {
   );
 }
 
+function LegacyConnectionsRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const siteId = Number.parseInt(params.get('siteId') || '', 10);
+  if (Number.isFinite(siteId) && siteId > 0) {
+    return <Navigate to={`/sites/${siteId}${location.search}`} replace />;
+  }
+  return <Navigate to={`/sites${location.search}`} replace />;
+}
+
 function AppShell() {
   const { language, toggleLanguage, t } = useI18n();
   const [authed, setAuthed] = useState(() => hasValidAuthSession(localStorage));
@@ -863,8 +872,9 @@ function AppShell() {
                 <Route path="/sites" element={<Sites />} />
                 <Route path="/sites/:id" element={<SiteDetail />} />
                 <Route path="/site-announcements" element={<SiteAnnouncements />} />
-                <Route path="/accounts" element={<Accounts />} />
-                <Route path="/tokens" element={<Tokens />} />
+                <Route path="/accounts" element={<LegacyConnectionsRedirect />} />
+                <Route path="/tokens" element={<LegacyConnectionsRedirect />} />
+                <Route path="/oauth" element={<OAuthManagement />} />
                 <Route path="/checkin" element={<CheckinLog />} />
                 <Route path="/routes" element={<TokenRoutes />} />
                 <Route path="/logs" element={<ProxyLogs />} />

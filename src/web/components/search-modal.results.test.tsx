@@ -124,7 +124,7 @@ describe('SearchModal results', () => {
         accountButton!.props.onClick();
       });
       const locationAfterAccountClick = root.root.find((node) => node.props?.id === 'location-probe');
-      expect(collectText(locationAfterAccountClick)).toBe('/accounts?segment=apikey&focusAccountId=8');
+      expect(collectText(locationAfterAccountClick)).toBe('/sites?segment=apikey&focusAccountId=8');
     } finally {
       root?.unmount();
     }

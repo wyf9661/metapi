@@ -26,24 +26,28 @@ export function buildAnnouncementFocusPath(announcementId: number): string {
 
 export function buildAccountFocusPath(
   accountId: number,
-  options?: { openRebind?: boolean; segment?: 'session' | 'apikey' | 'tokens' },
+  options?: { openRebind?: boolean; segment?: 'session' | 'apikey' | 'tokens'; siteId?: number },
 ): string {
   const normalizedId = normalizePositiveId(accountId);
-  if (!normalizedId) return '/accounts';
+  const normalizedSiteId = normalizePositiveId(options?.siteId);
+  const basePath = normalizedSiteId ? `/sites/${normalizedSiteId}` : '/sites';
+  if (!normalizedId) return basePath;
   const params = new URLSearchParams();
   if (options?.segment && options.segment !== 'session') params.set('segment', options.segment);
   params.set(FOCUS_ACCOUNT_ID_KEY, String(normalizedId));
   if (options?.openRebind) params.set(OPEN_REBIND_KEY, '1');
-  return `/accounts?${params.toString()}`;
+  return `${basePath}?${params.toString()}`;
 }
 
-export function buildTokenFocusPath(tokenId: number): string {
+export function buildTokenFocusPath(tokenId: number, siteId?: number): string {
   const normalizedId = normalizePositiveId(tokenId);
-  if (!normalizedId) return '/accounts?segment=tokens';
+  const normalizedSiteId = normalizePositiveId(siteId);
+  const basePath = normalizedSiteId ? `/sites/${normalizedSiteId}` : '/sites';
+  if (!normalizedId) return `${basePath}?segment=tokens`;
   const params = new URLSearchParams();
   params.set('segment', 'tokens');
   params.set(FOCUS_TOKEN_ID_KEY, String(normalizedId));
-  return `/accounts?${params.toString()}`;
+  return `${basePath}?${params.toString()}`;
 }
 
 export function readFocusSiteId(search: string): number | null {

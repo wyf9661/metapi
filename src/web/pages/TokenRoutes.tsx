@@ -1105,14 +1105,17 @@ export default function TokenRoutes() {
     [visibleRouteRows],
   );
 
-  const handleCreateTokenForMissingAccount = (accountId: number, modelName: string) => {
+  const handleCreateTokenForMissingAccount = (accountId: number, modelName: string, siteId?: number) => {
     if (!Number.isFinite(accountId) || accountId <= 0) return;
     const params = new URLSearchParams();
     params.set('create', '1');
     params.set('accountId', String(accountId));
     params.set('model', modelName);
     params.set('from', 'routes');
-    navigate(`/tokens?${params.toString()}`);
+    const normalizedSiteId = Number(siteId);
+    navigate(Number.isFinite(normalizedSiteId) && normalizedSiteId > 0
+      ? `/sites/${normalizedSiteId}?${params.toString()}`
+      : `/sites?${params.toString()}`);
   };
 
   const handleDeleteChannel = async (channelId: number, routeId: number) => {
