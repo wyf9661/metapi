@@ -82,6 +82,11 @@ vi.mock('./accountHealthService.js', () => ({
 }));
 
 vi.mock('undici', () => ({
+  Agent: class MockUndiciAgent {
+    constructor(...args: unknown[]) {}
+  },
+  setGlobalDispatcher: () => {},
+
   fetch: (...args: unknown[]) => undiciFetchMock(...args),
 }));
 

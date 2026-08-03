@@ -10,6 +10,8 @@ const undiciAgentCtorMock = vi.fn();
 const undiciProxyAgentCtorMock = vi.fn();
 
 vi.mock('undici', () => ({
+  setGlobalDispatcher: () => {},
+
   fetch: (...args: unknown[]) => fetchMock(...args),
   Agent: class MockUndiciAgent {
     constructor(...args: unknown[]) {

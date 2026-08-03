@@ -17,6 +17,11 @@ vi.mock('../../services/platforms/index.js', () => ({
 }));
 
 vi.mock('undici', () => ({
+  Agent: class MockUndiciAgent {
+    constructor(...args: unknown[]) {}
+  },
+  setGlobalDispatcher: () => {},
+
   fetch: (...args: unknown[]) => undiciFetchMock(...args),
 }));
 
