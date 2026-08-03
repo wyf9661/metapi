@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, or } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { config } from '../config.js';
 import { isUsableAccountToken } from './accountTokenService.js';
@@ -20,7 +20,7 @@ type ProbeCandidate = {
 const PROBE_SWEEP_INTERVAL_MS = config.probeHeartbeatIntervalMs ?? 120_000;
 const PROBE_TIMEOUT_MS = config.probeHeartbeatTimeoutMs ?? 10_000;
 const PROBE_CONCURRENCY = 1;
-const PROBE_MAX_BATCH = config.probeMaxBatch ?? 2;
+const PROBE_MAX_BATCH = 4;
 
 let probeSchedulerTimer: ReturnType<typeof setInterval> | null = null;
 let probeSweepInFlight: Promise<void> | null = null;
@@ -85,7 +85,52 @@ async function mapWithConcurrency<T>(
   await Promise.all(Array.from({ length: safeConcurrency }, () => runWorker()));
 }
 
-/** 仅加载活跃通道（正在被路由使用的） */
+/**
+ * Provider 主动下发的配额/额度冷却（例如余额耗尽、限流禁言）不参与自动恢复探测，
+ * 因为它们只能通过充值或人工解除，探测不会改变结果。
+ */
+function isProviderDirectedCooldown(row: {
+  route_channels: typeof schema.routeChannels.$inferSelect;
+}): boolean {
+  return !!row.route_channels.cooldownUntil
+    && (row.route_channels.failCount ?? 0) <= 0
+    && (row.route_channels.consecutiveFailCount ?? 0) <= 0
+    && (row.route_channels.cooldownLevel ?? 0) <= 0;
+}
+
+/** 加载冷却中、需要恢复探测的通道（排除 provider 主动冷却） */
+async function loadCoolingProbeCandidates(nowIso: string): Promise<ProbeCandidate[]> {
+  const rows = await db.select()
+    .from(schema.routeChannels)
+    .innerJoin(schema.accounts, eq(schema.routeChannels.accountId, schema.accounts.id))
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .innerJoin(schema.tokenRoutes, eq(schema.routeChannels.routeId, schema.tokenRoutes.id))
+    .leftJoin(schema.accountTokens, eq(schema.routeChannels.tokenId, schema.accountTokens.id))
+    .where(and(
+      eq(schema.routeChannels.enabled, true),
+      eq(schema.accounts.status, 'active'),
+      eq(schema.sites.status, 'active'),
+      isNotNull(schema.routeChannels.cooldownUntil),
+      gt(schema.routeChannels.cooldownUntil, nowIso),
+    ))
+    .all();
+
+  return rows.flatMap((row: any) => {
+    if (isProviderDirectedCooldown(row)) return [];
+    const modelName = resolveProbeModelName(row);
+    const tokenValue = resolveProbeTokenValue(row);
+    if (!modelName || !tokenValue) return [];
+    return [{
+      channelId: row.route_channels.id,
+      modelName,
+      tokenValue,
+      account: row.accounts,
+      site: row.sites,
+    }];
+  });
+}
+
+/** 加载活跃通道（正在被路由使用的，有租约） */
 async function loadActiveProbeCandidates(activeChannelIds: number[]): Promise<ProbeCandidate[]> {
   if (activeChannelIds.length <= 0) return [];
 
@@ -99,7 +144,6 @@ async function loadActiveProbeCandidates(activeChannelIds: number[]): Promise<Pr
       eq(schema.routeChannels.enabled, true),
       eq(schema.accounts.status, 'active'),
       eq(schema.sites.status, 'active'),
-      isNull(schema.routeChannels.cooldownUntil), // 仅非冷却通道
       inArray(schema.routeChannels.id, activeChannelIds),
     ))
     .all();
@@ -187,10 +231,20 @@ export async function runChannelProbeSweep(nowMs = Date.now()): Promise<void> {
   }
 
   probeSweepInFlight = (async () => {
+    const nowIso = new Date(nowMs).toISOString();
     const activeChannelIds = proxyChannelCoordinator.getActiveChannelIds();
-    const candidates = await loadActiveProbeCandidates(activeChannelIds);
+    const [coolingCandidates, activeCandidates] = await Promise.all([
+      loadCoolingProbeCandidates(nowIso),
+      loadActiveProbeCandidates(activeChannelIds),
+    ]);
 
-    const dueCandidates = candidates
+    // 同一通道同时出现在冷却与活跃集合时，按活跃处理（冷却标记即将被清除）
+    const merged = new Map<number, ProbeCandidate>();
+    for (const candidate of [...activeCandidates, ...coolingCandidates]) {
+      merged.set(candidate.channelId, candidate);
+    }
+
+    const dueCandidates = Array.from(merged.values())
       .filter((candidate) => shouldProbeCandidate(candidate, nowMs))
       .sort(compareProbeCandidatePriority)
       .slice(0, PROBE_MAX_BATCH);
