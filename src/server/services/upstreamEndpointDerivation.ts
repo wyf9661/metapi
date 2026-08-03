@@ -117,10 +117,6 @@ function preferredEndpointOrder(
     return ['chat'];
   }
 
-  if (platform === 'openai') {
-    return ['responses', 'chat', 'messages'];
-  }
-
   if (platform === 'antigravity') {
     return ['messages'];
   }
@@ -242,7 +238,7 @@ export async function resolveUpstreamEndpointCandidates(
       if (sitePlatform === 'gemini') return ['responses', 'chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini-cli') return ['chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'antigravity') return ['messages'] as UpstreamEndpoint[];
-      if (sitePlatform === 'openai') return ['responses', 'chat', 'messages'] as UpstreamEndpoint[];
+      if (sitePlatform === 'openai') return ['chat', 'messages', 'responses'] as UpstreamEndpoint[];
       return rankConversationFileEndpoints({
         sitePlatform,
         requestedOrder: preferMessagesForClaudeModel
