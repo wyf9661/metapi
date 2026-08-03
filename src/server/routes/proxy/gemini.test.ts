@@ -795,7 +795,13 @@ describe('gemini native proxy routes', () => {
   it('routes Gemini native generateContent requests to openai upstreams and serializes the response back to Gemini shape', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 41, routeId: 22 },
-      site: { id: 77, name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        id: 77,
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 37, username: 'openai-user@example.com' },
       tokenName: 'default',
       tokenValue: 'openai-access-token',
@@ -981,7 +987,13 @@ describe('gemini native proxy routes', () => {
   it('exposes GeminiCLI downstream generateContent endpoint and wraps the downstream response payload', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 42, routeId: 22 },
-      site: { id: 78, name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        id: 78,
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 38, username: 'openai-user@example.com' },
       tokenName: 'default',
       tokenValue: 'openai-access-token',
@@ -1064,7 +1076,13 @@ describe('gemini native proxy routes', () => {
   it('routes Gemini native document requests to responses endpoints on openai-compatible upstreams', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 42, routeId: 22 },
-      site: { id: 78, name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        id: 78,
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 38, username: 'openai-user@example.com' },
       tokenName: 'default',
       tokenValue: 'openai-access-token',

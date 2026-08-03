@@ -3377,7 +3377,12 @@ describe('chat proxy stream behavior', () => {
 
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
-      site: { name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 33, username: 'demo-user' },
       tokenName: 'default',
       tokenValue: 'sk-openai',
@@ -3421,7 +3426,12 @@ describe('chat proxy stream behavior', () => {
   it('falls back from /v1/responses to /v1/messages on openai platform when responses endpoint is unavailable', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
-      site: { name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 33, username: 'demo-user' },
       tokenName: 'default',
       tokenValue: 'sk-openai',
@@ -3462,7 +3472,7 @@ describe('chat proxy stream behavior', () => {
     const [firstUrl] = fetchMock.mock.calls[0] as [string, any];
     const [secondUrl] = fetchMock.mock.calls[1] as [string, any];
     expect(firstUrl).toContain('/v1/responses');
-    expect(secondUrl).toContain('/v1/chat/completions');
+    expect(secondUrl).toContain('/v1/messages');
   });
 
   it('stops after the first failed protocol when cross protocol fallback is disabled', async () => {
@@ -3564,7 +3574,12 @@ describe('chat proxy stream behavior', () => {
   it('forces openai platform to use /v1/responses for claude downstream requests', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
-      site: { name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 33, username: 'demo-user' },
       tokenName: 'default',
       tokenValue: 'sk-openai',
@@ -3609,7 +3624,12 @@ describe('chat proxy stream behavior', () => {
   it('preserves claude tool_use/tool_result when claude downstream is routed to openai responses endpoint', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
-      site: { name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 33, username: 'demo-user' },
       tokenName: 'default',
       tokenValue: 'sk-openai',
@@ -3692,7 +3712,12 @@ describe('chat proxy stream behavior', () => {
   it('maps claude tool config and thinking budget before routing claude downstream requests to openai responses endpoint', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
-      site: { name: 'openai-site', url: 'https://api.openai.com', platform: 'openai' },
+      site: {
+        name: 'openai-site',
+        url: 'https://api.openai.com',
+        platform: 'openai',
+        protocolProfile: JSON.stringify({ preferResponses: true }),
+      },
       account: { id: 33, username: 'demo-user' },
       tokenName: 'default',
       tokenValue: 'sk-openai',
