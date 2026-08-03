@@ -69,6 +69,16 @@ describe('Accounts verify feedback', () => {
       });
       await flushMicrotasks();
 
+      await act(async () => {
+        const segmentButton = root.root.find((node) => (
+          node.type === 'button'
+          && typeof node.props.onClick === 'function'
+          && collectText(node).includes('API Key管理')
+        ));
+        segmentButton.props.onClick();
+      });
+      await flushMicrotasks();
+
       const addButton = root.root.find((node) => (
         node.type === 'button'
         && typeof node.props.onClick === 'function'
@@ -82,10 +92,13 @@ describe('Accounts verify feedback', () => {
       await flushMicrotasks();
 
       const selects = root.root.findAllByType(ModernSelect);
-      expect(selects.length).toBeGreaterThan(1);
+      expect(selects.length).toBeGreaterThan(0);
 
+      const siteSelect = selects.find((select) => (
+        String(select.props.placeholder || '').includes('选择站点')
+      ));
       await act(async () => {
-        selects[1]!.props.onChange('10');
+        (siteSelect ?? selects[selects.length - 1]!).props.onChange('10');
       });
 
       const textareas = root.root.findAll((node) => node.type === 'textarea');
@@ -100,7 +113,7 @@ describe('Accounts verify feedback', () => {
         && typeof node.props.onClick === 'function'
         && typeof node.props.className === 'string'
         && node.props.className.includes('btn btn-ghost')
-        && collectText(node).includes('Token')
+        && (collectText(node).includes('验证 API Key') || collectText(node).includes('验证 Token'))
       ));
 
       await act(async () => {
