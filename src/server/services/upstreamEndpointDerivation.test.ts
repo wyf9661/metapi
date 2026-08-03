@@ -60,7 +60,7 @@ describe('upstreamEndpointDerivation', () => {
     expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
-  it('keeps explicit openai platforms on responses-first ordering even for claude-family models', async () => {
+  it('uses chat-first for explicit openai platforms unless responses are marked', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {
         ...baseContext,
@@ -69,11 +69,11 @@ describe('upstreamEndpointDerivation', () => {
           platform: 'openai',
         },
       },
-      'claude-opus-4-6',
+      'glm-5.2',
       'openai',
     );
 
-    expect(order).toEqual(['responses', 'chat', 'messages']);
+    expect(order).toEqual(['chat', 'messages', 'responses']);
   });
 
   it('keeps antigravity non-gemini compatibility requests on messages-first ordering', async () => {
