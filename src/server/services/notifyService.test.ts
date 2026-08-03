@@ -14,6 +14,11 @@ vi.mock('nodemailer', () => ({
 }));
 
 vi.mock('undici', () => ({
+  Agent: class MockUndiciAgent {
+    constructor(...args: unknown[]) {}
+  },
+  setGlobalDispatcher: () => {},
+
   fetch: (...args: unknown[]) => fetchMock(...args),
 }));
 
