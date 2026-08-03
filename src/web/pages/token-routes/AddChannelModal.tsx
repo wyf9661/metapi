@@ -26,7 +26,7 @@ type AddChannelModalProps = {
   candidateView: RouteCandidateView;
   onSuccess: () => void;
   missingTokenHints?: RouteMissingTokenHint[];
-  onCreateTokenForMissing?: (accountId: number, modelName: string) => void;
+  onCreateTokenForMissing?: (accountId: number, modelName: string, siteId?: number) => void;
   existingChannelAccountIds?: Set<number>;
 };
 
@@ -56,12 +56,12 @@ export default function AddChannelModal({
 
   const missingAccounts = useMemo(() => {
     if (!missingTokenHints || missingTokenHints.length === 0) return [];
-    const seen = new Map<number, { accountId: number; label: string; modelName: string }>();
+    const seen = new Map<number, { accountId: number; label: string; modelName: string; siteId: number }>();
     for (const hint of missingTokenHints) {
       for (const account of hint.accounts) {
         if (!seen.has(account.accountId)) {
           const label = `${account.username || `account-${account.accountId}`} @ ${account.siteName}`;
-          seen.set(account.accountId, { accountId: account.accountId, label, modelName: hint.modelName });
+          seen.set(account.accountId, { accountId: account.accountId, label, modelName: hint.modelName, siteId: account.siteId });
         }
       }
     }
@@ -284,7 +284,7 @@ export default function AddChannelModal({
                           type="button"
                           className="btn btn-link"
                           style={{ fontSize: 11, padding: '2px 6px' }}
-                          onClick={() => onCreateTokenForMissing(item.accountId, item.modelName)}
+                          onClick={() => onCreateTokenForMissing(item.accountId, item.modelName, item.siteId)}
                         >
                           {tr('创建令牌')}
                         </button>

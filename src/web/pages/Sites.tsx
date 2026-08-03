@@ -949,12 +949,12 @@ export default function Sites() {
         navigate(`/oauth?${params.toString()}`);
         return;
       }
-      navigate(`/accounts?${params.toString()}`);
+      navigate(`/sites/${input.siteId}?${params.toString()}`);
       return;
     }
 
     params.set('segment', 'apikey');
-    navigate(`/accounts?${params.toString()}`);
+    navigate(`/sites/${input.siteId}?${params.toString()}`);
   };
 
   const handleSiteCreatedChoice = (choice: 'session' | 'apikey' | 'later') => {

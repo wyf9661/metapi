@@ -786,7 +786,7 @@ export default function Dashboard({
             </li>
             <li>
               {totalAccounts === 0 ? (
-                <><strong>添加账号凭证</strong>（API Key 或 Session）并验证 → <Link to="/accounts">账号</Link></>
+                <><strong>添加账号凭证</strong>(API Key 或 Session)并验证 → <Link to="/sites">站点连接</Link></>
               ) : (
                 <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有账号</span>
               )}
