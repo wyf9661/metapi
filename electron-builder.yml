@@ -6,6 +6,7 @@ directories:
 electronDist: node_modules/electron/dist
 icon: build/desktop-icon.png
 asar: false
+n: false
 files:
   - dist/**/*
   - drizzle/**/*
