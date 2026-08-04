@@ -31,10 +31,10 @@ linux:
     - AppImage
     - deb
     - rpm
-  maintainer: cita-777 <cita-777@users.noreply.github.com>
+  maintainer: wyf9661 <wyf9661@hotmail.com>
 publish:
   provider: github
-  owner: cita-777
+  owner: wyf9661
   repo: metapi
   releaseType: release
   publishAutoUpdate: true

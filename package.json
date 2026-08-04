@@ -1,6 +1,6 @@
 {
   "name": "metapi",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "description": "Meta-layer management and unified proxy for AI API aggregation platforms",
   "main": "dist/desktop/main.js",
   "keywords": [
@@ -132,8 +132,8 @@
     "node-abi": "^4.33.0"
   },
   "author": {
-    "name": "cita-777",
-    "email": "cita-777@users.noreply.github.com",
-    "url": "https://github.com/cita-777"
+    "name": "wyf9661",
+    "email": "wyf9661@hotmail.com",
+    "url": "https://github.com/wyf9661"
   }
 }
