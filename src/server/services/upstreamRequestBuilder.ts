@@ -280,11 +280,16 @@ function ensureCodexClientFingerprintHeaders(
   // fingerprint (e.g. custom_headers with only user-agent + originator) would
   // still be rejected by upstream "only allows Codex official clients" checks.
   // Always rebuild the complete Codex CLI header signature (Originator,
-  // Version, Session_id, Conversation_id, User-Agent, Connection). The builder
-  // preserves any existing UA/version it can, then fills the rest.
+  // Version, Session_id, Conversation_id, User-Agent, Connection, …). The
+  // builder preserves any existing UA/version it can, then fills the rest.
   const codexHeaders = buildCodexRuntimeHeaders({
     baseHeaders: headers,
     stream: headerValueToString(headers.accept)?.includes('text/event-stream') ?? true,
+    // Some sub2api/new-api upstreams check x-codex-beta-features to distinguish
+    // official Codex clients from generic OpenAI-compat callers. Carry over
+    // any existing value (e.g. from a codex CLI client) or default to the
+    // current Codex CLI value so that converted chat→responses calls pass.
+    codexBetaFeatures: getInputHeader(headers, 'x-codex-beta-features') || 'cookie_auth_2025_05_08',
   });
   const next = { ...headers };
   for (const key of [
@@ -295,6 +300,7 @@ function ensureCodexClientFingerprintHeaders(
     'User-Agent',
     'Connection',
     'OpenAI-Beta',
+    'x-codex-beta-features',
   ]) {
     if (codexHeaders[key]) next[key] = codexHeaders[key];
   }
