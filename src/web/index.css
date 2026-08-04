@@ -1942,14 +1942,6 @@ body {
   width: 100%;
 }
 
-.program-logs-table th {
-  text-align: center;
-}
-
-.program-logs-table td {
-  text-align: center;
-}
-
 .program-logs-table .program-logs-title-cell {
   font-weight: 600;
   white-space: normal;
