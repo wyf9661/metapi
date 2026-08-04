@@ -12,23 +12,15 @@
 
 
 <p align="center">
-<a href="https://github.com/cita-777/metapi/releases">
-  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/cita-777/metapi?label=Release&logo=github&style=flat">
-</a><a href="https://github.com/cita-777/metapi/stargazers">
-  <img alt="GitHub Stars" src="https://img.shields.io/github/stars/cita-777/metapi?style=flat&logo=github&label=Stars">
-</a><a href="https://atomgit.com/cita-777/metapi">
-  <img alt="AtomGit Stars" src="https://atomgit.com/cita-777/metapi/star/badge.svg">
-</a><a href="https://deepwiki.com/cita-777/metapi">
-  <img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg">
-</a><a href="https://hub.docker.com/r/1467078763/metapi">
-  <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/1467078763/metapi?style=flat&logo=docker&label=Docker%20Pulls">
-</a><a href="https://hub.docker.com/r/1467078763/metapi">
+<a href="https://github.com/wyf9661/metapi/releases">
+  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/wyf9661/metapi?label=Release&logo=github&style=flat">
+</a><a href="https://github.com/wyf9661/metapi/stargazers">
+  <img alt="GitHub Stars" src="https://img.shields.io/github/stars/wyf9661/metapi?style=flat&logo=github&label=Stars">
+</a><a href="https://hub.docker.com/r/wyf9661/metapi">
+  <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/wyf9661/metapi?style=flat&logo=docker&label=Docker%20Pulls">
+</a><a href="LICENSE">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-brightgreen?style=flat">
-</a><img alt="Node.js" src="https://img.shields.io/badge/Node.js-22.15%2B-339933?logo=node.js&style=flat"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&style=flat"><a href="https://zeabur.com/templates/DOX5PR">
-  <img alt="Deploy on Zeabur" src="https://zeabur.com/button.svg" height="28">
-</a><a href="https://render.com/deploy?repo=https://github.com/cita-777/metapi">
-  <img alt="Deploy to Render" src="https://render.com/images/deploy-to-render-button.svg" height="28">
-</a>
+</a><img alt="Node.js" src="https://img.shields.io/badge/Node.js-22.15%2B-339933?logo=node.js&style=flat"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&style=flat">
 </p>
 
 <p align="center">
@@ -36,33 +28,11 @@
   <a href="README_EN.md">English</a>
 </p>
 
-<p align="center">
-  <a href="https://metapi.cita777.me"><strong>📚 在线文档</strong></a> ·
-  <a href="https://metapi.cita777.me/getting-started">快速上手</a> ·
-  <a href="https://metapi.cita777.me/deployment">部署指南</a> ·
-  <a href="https://metapi.cita777.me/configuration">配置说明</a> ·
-  <a href="https://metapi.cita777.me/client-integration">客户端接入</a> ·
-  <a href="https://metapi.cita777.me/faq">常见问题</a>
-</p>
-
 </div>
 
 ---
 
-## 🌐 在线体验
-
-> 无需部署，直接体验 Metapi 的完整功能：
-
-|                        |                                                            |
-| ---------------------- | ---------------------------------------------------------- |
-| 🔗**体验地址**   | [metapi-t9od.onrender.com](https://metapi-t9od.onrender.com/) |
-| 🔑**管理员令牌** | `123456`                                                 |
-
-> **⚠️ 安全提示**：体验站为公共环境，**请勿填入你的 API Key、账号密码或站点信息**。数据随时可能被清空。
-
-> **ℹ️ 说明**：体验站使用 Render 免费方案 + OpenRouter 免费模型（仅 `:free` 后缀的模型可用）。
-
----
+<!-- 体验站已移除 -->
 
 ## 📖 介绍
 
@@ -71,8 +41,7 @@
 **Metapi** 作为这些中转站之上的**元聚合层（Meta-Aggregation Layer）**，把多个站点统一到 **一个入口（可按项目配置多个下游 API Key）**——下游所有工具（Cursor、Claude Code、Codex、Open WebUI 等）即可无感接入全部模型。当前支持的上游范围已经不止传统聚合面板，还包括：
 
 - 聚合面板： [New API](https://github.com/QuantumNous/new-api)、[One API](https://github.com/songquanpeng/one-api)、[Sub2API](https://github.com/Wei-Shaw/sub2api)
-- 通用兼容接口：OpenAI / Claude / Gemini compatible endpoints，以及 `cliproxyapi` / CPA
-- 官方预设：阿里云 / 智谱 / 豆包 Coding Plan，DeepSeek，Moonshot(Kimi)，MiniMax，ModelScope
+- 通用兼容接口：OpenAI / Claude / Gemini compatible endpoints
 - OAuth 连接：Codex、Claude、Gemini CLI、Antigravity
 
 详细接法见 [上游接入](./docs/upstream-integration.md) 与 [OAuth 管理](./docs/oauth.md)。
@@ -192,6 +161,11 @@
 | **New API**   | `new-api`   | 新一代大模型网关     |
 | **One API**   | `one-api`   | 经典 OpenAI 接口聚合 |
 | **Sub2API**   | `sub2api`   | 订阅制中转平台       |
+| **OpenAI**    | `openai`    | 通用 OpenAI 兼容端点 |
+| **Claude**    | `claude`    | 通用 Anthropic 兼容端点 |
+| **Gemini**    | `gemini`    | 通用 Google 兼容端点 |
+
+OAuth 平台：Codex、Claude、Gemini CLI、Antigravity
 
 各平台适配器覆盖模型枚举、余额查询、Token 管理、代理接入等通用能力；登录、签到、用户信息等能力按平台而异。
 
@@ -276,13 +250,6 @@
 
 ## 🚀 快速开始
 
-<a href="https://zeabur.com/templates/DOX5PR">
-  <img alt="Deploy on Zeabur" src="https://zeabur.com/button.svg" height="28">
-</a>
-<a href="https://render.com/deploy?repo=https://github.com/cita-777/metapi">
-  <img alt="Deploy to Render" src="https://render.com/images/deploy-to-render-button.svg" height="28">
-</a>
-
 ### Docker Compose（推荐）
 
 ```bash
@@ -291,7 +258,7 @@ mkdir metapi && cd metapi
 cat > docker-compose.yml << 'EOF'
 services:
   metapi:
-    image: 1467078763/metapi:latest
+    image: wyf9661/metapi:latest
     ports:
       - "4000:4000"
     volumes:
@@ -326,7 +293,7 @@ docker run -d --name metapi \
   -e TZ=Asia/Shanghai \
   -v ./data:/app/data \
   --restart unless-stopped \
-  1467078763/metapi:latest
+  wyf9661/metapi:latest
 ```
 
 </details>
@@ -347,9 +314,9 @@ docker run -d --name metapi \
 > 桌面安装包首次启动也属于这类场景：如果你没有额外注入 `AUTH_TOKEN`，默认管理员令牌同样是 `change-me-admin-token`。
 > 如果在「设置」面板中修改了管理员令牌，后续登录请使用新令牌。
 
-Docker Compose、桌面安装包、反向代理、升级与数据库选项等详见 [部署指南](https://metapi.cita777.me/deployment)。
+Docker Compose、桌面安装包、反向代理、升级与数据库选项等详见 [部署指南](./docs/deployment.md)。
 
-📖 **[环境变量与配置](https://metapi.cita777.me/configuration)** · **[客户端接入指南](https://metapi.cita777.me/client-integration)** · **[常见问题](https://metapi.cita777.me/faq)**
+📖 **[环境变量与配置](./docs/configuration.md)** · **[客户端接入指南](./docs/client-integration.md)** · **[常见问题](./docs/faq.md)**
 
 ---
 
@@ -423,9 +390,9 @@ Metapi 完全自托管，所有数据（账号、令牌、路由、日志）均�
 
 欢迎各种形式的贡献！
 
-- 🐛 报告 Bug — [提交 Issue](https://github.com/cita-777/metapi/issues)
-- 💡 功能建议 — [发起讨论](https://github.com/cita-777/metapi/issues)
-- 🔧 代码贡献 — [提交 Pull Request](https://github.com/cita-777/metapi/pulls)
+- 🐛 报告 Bug — [提交 Issue](https://github.com/wyf9661/metapi/issues)
+- 💡 功能建议 — [发起讨论](https://github.com/wyf9661/metapi/issues)
+- 🔧 代码贡献 — [提交 Pull Request](https://github.com/wyf9661/metapi/pulls)
 - 📝 贡献指南 — [CONTRIBUTING.md](CONTRIBUTING.md)
 - 📜 行为准则 — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
@@ -447,17 +414,19 @@ Metapi 完全自托管，所有数据（账号、令牌、路由、日志）均�
 
 感谢所有为 Metapi 提交代码、反馈问题、提供思路和实测数据的朋友。这个项目的很多能力，都是在社区的真实使用和反复打磨中慢慢长出来的。
 
-特别感谢所有贡献者：
+特别感谢所有贡献者:
 
-<a href="https://github.com/cita-777/metapi/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=cita-777/metapi" alt="Contributors" />
+<a href="https://github.com/wyf9661/metapi/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=wyf9661/metapi" alt="Contributors" />
 </a>
+
+本项目为 [cita-777/metapi](https://github.com/cita-777/metapi) 的 fork，感谢上游作者 [@cita-777](https://github.com/cita-777) 及上游社区打下的基础。
 
 ---
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=cita-777/metapi&type=date&legend=top-left&v=2)](https://www.star-history.com/#cita-777/metapi&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=wyf9661/metapi&type=date&legend=top-left&v=2)](https://www.star-history.com/#wyf9661/metapi&type=date&legend=top-left)
 
 ---
 

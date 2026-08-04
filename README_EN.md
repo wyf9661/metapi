@@ -11,38 +11,26 @@ into <strong>one API Key, one endpoint</strong>, with automatic model discovery,
 </p>
 
 <p align="center">
-  <a href="https://linux.do/t/topic/1671489" alt="LINUX DO">
-    <img src="https://shorturl.at/ggSqS" alt="LINUX DO">
-  </a>
 </p>
 
 <p align="center">
-<a href="https://github.com/cita-777/metapi/releases">
-  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/cita-777/metapi?label=Release&logo=github&style=flat">
+<a href="https://github.com/wyf9661/metapi/releases">
+  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/wyf9661/metapi?label=Release&logo=github&style=flat">
 </a><!--
---><a href="https://github.com/cita-777/metapi/stargazers">
-  <img alt="GitHub Stars" src="https://img.shields.io/github/stars/cita-777/metapi?style=flat&logo=github&label=Stars">
+--><a href="https://github.com/wyf9661/metapi/stargazers">
+  <img alt="GitHub Stars" src="https://img.shields.io/github/stars/wyf9661/metapi?style=flat&logo=github&label=Stars">
 </a><!--
---><a href="https://deepwiki.com/cita-777/metapi">
-  <img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg">
+--><a href="https://hub.docker.com/r/wyf9661/metapi">
+  <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/wyf9661/metapi?style=flat&logo=docker&label=Docker%20Pulls">
 </a><!--
---><a href="https://hub.docker.com/r/1467078763/metapi">
-  <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/1467078763/metapi?style=flat&logo=docker&label=Docker%20Pulls">
-</a><!--
---><a href="https://hub.docker.com/r/1467078763/metapi">
-  <img alt="Docker Image" src="https://img.shields.io/badge/docker-1467078763%2Fmetapi-blue?logo=docker&style=flat">
+--><a href="https://hub.docker.com/r/wyf9661/metapi">
+  <img alt="Docker Image" src="https://img.shields.io/badge/docker-wyf9661%2Fmetapi-blue?logo=docker&style=flat">
 </a><!--
 --><a href="LICENSE">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-brightgreen?style=flat">
 </a><!--
 --><img alt="Node.js" src="https://img.shields.io/badge/Node.js-22.15%2B-339933?logo=node.js&style=flat"><!--
---><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&style=flat"><!--
---><a href="https://zeabur.com/templates/DOX5PR">
-  <img alt="Deploy on Zeabur" src="https://zeabur.com/button.svg" height="28">
-</a><!--
---><a href="https://render.com/deploy?repo=https://github.com/cita-777/metapi">
-  <img alt="Deploy to Render" src="https://render.com/images/deploy-to-render-button.svg" height="28">
-</a>
+--><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&style=flat">
 </p>
 
 <p align="center">
@@ -50,32 +38,11 @@ into <strong>one API Key, one endpoint</strong>, with automatic model discovery,
   <a href="README_EN.md"><strong>English</strong></a>
 </p>
 
-<p align="center">
-  <a href="https://metapi.cita777.me"><strong>Docs</strong></a> ·
-  <a href="https://metapi.cita777.me/getting-started">Quick Start</a> ·
-  <a href="https://metapi.cita777.me/deployment">Deployment</a> ·
-  <a href="https://metapi.cita777.me/configuration">Configuration</a> ·
-  <a href="https://metapi.cita777.me/client-integration">Client Integration</a> ·
-  <a href="https://metapi.cita777.me/faq">FAQ</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a>
-</p>
-
 </div>
 
 ---
 
-## 🌐 Live Demo
-
-> Try Metapi without deploying — full-featured demo instance:
-
-| | |
-|---|---|
-| 🔗 **Demo URL** | [metapi-t9od.onrender.com](https://metapi-t9od.onrender.com/) |
-| 🔑 **Admin Token** | `123456` |
-
-> **⚠️ Security Notice**: This is a public demo. **Do NOT enter any real API keys, credentials, or site information.** Data may be reset at any time.
-
-> **ℹ️ Note**: Demo runs on Render free tier + OpenRouter free models (only `:free` suffixed models available). First visit may take 30-60s to wake up.
+<!-- Live demo removed -->
 
 ---
 
@@ -88,6 +55,8 @@ The AI ecosystem is seeing a growing number of aggregation relay stations based 
 - [New API](https://github.com/QuantumNous/new-api)
 - [One API](https://github.com/songquanpeng/one-api)
 - [Sub2API](https://github.com/Wei-Shaw/sub2api) — Subscription-based relay
+- OpenAI / Claude / Gemini compatible endpoints
+- OAuth: Codex, Claude, Gemini CLI, Antigravity
 
 | Pain Point | How Metapi Solves It |
 | --- | --- |
@@ -211,6 +180,11 @@ The AI ecosystem is seeing a growing number of aggregation relay stations based 
 | **New API** | `new-api` | Next-gen LLM gateway |
 | **One API** | `one-api` | Classic OpenAI API aggregation |
 | **Sub2API** | `sub2api` | Subscription-based relay |
+| **OpenAI** | `openai` | Generic OpenAI-compatible endpoint |
+| **Claude** | `claude` | Generic Anthropic-compatible endpoint |
+| **Gemini** | `gemini` | Generic Google-compatible endpoint |
+
+OAuth platforms: Codex, Claude, Gemini CLI, Antigravity
 
 Adapters cover shared capabilities such as model discovery, balance access, token management, and proxy integration; login, check-in, and user-info flows vary by platform.
 
@@ -303,7 +277,7 @@ mkdir metapi && cd metapi
 cat > docker-compose.yml << 'EOF'
 services:
   metapi:
-    image: 1467078763/metapi:latest
+    image: wyf9661/metapi:latest
     ports:
       - "4000:4000"
     volumes:
@@ -338,7 +312,7 @@ docker run -d --name metapi \
   -e TZ=Asia/Shanghai \
   -v ./data:/app/data \
   --restart unless-stopped \
-  1467078763/metapi:latest
+  wyf9661/metapi:latest
 ```
 
 </details>
@@ -542,9 +516,9 @@ Metapi is fully self-hosted. All data (accounts, tokens, routes, logs) stays in 
 
 All forms of contribution are welcome!
 
-- Report bugs — [Submit an Issue](https://github.com/cita-777/metapi/issues)
-- Feature suggestions — [Start a Discussion](https://github.com/cita-777/metapi/issues)
-- Code contributions — [Submit a Pull Request](https://github.com/cita-777/metapi/pulls)
+- Report bugs — [Submit an Issue](https://github.com/wyf9661/metapi/issues)
+- Feature suggestions — [Start a Discussion](https://github.com/wyf9661/metapi/issues)
+- Code contributions — [Submit a Pull Request](https://github.com/wyf9661/metapi/pulls)
 - Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md)
 - Code of conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
@@ -579,7 +553,7 @@ Special thanks to all contributors:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=cita-777/metapi&type=date&legend=top-left&v=2)](https://www.star-history.com/#cita-777/metapi&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=wyf9661/metapi&type=date&legend=top-left&v=2)](https://www.star-history.com/#wyf9661/metapi&type=date&legend=top-left)
 
 ---
 
