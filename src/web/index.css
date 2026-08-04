@@ -5551,6 +5551,73 @@ textarea {
   pointer-events: none;
 }
 
+/* ===== Probe Logs ===== */
+.probe-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+@media (min-width: 1024px) {
+  .probe-stats-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.probe-stat-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.probe-stat-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.probe-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.probe-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 1023px) {
+  .probe-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .probe-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.probe-filter-total {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.probe-logs-table .probe-question-cell {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-secondary);
+}
+
 /* ===== Pagination ===== */
 .pagination {
   display: flex;
