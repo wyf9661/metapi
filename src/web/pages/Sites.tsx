@@ -1564,35 +1564,6 @@ export default function Sites() {
                 </span>
               </span>
             </label>
-            <label style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 10,
-              padding: '10px 12px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-bg)',
-              color: 'var(--color-text-primary)',
-              fontSize: 13,
-            }}>
-              <input
-                type="checkbox"
-                checked={form.customHeadersOverrideRequestHeaders}
-                onChange={(e) => setForm((prev) => ({
-                  ...prev,
-                  customHeadersOverrideRequestHeaders: e.target.checked,
-                }))}
-                style={{ marginTop: 2 }}
-              />
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>允许站点自定义请求头覆盖同名出站请求头</span>
-                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                  {form.customHeadersOverrideRequestHeaders
-                    ? '站点自定义请求头将覆盖同名出站请求头，适合强制覆盖 User-Agent、Version 等客户端特征。'
-                    : '关闭时请求本身显式传入的请求头优先级更高。'}
-                </span>
-              </span>
-            </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
               按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。
             </div>

@@ -236,7 +236,6 @@ describe('codex client profile helpers', () => {
     const enabled = applyCodexCompatibilityMode(base, true);
     expect(isCodexCompatibilityModeEnabled(enabled)).toBe(true);
     expect(isCodexClientProfileEnabled(enabled.customHeaders)).toBe(true);
-    expect(enabled.customHeadersOverrideRequestHeaders).toBe(true);
     expect(enabled.protocolProfile).toEqual({
       preferResponses: true,
       requireCodexClient: true,
