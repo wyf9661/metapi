@@ -66,7 +66,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
-import { sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 const GEMINI_MODEL_PROBES = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
@@ -917,6 +917,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               );
               return reply.code(upstream.status).type(contentType || 'text/event-stream').send('');
             }
+            if (isFastifyReplyCommitted(reply)) {
+              // Downstream already committed by a prior attempt — cannot re-open headers.
+              throw new Error('Cannot start Gemini stream after response already committed');
+            }
             reply.hijack();
             reply.raw.statusCode = upstream.status;
             reply.raw.setHeader('Content-Type', contentType || 'text/event-stream');
@@ -1490,7 +1494,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           isStreamAction,
           null,
           requestTraceId,);
-        if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
+        if (
+          canFailoverToNextChannel(reply)
+          && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+        ) {
           retryCount += 1;
           continue;
         }
