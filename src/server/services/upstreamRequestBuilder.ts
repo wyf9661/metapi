@@ -294,8 +294,19 @@ function ensureCodexClientFingerprintHeaders(
     'Conversation_id',
     'User-Agent',
     'Connection',
+    'OpenAI-Beta',
   ]) {
     if (codexHeaders[key]) next[key] = codexHeaders[key];
+  }
+  // Conversation_id must always be present for full Codex client fingerprint.
+  // When no continuity key is available, fall back to the session ID.
+  if (!next['Conversation_id'] && next['Session_id']) {
+    next['Conversation_id'] = next['Session_id'];
+  }
+  // Codex official clients always send openai-beta: responses=experimental.
+  // Use lowercase key to match real Codex CLI wire format.
+  if (!getInputHeader(next, 'openai-beta') && !getInputHeader(next, 'OpenAI-Beta')) {
+    next['openai-beta'] = 'responses=experimental';
   }
   delete next['user-agent'];
   delete next.originator;

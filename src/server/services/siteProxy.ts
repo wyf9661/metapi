@@ -510,9 +510,12 @@ function filterCustomHeadersForRequestUrl(requestUrl: string, customHeaders: unk
 }
 
 function resolveSiteCustomHeadersMergePriority(
-  site: Pick<SiteProxyConfigLike, 'customHeadersOverrideRequestHeaders'> | null | undefined,
+  _site: Pick<SiteProxyConfigLike, 'customHeadersOverrideRequestHeaders'> | null | undefined,
 ): SiteCustomHeadersMergePriority {
-  return site?.customHeadersOverrideRequestHeaders ? 'site' : 'request';
+  // Fixed to 'request': site custom headers never override outbound request
+  // headers (e.g. User-Agent, Authorization). The codex fingerprint is
+  // injected at the upstreamRequestBuilder layer and must not be overwritten.
+  return 'request';
 }
 
 export async function resolveSiteProxyUrlByRequestUrl(requestUrl: string): Promise<string | null> {

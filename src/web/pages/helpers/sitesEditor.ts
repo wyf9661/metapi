@@ -145,9 +145,7 @@ export function applyCodexCompatibilityMode(form: SiteForm, enabled: boolean): S
   return {
     ...form,
     customHeaders: applyCodexClientProfile(form.customHeaders, enabled),
-    customHeadersOverrideRequestHeaders: enabled
-      ? true
-      : form.customHeadersOverrideRequestHeaders,
+    customHeadersOverrideRequestHeaders: form.customHeadersOverrideRequestHeaders,
     protocolProfile: {
       ...form.protocolProfile,
       preferResponses: enabled,

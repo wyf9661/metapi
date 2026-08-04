@@ -88,7 +88,7 @@ describe('siteProxy', () => {
     expect(headers.get('x-trace-id')).toBe('trace-1');
   });
 
-  it('lets matched site custom headers override explicit headers when configured', async () => {
+  it('lets site custom headers add but not override explicit headers', async () => {
     await db.insert(schema.sites).values({
       name: 'headers-override-site',
       url: 'https://headers-override-site.example.com',
@@ -111,8 +111,9 @@ describe('siteProxy', () => {
     });
     const headers = new Headers(requestInit.headers);
 
-    expect(headers.get('authorization')).toBe('Bearer site-token');
-    expect(headers.get('user-agent')).toBe('site-agent');
+    // Site custom headers do NOT override explicitly set request headers.
+    expect(headers.get('authorization')).toBe('Bearer request-token');
+    expect(headers.get('user-agent')).toBe('request-agent');
     expect(headers.get('x-trace-id')).toBe('trace-1');
   });
 
@@ -149,7 +150,9 @@ describe('siteProxy', () => {
       },
     });
     const modelHeaders = new Headers(modelsInit.headers);
-    expect(modelHeaders.get('user-agent')).toBe('codex_cli_rs/0.39.0');
+    // Request headers win over site custom headers; non-conflicting site
+    // headers (originator, X-Site-Token) are still added on /v1 paths.
+    expect(modelHeaders.get('user-agent')).toBe('request-agent');
     expect(modelHeaders.get('originator')).toBe('codex_cli_rs');
     expect(modelHeaders.get('x-site-token')).toBe('keep-me');
   });
@@ -174,7 +177,7 @@ describe('siteProxy', () => {
     expect('dispatcher' in requestInit).toBe(true);
   });
 
-  it('lets direct site record custom headers override explicit headers when configured', async () => {
+  it('site record custom headers cannot override explicit request headers', async () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
       proxyUrl: null,
@@ -192,8 +195,9 @@ describe('siteProxy', () => {
     });
     const headers = new Headers(requestInit.headers);
 
-    expect(headers.get('authorization')).toBe('Bearer site-token');
-    expect(headers.get('user-agent')).toBe('site-agent');
+    // Site custom headers do NOT override explicitly set request headers.
+    expect(headers.get('authorization')).toBe('Bearer request-token');
+    expect(headers.get('user-agent')).toBe('request-agent');
   });
 
   it('merges parsed-object site custom headers from site records', async () => {
