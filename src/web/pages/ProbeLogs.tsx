@@ -8,6 +8,8 @@ import { marked } from 'marked';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import PaginationControls from '../components/PaginationControls.js';
+import CenteredModal from '../components/CenteredModal.js';
+import MobileDrawer from '../components/MobileDrawer.js';
 import { tr } from '../i18n.js';
 
 type ProbeLog = {
@@ -54,6 +56,80 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'badge badge-error',
   timeout: 'badge badge-warning',
 };
+
+function ProbeDetailFields({
+  log,
+  formatLatency,
+  STATUS_COLORS,
+  STATUS_LABELS,
+  CATEGORY_LABELS,
+  formatDateTimeLocal,
+  renderResponseText,
+}: {
+  log: ProbeLog;
+  formatLatency: (ms: number | null) => string;
+  STATUS_COLORS: Record<string, string>;
+  STATUS_LABELS: Record<string, string>;
+  CATEGORY_LABELS: Record<string, string>;
+  formatDateTimeLocal: (value?: string | null) => string;
+  renderResponseText: (raw: string | null | undefined) => string;
+}) {
+  return (
+    <div className="probe-detail-grid">
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">状态</div>
+        <span className={STATUS_COLORS[log.status] || 'badge'}>{STATUS_LABELS[log.status] || log.status}</span>
+      </div>
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">时间</div>
+        <div className="probe-detail-value">{formatDateTimeLocal(log.createdAt)}</div>
+      </div>
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">模型</div>
+        <div className="probe-detail-value">{log.modelName}</div>
+      </div>
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">分类</div>
+        <div className="probe-detail-value">{CATEGORY_LABELS[log.questionCategory] || '-'}</div>
+      </div>
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">站点</div>
+        <div className="probe-detail-value">{log.siteName || `#${log.siteId}`}</div>
+      </div>
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">账号</div>
+        <div className="probe-detail-value">{log.accountUsername || `#${log.accountId}`}</div>
+      </div>
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">延迟</div>
+        <div className="probe-detail-value">{formatLatency(log.latencyMs)}</div>
+      </div>
+      <div className="probe-detail-item">
+        <div className="probe-detail-label">Token</div>
+        <div className="probe-detail-value">{log.tokensUsed || '-'}</div>
+      </div>
+
+      {log.errorMessage ? (
+        <div className="probe-detail-item probe-detail-wide">
+          <div className="probe-detail-label">错误信息</div>
+          <div className="probe-detail-error">{log.errorMessage}</div>
+        </div>
+      ) : null}
+
+      <div className="probe-detail-item probe-detail-wide">
+        <div className="probe-detail-label">问题</div>
+        <div className="probe-detail-block">{log.questionText}</div>
+      </div>
+
+      {log.responseText ? (
+        <div className="probe-detail-item probe-detail-wide">
+          <div className="probe-detail-label">回答</div>
+          <div className="probe-detail-block probe-detail-answer" dangerouslySetInnerHTML={{ __html: renderResponseText(log.responseText) }} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function ProbeLogs() {
   const isMobile = useIsMobile();
@@ -404,93 +480,34 @@ export default function ProbeLogs() {
         )}
       </div>
 
-      {/* 详情弹窗 */}
+      {/* 详情弹窗：桌面端 portal 居中弹框，移动端右滑抽屉，避免被页面横向滚动影响 */}
       {selectedLog && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedLog(null)}
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">测活详情</h2>
-                <button
-                  onClick={() => setSelectedLog(null)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
+        <>
+          {isMobile ? (
+            <MobileDrawer
+              open={Boolean(selectedLog)}
+              onClose={() => setSelectedLog(null)}
+              title="测活详情"
+              closeLabel="关闭测活详情"
+              side="right"
+            >
+              <div className="probe-detail-body">
+                <ProbeDetailFields log={selectedLog} formatLatency={formatLatency} STATUS_COLORS={STATUS_COLORS} STATUS_LABELS={STATUS_LABELS} CATEGORY_LABELS={CATEGORY_LABELS} formatDateTimeLocal={formatDateTimeLocal} renderResponseText={renderResponseText} />
               </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-gray-500">状态</div>
-                    <div className={`inline-block px-2 py-1 rounded text-sm font-medium ${STATUS_COLORS[selectedLog.status]}`}>
-                      {STATUS_LABELS[selectedLog.status]}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">时间</div>
-                    <div className="text-sm">{formatDateTimeLocal(selectedLog.createdAt)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">模型</div>
-                    <div className="text-sm font-medium">{selectedLog.modelName}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">分类</div>
-                    <div className="text-sm">{CATEGORY_LABELS[selectedLog.questionCategory]}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">站点</div>
-                    <div className="text-sm">{selectedLog.siteName || `#${selectedLog.siteId}`}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">账号</div>
-                    <div className="text-sm">{selectedLog.accountUsername || `#${selectedLog.accountId}`}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">延迟</div>
-                    <div className="text-sm">{formatLatency(selectedLog.latencyMs)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">Token</div>
-                    <div className="text-sm">{selectedLog.tokensUsed || '-'}</div>
-                  </div>
-                </div>
-
-                {selectedLog.errorMessage && (
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">错误信息</div>
-                    <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
-                      {selectedLog.errorMessage}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <div className="text-sm text-gray-500 mb-1">问题</div>
-                  <div className="bg-gray-50 border border-gray-200 rounded p-3 text-sm whitespace-pre-wrap">
-                    {selectedLog.questionText}
-                  </div>
-                </div>
-
-                {selectedLog.responseText && (
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">回答</div>
-                    <div className="bg-gray-50 border border-gray-200 rounded p-3 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">
-                      {renderResponseText(selectedLog.responseText)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+            </MobileDrawer>
+          ) : (
+            <CenteredModal
+              open={Boolean(selectedLog)}
+              onClose={() => setSelectedLog(null)}
+              title="测活详情"
+              maxWidth={900}
+              closeOnBackdrop
+              closeOnEscape
+            >
+              <ProbeDetailFields log={selectedLog} formatLatency={formatLatency} STATUS_COLORS={STATUS_COLORS} STATUS_LABELS={STATUS_LABELS} CATEGORY_LABELS={CATEGORY_LABELS} formatDateTimeLocal={formatDateTimeLocal} renderResponseText={renderResponseText} />
+            </CenteredModal>
+          )}
+        </>
       )}
     </div>
   );
