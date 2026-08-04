@@ -102,7 +102,7 @@ import {
   isGeminiNativeRuntimePath,
   isRecord,
 } from './chatSurfaceHelpers.js';
-import { isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 
 export async function handleChatSurfaceRequest(
   request: FastifyRequest,
@@ -547,7 +547,10 @@ export async function handleChatSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
-      if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
+      if (
+        canFailoverToNextChannel(reply)
+        && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+      ) {
         retryCount += 1;
         continue;
       }
@@ -557,12 +560,13 @@ export async function handleChatSurfaceRequest(
           type: 'server_error',
         },
       });
-      return reply.code(503).send({
+      sendReplyIfWritable(reply, 503, {
         error: {
           message: busyMessage,
           type: 'server_error',
         },
       });
+      return;
     }
     const channelLease = leaseResult.lease;
 
@@ -589,6 +593,12 @@ export async function handleChatSurfaceRequest(
         let streamStarted = false;
         const startSseResponse = () => {
           if (streamStarted) return;
+          // Never re-open SSE headers once the raw response is committed
+          // (previous channel attempt may have already hijacked).
+          if (isFastifyReplyCommitted(reply)) {
+            streamStarted = true;
+            return;
+          }
           streamStarted = true;
           reply.hijack();
           reply.raw.statusCode = 200;
@@ -790,9 +800,12 @@ export async function handleChatSurfaceRequest(
               upstreamPath: successfulUpstreamPath,
             });
             const terminalFailureOutcome = failureOutcome.action === 'retry'
-              ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-                ? null
-                : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
+              ? (
+                canFailoverToNextChannel(reply)
+                && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+                  ? null
+                  : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
+              )
               : failureOutcome;
             if (!terminalFailureOutcome) {
               if (failureOutcome.action === 'retry') {
@@ -806,7 +819,8 @@ export async function handleChatSurfaceRequest(
               terminalFailureOutcome.payload,
               successfulUpstreamPath,
             );
-            return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+            sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+            return;
           }
 
           const streamResult = streamSession.consumeUpstreamFinalPayload(fallbackData, fallbackText, streamResponse);
@@ -1005,9 +1019,12 @@ export async function handleChatSurfaceRequest(
           upstreamPath: successfulUpstreamPath,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-            ? null
-            : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
+          ? (
+            canFailoverToNextChannel(reply)
+            && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+              ? null
+              : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
+          )
           : failureOutcome;
         if (!terminalFailureOutcome) {
           if (failureOutcome.action === 'retry') {
@@ -1021,7 +1038,8 @@ export async function handleChatSurfaceRequest(
           terminalFailureOutcome.payload,
           successfulUpstreamPath,
         );
-        return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+        sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+        return;
       }
       const normalizedFinal = isGeminiNativeRuntimePath(successfulUpstreamPath)
         ? buildOpenAiFinalFromGeminiNativePayload(upstreamData, modelName, rawText)
@@ -1107,9 +1125,12 @@ export async function handleChatSurfaceRequest(
           retryCount,
         });
         const terminalFailureOutcome = failureOutcome.action === 'retry'
-          ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-            ? null
-            : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err.message || 'unknown error'))
+          ? (
+            canFailoverToNextChannel(reply)
+            && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+              ? null
+              : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err.message || 'unknown error')
+          )
           : failureOutcome;
         if (!terminalFailureOutcome) {
           if (failureOutcome.action === 'retry') {
@@ -1136,9 +1157,12 @@ export async function handleChatSurfaceRequest(
         retryCount,
       });
       const terminalFailureOutcome = failureOutcome.action === 'retry'
-        ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-          ? null
-          : finalizeRetryAsExecutionFailure(err?.message || 'network failure'))
+        ? (
+          canFailoverToNextChannel(reply)
+          && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+            ? null
+            : finalizeRetryAsExecutionFailure(err?.message || 'network failure')
+        )
         : failureOutcome;
       if (!terminalFailureOutcome) {
         if (failureOutcome.action === 'retry') {

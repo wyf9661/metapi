@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isFastifyReplyCommitted, sendReplyIfWritable, endRawReplyQuietly } from './replySafety.js';
+import {
+  isFastifyReplyCommitted,
+  sendReplyIfWritable,
+  endRawReplyQuietly,
+  canFailoverToNextChannel,
+} from './replySafety.js';
 
 function makeReply(opts: { sent?: boolean; raw?: Record<string, unknown> } = {}) {
   const reply = {
@@ -55,5 +60,11 @@ describe('replySafety', () => {
     const reply = makeReply({ raw: { headersSent: true, end: endFn } });
     endRawReplyQuietly(reply);
     expect(endFn).toHaveBeenCalled();
+  });
+
+  it('canFailoverToNextChannel is true only for fresh replies', () => {
+    expect(canFailoverToNextChannel(makeReply())).toBe(true);
+    expect(canFailoverToNextChannel(makeReply({ raw: { headersSent: true } }))).toBe(false);
+    expect(canFailoverToNextChannel(makeReply({ sent: true }))).toBe(false);
   });
 });

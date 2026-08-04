@@ -109,7 +109,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
-import { sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -870,7 +870,11 @@ export async function handleOpenAiResponsesSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
-      if (retryCount < maxRetries && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
+      if (
+        canFailoverToNextChannel(reply)
+        && retryCount < maxRetries
+        && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+      ) {
         retryCount += 1;
         continue;
       }
@@ -880,12 +884,13 @@ export async function handleOpenAiResponsesSurfaceRequest(
             type: 'server_error',
           },
         });
-        return reply.code(503).send({
+        sendReplyIfWritable(reply, 503, {
           error: {
             message: busyMessage,
             type: 'server_error',
           },
         });
+        return;
       }
       const channelLease = leaseResult.lease;
 
@@ -947,7 +952,14 @@ export async function handleOpenAiResponsesSurfaceRequest(
 
         if (isStream) {
           const upstreamContentType = (upstream.headers.get('content-type') || '').toLowerCase();
+          let streamStarted = false;
           const startSseResponse = () => {
+            if (streamStarted) return;
+            if (isFastifyReplyCommitted(reply)) {
+              streamStarted = true;
+              return;
+            }
+            streamStarted = true;
             reply.hijack();
             reply.raw.statusCode = 200;
             reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -1075,9 +1087,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 upstreamPath: successfulUpstreamPath,
 	              });
 	              const terminalFailureOutcome = failureOutcome.action === 'retry'
-	                ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-	                  ? null
-	                  : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
+	                ? (
+	                  canFailoverToNextChannel(reply)
+	                  && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+	                    ? null
+	                    : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
+	                )
 	                : failureOutcome;
 	              if (!terminalFailureOutcome) {
 	                if (failureOutcome.action === 'retry') {
@@ -1091,7 +1106,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	                terminalFailureOutcome.payload,
 	                successfulUpstreamPath,
 	              );
-	              return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+	              sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+	              return;
             }
 
             startSseResponse();
@@ -1358,9 +1374,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             upstreamPath: successfulUpstreamPath,
 	          });
 	          const terminalFailureOutcome = failureOutcome.action === 'retry'
-	            ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-	              ? null
-	              : finalizeRetryAsUpstreamFailure(failure.status, failure.reason))
+	            ? (
+	              canFailoverToNextChannel(reply)
+	              && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+	                ? null
+	                : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
+	            )
 	            : failureOutcome;
 	          if (!terminalFailureOutcome) {
 	            if (failureOutcome.action === 'retry') {
@@ -1374,7 +1393,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	            terminalFailureOutcome.payload,
 	            successfulUpstreamPath,
 	          );
-	          return reply.code(terminalFailureOutcome.status).send(terminalFailureOutcome.payload);
+	          sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+	          return;
         }
         const normalized = openAiResponsesTransformer.transformFinalResponse(
           upstreamData,
@@ -1452,9 +1472,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
           retryCount,
         });
             const terminalFailureOutcome = failureOutcome.action === 'retry'
-              ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-                ? null
-                : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err?.message || 'unknown error'))
+              ? (
+                canFailoverToNextChannel(reply)
+                && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+                  ? null
+                  : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err?.message || 'unknown error')
+              )
               : failureOutcome;
             if (!terminalFailureOutcome) {
               if (failureOutcome.action === 'retry') {
@@ -1481,9 +1504,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             retryCount,
           });
           const terminalFailureOutcome = failureOutcome.action === 'retry'
-            ? (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-              ? null
-              : finalizeRetryAsExecutionFailure(err?.message || 'network failure'))
+            ? (
+              canFailoverToNextChannel(reply)
+              && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+                ? null
+                : finalizeRetryAsExecutionFailure(err?.message || 'network failure')
+            )
             : failureOutcome;
           if (!terminalFailureOutcome) {
             if (failureOutcome.action === 'retry') {

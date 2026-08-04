@@ -45,3 +45,13 @@ export function endRawReplyQuietly(reply: FastifyReply): void {
     // ignore
   }
 }
+
+/**
+ * Channel failover is only safe before the downstream response is committed.
+ * After reply.hijack() + SSE headers (or any body bytes), retrying another
+ * channel re-enters startSseResponse and throws:
+ * "Cannot set headers after they are sent to the client".
+ */
+export function canFailoverToNextChannel(reply: FastifyReply): boolean {
+  return !isFastifyReplyCommitted(reply);
+}
