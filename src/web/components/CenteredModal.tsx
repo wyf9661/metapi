@@ -79,7 +79,7 @@ export default function CenteredModal({
       <div
         ref={dialogRef}
         className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()}
-        style={{ maxWidth }}
+        style={{ width: `min(90vw, ${maxWidth}px)`, maxWidth: `${maxWidth}px` }}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
