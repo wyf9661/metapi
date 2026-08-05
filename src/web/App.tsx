@@ -132,6 +132,7 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [bootstrapToken, setBootstrapToken] = useState<string | null>(null);
   const capabilityRows = [
     {
       title: t('统一代理网关'),
@@ -146,6 +147,24 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
       description: t('按成本、延迟、成功率自动选择最优通道，故障自动转移'),
     },
   ];
+
+  useEffect(() => {
+    // Desktop first-run: the backend synthesized a random admin token and
+    // exposes it via /api/settings/auth/info as bootstrapToken. Show it on the
+    // login screen so the user can sign in once and then change it.
+    let cancelled = false;
+    fetch('/api/settings/auth/info')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && typeof data.bootstrapToken === 'string' && data.bootstrapToken) {
+          setBootstrapToken(data.bootstrapToken);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!token) return;
@@ -245,6 +264,31 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
             <div className="login-auth-eyebrow">{t('管理员入口')}</div>
             <h2 className="login-auth-title">{t('登录')}</h2>
             <p className="login-auth-copy">{t('请输入管理员令牌后继续。')}</p>
+            {bootstrapToken && (
+              <div className="alert alert-info login-bootstrap-hint" style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <strong>{t('首次登录密码')}</strong>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(bootstrapToken).catch(() => {});
+                    }}
+                  >
+                    {t('复制')}
+                  </button>
+                </div>
+                <div
+                  className="login-bootstrap-token"
+                  style={{ fontFamily: 'monospace', wordBreak: 'break-all', marginTop: 6, userSelect: 'all' }}
+                >
+                  {bootstrapToken}
+                </div>
+                <div className="login-bootstrap-note" style={{ marginTop: 6, opacity: 0.75, fontSize: 12 }}>
+                  {t('登录后请在「设置」中修改管理员令牌，修改后此提示将不再显示。')}
+                </div>
+              </div>
+            )}
             <label className="login-auth-label" htmlFor="admin-token-input">{t('管理员令牌')}</label>
             <input
               id="admin-token-input"
