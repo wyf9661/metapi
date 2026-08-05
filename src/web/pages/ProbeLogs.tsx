@@ -248,11 +248,20 @@ export default function ProbeLogs() {
     setSearchParams(newParams);
   };
 
-  // 一次性重置所有筛选参数（避免基于旧 searchParams 的多次 setSearchParams 互相覆盖）
+  const hasActiveFilters = Boolean(siteId || accountId || modelName || status || startTime || endTime || page !== 1);
+
+  // 一次性清除所有筛选参数并回到第一页。
   const resetFilters = () => {
-    setSiteId(''); setAccountId(''); setModelName(''); setStatus('');
-    setStartTime(''); setEndTime(''); setPage(1);
-    setSearchParams(new URLSearchParams());
+    if (!hasActiveFilters) return;
+    setSiteId('');
+    setAccountId('');
+    setModelName('');
+    setStatus('');
+    setStartTime('');
+    setEndTime('');
+    setPage(1);
+    setSearchParams(new URLSearchParams(), { replace: true });
+    setShowFilters(false);
   };
 
   const totalPages = Math.ceil(total / pageSize);
@@ -595,8 +604,10 @@ export default function ProbeLogs() {
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)', padding: '8px 12px' }}
                 onClick={resetFilters}
+                disabled={!hasActiveFilters}
+                title={hasActiveFilters ? '清除全部筛选条件并回到第一页' : '当前没有筛选条件'}
               >
-                重置
+                清除筛选
               </button>
             </div>
           </div>
