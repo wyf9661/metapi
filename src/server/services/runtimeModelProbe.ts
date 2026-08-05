@@ -125,6 +125,79 @@ function extractTokensFromResponse(responseText: string | undefined): number | n
   return null;
 }
 
+/**
+ * 从上游响应中提取用户可见的回答正文（assistant text）。
+ * 兼容 Chat Completions 与 Responses 格式，避免在 2k 截断时丢失真实答案
+ * （Responses 包的 instructions/前置元数据会挤占前段空间）。
+ */
+function extractAssistantText(responseText: string | undefined): string | null {
+  if (!responseText) return null;
+  let response: unknown;
+  try {
+    response = JSON.parse(responseText);
+  } catch {
+    // 非 JSON（如纯文本/二进制），截断保存
+    return responseText.substring(0, 2000) || null;
+  }
+  if (typeof response !== 'object' || response === null) {
+    return String(response).substring(0, 2000);
+  }
+  const r = response as Record<string, unknown>;
+
+  // plaintext 响应（/v1/audio, embeddings 等无 content）
+  const plaintext = r.plaintext ?? r.text;
+  if (typeof plaintext === 'string' && plaintext.trim()) {
+    return plaintext.substring(0, 2000);
+  }
+
+  // Chat Completions: choices[].message.content
+  const choices = r.choices as unknown;
+  if (Array.isArray(choices)) {
+    for (const choice of choices) {
+      const message = (choice as Record<string, unknown>)?.message as Record<string, unknown> | undefined;
+      const content = message?.content;
+      if (typeof content === 'string' && content.trim()) return content.substring(0, 2000);
+      const delta = (choice as Record<string, unknown>)?.delta as Record<string, unknown> | undefined;
+      const deltaContent = delta?.content;
+      if (typeof deltaContent === 'string' && deltaContent.trim()) return deltaContent.substring(0, 2000);
+    }
+  }
+
+  // Responses 格式: output[] 中的 type === 'message'，取其 content 里首个非空文本
+  const output = r.output;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      const obj = item as Record<string, unknown>;
+      if (obj?.type !== 'message' && obj?.role !== 'assistant') continue;
+      const itemContent = obj.content;
+      if (typeof itemContent === 'string' && itemContent.trim()) return itemContent.substring(0, 2000);
+      if (Array.isArray(itemContent)) {
+        let joined = '';
+        for (const part of itemContent) {
+          const p = part as Record<string, unknown>;
+          const text = p?.text;
+          if (typeof text === 'string') {
+            joined += text;
+            if (joined.trim().length >= 500) break;
+          }
+        }
+        if (joined.trim()) return joined.substring(0, 2000);
+      }
+    }
+  }
+
+  // 顶层 content / text / message.content 兜底
+  const topContent = r.content ?? r.text ?? r.answer;
+  if (typeof topContent === 'string' && topContent.trim()) return topContent.substring(0, 2000);
+  const message = r.message as Record<string, unknown> | undefined;
+  if (message && typeof message.content === 'string' && message.content.trim()) {
+    return message.content.substring(0, 2000);
+  }
+
+  // 未提取到正文则退回原样截断
+  return responseText.substring(0, 2000) || null;
+}
+
 async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
@@ -305,7 +378,7 @@ export async function probeRuntimeModel(input: {
         modelName: input.modelName,
         questionCategory: probeQuestion.category,
         questionText: probeQuestion.question,
-        responseText: responseText?.substring(0, 2000) || null, // 限制长度
+        responseText: extractAssistantText(responseText) || null,
         status: 'success',
         latencyMs,
         tokensUsed,

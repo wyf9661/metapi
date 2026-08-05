@@ -5670,6 +5670,27 @@ textarea {
 .probe-detail-answer {
   max-height: 320px;
   overflow-y: auto;
+  white-space: normal;
+}
+
+/* KaTeX 公式渲染样式 */
+.katex-display-block {
+  text-align: center;
+  padding: 8px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display-block .katex-display {
+  margin: 0;
+}
+
+.katex-fallback {
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-bg-card));
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  color: var(--color-danger);
 }
 
 /* ===== Pagination ===== */

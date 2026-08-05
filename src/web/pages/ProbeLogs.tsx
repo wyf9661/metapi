@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { marked } from 'marked';
+import katex from 'katex';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import PaginationControls from '../components/PaginationControls.js';
@@ -212,7 +213,77 @@ export default function ProbeLogs() {
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
-  // 清理乱码、解析 JSON 提取内容、�染 Markdown
+  // LaTeX 公式占位符前缀，用于在 marked 渲染前后安全传递
+  const KATEX_DISPLAY = '%%KATEX_DISPLAY_';
+  const KATEX_INLINE = '%%KATEX_INLINE_';
+  const KATEX_END = '%%';
+
+  // 在 marked 渲染前后处理 LaTeX：预提取 → 渲染 Markdown → 替换为 KaTeX HTML
+  const renderMarkdownWithLatex = (text: string): string => {
+    const formulas: string[] = [];
+
+    // 提取 LaTeX 公式并替换为占位符，防止被 marked 误解析
+    // 匹配顺序重要：$$ 必须在 $ 之前，\[ 在 \( 之前
+    const sanitized = text
+      // 块级公式：$$ ... $$
+      .replace(/\$\$([\s\S]+?)\$\$/g, (_m, tex) => {
+        const idx = formulas.length;
+        formulas.push(tex.trim());
+        return KATEX_DISPLAY + idx + KATEX_END;
+      })
+      // 块级公式：\[ ... \]
+      .replace(/\\\[([\s\S]+?)\\\]/g, (_m, tex) => {
+        const idx = formulas.length;
+        formulas.push(tex.trim());
+        return KATEX_DISPLAY + idx + KATEX_END;
+      })
+      // 行内公式：$ ... $（不匹配 $$，不跨行，不匹配空内容）
+      .replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_m, tex) => {
+        const idx = formulas.length;
+        formulas.push(tex.trim());
+        return KATEX_INLINE + idx + KATEX_END;
+      })
+      // 行内公式：\( ... \)
+      .replace(/\\\((.+?)\\\)/g, (_m, tex) => {
+        const idx = formulas.length;
+        formulas.push(tex.trim());
+        return KATEX_INLINE + idx + KATEX_END;
+      });
+
+    // 用 marked 渲染 Markdown
+    let html: string;
+    try {
+      html = String(marked.parse(sanitized, { gfm: true, breaks: true }));
+    } catch {
+      html = sanitized;
+    }
+
+    // 将占位符替换为 KaTeX 渲染后的 HTML
+    if (formulas.length > 0) {
+      // 块级公式：用 <div> 居中包裹
+      html = html.replace(/%%KATEX_DISPLAY_(\d+)%%/g, (_m, idx) => {
+        const tex = formulas[parseInt(idx)];
+        try {
+          return `<div class="katex-display-block">${katex.renderToString(tex, { displayMode: true, throwOnError: false, trust: true })}</div>`;
+        } catch {
+          return `<code class="katex-fallback">${tex}</code>`;
+        }
+      });
+      // 行内公式
+      html = html.replace(/%%KATEX_INLINE_(\d+)%%/g, (_m, idx) => {
+        const tex = formulas[parseInt(idx)];
+        try {
+          return katex.renderToString(tex, { displayMode: false, throwOnError: false, trust: true });
+        } catch {
+          return `<code class="katex-fallback">${tex}</code>`;
+        }
+      });
+    }
+
+    return html;
+  };
+
+  // 清理乱码、解析 JSON 提取内容、渲染 Markdown
   const renderResponseText = (raw: string | null | undefined): string => {
     const text = String(raw || '').trim();
     if (!text) return '-';
@@ -238,7 +309,7 @@ export default function ProbeLogs() {
       if (content !== null && content !== undefined) {
         const cleanContent = String(content);
         try {
-          return String(marked.parse(cleanContent, { gfm: true, breaks: true }));
+          return renderMarkdownWithLatex(cleanContent);
         } catch {
           return cleanContent;
         }
@@ -249,9 +320,9 @@ export default function ProbeLogs() {
       // 不是有效 JSON，当作普通文本处理
     }
 
-    // 普通文本：Markdown �染，支持换行和基本格式
+    // 普通文本：Markdown 渲染，支持换行和基本格式
     try {
-      return String(marked.parse(text, { gfm: true, breaks: true }));
+      return renderMarkdownWithLatex(text);
     } catch {
       return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
