@@ -106,7 +106,11 @@ export function resolveDesktopServerPort(env?: NodeJS.ProcessEnv): number {
 }
 
 export function resolveDesktopServerWorkingDir(input: DesktopServerWorkingDirInput): string {
-  return input.isPackaged ? input.resourcesPath : input.appPath;
+  // Packaged: appPath is <resources>/app, which holds both package.json (for
+  // getCurrentRuntimeVersion) and dist/server. Pointing cwd there keeps the
+  // backend's relative reads (e.g. package.json version) working inside a
+  // read-only AppImage mount, unlike resourcesPath (one level up).
+  return input.appPath;
 }
 
 export async function waitForServerReady(input: WaitForServerReadyInput): Promise<void> {

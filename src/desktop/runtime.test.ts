@@ -74,12 +74,12 @@ describe('desktop runtime helpers', () => {
     })).toBe(4312);
   });
 
-  it('uses resources path as backend cwd for packaged desktop builds', () => {
+  it('uses the app directory (with package.json) as backend cwd for packaged desktop builds', () => {
     expect(resolveDesktopServerWorkingDir({
-      appPath: 'C:/Users/test/AppData/Local/Programs/Metapi/resources/app.asar',
+      appPath: 'C:/Users/test/AppData/Local/Programs/Metapi/resources/app',
       resourcesPath: 'C:/Users/test/AppData/Local/Programs/Metapi/resources',
       isPackaged: true,
-    })).toBe('C:/Users/test/AppData/Local/Programs/Metapi/resources');
+    })).toBe('C:/Users/test/AppData/Local/Programs/Metapi/resources/app');
 
     expect(resolveDesktopServerWorkingDir({
       appPath: '/workspace/metapi',
