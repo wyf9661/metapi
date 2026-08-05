@@ -12,6 +12,7 @@ import PaginationControls from '../components/PaginationControls.js';
 import CenteredModal from '../components/CenteredModal.js';
 import MobileDrawer from '../components/MobileDrawer.js';
 import { tr, useI18n } from '../i18n.js';
+import DateTimeInput from '../components/DateTimeInput.js';
 
 type ProbeLog = {
   id: number;
@@ -455,16 +456,20 @@ export default function ProbeLogs() {
               <input type="text" value={modelName} placeholder="模型名称"
                 onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
             </label>
-            <label className="probe-filter-field-inline">
-              <span>开始</span>
-              <input type="datetime-local" value={startTime} max={endTime || undefined}
-                onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
-            </label>
-            <label className="probe-filter-field-inline">
-              <span>结束</span>
-              <input type="datetime-local" value={endTime} min={startTime || undefined}
-                onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
-            </label>
+            <DateTimeInput
+              value={startTime}
+              max={endTime || undefined}
+              onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
+              placeholder="开始时间"
+              label="开始"
+            />
+            <DateTimeInput
+              value={endTime}
+              min={startTime || undefined}
+              onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
+              placeholder="结束时间"
+              label="结束"
+            />
             <div className="probe-filter-total">共 {total} 条</div>
           </div>
         )}
@@ -502,16 +507,20 @@ export default function ProbeLogs() {
               <input type="text" value={modelName} placeholder="模型名称"
                 onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
             </label>
-            <label className="probe-filter-field-inline">
-              <span>开始</span>
-              <input type="datetime-local" value={startTime} max={endTime || undefined}
-                onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
-            </label>
-            <label className="probe-filter-field-inline">
-              <span>结束</span>
-              <input type="datetime-local" value={endTime} min={startTime || undefined}
-                onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
-            </label>
+            <DateTimeInput
+              value={startTime}
+              max={endTime || undefined}
+              onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
+              placeholder="开始时间"
+              label="开始"
+            />
+            <DateTimeInput
+              value={endTime}
+              min={startTime || undefined}
+              onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
+              placeholder="结束时间"
+              label="结束"
+            />
             <div style={{ marginLeft: 'auto' }}>
               <button
                 type="button"

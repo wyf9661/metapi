@@ -91,6 +91,7 @@ import {
   StreamModeIcon,
 } from "./helpers/proxyLogsUi.js";
 import { tr } from "../i18n.js";
+import DateTimeInput from "../components/DateTimeInput.js";
 
 type ProxyLogDetailState = {
   loading: boolean;
@@ -1109,30 +1110,20 @@ export default function ProxyLogs() {
           placeholder="全部模型"
         />
       </div>
-      <label className="proxy-logs-time-field">
-        <span>开始</span>
-        <input
-          type="datetime-local"
-          value={fromInput}
-          max={toInput || undefined}
-          onChange={(e) => {
-            setFromInput(e.target.value);
-            setPage(1);
-          }}
-        />
-      </label>
-      <label className="proxy-logs-time-field">
-        <span>结束</span>
-        <input
-          type="datetime-local"
-          value={toInput}
-          min={fromInput || undefined}
-          onChange={(e) => {
-            setToInput(e.target.value);
-            setPage(1);
-          }}
-        />
-      </label>
+      <DateTimeInput
+        value={fromInput}
+        max={toInput || undefined}
+        onChange={(v) => { setFromInput(v); setPage(1); }}
+        placeholder="开始时间"
+        label="开始"
+      />
+      <DateTimeInput
+        value={toInput}
+        min={fromInput || undefined}
+        onChange={(v) => { setToInput(v); setPage(1); }}
+        placeholder="结束时间"
+        label="结束"
+      />
       <div className="toolbar-search" style={{ maxWidth: 280 }}>
         <svg
           width="14"

@@ -7349,3 +7349,69 @@ textarea {
   color: var(--color-primary);
   text-decoration: underline;
 }
+
+/* DateTimeInput: 自定义占位层覆盖 datetime-local 原生占位文字 */
+.dt-input-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dt-input-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.dt-input-box {
+  position: relative;
+  display: inline-block;
+}
+
+.dt-input-box input[type="datetime-local"] {
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.dt-input-box input[type="datetime-local"]:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* 空值时隐藏原生占位文字（yyyy/mm/dd --:--），改用自定义 overlay */
+.dt-input-box input[type="datetime-local"].dt-empty {
+  color: transparent;
+}
+
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit {
+  color: transparent;
+}
+
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-text,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-year-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-month-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-day-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-hour-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-minute-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-second-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-ampm-field {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.dt-input-placeholder {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
