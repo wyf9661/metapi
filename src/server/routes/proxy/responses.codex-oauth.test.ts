@@ -37,7 +37,7 @@ const dbInsertMock = vi.fn((_arg?: any) => ({
   },
 }));
 
-const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful coding assistant.';
+const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
 
 vi.mock('undici', async () => {
   const actual = await vi.importActual<typeof import('undici')>('undici');

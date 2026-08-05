@@ -25,7 +25,7 @@ import {
   MODEL_KEY_HASH_SUFFIX_LENGTH,
 } from '../../services/upstreamEndpointRuntimeMemory.js';
 
-const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful coding assistant.';
+const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
 
 const baseContext = {
   site: {
