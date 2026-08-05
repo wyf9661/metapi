@@ -290,6 +290,13 @@ function ensureCodexClientFingerprintHeaders(
     // any existing value (e.g. from a codex CLI client) or default to the
     // current Codex CLI value so that converted chat→responses calls pass.
     codexBetaFeatures: getInputHeader(headers, 'x-codex-beta-features') || 'cookie_auth_2025_05_08',
+    // This path only exists for chat→responses conversion on codex-gated
+    // platforms (sub2api/new-api/openai). Downstream clients are generic
+    // OpenAI-compat SDKs (OpenAI/Python, curl, openai-node, …) whose UA would
+    // betray the request as a non-Codex client and trip the upstream
+    // "This account only allows Codex official clients" check. Always force the
+    // Codex CLI UA over any downstream UA.
+    userAgentOverride: 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464',
   });
   const next = { ...headers };
   for (const key of [
