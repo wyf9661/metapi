@@ -5619,6 +5619,26 @@ textarea {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
+/* 测活日志桌面工具栏中的 ModernSelect：保持使用日志的内联标签排版 */
+.probe-filter-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 210px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.probe-filter-select > span {
+  flex: 0 0 auto;
+}
+
+.probe-filter-select > .modern-select {
+  width: 150px;
+  min-width: 150px;
+}
+
 .probe-filter-total {
   font-size: 12px;
   color: var(--color-text-muted);

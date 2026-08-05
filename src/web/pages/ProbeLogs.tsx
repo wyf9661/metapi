@@ -542,21 +542,39 @@ export default function ProbeLogs() {
                 </button>
               ))}
             </div>
-            <label className="probe-filter-field-inline">
+            <div className="probe-filter-select">
               <span>站点 ID</span>
-              <input type="text" value={siteId} placeholder="站点 ID"
-                onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
-            </label>
-            <label className="probe-filter-field-inline">
+              <ModernSelect
+                value={siteId}
+                onChange={(v) => { setSiteId(v); setPage(1); updateSearchParams('siteId', v); }}
+                options={siteOptions}
+                placeholder="全部站点"
+                size="sm"
+                searchable
+              />
+            </div>
+            <div className="probe-filter-select">
               <span>账号 ID</span>
-              <input type="text" value={accountId} placeholder="账号 ID"
-                onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
-            </label>
-            <label className="probe-filter-field-inline">
+              <ModernSelect
+                value={accountId}
+                onChange={(v) => { setAccountId(v); setPage(1); updateSearchParams('accountId', v); }}
+                options={accountOptions}
+                placeholder="全部账号"
+                size="sm"
+                searchable
+              />
+            </div>
+            <div className="probe-filter-select">
               <span>模型名称</span>
-              <input type="text" value={modelName} placeholder="模型名称"
-                onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
-            </label>
+              <ModernSelect
+                value={modelName}
+                onChange={(v) => { setModelName(v); setPage(1); updateSearchParams('modelName', v); }}
+                options={modelOptions}
+                placeholder="全部模型"
+                size="sm"
+                searchable
+              />
+            </div>
             <DateTimeInput
               value={startTime}
               max={endTime || undefined}
