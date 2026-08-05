@@ -206,6 +206,13 @@ export default function ProbeLogs() {
     setSearchParams(newParams);
   };
 
+  // 一次性重置所有筛选参数（避免基于旧 searchParams 的多次 setSearchParams 互相覆盖）
+  const resetFilters = () => {
+    setSiteId(''); setAccountId(''); setModelName(''); setStatus('');
+    setStartTime(''); setEndTime(''); setPage(1);
+    setSearchParams(new URLSearchParams());
+  };
+
   const totalPages = Math.ceil(total / pageSize);
 
   const formatLatency = (ms: number | null) => {
@@ -413,84 +420,108 @@ export default function ProbeLogs() {
         mobileTitle="筛选测活日志"
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="probe-filter-field">
-              <label className="probe-filter-label">站点 ID</label>
-              <input className="form-input" type="text" value={siteId} placeholder="按站点筛选"
+            <div>
+              <div className="probe-filter-label" style={{ marginBottom: 6 }}>状态</div>
+              <div className="pill-tabs">
+                {[
+                  { key: '', label: '全部' },
+                  { key: 'success', label: '成功' },
+                  { key: 'failed', label: '失败' },
+                  { key: 'timeout', label: '超时' },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`pill-tab ${status === tab.key ? 'active' : ''}`}
+                    onClick={() => { setStatus(tab.key); setPage(1); updateSearchParams('status', tab.key); }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="probe-filter-field-inline">
+              <span>站点 ID</span>
+              <input type="text" value={siteId} placeholder="站点 ID"
                 onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
-            </div>
-            <div className="probe-filter-field">
-              <label className="probe-filter-label">账号 ID</label>
-              <input className="form-input" type="text" value={accountId} placeholder="按账号筛选"
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>账号 ID</span>
+              <input type="text" value={accountId} placeholder="账号 ID"
                 onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
-            </div>
-            <div className="probe-filter-field">
-              <label className="probe-filter-label">模型名称</label>
-              <input className="form-input" type="text" value={modelName} placeholder="按模型筛选"
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>模型名称</span>
+              <input type="text" value={modelName} placeholder="模型名称"
                 onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
-            </div>
-            <div className="probe-filter-field">
-              <label className="probe-filter-label">状态</label>
-              <select className="form-input" value={status}
-                onChange={(e) => { setStatus(e.target.value); setPage(1); updateSearchParams('status', e.target.value); }}>
-                <option value="">全部状态</option>
-                <option value="success">成功</option>
-                <option value="failed">失败</option>
-                <option value="timeout">超时</option>
-              </select>
-            </div>
-            <div className="probe-filter-field">
-              <label className="probe-filter-label">开始时间</label>
-              <input className="form-input" type="datetime-local" value={startTime}
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>开始</span>
+              <input type="datetime-local" value={startTime} max={endTime || undefined}
                 onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
-            </div>
-            <div className="probe-filter-field">
-              <label className="probe-filter-label">结束时间</label>
-              <input className="form-input" type="datetime-local" value={endTime}
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>结束</span>
+              <input type="datetime-local" value={endTime} min={startTime || undefined}
                 onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
-            </div>
+            </label>
             <div className="probe-filter-total">共 {total} 条</div>
           </div>
         )}
         desktopContent={(
-          <div className="card" style={{ padding: 14, marginBottom: 12 }}>
-            <div className="probe-filter-grid">
-              <div className="probe-filter-field">
-                <label className="probe-filter-label">站点 ID</label>
-                <input className="form-input" type="text" value={siteId} placeholder="按站点筛选"
-                  onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
-              </div>
-              <div className="probe-filter-field">
-                <label className="probe-filter-label">账号 ID</label>
-                <input className="form-input" type="text" value={accountId} placeholder="按账号筛选"
-                  onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
-              </div>
-              <div className="probe-filter-field">
-                <label className="probe-filter-label">模型名称</label>
-                <input className="form-input" type="text" value={modelName} placeholder="按模型筛选"
-                  onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
-              </div>
-              <div className="probe-filter-field">
-                <label className="probe-filter-label">状态</label>
-                <select className="form-input" value={status}
-                  onChange={(e) => { setStatus(e.target.value); setPage(1); updateSearchParams('status', e.target.value); }}>
-                  <option value="">全部状态</option>
-                  <option value="success">成功</option>
-                  <option value="failed">失败</option>
-                  <option value="timeout">超时</option>
-                </select>
-              </div>
-              <div className="probe-filter-field">
-                <label className="probe-filter-label">开始时间</label>
-                <input className="form-input" type="datetime-local" value={startTime}
-                  onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
-              </div>
-              <div className="probe-filter-field">
-                <label className="probe-filter-label">结束时间</label>
-                <input className="form-input" type="datetime-local" value={endTime}
-                  onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
-              </div>
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <div className="pill-tabs">
+              {[
+                { key: '', label: '全部' },
+                { key: 'success', label: '成功' },
+                { key: 'failed', label: '失败' },
+                { key: 'timeout', label: '超时' },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`pill-tab ${status === tab.key ? 'active' : ''}`}
+                  onClick={() => { setStatus(tab.key); setPage(1); updateSearchParams('status', tab.key); }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            <div className="probe-filter-total">共 {total} 条</div>
+            <label className="probe-filter-field-inline">
+              <span>站点 ID</span>
+              <input type="text" value={siteId} placeholder="站点 ID"
+                onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>账号 ID</span>
+              <input type="text" value={accountId} placeholder="账号 ID"
+                onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>模型名称</span>
+              <input type="text" value={modelName} placeholder="模型名称"
+                onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>开始</span>
+              <input type="datetime-local" value={startTime} max={endTime || undefined}
+                onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
+            </label>
+            <label className="probe-filter-field-inline">
+              <span>结束</span>
+              <input type="datetime-local" value={endTime} min={startTime || undefined}
+                onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
+            </label>
+            <div style={{ marginLeft: 'auto' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ border: '1px solid var(--color-border)', padding: '8px 12px' }}
+                onClick={resetFilters}
+              >
+                重置
+              </button>
+            </div>
           </div>
         )}
       />

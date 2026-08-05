@@ -1,3 +1,5 @@
+import { getRuntimeLanguage } from '../../i18n';
+
 function parseServerUtcDate(value: string | null | undefined): { date: Date | null; raw: string } {
   if (!value) return { date: null, raw: '' };
 
@@ -56,7 +58,7 @@ function formatWithParts(
 
 export function formatDateTimeLocal(
   value: string | null | undefined,
-  locale = 'zh-CN',
+  locale = getRuntimeLanguage() === 'zh' ? 'zh-CN' : 'en-US',
   timeZone?: string,
 ): string {
   return formatWithParts(value, {
@@ -72,7 +74,7 @@ export function formatDateTimeLocal(
 
 export function formatDateTimeMinuteLocal(
   value: string | null | undefined,
-  locale = 'zh-CN',
+  locale = getRuntimeLanguage() === 'zh' ? 'zh-CN' : 'en-US',
   timeZone?: string,
 ): string {
   return formatWithParts(value, {
@@ -87,7 +89,7 @@ export function formatDateTimeMinuteLocal(
 
 export function formatDateLocal(
   value: string | null | undefined,
-  locale = 'zh-CN',
+  locale = getRuntimeLanguage() === 'zh' ? 'zh-CN' : 'en-US',
   timeZone?: string,
 ): string {
   return formatWithParts(value, {

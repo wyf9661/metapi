@@ -363,6 +363,10 @@ function resolveStoredLanguage(): Language {
 
 let runtimeLanguage: Language = 'zh';
 
+export function getRuntimeLanguage(): Language {
+  return runtimeLanguage;
+}
+
 export function translateText(text: string, language: Language): string {
   if (language === 'zh') return text;
   if (!text) return text;

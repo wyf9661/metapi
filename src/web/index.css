@@ -5583,40 +5583,40 @@ textarea {
   line-height: 1.2;
 }
 
-.probe-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.probe-filter-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .probe-filter-label {
   font-size: 12px;
   color: var(--color-text-muted);
   font-weight: 500;
 }
 
-/* 时间筛选字段与文本筛选字段保持同等宽度，避免视觉错位 */
-.probe-filter-field input[type="datetime-local"] {
-  min-width: 0;
+/* 复用使用日志(ProxyLogs)的工具栏排版：内联 label + 输入框，flex 换行 */
+.probe-filter-field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
-@media (max-width: 1023px) {
-  .probe-filter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.probe-filter-field-inline > span {
+  white-space: nowrap;
 }
 
-@media (max-width: 639px) {
-  .probe-filter-grid {
-    grid-template-columns: 1fr;
-  }
+.probe-filter-field-inline input {
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.probe-filter-field-inline input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 .probe-filter-total {
