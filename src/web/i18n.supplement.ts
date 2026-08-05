@@ -1659,4 +1659,12 @@ export const zhToEnSupplemental: Record<string, string> = {
   '迁移结果：站点': 'Migration result: sites',
   '还没有可视化规则': 'No visual rules yet',
   '用于对特定站点做分发倍率微调；留空或 `': 'For fine-tuning distribution multiplier per site. Leave blank or `',
+  // 测活日志筛选区
+  '站点 ID': 'Site ID',
+  '账号 ID': 'Account ID',
+  '开始时间': 'Start Time',
+  '结束时间': 'End Time',
+  '按站点筛选': 'Filter by site',
+  '按账号筛选': 'Filter by account',
+  '按模型筛选': 'Filter by model',
 };

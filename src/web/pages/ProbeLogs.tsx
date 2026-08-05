@@ -11,7 +11,7 @@ import { MobileCard, MobileField } from '../components/MobileCard.js';
 import PaginationControls from '../components/PaginationControls.js';
 import CenteredModal from '../components/CenteredModal.js';
 import MobileDrawer from '../components/MobileDrawer.js';
-import { tr } from '../i18n.js';
+import { tr, useI18n } from '../i18n.js';
 
 type ProbeLog = {
   id: number;
@@ -135,6 +135,7 @@ function ProbeDetailFields({
 export default function ProbeLogs() {
   const isMobile = useIsMobile();
   const toast = useToast();
+  const { language } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [logs, setLogs] = useState<ProbeLog[]>([]);
@@ -212,6 +213,11 @@ export default function ProbeLogs() {
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
   };
+
+  // 时间格式跟随界面语言：中文用 zh-CN（YYYY/MM/DD HH:mm:ss），英文用 en（MM/DD/YYYY hh:mm:ss AM/PM）。
+  // 避免中英文界面下时间格式不统一。
+  const fmtDateTime = (value?: string | null) =>
+    formatDateTimeLocal(value, language === 'zh' ? 'zh-CN' : 'en-US');
 
   // LaTeX 公式占位符前缀，用于在 marked 渲染前后安全传递
   const KATEX_DISPLAY = '%%KATEX_DISPLAY_';
@@ -407,35 +413,23 @@ export default function ProbeLogs() {
         mobileTitle="筛选测活日志"
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <input className="form-input" type="text" value={siteId} placeholder="站点 ID"
-              onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
-            <input className="form-input" type="text" value={accountId} placeholder="账号 ID"
-              onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
-            <input className="form-input" type="text" value={modelName} placeholder="模型名称"
-              onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
-            <select className="form-input" value={status}
-              onChange={(e) => { setStatus(e.target.value); setPage(1); updateSearchParams('status', e.target.value); }}>
-              <option value="">全部状态</option>
-              <option value="success">成功</option>
-              <option value="failed">失败</option>
-              <option value="timeout">超时</option>
-            </select>
-            <input className="form-input" type="datetime-local" value={startTime}
-              onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
-            <input className="form-input" type="datetime-local" value={endTime}
-              onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
-            <div className="probe-filter-total">共 {total} 条</div>
-          </div>
-        )}
-        desktopContent={(
-          <div className="card" style={{ padding: 14, marginBottom: 12 }}>
-            <div className="probe-filter-grid">
-              <input className="form-input" type="text" value={siteId} placeholder="站点 ID"
+            <div className="probe-filter-field">
+              <label className="probe-filter-label">站点 ID</label>
+              <input className="form-input" type="text" value={siteId} placeholder="按站点筛选"
                 onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
-              <input className="form-input" type="text" value={accountId} placeholder="账号 ID"
+            </div>
+            <div className="probe-filter-field">
+              <label className="probe-filter-label">账号 ID</label>
+              <input className="form-input" type="text" value={accountId} placeholder="按账号筛选"
                 onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
-              <input className="form-input" type="text" value={modelName} placeholder="模型名称"
+            </div>
+            <div className="probe-filter-field">
+              <label className="probe-filter-label">模型名称</label>
+              <input className="form-input" type="text" value={modelName} placeholder="按模型筛选"
                 onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
+            </div>
+            <div className="probe-filter-field">
+              <label className="probe-filter-label">状态</label>
               <select className="form-input" value={status}
                 onChange={(e) => { setStatus(e.target.value); setPage(1); updateSearchParams('status', e.target.value); }}>
                 <option value="">全部状态</option>
@@ -443,10 +437,58 @@ export default function ProbeLogs() {
                 <option value="failed">失败</option>
                 <option value="timeout">超时</option>
               </select>
+            </div>
+            <div className="probe-filter-field">
+              <label className="probe-filter-label">开始时间</label>
               <input className="form-input" type="datetime-local" value={startTime}
                 onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
+            </div>
+            <div className="probe-filter-field">
+              <label className="probe-filter-label">结束时间</label>
               <input className="form-input" type="datetime-local" value={endTime}
                 onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
+            </div>
+            <div className="probe-filter-total">共 {total} 条</div>
+          </div>
+        )}
+        desktopContent={(
+          <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+            <div className="probe-filter-grid">
+              <div className="probe-filter-field">
+                <label className="probe-filter-label">站点 ID</label>
+                <input className="form-input" type="text" value={siteId} placeholder="按站点筛选"
+                  onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
+              </div>
+              <div className="probe-filter-field">
+                <label className="probe-filter-label">账号 ID</label>
+                <input className="form-input" type="text" value={accountId} placeholder="按账号筛选"
+                  onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
+              </div>
+              <div className="probe-filter-field">
+                <label className="probe-filter-label">模型名称</label>
+                <input className="form-input" type="text" value={modelName} placeholder="按模型筛选"
+                  onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
+              </div>
+              <div className="probe-filter-field">
+                <label className="probe-filter-label">状态</label>
+                <select className="form-input" value={status}
+                  onChange={(e) => { setStatus(e.target.value); setPage(1); updateSearchParams('status', e.target.value); }}>
+                  <option value="">全部状态</option>
+                  <option value="success">成功</option>
+                  <option value="failed">失败</option>
+                  <option value="timeout">超时</option>
+                </select>
+              </div>
+              <div className="probe-filter-field">
+                <label className="probe-filter-label">开始时间</label>
+                <input className="form-input" type="datetime-local" value={startTime}
+                  onChange={(e) => { setStartTime(e.target.value); setPage(1); updateSearchParams('startTime', e.target.value); }} />
+              </div>
+              <div className="probe-filter-field">
+                <label className="probe-filter-label">结束时间</label>
+                <input className="form-input" type="datetime-local" value={endTime}
+                  onChange={(e) => { setEndTime(e.target.value); setPage(1); updateSearchParams('endTime', e.target.value); }} />
+              </div>
             </div>
             <div className="probe-filter-total">共 {total} 条</div>
           </div>
@@ -482,7 +524,7 @@ export default function ProbeLogs() {
                       <button type="button" className="btn btn-link btn-link-primary" onClick={() => setSelectedLog(log)}>查看详情</button>
                     }
                   >
-                    <MobileField label="时间" value={formatDateTimeLocal(log.createdAt)} />
+                    <MobileField label="时间" value={fmtDateTime(log.createdAt)} />
                     <MobileField label="站点/账号" value={`${log.siteName || `站点 #${log.siteId}`} · ${log.accountUsername || `账号 #${log.accountId}`}`} />
                     <MobileField label="分类" value={CATEGORY_LABELS[log.questionCategory] || '-'} />
                     <MobileField label="延迟" value={formatLatency(log.latencyMs)} />
@@ -526,7 +568,7 @@ export default function ProbeLogs() {
                         <span className={STATUS_COLORS[log.status]} style={{ fontSize: 11 }}>{STATUS_LABELS[log.status]}</span>
                       </td>
                       <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                        {formatDateTimeLocal(log.createdAt)}
+                        {fmtDateTime(log.createdAt)}
                       </td>
                       <td style={{ fontWeight: 500 }}>
                         {log.modelName}
@@ -582,7 +624,7 @@ export default function ProbeLogs() {
               side="right"
             >
               <div className="probe-detail-body">
-                <ProbeDetailFields log={selectedLog} formatLatency={formatLatency} STATUS_COLORS={STATUS_COLORS} STATUS_LABELS={STATUS_LABELS} CATEGORY_LABELS={CATEGORY_LABELS} formatDateTimeLocal={formatDateTimeLocal} renderResponseText={renderResponseText} />
+                <ProbeDetailFields log={selectedLog} formatLatency={formatLatency} STATUS_COLORS={STATUS_COLORS} STATUS_LABELS={STATUS_LABELS} CATEGORY_LABELS={CATEGORY_LABELS} formatDateTimeLocal={fmtDateTime} renderResponseText={renderResponseText} />
               </div>
             </MobileDrawer>
           ) : (
@@ -594,7 +636,7 @@ export default function ProbeLogs() {
               closeOnBackdrop
               closeOnEscape
             >
-              <ProbeDetailFields log={selectedLog} formatLatency={formatLatency} STATUS_COLORS={STATUS_COLORS} STATUS_LABELS={STATUS_LABELS} CATEGORY_LABELS={CATEGORY_LABELS} formatDateTimeLocal={formatDateTimeLocal} renderResponseText={renderResponseText} />
+              <ProbeDetailFields log={selectedLog} formatLatency={formatLatency} STATUS_COLORS={STATUS_COLORS} STATUS_LABELS={STATUS_LABELS} CATEGORY_LABELS={CATEGORY_LABELS} formatDateTimeLocal={fmtDateTime} renderResponseText={renderResponseText} />
             </CenteredModal>
           )}
         </>
