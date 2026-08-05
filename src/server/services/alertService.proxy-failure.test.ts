@@ -52,11 +52,10 @@ describe('proxy failure notify policy', () => {
     __resetProxyFailureNotifyStateForTests();
   });
 
-  it('pushes external notify only for empty candidate sets', () => {
+  it('never pushes external notify for proxy failures (events-only)', () => {
     expect(shouldPushProxyFailureNotification('request_failed')).toBe(false);
-    // Attempt-cap exhaustion is not a full inventory failure; keep it events-only.
     expect(shouldPushProxyFailureNotification('all_attempted_channels_failed')).toBe(false);
-    expect(shouldPushProxyFailureNotification('no_available_channels')).toBe(true);
+    expect(shouldPushProxyFailureNotification('no_available_channels')).toBe(false);
   });
 
   it('throttles same model+outcome for 10 minutes regardless of reason text', () => {

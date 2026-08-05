@@ -178,14 +178,14 @@ export function formatProxyFailureAlert(params: ProxyFailureAlertParams): {
 }
 
 /**
- * External push only when there are truly no candidates left to try.
- * Partial failover (default 3 attempts among many channels) is events-only —
- * labeling that as "all channels failed" is misleading noise.
+ * All proxy failure alerts are now events-only (stored in the events table,
+ * never pushed to DingTalk/email/bark). The previous behavior of pushing
+ * only 'no_available_channels' externally was too noisy for group bots.
  */
 export function shouldPushProxyFailureNotification(
-  outcome: ProxyFailureOutcome = 'request_failed',
+  _outcome: ProxyFailureOutcome = 'request_failed',
 ): boolean {
-  return outcome === 'no_available_channels';
+  return false;
 }
 
 /** Throttle key ignores exact reason text so the same model cannot flood. */
