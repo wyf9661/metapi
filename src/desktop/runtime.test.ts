@@ -28,6 +28,38 @@ describe('desktop runtime helpers', () => {
     expect(env.PROXY_TOKEN).toBe('proxy-token');
   });
 
+  it('injects strong random auth token + credential secret when secrets are missing', () => {
+    const env = buildDesktopServerEnv({
+      inheritedEnv: {},
+      userDataDir: '/tmp/metapi-data',
+      logsDir: '/tmp/metapi-logs',
+      port: 4312,
+    });
+
+    expect(env.AUTH_TOKEN).toBeDefined();
+    expect(env.AUTH_TOKEN).toMatch(/^[\w-]{24,}$/);
+    expect(env.ACCOUNT_CREDENTIAL_SECRET).toBeDefined();
+    expect(env.ACCOUNT_CREDENTIAL_SECRET).not.toBe(env.AUTH_TOKEN);
+  });
+
+  it('keeps persisted ACCOUNT_CREDENTIAL_SECRET stable across launches', () => {
+    const inherited = {
+      AUTH_TOKEN: 'change-me-admin-token',
+      ACCOUNT_CREDENTIAL_SECRET: 'my-persisted-account-secret-32ch',
+    };
+    const env = buildDesktopServerEnv({
+      inheritedEnv: { ...inherited },
+      userDataDir: '/tmp/metapi-data',
+      logsDir: '/tmp/metapi-logs',
+      port: 4312,
+    });
+
+    // AUTH_TOKEN is still the default → replaced with random.
+    expect(env.AUTH_TOKEN).not.toBe('change-me-admin-token');
+    // ACCOUNT_CREDENTIAL_SECRET is a real non-default value → must be kept.
+    expect(env.ACCOUNT_CREDENTIAL_SECRET).toBe('my-persisted-account-secret-32ch');
+  });
+
   it('creates the browser URL from the local desktop port', () => {
     expect(createDesktopServerUrl(4312)).toBe('http://127.0.0.1:4312');
   });

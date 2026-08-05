@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 type DesktopServerEnvInput = {
   inheritedEnv?: NodeJS.ProcessEnv;
   userDataDir: string;
@@ -31,10 +33,25 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isInsecureDefaultSecret(value: string | undefined): boolean {
+  const v = (value || '').trim();
+  return (
+    v.length === 0
+    || v === 'change-me-admin-token'
+    || v === 'change-me-proxy-sk-token'
+    || v === '123456'
+    || v === 'REPLACE_WITH_STRONG_RANDOM_SECRET'
+  );
+}
+
+function generateRandomSecret(bytes = 24): string {
+  return randomBytes(bytes).toString('base64url');
+}
+
 export function buildDesktopServerEnv(input: DesktopServerEnvInput): NodeJS.ProcessEnv {
   const host = (input.inheritedEnv?.HOST || '0.0.0.0').trim() || '0.0.0.0';
 
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...(input.inheritedEnv || {}),
     HOST: host,
     PORT: String(input.port),
@@ -42,6 +59,36 @@ export function buildDesktopServerEnv(input: DesktopServerEnvInput): NodeJS.Proc
     METAPI_DESKTOP: '1',
     METAPI_LOG_DIR: input.logsDir,
   };
+
+  // The desktop build runs its backend as a managed local process. A normal
+  // user cannot (and should not) set AUTH_TOKEN in the OS environment, so when
+  // no strong token is provided we hand the server a fresh random admin login.
+  // The user then changes it from the UI (ChangeKeyModal) which persists it to
+  // the settings table — on restart runtimeSettingsHydration() overrides the
+  // env with that persisted value, so a changed password survives. An
+  // unchanged random token is a new value next launch, which is intended.
+  if (isInsecureDefaultSecret(env.AUTH_TOKEN)) {
+    env.AUTH_TOKEN = generateRandomSecret();
+  }
+
+  // The credential secret is the AES key for stored account/key secrets. Once
+  // real encrypted data exists it MUST stay stable or existing rows unseal to
+  // garbage, so only synthesize it when missing/default — never rotate it here.
+  // config.ts falls back to AUTH_TOKEN, but assertProductionSecurity requires
+  // it to differ from AUTH_TOKEN, so keep both explicit and distinct.
+  if (
+    isInsecureDefaultSecret(env.ACCOUNT_CREDENTIAL_SECRET)
+    || env.ACCOUNT_CREDENTIAL_SECRET === env.AUTH_TOKEN
+    || env.ACCOUNT_CREDENTIAL_SECRET === 'change-me-admin-token'
+  ) {
+    let secret = generateRandomSecret();
+    while (secret === env.AUTH_TOKEN) {
+      secret = generateRandomSecret();
+    }
+    env.ACCOUNT_CREDENTIAL_SECRET = secret;
+  }
+
+  return env;
 }
 
 export function createDesktopServerUrl(port: number): string {
