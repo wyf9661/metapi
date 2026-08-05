@@ -95,38 +95,60 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
     };
   });
 
-  // 获取单个测活日志详情
-  app.get('/api/probe-logs/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
+  // 清理旧的测活日志
+  app.post('/api/probe-logs/cleanup', async (request, reply) => {
+    const { daysToKeep = 7 } = request.body as { daysToKeep?: number };
 
-    const log = await db
-      .select({
-        id: probeLogs.id,
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    const cutoffDateStr = cutoffDate.toISOString();
+
+    const result = await db
+      .delete(probeLogs)
+      .where(sql`${probeLogs.createdAt} < ${cutoffDateStr}`);
+
+    return {
+      deletedCount: result.changes || 0,
+      cutoffDate: cutoffDateStr,
+    };
+  });
+
+  // 获取测活筛选选项（站点/账号/模型去重列表）
+  app.get('/api/probe-logs/filters', async (request, reply) => {
+    const siteRows = await db
+      .selectDistinct({
         siteId: probeLogs.siteId,
-        accountId: probeLogs.accountId,
-        modelName: probeLogs.modelName,
-        questionCategory: probeLogs.questionCategory,
-        questionText: probeLogs.questionText,
-        responseText: probeLogs.responseText,
-        status: probeLogs.status,
-        latencyMs: probeLogs.latencyMs,
-        tokensUsed: probeLogs.tokensUsed,
-        errorMessage: probeLogs.errorMessage,
-        createdAt: probeLogs.createdAt,
         siteName: sites.name,
-        accountUsername: accounts.username,
       })
       .from(probeLogs)
       .leftJoin(sites, eq(probeLogs.siteId, sites.id))
+      .orderBy(sites.name);
+
+    const accountRows = await db
+      .selectDistinct({
+        accountId: probeLogs.accountId,
+        accountUsername: accounts.username,
+      })
+      .from(probeLogs)
       .leftJoin(accounts, eq(probeLogs.accountId, accounts.id))
-      .where(eq(probeLogs.id, parseInt(id)))
-      .get();
+      .orderBy(accounts.username);
 
-    if (!log) {
-      return reply.status(404).send({ error: 'Probe log not found' });
-    }
+    const modelRows = await db
+      .selectDistinct({ modelName: probeLogs.modelName })
+      .from(probeLogs)
+      .orderBy(probeLogs.modelName);
 
-    return log;
+    return {
+      sites: siteRows
+        .filter((row: { siteId: number | null }) => row.siteId !== null)
+        .map((row: { siteId: number; siteName: string | null }) => ({ id: row.siteId, name: row.siteName || `站点 #${row.siteId}` })),
+      accounts: accountRows
+        .filter((row: { accountId: number | null }) => row.accountId !== null)
+        .map((row: { accountId: number; accountUsername: string | null }) => ({ id: row.accountId, username: row.accountUsername || `账号 #${row.accountId}` })),
+      models: modelRows
+        .filter((row: { modelName: string | null }) => row.modelName)
+        .map((row: { modelName: string }) => row.modelName),
+    };
   });
 
   // 获取测活统计
@@ -170,21 +192,37 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
     };
   });
 
-  // 清理旧的测活日志
-  app.post('/api/probe-logs/cleanup', async (request, reply) => {
-    const { daysToKeep = 7 } = request.body as { daysToKeep?: number };
+  // 获取单个测活日志详情（放在静态路由之后，避免 /filters、/stats 被 :id 吞掉）
+  app.get('/api/probe-logs/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
 
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-    const cutoffDateStr = cutoffDate.toISOString();
+    const log = await db
+      .select({
+        id: probeLogs.id,
+        siteId: probeLogs.siteId,
+        accountId: probeLogs.accountId,
+        modelName: probeLogs.modelName,
+        questionCategory: probeLogs.questionCategory,
+        questionText: probeLogs.questionText,
+        responseText: probeLogs.responseText,
+        status: probeLogs.status,
+        latencyMs: probeLogs.latencyMs,
+        tokensUsed: probeLogs.tokensUsed,
+        errorMessage: probeLogs.errorMessage,
+        createdAt: probeLogs.createdAt,
+        siteName: sites.name,
+        accountUsername: accounts.username,
+      })
+      .from(probeLogs)
+      .leftJoin(sites, eq(probeLogs.siteId, sites.id))
+      .leftJoin(accounts, eq(probeLogs.accountId, accounts.id))
+      .where(eq(probeLogs.id, parseInt(id)))
+      .get();
 
-    const result = await db
-      .delete(probeLogs)
-      .where(sql`${probeLogs.createdAt} < ${cutoffDateStr}`);
+    if (!log) {
+      return reply.status(404).send({ error: 'Probe log not found' });
+    }
 
-    return {
-      deletedCount: result.changes || 0,
-      cutoffDate: cutoffDateStr,
-    };
+    return log;
   });
 }

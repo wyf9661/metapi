@@ -1126,6 +1126,12 @@ export const api = {
       avgLatencyMs: number;
       totalTokens: number;
     }>,
+  getProbeLogFilters: () =>
+    request('/api/probe-logs/filters') as Promise<{
+      sites: { id: number; name: string }[];
+      accounts: { id: number; username: string }[];
+      models: string[];
+    }>,
   getProxyDebugTraces: (params?: { limit?: number }) =>
     request(
       `/api/stats/proxy-debug/traces${buildQueryString(params)}`,

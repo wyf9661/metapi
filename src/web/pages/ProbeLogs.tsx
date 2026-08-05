@@ -13,6 +13,7 @@ import CenteredModal from '../components/CenteredModal.js';
 import MobileDrawer from '../components/MobileDrawer.js';
 import { tr, useI18n } from '../i18n.js';
 import DateTimeInput from '../components/DateTimeInput.js';
+import ModernSelect from '../components/ModernSelect.js';
 
 type ProbeLog = {
   id: number;
@@ -157,6 +158,37 @@ export default function ProbeLogs() {
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1'));
   const pageSize = 50;
 
+  // 筛选选项数据
+  const [filterOptions, setFilterOptions] = useState<{
+    sites: { id: number; name: string }[];
+    accounts: { id: number; username: string }[];
+    models: string[];
+  }>({ sites: [], accounts: [], models: [] });
+
+  const siteOptions = useMemo(() => {
+    const opts = filterOptions.sites.map((s) => ({ value: String(s.id), label: s.name }));
+    if (siteId && !opts.some((o) => o.value === siteId)) {
+      opts.unshift({ value: siteId, label: `站点 #${siteId}` });
+    }
+    return [{ value: '', label: '全部站点' }, ...opts];
+  }, [filterOptions.sites, siteId]);
+
+  const accountOptions = useMemo(() => {
+    const opts = filterOptions.accounts.map((a) => ({ value: String(a.id), label: a.username }));
+    if (accountId && !opts.some((o) => o.value === accountId)) {
+      opts.unshift({ value: accountId, label: `账号 #${accountId}` });
+    }
+    return [{ value: '', label: '全部账号' }, ...opts];
+  }, [filterOptions.accounts, accountId]);
+
+  const modelOptions = useMemo(() => {
+    const opts = filterOptions.models.map((m) => ({ value: m, label: m }));
+    if (modelName && !opts.some((o) => o.value === modelName)) {
+      opts.unshift({ value: modelName, label: modelName });
+    }
+    return [{ value: '', label: '全部模型' }, ...opts];
+  }, [filterOptions.models, modelName]);
+
   const fetchLogs = async () => {
     setLoading(true);
     try {
@@ -196,6 +228,15 @@ export default function ProbeLogs() {
     fetchLogs();
     fetchStats();
   }, [siteId, accountId, modelName, status, startTime, endTime, page]);
+
+  // 初始化加载筛选选项
+  useEffect(() => {
+    api.getProbeLogFilters().then((data) => {
+      setFilterOptions(data);
+    }).catch(() => {
+      // 静默失败，不影响页面使用
+    });
+  }, []);
 
   const updateSearchParams = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams);
@@ -441,21 +482,30 @@ export default function ProbeLogs() {
                 ))}
               </div>
             </div>
-            <label className="probe-filter-field-inline">
-              <span>站点 ID</span>
-              <input type="text" value={siteId} placeholder="站点 ID"
-                onChange={(e) => { setSiteId(e.target.value); setPage(1); updateSearchParams('siteId', e.target.value); }} />
-            </label>
-            <label className="probe-filter-field-inline">
-              <span>账号 ID</span>
-              <input type="text" value={accountId} placeholder="账号 ID"
-                onChange={(e) => { setAccountId(e.target.value); setPage(1); updateSearchParams('accountId', e.target.value); }} />
-            </label>
-            <label className="probe-filter-field-inline">
-              <span>模型名称</span>
-              <input type="text" value={modelName} placeholder="模型名称"
-                onChange={(e) => { setModelName(e.target.value); setPage(1); updateSearchParams('modelName', e.target.value); }} />
-            </label>
+            <ModernSelect
+              value={siteId}
+              onChange={(v) => { setSiteId(v); setPage(1); updateSearchParams('siteId', v); }}
+              options={siteOptions}
+              placeholder="站点"
+              size="sm"
+              searchable
+            />
+            <ModernSelect
+              value={accountId}
+              onChange={(v) => { setAccountId(v); setPage(1); updateSearchParams('accountId', v); }}
+              options={accountOptions}
+              placeholder="账号"
+              size="sm"
+              searchable
+            />
+            <ModernSelect
+              value={modelName}
+              onChange={(v) => { setModelName(v); setPage(1); updateSearchParams('modelName', v); }}
+              options={modelOptions}
+              placeholder="模型"
+              size="sm"
+              searchable
+            />
             <DateTimeInput
               value={startTime}
               max={endTime || undefined}
