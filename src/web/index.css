@@ -5645,7 +5645,7 @@ textarea {
 }
 
 .probe-logs-table .probe-question-cell {
-  max-width: 280px;
+  max-width: 350px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

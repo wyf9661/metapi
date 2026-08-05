@@ -647,11 +647,11 @@ export default function ProbeLogs() {
                   <col style={{ width: 90 }} />
                   <col style={{ width: 160 }} />
                   <col style={{ width: 180 }} />
-                  <col />
+                  <col style={{ width: 130 }} />
                   <col style={{ width: 90 }} />
                   <col style={{ width: 90 }} />
                   <col style={{ width: 90 }} />
-                  <col style={{ width: 280 }} />
+                  <col style={{ width: 350 }} />
                 </colgroup>
                 <thead>
                   <tr>
