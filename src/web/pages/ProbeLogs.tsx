@@ -288,10 +288,29 @@ export default function ProbeLogs() {
     const text = String(raw || '').trim();
     if (!text) return '-';
 
-    // 检测并过滤纯乱码（二进制数据被保存为 UTF-8 替换字符，通常 < 20 字节且包含大量不可打印字符）
-    const nonPrintableRatio = text.replace(/[\x20-\x7E\t\n\r]/g, '').length / Math.max(text.length, 1);
-    if (nonPrintableRatio > 0.3 || text.length < 20 && text.includes('�')) {
-      return '<div class="text-xs text-gray-400 italic">上游返回了非文本数据（可能为二进制/压缩响应，已过滤乱码）</div>';
+    // 检测疑似二进制/乱码内容：统计 UTF-8 替换字符 (U+FFFD) 和控制字符比例。
+    // 注意：中文等非 ASCII 正常文本不应被过滤，所以只看 U+FFFD 和控制字符，不看非 ASCII 字符本身。
+    const replacementCharCount = (text.match(/\uFFFD/g) || []).length;
+    const controlCharCount = (text.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length;
+    const garbageRatio = (replacementCharCount + controlCharCount) / Math.max(text.length, 1);
+
+    if (garbageRatio > 0.15) {
+      // 疑似二进制/压缩数据未正常解码。不直接丢弃，而是显示可读提示 + 可展开原始数据。
+      // 尝试提取其中可读的 ASCII 片段作为预览
+      const readableSnippets = text
+        .replace(/[^\x20-\x7E\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\n\r]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 200);
+      const escapedRaw = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escapedSnippet = readableSnippets.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return (
+        `<div class="probe-binary-notice">`
+        + `<div class="probe-binary-hint">⚠ 上游返回了疑似二进制/压缩数据（替换字符 ${replacementCharCount} 个，控制字符 ${controlCharCount} 个），可能未正常解码。</div>`
+        + (readableSnippets ? `<div class="probe-binary-snippet">可读片段：${escapedSnippet}</div>` : '')
+        + `<details class="probe-binary-details"><summary>查看原始数据（${text.length} 字符）</summary><pre class="probe-binary-raw">${escapedRaw}</pre></details>`
+        + `</div>`
+      );
     }
 
     // 尝试解析 JSON（完整的 API 响应对象）

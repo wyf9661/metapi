@@ -8,6 +8,7 @@ import {
   type UpstreamEndpoint,
 } from './upstreamEndpointRuntime.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/orchestration/endpointFlow.js';
+import { readRuntimeResponseText } from '../proxy-core/executors/types.js';
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
 import type { schema } from '../db/index.js';
@@ -368,7 +369,7 @@ export async function probeRuntimeModel(input: {
     const latencyMs = Date.now() - startedAt;
 
     if (result.ok) {
-      const responseText = await result.upstream.text().catch(() => undefined);
+      const responseText = await readRuntimeResponseText(result.upstream).catch(() => undefined);
       const tokensUsed = extractTokensFromResponse(responseText);
 
       // 记录成功的测活日志

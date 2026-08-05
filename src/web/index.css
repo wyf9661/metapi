@@ -5693,6 +5693,60 @@ textarea {
   color: var(--color-danger);
 }
 
+/* 疑似二进制/乱码响应的展示区域 */
+.probe-binary-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.probe-binary-hint {
+  font-size: 12px;
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 22%, var(--color-border-light));
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.probe-binary-snippet {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  word-break: break-all;
+}
+
+.probe-binary-details {
+  font-size: 12px;
+}
+
+.probe-binary-details summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  user-select: none;
+  padding: 4px 0;
+}
+
+.probe-binary-details summary:hover {
+  text-decoration: underline;
+}
+
+.probe-binary-raw {
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-top: 6px;
+  color: var(--color-text-muted);
+}
+
 /* ===== Pagination ===== */
 .pagination {
   display: flex;

@@ -173,12 +173,15 @@ export async function readRuntimeResponseText(
   const contentEncoding = typeof response.headers?.get === 'function'
     ? response.headers.get('content-encoding')
     : null;
-  if (!hasZstdContentEncoding(contentEncoding)) {
+  const encodings = getContentEncodings(contentEncoding);
+  if (encodings.length === 0) {
     return typeof response.text === 'function'
       ? response.text().catch(() => '')
       : '';
   }
 
+  // 有任意 content-encoding（gzip/br/deflate/zstd 等）时，统一走显式解压，
+  // 避免某些环境下 fetch 实现不解压导致 .text() 返回乱码。
   const rawBuffer = Buffer.from(await response.arrayBuffer());
   try {
     return decodeRuntimeResponseBuffer(rawBuffer, contentEncoding).toString('utf8');
