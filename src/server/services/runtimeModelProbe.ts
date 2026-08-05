@@ -425,8 +425,8 @@ export async function probeRuntimeModel(input: {
       siteId: input.site.id,
       accountId: input.account.id,
       modelName: input.modelName,
-      questionCategory: 'math', // 默认分类
-      questionText: 'Probe failed before question selection',
+      questionCategory: 'unknown',
+      questionText: '测活请求尚未发出',
       responseText: null,
       status: isTimeout ? 'timeout' : 'failed',
       latencyMs,

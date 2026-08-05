@@ -686,7 +686,7 @@ export default function ProbeLogs() {
                         <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{log.accountUsername || `账号 #${log.accountId}`}</div>
                       </td>
                       <td>
-                        {CATEGORY_LABELS[log.questionCategory]}
+                        {CATEGORY_LABELS[log.questionCategory] || '-'}
                       </td>
                       <td>
                         {formatLatency(log.latencyMs)}
