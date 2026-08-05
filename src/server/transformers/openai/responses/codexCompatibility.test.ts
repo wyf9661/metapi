@@ -110,13 +110,55 @@ describe('normalizeCodexResponsesBodyForProxy', () => {
     });
   });
 
-  it('leaves non-codex bodies untouched', () => {
+  it('injects default instructions into codex-gated platform bodies (sub2api/new-api/openai)', () => {
+    for (const platform of ['sub2api', 'new-api', 'openai', 'one-api']) {
+      const source = {
+        input: 'hello',
+        max_output_tokens: 512,
+      };
+
+      const body = normalizeCodexResponsesBodyForProxy(source, platform);
+
+      expect(body.instructions).toBe(CODEX_DEFAULT_INSTRUCTIONS);
+      // gated platforms keep non-instructions fields intact
+      expect(body.max_output_tokens).toBe(512);
+      expect(body.store).toBeUndefined();
+    }
+  });
+
+  it('extracts system input into instructions on gated platforms', () => {
+    const body = normalizeCodexResponsesBodyForProxy({
+      input: [
+        {
+          type: 'message',
+          role: 'system',
+          content: [{ type: 'input_text', text: 'be precise' }],
+        },
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'hello' }],
+        },
+      ],
+    }, 'sub2api');
+
+    expect(body.instructions).toBe('be precise');
+    expect(body.input).toEqual([
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'hello' }],
+      },
+    ]);
+  });
+
+  it('leaves unrelated platform bodies untouched', () => {
     const source = {
       input: 'hello',
       max_output_tokens: 512,
     };
 
-    const body = normalizeCodexResponsesBodyForProxy(source, 'openai');
+    const body = normalizeCodexResponsesBodyForProxy(source, 'gemini');
 
     expect(body).toBe(source);
   });

@@ -6,7 +6,22 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful coding assistant.';
+export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
+
+/**
+ * Platforms where the upstream may reject non-Codex clients at nginx/app layer.
+ * Must stay in sync with the same set in upstreamRequestBuilder.ts
+ * (ensureCodexClientFingerprintHeaders): when we fake the Codex CLI header
+ * signature there, the responses body must also carry Codex client fields
+ * (e.g. top-level `instructions`), or the upstream's official-client check
+ * rejects the request with "This account only allows Codex official clients".
+ */
+const CODEX_GATED_PLATFORMS = new Set([
+  'new-api',
+  'one-api',
+  'sub2api',
+  'openai',
+]);
 
 function extractTextValue(content: Record<string, unknown>): string {
   if (typeof content.text === 'string') return content.text;
@@ -141,7 +156,7 @@ function ensureCodexResponsesInstructions(
   body: Record<string, unknown>,
   sitePlatform: string,
 ): Record<string, unknown> {
-  if (sitePlatform !== 'codex') return body;
+  if (sitePlatform !== 'codex' && !CODEX_GATED_PLATFORMS.has(sitePlatform)) return body;
   if (typeof body.instructions === 'string' && body.instructions.trim()) return body;
   return {
     ...body,
@@ -177,7 +192,7 @@ function applyCodexResponsesCompatibility(
   body: Record<string, unknown>,
   sitePlatform: string,
 ): Record<string, unknown> {
-  if (sitePlatform !== 'codex') return body;
+  if (sitePlatform !== 'codex' && !CODEX_GATED_PLATFORMS.has(sitePlatform)) return body;
   return extractSystemMessagesToInstructions(body);
 }
 
@@ -185,15 +200,28 @@ export function normalizeCodexResponsesBodyForProxy(
   body: Record<string, unknown>,
   sitePlatform: string,
 ): Record<string, unknown> {
-  if (sitePlatform !== 'codex') return body;
-  return ensureCodexResponsesStoreFalse(
-    stripCodexUnsupportedResponsesFields(
-      ensureCodexResponsesInstructions(
-        applyCodexResponsesCompatibility(body, sitePlatform),
+  if (sitePlatform === 'codex') {
+    return ensureCodexResponsesStoreFalse(
+      stripCodexUnsupportedResponsesFields(
+        ensureCodexResponsesInstructions(
+          applyCodexResponsesCompatibility(body, sitePlatform),
+          sitePlatform,
+        ),
         sitePlatform,
       ),
       sitePlatform,
-    ),
-    sitePlatform,
-  );
+    );
+  }
+  if (CODEX_GATED_PLATFORMS.has(sitePlatform)) {
+    // For codex-gated platforms (sub2api/new-api/openai), apply only safe body
+    // normalizations that real Codex CLI clients always send (top-level
+    // `instructions`). The header fingerprint is already injected by
+    // ensureCodexClientFingerprintHeaders; keeping the body consistent avoids
+    // upstream "This account only allows Codex official clients" rejections.
+    return ensureCodexResponsesInstructions(
+      applyCodexResponsesCompatibility(body, sitePlatform),
+      sitePlatform,
+    );
+  }
+  return body;
 }
