@@ -52,6 +52,7 @@ interface RuntimeSettingsBody {
   payloadRules?: unknown;
   modelAvailabilityProbeEnabled?: boolean;
   sensitiveWordDetectionEnabled?: boolean;
+  antiProbeMinTextLength?: number;
   codexUpstreamWebsocketEnabled?: boolean;
   responsesCompactFallbackToResponsesEnabled?: boolean;
   disableCrossProtocolFallback?: boolean;
@@ -602,8 +603,9 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
 }
 
 async function getRuntimeSettingsResponse(currentAdminIp = '') {
-  const { resolveGlobalSensitiveWordDetection } = await import('../../services/sensitiveWordDetectionService.js');
+  const { resolveGlobalSensitiveWordDetection, resolveAntiProbeMinTextLength } = await import('../../services/sensitiveWordDetectionService.js');
   const sensitiveWordDetectionEnabled = await resolveGlobalSensitiveWordDetection();
+  const antiProbeMinTextLength = await resolveAntiProbeMinTextLength();
   return {
     checkinCron: config.checkinCron,
     checkinScheduleMode: config.checkinScheduleMode,
@@ -615,6 +617,7 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     logCleanupRetentionDays: config.logCleanupRetentionDays,
     modelAvailabilityProbeEnabled: config.modelAvailabilityProbeEnabled,
     sensitiveWordDetectionEnabled,
+    antiProbeMinTextLength,
     codexUpstreamWebsocketEnabled: config.codexUpstreamWebsocketEnabled,
     responsesCompactFallbackToResponsesEnabled: config.responsesCompactFallbackToResponsesEnabled,
     disableCrossProtocolFallback: config.disableCrossProtocolFallback,
@@ -1026,6 +1029,15 @@ export async function settingsRoutes(app: FastifyInstance) {
         changedLabels.push(nextValue ? '开启敏感词检测' : '关闭敏感词检测');
       }
       await setGlobalSensitiveWordDetection(nextValue);
+    }
+
+    if (body.antiProbeMinTextLength !== undefined) {
+      const { setAntiProbeMinTextLength, resolveAntiProbeMinTextLength } = await import('../../services/sensitiveWordDetectionService.js');
+      const prevValue = await resolveAntiProbeMinTextLength();
+      const nextValue = await setAntiProbeMinTextLength(body.antiProbeMinTextLength);
+      if (nextValue !== prevValue) {
+        changedLabels.push(`反探测短文本阈值设置为 ${nextValue}`);
+      }
     }
 
     if (body.codexUpstreamWebsocketEnabled !== undefined) {

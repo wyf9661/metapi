@@ -6,6 +6,7 @@ const migrationDialectSchema = z.enum(['sqlite', 'mysql', 'postgres']);
 const runtimeSettingsPayloadSchema = z.object({
   modelAvailabilityProbeEnabled: z.boolean().optional(),
   sensitiveWordDetectionEnabled: z.boolean().optional(),
+  antiProbeMinTextLength: z.number().optional(),
   webhookEnabled: z.boolean().optional(),
   barkEnabled: z.boolean().optional(),
   serverChanEnabled: z.boolean().optional(),

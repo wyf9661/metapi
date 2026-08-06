@@ -191,17 +191,60 @@ function hasStructuredContent(body: unknown): boolean {
   });
 }
 
+function hasSubstantivePriorUserContext(body: unknown, minTextLength: number): boolean {
+  if (!body || typeof body !== 'object') return false;
+  const record = body as Record<string, unknown>;
+
+  // OpenAI / Claude format: earlier user messages with real content mean this
+  // is a continuing conversation, so a short latest message is a legitimate
+  // follow-up ("谢谢", "继续", "再来一个") rather than a probe.
+  if (Array.isArray(record.messages)) {
+    for (let i = record.messages.length - 2; i >= 0; i--) {
+      const msg = record.messages[i];
+      if (msg && typeof msg === 'object' && (msg as Record<string, unknown>).role === 'user') {
+        const text = extractTextFromContent((msg as Record<string, unknown>).content).trim();
+        if (text.length >= minTextLength) return true;
+      }
+    }
+    return false;
+  }
+
+  // Gemini format: body.contents[] — same multi-turn heuristic.
+  if (Array.isArray(record.contents)) {
+    for (let i = record.contents.length - 2; i >= 0; i--) {
+      const content = record.contents[i];
+      if (!content || typeof content !== 'object') continue;
+      if ((content as Record<string, unknown>).role !== 'user') continue;
+      const parts = (content as Record<string, unknown>).parts;
+      if (!Array.isArray(parts)) continue;
+      const text = parts
+        .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+        .map((p) => (typeof p.text === 'string' ? p.text : ''))
+        .join(' ')
+        .trim();
+      if (text.length >= minTextLength) return true;
+    }
+    return false;
+  }
+
+  return false;
+}
+
 // ── Detection ───────────────────────────────────────────────────────────────
 
-function isProbeRequest(body: unknown): boolean {
+export function isProbeRequest(body: unknown, minTextLength = MIN_TEXT_LENGTH): boolean {
   // Structured content (tool calls, images) = legitimate use
   if (hasStructuredContent(body)) return false;
 
   const text = extractLastUserMessageText(body).trim();
   if (!text) return false;
 
-  // Short text = likely probe
-  if (text.length < MIN_TEXT_LENGTH) return true;
+  // Short text = likely probe... unless it's a follow-up in an ongoing
+  // conversation, which is normal usage ("谢谢", "继续", "next").
+  if (text.length < minTextLength) {
+    if (hasSubstantivePriorUserContext(body, minTextLength)) return false;
+    return true;
+  }
 
   // Pattern match
   if (PROBE_PATTERNS.some((pattern) => pattern.test(text))) return true;
@@ -251,13 +294,16 @@ export async function antiProbingMiddleware(request: FastifyRequest, reply: Fast
   } else if (auth.sensitiveWordDetection === false) {
     shouldEnforce = false;
   } else {
-    // null → consult global setting (default ON)
+    // null → consult global settings (anti-probing defaults ON)
     const { resolveGlobalSensitiveWordDetection } = await import('../services/sensitiveWordDetectionService.js');
     shouldEnforce = await resolveGlobalSensitiveWordDetection();
   }
   if (!shouldEnforce) return;
 
-  if (isProbeRequest(request.body)) {
+  // Resolve the configurable short-text threshold from global settings.
+  const { resolveAntiProbeMinTextLength } = await import('../services/sensitiveWordDetectionService.js');
+  const minTextLength = await resolveAntiProbeMinTextLength();
+  if (isProbeRequest(request.body, minTextLength)) {
     reply.code(400).send({
       error: {
         message: '敏感词检测：请求内容包含被限制的关键词，请修改后重试。',
