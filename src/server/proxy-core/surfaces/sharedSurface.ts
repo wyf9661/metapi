@@ -6,7 +6,7 @@ import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageF
 import type { DownstreamRoutingPolicy } from '../../services/downstreamPolicyTypes.js';
 import { reportProxyAllFailed, reportTokenExpired, resetTokenExpiredSightings } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
-import { shouldRetryProxyRequest } from '../../services/proxyRetryPolicy.js';
+import { shouldRetryProxyRequest, canRetryInPlaceForRecoveringFailure } from '../../services/proxyRetryPolicy.js';
 import {
   createFailoverStreakState,
   noteFailoverFailureAndShouldStop,
@@ -50,7 +50,7 @@ type SurfaceFailureResponse = {
 };
 
 type SurfaceFailureOutcome =
-  | { action: 'retry'; excludeSiteId?: number | null }
+  | { action: 'retry'; excludeSiteId?: number | null; inPlace?: boolean }
   | SurfaceFailureResponse;
 
 type SurfaceOauthRefreshSelectedChannel = {
@@ -516,6 +516,13 @@ export function createSurfaceFailureToolkit(input: {
    * accumulate, stop channel failover early even if maxRetries remain.
    */
   failoverStreak?: FailoverStreakState;
+  /**
+   * Short backoff (ms) for transient-recovering failures (403 blocks, 429, 5xx).
+   * When the failover budget is exhausted, one in-place retry after this delay
+   * is allowed so recovery windows are observed instead of failing fast.
+   * 0 = disabled (legacy immediate-fail behavior).
+   */
+  backoffMs?: number;
 }) {
   const failoverStreak = input.failoverStreak ?? createFailoverStreakState();
   const log = async (args: {
@@ -562,7 +569,16 @@ export function createSurfaceFailureToolkit(input: {
   };
 
   const maybeRetry = (retryCount: number, status: number, errorText?: string | null, selected?: SurfaceSelectedChannel) => {
-    if (retryCount >= input.maxRetries) return null;
+    if (retryCount >= input.maxRetries) {
+      // Budget exhausted: allow exactly one in-place retry after the backoff
+      // window for transient-recovering failures (403 blocks / 429 / 5xx that
+      // clear within seconds). Callers sleep `input.backoffMs` before retrying
+      // the same channel instead of failing fast.
+      if (canRetryInPlaceForRecoveringFailure(retryCount, status, errorText, input.backoffMs ?? 0)) {
+        return { action: 'retry' as const, excludeSiteId: null, inPlace: true };
+      }
+      return null;
+    }
     if (!shouldRetryProxyRequest(status, errorText)) return null;
     if (noteFailoverFailureAndShouldStop(failoverStreak, status, errorText)) {
       return null;

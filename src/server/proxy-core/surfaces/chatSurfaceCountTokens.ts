@@ -1,4 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { config } from '../../config.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { reportProxyAllFailed } from '../../services/alertService.js';
 import {
@@ -107,6 +108,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
     clientContext,
     downstreamApiKeyId,
     traceId: requestTraceId,
+    backoffMs: config.proxyFailoverBackoffMs,
   });
   const stickySessionKey = buildSurfaceStickySessionKey({
     clientContext,
