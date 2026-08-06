@@ -270,6 +270,10 @@ export default function NotificationSettings() {
                             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
                                 钉钉开启“加签”时填写 SEC 密钥；也可把 secret=SEC... 拼在 Webhook URL 查询参数里。
                             </div>
+                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 10, lineHeight: 1.6 }}>
+                                <strong>飞书</strong>：群会话 → 设置 → 群机器人 → 添加「自定义机器人」→ 复制 Webhook 地址（形如
+                                https://open.feishu.cn/open-apis/bot/v2/hook/xxxx）粘贴到上方，勾选“启用 Webhook”后点“发送测试通知”。企业微信 / 钉钉 / 飞书地址都能自动识别。
+                            </div>
                         </div>
                         <div style={{ opacity: runtime.barkEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
                             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Bark URL</div>
