@@ -382,6 +382,8 @@ export type RuntimeSettingsPayload = {
   proxyToken?: string;
   payloadRules?: Record<string, unknown> | null;
   modelAvailabilityProbeEnabled?: boolean;
+  sensitiveWordDetectionEnabled?: boolean;
+  antiProbeMinTextLength?: number;
   codexUpstreamWebsocketEnabled?: boolean;
   responsesCompactFallbackToResponsesEnabled?: boolean;
   disableCrossProtocolFallback?: boolean;

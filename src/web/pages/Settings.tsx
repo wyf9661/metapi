@@ -66,6 +66,8 @@ type RuntimeSettings = {
   logCleanupProgramLogsEnabled: boolean;
   logCleanupRetentionDays: number;
   modelAvailabilityProbeEnabled: boolean;
+  sensitiveWordDetectionEnabled: boolean;
+  antiProbeMinTextLength: number;
   codexUpstreamWebsocketEnabled: boolean;
   responsesCompactFallbackToResponsesEnabled: boolean;
   disableCrossProtocolFallback: boolean;
@@ -349,6 +351,8 @@ export default function Settings() {
     logCleanupProgramLogsEnabled: false,
     logCleanupRetentionDays: 30,
     modelAvailabilityProbeEnabled: false,
+    sensitiveWordDetectionEnabled: true,
+    antiProbeMinTextLength: 8,
     codexUpstreamWebsocketEnabled: false,
     responsesCompactFallbackToResponsesEnabled: false,
     disableCrossProtocolFallback: false,
@@ -647,6 +651,10 @@ export default function Settings() {
           ? Math.trunc(Number(runtimeInfo.logCleanupRetentionDays))
           : 30,
         modelAvailabilityProbeEnabled: !!runtimeInfo.modelAvailabilityProbeEnabled,
+        sensitiveWordDetectionEnabled: runtimeInfo.sensitiveWordDetectionEnabled !== false,
+        antiProbeMinTextLength: Number(runtimeInfo.antiProbeMinTextLength) >= 1
+          ? Math.trunc(Number(runtimeInfo.antiProbeMinTextLength))
+          : 8,
         codexUpstreamWebsocketEnabled: !!runtimeInfo.codexUpstreamWebsocketEnabled,
         responsesCompactFallbackToResponsesEnabled: !!runtimeInfo.responsesCompactFallbackToResponsesEnabled,
         disableCrossProtocolFallback: !!runtimeInfo.disableCrossProtocolFallback,
@@ -1023,6 +1031,30 @@ export default function Settings() {
       toast.error(err?.message || '清理缓存失败');
     } finally {
       setClearingCache(false);
+    }
+  };
+
+  const saveAntiProbeSettings = async () => {
+    setSavingSecurity(true);
+    try {
+      const res = await api.updateRuntimeSettings({
+        sensitiveWordDetectionEnabled: runtime.sensitiveWordDetectionEnabled,
+        antiProbeMinTextLength: runtime.antiProbeMinTextLength,
+      });
+      setRuntime((prev) => ({
+        ...prev,
+        sensitiveWordDetectionEnabled: typeof res?.sensitiveWordDetectionEnabled === 'boolean'
+          ? res.sensitiveWordDetectionEnabled
+          : prev.sensitiveWordDetectionEnabled,
+        antiProbeMinTextLength: Number(res?.antiProbeMinTextLength) >= 1
+          ? Math.trunc(Number(res.antiProbeMinTextLength))
+          : prev.antiProbeMinTextLength,
+      }));
+      toast.success('反探测设置已保存');
+    } catch (err: any) {
+      toast.error(err?.message || '保存失败');
+    } finally {
+      setSavingSecurity(false);
     }
   };
 
@@ -2329,6 +2361,49 @@ export default function Settings() {
               className="btn btn-danger"
             >
               退出登录
+            </button>
+          </div>
+        </div>
+
+        <div className="card animate-slide-up stagger-7" style={{ padding: 20 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>反探测（敏感词检测）</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+            用于伪装成内容审核以拦截探活请求。开启后，短文本（低于下方阈值）的非继续对话请求会被 400 拦截；多轮对话中的简短后续消息不受影响。可在每个下游 Key 上单独覆盖。
+          </div>
+          {isTunnelClientView && (
+            <div style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 12 }}>
+              通过公网隧道时不允许修改安全设置。
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                disabled={isTunnelClientView}
+                checked={runtime.sensitiveWordDetectionEnabled}
+                onChange={(e) => setRuntime((prev) => ({ ...prev, sensitiveWordDetectionEnabled: e.target.checked }))}
+              />
+              启用敏感词检测（反探活）
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              短文本阈值
+              <input
+                type="number"
+                min={1}
+                max={64}
+                disabled={isTunnelClientView}
+                value={runtime.antiProbeMinTextLength}
+                onChange={(e) => setRuntime((prev) => ({
+                  ...prev,
+                  antiProbeMinTextLength: Math.max(1, Math.min(64, Math.trunc(Number(e.target.value) || 1))),
+                }))}
+                style={{ ...inputStyle, width: 80 }}
+              />
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={saveAntiProbeSettings} disabled={savingSecurity || isTunnelClientView} className="btn btn-primary">
+              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存反探测设置'}
             </button>
           </div>
         </div>
