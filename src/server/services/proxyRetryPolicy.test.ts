@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canRetryInPlaceForRecoveringFailure,
   isNonRetryableProtocolPolicyError,
+  isRecoveringTransientFailure,
+  resolveFailoverBackoffMs,
   shouldAbortSameSiteEndpointFallback,
   shouldRetryProxyRequest,
 } from './proxyRetryPolicy.js';
@@ -155,5 +158,44 @@ describe('proxyRetryPolicy', () => {
   it('aborts same-site cascade and retries other channels on first-byte timeout', () => {
     expect(shouldAbortSameSiteEndpointFallback(408, 'first byte timeout')).toBe(true);
     expect(shouldRetryProxyRequest(408, 'first byte timeout')).toBe(true);
+  });
+
+  it('classifies transient-recovering failures for failover backoff', () => {
+    // WAF / edge 403 blocks recover within seconds.
+    expect(isRecoveringTransientFailure(403, 'Your request was blocked.')).toBe(true);
+    expect(isRecoveringTransientFailure(403, 'error code: 1010')).toBe(true);
+    // Bare forbidden 403 is treated as temporarily recoverable.
+    expect(isRecoveringTransientFailure(403, 'forbidden')).toBe(true);
+    expect(isRecoveringTransientFailure(403, 'Forbidden')).toBe(true);
+    // Rate limits and 5xx are self-healing.
+    expect(isRecoveringTransientFailure(429, 'rate limit exceeded')).toBe(true);
+    expect(isRecoveringTransientFailure(503, 'service unavailable')).toBe(true);
+    expect(isRecoveringTransientFailure(502, 'bad gateway')).toBe(true);
+    // Credential death / request-shape errors will not self-heal.
+    expect(isRecoveringTransientFailure(401, 'invalid access token')).toBe(false);
+    expect(isRecoveringTransientFailure(400, 'invalid request body')).toBe(false);
+    expect(isRecoveringTransientFailure(422, 'unprocessable')).toBe(false);
+  });
+
+  it('returns zero backoff when disabled or not a recovering failure', () => {
+    expect(resolveFailoverBackoffMs(403, 'forbidden', 0)).toBe(0);
+    expect(resolveFailoverBackoffMs(403, 'forbidden', 800)).toBe(800);
+    expect(resolveFailoverBackoffMs(401, 'invalid access token', 800)).toBe(0);
+    expect(resolveFailoverBackoffMs(200, null, 800)).toBe(0);
+  });
+
+  it('allows exactly one in-place retry for recovering failures on the first attempt', () => {
+    // First attempt + recovering failure + backoff enabled → in-place retry allowed.
+    expect(canRetryInPlaceForRecoveringFailure(0, 403, 'forbidden', 800)).toBe(true);
+    expect(canRetryInPlaceForRecoveringFailure(0, 429, 'rate limit', 800)).toBe(true);
+    expect(canRetryInPlaceForRecoveringFailure(0, 503, 'unavailable', 800)).toBe(true);
+    // Never on later attempts (prevents infinite loops).
+    expect(canRetryInPlaceForRecoveringFailure(1, 403, 'forbidden', 800)).toBe(false);
+    expect(canRetryInPlaceForRecoveringFailure(2, 403, 'forbidden', 800)).toBe(false);
+    // Not for credential death / request-shape errors.
+    expect(canRetryInPlaceForRecoveringFailure(0, 401, 'invalid access token', 800)).toBe(false);
+    expect(canRetryInPlaceForRecoveringFailure(0, 400, 'invalid request body', 800)).toBe(false);
+    // Backoff disabled → never.
+    expect(canRetryInPlaceForRecoveringFailure(0, 403, 'forbidden', 0)).toBe(false);
   });
 });

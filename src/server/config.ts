@@ -157,6 +157,11 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     // Explicit wall-clock budget (ms). 0 = live path uses soft default 30s for
     // multi-channel pools (see getProxyEffectiveFailoverBudgetMs).
     proxyChannelFailoverBudgetMs: Math.max(0, Math.trunc(parseNumber(env.PROXY_CHANNEL_FAILOVER_BUDGET_MS, 0))),
+    // Short sleep before switching channels after a transient-recovering
+    // failure (WAF 403 / bare 403 / 429 / 5xx). These often clear within
+    // seconds; a small delay between channel attempts improves success on
+    // recovery windows. 0 = disabled (immediate failover, legacy behavior).
+    proxyFailoverBackoffMs: Math.max(0, Math.min(5_000, Math.trunc(parseNumber(env.PROXY_FAILOVER_BACKOFF_MS, 0)))),
     proxyStickySessionEnabled: parseBoolean(env.PROXY_STICKY_SESSION_ENABLED, true),
     // Soft sticky default 30s so dense same-key traffic rebalances across sites.
     proxyStickySessionTtlMs: Math.max(30_000, Math.trunc(parseNumber(env.PROXY_STICKY_SESSION_TTL_MS, 30_000))),

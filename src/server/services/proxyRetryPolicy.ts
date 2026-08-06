@@ -47,3 +47,66 @@ export function classifyProxyRequestFailure(
   };
   return classifyProxyFailure(context);
 }
+
+/**
+ * Whether this failure belongs to the "recovers within seconds" family that
+ * benefits from a short pause before the next channel attempt: WAF/edge 403
+ * blocks, bare 403 forbidden, rate limits (429) and 5xx origin errors.
+ *
+ * Credential-death 401 and request-shape 400/422 are intentionally excluded:
+ * pausing would only add latency to failures that will not self-heal.
+ */
+export function isRecoveringTransientFailure(status: number, upstreamErrorText?: string | null): boolean {
+  if (status === 429) return true;
+  if (status >= 500) return true;
+  const decision = classifyProxyFailure({ status, errorText: upstreamErrorText || '' });
+  if (decision.class === 'waf_blocked') return true;
+  // Bare 403/forbidden: WAF vocabulary may be absent (e.g. Nginx/CF without
+  // the usual body) yet the block is still temporary edge filtering.
+  if (status === 403 && /forbidden/i.test(upstreamErrorText || '')) return true;
+  return false;
+}
+
+/**
+ * Short backoff before the next failover attempt after a transient-recovering
+ * failure. Returns 0 when the feature is disabled (config default) or the
+ * failure is not in the recovering family, preserving legacy immediate
+ * failover behavior.
+ */
+export function resolveFailoverBackoffMs(
+  status: number,
+  upstreamErrorText?: string | null,
+  backoffMs = 0,
+): number {
+  if (backoffMs <= 0) return 0;
+  if (!isRecoveringTransientFailure(status, upstreamErrorText)) return 0;
+  return backoffMs;
+}
+
+export function sleepMs(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Whether a single retry of the same channel is worth attempting after the
+ * regular failover budget is exhausted. Transient-recovering failures (403
+ * blocks, 429, 5xx) can clear within seconds; when the request already burned
+ * through every candidate (e.g. a model served by a single site), one extra
+ * attempt after the backoff window lets the recovery be observed instead of
+ * failing fast.
+ *
+ * Limited to one in-place retry (retryCount === 0) so a stuck upstream cannot
+ * turn this into an infinite loop; multi-channel pools still prefer normal
+ * failover which is handled by the caller.
+ */
+export function canRetryInPlaceForRecoveringFailure(
+  retryCount: number,
+  status: number,
+  upstreamErrorText?: string | null,
+  backoffMs = 0,
+): boolean {
+  if (backoffMs <= 0) return false;
+  if (retryCount !== 0) return false;
+  return isRecoveringTransientFailure(status, upstreamErrorText);
+}
