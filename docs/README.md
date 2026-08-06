@@ -59,6 +59,6 @@ npm run docs:build
 
 - [FAQ/教程贡献规范](./community/faq-tutorial-guidelines.md)
 - [返回文档首页](/)
-- [项目贡献流程](https://github.com/cita-777/metapi/blob/main/CONTRIBUTING.md)
-- [安全策略](https://github.com/cita-777/metapi/blob/main/SECURITY.md)
-- [行为准则](https://github.com/cita-777/metapi/blob/main/CODE_OF_CONDUCT.md)
+- [项目贡献流程](https://github.com/wyf9661/metapi/blob/main/CONTRIBUTING.md)
+- [安全策略](https://github.com/wyf9661/metapi/blob/main/SECURITY.md)
+- [行为准则](https://github.com/wyf9661/metapi/blob/main/CODE_OF_CONDUCT.md)

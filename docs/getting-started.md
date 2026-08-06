@@ -14,8 +14,8 @@
 |------|----------|----------|
 | 云服务器 / NAS / 家用主机长期运行 | Docker / Docker Compose | Docker 与 Docker Compose |
 | 免费云部署（24h 在线） | Render + TiDB + UptimeRobot | 注册 Render / TiDB Cloud / UptimeRobot 免费账号，详见 [Render 部署指南](./deployment.md#render-一键部署免费-24h-运行) |
-| 个人电脑本地使用 | 桌面版安装包 | 从 [Releases](https://github.com/cita-777/metapi/releases) 下载对应系统的桌面安装包 |
-| 二次开发 / 调试 | 本地开发 | Node.js 20+ 与 npm |
+| 个人电脑本地使用 | 桌面版安装包 | 从 [Releases](https://github.com/wyf9661/metapi/releases) 下载对应系统的桌面安装包 |
+| 二次开发 / 调试 | 本地开发 | Node.js 25+ 与 npm |
 
 > [!NOTE]
 > - 当前不再把 `Release` 压缩包 + Node.js 运行时作为独立部署路径。
@@ -73,7 +73,7 @@ docker compose up -d
 
 如果你是在个人电脑上本地使用，请直接下载桌面版安装包：
 
-1. 打开 [Releases](https://github.com/cita-777/metapi/releases) 下载与你系统匹配的桌面安装包
+1. 打开 [Releases](https://github.com/wyf9661/metapi/releases) 下载与你系统匹配的桌面安装包
 2. 安装并启动 Metapi Desktop
 3. 桌面壳会自动启动本地服务并保存数据，无需手动准备 Node.js 环境
 
@@ -110,7 +110,7 @@ Linux 安装包选择建议：
 ## 方式三：本地开发启动
 
 ```bash
-git clone https://github.com/cita-777/metapi.git
+git clone https://github.com/wyf9661/metapi.git
 cd metapi
 npm install
 npm run db:migrate

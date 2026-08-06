@@ -220,7 +220,7 @@ docker compose up -d
 
 如果以上内容未能解决你的问题：
 
-- [搜索已有 Issue](https://github.com/cita-777/metapi/issues?q=is%3Aissue) — 看看是否有人遇到过相同问题
-- [提交新 Issue](https://github.com/cita-777/metapi/issues/new) — 报告 Bug 或提出功能建议
-- [参与讨论](https://github.com/cita-777/metapi/discussions) — 使用疑问、经验分享
+- [搜索已有 Issue](https://github.com/wyf9661/metapi/issues?q=is%3Aissue) — 看看是否有人遇到过相同问题
+- [提交新 Issue](https://github.com/wyf9661/metapi/issues/new) — 报告 Bug 或提出功能建议
+- [参与讨论](https://github.com/wyf9661/metapi/discussions) — 使用疑问、经验分享
 - [文档中心](./README.md) — 查看所有文档

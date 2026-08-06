@@ -75,7 +75,7 @@
 
 ## Render 一键部署（免费 24h 运行）
 
-<a href="https://render.com/deploy?repo=https://github.com/cita-777/metapi">
+<a href="https://render.com/deploy?repo=https://github.com/wyf9661/metapi">
   <img alt="Deploy to Render" src="https://render.com/images/deploy-to-render-button.svg" height="28">
 </a>
 
@@ -120,7 +120,7 @@
 **方式二：手动创建**
 
 1. 在 [Render Dashboard](https://dashboard.render.com) 点击 **New → Web Service**
-2. 连接你的 GitHub 仓库（或使用公开仓库地址 `https://github.com/cita-777/metapi`）
+2. 连接你的 GitHub 仓库（或使用公开仓库地址 `https://github.com/wyf9661/metapi`）
 3. 配置：
    - **Environment**: Docker
    - **Dockerfile Path**: `./docker/Dockerfile`

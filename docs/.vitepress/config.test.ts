@@ -75,9 +75,9 @@ describe('docs vitepress config', () => {
           (entry[1].rel === 'icon' || entry[1].rel === 'shortcut icon'),
       ) ?? [];
 
-    expect(iconLinks.some((entry) => typeof entry[1] === 'object' && entry[1] !== null && 'href' in entry[1] && entry[1].href === '/favicon.png')).toBe(true);
-    expect(iconLinks.some((entry) => typeof entry[1] === 'object' && entry[1] !== null && 'href' in entry[1] && entry[1].href === '/favicon-64.png')).toBe(true);
-    expect(iconLinks.some((entry) => typeof entry[1] === 'object' && entry[1] !== null && 'href' in entry[1] && entry[1].href === '/favicon.ico')).toBe(true);
+    expect(iconLinks.some((entry) => typeof entry[1] === 'object' && entry[1] !== null && 'href' in entry[1] && entry[1].href === '/metapi/favicon.png')).toBe(true);
+    expect(iconLinks.some((entry) => typeof entry[1] === 'object' && entry[1] !== null && 'href' in entry[1] && entry[1].href === '/metapi/favicon-64.png')).toBe(true);
+    expect(iconLinks.some((entry) => typeof entry[1] === 'object' && entry[1] !== null && 'href' in entry[1] && entry[1].href === '/metapi/favicon.ico')).toBe(true);
   });
 
   it('aliases dayjs to the ESM entry for mermaid browser compatibility', () => {

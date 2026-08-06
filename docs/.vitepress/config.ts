@@ -46,10 +46,13 @@ export default withMermaid(
     lang: 'zh-CN',
     title: 'Metapi 文档',
     description: 'Metapi 使用文档、FAQ 与维护协作指南',
+    // Deployed at https://wyf9661.github.io/metapi/ — must match the repo
+    // name so asset/link URLs resolve under /metapi/ instead of the root.
+    base: '/metapi/',
     head: [
-      ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon.png' }],
-      ['link', { rel: 'icon', type: 'image/png', sizes: '64x64', href: '/favicon-64.png' }],
-      ['link', { rel: 'shortcut icon', href: '/favicon.ico' }],
+      ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/metapi/favicon.png' }],
+      ['link', { rel: 'icon', type: 'image/png', sizes: '64x64', href: '/metapi/favicon-64.png' }],
+      ['link', { rel: 'shortcut icon', href: '/metapi/favicon.ico' }],
     ],
     cleanUrls: true,
     lastUpdated: true,
@@ -72,7 +75,7 @@ export default withMermaid(
         { text: 'OAuth 管理', link: '/oauth' },
         { text: 'FAQ', link: '/faq' },
         { text: '文档维护', link: '/README' },
-        { text: '项目主页', link: 'https://github.com/cita-777/metapi' },
+        { text: '项目主页', link: 'https://github.com/wyf9661/metapi' },
       ],
       sidebar: [
         {
@@ -106,7 +109,7 @@ export default withMermaid(
         },
       ],
       socialLinks: [
-        { icon: 'github', link: 'https://github.com/cita-777/metapi' },
+        { icon: 'github', link: 'https://github.com/wyf9661/metapi' },
       ],
       outline: {
         level: [2, 3],

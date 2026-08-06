@@ -201,6 +201,7 @@ Metapi 当前有三类主要配置入口：
 | `PROXY_LOG_RETENTION_DAYS` | 代理日志保留天数 | `30` |
 | `PROXY_LOG_RETENTION_PRUNE_INTERVAL_MINUTES` | 代理日志清理任务执行间隔（分钟） | `30` |
 | `MODEL_AVAILABILITY_PROBE_ALLOW` | 是否允许启用批量测活（默认禁止） | `false` |
+| `MODEL_AVAILABILITY_PROBE_ENABLED` | 批量测活开关（需先设 `MODEL_AVAILABILITY_PROBE_ALLOW=true` 才生效） | `false` |
 | `MODEL_AVAILABILITY_PROBE_INTERVAL_MS` | 批量测活间隔（毫秒） | `1800000` |
 | `MODEL_AVAILABILITY_PROBE_TIMEOUT_MS` | 批量测活单次探测超时（毫秒） | `30000` |
 | `PROXY_FIRST_BYTE_TIMEOUT_SEC` | 单次通道首字超时（秒）；0 关闭 | `30` |
@@ -212,6 +213,109 @@ Metapi 当前有三类主要配置入口：
 
 - **批量测活开关本身**已经在 UI 里有了
 - 这里只剩下间隔、超时、并发这些更高级的细项还没有 UI
+
+### 5. 路由与故障转移（proxy 核心行为）
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `PROXY_FAILOVER_BACKOFF_MS` | 瞬时恢复型失败（WAF 403 / 裸 403 / 429 / 5xx）在切换通道前等待的毫秒数。这些失败通常几秒内恢复，短暂等待能显著提高重试成功率；设为 `0` 关闭（立即切换，旧行为） | `1200` |
+| `PROXY_CHANNEL_FAILOVER_MAX_ATTEMPTS` | 单次请求最多尝试的通道数上限（min(候选池, 上限)，防止候选过多时客户端被反复切换拖死） | `8` |
+| `PROXY_MAX_CHANNEL_ATTEMPTS` | 候选通道数统计失败时的兜底尝试次数 | `5` |
+| `PROXY_STICKY_SESSION_ENABLED` | 是否启用会话粘性（同一会话尽量复用同一通道） | `true` |
+| `PROXY_STICKY_MAX_HITS` | 粘性/最近成功通道连续命中次数上限，超过后丢弃会话级粘性、重新进入均衡选择（防止单站垄断） | `5` |
+| `PROXY_SESSION_CHANNEL_CONCURRENCY_LIMIT` | 会话级通道并发上限（0 = 不限制） | `3` |
+| `PROXY_SESSION_CHANNEL_QUEUE_WAIT_MS` | 并发超限时的排队等待时间（毫秒） | `1500` |
+| `PROXY_SESSION_CHANNEL_LEASE_TTL_MS` | 会话级通道租约 TTL（毫秒） | `90000` |
+| `PROXY_SESSION_CHANNEL_LEASE_KEEPALIVE_MS` | 会话级通道租约保活间隔（毫秒） | `15000` |
+| `TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC` | 通道失败冷却上限（秒），冷却期内该通道优先避开 | `3600` |
+| `DISABLE_CROSS_PROTOCOL_FALLBACK` | 关闭跨协议回退（如 chat → responses），默认允许 | `false` |
+| `RESPONSES_COMPACT_FALLBACK_TO_RESPONSES_ENABLED` | Responses 压缩模式回退开关 | `false` |
+| `CODEX_UPSTREAM_WEBSOCKET_ENABLED` | 启用 Codex 上游 WebSocket 传输 | `false` |
+| `CODEX_RESPONSES_WEBSOCKET_BETA` | Codex responses WebSocket beta 版本头 | `responses_websockets=2026-02-06` |
+| `CODEX_HEADER_DEFAULTS_USER_AGENT` | 覆盖 Codex 默认 User-Agent 头 | 空 |
+| `CODEX_HEADER_DEFAULTS_BETA_FEATURES` | 覆盖 Codex 默认 beta-features 头 | 空 |
+| `PROXY_EMPTY_CONTENT_FAIL` | 上游返回空内容时按失败处理 | `false` |
+| `PROXY_ERROR_KEYWORDS` | 逗号分隔的关键词列表，命中即判定为代理错误（用于日志/告警分类） | 空 |
+| `ROUTING_FALLBACK_UNIT_COST` | 路由成本兜底值（成本未知时的默认单价） | `1` |
+
+### 6. 代理调试（trace 抓包）
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `PROXY_DEBUG_TRACE_ENABLED` | 开启代理调试 trace 记录 | `false` |
+| `PROXY_DEBUG_CAPTURE_HEADERS` | 记录请求/响应头 | `true` |
+| `PROXY_DEBUG_CAPTURE_BODIES` | 记录请求/响应体（体积大，默认关） | `false` |
+| `PROXY_DEBUG_CAPTURE_STREAM_CHUNKS` | 记录流式响应分片 | `false` |
+| `PROXY_DEBUG_TARGET_SESSION_ID` | 只抓指定会话的调试数据 | 空 |
+| `PROXY_DEBUG_TARGET_CLIENT_KIND` | 只抓指定客户端类型（如 `cursor`/`codex`） | 空 |
+| `PROXY_DEBUG_TARGET_MODEL` | 只抓指定模型的调试数据 | 空 |
+| `PROXY_DEBUG_RETENTION_HOURS` | 调试数据保留小时数 | `24` |
+| `PROXY_DEBUG_MAX_BODY_BYTES` | 单条调试记录 body 大小上限（字节） | `262144` |
+
+### 7. 文件与日志清理
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `PROXY_FILE_RETENTION_DAYS` | 代理文件（上传/下载缓存）保留天数 | `30` |
+| `PROXY_FILE_RETENTION_PRUNE_INTERVAL_MINUTES` | 文件清理任务执行间隔（分钟） | `60` |
+| `LOG_CLEANUP_CRON` | 日志清理 cron 表达式 | `0 6 * * *` |
+| `LOG_CLEANUP_USAGE_LOGS_ENABLED` | 是否清理用量日志 | `false` |
+| `LOG_CLEANUP_PROGRAM_LOGS_ENABLED` | 是否清理程序日志 | `false` |
+| `LOG_CLEANUP_RETENTION_DAYS` | 日志保留天数 | `30` |
+
+### 8. 路由权重（智能路由打分）
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `BASE_WEIGHT_FACTOR` | 基础权重因子 | `0.5` |
+| `VALUE_SCORE_FACTOR` | 价值分权重因子 | `0.5` |
+| `COST_WEIGHT` | 成本权重 | `0.4` |
+| `BALANCE_WEIGHT` | 余额权重 | `0.3` |
+| `USAGE_WEIGHT` | 用量权重 | `0.3` |
+
+### 9. 规则与高级 JSON 配置
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `PAYLOAD_RULES` / `PAYLOAD_RULES_JSON` | 请求体规则（JSON），二选一 | 空 |
+| `OPENAI_SERVICE_TIER_RULES` / `OPENAI_SERVICE_TIER_RULES_JSON` | OpenAI service tier 规则（JSON），二选一 | 空 |
+| `PROBE_HEARTBEAT_INTERVAL_MS` | 活跃通道心跳探测间隔（毫秒） | `120000` |
+| `PROBE_HEARTBEAT_TIMEOUT_MS` | 心跳探测超时（毫秒） | `10000` |
+| `PROBE_MAX_BATCH` | 心跳探测每批通道数 | `2` |
+| `PROBE_INITIAL_RETRIES_AFTER_COOLDOWN` | 冷却后初始重试次数 | `2` |
+
+### 10. 安全与访问控制
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `ALLOW_GLOBAL_PROXY_TOKEN` | 允许客户端直接使用全局 `PROXY_TOKEN` 调用 `/v1/*`（生产环境建议 `false`，改用 UI 生成的下游密钥） | 非生产环境 `true` / 生产环境 `false` |
+| `ALLOW_INSECURE_DEFAULTS` | 跳过生产安全检查（仅紧急排障用，不推荐） | `false` |
+| `ADMIN_IP_ALLOWLIST` | 管理员接口 IP 白名单（逗号分隔 CIDR） | 空 |
+| `TRUST_PROXY` | 信任反向代理的 `X-Forwarded-For` | `false` |
+| `TRUST_PROXY_HOPS` | 仅信任最近 N 跳（设置了 `TRUST_PROXY` 后生效） | 未设置（沿用旧行为） |
+| `NOTIFY_COOLDOWN_SEC` | 同一告警重复推送的最小间隔（秒） | `300` |
+| `TUNNEL_ENABLED` | 启用 Cloudflare Quick Tunnel | `false` |
+| `TUNNEL_DASHBOARD_ACCESS` | 允许通过隧道访问管理后台 | `false` |
+
+### 11. 数据库连接
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `DB_TYPE` | 数据库类型：`sqlite` / `mysql` / `postgres` | `sqlite` |
+| `DB_URL` | 数据库连接串（MySQL/Postgres 必填） | 空 |
+| `DB_SSL` | 启用数据库 SSL | `false` |
+| `DB_SSL_REJECT_UNAUTHORIZED` | SSL 证书校验（自签名证书时设 `false`） | `true` |
+
+### 12. 登录签到（Check-in）
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `CHECKIN_CRON` | 定时签到 cron 表达式 | `0 8 * * *` |
+| `CHECKIN_SCHEDULE_MODE` | 调度方式：`cron` / `interval` | `cron` |
+| `CHECKIN_INTERVAL_HOURS` | interval 模式下的间隔小时数（1-24） | `6` |
+| `BALANCE_REFRESH_CRON` | 余额刷新 cron 表达式 | `0 * * * *` |
+| `HOST` | 服务监听地址 | `0.0.0.0` |
+| `NODE_ENV` | 运行环境（`production` 会启用生产安全检查） | 空 |
 
 ---
 
@@ -270,6 +374,7 @@ Metapi 当前的配置关系可以概括为：
 |--------|------|--------|
 | `WEBHOOK_ENABLED` | 启用 Webhook 通知 | `true` |
 | `WEBHOOK_URL` | Webhook 推送地址 | 空 |
+| `WEBHOOK_SECRET` | Webhook 签名密钥（可选） | 空 |
 
 ### Bark（iOS 推送）
 
@@ -292,6 +397,7 @@ Metapi 当前的配置关系可以概括为：
 | `TELEGRAM_ENABLED` | 启用 Telegram 通知 | `false` |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（形如 `123456:abc`） | 空 |
 | `TELEGRAM_CHAT_ID` | 接收消息的 Chat ID（如 `-100xxxx` 或 `@channel`） | 空 |
+| `TELEGRAM_MESSAGE_THREAD_ID` | 话题群组中的 Thread ID（非话题群可留空） | 空 |
 
 **配置步骤：**
 
