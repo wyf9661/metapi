@@ -160,8 +160,9 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     // Short sleep before switching channels after a transient-recovering
     // failure (WAF 403 / bare 403 / 429 / 5xx). These often clear within
     // seconds; a small delay between channel attempts improves success on
-    // recovery windows. 0 = disabled (immediate failover, legacy behavior).
-    proxyFailoverBackoffMs: Math.max(0, Math.min(5_000, Math.trunc(parseNumber(env.PROXY_FAILOVER_BACKOFF_MS, 0)))),
+    // recovery windows. Default 1200ms; set 0 to disable (immediate
+    // failover, legacy behavior).
+    proxyFailoverBackoffMs: Math.max(0, Math.min(5_000, Math.trunc(parseNumber(env.PROXY_FAILOVER_BACKOFF_MS, 1_200)))),
     proxyStickySessionEnabled: parseBoolean(env.PROXY_STICKY_SESSION_ENABLED, true),
     // Soft sticky default 30s so dense same-key traffic rebalances across sites.
     proxyStickySessionTtlMs: Math.max(30_000, Math.trunc(parseNumber(env.PROXY_STICKY_SESSION_TTL_MS, 30_000))),
