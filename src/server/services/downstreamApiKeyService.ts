@@ -572,11 +572,27 @@ export function __resetManagedKeyRpmWindowsForTests(): void {
   managedKeyRpmWindows.clear();
 }
 
+// Lazy global prune: once the map grows past this many keys, drop every key
+// whose 60s window is now empty. Keeps deleted/inactive keys from
+// accumulating forever without a periodic timer.
+const MANAGED_KEY_RPM_PRUNE_THRESHOLD = 512;
+
+function pruneManagedKeyRpmWindows(nowMs: number): void {
+  if (managedKeyRpmWindows.size < MANAGED_KEY_RPM_PRUNE_THRESHOLD) return;
+  const windowStart = nowMs - 60_000;
+  for (const [keyId, window] of managedKeyRpmWindows.entries()) {
+    if (window.length === 0 || window[window.length - 1]! <= windowStart) {
+      managedKeyRpmWindows.delete(keyId);
+    }
+  }
+}
+
 export function checkManagedKeyRpmLimit(keyId: number, maxRpm: number | null | undefined, nowMs = Date.now()): {
   allowed: boolean;
   retryAfterSec: number;
   current: number;
 } {
+  pruneManagedKeyRpmWindows(nowMs);
   const limit = typeof maxRpm === 'number' && Number.isFinite(maxRpm) ? Math.trunc(maxRpm) : null;
   if (limit === null || limit <= 0) {
     return { allowed: true, retryAfterSec: 0, current: 0 };

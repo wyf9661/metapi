@@ -167,6 +167,17 @@ function decodeRuntimeResponseStream(
   return decoded;
 }
 
+// Whole-body reads are used for upstream error bodies and non-stream
+// fallbacks. Cap the decoded text so a pathological upstream (multi-MB
+// HTML error page) cannot balloon process memory. 1 MiB is far beyond any
+// meaningful API error payload while keeping diagnostics intact.
+const MAX_RUNTIME_RESPONSE_TEXT_CHARS = 1024 * 1024;
+
+function truncateRuntimeResponseText(text: string): string {
+  if (text.length <= MAX_RUNTIME_RESPONSE_TEXT_CHARS) return text;
+  return `${text.slice(0, MAX_RUNTIME_RESPONSE_TEXT_CHARS)}\n...[truncated ${text.length - MAX_RUNTIME_RESPONSE_TEXT_CHARS} chars]`;
+}
+
 export async function readRuntimeResponseText(
   response: RuntimeResponse,
 ): Promise<string> {
@@ -176,7 +187,7 @@ export async function readRuntimeResponseText(
   const encodings = getContentEncodings(contentEncoding);
   if (encodings.length === 0) {
     return typeof response.text === 'function'
-      ? response.text().catch(() => '')
+      ? response.text().then(truncateRuntimeResponseText).catch(() => '')
       : '';
   }
 
@@ -184,9 +195,11 @@ export async function readRuntimeResponseText(
   // 避免某些环境下 fetch 实现不解压导致 .text() 返回乱码。
   const rawBuffer = Buffer.from(await response.arrayBuffer());
   try {
-    return decodeRuntimeResponseBuffer(rawBuffer, contentEncoding).toString('utf8');
+    return truncateRuntimeResponseText(
+      decodeRuntimeResponseBuffer(rawBuffer, contentEncoding).toString('utf8'),
+    );
   } catch {
-    return looksLikeZstdFrame(rawBuffer) ? '' : rawBuffer.toString('utf8');
+    return looksLikeZstdFrame(rawBuffer) ? '' : truncateRuntimeResponseText(rawBuffer.toString('utf8'));
   }
 }
 

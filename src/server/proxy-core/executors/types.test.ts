@@ -32,6 +32,29 @@ describe('readRuntimeResponseText', () => {
 
     await expect(readRuntimeResponseText(response)).resolves.toBe(payload);
   });
+
+  it('truncates oversized bodies to protect process memory', async () => {
+    // Build a body larger than the 1 MiB cap.
+    const bigPayload = `{"error":"${'x'.repeat(2 * 1024 * 1024)}"}`;
+    const response = new Response(bigPayload, {
+      status: 500,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+
+    const text = await readRuntimeResponseText(response);
+    expect(text.length).toBeLessThan(bigPayload.length);
+    expect(text).toContain('[truncated');
+  });
+
+  it('passes through bodies within the cap unchanged', async () => {
+    const payload = JSON.stringify({ error: { message: 'small' } });
+    const response = new Response(payload, {
+      status: 500,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+
+    await expect(readRuntimeResponseText(response)).resolves.toBe(payload);
+  });
 });
 
 describe('materializeErrorResponse', () => {

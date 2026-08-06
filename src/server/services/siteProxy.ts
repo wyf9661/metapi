@@ -27,6 +27,17 @@ const globalNonProxyAgent = new Agent({
 setGlobalDispatcher(globalNonProxyAgent);
 
 const SITE_PROXY_CACHE_TTL_MS = 3_000;
+// Proxy dispatchers (ProxyAgent / SOCKS) hold keep-alive sockets and TLS
+// state. Cache them for reuse but expire idle entries so long-running
+// instances do not accumulate unbounded sockets for one-off proxy URLs.
+const DISPATCHER_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type DispatcherCacheEntry = {
+  dispatcher: Dispatcher;
+  lastUsedAtMs: number;
+};
+
+const dispatcherCache = new Map<string, DispatcherCacheEntry>();
 const SUPPORTED_PROXY_PROTOCOLS = new Set([
   'http:',
   'https:',
@@ -81,8 +92,6 @@ let siteProxyCache: {
   loadedAt: 0,
   rows: [],
 };
-
-const dispatcherCache = new Map<string, Dispatcher>();
 
 const accountProxyOverride = new AsyncLocalStorage<string | null>();
 
@@ -163,13 +172,33 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
   return siteProxyCache.rows;
 }
 
+function closeDispatcherIfPossible(dispatcher: Dispatcher | undefined): void {
+  if (dispatcher && typeof (dispatcher as { close?: () => Promise<void> | void }).close === 'function') {
+    try {
+      void (dispatcher as { close: () => Promise<void> | void }).close();
+    } catch {
+      // Best-effort socket teardown; ignore close failures.
+    }
+  }
+}
+
 function getDispatcherByProxyUrl(proxyUrl: string, skipCache = false): Dispatcher | undefined {
   const normalized = normalizeSiteProxyUrl(proxyUrl);
   if (!normalized) return undefined;
 
   if (!skipCache) {
+    const nowMs = Date.now();
     const cached = dispatcherCache.get(normalized);
-    if (cached) return cached;
+    if (cached) {
+      if (nowMs - cached.lastUsedAtMs > DISPATCHER_CACHE_TTL_MS) {
+        // Idle entry expired: tear down its sockets and evict.
+        dispatcherCache.delete(normalized);
+        closeDispatcherIfPossible(cached.dispatcher);
+      } else {
+        cached.lastUsedAtMs = nowMs;
+        return cached.dispatcher;
+      }
+    }
   }
 
   try {
@@ -178,7 +207,10 @@ function getDispatcherByProxyUrl(proxyUrl: string, skipCache = false): Dispatche
       ? createSocksDispatcher(parsedProxyUrl)
       : new ProxyAgent(normalized);
     if (!skipCache) {
-      dispatcherCache.set(normalized, dispatcher);
+      dispatcherCache.set(normalized, {
+        dispatcher,
+        lastUsedAtMs: Date.now(),
+      });
     }
     return dispatcher;
   } catch {
