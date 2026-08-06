@@ -131,7 +131,8 @@
   },
   "overrides": {
     "minimist": "^1.2.8",
-    "node-abi": "^4.33.0"
+    "node-abi": "^4.33.0",
+    "ip-address": "^10.3.0"
   },
   "author": {
     "name": "wyf9661",
