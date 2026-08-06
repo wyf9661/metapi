@@ -200,15 +200,12 @@ export async function selectProxyChannelForAttempt(input: {
       if (stickyChannelId) {
         const hitCount = proxyChannelCoordinator.incrementStickyHitCount(input.stickySessionKey);
         if (hitCount > config.proxyStickyMaxHits) {
-          // Consecutive-hit cap reached: discard both affinity layers for this
-          // key+model, then let this very hop re-enter balanced-v2. Otherwise
-          // last-success would immediately re-pin the same channel.
+          // Consecutive-hit cap reached: discard the session-level affinity for
+          // this sticky binding so dense same-key traffic re-enters balanced-v2
+          // instead of monopolizing one site. Keep the model-level last-success
+          // memory intact so a transiently-pinned channel can be re-selected on
+          // the very next retry rather than being permanently forgotten.
           proxyChannelCoordinator.clearStickyChannel(input.stickySessionKey, stickyChannelId);
-          proxyChannelCoordinator.clearLastSuccessChannel({
-            requestedModel: input.requestedModel,
-            downstreamApiKeyId: input.downstreamApiKeyId,
-            channelId: stickyChannelId,
-          });
         } else {
           selected = await tryPreferredChannel(stickyChannelId, 'sticky');
         }
