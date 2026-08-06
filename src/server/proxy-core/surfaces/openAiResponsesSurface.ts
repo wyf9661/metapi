@@ -76,7 +76,7 @@ import {
 } from '../../services/proxyChannelRetry.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { shouldAbortSameSiteEndpointFallback } from '../../services/proxyRetryPolicy.js';
+import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure } from '../../services/proxyRetryPolicy.js';
 import {
   acquireSurfaceChannelLease,
   bindSurfaceStickyChannel,
@@ -90,6 +90,7 @@ import {
   selectSurfaceChannelForAttempt,
   trySurfaceOauthRefreshRecovery,
 } from './sharedSurface.js';
+import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 import {
   buildSurfaceProxyDebugResponseHeaders,
   captureSurfaceProxyDebugSuccessResponseBody,
@@ -202,6 +203,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
       clientContext,
       downstreamApiKeyId,
       traceId: requestTraceId,
+      backoffMs: config.proxyFailoverBackoffMs,
     });
     const stickySessionKey = buildSurfaceStickySessionKey({
       clientContext,
@@ -256,12 +258,47 @@ export async function handleOpenAiResponsesSurfaceRequest(
     };
     const requestStartedAtMs = Date.now();
     let retryCount = 0;
+    // See chatSurface: when the failover budget is exhausted but every failure
+    // was transient-recovering (403 block / 429 / 5xx), one final retry after
+    // the backoff window re-selects from the full pool so the previously-good
+    // channel can be picked again instead of failing fast.
+    let allFailuresRecovering = true;
+    let recoveryPass = false;
+    let inPlaceRetryChannel: Awaited<ReturnType<typeof tokenRouter.selectChannel>> = null;
 
-    while (retryCount <= maxRetries) {
-      const stickyPreferredChannelId = retryCount === 0
+    while (true) {
+      if (retryCount > maxRetries && !recoveryPass) {
+        if (allFailuresRecovering && config.proxyFailoverBackoffMs > 0) {
+          // One recovery pass: clear exclusions so the previously-good channel
+          // can be re-selected, wait for the recovery window, then retry. Keep
+          // retryCount non-zero so selection does NOT trigger the expensive
+          // first-attempt route refresh against every upstream.
+          recoveryPass = true;
+          excludeChannelIds.length = 0;
+          // Recovery: prefer the last-success channel (the one that was working
+          // before transient failures started) instead of a weighted-random
+          // re-select which may pick another failing site.
+          const lsChannelId = proxyChannelCoordinator.getLastSuccessChannelId({
+            requestedModel,
+            downstreamApiKeyId,
+          });
+          if (lsChannelId) {
+            const lsSelected = await tokenRouter.selectPreferredChannel(
+              requestedModel, lsChannelId, downstreamPolicy, [],
+            );
+            if (lsSelected) {
+              inPlaceRetryChannel = lsSelected;
+            }
+          }
+          await sleepMs(config.proxyFailoverBackoffMs);
+          continue;
+        }
+        break;
+      }
+      const stickyPreferredChannelId = !inPlaceRetryChannel && retryCount === 0
         ? getSurfaceStickyPreferredChannelId(stickySessionKey)
         : null;
-      const selected = await selectSurfaceChannelForAttempt({
+      const selected: Awaited<ReturnType<typeof tokenRouter.selectChannel>> = inPlaceRetryChannel ?? await selectSurfaceChannelForAttempt({
         requestedModel,
         downstreamPolicy,
         excludeChannelIds,
@@ -270,6 +307,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         forcedChannelId,
         downstreamApiKeyId,
       });
+      inPlaceRetryChannel = null;
 
       if (!selected) {
         const noChannelMessage = buildForcedChannelUnavailableMessage(forcedChannelId);
@@ -953,18 +991,29 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 totalTokens: parsedUsage.totalTokens,
                 upstreamPath: successfulUpstreamPath,
 	              });
+	              const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+	                && canRetryInPlaceForRecoveringFailure(retryCount, failure.status, failure.reason, config.proxyFailoverBackoffMs);
 	              const terminalFailureOutcome = failureOutcome.action === 'retry'
 	                ? (
 	                  canFailoverToNextChannel(reply)
-	                  && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+	                  && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry)
 	                    ? null
 	                    : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
 	                )
 	                : failureOutcome;
 	              if (!terminalFailureOutcome) {
+	                if (!isRecoveringTransientFailure(failure.status, failure.reason)) {
+	                  allFailuresRecovering = false;
+	                }
+	                if (inPlaceRecoveringRetry) {
+	                  inPlaceRetryChannel = selected;
+	                  await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
+	                  continue;
+	                }
 	                if (failureOutcome.action === 'retry') {
 	                  await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
 	                }
+	                await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
 	                retryCount += 1;
 	                continue;
 	              }
@@ -1240,18 +1289,29 @@ export async function handleOpenAiResponsesSurfaceRequest(
             totalTokens: parsedUsage.totalTokens,
             upstreamPath: successfulUpstreamPath,
 	          });
+	          const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+	            && canRetryInPlaceForRecoveringFailure(retryCount, failure.status, failure.reason, config.proxyFailoverBackoffMs);
 	          const terminalFailureOutcome = failureOutcome.action === 'retry'
 	            ? (
 	              canFailoverToNextChannel(reply)
-	              && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+	              && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry)
 	                ? null
 	                : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
 	            )
 	            : failureOutcome;
 	          if (!terminalFailureOutcome) {
+	            if (!isRecoveringTransientFailure(failure.status, failure.reason)) {
+	              allFailuresRecovering = false;
+	            }
+	            if (inPlaceRecoveringRetry) {
+	              inPlaceRetryChannel = selected;
+	              await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
+	              continue;
+	            }
 	            if (failureOutcome.action === 'retry') {
 	              await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
 	            }
+	            await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
 	            retryCount += 1;
 	            continue;
 	          }
@@ -1338,18 +1398,29 @@ export async function handleOpenAiResponsesSurfaceRequest(
           latencyMs: Date.now() - startTime,
           retryCount,
         });
+            const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+              && canRetryInPlaceForRecoveringFailure(retryCount, endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs);
             const terminalFailureOutcome = failureOutcome.action === 'retry'
               ? (
                 canFailoverToNextChannel(reply)
-                && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+                && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry)
                   ? null
                   : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err?.message || 'unknown error')
               )
               : failureOutcome;
             if (!terminalFailureOutcome) {
+              if (!isRecoveringTransientFailure(endpointFailureStatus || 502, err?.message || null)) {
+                allFailuresRecovering = false;
+              }
+              if (inPlaceRecoveringRetry) {
+                inPlaceRetryChannel = selected;
+                await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
+                continue;
+              }
               if (failureOutcome.action === 'retry') {
                 await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
               }
+              await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
               retryCount += 1;
               continue;
             }
@@ -1370,21 +1441,32 @@ export async function handleOpenAiResponsesSurfaceRequest(
             latencyMs: Date.now() - startTime,
             retryCount,
           });
+          const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+            && canRetryInPlaceForRecoveringFailure(retryCount, 502, err?.message || null, config.proxyFailoverBackoffMs);
           const terminalFailureOutcome = failureOutcome.action === 'retry'
             ? (
               canFailoverToNextChannel(reply)
-              && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+              && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry)
                 ? null
                 : finalizeRetryAsExecutionFailure(err?.message || 'network failure')
             )
             : failureOutcome;
           if (!terminalFailureOutcome) {
+            if (!isRecoveringTransientFailure(502, err?.message || null)) {
+              allFailuresRecovering = false;
+            }
+            if (inPlaceRecoveringRetry) {
+              inPlaceRetryChannel = selected;
+              await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
+              continue;
+            }
             if (failureOutcome.action === 'retry') {
               await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
             }
+            await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
             retryCount += 1;
             continue;
-	        }
+        }
 		        await finalizeDebugFailure(
 	            terminalFailureOutcome.status,
 	            terminalFailureOutcome.payload,
