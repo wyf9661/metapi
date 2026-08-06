@@ -361,7 +361,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     setApplyCreatePresetModels(
       Boolean(initializationPreset?.recommendedModels?.length),
     );
-    setLoginForm(createLoginForm());
+    setLoginForm({ ...createLoginForm(), siteId: requestedSiteId });
     setTokenForm({
       ...createTokenForm(credentialMode),
       siteId: requestedSiteId,
@@ -1520,34 +1520,36 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   >
                     Session Token / Cookie
                   </button>
-                  <button
-                    onClick={() => {
-                      setAddMode("login");
-                      setVerifyResult(null);
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "8px 0",
-                      borderRadius: 6,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      border: "none",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                      background:
-                        addMode === "login"
-                          ? "var(--color-bg-card)"
-                          : "transparent",
-                      color:
-                        addMode === "login"
-                          ? "var(--color-primary)"
-                          : "var(--color-text-muted)",
-                      boxShadow:
-                        addMode === "login" ? "var(--shadow-sm)" : "none",
-                    }}
-                  >
-                    账号密码登录
-                  </button>
+                  {!isSub2ApiSelected && (
+                    <button
+                      onClick={() => {
+                        setAddMode("login");
+                        setVerifyResult(null);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 0",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        border: "none",
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        background:
+                          addMode === "login"
+                            ? "var(--color-bg-card)"
+                            : "transparent",
+                        color:
+                          addMode === "login"
+                            ? "var(--color-primary)"
+                            : "var(--color-text-muted)",
+                        boxShadow:
+                          addMode === "login" ? "var(--shadow-sm)" : "none",
+                      }}
+                    >
+                      账号密码登录
+                    </button>
+                  )}
                 </div>
 
                 {addMode === "token" ? (
@@ -2056,6 +2058,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       siteId: nextSiteId,
                       credentialMode: "apikey",
                     }));
+                    setLoginForm((f) => ({ ...f, siteId: nextSiteId }));
+                    const nextPlatform = sites.find((s) => s.id === nextSiteId)?.platform?.toLowerCase() || "";
+                    if (nextPlatform === "sub2api") {
+                      setAddMode("token");
+                    }
                     setVerifyResult(null);
                     if (
                       createIntentPresetId &&
