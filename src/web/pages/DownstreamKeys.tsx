@@ -85,7 +85,7 @@ type BatchMetadataForm = {
   tags: string[];
 };
 
-type DefaultRouteSelections = Pick<DownstreamKeyEditorForm, 'selectedModels' | 'selectedGroupRouteIds'>;
+
 function toDateTimeLocal(isoString: string | null | undefined): string {
   if (!isoString) return '';
   const ts = Date.parse(isoString);
@@ -172,21 +172,6 @@ function normalizeExcludedCredentialRefs(values: DownstreamExcludedCredentialRef
     deduped.set(buildExcludedCredentialRefKey(normalized), normalized);
   }
   return Array.from(deduped.values()).sort((left, right) => buildExcludedCredentialRefKey(left).localeCompare(buildExcludedCredentialRefKey(right)));
-}
-
-function buildDefaultRouteSelections(routeOptions: RouteSelectorItem[]): DefaultRouteSelections {
-  return {
-    selectedModels: uniqStrings(
-      routeOptions
-        .filter((item) => isExactModelPattern(item.modelPattern))
-        .map((item) => item.modelPattern),
-    ).sort((a, b) => a.localeCompare(b)),
-    selectedGroupRouteIds: uniqIds(
-      routeOptions
-        .filter(isGroupRouteOption)
-        .map((item) => item.id),
-    ),
-  };
 }
 
 function parseTagText(value: string): string[] {
@@ -333,11 +318,8 @@ function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined 
 function buildEditorForm(
   item?: ManagedItem | DownstreamApiKeyItem | null,
   routeOptions: RouteSelectorItem[] = [],
-  selectAllByDefault = false,
 ): DownstreamKeyEditorForm {
-  const defaultSelections = selectAllByDefault
-    ? buildDefaultRouteSelections(routeOptions)
-    : { selectedModels: [], selectedGroupRouteIds: [] };
+  const defaultSelections: { selectedModels: string[]; selectedGroupRouteIds: number[] } = { selectedModels: [], selectedGroupRouteIds: [] };
   const selectedModels = Array.isArray(item?.supportedModels)
     ? item.supportedModels
     : defaultSelections.selectedModels;
@@ -490,7 +472,6 @@ export default function DownstreamKeys() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editorForm, setEditorForm] = useState<DownstreamKeyEditorForm>(() => buildEditorForm());
-  const [createDefaultsPending, setCreateDefaultsPending] = useState(false);
   const [exclusionSourceLoading, setExclusionSourceLoading] = useState(false);
   const [exclusionSourceLoaded, setExclusionSourceLoaded] = useState(false);
   const [exclusionSiteOptions, setExclusionSiteOptions] = useState<DownstreamSiteOption[]>([]);
@@ -755,33 +736,9 @@ export default function DownstreamKeys() {
     return acc;
   }, { tokens: 0, requests: 0, cost: 0, enabled: 0 }), [visibleItems]);
 
-  useEffect(() => {
-    if (!editorOpen || editingId !== null || !createDefaultsPending) {
-      return;
-    }
-
-    const defaultSelections = buildDefaultRouteSelections(routeOptions);
-    if (defaultSelections.selectedModels.length === 0 && defaultSelections.selectedGroupRouteIds.length === 0) {
-      return;
-    }
-
-    setEditorForm((prev) => {
-      if (prev.selectedModels.length > 0 || prev.selectedGroupRouteIds.length > 0) {
-        return prev;
-      }
-      return {
-        ...prev,
-        selectedModels: defaultSelections.selectedModels,
-        selectedGroupRouteIds: defaultSelections.selectedGroupRouteIds,
-      };
-    });
-    setCreateDefaultsPending(false);
-  }, [createDefaultsPending, editorOpen, editingId, routeOptions]);
-
   const openCreate = () => {
     setEditingId(null);
-    setEditorForm(buildEditorForm(null, routeOptions, true));
-    setCreateDefaultsPending(true);
+    setEditorForm(buildEditorForm(null, routeOptions));
     setEditorOpen(true);
   };
 
@@ -796,7 +753,6 @@ export default function DownstreamKeys() {
 
   const openEdit = (item: ManagedItem) => {
     setEditingId(item.id);
-    setCreateDefaultsPending(false);
     setEditorForm(buildEditorForm(rawItemMap.get(item.id) || item));
     setEditorOpen(true);
   };
@@ -804,7 +760,6 @@ export default function DownstreamKeys() {
   const closeEditor = () => {
     setEditorOpen(false);
     setEditingId(null);
-    setCreateDefaultsPending(false);
     setEditorForm(buildEditorForm());
   };
 
