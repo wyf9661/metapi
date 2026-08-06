@@ -1587,6 +1587,30 @@ export function checkpointSqliteWal(mode: 'PASSIVE' | 'FULL' | 'RESTART' = 'PASS
   }
 }
 
+/**
+ * Lightweight liveness probe against the active runtime database.
+ *
+ * Used by the readiness health endpoint to confirm writes/queries can still
+ * reach the configured store. Throws on failure so callers can 503.
+ */
+export async function pingRuntimeDatabase(): Promise<void> {
+  if (runtimeDbDialect === 'mysql') {
+    if (!mysqlPool) throw new Error('MySQL pool not initialized');
+    await mysqlPool.query('SELECT 1');
+    return;
+  }
+  if (runtimeDbDialect === 'postgres') {
+    if (!pgPool) throw new Error('Postgres pool not initialized');
+    await pgPool.query('SELECT 1');
+    return;
+  }
+  if (sqliteConnection) {
+    sqliteConnection.prepare('SELECT 1').get();
+    return;
+  }
+  throw new Error('SQLite connection not initialized');
+}
+
 export async function closeDbConnections(): Promise<void> {
   resetSchemaCapabilityCache();
   if (mysqlPool) {

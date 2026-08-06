@@ -92,6 +92,7 @@ import {
   ensureProxyLogStreamTimingColumns,
   ensureRouteGroupingCompatibilityColumns,
   ensureSiteCompatibilityColumns,
+  pingRuntimeDatabase,
   runtimeDbDialect,
   schema,
   switchRuntimeDatabase,
@@ -259,7 +260,16 @@ app.addHook('onSend', async (request, reply, payload) => {
 });
 
 // Register API routes
-await app.register(registerDesktopRoutes);
+await app.register(registerDesktopRoutes, {
+  checkReady: async () => {
+    try {
+      await pingRuntimeDatabase();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
 await app.register(sitesRoutes);
 await app.register(accountsRoutes);
 await app.register(checkinRoutes);
