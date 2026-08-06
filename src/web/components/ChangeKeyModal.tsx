@@ -33,8 +33,8 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
       setError('两次输入的新 Token 不一致');
       return;
     }
-    if (newToken.length < 6) {
-      setError('新 Token 至少 6 个字符');
+    if (newToken.length < 8) {
+      setError('新 Token 至少 8 个字符');
       return;
     }
 
@@ -88,7 +88,7 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
               type="password"
               value={newToken}
               onChange={e => { setNewToken(e.target.value); setError(''); }}
-              placeholder="输入新 Token (至少 6 位)"
+              placeholder="输入新 Token (至少 8 位)"
               style={inputStyle}
             />
           </div>

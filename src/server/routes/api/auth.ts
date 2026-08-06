@@ -37,8 +37,8 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ success: false, message: '请填写所有字段' });
     }
 
-    if (newToken.length < 6) {
-      return reply.code(400).send({ success: false, message: '新 Token 至少 6 个字符' });
+    if (newToken.length < 8) {
+      return reply.code(400).send({ success: false, message: '新 Token 至少 8 个字符' });
     }
 
     if (oldToken !== config.authToken) {

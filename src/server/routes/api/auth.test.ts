@@ -63,4 +63,24 @@ describe('auth routes', () => {
       message: 'Invalid newToken. Expected string.',
     });
   });
+
+  it('rejects new tokens shorter than 8 characters to keep startup gate satisfied', async () => {
+    // Startup (assertProductionSecurity) requires AUTH_TOKEN >= 8 chars; the
+    // save route must enforce the same limit so a persisted token never breaks
+    // the next boot (Windows desktop users don't read server logs).
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/settings/auth/change',
+      payload: {
+        oldToken: 'secret-token',
+        newToken: 'short7',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      success: false,
+      message: '新 Token 至少 8 个字符',
+    });
+  });
 });
