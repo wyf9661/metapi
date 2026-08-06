@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 
 type RateLimitOptions = {
   bucket: string;
@@ -7,13 +8,15 @@ type RateLimitOptions = {
   message?: string;
 };
 
-type RateLimitEntry = {
-  count: number;
-  resetAt: number;
-};
-
 const DEFAULT_MESSAGE = '请求过于频繁，请稍后再试';
-const rateLimitStore = new Map<string, RateLimitEntry>();
+
+// Track created limiters + the keys each has seen so tests can reset state.
+// rate-limiter-flexible has no clear-all on RateLimiterMemory, so we remember
+// consumed keys per bucket and delete them on reset.
+const activeLimiters = new Set<{
+  limiter: RateLimiterMemory;
+  seenKeys: Set<string>;
+}>();
 
 function normalizeIp(rawIp: string | null | undefined): string {
   const ip = (rawIp || '').trim();
@@ -27,48 +30,38 @@ function extractClientIp(request: FastifyRequest): string {
   return normalizeIp(request.ip);
 }
 
-function getRateLimitKey(bucket: string, request: FastifyRequest): string {
-  return `${bucket}:${extractClientIp(request)}`;
-}
-
-function pruneExpiredEntries(nowMs: number): void {
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (entry.resetAt > nowMs) continue;
-    rateLimitStore.delete(key);
-  }
-}
-
 export function resetRequestRateLimitStore(): void {
-  rateLimitStore.clear();
+  for (const entry of activeLimiters) {
+    for (const key of entry.seenKeys) {
+      entry.limiter.delete(key).catch(() => undefined);
+    }
+    entry.seenKeys.clear();
+  }
 }
 
 export function createRateLimitGuard(options: RateLimitOptions) {
   const message = options.message || DEFAULT_MESSAGE;
+  const limiter = new RateLimiterMemory({
+    keyPrefix: options.bucket,
+    points: options.max,
+    duration: Math.max(1, Math.ceil(options.windowMs / 1000)),
+  });
+  const seenKeys = new Set<string>();
+  activeLimiters.add({ limiter, seenKeys });
+
   return async function rateLimitGuard(request: FastifyRequest, reply: FastifyReply) {
-    const nowMs = Date.now();
-    pruneExpiredEntries(nowMs);
-
-    const key = getRateLimitKey(options.bucket, request);
-    const current = rateLimitStore.get(key);
-
-    if (!current || current.resetAt <= nowMs) {
-      rateLimitStore.set(key, {
-        count: 1,
-        resetAt: nowMs + options.windowMs,
-      });
-      return;
-    }
-
-    if (current.count >= options.max) {
-      const retryAfterSec = Math.max(1, Math.ceil((current.resetAt - nowMs) / 1000));
+    const key = extractClientIp(request);
+    seenKeys.add(key);
+    try {
+      await limiter.consume(key);
+    } catch (error) {
+      const retryState = error instanceof RateLimiterRes ? error : null;
+      const retryAfterSec = Math.max(1, Math.ceil((retryState?.msBeforeNext ?? options.windowMs) / 1000));
       reply
         .code(429)
         .header('retry-after', String(retryAfterSec))
         .send({ success: false, message });
       return;
     }
-
-    current.count += 1;
-    rateLimitStore.set(key, current);
   };
 }
