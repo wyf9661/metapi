@@ -1223,3 +1223,22 @@ describe('selectSurfaceChannelForAttempt', () => {
     });
   });
 });
+
+describe('clearSurfaceStickyChannel', () => {
+  it('clears the session sticky binding but preserves model-level last-success', async () => {
+    const { clearSurfaceStickyChannel } = await import('./sharedSurface.js');
+
+    clearSurfaceStickyChannel({
+      stickySessionKey: 'session-1',
+      selected: { channel: { id: 55 } },
+      requestedModel: 'gpt-5.2',
+      downstreamApiKeyId: 7,
+    });
+
+    // Session sticky is dropped…
+    expect(clearStickyChannelMock).toHaveBeenCalledWith('session-1', 55);
+    // …but last-success must survive so the recovery pass / next hop can
+    // still fall back to the channel that most recently worked for this model.
+    expect(clearLastSuccessChannelMock).not.toHaveBeenCalled();
+  });
+});

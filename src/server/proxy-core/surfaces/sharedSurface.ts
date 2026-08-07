@@ -169,15 +169,18 @@ export function clearSurfaceStickyChannel(input: {
   requestedModel?: string | null;
   downstreamApiKeyId?: number | null;
 }): void {
+  // Only drop the session-level sticky binding. Keep the model-level
+  // last-success memory intact: last-success is the "which channel worked
+  // most recently for this model" fallback, and a single failed attempt
+  // (even a fatal one) should not erase it — otherwise the recovery pass
+  // and subsequent hops lose their best-known-good channel. Fatal failures
+  // (401 token death, credential revoke) are already handled by the
+  // tokenRouter failure cooldown so last-success won't keep retrying a
+  // truly dead channel indefinitely.
   proxyChannelCoordinator.clearStickyChannel(
     input.stickySessionKey,
     input.selected.channel.id,
   );
-  proxyChannelCoordinator.clearLastSuccessChannel({
-    requestedModel: input.requestedModel,
-    downstreamApiKeyId: input.downstreamApiKeyId,
-    channelId: input.selected.channel.id,
-  });
 }
 
 export async function acquireSurfaceChannelLease(input: {
