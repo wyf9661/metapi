@@ -12,7 +12,10 @@ ENV PYTHON=/usr/bin/python3
 
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
-RUN npm rebuild esbuild sharp better-sqlite3 --no-audit --no-fund
+# Only rebuild native modules that need target-arch compilation. esbuild has
+# prebuilt binaries for armv7 (vitepress/esbuild@0.21.5 ships as
+# esbuild-linux-arm); rebuilding it under QEMU breaks its version check.
+RUN npm rebuild sharp better-sqlite3 --no-audit --no-fund
 
 COPY . .
 RUN npm run build:web && npm run build:server

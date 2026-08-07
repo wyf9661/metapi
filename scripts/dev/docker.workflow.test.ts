@@ -45,7 +45,8 @@ describe('docker workflows', () => {
     const dockerfile = readFileSync(resolve(process.cwd(), 'docker/Dockerfile'), 'utf8');
 
     expect(dockerfile).toContain('npm ci --ignore-scripts --no-audit --no-fund');
-    expect(dockerfile).toContain('npm rebuild esbuild sharp better-sqlite3 --no-audit --no-fund');
+    expect(dockerfile).toContain('npm rebuild sharp better-sqlite3 --no-audit --no-fund');
+    expect(dockerfile).not.toContain('npm rebuild esbuild');
     expect(dockerfile).not.toContain('npm ci --no-audit --no-fund');
     expect(dockerfile).toContain('RUN npm run build:web && npm run build:server');
     expect(dockerfile).toContain('npm prune --omit=dev --no-audit --no-fund');
