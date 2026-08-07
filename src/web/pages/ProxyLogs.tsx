@@ -90,6 +90,10 @@ import {
   renderProxyLogClientCell,
   StreamModeIcon,
 } from "./helpers/proxyLogsUi.js";
+import {
+  renderStoredDebugDetails,
+  renderTraceStatusBadge,
+} from "./helpers/proxyLogTraceDetail.js";
 import { tr } from "../i18n.js";
 import DateTimeInput from "../components/DateTimeInput.js";
 
@@ -796,18 +800,6 @@ export default function ProxyLogs() {
     [toast],
   );
 
-  function renderTraceStatusBadge(trace: ProxyDebugTraceListItem) {
-    const failed = trace.finalStatus === "failed";
-    return (
-      <span
-        className={`badge ${failed ? "badge-error" : "badge-success"}`}
-        style={{ fontSize: 11 }}
-      >
-        {failed ? "失败" : "成功"}
-      </span>
-    );
-  }
-
   function renderAttemptDetail(attempt: ProxyDebugTraceAttempt) {
     const serializedAttempt = [
       `targetUrl: ${attempt.targetUrl}`,
@@ -879,46 +871,6 @@ export default function ProxyLogs() {
             </div>
           ) : null}
           <pre style={debugCodeBlockStyle}>{serializedAttempt}</pre>
-        </div>
-      </DetailDisclosureCard>
-    );
-  }
-
-  function renderStoredDebugDetails(
-    title: string,
-    value: unknown,
-    options?: { defaultOpen?: boolean; copyLabel?: string },
-  ) {
-    const normalized = parseStoredDebugPreview(value);
-    const copyLabel = options?.copyLabel || title;
-
-    return (
-      <DetailDisclosureCard title={title} defaultOpen={options?.defaultOpen}>
-        <div style={{ padding: 12, display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{
-                border: "1px solid var(--color-border)",
-                padding: "6px 12px",
-              }}
-              aria-label={`复制${copyLabel}`}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                void handleCopyStoredDebugValue(copyLabel, value);
-              }}
-            >
-              复制当前保存内容
-            </button>
-          </div>
-          {normalized.note ? (
-            <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
-              {normalized.note}
-            </div>
-          ) : null}
-          <pre style={debugCodeBlockStyle}>{normalized.displayText}</pre>
         </div>
       </DetailDisclosureCard>
     );
@@ -997,28 +949,28 @@ export default function ProxyLogs() {
             traceDetail.endpointCandidatesJson,
             {
               copyLabel: "候选 endpoint",
-            },
+            }, handleCopyStoredDebugValue,
           )}
           {renderStoredDebugDetails(
             "原始下游请求头",
             traceDetail.requestHeadersJson,
             {
               copyLabel: "原始下游请求头",
-            },
+            }, handleCopyStoredDebugValue,
           )}
           {renderStoredDebugDetails(
             "原始下游请求体",
             traceDetail.requestBodyJson,
             {
               copyLabel: "原始下游请求体",
-            },
+            }, handleCopyStoredDebugValue,
           )}
           {renderStoredDebugDetails(
             "最终响应",
             traceDetail.finalResponseBodyJson,
             {
               copyLabel: "最终响应",
-            },
+            }, handleCopyStoredDebugValue,
           )}
         </div>
 
