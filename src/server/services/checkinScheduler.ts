@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import type { ScheduledTask } from 'node-cron';
 import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db, schema } from '../db/index.js';
@@ -12,11 +13,11 @@ import { normalizeLogCleanupRetentionDays } from '../shared/logCleanupRetentionD
 
 export type CheckinScheduleMode = 'cron' | 'interval';
 
-let checkinTask: cron.ScheduledTask | null = null;
+let checkinTask: ScheduledTask | null = null;
 let checkinIntervalTimer: ReturnType<typeof setInterval> | null = null;
-let balanceTask: cron.ScheduledTask | null = null;
-let dailySummaryTask: cron.ScheduledTask | null = null;
-let logCleanupTask: cron.ScheduledTask | null = null;
+let balanceTask: ScheduledTask | null = null;
+let dailySummaryTask: ScheduledTask | null = null;
+let logCleanupTask: ScheduledTask | null = null;
 const intervalAttemptByAccount = new Map<number, number>();
 
 const DAILY_SUMMARY_DEFAULT_CRON = '58 23 * * *';

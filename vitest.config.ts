@@ -16,5 +16,10 @@ export default defineConfig({
     env: {
       NODE_ENV: process.env.NODE_ENV && process.env.NODE_ENV !== 'production' ? process.env.NODE_ENV : 'test',
     },
+    // Some tests (live schema parity on fresh MySQL/Postgres containers,
+    // dashboard perf cards under heavy parallel load) occasionally exceed
+    // vitest's 5s default on slow CI runners. Double the budget so cold-start
+    // and load spikes do not turn into flaky failures.
+    testTimeout: 10_000,
   },
 });
