@@ -368,6 +368,27 @@ try {
     console.log(line);
   }
 } catch (err) {
-  app.log.error(err);
+  const message = err instanceof Error ? err.message : String(err);
+  const isAddressInUse = /EADDRINUSE|address already in use/i.test(message);
+  if (isAddressInUse) {
+    // Port conflicts are the #1 reason a fresh desktop/server install "fails
+    // silently". Print an actionable message (desktop users see it via the
+    // crash dialog detail / log file) instead of a bare error.
+    console.error('');
+    console.error('==================================================');
+    console.error(`Metapi 无法启动: 端口 ${config.port} 已被占用。`);
+    console.error('');
+    console.error(`当前监听地址: ${config.listenHost}:${config.port}`);
+    console.error('可能原因: 另一个 Metapi 实例、本地 agent 或其它服务已占用该端口。');
+    console.error('');
+    console.error('解决办法:');
+    console.error('  1) 桌面版: 设置环境变量 METAPI_DESKTOP_SERVER_PORT=其他端口后重启;');
+    console.error('  2) 服务版: 设置环境变量 PORT=其他端口后重启;');
+    console.error('  3) 或先停止占用 4000 端口的程序。');
+    console.error('==================================================');
+    console.error('');
+  } else {
+    app.log.error(err);
+  }
   process.exit(1);
 }

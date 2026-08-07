@@ -1134,6 +1134,13 @@ export const api = {
       accounts: { id: number; username: string }[];
       models: string[];
     }>,
+  getDesktopInfo: () =>
+    request('/api/desktop/info') as Promise<{
+      baseUrl: string;
+      port: number;
+      host: string;
+      desktop: boolean;
+    }>,
   getProxyDebugTraces: (params?: { limit?: number }) =>
     request(
       `/api/stats/proxy-debug/traces${buildQueryString(params)}`,

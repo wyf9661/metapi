@@ -368,6 +368,7 @@ export default function Settings() {
   });
   const [proxyErrorKeywordsText, setProxyErrorKeywordsText] = useState('');
   const [maskedToken, setMaskedToken] = useState('');
+  const [desktopInfo, setDesktopInfo] = useState<{ baseUrl: string; port: number; desktop: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [testingCheckin, setTestingCheckin] = useState(false);
@@ -630,12 +631,14 @@ export default function Settings() {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const [authInfo, runtimeInfo, runtimeDatabaseInfo] = await Promise.all([
+      const [authInfo, runtimeInfo, runtimeDatabaseInfo, desktopInfo] = await Promise.all([
         api.getAuthInfo(),
         api.getRuntimeSettings(),
         api.getRuntimeDatabaseConfig(),
+        api.getDesktopInfo().catch(() => null),
       ]);
       setMaskedToken(authInfo.masked || '****');
+      setDesktopInfo(desktopInfo);
       const routeCooldownInput = resolveRouteCooldownInput(runtimeInfo.tokenRouterFailureCooldownMaxSec);
       setRuntime({
         checkinCron: runtimeInfo.checkinCron || '0 8 * * *',
@@ -1209,7 +1212,34 @@ export default function Settings() {
       </div>
 
       <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="card animate-slide-up stagger-1" style={{ padding: 20 }}>
+        {desktopInfo ? (
+          <div className="card animate-slide-up stagger-1" style={{ padding: 20 }} data-settings-card="local-address">
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>本地服务地址</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用
+              {desktopInfo.port !== 4000 ? `。当前端口 4000 已被占用，已自动使用 ${desktopInfo.port}` : ''}。
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <code style={{ flex: 1, padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)' }}>
+                {desktopInfo.baseUrl}
+              </code>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}
+                onClick={() => {
+                  void navigator.clipboard?.writeText(desktopInfo.baseUrl)
+                    .then(() => { toast.success('地址已复制'); })
+                    .catch(() => { toast.error('复制失败'); });
+                }}
+              >
+                复制
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="card animate-slide-up stagger-2" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>管理员登录令牌</div>
           <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 12 }}>
             {maskedToken || '****'}

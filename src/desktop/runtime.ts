@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import getPort from 'get-port';
 
 type DesktopServerEnvInput = {
   inheritedEnv?: NodeJS.ProcessEnv;
@@ -103,6 +104,21 @@ export function resolveDesktopServerPort(env?: NodeJS.ProcessEnv): number {
   const forcedPort = Number.parseInt(env?.METAPI_DESKTOP_SERVER_PORT || '', 10);
   if (Number.isFinite(forcedPort) && forcedPort > 0) return forcedPort;
   return DEFAULT_DESKTOP_SERVER_PORT;
+}
+
+/**
+ * Resolve the desktop backend port, preferring an available one when the
+ * default 4000 is already taken (many machines run an agent / other service
+ * on 4000). An explicit METAPI_DESKTOP_SERVER_PORT is always honored; when it
+ * is busy the server startup fails with a clear error instead of silently
+ * picking a different port the user didn't ask for.
+ */
+export async function resolveDesktopServerPortAsync(env?: NodeJS.ProcessEnv): Promise<number> {
+  const forcedPort = Number.parseInt(env?.METAPI_DESKTOP_SERVER_PORT || '', 10);
+  if (Number.isFinite(forcedPort) && forcedPort > 0) return forcedPort;
+  // get-port tries the preferred port and returns the next available one if
+  // it is taken, so a fresh install with an occupied 4000 still boots.
+  return getPort({ port: DEFAULT_DESKTOP_SERVER_PORT });
 }
 
 export function resolveDesktopServerWorkingDir(input: DesktopServerWorkingDirInput): string {

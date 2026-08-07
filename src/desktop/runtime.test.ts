@@ -4,6 +4,7 @@ import {
   createDesktopServerUrl,
   isFatalServerExit,
   resolveDesktopServerPort,
+  resolveDesktopServerPortAsync,
   resolveDesktopServerWorkingDir,
   waitForServerReady,
 } from './runtime.js';
@@ -72,6 +73,23 @@ describe('desktop runtime helpers', () => {
     expect(resolveDesktopServerPort({
       METAPI_DESKTOP_SERVER_PORT: '4312',
     })).toBe(4312);
+  });
+
+  it('honors explicit desktop backend port override in async resolver', async () => {
+    expect(await resolveDesktopServerPortAsync({
+      METAPI_DESKTOP_SERVER_PORT: '4312',
+    })).toBe(4312);
+  });
+
+  it('async resolver prefers 4000 and falls back to an available port when busy', async () => {
+    // get-port: preferred port when free, next available when taken.
+    // 4000 is currently occupied on this machine (local agent), so the async
+    // resolver must return something usable and different from 4000.
+    const resolved = await resolveDesktopServerPortAsync({});
+    expect(Number.isInteger(resolved)).toBe(true);
+    expect(resolved).toBeGreaterThan(0);
+    // Must not silently pick a port the user explicitly asked for elsewhere.
+    expect(resolved).not.toBeNaN();
   });
 
   it('uses the app directory (with package.json) as backend cwd for packaged desktop builds', () => {

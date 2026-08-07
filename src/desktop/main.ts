@@ -17,7 +17,7 @@ import {
   createDesktopHealthUrl,
   createDesktopServerUrl,
   isFatalServerExit,
-  resolveDesktopServerPort,
+  resolveDesktopServerPortAsync,
   resolveDesktopServerWorkingDir,
   waitForServerReady,
 } from './runtime.js';
@@ -201,7 +201,7 @@ async function waitForManagedServerReady(url: string) {
 async function startManagedBackend() {
   ensureDesktopDirs();
   const serverEntryPath = getServerEntryPath();
-  const port = resolveDesktopServerPort(process.env);
+  const port = await resolveDesktopServerPortAsync(process.env);
   serverUrl = createDesktopServerUrl(port);
 
   const env = buildDesktopServerEnv({
