@@ -42,6 +42,14 @@ import {
   STABLE_FIRST_SITE_SCORE_RATIO,
 } from './tokenRouterMath.js';
 import {
+  getStableFirstLastSelectedSiteByKey,
+  getStableFirstObservationProgressByKey,
+  getStableFirstObservationSiteCooldownByKey,
+  rememberStableFirstObservationProgressForKey,
+  rememberStableFirstObservationSiteCooldown,
+  rememberStableFirstSiteSelectionForKey,
+} from './tokenRouterStableFirstMemory.js';
+import {
   clearRuntimeHealthStatesForChannels,
   persistSiteRuntimeHealthState,
   ensureSiteRuntimeHealthStateLoaded,
@@ -190,75 +198,11 @@ type StableFirstPoolPlan = {
   siteStateById: Map<number, StableFirstSitePoolState>;
 };
 
-type StableFirstObservationProgressState = {
-  requestCount: number;
-  lastObservationAtMs: number | null;
-};
-
 const STABLE_FIRST_PRIMARY_SUCCESS_RATE_RATIO = 0.92;
 const STABLE_FIRST_TRUSTED_RECENT_CONFIDENCE = 0.5;
 const STABLE_FIRST_TRUSTED_HISTORICAL_CALLS = 8;
 const STABLE_FIRST_OBSERVATION_REQUEST_INTERVAL = 24;
 const STABLE_FIRST_OBSERVATION_SITE_COOLDOWN_MS = 30 * 60 * 1000;
-
-const stableFirstLastSelectedSiteByKey = new Map<string, number>();
-const MAX_STABLE_FIRST_ROTATION_KEYS = 1024;
-const stableFirstObservationProgressByKey = new Map<string, StableFirstObservationProgressState>();
-const stableFirstObservationSiteCooldownByKey = new Map<string, number>();
-const MAX_STABLE_FIRST_OBSERVATION_PROGRESS_KEYS = 1024;
-const MAX_STABLE_FIRST_OBSERVATION_SITE_COOLDOWN_KEYS = 4096;
-
-setTokenRouterRuntimeHealthResetHook(() => {
-  stableFirstObservationProgressByKey.clear();
-  stableFirstObservationSiteCooldownByKey.clear();
-});
-
-function rememberStableFirstSiteSelectionForKey(rotationKey: string, siteId: number): void {
-  if (!rotationKey || !Number.isFinite(siteId) || siteId <= 0) return;
-  if (stableFirstLastSelectedSiteByKey.has(rotationKey)) {
-    stableFirstLastSelectedSiteByKey.delete(rotationKey);
-  }
-  stableFirstLastSelectedSiteByKey.set(rotationKey, siteId);
-  while (stableFirstLastSelectedSiteByKey.size > MAX_STABLE_FIRST_ROTATION_KEYS) {
-    const oldestKey = stableFirstLastSelectedSiteByKey.keys().next().value;
-    if (!oldestKey) break;
-    stableFirstLastSelectedSiteByKey.delete(oldestKey);
-  }
-}
-
-function rememberStableFirstObservationProgressForKey(
-  rotationKey: string,
-  state: StableFirstObservationProgressState,
-): void {
-  if (!rotationKey) return;
-  if (stableFirstObservationProgressByKey.has(rotationKey)) {
-    stableFirstObservationProgressByKey.delete(rotationKey);
-  }
-  stableFirstObservationProgressByKey.set(rotationKey, state);
-  while (stableFirstObservationProgressByKey.size > MAX_STABLE_FIRST_OBSERVATION_PROGRESS_KEYS) {
-    const oldestKey = stableFirstObservationProgressByKey.keys().next().value;
-    if (!oldestKey) break;
-    stableFirstObservationProgressByKey.delete(oldestKey);
-  }
-}
-
-function rememberStableFirstObservationSiteCooldown(
-  rotationKey: string,
-  siteId: number,
-  observedAtMs: number,
-): void {
-  if (!rotationKey || !Number.isFinite(siteId) || siteId <= 0) return;
-  const scopedKey = `${rotationKey}:${siteId}`;
-  if (stableFirstObservationSiteCooldownByKey.has(scopedKey)) {
-    stableFirstObservationSiteCooldownByKey.delete(scopedKey);
-  }
-  stableFirstObservationSiteCooldownByKey.set(scopedKey, observedAtMs);
-  while (stableFirstObservationSiteCooldownByKey.size > MAX_STABLE_FIRST_OBSERVATION_SITE_COOLDOWN_KEYS) {
-    const oldestKey = stableFirstObservationSiteCooldownByKey.keys().next().value;
-    if (!oldestKey) break;
-    stableFirstObservationSiteCooldownByKey.delete(oldestKey);
-  }
-}
 
 function resolveConfiguredFailureCooldownMaxMs(): number {
   const normalized = normalizeTokenRouterFailureCooldownMaxSec(config.tokenRouterFailureCooldownMaxSec)
@@ -544,19 +488,19 @@ function patchCachedChannel(channelId: number, apply: (channel: ChannelRow) => v
 
 function clearStableFirstCachesForRoute(routeId: number): void {
   const routePrefix = `${routeId}:`;
-  for (const key of stableFirstLastSelectedSiteByKey.keys()) {
+  for (const key of getStableFirstLastSelectedSiteByKey().keys()) {
     if (key.startsWith(routePrefix)) {
-      stableFirstLastSelectedSiteByKey.delete(key);
+      getStableFirstLastSelectedSiteByKey().delete(key);
     }
   }
-  for (const key of stableFirstObservationProgressByKey.keys()) {
+  for (const key of getStableFirstObservationProgressByKey().keys()) {
     if (key.startsWith(routePrefix)) {
-      stableFirstObservationProgressByKey.delete(key);
+      getStableFirstObservationProgressByKey().delete(key);
     }
   }
-  for (const key of stableFirstObservationSiteCooldownByKey.keys()) {
+  for (const key of getStableFirstObservationSiteCooldownByKey().keys()) {
     if (key.startsWith(routePrefix)) {
-      stableFirstObservationSiteCooldownByKey.delete(key);
+      getStableFirstObservationSiteCooldownByKey().delete(key);
     }
   }
 }
@@ -573,9 +517,9 @@ export function invalidateTokenRouterCache(): void {
     routes: [],
   };
   routeMatchCache.clear();
-  stableFirstLastSelectedSiteByKey.clear();
-  stableFirstObservationProgressByKey.clear();
-  stableFirstObservationSiteCooldownByKey.clear();
+  getStableFirstLastSelectedSiteByKey().clear();
+  getStableFirstObservationProgressByKey().clear();
+  getStableFirstObservationSiteCooldownByKey().clear();
 }
 
 function isSiteDisabled(status?: string | null): boolean {
@@ -895,7 +839,7 @@ function shouldUseStableFirstObservationCandidate(
   nowMs = Date.now(),
 ): boolean {
   if (!rotationKey || observationCandidates.length <= 0) return false;
-  const state = stableFirstObservationProgressByKey.get(rotationKey) ?? {
+  const state = getStableFirstObservationProgressByKey().get(rotationKey) ?? {
     requestCount: 0,
     lastObservationAtMs: null,
   };
@@ -903,7 +847,7 @@ function shouldUseStableFirstObservationCandidate(
     return false;
   }
   return observationCandidates.some((candidate) => {
-    const observedAtMs = stableFirstObservationSiteCooldownByKey.get(`${rotationKey}:${candidate.site.id}`) ?? null;
+    const observedAtMs = getStableFirstObservationSiteCooldownByKey().get(`${rotationKey}:${candidate.site.id}`) ?? null;
     return observedAtMs == null || (nowMs - observedAtMs) >= STABLE_FIRST_OBSERVATION_SITE_COOLDOWN_MS;
   });
 }
@@ -918,7 +862,7 @@ function updateStableFirstObservationProgress(
 ): void {
   if (!rotationKey) return;
   const nowMs = input.nowMs ?? Date.now();
-  const previous = stableFirstObservationProgressByKey.get(rotationKey) ?? {
+  const previous = getStableFirstObservationProgressByKey().get(rotationKey) ?? {
     requestCount: 0,
     lastObservationAtMs: null,
   };
@@ -1362,7 +1306,7 @@ export class TokenRouter {
         && shouldUseStableFirstObservationCandidate(rotationKey, poolPlan.observationCandidates, nowMs);
       const useObservationNow = poolPlan.observationCandidates.length > 0
         && (poolPlan.primaryCandidates.length <= 0 || observationDueNow);
-      const observationProgressState = stableFirstObservationProgressByKey.get(rotationKey) ?? {
+      const observationProgressState = getStableFirstObservationProgressByKey().get(rotationKey) ?? {
         requestCount: 0,
         lastObservationAtMs: null,
       };
@@ -3288,7 +3232,7 @@ export class TokenRouter {
 
     const orderedSiteLeaderIndices = this.getStableFirstOrderedSiteLeaderIndices(candidates, stableSiteLeaderIndices);
     const lastSelectedSiteId = stableFirstRotationKey
-      ? stableFirstLastSelectedSiteByKey.get(stableFirstRotationKey)
+      ? getStableFirstLastSelectedSiteByKey().get(stableFirstRotationKey)
       : undefined;
     const lastSelectedIndex = typeof lastSelectedSiteId === 'number'
       ? orderedSiteLeaderIndices.findIndex((index) => candidates[index]?.site.id === lastSelectedSiteId)
@@ -3308,7 +3252,7 @@ export const tokenRouter = new TokenRouter();
 
 export const __tokenRouterTestUtils = {
   resolveMappedModel,
-  getStableFirstRotationCacheSize: () => stableFirstLastSelectedSiteByKey.size,
+  getStableFirstRotationCacheSize: () => getStableFirstLastSelectedSiteByKey().size,
   rememberStableFirstSiteSelectionForKey,
 };
 
