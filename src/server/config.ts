@@ -195,9 +195,12 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     modelAvailabilityProbeIntervalMs: Math.max(60_000, Math.trunc(parseNumber(env.MODEL_AVAILABILITY_PROBE_INTERVAL_MS, 30 * 60 * 1000))),
     modelAvailabilityProbeTimeoutMs: Math.max(3_000, Math.trunc(parseNumber(env.MODEL_AVAILABILITY_PROBE_TIMEOUT_MS, 30_000))),
     modelAvailabilityProbeConcurrency: Math.max(1, Math.min(2, Math.trunc(parseNumber(env.MODEL_AVAILABILITY_PROBE_CONCURRENCY, 1)))),
-    // Channel probe (heartbeat for active channels)
+    // Channel probe (heartbeat for active channels). Default 30s to match the
+    // marketplace probe timeout: free/slow relay sites routinely take >10s to
+    // return a first byte, and a too-short heartbeat marks healthy channels as
+    // dead, extending their cooldown unnecessarily.
     probeHeartbeatIntervalMs: Math.max(60_000, Math.trunc(parseNumber(env.PROBE_HEARTBEAT_INTERVAL_MS, 2 * 60 * 1000))),
-    probeHeartbeatTimeoutMs: Math.max(3_000, Math.trunc(parseNumber(env.PROBE_HEARTBEAT_TIMEOUT_MS, 10_000))),
+    probeHeartbeatTimeoutMs: Math.max(3_000, Math.trunc(parseNumber(env.PROBE_HEARTBEAT_TIMEOUT_MS, 30_000))),
     probeMaxBatch: Math.max(1, Math.min(4, Math.trunc(parseNumber(env.PROBE_MAX_BATCH, 2)))),
     probeInitialRetriesAfterCooldown: Math.max(1, Math.min(5, Math.trunc(parseNumber(env.PROBE_INITIAL_RETRIES_AFTER_COOLDOWN, 2)))),
     proxyLogRetentionDays: Math.max(0, Math.trunc(parseNumber(env.PROXY_LOG_RETENTION_DAYS, 30))),

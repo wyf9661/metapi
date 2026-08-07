@@ -280,7 +280,7 @@ Metapi 当前有三类主要配置入口：
 | `PAYLOAD_RULES` / `PAYLOAD_RULES_JSON` | 请求体规则（JSON），二选一 | 空 |
 | `OPENAI_SERVICE_TIER_RULES` / `OPENAI_SERVICE_TIER_RULES_JSON` | OpenAI service tier 规则（JSON），二选一 | 空 |
 | `PROBE_HEARTBEAT_INTERVAL_MS` | 活跃通道心跳探测间隔（毫秒） | `120000` |
-| `PROBE_HEARTBEAT_TIMEOUT_MS` | 心跳探测超时（毫秒） | `10000` |
+| `PROBE_HEARTBEAT_TIMEOUT_MS` | 心跳探测超时（毫秒） | `30000` |
 | `PROBE_MAX_BATCH` | 心跳探测每批通道数 | `2` |
 | `PROBE_INITIAL_RETRIES_AFTER_COOLDOWN` | 冷却后初始重试次数 | `2` |
 
