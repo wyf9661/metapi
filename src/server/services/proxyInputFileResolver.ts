@@ -2,17 +2,15 @@ import type { ProxyResourceOwner } from '../middleware/auth.js';
 import { getProxyFileByPublicIdForOwner, LOCAL_PROXY_FILE_ID_PREFIX } from './proxyFileStore.js';
 import { ensureBase64DataUrl } from '../transformers/shared/inputFile.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../proxy-core/capabilities/conversationFileCapabilities.js';
+import { asTrimmedString } from '../shared/trimString.js';
 import {
+
   isSupportedConversationFileMimeType,
   resolveConversationFileMimeType,
 } from '../../shared/conversationFileTypes.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function cloneJsonValue<T>(value: T): T {

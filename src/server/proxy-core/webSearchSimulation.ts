@@ -1,17 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { anthropicMessagesTransformer } from '../transformers/anthropic/messages/index.js';
+import { asTrimmedString } from '../shared/trimString.js';
 import {
+
   extractResponsesWebSearchQuery,
   hasResponsesWebSearchOnlyRequest,
 } from './responsesPreflight.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 const SEARCH_SIMULATION_MODEL = '__search';

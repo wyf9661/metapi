@@ -1,5 +1,7 @@
 import { inferInputFileMimeType, normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
 import { classifyConversationFileMimeType } from '../../../shared/conversationFileTypes.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 export type ConversationFileTransport = 'unsupported' | 'inline_only' | 'native';
 export type ConversationFileEndpoint = 'chat' | 'messages' | 'responses';
@@ -20,10 +22,6 @@ export type ConversationFileEndpointCapability = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function appendConversationFileSummary(

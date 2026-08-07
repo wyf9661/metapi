@@ -21,6 +21,8 @@ import type {
   CanonicalSurface,
 } from './types.js';
 import { toOpenAiChatFileBlock } from '../shared/inputFile.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 type CanonicalRequestFromOpenAiBodyInput = {
   body: Record<string, unknown>;
@@ -31,10 +33,6 @@ type CanonicalRequestFromOpenAiBodyInput = {
   passthrough?: Record<string, unknown>;
   continuation?: CanonicalContinuation;
 };
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

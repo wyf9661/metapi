@@ -4,13 +4,11 @@ import {
 } from '../../shared/normalized.js';
 import { decodeOpenAiEncryptedReasoning } from '../../shared/reasoningTransport.js';
 import { decodeResponsesMcpCompatToolCall } from './mcpCompatibility.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 let syntheticIdCounter = 0;

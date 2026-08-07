@@ -1,3 +1,5 @@
+import { asTrimmedString } from '../shared/trimString.js';
+
 export type ServiceTierAction = 'pass' | 'filter' | 'block';
 
 export type ServiceTierRule = {
@@ -42,10 +44,6 @@ const KNOWN_OPENAI_SERVICE_TIERS = new Set([
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function normalizeMatchList(value: unknown): string[] {

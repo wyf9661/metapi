@@ -1,5 +1,7 @@
 import { pbkdf2Sync, randomUUID } from 'node:crypto';
 import { inferCodexOfficialOriginator } from '../../shared/codexClientFamily.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 const CODEX_CLIENT_VERSION = '0.101.0';
 const CODEX_DEFAULT_USER_AGENT = 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
@@ -108,10 +110,6 @@ export function buildGeminiCliUserAgent(modelName: string, existingUserAgent?: s
   const arch = parsed?.arch || 'x64';
   const effectiveModel = typeof modelName === 'string' ? modelName.trim() : '';
   return `GeminiCLI/${version}/${effectiveModel || 'unknown'} (${platform}; ${arch})`;
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 export function buildCodexRuntimeHeaders(input: {

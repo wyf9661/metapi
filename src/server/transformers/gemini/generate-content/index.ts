@@ -11,10 +11,6 @@ export {
   resolveGeminiNativeBaseUrl,
 } from './urlResolver.js';
 
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
 export function resolveGeminiProxyApiVersion(params: { geminiApiVersion?: unknown } | null | undefined): string {
   return (typeof params?.geminiApiVersion === 'string' ? params.geminiApiVersion.trim() : '') || 'v1beta';
 }
@@ -58,7 +54,9 @@ import { createGeminiGenerateContentAggregateState, applyGeminiGenerateContentAg
 import { geminiGenerateContentUsage } from './usage.js';
 import { reasoningEffortToGeminiThinkingConfig, geminiThinkingConfigToReasoning } from './convert.js';
 import { buildOpenAiBodyFromGeminiRequest, serializeNormalizedFinalToGemini } from './compatibility.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
 import {
+
   buildCanonicalRequestToGeminiGenerateContentBody,
   parseGeminiGenerateContentRequestToCanonical,
 } from './requestBridge.js';

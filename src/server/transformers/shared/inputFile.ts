@@ -1,9 +1,7 @@
+import { asTrimmedString } from '../../shared/trimString.js';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function splitBase64DataUrl(value: string): { mimeType: string; data: string } | null {

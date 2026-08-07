@@ -1,3 +1,4 @@
+import { asTrimmedString } from '../../../shared/trimString.js';
 import {
   createStreamTransformContext,
   normalizeUpstreamStreamEvent,
@@ -13,6 +14,7 @@ import {
   type OpenAiResponsesAggregateState,
 } from './aggregator.js';
 import {
+
   buildNormalizedFinalToOpenAiResponsesPayload,
   normalizeOpenAiResponsesFinalToNormalized,
   type ResponsesUsageSummary,
@@ -20,10 +22,6 @@ import {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function cloneJson<T>(value: T): T {

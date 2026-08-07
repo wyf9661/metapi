@@ -1,9 +1,7 @@
 import type { PreparedProviderRequest, PrepareProviderRequestInput, ProviderAction, ProviderProfile } from './types.js';
 import { buildGeminiCliRuntimeHeaders } from './headerUtils.js';
+import { asTrimmedString } from '../../shared/trimString.js';
 
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function resolveAction(action: ProviderAction | undefined, stream: boolean): ProviderAction {
   if (action) return action;

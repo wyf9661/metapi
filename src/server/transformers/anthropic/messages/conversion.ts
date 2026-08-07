@@ -3,6 +3,8 @@ import {
   decodeAnthropicReasoningSignature,
 } from '../../shared/reasoningTransport.js';
 import { buildShortToolNameMap, getShortToolName } from '../../shared/toolNameShortener.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -18,10 +20,6 @@ const ANTHROPIC_WEB_SEARCH_TOOL_TYPES = new Set([
   'web_search_20250305',
   'google_search',
 ]);
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function toFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;

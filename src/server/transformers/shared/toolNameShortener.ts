@@ -1,9 +1,7 @@
+import { asTrimmedString } from '../../shared/trimString.js';
+
 const TOOL_NAME_LIMIT = 64;
 const MCP_PREFIX = 'mcp__';
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 export function normalizeToolName(name: string): string {
   const trimmed = asTrimmedString(name);

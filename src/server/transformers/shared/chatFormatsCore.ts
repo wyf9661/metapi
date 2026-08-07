@@ -2,7 +2,9 @@ import {
   decodeAnthropicReasoningSignature,
 } from './reasoningTransport.js';
 import { toOpenAiChatFileBlock } from './inputFile.js';
+import { asTrimmedString } from '../../shared/trimString.js';
 import {
+
   consumeThinkTaggedText,
   createThinkTagParserState,
   extractInlineThinkTags,
@@ -90,10 +92,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function pickFiniteNumber(value: unknown): number | undefined {

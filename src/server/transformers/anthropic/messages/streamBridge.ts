@@ -11,6 +11,8 @@ import {
 } from '../../shared/normalized.js';
 import { decodeAnthropicReasoningSignature } from '../../shared/reasoningTransport.js';
 import { type AnthropicExtendedStreamEvent } from './aggregator.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 type AnthropicStreamPayload = Record<string, unknown>;
 type AnthropicMessagesNormalizedFinalResponse = NormalizedFinalResponse & {
@@ -51,10 +53,6 @@ export const ANTHROPIC_RAW_SSE_EVENT_NAMES = new Set([
 
 function isRecord(value: unknown): value is AnthropicStreamPayload {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function serializeSse(event: string, payload: Record<string, unknown>): string {

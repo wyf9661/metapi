@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { ConversationFileInputSummary } from '../proxy-core/capabilities/conversationFileCapabilities.js';
 import type { DownstreamFormat } from '../transformers/shared/normalized.js';
+import { asTrimmedString } from '../shared/trimString.js';
 import {
+
   inferSuggestedEndpointFromUpstreamError,
   inferRequiredEndpointFromProtocolError,
   isEndpointDispatchDeniedError,
@@ -54,10 +56,6 @@ export const MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH = 64;
 export const MODEL_KEY_HASH_SUFFIX_LENGTH = 8;
 
 const endpointRuntimeStates = new Map<string, EndpointRuntimeState>();
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function isClaudeFamilyModel(modelName: string): boolean {
   const normalized = asTrimmedString(modelName).toLowerCase();

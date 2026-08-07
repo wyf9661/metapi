@@ -1,9 +1,7 @@
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 const RESPONSES_TOOL_OUTPUT_TYPES = new Set([

@@ -1,5 +1,7 @@
 import type { TransformerMetadata } from '../shared/normalized.js';
+import { asTrimmedString } from '../../shared/trimString.js';
 import type {
+
   CanonicalReasoningEffort,
   CanonicalReasoningRequest,
 } from './types.js';
@@ -14,10 +16,6 @@ type CanonicalReasoningNormalizationInput = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function toFiniteInteger(value: unknown): number | undefined {

@@ -10,6 +10,8 @@ import {
   buildEndpointCapabilityProfile,
 } from './upstreamEndpointRuntimeMemory.js';
 import type { DownstreamFormat } from '../transformers/shared/normalized.js';
+import { asTrimmedString } from '../shared/trimString.js';
+
 
 export type EndpointPreference = DownstreamFormat | 'responses';
 export type EndpointDerivationHints = {
@@ -32,10 +34,6 @@ type ChannelContext = {
     apiToken?: string | null;
   };
 };
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function normalizePlatformName(platform: unknown): string {
   return asTrimmedString(platform).toLowerCase();

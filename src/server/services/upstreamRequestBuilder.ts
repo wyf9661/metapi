@@ -8,6 +8,7 @@ import {
   sanitizeResponsesBodyForProxy as sanitizeResponsesBodyForProxyViaTransformer,
 } from '../transformers/openai/responses/conversion.js';
 import { normalizeCodexResponsesBodyForProxy } from '../transformers/openai/responses/codexCompatibility.js';
+import { asTrimmedString } from '../shared/trimString.js';
 import {
   convertOpenAiBodyToAnthropicMessagesBody,
   sanitizeAnthropicMessagesBody,
@@ -16,6 +17,7 @@ import {
   buildGeminiGenerateContentRequestFromOpenAi,
 } from '../transformers/gemini/generate-content/requestBridge.js';
 import {
+
   buildClaudeRuntimeHeaders,
   buildCodexRuntimeHeaders,
   getInputHeader,
@@ -24,10 +26,6 @@ import {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function resolveRequestedModelForPayloadRules(input: {

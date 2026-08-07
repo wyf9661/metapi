@@ -1,6 +1,8 @@
 import { normalizeUpstreamFinalResponse, toClaudeStopReason, type NormalizedFinalResponse } from '../../shared/normalized.js';
 import { decodeAnthropicReasoningSignature } from '../../shared/reasoningTransport.js';
 import { toAnthropicUsagePayload } from './usage.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 type AnthropicRecord = Record<string, unknown>;
 
@@ -24,10 +26,6 @@ function cloneJsonValue<T>(value: T): T {
     ) as T;
   }
   return value;
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function parseJsonLike(raw: string): unknown {

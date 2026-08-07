@@ -1,15 +1,13 @@
 import { toOpenAiChatFileBlock } from '../../shared/inputFile.js';
 import type { NormalizedFinalResponse } from '../../shared/normalized.js';
 import { extractReasoningMetadataFromGeminiRequest } from './convert.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 type GeminiRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is GeminiRecord {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function isImageMimeType(mimeType: string): boolean {

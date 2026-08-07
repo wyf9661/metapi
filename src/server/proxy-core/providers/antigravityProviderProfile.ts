@@ -1,11 +1,9 @@
 import type { PreparedProviderRequest, PrepareProviderRequestInput, ProviderAction, ProviderProfile } from './types.js';
 import { resolveAntigravityProviderAction } from './antigravityRuntime.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 const ANTIGRAVITY_RUNTIME_USER_AGENT = 'antigravity/1.19.6 darwin/arm64';
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function resolvePath(action: ProviderAction): string {
   if (action === 'countTokens') return '/v1internal:countTokens';

@@ -1,4 +1,6 @@
 import { minimatch } from 'minimatch';
+import { asTrimmedString } from '../shared/trimString.js';
+
 
 export type PayloadRuleModel = {
   name: string;
@@ -34,10 +36,6 @@ type PayloadRulesParseFailure = {
 };
 
 export type PayloadRulesParseResult = PayloadRulesParseSuccess | PayloadRulesParseFailure;
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

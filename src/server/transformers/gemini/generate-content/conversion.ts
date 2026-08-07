@@ -1,14 +1,12 @@
 import { normalizeInputFileBlock } from '../../shared/inputFile.js';
 import { resolveGeminiThinkingConfigFromRequest } from './convert.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 const DUMMY_THOUGHT_SIGNATURE = 'c2tpcF90aG91Z2h0X3NpZ25hdHVyZV92YWxpZGF0b3I=';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function parseDataUrl(url: string): { mimeType: string; data: string } | null {

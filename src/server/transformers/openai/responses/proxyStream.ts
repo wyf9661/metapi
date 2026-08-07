@@ -9,6 +9,8 @@ import {
   serializeResponsesUpstreamFinalAsStream,
 } from './streamBridge.js';
 import { config } from '../../../config.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 type StreamReader = {
   read(): Promise<{ done: boolean; value?: Uint8Array }>;
@@ -44,10 +46,6 @@ type ResponsesProxyStreamSessionInput = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function hasMeaningfulAggregateOutput(state: ReturnType<typeof createOpenAiResponsesAggregateState>): boolean {

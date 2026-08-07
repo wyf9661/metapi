@@ -10,6 +10,8 @@ import type {
   CanonicalSurface,
 } from './types.js';
 import { normalizeCanonicalContinuation } from './continuationBridge.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 export type CreateCanonicalRequestEnvelopeInput = {
   operation?: CanonicalOperation;
@@ -26,10 +28,6 @@ export type CreateCanonicalRequestEnvelopeInput = {
   passthrough?: Record<string, unknown>;
   attachments?: CanonicalAttachment[];
 };
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

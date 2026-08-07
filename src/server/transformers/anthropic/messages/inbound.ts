@@ -1,13 +1,11 @@
 import { parseDownstreamChatRequest, type ParsedDownstreamChatRequest } from '../../shared/normalized.js';
 import { createProtocolRequestEnvelope, type ProtocolRequestEnvelope } from '../../shared/protocolModel.js';
 import { validateAnthropicMessagesBody } from './conversion.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function toPositiveInteger(value: unknown): number {

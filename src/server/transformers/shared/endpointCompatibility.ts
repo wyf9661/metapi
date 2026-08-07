@@ -1,4 +1,6 @@
 import type { DownstreamFormat } from './normalized.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 export type CompatibilityEndpoint = 'chat' | 'messages' | 'responses';
 export type CompatibilityEndpointPreference = DownstreamFormat | 'responses';
@@ -19,10 +21,6 @@ type PreferResponsesAfterLegacyChatErrorInput = {
   requestedModelHint?: string | null;
   currentEndpoint?: CompatibilityEndpoint | null;
 };
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function normalizePlatformName(platform: unknown): string {
   return asTrimmedString(platform).toLowerCase();

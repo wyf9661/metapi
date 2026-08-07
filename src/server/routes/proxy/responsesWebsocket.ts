@@ -20,6 +20,8 @@ import { openAiResponsesTransformer } from '../../transformers/openai/responses/
 import { buildUpstreamEndpointRequest } from './upstreamEndpoint.js';
 import { config } from '../../config.js';
 import { applyOpenAiServiceTierPolicy } from '../../proxy-core/serviceTierPolicy.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 const installedApps = new WeakSet<FastifyInstance>();
 const WS_TURN_STATE_HEADER = 'x-codex-turn-state';
@@ -48,10 +50,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getServiceTierPolicyRules(): unknown {
   return (config as typeof config & { openAiServiceTierRules?: unknown }).openAiServiceTierRules;
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function headerValueToTrimmedString(value: unknown): string {

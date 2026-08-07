@@ -4,14 +4,12 @@ import type { CanonicalContentPart, CanonicalRequestEnvelope } from '../../canon
 import type { ProtocolParseContext } from '../../contracts.js';
 import { geminiGenerateContentInbound } from './inbound.js';
 import { buildOpenAiBodyFromGeminiRequest } from './compatibility.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
 import {
+
   reasoningEffortToGeminiThinkingConfig,
   resolveGeminiThinkingConfigFromRequest,
 } from './convert.js';
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

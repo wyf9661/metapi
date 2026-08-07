@@ -18,16 +18,14 @@ import {
   setCodexSessionResponseId,
 } from './codexSessionResponseStore.js';
 import { createCodexWebsocketSessionStore } from './codexWebsocketSessionStore.js';
+import { asTrimmedString } from '../../shared/trimString.js';
 import type {
+
   CodexWebsocketRuntimeResult,
   CodexWebsocketRuntimeSendInput,
   CodexWebsocketSession,
   CodexWebsocketSessionStore,
 } from './types.js';
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

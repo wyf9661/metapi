@@ -1,12 +1,10 @@
 import { type DownstreamFormat } from '../../shared/normalized.js';
 import { inferRequiredEndpointFromProtocolError } from '../../shared/endpointCompatibility.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function hasAnthropicContinuationHint(body: Record<string, unknown>): boolean {

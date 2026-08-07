@@ -1,10 +1,8 @@
 import type { CanonicalContinuation } from './types.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 export const OPENAI_CONTINUATION_TURN_STATE_METADATA_KEY = 'metapi_turn_state';
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

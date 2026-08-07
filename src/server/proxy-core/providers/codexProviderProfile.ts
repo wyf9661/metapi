@@ -1,10 +1,8 @@
 import type { PreparedProviderRequest, PrepareProviderRequestInput, ProviderProfile } from './types.js';
 import { config } from '../../config.js';
 import { buildCodexRuntimeHeaders, getInputHeader } from './headerUtils.js';
+import { asTrimmedString } from '../../shared/trimString.js';
 
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 export const codexProviderProfile: ProviderProfile = {
   id: 'codex',

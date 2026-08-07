@@ -1,12 +1,10 @@
 import { type StreamTransformContext } from '../../shared/normalized.js';
 import type { OpenAiResponsesStreamEvent } from './streamBridge.js';
+import { asTrimmedString } from '../../../shared/trimString.js';
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function cloneRecord(value: unknown): Record<string, unknown> | null {

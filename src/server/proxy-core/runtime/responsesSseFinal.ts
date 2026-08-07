@@ -1,15 +1,13 @@
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { readRuntimeResponseText } from '../executors/types.js';
+import { asTrimmedString } from '../../shared/trimString.js';
+
 
 type ResponsesTerminalStatus = 'completed' | 'incomplete';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function parseResponsesSsePayload(data: string): Record<string, unknown> | null {

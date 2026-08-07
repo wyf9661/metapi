@@ -1,6 +1,4 @@
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
+import { asTrimmedString } from '../../shared/trimString.js';
 
 function shouldStripCompactResponsesStore(sitePlatform?: string): boolean {
   const normalized = asTrimmedString(sitePlatform).toLowerCase();

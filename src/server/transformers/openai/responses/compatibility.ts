@@ -1,3 +1,4 @@
+import { asTrimmedString } from '../../../shared/trimString.js';
 import {
   normalizeResponsesInputForCompatibility,
   normalizeResponsesMessageContent,
@@ -8,16 +9,13 @@ import {
   sanitizeResponsesBodyForProxy,
 } from './conversion.js';
 import {
+
   hasEndpointMismatchHint,
   inferRequiredEndpointFromProtocolError,
 } from '../../shared/endpointCompatibility.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function asTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 export function buildResponsesCompatibilityBodies(
