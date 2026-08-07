@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REPO = 'cita-777/metapi';
+const REPO = 'wyf9661/metapi';
 const README_FILES = ['README.md', 'README_EN.md'] as const;
 const START_MARKER = '<!-- metapi-contributors:start -->';
 const END_MARKER = '<!-- metapi-contributors:end -->';

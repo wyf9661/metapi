@@ -10,8 +10,8 @@ describe('README contributors updater', () => {
   it('filters anonymous and bot contributors before rendering', () => {
     const contributors = normalizeContributors([
       {
-        login: 'cita-777',
-        html_url: 'https://github.com/cita-777',
+        login: 'wyf9661',
+        html_url: 'https://github.com/wyf9661',
         avatar_url: 'https://avatars.githubusercontent.com/u/177306803?v=4',
         contributions: 483,
       },
@@ -37,8 +37,8 @@ describe('README contributors updater', () => {
 
     expect(contributors).toEqual([
       {
-        login: 'cita-777',
-        htmlUrl: 'https://github.com/cita-777',
+        login: 'wyf9661',
+        htmlUrl: 'https://github.com/wyf9661',
         avatarUrl: 'https://avatars.githubusercontent.com/u/177306803?v=4&s=48',
       },
       {
@@ -62,8 +62,8 @@ describe('README contributors updater', () => {
 
     const next = replaceContributorsSection(readme, [
       {
-        login: 'cita-777',
-        htmlUrl: 'https://github.com/cita-777',
+        login: 'wyf9661',
+        htmlUrl: 'https://github.com/wyf9661',
         avatarUrl: 'https://avatars.githubusercontent.com/u/177306803?v=4&s=48',
       },
       {
@@ -79,7 +79,7 @@ describe('README contributors updater', () => {
     ], 2);
 
     expect(next).toContain('<p align="left">');
-    expect(next).toContain('https://github.com/cita-777');
+    expect(next).toContain('https://github.com/wyf9661');
     expect(next).toContain('https://github.com/Hureru');
     expect(next).toContain('https://github.com/Babylonehy');
     expect(next).not.toContain('old block');
@@ -89,8 +89,8 @@ describe('README contributors updater', () => {
   it('renders contributors across multiple rows', () => {
     const html = renderContributorsBlock([
       {
-        login: 'cita-777',
-        htmlUrl: 'https://github.com/cita-777',
+        login: 'wyf9661',
+        htmlUrl: 'https://github.com/wyf9661',
         avatarUrl: 'https://avatars.githubusercontent.com/u/177306803?v=4&s=48',
       },
       {
@@ -105,7 +105,7 @@ describe('README contributors updater', () => {
       },
     ], 2);
 
-    expect(html).toContain('\n  <a href="https://github.com/cita-777"');
+    expect(html).toContain('\n  <a href="https://github.com/wyf9661"');
     expect(html).toContain('\n  <a href="https://github.com/Babylonehy"');
     expect((html.match(/\n  <a href=/g) || []).length).toBe(2);
   });

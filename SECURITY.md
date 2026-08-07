@@ -21,9 +21,9 @@ We provide security updates for the following versions / 我们为以下版本�
 | Older releases / 旧版本 | ⚠️ Best effort / 尽力而为 |
 | Forks / 分支 | ❌ Not supported / 不支持 |
 
-**Recommendation** / **建议**: Always use the latest stable release from [GitHub Releases](https://github.com/cita-777/metapi/releases) or the `main` branch for the most up-to-date security patches.
+**Recommendation** / **建议**: Always use the latest stable release from [GitHub Releases](https://github.com/wyf9661/metapi/releases) or the `main` branch for the most up-to-date security patches.
 
-始终使用 [GitHub Releases](https://github.com/cita-777/metapi/releases) 的最新稳定版本或 `main` 分支以获得最新的安全补丁。
+始终使用 [GitHub Releases](https://github.com/wyf9661/metapi/releases) 的最新稳定版本或 `main` 分支以获得最新的安全补丁。
 
 ## Security Considerations / 安全注意事项
 
@@ -64,11 +64,11 @@ When deploying Metapi, please consider / 部署 Metapi 时，请考虑:
 Use one of these private channels / 使用以下私密渠道之一:
 
 1. **GitHub Security Advisory** (Preferred) / **GitHub 安全公告**（首选）
-   - Go to: https://github.com/cita-777/metapi/security/advisories/new
+   - Go to: https://github.com/wyf9661/metapi/security/advisories/new
    - This allows for coordinated disclosure and CVE assignment / 这允许协调披露和 CVE 分配
 
 2. **Email** / **邮件**
-   - Send to: `cita-777@users.noreply.github.com`
+   - Send to: `wyf9661@users.noreply.github.com`
    - Subject: `[Metapi Security] <brief description>` / 主题：`[Metapi Security] <简要描述>`
 
 ### What to Include / 应包含的内容
@@ -153,8 +153,8 @@ If a vulnerability is accidentally posted publicly / 如果漏洞被意外公开
 
 Security updates will be announced through / 安全更新将通过以下方式公布:
 
-- [GitHub Security Advisories](https://github.com/cita-777/metapi/security/advisories)
-- [GitHub Releases](https://github.com/cita-777/metapi/releases) with `[SECURITY]` tag / 带有 `[SECURITY]` 标签
+- [GitHub Security Advisories](https://github.com/wyf9661/metapi/security/advisories)
+- [GitHub Releases](https://github.com/wyf9661/metapi/releases) with `[SECURITY]` tag / 带有 `[SECURITY]` 标签
 - Project README and documentation / 项目 README 和文档
 
 Subscribe to repository notifications to stay informed / 订阅仓库通知以保持了解。
@@ -167,9 +167,9 @@ We currently do not offer a paid bug bounty program. However, we deeply apprecia
 
 ## Questions / 问题
 
-If you have questions about this security policy, please contact `cita-777@users.noreply.github.com`.
+If you have questions about this security policy, please contact `wyf9661@users.noreply.github.com`.
 
-如果您对本安全政策有疑问，请联系 `cita-777@users.noreply.github.com`。
+如果您对本安全政策有疑问，请联系 `wyf9661@users.noreply.github.com`。
 
 ---
 

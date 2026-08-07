@@ -38,7 +38,7 @@ If you experience or witness unacceptable behavior, or have any other concerns, 
 
 如果您遇到或目睹不可接受的行为，或有任何其他疑虑，请通过以下方式举报：
 
-1. **Email** / **邮件**: `cita-777@users.noreply.github.com` with subject prefix `[Metapi Conduct]` / 主题前缀为 `[Metapi Conduct]`
+1. **Email** / **邮件**: `wyf9661@users.noreply.github.com` with subject prefix `[Metapi Conduct]` / 主题前缀为 `[Metapi Conduct]`
 2. **GitHub**: Use [GitHub's built-in reporting tools](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam) for urgent platform-level issues / 对于紧急的平台级问题，使用 [GitHub 的内置举报工具](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
 
 ### What to Include / 应包含的内容
@@ -101,6 +101,6 @@ This Code of Conduct is adapted from the [Contributor Covenant](https://www.cont
 
 ## Questions / 问题
 
-If you have questions about this Code of Conduct, please open an issue or contact the maintainers at `cita-777@users.noreply.github.com`.
+If you have questions about this Code of Conduct, please open an issue or contact the maintainers at `wyf9661@users.noreply.github.com`.
 
-如果您对本行为准则有疑问，请开启 issue 或通过 `cita-777@users.noreply.github.com` 联系维护者。
+如果您对本行为准则有疑问，请开启 issue 或通过 `wyf9661@users.noreply.github.com` 联系维护者。

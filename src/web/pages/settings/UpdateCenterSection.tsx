@@ -652,7 +652,7 @@ export default function UpdateCenterSection() {
               value={config.chartRef}
               onChange={(e) => setConfig((prev) => ({ ...prev, chartRef: e.target.value }))}
               style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
-              placeholder="oci://ghcr.io/cita-777/charts/metapi"
+              placeholder="oci://ghcr.io/wyf9661/charts/metapi"
             />
           </label>
           <label>

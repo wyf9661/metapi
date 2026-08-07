@@ -40,7 +40,7 @@ describe('desktop navigation guard', () => {
   const appUrl = 'http://127.0.0.1:5173/dashboard';
 
   it('routes cross-origin popup links to the default browser', () => {
-    expect(resolveDesktopNavigationAction('https://github.com/cita-777/metapi', appUrl)).toBe('deny');
+    expect(resolveDesktopNavigationAction('https://github.com/wyf9661/metapi', appUrl)).toBe('deny');
   });
 
   it('keeps same-origin popup links inside the desktop app', () => {

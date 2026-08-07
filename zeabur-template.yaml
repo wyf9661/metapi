@@ -4,8 +4,8 @@ metadata:
   name: Metapi
 spec:
   description: Meta-layer management and unified proxy for AI API aggregation platforms.
-  icon: https://raw.githubusercontent.com/cita-777/metapi/main/docs/logos/logo-icon-512.png
-  coverImage: https://raw.githubusercontent.com/cita-777/metapi/main/docs/logos/logo-banner.png
+  icon: https://raw.githubusercontent.com/wyf9661/metapi/main/docs/logos/logo-icon-512.png
+  coverImage: https://raw.githubusercontent.com/wyf9661/metapi/main/docs/logos/logo-banner.png
   tags:
     - AI
     - Tool
@@ -42,7 +42,7 @@ spec:
       description: Internal HTTP port (default 4000).
   services:
     - name: metapi
-      icon: https://raw.githubusercontent.com/cita-777/metapi/main/docs/logos/logo-icon-512.png
+      icon: https://raw.githubusercontent.com/wyf9661/metapi/main/docs/logos/logo-icon-512.png
       template: PREBUILT
       spec:
         source:

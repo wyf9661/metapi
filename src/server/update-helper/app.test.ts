@@ -126,7 +126,7 @@ describe('update helper app', () => {
       payload: {
         namespace: 'ai',
         releaseName: 'metapi',
-        chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
+        chartRef: 'oci://ghcr.io/wyf9661/charts/metapi',
         imageRepository: '1467078763/metapi',
         source: 'github-release',
         targetTag: 'latest',

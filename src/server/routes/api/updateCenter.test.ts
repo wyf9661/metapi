@@ -66,7 +66,7 @@ describe('update center routes', () => {
         helperBaseUrl: 'http://metapi-deploy-helper.ai.svc.cluster.local:9850',
         namespace: 'ai',
         releaseName: 'metapi',
-        chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
+        chartRef: 'oci://ghcr.io/wyf9661/charts/metapi',
         imageRepository: '1467078763/metapi',
         githubReleasesEnabled: true,
         dockerHubTagsEnabled: true,
@@ -127,7 +127,7 @@ describe('update center routes', () => {
       source: 'github-release',
       rawVersion: 'v1.3.0',
       normalizedVersion: '1.3.0',
-      url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
+      url: 'https://github.com/wyf9661/metapi/releases/tag/v1.3.0',
     } as const;
     const dockerHubTag = {
       source: 'docker-hub-tag',
@@ -187,7 +187,7 @@ describe('update center routes', () => {
         helperBaseUrl: 'http://metapi-deploy-helper.ai.svc.cluster.local:9850',
         namespace: 'ai',
         releaseName: 'metapi',
-        chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
+        chartRef: 'oci://ghcr.io/wyf9661/charts/metapi',
         imageRepository: '1467078763/metapi',
         githubReleasesEnabled: true,
         dockerHubTagsEnabled: true,
@@ -377,7 +377,7 @@ describe('update center routes', () => {
       source: 'github-release',
       rawVersion: 'v1.3.0',
       normalizedVersion: '1.3.0',
-      url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
+      url: 'https://github.com/wyf9661/metapi/releases/tag/v1.3.0',
     });
     getUpdateCenterHelperStatusMock.mockResolvedValue({
       ok: true,
@@ -435,7 +435,7 @@ describe('update center routes', () => {
           source: 'github-release',
           rawVersion: 'v1.3.0',
           normalizedVersion: '1.3.0',
-          url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
+          url: 'https://github.com/wyf9661/metapi/releases/tag/v1.3.0',
           tagName: 'v1.3.0',
           digest: null,
           displayVersion: '1.3.0',
@@ -518,7 +518,7 @@ describe('update center routes', () => {
       tagName: 'v1.3.1',
       displayVersion: '1.3.1',
       publishedAt: '2026-03-31T10:00:00Z',
-      url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.1',
+      url: 'https://github.com/wyf9661/metapi/releases/tag/v1.3.1',
     });
     fetchDockerHubTagCandidatesMock.mockResolvedValue({
       primary: {
@@ -672,7 +672,7 @@ describe('update center routes', () => {
         helperBaseUrl: 'http://metapi-deploy-helper.ai.svc.cluster.local:9850',
         namespace: 'ai',
         releaseName: 'metapi',
-        chartRef: 'oci://ghcr.io/cita-777/charts/metapi',
+        chartRef: 'oci://ghcr.io/wyf9661/charts/metapi',
         imageRepository: '1467078763/metapi',
         githubReleasesEnabled: true,
         dockerHubTagsEnabled: true,
