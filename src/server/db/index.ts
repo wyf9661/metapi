@@ -314,6 +314,40 @@ function ensureProxyFileSchema() {
   `);
 }
 
+function ensureProbeLogsSchema() {
+  execSqliteLegacyCompat(`
+    CREATE TABLE IF NOT EXISTS probe_logs (
+      id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+      site_id integer NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      account_id integer NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      model_name text NOT NULL,
+      question_category text NOT NULL,
+      question_text text NOT NULL,
+      response_text text,
+      status text NOT NULL,
+      latency_ms integer,
+      tokens_used integer,
+      error_message text,
+      created_at text DEFAULT (datetime('now'))
+    );
+  `);
+  execSqliteLegacyCompat(`
+    CREATE INDEX IF NOT EXISTS probe_logs_created_at_idx ON probe_logs(created_at);
+  `);
+  execSqliteLegacyCompat(`
+    CREATE INDEX IF NOT EXISTS probe_logs_site_created_at_idx ON probe_logs(site_id, created_at);
+  `);
+  execSqliteLegacyCompat(`
+    CREATE INDEX IF NOT EXISTS probe_logs_account_created_at_idx ON probe_logs(account_id, created_at);
+  `);
+  execSqliteLegacyCompat(`
+    CREATE INDEX IF NOT EXISTS probe_logs_model_created_at_idx ON probe_logs(model_name, created_at);
+  `);
+  execSqliteLegacyCompat(`
+    CREATE INDEX IF NOT EXISTS probe_logs_status_created_at_idx ON probe_logs(status, created_at);
+  `);
+}
+
 function ensureSiteStatusSchema() {
   if (!tableExists('sites')) {
     return;
@@ -1487,6 +1521,7 @@ function initSqliteDb() {
   ensureProxyLogRequestTraceIdSchema();
   ensureProxyVideoTaskSchema();
   ensureProxyFileSchema();
+  ensureProbeLogsSchema();
 
   const rawDb = drizzleSqliteProxy(
     (sqlText, params, method) => sqliteProxyQuery(sqlText, params, method as SqlMethod),

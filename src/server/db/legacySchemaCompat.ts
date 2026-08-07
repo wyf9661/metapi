@@ -42,6 +42,7 @@ const BOOTSTRAP_OWNED_LEGACY_TABLES = [
   'token_model_availability',
   'proxy_video_tasks',
   'downstream_api_keys',
+  'probe_logs',
 ];
 
 const BOOTSTRAP_OWNED_LEGACY_COLUMNS = [
@@ -77,6 +78,11 @@ const BOOTSTRAP_OWNED_LEGACY_INDEXES = [
   'proxy_logs_client_family_created_at_idx',
   'proxy_logs_request_trace_id_created_at_idx',
   'proxy_logs_downstream_api_key_created_at_idx',
+  'probe_logs_created_at_idx',
+  'probe_logs_site_created_at_idx',
+  'probe_logs_account_created_at_idx',
+  'probe_logs_model_created_at_idx',
+  'probe_logs_status_created_at_idx',
 ];
 
 function normalizeSqlText(sqlText: string): string {

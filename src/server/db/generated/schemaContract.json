@@ -920,6 +920,82 @@
         }
       }
     },
+    "probe_logs": {
+      "columns": {
+        "id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true
+        },
+        "site_id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "account_id": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "model_name": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "question_category": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "question_text": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "response_text": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "status": {
+          "logicalType": "text",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "latency_ms": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "tokens_used": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "error_message": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "created_at": {
+          "logicalType": "datetime",
+          "notNull": false,
+          "defaultValue": "datetime('now')",
+          "primaryKey": false
+        }
+      }
+    },
     "proxy_debug_attempts": {
       "columns": {
         "id": {
@@ -2605,6 +2681,50 @@
       "unique": false
     },
     {
+      "name": "probe_logs_account_created_at_idx",
+      "table": "probe_logs",
+      "columns": [
+        "account_id",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "probe_logs_created_at_idx",
+      "table": "probe_logs",
+      "columns": [
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "probe_logs_model_created_at_idx",
+      "table": "probe_logs",
+      "columns": [
+        "model_name",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "probe_logs_site_created_at_idx",
+      "table": "probe_logs",
+      "columns": [
+        "site_id",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "probe_logs_status_created_at_idx",
+      "table": "probe_logs",
+      "columns": [
+        "status",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
       "name": "proxy_debug_attempts_trace_attempt_unique",
       "table": "proxy_debug_attempts",
       "columns": [
@@ -3241,6 +3361,28 @@
     },
     {
       "table": "oauth_route_units",
+      "columns": [
+        "site_id"
+      ],
+      "referencedTable": "sites",
+      "referencedColumns": [
+        "id"
+      ],
+      "onDelete": "CASCADE"
+    },
+    {
+      "table": "probe_logs",
+      "columns": [
+        "account_id"
+      ],
+      "referencedTable": "accounts",
+      "referencedColumns": [
+        "id"
+      ],
+      "onDelete": "CASCADE"
+    },
+    {
+      "table": "probe_logs",
       "columns": [
         "site_id"
       ],
