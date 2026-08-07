@@ -11,6 +11,7 @@ import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/or
 import { readRuntimeResponseText } from '../proxy-core/executors/types.js';
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
+import { resolveProxyChannelFirstByteTimeoutMs } from './proxyChannelRetry.js';
 import type { schema } from '../db/index.js';
 import { getRandomProbeQuestion, type ProbeQuestion } from './probeQuestionBank.js';
 import { db } from '../db/index.js';
@@ -352,6 +353,11 @@ export async function probeRuntimeModel(input: {
         endpointCandidates,
         buildRequest,
         dispatchRequest,
+        // Same first-byte guard as live proxy surfaces: a relay site that
+        // never returns a byte should fail fast instead of dragging the probe
+        // to its full timeout (which made slow-but-alive sites dominate the
+        // probe log as ambiguous timeouts).
+        firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(0),
         // Match live proxy surfaces: cascade protocols on endpoint mismatch,
         // but abort same-site cascade for WAF/5xx/model-missing style failures.
         shouldAbortRemainingEndpoints: (ctx) => shouldAbortSameSiteEndpointFallback(
@@ -395,7 +401,6 @@ export async function probeRuntimeModel(input: {
     const rawErrorText = String(result.rawErrText || result.errText || '').trim();
     const probeStatus = classifyUnsupportedFailure(result.status || 0, rawErrorText) ? 'unsupported' : 'inconclusive';
     const logStatus = probeStatus === 'unsupported' ? 'failed' : 'failed';
-
     // 记录失败的测活日志
     await db.insert(probeLogs).values({
       siteId: input.site.id,
