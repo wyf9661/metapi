@@ -415,7 +415,7 @@ export async function handleChatSurfaceRequest(
                 sitePlatform: selected.site.platform,
                 accountType: oauth?.planType,
               },
-              rules: (config as any).openAiServiceTierRules,
+              rules: config.openAiServiceTierRules,
             });
             if (!policyResult.ok) {
               const error = new SiteApiEndpointRequestError(policyResult.payload.error.message, {

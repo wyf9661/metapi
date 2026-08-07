@@ -4,6 +4,13 @@ import { createContext, runInContext } from 'node:vm';
 import { withSiteProxyRequestInit } from '../siteProxy.js';
 import { fetchJsonWithShieldCookieRetry } from './newApiShield.js';
 
+/**
+ * Minimal structural type for upstream JSON payloads. External APIs are
+ * untyped at the boundary; parsing helpers narrow fields with typeof checks
+ * before use instead of trusting `any`.
+ */
+type JsonRecord = Record<string, unknown>;
+
 export class NewApiAdapter extends BasePlatformAdapter {
   readonly platformName: string = 'new-api';
 

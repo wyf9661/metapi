@@ -374,7 +374,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
           sitePlatform: selected.site.platform,
           accountType: oauth?.planType,
         },
-        rules: (config as any).openAiServiceTierRules,
+        rules: config.openAiServiceTierRules,
       });
       if (!serviceTierPolicy.ok) {
         await finalizeDebugFailure(serviceTierPolicy.statusCode, serviceTierPolicy.payload, null);

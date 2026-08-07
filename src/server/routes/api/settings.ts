@@ -460,7 +460,7 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
     }
     case 'webhook_secret': {
       if (typeof value !== 'string') return;
-      (config as any).webhookSecret = value.trim();
+      config.webhookSecret = value.trim();
       return;
     }
     case 'webhook_url': {
@@ -637,7 +637,7 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     tokenRouterFailureCooldownMaxSec: config.tokenRouterFailureCooldownMaxSec,
     routingWeights: config.routingWeights,
     webhookUrl: config.webhookUrl,
-    webhookSecret: (config as any).webhookSecret || '',
+    webhookSecret: config.webhookSecret || '',
     barkUrl: config.barkUrl,
     webhookEnabled: config.webhookEnabled,
     barkEnabled: config.barkEnabled,
@@ -1337,10 +1337,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     if (body.webhookSecret !== undefined) {
       const nextSecret = String(body.webhookSecret || '').trim();
-      if (nextSecret !== String((config as any).webhookSecret || '')) {
+      if (nextSecret !== String(config.webhookSecret || '')) {
         changedLabels.push('Webhook 加签密钥');
       }
-      (config as any).webhookSecret = nextSecret;
+      config.webhookSecret = nextSecret;
       upsertSetting('webhook_secret', nextSecret);
     }
 

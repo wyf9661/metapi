@@ -151,7 +151,7 @@ function extractDingTalkSecret(url: string): string {
     }
   } catch {}
   // Config-level secret (optional, set via WEBHOOK_SECRET / settings).
-  const fromConfig = String((config as any).webhookSecret || '').trim();
+  const fromConfig = String(config.webhookSecret || '').trim();
   return fromConfig;
 }
 
