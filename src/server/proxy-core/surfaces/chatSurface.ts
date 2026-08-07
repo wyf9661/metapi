@@ -72,6 +72,7 @@ import {
   recordSurfaceSuccess,
   selectSurfaceChannelForAttempt,
   trySurfaceOauthRefreshRecovery,
+  wireStreamCancelOnClientDisconnect,
 } from './sharedSurface.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
 import {
@@ -961,7 +962,12 @@ export async function handleChatSurfaceRequest(
               },
             }
             : baseReader;
+          const unwireStreamCancel = wireStreamCancelOnClientDisconnect(
+            reply,
+            () => (reader ? () => reader.cancel('client disconnected') : null),
+          );
           const streamResult = await streamSession.run(reader, streamResponse);
+          unwireStreamCancel();
           rawText += decoder.decode();
 
           const latency = Date.now() - startTime;

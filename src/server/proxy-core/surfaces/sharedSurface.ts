@@ -1,4 +1,5 @@
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
+import type { FastifyReply } from 'fastify';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import type { SiteProxyConfigLike } from '../../services/siteProxy.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
@@ -282,6 +283,48 @@ export async function writeSurfaceProxyLog(input: {
   } catch (error) {
     console.warn(`[proxy/${input.warningScope}] failed to write proxy log`, error);
   }
+}
+
+/**
+ * Propagate a downstream client disconnect to the upstream stream reader.
+ *
+ * While streaming a hijacked SSE response, `reply.raw` emits 'close' both when
+ * the response finishes normally AND when the client disconnects (closes the
+ * tab, kills the app, loses the network). Without this, the upstream body
+ * reader keeps pulling tokens that nobody will ever receive — burning upstream
+ * quota on long streams (Codex, chat with reasoning, etc.).
+ *
+ * `getCancel` returns a function that cancels the upstream reader when the
+ * client really disconnected. Returns a cleanup that MUST be called when the
+ * stream completes normally so the listener does not leak.
+ */
+export function wireStreamCancelOnClientDisconnect(
+  reply: FastifyReply,
+  getCancel: () => ((() => void | Promise<unknown>) | null | undefined),
+): () => void {
+  const raw = reply.raw as { on?: (event: string, listener: () => void) => void; removeListener?: (event: string, listener: () => void) => void; writableEnded?: boolean; destroyed?: boolean };
+  if (!raw || typeof raw.on !== 'function') return () => { };
+  let cancelled = false;
+  const onClose = () => {
+    // Normal completion: writableEnded is set by reply.raw.end(); a client
+    // disconnect leaves the response unfinished (writableEnded false) or the
+    // socket destroyed. Only then cancel the upstream reader.
+    if (raw.writableEnded) return;
+    if (cancelled) return;
+    cancelled = true;
+    const cancelFn = getCancel();
+    if (cancelFn) {
+      void Promise.resolve().then(() => cancelFn()).catch(() => { });
+    }
+  };
+  raw.on('close', onClose);
+  return () => {
+    try {
+      raw.removeListener?.('close', onClose);
+    } catch {
+      // ignore
+    }
+  };
 }
 
 export function createSurfaceDispatchRequest(input: {

@@ -1242,3 +1242,77 @@ describe('clearSurfaceStickyChannel', () => {
     expect(clearLastSuccessChannelMock).not.toHaveBeenCalled();
   });
 });
+
+describe('wireStreamCancelOnClientDisconnect', () => {
+  it('cancels the upstream reader when the client disconnects mid-stream', async () => {
+    const { wireStreamCancelOnClientDisconnect } = await import('./sharedSurface.js');
+    const cancelFn = vi.fn(async () => { });
+    const listeners: Record<string, () => void> = {};
+    const fakeRaw = {
+      writableEnded: false,
+      destroyed: false,
+      on: vi.fn((event: string, listener: () => void) => { listeners[event] = listener; }),
+      removeListener: vi.fn((event: string) => { delete listeners[event]; }),
+    };
+    const reply = { raw: fakeRaw } as any;
+
+    const unwire = wireStreamCancelOnClientDisconnect(reply, () => cancelFn);
+
+    // Client aborts the connection: close fires with writableEnded false.
+    fakeRaw.writableEnded = false;
+    fakeRaw.destroyed = true;
+    listeners['close']();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancelFn).toHaveBeenCalledTimes(1);
+
+    unwire();
+    expect(fakeRaw.removeListener).toHaveBeenCalledWith('close', expect.any(Function));
+  });
+
+  it('does not cancel when the response finished normally', async () => {
+    const { wireStreamCancelOnClientDisconnect } = await import('./sharedSurface.js');
+    const cancelFn = vi.fn(async () => { });
+    const listeners: Record<string, () => void> = {};
+    const fakeRaw = {
+      writableEnded: false,
+      destroyed: false,
+      on: vi.fn((event: string, listener: () => void) => { listeners[event] = listener; }),
+      removeListener: vi.fn((event: string) => { delete listeners[event]; }),
+    };
+    const reply = { raw: fakeRaw } as any;
+
+    const unwire = wireStreamCancelOnClientDisconnect(reply, () => cancelFn);
+
+    // Normal completion: end() set writableEnded before close fires.
+    fakeRaw.writableEnded = true;
+    listeners['close']();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancelFn).not.toHaveBeenCalled();
+
+    unwire();
+  });
+
+  it('removes the listener so a later close does not cancel after normal completion', async () => {
+    const { wireStreamCancelOnClientDisconnect } = await import('./sharedSurface.js');
+    const cancelFn = vi.fn(async () => { });
+    const listeners: Record<string, () => void> = {};
+    const fakeRaw = {
+      writableEnded: false,
+      destroyed: false,
+      on: vi.fn((event: string, listener: () => void) => { listeners[event] = listener; }),
+      removeListener: vi.fn((event: string) => { delete listeners[event]; }),
+    };
+    const reply = { raw: fakeRaw } as any;
+
+    const unwire = wireStreamCancelOnClientDisconnect(reply, () => cancelFn);
+    unwire();
+
+    fakeRaw.writableEnded = false;
+    listeners['close']?.();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancelFn).not.toHaveBeenCalled();
+  });
+});

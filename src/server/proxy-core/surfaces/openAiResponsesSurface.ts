@@ -89,6 +89,7 @@ import {
   recordSurfaceSuccess,
   selectSurfaceChannelForAttempt,
   trySurfaceOauthRefreshRecovery,
+  wireStreamCancelOnClientDisconnect,
 } from './sharedSurface.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 import {
@@ -1181,7 +1182,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
               },
             }
             : baseReader;
+          const unwireStreamCancel = wireStreamCancelOnClientDisconnect(
+            reply,
+            () => (reader ? () => reader.cancel('client disconnected') : null),
+          );
           const streamResult = await streamSession.run(reader, reply.raw);
+          unwireStreamCancel();
           rawText += decoder.decode();
 
           const latency = Date.now() - startTime;
