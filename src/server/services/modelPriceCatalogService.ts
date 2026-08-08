@@ -20,11 +20,14 @@
 import cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
 import { fetch } from 'undici';
+import { db, schema } from '../db/index.js';
+import { formatUtcSqlDateTime } from './localTimeService.js';
 import type { PricingModel } from './modelPricingService.js';
 
 export const MODELS_DEV_URL = 'https://models.dev/api.json';
 const SYNC_TIMEOUT_MS = 30_000;
 const SYNC_DAILY_CRON = '0 3 * * *'; // refresh once a day in the quiet window
+const SYNC_RETRY_DELAY_MS = 60 * 60 * 1000; // 1h retry after a failed sync
 const MAX_MEMORY_MODELS = 50_000; // hard cap against an unexpectedly huge payload
 
 /**
@@ -64,6 +67,7 @@ const OFFICIAL_PROVIDER_PRIORITY = [
 let modelsDevPrices = new Map<string, ModelsDevCost>();
 let lastSyncAtMs = 0;
 let syncTask: ScheduledTask | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 function normalizeModelName(modelName: string): string {
   // Lowercase and strip `:free` / `:reasoning` style variant suffixes.
@@ -193,24 +197,63 @@ export async function syncModelsDevPrices(): Promise<boolean> {
       signal: controller.signal,
     });
     if (!response.ok) {
-      console.warn(`[models.dev] sync failed: HTTP ${response.status}`);
+      await handleSyncFailure(`HTTP ${response.status}`);
       return false;
     }
     const text = await response.text();
     const parsed = parseModelsDevPrices(text);
     if (!parsed || parsed.size === 0) {
-      console.warn('[models.dev] sync failed: no usable prices in payload');
+      await handleSyncFailure('no usable prices in payload');
       return false;
     }
     modelsDevPrices = parsed;
     lastSyncAtMs = Date.now();
+    clearRetryTimer();
     console.info(`[models.dev] synced ${parsed.size} model prices`);
     return true;
   } catch (error) {
-    console.warn(`[models.dev] sync failed: ${String(error)}`);
+    await handleSyncFailure(String(error));
     return false;
   } finally {
     clearTimeout(timeoutHandle);
+  }
+}
+
+function clearRetryTimer(): void {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+}
+
+function scheduleRetry(): void {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void syncModelsDevPrices();
+  }, SYNC_RETRY_DELAY_MS);
+}
+
+/**
+ * A failed sync keeps the previous price map (stale-but-usable) and schedules
+ * a 1h retry; the failure is surfaced in the events center (no external push).
+ */
+async function handleSyncFailure(reason: string): Promise<void> {
+  console.warn(`[models.dev] sync failed: ${reason}`);
+  scheduleRetry();
+  try {
+    await db.insert(schema.events).values({
+      type: 'status',
+      title: '模型价格同步失败',
+      message: `models.dev 价格同步失败：${reason}，1 小时后重试，期间继续使用上次同步的价格`,
+      level: 'warning',
+      relatedId: null,
+      relatedType: null,
+      createdAt: formatUtcSqlDateTime(new Date()),
+    }).run();
+  } catch (eventError) {
+    // Event persistence must never break the sync lifecycle.
+    console.warn(`[models.dev] failed to record sync-failure event: ${String(eventError)}`);
   }
 }
 

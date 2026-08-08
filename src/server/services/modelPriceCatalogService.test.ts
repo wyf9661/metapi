@@ -1,11 +1,37 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
   __setModelsDevPricesForTests,
   lookupModelsDevPrice,
   modelsDevCostToPricingModel,
   parseModelsDevPrices,
+  syncModelsDevPrices,
   type ModelsDevCost,
 } from './modelPriceCatalogService.js';
+
+const insertValuesMock = vi.fn();
+const fetchMock = vi.fn();
+
+vi.mock('../db/index.js', () => {
+  const insertChain = {
+    run: () => ({}),
+    values: (...args: unknown[]) => {
+      insertValuesMock(...args);
+      return insertChain;
+    },
+  };
+  return {
+    db: {
+      insert: () => insertChain,
+    },
+    schema: {
+      events: {},
+    },
+  };
+});
+
+vi.mock('undici', () => ({
+  fetch: (...args: unknown[]) => fetchMock(...args),
+}));
 
 // Real models.dev/api.json shape: { provider: { models: { id: { cost } } } }
 const SAMPLE_PAYLOAD = JSON.stringify({
@@ -154,6 +180,51 @@ describe('modelPriceCatalogService', () => {
       });
       expect(model.cacheCreationRatio).toBe(1.25);
       expect(model.cacheRatio).toBeCloseTo(0.1, 10);
+    });
+  });
+
+  describe('syncModelsDevPrices failure handling', () => {
+    beforeEach(() => {
+      fetchMock.mockReset();
+      insertValuesMock.mockReset();
+    });
+
+    it('records a status event and returns false when the fetch fails', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('network down'));
+      const ok = await syncModelsDevPrices();
+      expect(ok).toBe(false);
+      expect(insertValuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status',
+          title: '模型价格同步失败',
+          level: 'warning',
+        }),
+      );
+    });
+
+    it('records an event on HTTP error responses', async () => {
+      fetchMock.mockResolvedValueOnce({ ok: false, status: 503, text: async () => '' });
+      const ok = await syncModelsDevPrices();
+      expect(ok).toBe(false);
+      expect(insertValuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('HTTP 503') }),
+      );
+    });
+
+    it('does not write an event on a successful sync', async () => {
+      fetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => SAMPLE_PAYLOAD });
+      const ok = await syncModelsDevPrices();
+      expect(ok).toBe(true);
+      expect(insertValuesMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps returning false when event persistence itself fails', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('network down'));
+      insertValuesMock.mockImplementationOnce(() => {
+        throw new Error('db down');
+      });
+      const ok = await syncModelsDevPrices();
+      expect(ok).toBe(false);
     });
   });
 });
