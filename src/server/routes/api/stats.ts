@@ -70,32 +70,22 @@ import {
   runUsageAggregationProjectionPass,
 } from "../../services/usageAggregationService.js";
 
-function parseBooleanFlag(raw?: string): boolean {
-  if (!raw) return false;
-  const normalized = raw.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes";
-}
 
-function normalizeDashboardView(raw?: string) {
-  const normalized = (raw || "").trim().toLowerCase();
-  if (normalized === "summary" || normalized === "insights") {
-    return normalized;
-  }
-  return "full";
-}
-
-function normalizeProxyLogsView(raw?: string) {
-  const normalized = (raw || "").trim().toLowerCase();
-  if (normalized === "query" || normalized === "meta") {
-    return normalized;
-  }
-  return "full";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
+import {
+  parseBooleanFlag,
+  normalizeDashboardView,
+  normalizeProxyLogsView,
+  isRecord,
+  normalizeProxyLogPageSize,
+  normalizeProxyLogOffset,
+  normalizeProxyLogSearch,
+  normalizeProxyLogSiteId,
+  parseDownstreamKeyTags,
+  toRoundedMicroNumber,
+  normalizeNullableText,
+  normalizeClientConfidence,
+  roundPercent,
+} from './stats.pure.js';
 const MODELS_MARKETPLACE_BASE_TTL_MS = 15_000;
 const MODELS_MARKETPLACE_PRICING_TTL_MS = 90_000;
 const limitModelTokenCandidatesRead = createRateLimitGuard({
@@ -170,18 +160,6 @@ const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
   generic: "通用",
 };
 
-function normalizeProxyLogPageSize(raw?: string): number {
-  const parsed = Number.parseInt(raw || "50", 10);
-  if (!Number.isFinite(parsed)) return 50;
-  return Math.max(1, Math.min(100, parsed));
-}
-
-function normalizeProxyLogOffset(raw?: string): number {
-  const parsed = Number.parseInt(raw || "0", 10);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, parsed);
-}
-
 function normalizeProxyLogStatusFilter(raw?: string): ProxyLogStatusFilter {
   const normalized = (raw || "").trim().toLowerCase();
   if (normalized === "success") return "success";
@@ -189,21 +167,11 @@ function normalizeProxyLogStatusFilter(raw?: string): ProxyLogStatusFilter {
   return "all";
 }
 
-function normalizeProxyLogSearch(raw?: string): string {
-  return (raw || "").trim().toLowerCase();
-}
-
 function normalizeProxyLogModelFilter(raw?: string): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
   return canonicalizeModelName(trimmed) || trimmed;
-}
-
-function normalizeProxyLogSiteId(raw?: string): number | null {
-  const parsed = Number.parseInt(raw || "", 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed;
 }
 
 function normalizeProxyLogClientFilter(raw?: string): ProxyLogClientFilter {
@@ -229,27 +197,6 @@ function normalizeProxyLogTimeBoundary(raw?: string): string | null {
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return null;
   return formatUtcSqlDateTime(parsed);
-}
-
-function parseDownstreamKeyTags(raw: unknown): string[] {
-  if (typeof raw !== "string" || !raw.trim()) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const value of parsed) {
-      const text = String(value || "").trim();
-      if (!text) continue;
-      const dedupeKey = text.toLowerCase();
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      result.push(text);
-    }
-    return result;
-  } catch {
-    return [];
-  }
 }
 
 function buildProxyLogSearchCondition(search: string) {
@@ -321,28 +268,6 @@ function buildProxyLogWhereClause(params: {
 
   if (conditions.length === 0) return undefined;
   return conditions.length === 1 ? conditions[0] : and(...conditions);
-}
-
-function toRoundedMicroNumber(value: number | null | undefined): number {
-  return Math.round(Number(value || 0) * 1_000_000) / 1_000_000;
-}
-
-function normalizeNullableText(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-
-function normalizeClientConfidence(value: unknown): string | null {
-  const normalized = normalizeNullableText(value)?.toLowerCase() || null;
-  if (
-    normalized === "exact" ||
-    normalized === "heuristic" ||
-    normalized === "unknown"
-  ) {
-    return normalized;
-  }
-  return null;
 }
 
 function displayProxyLogClientFamily(value: string | null): string | null {
@@ -467,11 +392,6 @@ type SiteAvailabilityBucketAccumulator = {
   latencyTotalMs: number;
   latencyCount: number;
 };
-
-function roundPercent(value: number | null): number | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return Math.round(value * 10) / 10;
-}
 
 function buildSiteAvailabilitySummaries(
   sites: SiteAvailabilitySiteRow[],
