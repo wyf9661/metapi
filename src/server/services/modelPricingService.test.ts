@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import {
   calculateModelUsageBreakdown,
   calculateModelUsageCost,
+  estimateWithModelsDevOrFallback,
   fallbackTokenCost,
   type PricingModel,
 } from './modelPricingService.js';
+import { __setModelsDevPricesForTests } from './modelPriceCatalogService.js';
+import type { EstimateProxyCostInput } from './modelPricingService.js';
 
 describe('modelPricingService', () => {
   it('calculates token-based cost from model ratio and completion ratio', () => {
@@ -182,5 +185,54 @@ describe('modelPricingService', () => {
   it('uses platform-specific fallback token divisor', () => {
     expect(fallbackTokenCost(1500, 'new-api')).toBe(0.003);
     expect(fallbackTokenCost(1500, 'new-api')).toBe(0.003);
+  });
+
+  describe('estimateWithModelsDevOrFallback (models.dev middle tier)', () => {
+    const baseInput: EstimateProxyCostInput = {
+      site: { id: 1, url: 'https://api.example.com', platform: 'openai' },
+      account: { id: 1 },
+      modelName: 'gpt-4o',
+    };
+
+    beforeEach(() => {
+      __setModelsDevPricesForTests(
+        new Map([['gpt-4o', { input: 2.5, output: 10, cacheRead: 1.25 }]]),
+      );
+    });
+
+    it('bills by official models.dev price when upstream pricing is absent (1M+1M = $12.5)', () => {
+      const cost = estimateWithModelsDevOrFallback(
+        baseInput,
+        { promptTokens: 1_000_000, completionTokens: 1_000_000, totalTokens: 2_000_000 },
+        2_000_000,
+      );
+      expect(cost).toBe(12.5);
+    });
+
+    it('deducts cache-read tokens from billable prompt tokens', () => {
+      const cost = estimateWithModelsDevOrFallback(
+        baseInput,
+        {
+          promptTokens: 1_000_000,
+          completionTokens: 1_000_000,
+          totalTokens: 2_000_000,
+          cacheReadTokens: 500_000,
+          promptTokensIncludeCache: true,
+        },
+        2_000_000,
+      );
+      // input: 0.5M billable × 2.5 = 1.25; cache read: 0.5M × 1.25 = 0.625; output: 1M × 10 = 10
+      expect(cost).toBe(11.875);
+    });
+
+    it('falls back to the flat token divisor when the model is not in the catalog', () => {
+      const input = { ...baseInput, modelName: 'unknown-model' };
+      const cost = estimateWithModelsDevOrFallback(
+        input,
+        { promptTokens: 1_000_000, completionTokens: 1_000_000, totalTokens: 2_000_000 },
+        2_000_000,
+      );
+      expect(cost).toBe(fallbackTokenCost(2_000_000, 'openai'));
+    });
   });
 });

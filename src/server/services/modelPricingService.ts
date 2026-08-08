@@ -4,6 +4,10 @@ import {
   buildNewApiCookieCandidates,
   fetchJsonWithShieldCookieRetry,
 } from './platforms/newApiShield.js';
+import {
+  lookupModelsDevPrice,
+  modelsDevCostToPricingModel,
+} from './modelPriceCatalogService.js';
 
 const PRICE_CACHE_TTL_MS = 10 * 60 * 1000;
 const PRICE_CACHE_FAILURE_TTL_MS = 60 * 1000;
@@ -745,18 +749,43 @@ export async function estimateProxyCost(input: EstimateProxyCostInput): Promise<
 
     const pricingData = await getPricingDataCached(input);
     if (!pricingData) {
-      return fallbackTokenCost(totalTokens, input.site.platform);
+      return estimateWithModelsDevOrFallback(input, usage, totalTokens);
     }
 
     const model = resolveModel(input.modelName, pricingData);
     if (!model) {
-      return fallbackTokenCost(totalTokens, input.site.platform);
+      return estimateWithModelsDevOrFallback(input, usage, totalTokens);
     }
 
     return calculateModelUsageCost(model, usage, pricingData.groupRatio);
   } catch {
     return fallbackTokenCost(totalTokens, input.site.platform);
   }
+}
+
+function resolveModelsDevPricingModel(modelName: string): PricingModel | null {
+  const cost = lookupModelsDevPrice(modelName);
+  if (!cost) return null;
+  return modelsDevCostToPricingModel(modelName, cost);
+}
+
+export function estimateWithModelsDevOrFallback(
+  input: EstimateProxyCostInput,
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    promptTokensIncludeCache?: boolean | null;
+  },
+  totalTokens: number,
+): number {
+  const modelsDevModel = resolveModelsDevPricingModel(input.modelName);
+  if (modelsDevModel) {
+    return calculateModelUsageCost(modelsDevModel, usage, { default: 1 });
+  }
+  return fallbackTokenCost(totalTokens, input.site.platform);
 }
 
 async function fetchJsonViaNewApiShield(url: string, token: string): Promise<unknown> {
@@ -790,13 +819,33 @@ export async function buildProxyBillingDetails(input: EstimateProxyCostInput): P
     }
 
     const pricingData = await getPricingDataCached(input);
-    if (!pricingData) return null;
+    if (!pricingData) {
+      return buildModelsDevBillingDetails(input.modelName, usage);
+    }
 
     const model = resolveModel(input.modelName, pricingData);
-    if (!model || model.quotaType === 1) return null;
+    if (!model || model.quotaType === 1) {
+      return buildModelsDevBillingDetails(input.modelName, usage);
+    }
 
     return calculateModelUsageBreakdown(model, usage, pricingData.groupRatio);
   } catch {
     return null;
   }
+}
+
+function buildModelsDevBillingDetails(
+  modelName: string,
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    promptTokensIncludeCache?: boolean | null;
+  },
+): ProxyBillingDetails | null {
+  const modelsDevModel = resolveModelsDevPricingModel(modelName);
+  if (!modelsDevModel) return null;
+  return calculateModelUsageBreakdown(modelsDevModel, usage, { default: 1 });
 }
