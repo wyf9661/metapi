@@ -1302,6 +1302,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
         const endpointResult = await executeEndpointFlow({
           siteUrl: selected.site.url,
+          paramOverride: selected.site.paramOverride ?? null,
           disableCrossProtocolFallback: config.disableCrossProtocolFallback,
           firstByteTimeoutMs,
           endpointCandidates,

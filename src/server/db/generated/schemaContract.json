@@ -2249,6 +2249,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "param_override": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },

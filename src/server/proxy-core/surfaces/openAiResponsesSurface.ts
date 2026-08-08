@@ -665,6 +665,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
         return executeEndpointFlow({
           siteUrl: siteApiBaseUrl,
+          paramOverride: selected.site.paramOverride ?? null,
           disableCrossProtocolFallback: isCompactRequest || config.disableCrossProtocolFallback,
           firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
           endpointCandidates,

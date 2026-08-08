@@ -350,6 +350,7 @@ export async function probeRuntimeModel(input: {
       result = await executeEndpointFlow({
         siteUrl: input.site.url,
         proxyUrl: channelProxyUrl,
+        paramOverride: input.site.paramOverride ?? null,
         endpointCandidates,
         buildRequest,
         dispatchRequest,

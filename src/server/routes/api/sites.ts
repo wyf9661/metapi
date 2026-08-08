@@ -6,6 +6,7 @@ import { detectSite } from '../../services/siteDetector.js';
 import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services/siteProxy.js';
 import { formatUtcSqlDateTime, getLocalDayRangeUtc } from '../../services/localTimeService.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
+import { parseSiteParamOverrideInput } from '../../services/siteParamOverride.js';
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
 import { getCredentialModeFromExtraConfig, getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
 import {
@@ -668,6 +669,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       proxyUrl,
       customHeaders,
       customHeadersOverrideRequestHeaders,
+      paramOverride,
       externalCheckinUrl,
       status,
       isPinned,
@@ -702,6 +704,10 @@ export async function sitesRoutes(app: FastifyInstance) {
     const normalizedCustomHeaders = parseSiteCustomHeadersInput(customHeaders);
     if (!normalizedCustomHeaders.valid) {
       return reply.code(400).send({ error: normalizedCustomHeaders.error || 'Invalid customHeaders.' });
+    }
+    const normalizedParamOverride = parseSiteParamOverrideInput(paramOverride);
+    if (!normalizedParamOverride.valid) {
+      return reply.code(400).send({ error: normalizedParamOverride.error || 'Invalid paramOverride.' });
     }
     const normalizedCustomHeadersOverrideRequestHeaders =
       normalizeCustomHeadersOverrideRequestHeadersFlag(customHeadersOverrideRequestHeaders);
@@ -747,6 +753,7 @@ export async function sitesRoutes(app: FastifyInstance) {
           proxyUrl: normalizedProxyUrl.proxyUrl,
           customHeaders: normalizedCustomHeaders.customHeaders,
           customHeadersOverrideRequestHeaders: normalizedCustomHeadersOverrideRequestHeaders ?? false,
+          paramOverride: normalizedParamOverride.paramOverride,
           protocolProfile: typeof (createBody as any).protocolProfile === 'string' ? (createBody as any).protocolProfile : null,
           externalCheckinUrl: normalizedExternalCheckinUrl.url,
           status: normalizedStatus ?? 'active',
@@ -834,6 +841,12 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (!normalizedCustomHeaders.valid) {
       return reply.code(400).send({ error: normalizedCustomHeaders.error || 'Invalid customHeaders.' });
     }
+    if (body.paramOverride !== undefined) {
+      const normalizedParamOverride = parseSiteParamOverrideInput(body.paramOverride);
+      if (!normalizedParamOverride.valid) {
+        return reply.code(400).send({ error: normalizedParamOverride.error || 'Invalid paramOverride.' });
+      }
+    }
     const normalizedCustomHeadersOverrideRequestHeaders =
       normalizeCustomHeadersOverrideRequestHeadersFlag(body.customHeadersOverrideRequestHeaders);
     if (
@@ -877,6 +890,10 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (normalizedCustomHeaders.present) updates.customHeaders = normalizedCustomHeaders.customHeaders;
     if (body.customHeadersOverrideRequestHeaders !== undefined) {
       updates.customHeadersOverrideRequestHeaders = normalizedCustomHeadersOverrideRequestHeaders;
+    }
+    if (body.paramOverride !== undefined) {
+      const normalizedParamOverride = parseSiteParamOverrideInput(body.paramOverride);
+      updates.paramOverride = normalizedParamOverride.valid ? normalizedParamOverride.paramOverride : null;
     }
     if (typeof (body as any).protocolProfile === 'string' || (body as any).protocolProfile === null) {
       (updates as any).protocolProfile = (body as any).protocolProfile ?? null;

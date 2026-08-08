@@ -9,6 +9,7 @@ export const sites = sqliteTable('sites', {
   platform: text('platform').notNull(), // 'new-api' | 'one-api' | 'sub2api' | 'openai' | 'claude' | 'gemini' | 'codex' | 'gemini-cli' | 'antigravity'
   proxyUrl: text('proxy_url'),
   customHeaders: text('custom_headers'),
+  paramOverride: text('param_override'), // JSON: merged into outbound JSON request body (top-level keys win)
   customHeadersOverrideRequestHeaders: integer('custom_headers_override_request_headers', { mode: 'boolean' }).default(false),
   protocolProfile: text('protocol_profile'), // JSON: preferResponses/requireCodexClient/credentialMode
   status: text('status').notNull().default('active'), // 'active' | 'disabled'

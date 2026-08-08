@@ -2,6 +2,7 @@ import { fetch } from 'undici';
 import { readRuntimeResponseText } from '../executors/types.js';
 import { fetchWithObservedFirstByte, isObservedFirstByteTimeoutResponse } from '../firstByteTimeout.js';
 import { withSiteProxyRequestInit } from '../../services/siteProxy.js';
+import { mergeParamOverrideIntoBody } from '../../services/siteParamOverride.js';
 import {
   buildUpstreamUrl,
   summarizeUpstreamError,
@@ -64,6 +65,8 @@ export type EndpointFlowResult =
 export type ExecuteEndpointFlowInput = {
   siteUrl: string;
   proxyUrl?: string | null;
+  /** Site-level JSON body override merged into every outbound JSON request. */
+  paramOverride?: string | null;
   disableCrossProtocolFallback?: boolean;
   endpointCandidates: UpstreamEndpoint[];
   buildRequest: (endpoint: UpstreamEndpoint, endpointIndex: number) => BuiltEndpointRequest;
@@ -115,6 +118,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
   for (let endpointIndex = 0; endpointIndex < endpointCount; endpointIndex += 1) {
     const endpoint = input.endpointCandidates[endpointIndex] as UpstreamEndpoint;
     const request = input.buildRequest(endpoint, endpointIndex);
+    if (input.paramOverride) {
+      request.body = mergeParamOverrideIntoBody(request.body, input.paramOverride);
+    }
     const defaultTarget = buildUpstreamUrl(input.siteUrl, request.path);
     const targetUrl = input.proxyUrl
       ? buildUpstreamUrl(input.proxyUrl, request.path)

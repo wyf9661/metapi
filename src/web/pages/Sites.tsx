@@ -633,6 +633,7 @@ export default function Sites() {
       apiEndpoints: serializedApiEndpoints.apiEndpoints,
       customHeaders: serializedCustomHeaders.customHeaders,
       customHeadersOverrideRequestHeaders: !!form.customHeadersOverrideRequestHeaders,
+      paramOverride: form.paramOverride.trim() || null,
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
       protocolProfile: JSON.stringify(form.protocolProfile),
       postRefreshProbeEnabled: probeEnabled,
@@ -1402,6 +1403,26 @@ export default function Sites() {
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
               按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。
+            </div>
+            <div style={{ marginTop: 12, padding: 14, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>请求体参数覆盖（paramOverride）</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>
+                JSON 对象，转发请求时合并进上游请求体（顶层字段覆盖客户端传参）。例如：
+                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{'{"max_tokens": 64, "temperature": 0}'}</code>。留空表示不覆盖。
+              </div>
+              <textarea
+                placeholder='{"max_tokens": 64, "temperature": 0}'
+                value={form.paramOverride}
+                onChange={(e) => setForm((prev) => ({ ...prev, paramOverride: e.target.value }))}
+                rows={3}
+                style={{
+                  ...formInputStyle,
+                  width: '100%',
+                  fontFamily: 'var(--font-mono)',
+                  resize: 'vertical',
+                  minHeight: 72,
+                }}
+              />
             </div>
             <div style={{ marginTop: 12, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>凭证提示</div>

@@ -489,6 +489,7 @@ export async function handleChatSurfaceRequest(
       const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
       return executeEndpointFlow({
         siteUrl: siteApiBaseUrl,
+        paramOverride: selected.site.paramOverride ?? null,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
         firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
         endpointCandidates,

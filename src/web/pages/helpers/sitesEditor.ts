@@ -19,6 +19,8 @@ export type SiteForm = {
   apiEndpoints: SiteApiEndpointField[];
   customHeaders: SiteCustomHeaderField[];
   customHeadersOverrideRequestHeaders: boolean;
+  /** JSON string merged into every outbound JSON request body (top-level keys win). */
+  paramOverride: string;
   globalWeight: string;
   protocolProfile: {
     preferResponses: boolean;
@@ -44,6 +46,7 @@ export type SiteSavePayload = {
   }>;
   customHeaders: string;
   customHeadersOverrideRequestHeaders: boolean;
+  paramOverride?: string | null;
   globalWeight: number;
   protocolProfile?: string | null;
   postRefreshProbeEnabled?: boolean;
@@ -177,6 +180,7 @@ export function emptySiteForm(): SiteForm {
     apiEndpoints: [emptySiteApiEndpoint()],
     customHeaders: [emptySiteCustomHeader()],
     customHeadersOverrideRequestHeaders: false,
+    paramOverride: '',
     protocolProfile: { preferResponses: false, requireCodexClient: false, credentialMode: 'auto' },
     globalWeight: '1',
   };
@@ -252,6 +256,7 @@ export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | '
     apiEndpoints: parseApiEndpointsForEditor(site.apiEndpoints),
     customHeaders: parseCustomHeadersForEditor(site.customHeaders),
     customHeadersOverrideRequestHeaders: !!site.customHeadersOverrideRequestHeaders,
+    paramOverride: typeof (site as any).paramOverride === 'string' ? (site as any).paramOverride : '',
     protocolProfile: (() => {
       try {
         const raw = typeof (site as any).protocolProfile === 'string' ? JSON.parse((site as any).protocolProfile) : null;
