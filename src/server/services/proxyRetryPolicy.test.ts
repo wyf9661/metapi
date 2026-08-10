@@ -5,6 +5,7 @@ import {
   isRecoveringTransientFailure,
   resolveFailoverBackoffMs,
   shouldAbortSameSiteEndpointFallback,
+  shouldGraceRetryInPlace,
   shouldRetryProxyRequest,
 } from './proxyRetryPolicy.js';
 
@@ -197,5 +198,23 @@ describe('proxyRetryPolicy', () => {
     expect(canRetryInPlaceForRecoveringFailure(0, 400, 'invalid request body', 800)).toBe(false);
     // Backoff disabled → never.
     expect(canRetryInPlaceForRecoveringFailure(0, 403, 'forbidden', 0)).toBe(false);
+  });
+
+  it('stays on the same channel during the grace window for recovering failures', () => {
+    // Within the grace window + recovering failure → grace retry allowed.
+    expect(shouldGraceRetryInPlace(0, 8000, 403, 'forbidden')).toBe(true);
+    expect(shouldGraceRetryInPlace(1000, 8000, 429, 'rate limit')).toBe(true);
+    expect(shouldGraceRetryInPlace(7999, 8000, 503, 'unavailable')).toBe(true);
+    // Grace window expired → failover engages.
+    expect(shouldGraceRetryInPlace(8000, 8000, 403, 'forbidden')).toBe(false);
+    expect(shouldGraceRetryInPlace(9000, 8000, 403, 'forbidden')).toBe(false);
+    // Feature disabled (graceMs = 0) → never.
+    expect(shouldGraceRetryInPlace(0, 0, 403, 'forbidden')).toBe(false);
+    // Non-recovering failures never grace-retry.
+    expect(shouldGraceRetryInPlace(0, 8000, 401, 'invalid access token')).toBe(false);
+    expect(shouldGraceRetryInPlace(0, 8000, 400, 'invalid request body')).toBe(false);
+    // Invalid elapsed time → never.
+    expect(shouldGraceRetryInPlace(-1, 8000, 403, 'forbidden')).toBe(false);
+    expect(shouldGraceRetryInPlace(Number.NaN, 8000, 403, 'forbidden')).toBe(false);
   });
 });

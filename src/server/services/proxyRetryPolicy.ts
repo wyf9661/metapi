@@ -110,3 +110,29 @@ export function canRetryInPlaceForRecoveringFailure(
   if (retryCount !== 0) return false;
   return isRecoveringTransientFailure(status, upstreamErrorText);
 }
+
+/**
+ * Whether to stay on the same channel during a time-boxed grace window
+ * when a transient-recovering failure occurs. Gives WAF 403 / 429 / 5xx
+ * blocks a chance to self-heal before the normal multi-channel failover
+ * cascade engages.
+ *
+ * Returns true when ALL of the following hold:
+ *   - graceMs > 0 (feature enabled)
+ *   - elapsedMs >= 0 and < graceMs (still within the grace window)
+ *   - failure is classified as a recovering transient failure
+ *
+ * The caller must NOT increment retryCount when this returns true, so the
+ * failover budget is preserved for genuine multi-channel fallback.
+ */
+export function shouldGraceRetryInPlace(
+  elapsedMs: number,
+  graceMs: number,
+  status: number,
+  upstreamErrorText?: string | null,
+): boolean {
+  if (graceMs <= 0) return false;
+  if (typeof elapsedMs !== 'number' || !Number.isFinite(elapsedMs) || elapsedMs < 0) return false;
+  if (elapsedMs >= graceMs) return false;
+  return isRecoveringTransientFailure(status, upstreamErrorText);
+}

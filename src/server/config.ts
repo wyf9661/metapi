@@ -162,6 +162,11 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     // recovery windows. Default 1200ms; set 0 to disable (immediate
     // failover, legacy behavior).
     proxyFailoverBackoffMs: Math.max(0, Math.min(5_000, Math.trunc(parseNumber(env.PROXY_FAILOVER_BACKOFF_MS, 1_200)))),
+    // Grace period (ms) for transient-recovering failures (WAF 403 / 429 / 5xx):
+    // stay on the same channel instead of immediately failing over, giving the
+    // upstream a chance to self-heal. 0 = disabled (legacy immediate failover).
+    // Default 8s; inspired by codex-watchdog's interruptAfterMs concept.
+    proxyRecoveringGraceMs: Math.max(0, Math.min(30_000, Math.trunc(parseNumber(env.PROXY_RECOVERING_GRACE_MS, 8_000)))),
     proxyStickySessionEnabled: parseBoolean(env.PROXY_STICKY_SESSION_ENABLED, true),
     // Soft sticky default 30s so dense same-key traffic rebalances across sites.
     proxyStickySessionTtlMs: Math.max(30_000, Math.trunc(parseNumber(env.PROXY_STICKY_SESSION_TTL_MS, 30_000))),

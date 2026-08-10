@@ -51,7 +51,7 @@ import {
   getProxyMaxChannelRetries,
   resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
-import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure } from '../../services/proxyRetryPolicy.js';
+import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlace } from '../../services/proxyRetryPolicy.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
 import { maybeHandleWebSearchOnlySimulation } from '../webSearchSimulation.js';
@@ -848,6 +848,15 @@ export async function handleChatSurfaceRequest(
               if (!isRecoveringTransientFailure(failure.status, failure.reason)) {
                 allFailuresRecovering = false;
               }
+              // Grace window: transient-recovering failures (WAF/429/5xx) often
+              // clear within seconds. Stay on the same channel for a configurable
+              // grace period before switching, so recovery is observed instead of
+              // burning the failover budget on a cascade.
+              if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+                inPlaceRetryChannel = selected;
+                await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
+                continue;
+              }
               if (inPlaceRecoveringRetry) {
                 inPlaceRetryChannel = selected;
                 await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1084,6 +1093,13 @@ export async function handleChatSurfaceRequest(
           if (!isRecoveringTransientFailure(failure.status, failure.reason)) {
             allFailuresRecovering = false;
           }
+          // Grace window: stay on the same channel for a configurable grace period
+          // on transient-recovering failures (WAF/429/5xx) before failing over.
+          if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+            inPlaceRetryChannel = selected;
+            await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
+            continue;
+          }
           if (inPlaceRecoveringRetry) {
             inPlaceRetryChannel = selected;
             await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1202,6 +1218,11 @@ export async function handleChatSurfaceRequest(
           if (!isRecoveringTransientFailure(endpointFailureStatus || 502, err.message || null)) {
             allFailuresRecovering = false;
           }
+          if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err.message || null)) {
+            inPlaceRetryChannel = selected;
+            await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err.message || null, config.proxyFailoverBackoffMs));
+            continue;
+          }
           if (inPlaceRecoveringRetry) {
             // Same-channel recovery: reuse the selected channel for one more
             // attempt after the backoff, without re-selection (the channel is
@@ -1248,6 +1269,11 @@ export async function handleChatSurfaceRequest(
       if (!terminalFailureOutcome) {
         if (!isRecoveringTransientFailure(502, err?.message || null)) {
           allFailuresRecovering = false;
+        }
+        if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, 502, err?.message || null)) {
+          inPlaceRetryChannel = selected;
+          await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
+          continue;
         }
         if (inPlaceRecoveringRetry) {
           inPlaceRetryChannel = selected;
