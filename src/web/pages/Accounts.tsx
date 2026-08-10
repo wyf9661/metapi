@@ -333,7 +333,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         pathname: location.pathname,
         search: nextSearch ? `?${nextSearch}` : "",
       },
-      { replace: false },
+      // 透传 state：从站点列表进入时的 fromSearch 必须保留，
+      // 否则切换段后返回按钮丢失来源页码（回到 /sites 第 1 页）。
+      { replace: false, state: location.state },
     );
   };
 
@@ -388,7 +390,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         pathname: location.pathname,
         search: nextSearch ? `?${nextSearch}` : "",
       },
-      { replace: true },
+      { replace: true, state: location.state },
     );
   }, [activeSegment, loaded, location.pathname, location.search, navigate]);
 
@@ -1160,7 +1162,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     if (targetIndex < 0) {
       navigate(
         { pathname: location.pathname, search: cleanedSearch },
-        { replace: true },
+        { replace: true, state: location.state },
       );
       return;
     }
@@ -1196,7 +1198,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
     navigate(
       { pathname: location.pathname, search: cleanedSearch },
-      { replace: true },
+      { replace: true, state: location.state },
     );
   }, [
     activeSegment,
