@@ -12,7 +12,6 @@ const { apiMock } = vi.hoisted(() => ({
     getDownstreamApiKeys: vi.fn(),
     getRoutesLite: vi.fn(),
     getRuntimeDatabaseConfig: vi.fn(),
-    getDesktopInfo: vi.fn().mockResolvedValue(null),
     updateRuntimeSettings: vi.fn(),
     getModelTokenCandidates: vi.fn(),
   },

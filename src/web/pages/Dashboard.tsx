@@ -279,6 +279,7 @@ export default function Dashboard({
   const [tunnel, setTunnel] = useState<any>(null);
   const [tunnelBusy, setTunnelBusy] = useState(false);
   const [tunnelError, setTunnelError] = useState<string | null>(null);
+  const [localAddress, setLocalAddress] = useState<{ baseUrl: string; port: number } | null>(null);
   const isTunnelClientView = typeof window !== 'undefined'
     && (
       window.location.hostname.endsWith('.trycloudflare.com')
@@ -455,6 +456,17 @@ export default function Dashboard({
     }, 8000);
     return () => window.clearInterval(timer);
   }, [refreshTunnel]);
+
+  useEffect(() => {
+    api.getDesktopInfo()
+      .then((info) => {
+        // 跟随当前访问地址：服务端 host 可能是 0.0.0.0/127.0.0.1，
+        // 用户从局域网 IP 登录时应显示该 IP 而不是 localhost。
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        setLocalAddress({ baseUrl: origin || `http://127.0.0.1:${info.port}`, port: info.port });
+      })
+      .catch(() => setLocalAddress(null));
+  }, []);
 
   const handleToggleDashboardAccess = async (next: boolean) => {
     if (isTunnelClientView) {
@@ -803,6 +815,47 @@ export default function Dashboard({
           </ol>
         </div>
       )}
+      {localAddress ? (
+        <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>本地服务地址</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
+            在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <code style={{ flex: 1, padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)' }}>
+              {localAddress.baseUrl}
+            </code>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}
+              onClick={() => {
+                // navigator.clipboard 只在安全上下文（HTTPS/localhost）可用，
+                // 局域网 HTTP 访问需 fallback 到 execCommand。
+                const copyText = async () => {
+                  if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(localAddress.baseUrl);
+                    return;
+                  }
+                  const textarea = document.createElement('textarea');
+                  textarea.value = localAddress.baseUrl;
+                  textarea.style.position = 'fixed';
+                  textarea.style.opacity = '0';
+                  document.body.appendChild(textarea);
+                  textarea.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(textarea);
+                };
+                copyText()
+                  .then(() => { toast.success('地址已复制'); })
+                  .catch(() => { toast.error('复制失败'); });
+              }}
+            >
+              复制
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
         <div className="dashboard-tunnel-card">
           <div style={{ minWidth: 0 }}>
