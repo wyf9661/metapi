@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 
@@ -16,6 +16,9 @@ type SiteDetail = {
 export default function SiteDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  // 从站点列表跳转时携带来源 search（?page=N 等），返回按钮恢复列表原页。
+  const backSearch = (location.state as { fromSearch?: string } | null)?.fromSearch || '';
   const toast = useToast();
 
   const [site, setSite] = useState<SiteDetail | null>(null);
@@ -61,7 +64,7 @@ export default function SiteDetail() {
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
-            onClick={() => navigate('/sites')}
+            onClick={() => navigate(backSearch ? `/sites${backSearch}` : '/sites')}
             className="btn btn-ghost"
             style={{ padding: '6px 12px' }}
           >

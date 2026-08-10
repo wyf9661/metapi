@@ -282,6 +282,14 @@ export default function Sites() {
     showControls: showSitePagination,
   } = useClientPagination(sortedSites, `${sortMode}:${sites.length}`);
 
+  // 页码持久化到 URL（?page=N），跳详情页返回后仍停留在原页。
+  useEffect(() => {
+    const urlPage = Number.parseInt(new URLSearchParams(location.search).get('page') || '', 10);
+    if (Number.isFinite(urlPage) && urlPage >= 1 && urlPage !== safePage) {
+      setPage(urlPage);
+    }
+  }, [location.search, safePage, setPage]);
+
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
     const genericOptions = (!current || SITE_PLATFORM_OPTIONS.some((option) => option.value === current))
@@ -786,12 +794,12 @@ export default function Sites() {
         navigate(`/oauth?${params.toString()}`);
         return;
       }
-      navigate(`/sites/${input.siteId}?${params.toString()}`);
+      navigate(`/sites/${input.siteId}?${params.toString()}`, { state: { fromSearch: location.search } });
       return;
     }
 
     params.set('segment', 'apikey');
-    navigate(`/sites/${input.siteId}?${params.toString()}`);
+    navigate(`/sites/${input.siteId}?${params.toString()}`, { state: { fromSearch: location.search } });
   };
 
   const handleSiteCreatedChoice = (choice: 'session' | 'apikey' | 'later') => {
@@ -1558,19 +1566,22 @@ export default function Sites() {
                 placeholder='{"max_tokens": 64, "temperature": 0}'
                 value={form.paramOverride}
                 onChange={(e) => setForm((prev) => ({ ...prev, paramOverride: e.target.value }))}
-                rows={3}
+                rows={2}
                 style={{
                   ...formInputStyle,
                   width: '100%',
                   fontFamily: 'var(--font-mono)',
                   resize: 'vertical',
-                  minHeight: 72,
+                  minHeight: 52,
                 }}
               />
             </div>
             <div style={{ padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'color-mix(in srgb, var(--color-surface) 82%, transparent)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>凭证提示</div>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 4, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>凭证提示</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+                添加账号时的凭证验证策略提示
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(['auto', 'api_key', 'session'] as const).map((mode) => (
                   <label
                     key={mode}
@@ -1597,9 +1608,6 @@ export default function Sites() {
                     {mode === 'auto' ? '自动' : mode === 'api_key' ? 'API Key（sk-...）' : 'Session Cookie'}
                   </label>
                 ))}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                添加账号时的凭证验证策略提示
               </div>
             </div>
           </div>
@@ -1830,7 +1838,7 @@ export default function Sites() {
                       <>
                         <button
                           type="button"
-                          onClick={() => navigate(`/sites/${site.id}`)}
+                          onClick={() => navigate(`/sites/${site.id}`, { state: { fromSearch: location.search } })}
                           className="btn btn-link btn-link-primary"
                         >
                           详情
@@ -2110,7 +2118,7 @@ export default function Sites() {
                     <td className="sites-actions-cell">
                       <div className="sites-row-actions">
                         <button
-                          onClick={() => navigate(`/sites/${site.id}`)}
+                          onClick={() => navigate(`/sites/${site.id}`, { state: { fromSearch: location.search } })}
                           className="btn btn-link btn-link-primary"
                         >
                           详情
@@ -2192,7 +2200,13 @@ export default function Sites() {
         <PaginationControls
           page={safePage}
           totalPages={totalPages}
-          onPageChange={setPage}
+          onPageChange={(next) => {
+            setPage(next);
+            const targetPage = typeof next === 'function' ? next(safePage) : next;
+            const params = new URLSearchParams(location.search);
+            params.set('page', String(targetPage));
+            navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+          }}
           visible={showSitePagination}
         />
       </div>
