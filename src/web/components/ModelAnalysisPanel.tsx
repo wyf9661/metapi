@@ -117,17 +117,14 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     };
   }, [tokenDistribution, labelColor]);
 
-  const callsPieSpec = useMemo(() => ({
-    type: 'pie' as const,
-    data: [{ id: 'data', values: (() => { const total = callsDistribution.reduce((s, d) => s + toSafeNumber(d.calls), 0); return callsDistribution.map(d => ({ model: String(d.model || '-'), calls: toSafeNumber(d.calls), pctLabel: total > 0 ? (toSafeNumber(d.calls) / total * 100).toFixed(1) : '0.0' })); })() }],
-    valueField: 'calls', categoryField: 'model',
-    outerRadius: 0.8, innerRadius: 0.55,
-    pie: { style: { cornerRadius: 4, padAngle: 0.02 } },
-    label: { visible: true, position: 'outside', format: '{pctLabel}%', style: { fill: labelColor } },
-    legends: { visible: false },
-    animation: true,
-    color: ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'],
-    background: 'transparent',
+  const callsBarSpec = useMemo(() => ({
+    type: 'bar' as const,
+    data: [{ id: 'data', values: callsDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.calls) })).reverse() }],
+    xField: 'value', yField: 'model', direction: 'horizontal' as const,
+    bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#10b981' }, { offset: 1, color: '#34d399' }] } } },
+    label: { visible: true, position: 'right', formatMethod: (text: string | number) => Number(text).toLocaleString(), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
+    axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
+    animation: true, background: 'transparent',
   }), [callsDistribution, labelColor]);
 
   if (!hasData) return <EmptyBlock />;
@@ -203,20 +200,17 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       {activeTab === 'calls' && (
         <div>
           <div style={{ height: 300 }}>
-            <VChart spec={callsPieSpec} />
+            <VChart spec={callsBarSpec} />
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px' }}>
-            {callsDistribution.map((d, idx) => {
-              const pieColors = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
-              return (
-                <span key={d.model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: pieColors[idx % pieColors.length], flexShrink: 0 }} />
-                  <InlineBrandIcon model={d.model} size={13} />
-                  <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.model}</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>{d.calls}</span>
-                </span>
-              );
-            })}
+            {callsDistribution.map((d) => (
+              <span key={d.model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981', flexShrink: 0 }} />
+                <InlineBrandIcon model={d.model} size={13} />
+                <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.model}</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>{Math.round(d.calls).toLocaleString()}</span>
+              </span>
+            ))}
           </div>
         </div>
       )}
