@@ -80,11 +80,11 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
 
   const spendBarSpec = useMemo(() => ({
     type: 'bar' as const,
-    data: [{ id: 'data', values: spendDistribution.map(d => ({ model: String(d.model || '-').slice(0, 25), value: toSafeNumber(d.spend) })).reverse() }],
+    data: [{ id: 'data', values: spendDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.spend) })).reverse() }],
     xField: 'value', yField: 'model', direction: 'horizontal' as const,
     bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#4f46e5' }, { offset: 1, color: '#818cf8' }] } } },
     label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCurrency(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
-    axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
+    axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
     animation: true, background: 'transparent',
   }), [spendDistribution, labelColor]);
 
@@ -102,7 +102,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
 
   const trendSpec = useMemo(() => {
     const tokenData = tokenDistribution.map((d) => ({
-      model: String(d.model || '-').slice(0, 20),
+      model: String(d.model || '-'),
       value: d.tokens,
     })).reverse();
     return {
@@ -111,7 +111,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       xField: 'value', yField: 'model', direction: 'horizontal' as const,
       bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#06b6d4' }, { offset: 1, color: '#22d3ee' }] } } },
       label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCompactTokenMetric(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
-      axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
+      axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
       animation: true, background: 'transparent',
     };
   }, [tokenDistribution, labelColor]);
