@@ -1667,4 +1667,9 @@ export const zhToEnSupplemental: Record<string, string> = {
   '按站点筛选': 'Filter by site',
   '按账号筛选': 'Filter by account',
   '按模型筛选': 'Filter by model',
+  '视觉': 'vision',
+  '推理': 'reasoning',
+  '语音输入': 'audio input',
+  '图像生成': 'image generation',
+  '上下文': 'context',
 };

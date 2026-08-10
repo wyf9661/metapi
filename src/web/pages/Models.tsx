@@ -66,8 +66,43 @@ interface ModelRow {
   description: string | null;
   tags: string[];
   supportedEndpointTypes: string[];
+  capabilities?: ModelsDevCapabilities | null;
   pricingSources: ModelPricingSource[];
   accounts: ModelAccountInfo[];
+}
+
+/** models.dev capability record (mirrors server modelCapabilitiesService). */
+interface ModelsDevCapabilities {
+  vision: boolean;
+  pdf: boolean;
+  audioInput: boolean;
+  videoInput: boolean;
+  imageOutput: boolean;
+  audioOutput: boolean;
+  search: boolean;
+  tools: boolean;
+  reasoning: boolean;
+  contextWindow: number;
+  maxOutput: number;
+}
+
+function formatContextWindow(tokens: number | null | undefined): string {
+  if (typeof tokens !== 'number' || !Number.isFinite(tokens) || tokens <= 0) return '';
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (tokens >= 1000) return `${Math.round(tokens / 1000)}k`;
+  return String(tokens);
+}
+
+function renderCapabilityBadges(caps: ModelsDevCapabilities | null | undefined) {
+  if (!caps) return null;
+  const badges: string[] = [];
+  if (caps.vision) badges.push(tr('视觉'));
+  if (caps.reasoning) badges.push(tr('推理'));
+  if (caps.audioInput) badges.push(tr('语音输入'));
+  if (caps.imageOutput) badges.push(tr('图像生成'));
+  const ctx = formatContextWindow(caps.contextWindow);
+  if (ctx) badges.push(`${tr('上下文')} ${ctx}`);
+  return badges;
 }
 
 interface ModelsMarketplaceResponse {
@@ -1219,6 +1254,11 @@ export default function Models() {
                             <span key={endpoint} className="badge badge-success">{endpoint}</span>
                           )) : <span className="badge badge-muted">{metadataHydrating ? tr('加载元数据中...') : tr('未提供')}</span>}
                         </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                          {renderCapabilityBadges(m.capabilities)?.map((label, idx) => (
+                            <span key={`${label}-${idx}`} className="badge badge-success">{label}</span>
+                          )) ?? null}
+                        </div>
                       </div>
 
                       <div className="card" style={{ padding: 10 }}>
@@ -1483,6 +1523,11 @@ export default function Models() {
                                   {m.supportedEndpointTypes.length > 0 ? m.supportedEndpointTypes.map((endpoint) => (
                                     <span key={endpoint} className="badge badge-success">{endpoint}</span>
                                   )) : <span className="badge badge-muted">{metadataHydrating ? tr('加载元数据中...') : tr('未提供')}</span>}
+                                </div>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                                  {renderCapabilityBadges(m.capabilities)?.map((label, idx) => (
+                                    <span key={`${label}-${idx}`} className="badge badge-success">{label}</span>
+                                  )) ?? null}
                                 </div>
                               </div>
 

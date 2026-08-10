@@ -23,6 +23,10 @@ import { fetch } from 'undici';
 import { db, schema } from '../db/index.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
 import type { PricingModel } from './modelPricingService.js';
+import {
+  parseModelsDevCapabilities,
+  setModelsDevCapabilities,
+} from './modelCapabilitiesService.js';
 
 export const MODELS_DEV_URL = 'https://models.dev/api.json';
 const SYNC_TIMEOUT_MS = 30_000;
@@ -69,12 +73,14 @@ let lastSyncAtMs = 0;
 let syncTask: ScheduledTask | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-function normalizeModelName(modelName: string): string {
+/** Lowercase and strip `:free` / `:reasoning` style variant suffixes. */
+export function normalizeModelName(modelName: string): string {
   // Lowercase and strip `:free` / `:reasoning` style variant suffixes.
   return modelName.trim().replace(/[:/].*$/, '').toLowerCase();
 }
 
-function stripDateSuffix(modelName: string): string {
+/** Vendor date/version suffixes: `gpt-4o-2024-08-06`, `claude-3-7-sonnet-20250219`. */
+export function stripDateSuffix(modelName: string): string {
   // Vendor date/version suffixes: `gpt-4o-2024-08-06`, `claude-3-7-sonnet-20250219`.
   return modelName
     .replace(/-\d{4}-\d{2}-\d{2}$/, '')
@@ -207,6 +213,19 @@ export async function syncModelsDevPrices(): Promise<boolean> {
       return false;
     }
     modelsDevPrices = parsed;
+
+    // Capability table rides the same fetch; a failure here must never
+    // break the price sync (capabilities are informational metadata).
+    try {
+      const caps = parseModelsDevCapabilities(text);
+      if (caps && caps.size > 0) {
+        setModelsDevCapabilities(caps);
+        console.info(`[models.dev] synced ${caps.size} model capabilities`);
+      }
+    } catch (capError) {
+      console.warn(`[models.dev] capability parse failed: ${String(capError)}`);
+    }
+
     lastSyncAtMs = Date.now();
     clearRetryTimer();
     console.info(`[models.dev] synced ${parsed.size} model prices`);

@@ -12,6 +12,7 @@ import { config } from "../../config.js";
 import { refreshModelsForAccount } from "../../services/modelService.js";
 import * as routeRefreshWorkflow from "../../services/routeRefreshWorkflow.js";
 import { buildModelAnalysis } from "../../services/modelAnalysisService.js";
+import { lookupModelsDevCapabilities } from "../../services/modelCapabilitiesService.js";
 import {
   fetchModelPricingCatalog,
 } from "../../services/modelPricingService.js";
@@ -1666,6 +1667,7 @@ export async function statsRoutes(app: FastifyInstance) {
                 a.localeCompare(b),
               )
             : [],
+          capabilities: lookupModelsDevCapabilities(m.name),
           pricingSources: metadata?.pricingSources || [],
           accounts,
         };
