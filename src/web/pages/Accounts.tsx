@@ -250,6 +250,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   );
   const isSub2ApiSelected =
     (selectedTokenSite?.platform || "").toLowerCase() === "sub2api";
+  // 只有 new-api / one-api 系在验证/拉模型时需要 New-Api-User 用户 ID；
+  // sub2api 等 JWT 鉴权平台填了也不生效，输入框按平台隐藏。
+  const platformRequiresUserId = (platform?: string) => {
+    const normalized = (platform || "").toLowerCase();
+    return normalized === "new-api" || normalized === "one-api";
+  };
   const activeAddCredentialMode =
     activeSegment === "apikey" ? "apikey" : "session";
   const createIntentPreset = useMemo(
@@ -1653,34 +1659,36 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         resize: "none" as const,
                       }}
                     />
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                      }}
-                    >
-                      <input
-                        placeholder="用户 ID（可选）"
-                        value={tokenForm.platformUserId}
-                        onChange={(e) => {
-                          setTokenForm((f) => ({
-                            ...f,
-                            platformUserId: e.target.value.replace(/\D/g, ""),
-                          }));
-                          setVerifyResult(null);
-                        }}
-                        style={inputStyle}
-                      />
+                    {platformRequiresUserId(selectedTokenSite?.platform) && (
                       <div
                         style={{
-                          fontSize: 12,
-                          color: "var(--color-text-muted)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
                         }}
                       >
-                        若站点要求 New-Api-User / User-ID，请在这里提前填写。
+                        <input
+                          placeholder="用户 ID（可选）"
+                          value={tokenForm.platformUserId}
+                          onChange={(e) => {
+                            setTokenForm((f) => ({
+                              ...f,
+                              platformUserId: e.target.value.replace(/\D/g, ""),
+                            }));
+                            setVerifyResult(null);
+                          }}
+                          style={inputStyle}
+                        />
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--color-text-muted)",
+                          }}
+                        >
+                          若站点要求 New-Api-User / User-ID，请在这里提前填写。
+                        </div>
                       </div>
-                    </div>
+                    )}
                     {isSub2ApiSelected && (
                       <>
                         <div
@@ -2341,18 +2349,20 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         resize: "none" as const,
                       }}
                     />
-                    <input
-                      placeholder="用户 ID（可选）"
-                      value={rebindForm.platformUserId}
-                      onChange={(e) => {
-                        setRebindForm((prev) => ({
-                          ...prev,
-                          platformUserId: e.target.value.replace(/\D/g, ""),
-                        }));
-                        setRebindVerifyResult(null);
-                      }}
-                      style={inputStyle}
-                    />
+                    {platformRequiresUserId(activeRebindTarget?.site?.platform) && (
+                      <input
+                        placeholder="用户 ID（可选）"
+                        value={rebindForm.platformUserId}
+                        onChange={(e) => {
+                          setRebindForm((prev) => ({
+                            ...prev,
+                            platformUserId: e.target.value.replace(/\D/g, ""),
+                          }));
+                          setRebindVerifyResult(null);
+                        }}
+                        style={inputStyle}
+                      />
+                    )}
                   </div>
                   {isRebindSub2Api && (
                     <>
