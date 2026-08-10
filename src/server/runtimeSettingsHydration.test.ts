@@ -16,7 +16,6 @@ describe('applyRuntimeSettings', () => {
     config.webhookEnabled = true;
     config.barkEnabled = true;
     config.serverChanEnabled = true;
-    config.globalAllowedModels = [];
 
     applyRuntimeSettings(new Map([
       ['disable_cross_protocol_fallback', JSON.stringify(true)],
@@ -24,7 +23,6 @@ describe('applyRuntimeSettings', () => {
       ['webhook_enabled', JSON.stringify(false)],
       ['bark_enabled', JSON.stringify(false)],
       ['serverchan_enabled', JSON.stringify(false)],
-      ['global_allowed_models', JSON.stringify(['gpt-5.4', ' claude-3.7-sonnet '])],
     ]));
 
     expect(config.disableCrossProtocolFallback).toBe(true);
@@ -32,7 +30,6 @@ describe('applyRuntimeSettings', () => {
     expect(config.webhookEnabled).toBe(false);
     expect(config.barkEnabled).toBe(false);
     expect(config.serverChanEnabled).toBe(false);
-    expect(config.globalAllowedModels).toEqual(['gpt-5.4', 'claude-3.7-sonnet']);
   });
 
   it('normalizes smtpPort to a positive integer during hydration', () => {
@@ -43,15 +40,5 @@ describe('applyRuntimeSettings', () => {
     ]));
 
     expect(config.smtpPort).toBe(587);
-  });
-
-  it('hydrates legacy double-encoded global model allowlist values', () => {
-    config.globalAllowedModels = [];
-
-    applyRuntimeSettings(new Map([
-      ['global_allowed_models', JSON.stringify(JSON.stringify(['model-alpha', ' model-beta ', 'model-gamma']))],
-    ]));
-
-    expect(config.globalAllowedModels).toEqual(['model-alpha', 'model-beta', 'model-gamma']);
   });
 });

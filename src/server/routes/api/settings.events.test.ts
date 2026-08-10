@@ -80,8 +80,6 @@ describe('settings and auth events', () => {
     (config as any).telegramBotToken = '';
     (config as any).telegramChatId = '';
     (config as any).telegramMessageThreadId = '';
-    config.globalBlockedBrands = [];
-    config.globalAllowedModels = [];
   });
 
   afterAll(async () => {
@@ -661,32 +659,6 @@ describe('settings and auth events', () => {
       'too many requests',
     ]);
     expect(runtime.proxyEmptyContentFailEnabled).toBe(true);
-  });
-
-  it('persists global model and brand filters as JSON arrays', async () => {
-    const updateResponse = await app.inject({
-      method: 'PUT',
-      url: '/api/settings/runtime',
-      payload: {
-        globalAllowedModels: ['model-alpha', ' model-beta ', 'model-alpha', 'model-gamma'],
-        globalBlockedBrands: ['Codex', ' Codex ', 'Gemini'],
-      },
-    });
-
-    expect(updateResponse.statusCode).toBe(200);
-    const updated = updateResponse.json() as {
-      globalAllowedModels?: string[];
-      globalBlockedBrands?: string[];
-    };
-    expect(updated.globalAllowedModels).toEqual(['model-alpha', 'model-beta', 'model-gamma']);
-    expect(updated.globalBlockedBrands).toEqual(['Codex', 'Gemini']);
-
-    const rows = await db.select().from(schema.settings).all();
-    const settingsMap = new Map(rows.map((row: any) => [row.key, row.value]));
-    expect(settingsMap.get('global_allowed_models')).toBe(JSON.stringify(['model-alpha', 'model-beta', 'model-gamma']));
-    expect(JSON.parse(settingsMap.get('global_allowed_models') || 'null')).toEqual(['model-alpha', 'model-beta', 'model-gamma']);
-    expect(settingsMap.get('global_blocked_brands')).toBe(JSON.stringify(['Codex', 'Gemini']));
-    expect(JSON.parse(settingsMap.get('global_blocked_brands') || 'null')).toEqual(['Codex', 'Gemini']);
   });
 
   it('persists and returns log cleanup settings from runtime settings', async () => {

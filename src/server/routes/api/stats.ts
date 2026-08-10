@@ -1714,13 +1714,6 @@ export async function statsRoutes(app: FastifyInstance) {
         return name;
       };
 
-      // Load global allowed models whitelist
-      const globalAllowedModels = new Set(
-        config.globalAllowedModels
-          .map((m) => m.toLowerCase().trim())
-          .filter(Boolean),
-      );
-
       const rows = await db
         .select()
         .from(schema.tokenModelAvailability)
@@ -2032,49 +2025,10 @@ export async function statsRoutes(app: FastifyInstance) {
         }
       }
 
-      // Apply model whitelist filter if configured
-      const filteredResult: typeof result = {};
-      const filteredModelsWithoutToken: typeof modelsWithoutToken = {};
-      const filteredModelsMissingTokenGroups: typeof modelsMissingTokenGroups =
-        {};
-
-      if (globalAllowedModels.size > 0) {
-        // Filter result
-        for (const [modelName, candidates] of Object.entries(result)) {
-          if (globalAllowedModels.has(modelName.toLowerCase().trim())) {
-            filteredResult[modelName] = candidates;
-          }
-        }
-        // Filter modelsWithoutToken
-        for (const [modelName, accounts] of Object.entries(
-          modelsWithoutToken,
-        )) {
-          if (globalAllowedModels.has(modelName.toLowerCase().trim())) {
-            filteredModelsWithoutToken[modelName] = accounts;
-          }
-        }
-        // Filter modelsMissingTokenGroups
-        for (const [modelName, accounts] of Object.entries(
-          modelsMissingTokenGroups,
-        )) {
-          if (globalAllowedModels.has(modelName.toLowerCase().trim())) {
-            filteredModelsMissingTokenGroups[modelName] = accounts;
-          }
-        }
-      } else {
-        // No whitelist configured, return all models (backward compatible)
-        Object.assign(filteredResult, result);
-        Object.assign(filteredModelsWithoutToken, modelsWithoutToken);
-        Object.assign(
-          filteredModelsMissingTokenGroups,
-          modelsMissingTokenGroups,
-        );
-      }
-
       return {
-        models: filteredResult,
-        modelsWithoutToken: filteredModelsWithoutToken,
-        modelsMissingTokenGroups: filteredModelsMissingTokenGroups,
+        models: result,
+        modelsWithoutToken,
+        modelsMissingTokenGroups,
         endpointTypesByModel,
       };
     },

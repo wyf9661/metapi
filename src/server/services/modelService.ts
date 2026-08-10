@@ -18,7 +18,6 @@ import {
   supportsDirectAccountRoutingConnection,
 } from './accountExtraConfig.js';
 import { invalidateTokenRouterCache } from './tokenRouter.js';
-import { getBlockedBrandRules, isModelBlockedByBrand } from './brandMatcher.js';
 import { config } from '../config.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { clearAllRouteDecisionSnapshots } from './routeDecisionSnapshotStore.js';
@@ -1396,21 +1395,6 @@ export async function rebuildTokenRoutesFromAvailability() {
   // Load site-level disabled models (raw + canonical match)
   const disabledModelsIndex = await loadSiteDisabledModelsIndex();
 
-  // Load global brand filter
-  const blockedBrandRules = getBlockedBrandRules(config.globalBlockedBrands);
-
-  // Load global allowed models whitelist
-  const globalAllowedModels = new Set(
-    config.globalAllowedModels.map((m) => m.toLowerCase().trim()).filter(Boolean),
-  );
-
-  function isModelAllowedByWhitelist(modelName: string): boolean {
-    // If whitelist is empty, allow all models (backward compatible)
-    if (globalAllowedModels.size === 0) return true;
-    // Check if model is in whitelist (case-insensitive)
-    return globalAllowedModels.has(modelName.toLowerCase().trim());
-  }
-
   const enabledOauthRouteUnits = await listEnabledOauthRouteUnitsWithMembers();
   const routeUnitByAccountId = new Map<number, {
     routeUnitId: number;
@@ -1458,9 +1442,7 @@ export async function rebuildTokenRoutesFromAvailability() {
   ) => {
     const sourceModel = (modelNameRaw || '').trim();
     if (!sourceModel) return;
-    if (!isModelAllowedByWhitelist(sourceModel)) return;
     if (isModelDisabledForSite(disabledModelsIndex, siteId, sourceModel)) return;
-    if (blockedBrandRules.length > 0 && isModelBlockedByBrand(sourceModel, blockedBrandRules)) return;
     const modelName = canonicalizeModelName(sourceModel) || sourceModel;
     if (!modelCandidates.has(modelName)) modelCandidates.set(modelName, new Map());
     const candidate = { accountId, tokenId, oauthRouteUnitId, sourceModel };

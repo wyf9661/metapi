@@ -13,7 +13,6 @@ const { apiMock } = vi.hoisted(() => ({
     getRoutesLite: vi.fn(),
     getRuntimeDatabaseConfig: vi.fn(),
     getDesktopInfo: vi.fn().mockResolvedValue(null),
-    getBrandList: vi.fn(),
     updateRuntimeSettings: vi.fn(),
     getModelTokenCandidates: vi.fn(),
   },
@@ -65,7 +64,6 @@ describe('Settings route cooldown cap', () => {
     });
     apiMock.getDownstreamApiKeys.mockResolvedValue({ items: [] });
     apiMock.getRoutesLite.mockResolvedValue([]);
-    apiMock.getBrandList.mockResolvedValue({ brands: [] });
     apiMock.getRuntimeDatabaseConfig.mockResolvedValue({
       active: { dialect: 'sqlite', connection: '(default sqlite path)', ssl: false },
       saved: null,

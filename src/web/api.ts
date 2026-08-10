@@ -357,8 +357,6 @@ export type RuntimeSettingsPayload = {
   routingWeights?: RuntimeRoutingWeightsPayload;
   proxyErrorKeywords?: string[] | string;
   proxyEmptyContentFailEnabled?: boolean;
-  globalBlockedBrands?: string[];
-  globalAllowedModels?: string[];
 };
 
 export type ProxyLogStatusFilter = "all" | "success" | "failed";
@@ -1242,7 +1240,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ dashboardAccess }),
     }),
-  getBrandList: () => request("/api/settings/brand-list"),
   updateRuntimeSettings: (data: RuntimeSettingsPayload) =>
     request("/api/settings/runtime", {
       method: "PUT",
