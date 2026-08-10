@@ -27,7 +27,7 @@ describe('live schema parity', () => {
     });
     const live = await introspectLiveSchema({ dialect: 'mysql', connectionString: mysqlUrl });
     expect(live).toEqual(contract);
-  });
+  }, 60_000);
 
   postgresParity('matches the contract for postgres', async () => {
     const postgresUrl = await materializeFreshSchema('postgres', {
@@ -35,5 +35,5 @@ describe('live schema parity', () => {
     });
     const live = await introspectLiveSchema({ dialect: 'postgres', connectionString: postgresUrl });
     expect(live).toEqual(contract);
-  });
+  }, 60_000);
 });

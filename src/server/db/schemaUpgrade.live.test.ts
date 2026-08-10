@@ -21,7 +21,7 @@ describe('schema upgrade parity', () => {
     });
     const live = await introspectLiveSchema({ dialect: 'mysql', connectionString: mysqlUrl });
     expect(live).toEqual(currentContract);
-  });
+  }, 60_000);
 
   postgresUpgrade('upgrades postgres to the current contract', async () => {
     const postgresUrl = await applyContractFixtureThenUpgrade('postgres', baselineContract, currentContract, {
@@ -29,5 +29,5 @@ describe('schema upgrade parity', () => {
     });
     const live = await introspectLiveSchema({ dialect: 'postgres', connectionString: postgresUrl });
     expect(live).toEqual(currentContract);
-  });
+  }, 60_000);
 });
