@@ -26,9 +26,6 @@ import type {
 import type {
   BackupImportPayload,
 } from "../server/contracts/settingsRoutePayloads.js";
-import type {
-  UpdateCenterConfigPayload,
-} from "../server/contracts/supportRoutePayloads.js";
 
 type BufferLike = {
   from(data: ArrayBuffer): { toString(encoding: "base64"): string };
@@ -198,80 +195,6 @@ async function request<T = any>(
     throw new Error(await extractResponseErrorMessage(res));
   }
   return res.json() as Promise<T>;
-}
-
-async function streamSse(
-  url: string,
-  handlers: {
-    onLog?: (entry: any) => void;
-    onDone?: (payload: any) => void;
-    signal?: AbortSignal;
-  },
-) {
-  const response = await fetchAuthenticatedResponse(url, {
-    method: "GET",
-    signal: handlers.signal,
-    headers: {
-      Accept: "text/event-stream",
-    },
-    timeoutMs: 120_000,
-  });
-
-  if (!response.ok) {
-    throw new Error(await extractResponseErrorMessage(response));
-  }
-  if (!response.body) {
-    throw new Error("响应未返回流式内容");
-  }
-
-  const decoder = new TextDecoder();
-  const reader = response.body.getReader();
-  let buffer = "";
-
-  const flushBuffer = (final = false) => {
-    const chunks = final ? [...buffer.split("\n\n"), ""] : buffer.split("\n\n");
-    if (!final) buffer = chunks.pop() || "";
-    else buffer = "";
-
-    for (const chunk of chunks) {
-      const lines = chunk.split("\n");
-      let eventName = "message";
-      const dataLines: string[] = [];
-
-      for (const line of lines) {
-        if (line.startsWith("event:")) {
-          eventName = line.slice("event:".length).trim() || "message";
-        } else if (line.startsWith("data:")) {
-          dataLines.push(line.slice("data:".length).trim());
-        }
-      }
-
-      if (dataLines.length <= 0) continue;
-      let payload: any = dataLines.join("\n");
-      try {
-        payload = JSON.parse(payload);
-      } catch {
-        // keep string payload
-      }
-
-      if (eventName === "log") {
-        handlers.onLog?.(payload);
-      } else if (eventName === "done") {
-        handlers.onDone?.(payload);
-      }
-    }
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    flushBuffer(false);
-  }
-
-  if (buffer.trim()) {
-    flushBuffer(true);
-  }
 }
 
 function buildQueryString(
@@ -1326,42 +1249,11 @@ export const api = {
       body: JSON.stringify(data),
     }),
   getUpdateCenterStatus: () => request("/api/update-center/status"),
-  saveUpdateCenterConfig: (data: UpdateCenterConfigPayload) =>
-    request("/api/update-center/config", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
   checkUpdateCenter: () =>
     request("/api/update-center/check", {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  deployUpdateCenter: (data: {
-    source: "github-release" | "docker-hub-tag";
-    targetTag: string;
-    targetDigest?: string | null;
-  }) =>
-    request("/api/update-center/deploy", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  rollbackUpdateCenter: (data: { targetRevision: string }) =>
-    request("/api/update-center/rollback", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  streamUpdateCenterTaskLogs: (
-    taskId: string,
-    handlers: {
-      onLog?: (entry: any) => void;
-      onDone?: (payload: any) => void;
-      signal?: AbortSignal;
-    },
-  ) =>
-    streamSse(
-      `/api/update-center/tasks/${encodeURIComponent(taskId)}/stream`,
-      handlers,
-    ),
 
   getRuntimeDatabaseConfig: () => request("/api/settings/database/runtime"),
   updateRuntimeDatabaseConfig: (data: {

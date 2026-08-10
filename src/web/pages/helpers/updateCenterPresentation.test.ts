@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildUpdateReminder,
-  describeDockerDeployState,
-} from './updateCenterPresentation.js';
+import { buildUpdateReminder } from './updateCenterPresentation.js';
 
 describe('updateCenterPresentation', () => {
   it('returns an unknown reminder when no candidate source data is available', () => {
@@ -18,68 +15,6 @@ describe('updateCenterPresentation', () => {
       detail: '暂未获取到可比较的版本信息。',
       highlight: false,
     });
-  });
-
-  it('treats a same-version Docker target with a different digest as a real new-digest deploy', () => {
-    const state = describeDockerDeployState({
-      enabled: true,
-      helperHealthy: true,
-      currentVersion: '1.2.3',
-      helper: {
-        imageTag: '1.2.3',
-        imageDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      },
-      candidate: {
-        normalizedVersion: '1.2.3',
-        tagName: '1.2.3',
-        digest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      },
-    });
-
-    expect(state.kind).toBe('new-digest');
-    expect(state.canDeploy).toBe(true);
-    expect(state.badgeLabel).toBe('发现新 digest');
-  });
-
-  it('treats semver tags with and without a v prefix as the same Docker digest target', () => {
-    const state = describeDockerDeployState({
-      enabled: true,
-      helperHealthy: true,
-      currentVersion: '1.2.3',
-      helper: {
-        imageTag: 'v1.2.3',
-        imageDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      },
-      candidate: {
-        normalizedVersion: '1.2.3',
-        tagName: '1.2.3',
-        digest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      },
-    });
-
-    expect(state.kind).toBe('new-digest');
-    expect(state.canDeploy).toBe(true);
-  });
-
-  it('treats alias tags like latest as a new digest deploy target when the digest changes', () => {
-    const state = describeDockerDeployState({
-      enabled: true,
-      helperHealthy: true,
-      currentVersion: '1.2.3',
-      helper: {
-        imageTag: 'latest',
-        imageDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      },
-      candidate: {
-        normalizedVersion: 'latest',
-        tagName: 'latest',
-        digest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      },
-    });
-
-    expect(state.kind).toBe('new-digest');
-    expect(state.canDeploy).toBe(true);
-    expect(state.badgeLabel).toBe('发现新 digest');
   });
 
   it('does not advertise an older GitHub reminder when the helper is already ahead', () => {

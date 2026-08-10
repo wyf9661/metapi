@@ -78,7 +78,6 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
       env.ALLOW_GLOBAL_PROXY_TOKEN,
       (env.NODE_ENV || '').toLowerCase() !== 'production',
     ),
-    deployHelperToken: parseOptionalSecret(env.DEPLOY_HELPER_TOKEN || env.UPDATE_CENTER_HELPER_TOKEN),
     codexClientId: parseOptionalSecret(env.CODEX_CLIENT_ID) || DEFAULT_CODEX_CLIENT_ID,
     claudeClientId: parseOptionalSecret(env.CLAUDE_CLIENT_ID) || DEFAULT_CLAUDE_CLIENT_ID,
     claudeClientSecret: parseOptionalSecret(env.CLAUDE_CLIENT_SECRET),

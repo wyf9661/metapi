@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-const updateCenterVersionSourceSchema = z.enum(['docker-hub-tag', 'github-release']);
-
 const authChangePayloadSchema = z.object({
   oldToken: z.string().optional(),
   newToken: z.string().optional(),
@@ -53,29 +51,6 @@ const oauthRouteUnitUpdatePayloadSchema = z.object({
   strategy: oauthRouteUnitStrategySchema.optional(),
 }).passthrough();
 
-const updateCenterConfigPayloadSchema = z.object({
-  enabled: z.boolean().optional(),
-  helperBaseUrl: z.string().optional(),
-  namespace: z.string().optional(),
-  releaseName: z.string().optional(),
-  chartRef: z.string().optional(),
-  imageRepository: z.string().optional(),
-  githubReleasesEnabled: z.boolean().optional(),
-  dockerHubTagsEnabled: z.boolean().optional(),
-  defaultDeploySource: updateCenterVersionSourceSchema.optional(),
-}).passthrough();
-
-const updateCenterDeployPayloadSchema = z.object({
-  source: updateCenterVersionSourceSchema.optional(),
-  targetVersion: z.string().optional(),
-  targetTag: z.string().optional(),
-  targetDigest: z.string().optional(),
-}).passthrough();
-
-const updateCenterRollbackPayloadSchema = z.object({
-  targetRevision: z.string().optional(),
-}).passthrough();
-
 export type AuthChangePayload = z.output<typeof authChangePayloadSchema>;
 
 export type OauthConnectionRebindPayload = z.output<typeof oauthConnectionRebindPayloadSchema>;
@@ -86,9 +61,6 @@ export type OauthQuotaBatchRefreshPayload = z.output<typeof oauthQuotaBatchRefre
 export type OauthRouteUnitCreatePayload = z.output<typeof oauthRouteUnitCreatePayloadSchema>;
 export type OauthRouteUnitUpdatePayload = z.output<typeof oauthRouteUnitUpdatePayloadSchema>;
 export type OauthStartPayload = z.output<typeof oauthStartPayloadSchema>;
-export type UpdateCenterConfigPayload = z.output<typeof updateCenterConfigPayloadSchema>;
-export type UpdateCenterDeployPayload = z.output<typeof updateCenterDeployPayloadSchema>;
-export type UpdateCenterRollbackPayload = z.output<typeof updateCenterRollbackPayloadSchema>;
 
 function normalizeSupportRoutePayloadInput(input: unknown): unknown {
   return input === undefined ? {} : input;
@@ -242,19 +214,4 @@ export function parseOauthRouteUnitCreatePayload(input: unknown):
 export function parseOauthRouteUnitUpdatePayload(input: unknown):
 { success: true; data: OauthRouteUnitUpdatePayload } | { success: false; error: string } {
   return parseSupportRoutePayload(oauthRouteUnitUpdatePayloadSchema, input);
-}
-
-export function parseUpdateCenterConfigPayload(input: unknown):
-{ success: true; data: UpdateCenterConfigPayload } | { success: false; error: string } {
-  return parseSupportRoutePayload(updateCenterConfigPayloadSchema, input);
-}
-
-export function parseUpdateCenterDeployPayload(input: unknown):
-{ success: true; data: UpdateCenterDeployPayload } | { success: false; error: string } {
-  return parseSupportRoutePayload(updateCenterDeployPayloadSchema, input);
-}
-
-export function parseUpdateCenterRollbackPayload(input: unknown):
-{ success: true; data: UpdateCenterRollbackPayload } | { success: false; error: string } {
-  return parseSupportRoutePayload(updateCenterRollbackPayloadSchema, input);
 }

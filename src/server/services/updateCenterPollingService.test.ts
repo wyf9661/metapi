@@ -98,17 +98,6 @@ describe('updateCenterPollingService', () => {
           },
           dockerHubTag: null,
           dockerHubRecentTags: [],
-          helper: {
-            ok: true,
-            releaseName: 'metapi',
-            namespace: 'ai',
-            revision: '12',
-            imageRepository: '1467078763/metapi',
-            imageTag: '1.2.3',
-            imageDigest: null,
-            healthy: true,
-            history: [],
-          },
         },
       };
       return {
@@ -117,7 +106,6 @@ describe('updateCenterPollingService', () => {
           githubRelease: runtime.statusSnapshot.githubRelease,
           dockerHubTag: null,
           dockerHubRecentTags: [],
-          helper: runtime.statusSnapshot.helper,
           runtime,
         },
         candidate: {
@@ -159,9 +147,6 @@ describe('updateCenterPollingService', () => {
         }),
         dockerHubTag: null,
         dockerHubRecentTags: [],
-        helper: expect.objectContaining({
-          imageTag: '1.2.3',
-        }),
       }),
     }));
 
@@ -209,17 +194,6 @@ describe('updateCenterPollingService', () => {
           },
           dockerHubTag: null,
           dockerHubRecentTags: [],
-          helper: {
-            ok: true,
-            releaseName: 'metapi',
-            namespace: 'ai',
-            revision: '12',
-            imageRepository: '1467078763/metapi',
-            imageTag: '1.2.3',
-            imageDigest: null,
-            healthy: true,
-            history: [],
-          },
         },
       };
       return {
@@ -228,7 +202,6 @@ describe('updateCenterPollingService', () => {
           githubRelease: runtime.statusSnapshot.githubRelease,
           dockerHubTag: null,
           dockerHubRecentTags: [],
-          helper: runtime.statusSnapshot.helper,
           runtime,
         },
         candidate: {
@@ -262,9 +235,6 @@ describe('updateCenterPollingService', () => {
         }),
         dockerHubTag: null,
         dockerHubRecentTags: [],
-        helper: expect.objectContaining({
-          imageTag: '1.2.3',
-        }),
       }),
     }));
   });

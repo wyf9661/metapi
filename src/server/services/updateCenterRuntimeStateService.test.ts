@@ -100,28 +100,6 @@ describe('updateCenterRuntimeStateService', () => {
             publishedAt: '2026-03-30T20:35:00Z',
           },
         ],
-        helper: {
-          ok: true,
-          releaseName: 'metapi',
-          namespace: 'ai',
-          revision: '12',
-          imageRepository: '1467078763/metapi',
-          imageTag: 'latest',
-          imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-          healthy: true,
-          error: undefined,
-          history: [
-            {
-              revision: '11',
-              updatedAt: '2026-03-29T20:00:00Z',
-              status: 'superseded',
-              description: 'Rollback to stable digest',
-              imageRepository: '1467078763/metapi',
-              imageTag: 'main',
-              imageDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-            },
-          ],
-        },
       },
     });
 
@@ -166,28 +144,6 @@ describe('updateCenterRuntimeStateService', () => {
             publishedAt: '2026-03-30T20:35:00Z',
           },
         ],
-        helper: {
-          ok: true,
-          releaseName: 'metapi',
-          namespace: 'ai',
-          revision: '12',
-          imageRepository: '1467078763/metapi',
-          imageTag: 'latest',
-          imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-          healthy: true,
-          error: undefined,
-          history: [
-            {
-              revision: '11',
-              updatedAt: '2026-03-29T20:00:00Z',
-              status: 'superseded',
-              description: 'Rollback to stable digest',
-              imageRepository: '1467078763/metapi',
-              imageTag: 'main',
-              imageDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-            },
-          ],
-        },
       },
     });
   });
