@@ -19,6 +19,7 @@ const { apiMock } = vi.hoisted(() => ({
     getRoutes: vi.fn(),
     startTestChatJob: vi.fn(),
     getTestChatJob: vi.fn(),
+    getDesktopInfo: vi.fn().mockResolvedValue({ baseUrl: 'http://127.0.0.1:5000', port: 5000 }),
   },
 }));
 

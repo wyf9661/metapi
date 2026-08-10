@@ -8,6 +8,7 @@ import { installDashboardSnapshotCompat } from './testApiCompat.js';
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getDashboard: vi.fn(),
+    getDesktopInfo: vi.fn().mockResolvedValue({ baseUrl: 'http://127.0.0.1:5000', port: 5000 }),
     getDashboardSnapshot: vi.fn(),
     getDashboardInsights: vi.fn(),
     getSiteSnapshot: vi.fn(),
