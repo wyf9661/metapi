@@ -1,11 +1,11 @@
-import { getAccountsSnapshot } from "./accountsOverviewService.js";
-import { deleteExpiredAdminSnapshots } from "./adminSnapshotStore.js";
+import { getAccountsSnapshot } from './accountsOverviewService.js';
+import { deleteExpiredAdminSnapshots } from './adminSnapshotStore.js';
 import {
   getDashboardInsightsSnapshot,
   getDashboardSummarySnapshot,
-} from "./dashboardSnapshotService.js";
-import { getSiteStatsSnapshot } from "./siteStatsSnapshotService.js";
-import { runUsageAggregationProjectionPass } from "./usageAggregationService.js";
+} from './dashboardSnapshotService.js';
+import { getSiteStatsSnapshot } from './siteStatsSnapshotService.js';
+import { runUsageAggregationProjectionPass } from './usageAggregationService.js';
 
 const ADMIN_SNAPSHOT_WARM_INTERVAL_MS = 20_000;
 const ADMIN_SNAPSHOT_PRUNE_EVERY_PASSES = 6;
@@ -21,19 +21,19 @@ let completedWarmPassCount = 0;
 
 const snapshotWarmTargets: SnapshotWarmTarget[] = [
   {
-    name: "dashboard-summary",
+    name: 'dashboard-summary',
     refresh: () => getDashboardSummarySnapshot({ forceRefresh: true }),
   },
   {
-    name: "accounts-snapshot",
+    name: 'accounts-snapshot',
     refresh: () => getAccountsSnapshot({ forceRefresh: true }),
   },
   {
-    name: "site-stats",
+    name: 'site-stats',
     refresh: () => getSiteStatsSnapshot({ days: 7, forceRefresh: true }),
   },
   {
-    name: "dashboard-insights",
+    name: 'dashboard-insights',
     refresh: () => getDashboardInsightsSnapshot({ forceRefresh: true }),
   },
 ];
@@ -48,12 +48,12 @@ async function runAdminSnapshotWarmPass() {
   );
 
   for (const result of settled) {
-    if (result.status === "rejected") {
+    if (result.status === 'rejected') {
       console.warn(
         `[AdminSnapshotWarm] Failed to refresh snapshot: ${
           result.reason instanceof Error
             ? result.reason.message
-            : String(result.reason || "unknown error")
+            : String(result.reason || 'unknown error')
         }`,
       );
     }

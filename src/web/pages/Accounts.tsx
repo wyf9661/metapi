@@ -1,108 +1,108 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { api } from "../api.js";
-import CenteredModal from "../components/CenteredModal.js";
-import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";
-import { useToast } from "../components/Toast.js";
-import ModernSelect from "../components/ModernSelect.js";
-import { MobileCard, MobileField } from "../components/MobileCard.js";
-import { useIsMobile } from "../components/useIsMobile.js";
-import { pageForItemIndex } from "../components/clientPagination.js";
-import PaginationControls from "../components/PaginationControls.js";
-import { useClientPagination } from "../components/useClientPagination.js";
-import DeleteConfirmModal from "../components/DeleteConfirmModal.js";
-import SiteBadgeLink from "../components/SiteBadgeLink.js";
-import AccountModelsModal from "./accounts/AccountModelsModal.js";
-import EditAccountModal from "./accounts/EditAccountModal.js";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { api } from '../api.js';
+import CenteredModal from '../components/CenteredModal.js';
+import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
+import { useToast } from '../components/Toast.js';
+import ModernSelect from '../components/ModernSelect.js';
+import { MobileCard, MobileField } from '../components/MobileCard.js';
+import { useIsMobile } from '../components/useIsMobile.js';
+import { pageForItemIndex } from '../components/clientPagination.js';
+import PaginationControls from '../components/PaginationControls.js';
+import { useClientPagination } from '../components/useClientPagination.js';
+import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
+import SiteBadgeLink from '../components/SiteBadgeLink.js';
+import AccountModelsModal from './accounts/AccountModelsModal.js';
+import EditAccountModal from './accounts/EditAccountModal.js';
 import {
   buildAddAccountPrereqHint,
   buildVerifyFailureHint,
   normalizeVerifyFailureMessage,
-} from "./helpers/accountVerifyFeedback.js";
+} from './helpers/accountVerifyFeedback.js';
 import {
   isTruthyFlag,
   parsePositiveInt,
   resolveAccountCredentialMode,
-} from "./helpers/accountConnection.js";
+} from './helpers/accountConnection.js';
 import {
   clearFocusParams,
   readFocusAccountIntent,
-} from "./helpers/navigationFocus.js";
-import { TokensPanel } from "./tokens/TokensPanel.js";
-import { tr } from "../i18n.js";
+} from './helpers/navigationFocus.js';
+import { TokensPanel } from './tokens/TokensPanel.js';
+import { tr } from '../i18n.js';
 import {
   buildCustomReorderUpdates,
   sortItemsForDisplay,
   type SortMode,
-} from "./helpers/listSorting.js";
-import { SITE_DOCS_URL } from "../docsLink.js";
-import { getSiteInitializationPreset } from "../../shared/siteInitializationPresets.js";
-import { parseBatchApiKeys } from "../../shared/apiKeyBatch.js";
+} from './helpers/listSorting.js';
+import { SITE_DOCS_URL } from '../docsLink.js';
+import { getSiteInitializationPreset } from '../../shared/siteInitializationPresets.js';
+import { parseBatchApiKeys } from '../../shared/apiKeyBatch.js';
 
-type ConnectionsSegment = "session" | "apikey" | "tokens";
+type ConnectionsSegment = 'session' | 'apikey' | 'tokens';
 
 const ACCOUNT_SEGMENTS: Array<{
   value: ConnectionsSegment;
   label: string;
   tooltip: string;
-  tooltipSide: "top" | "bottom";
-  tooltipAlign: "start" | "center" | "end";
+  tooltipSide: 'top' | 'bottom';
+  tooltipAlign: 'start' | 'center' | 'end';
 }> = [
   {
-    value: "session",
-    label: "账号管理",
-    tooltip: "用于签到、余额、状态维护",
-    tooltipSide: "bottom",
-    tooltipAlign: "start",
+    value: 'session',
+    label: '账号管理',
+    tooltip: '用于签到、余额、状态维护',
+    tooltipSide: 'bottom',
+    tooltipAlign: 'start',
   },
   {
-    value: "apikey",
-    label: "API Key管理",
-    tooltip: "只有 Base URL + Key 时使用，只负责代理调用",
-    tooltipSide: "bottom",
-    tooltipAlign: "center",
+    value: 'apikey',
+    label: 'API Key管理',
+    tooltip: '只有 Base URL + Key 时使用，只负责代理调用',
+    tooltipSide: 'bottom',
+    tooltipAlign: 'center',
   },
   {
-    value: "tokens",
-    label: "账号令牌管理",
-    tooltip: "从账号同步或手动维护，供路由实际调用",
-    tooltipSide: "bottom",
-    tooltipAlign: "end",
+    value: 'tokens',
+    label: '账号令牌管理',
+    tooltip: '从账号同步或手动维护，供路由实际调用',
+    tooltipSide: 'bottom',
+    tooltipAlign: 'end',
   },
 ];
 
-const SITE_SELECT_SEARCH_PLACEHOLDER = "筛选站点（名称 / 平台 / URL）";
+const SITE_SELECT_SEARCH_PLACEHOLDER = '筛选站点（名称 / 平台 / URL）';
 
 function createLoginForm() {
-  return { siteId: 0, username: "", password: "" };
+  return { siteId: 0, username: '', password: '' };
 }
 
-function createTokenForm(credentialMode: "session" | "apikey" = "session") {
+function createTokenForm(credentialMode: 'session' | 'apikey' = 'session') {
   return {
     siteId: 0,
-    username: "",
-    accessToken: "",
-    platformUserId: "",
-    refreshToken: "",
-    tokenExpiresAt: "",
+    username: '',
+    accessToken: '',
+    platformUserId: '',
+    refreshToken: '',
+    tokenExpiresAt: '',
     credentialMode,
     skipModelFetch: false,
   };
 }
 
-function createRebindForm(platformUserId = "") {
+function createRebindForm(platformUserId = '') {
   return {
-    accessToken: "",
+    accessToken: '',
     platformUserId,
-    refreshToken: "",
-    tokenExpiresAt: "",
+    refreshToken: '',
+    tokenExpiresAt: '',
   };
 }
 
 function resolveConnectionsSegment(search: string): ConnectionsSegment {
-  const rawSegment = new URLSearchParams(search).get("segment");
-  if (rawSegment === "apikey" || rawSegment === "tokens") return rawSegment;
-  return "session";
+  const rawSegment = new URLSearchParams(search).get('segment');
+  if (rawSegment === 'apikey' || rawSegment === 'tokens') return rawSegment;
+  return 'session';
 }
 
 type AccountsProps = {
@@ -119,7 +119,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [sites, setSites] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>("custom");
+  const [sortMode, setSortMode] = useState<SortMode>('custom');
   const [highlightAccountId, setHighlightAccountId] = useState<number | null>(
     null,
   );
@@ -127,9 +127,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const isMobile = useIsMobile();
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [addMode, setAddMode] = useState<"token" | "login">("token");
+  const [addMode, setAddMode] = useState<'token' | 'login'>('token');
   const [loginForm, setLoginForm] = useState(createLoginForm);
-  const [tokenForm, setTokenForm] = useState(() => createTokenForm("session"));
+  const [tokenForm, setTokenForm] = useState(() => createTokenForm('session'));
   const [createIntentPresetId, setCreateIntentPresetId] = useState<
     string | null
   >(null);
@@ -143,7 +143,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const [embeddedTokenActions, setEmbeddedTokenActions] =
     useState<React.ReactNode>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
-    mode: "single";
+    mode: 'single';
     accountId?: number;
     accountName?: string;
   }>(null);
@@ -175,8 +175,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     pendingDisabled: new Set(),
     loading: false,
     saving: false,
-    siteName: "",
-    manualModelsInput: "",
+    siteName: '',
+    manualModelsInput: '',
     addingManualModels: false,
   });
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
@@ -187,7 +187,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   if (rebindTarget) lastRebindTargetRef.current = rebindTarget;
   const activeRebindTarget = rebindTarget || lastRebindTargetRef.current;
   const isRebindSub2Api =
-    (activeRebindTarget?.site?.platform || "").toLowerCase() === "sub2api";
+    (activeRebindTarget?.site?.platform || '').toLowerCase() === 'sub2api';
 
   const load = async (forceRefresh = false) => {
     try {
@@ -201,7 +201,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       setAccounts(nextAccounts);
       setSites(nextSites);
     } catch (error: any) {
-      toast.error(error?.message || "加载账号列表失败");
+      toast.error(error?.message || '加载账号列表失败');
     } finally {
       setLoaded(true);
     }
@@ -216,16 +216,16 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   );
   const parsedApiKeys = useMemo(
     () =>
-      activeSegment === "apikey"
+      activeSegment === 'apikey'
         ? parseBatchApiKeys(tokenForm.accessToken)
         : [],
     [activeSegment, tokenForm.accessToken],
   );
   const isBatchApiKeyInput =
-    activeSegment === "apikey" && parsedApiKeys.length > 1;
+    activeSegment === 'apikey' && parsedApiKeys.length > 1;
   const siteSelectOptions = useMemo(
     () => [
-      { value: "0", label: "选择站点" },
+      { value: '0', label: '选择站点' },
       ...sites.map((site: any) => ({
         value: String(site.id),
         label: `${site.name} (${site.platform})`,
@@ -235,25 +235,25 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     [sites],
   );
   const isSub2ApiSelected =
-    (selectedTokenSite?.platform || "").toLowerCase() === "sub2api";
+    (selectedTokenSite?.platform || '').toLowerCase() === 'sub2api';
   // 只有 new-api / one-api 系在验证/拉模型时需要 New-Api-User 用户 ID；
   // sub2api 等 JWT 鉴权平台填了也不生效，输入框按平台隐藏。
   const platformRequiresUserId = (platform?: string) => {
-    const normalized = (platform || "").toLowerCase();
-    return normalized === "new-api" || normalized === "one-api";
+    const normalized = (platform || '').toLowerCase();
+    return normalized === 'new-api' || normalized === 'one-api';
   };
   const activeAddCredentialMode =
-    activeSegment === "apikey" ? "apikey" : "session";
+    activeSegment === 'apikey' ? 'apikey' : 'session';
   const createIntentPreset = useMemo(
     () => getSiteInitializationPreset(createIntentPresetId),
     [createIntentPresetId],
   );
 
   const resetAddForms = (
-    credentialMode: "session" | "apikey" = activeAddCredentialMode,
+    credentialMode: 'session' | 'apikey' = activeAddCredentialMode,
   ) => {
     const currentSiteId = filterSiteId || 0;
-    setAddMode("token");
+    setAddMode('token');
     setLoginForm({ ...createLoginForm(), siteId: currentSiteId });
     setTokenForm({ ...createTokenForm(credentialMode), siteId: currentSiteId });
     setCreateIntentPresetId(null);
@@ -270,11 +270,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
   const resolveAccountDisplayName = (account: any) => {
     const username =
-      typeof account?.username === "string" ? account.username.trim() : "";
+      typeof account?.username === 'string' ? account.username.trim() : '';
     if (username) return username;
-    return resolveAccountCredentialMode(account) === "apikey"
-      ? "API Key 连接"
-      : "未命名";
+    return resolveAccountCredentialMode(account) === 'apikey'
+      ? 'API Key 连接'
+      : '未命名';
   };
 
   const sortedAccounts = useMemo(
@@ -287,7 +287,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     [accounts, sortMode],
   );
   const visibleAccounts = useMemo(() => {
-    if (activeSegment === "tokens") return [];
+    if (activeSegment === 'tokens') return [];
     return sortedAccounts.filter((account) => {
       if (filterSiteId && account.siteId !== filterSiteId && account.site?.id !== filterSiteId) {
         return false;
@@ -311,13 +311,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
   const setSegment = (nextSegment: ConnectionsSegment) => {
     const params = new URLSearchParams(location.search);
-    if (nextSegment === "session") params.delete("segment");
-    else params.set("segment", nextSegment);
+    if (nextSegment === 'session') params.delete('segment');
+    else params.set('segment', nextSegment);
     const nextSearch = params.toString();
     navigate(
       {
         pathname: location.pathname,
-        search: nextSearch ? `?${nextSearch}` : "",
+        search: nextSearch ? `?${nextSearch}` : '',
       },
       // 透传 state：从站点列表进入时的 fromSearch 必须保留，
       // 否则切换段后返回按钮丢失来源页码（回到 /sites 第 1 页）。
@@ -326,30 +326,30 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   };
 
   useEffect(() => {
-    if (activeSegment !== "tokens") return;
+    if (activeSegment !== 'tokens') return;
     closeAddPanel();
     if (rebindTarget) closeRebindPanel();
     setEditingAccount(null);
   }, [activeSegment]);
 
   useEffect(() => {
-    if (activeSegment === "tokens") return;
+    if (activeSegment === 'tokens') return;
     setEmbeddedTokenActions(null);
   }, [activeSegment]);
 
   useEffect(() => {
-    if (activeSegment === "tokens" || !loaded) return;
+    if (activeSegment === 'tokens' || !loaded) return;
     const params = new URLSearchParams(location.search);
-    const shouldOpenCreate = isTruthyFlag(params.get("create"));
-    const requestedSiteId = parsePositiveInt(params.get("siteId"));
+    const shouldOpenCreate = isTruthyFlag(params.get('create'));
+    const requestedSiteId = parsePositiveInt(params.get('siteId'));
     if (!shouldOpenCreate || !requestedSiteId) return;
 
-    const credentialMode = activeSegment === "apikey" ? "apikey" : "session";
+    const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
     const initializationPreset = getSiteInitializationPreset(
-      params.get("initPreset"),
+      params.get('initPreset'),
     );
     setShowAdd(true);
-    setAddMode("token");
+    setAddMode('token');
     setVerifyResult(null);
     setCreateIntentPresetId(initializationPreset?.id || null);
     setApplyCreatePresetModels(
@@ -360,21 +360,21 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       ...createTokenForm(credentialMode),
       siteId: requestedSiteId,
       skipModelFetch:
-        credentialMode === "apikey" &&
+        credentialMode === 'apikey' &&
         initializationPreset?.recommendedSkipModelFetch === true,
     });
     // Refresh snapshot so the selected new site is present in siteSelectOptions.
     void load(true);
 
-    params.delete("create");
-    params.delete("siteId");
-    params.delete("from");
-    params.delete("initPreset");
+    params.delete('create');
+    params.delete('siteId');
+    params.delete('from');
+    params.delete('initPreset');
     const nextSearch = params.toString();
     navigate(
       {
         pathname: location.pathname,
-        search: nextSearch ? `?${nextSearch}` : "",
+        search: nextSearch ? `?${nextSearch}` : '',
       },
       { replace: true, state: location.state },
     );
@@ -401,10 +401,10 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         toast.success(msg);
         load(true);
       } else {
-        toast.error(result.message || "登录失败");
+        toast.error(result.message || '登录失败');
       }
     } catch (e: any) {
-      toast.error(e.message || "登录请求失败");
+      toast.error(e.message || '登录请求失败');
     } finally {
       setSaving(false);
     }
@@ -418,7 +418,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       );
       return;
     }
-    const credentialMode = activeSegment === "apikey" ? "apikey" : "session";
+    const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
     setVerifying(true);
     setVerifyResult(null);
     try {
@@ -432,18 +432,18 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       });
       setVerifyResult(result);
       if (result.success) {
-        if (result.tokenType === "apikey") {
+        if (result.tokenType === 'apikey') {
           toast.success(
             `API Key 验证成功（可用模型 ${result.modelCount || 0} 个）`,
           );
         } else {
           toast.success(
-            `Session 验证成功: ${result.userInfo?.username || "未知用户"}`,
+            `Session 验证成功: ${result.userInfo?.username || '未知用户'}`,
           );
         }
       } else {
         toast.error(
-          normalizeVerifyFailureMessage(result.message || "Token 无效"),
+          normalizeVerifyFailureMessage(result.message || 'Token 无效'),
         );
       }
     } catch (e: any) {
@@ -461,10 +461,10 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       !verifyResult?.success &&
       !tokenForm.skipModelFetch
     ) {
-      toast.error("请先验证 Token 成功后再添加账号");
+      toast.error('请先验证 Token 成功后再添加账号');
       return;
     }
-    const credentialMode = activeSegment === "apikey" ? "apikey" : "session";
+    const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
     const initializationPreset = createIntentPreset;
     setSaving(true);
     try {
@@ -497,10 +497,10 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           );
         }
         const failedItems = Array.isArray(result.items)
-          ? result.items.filter((item: any) => item?.status === "failed")
+          ? result.items.filter((item: any) => item?.status === 'failed')
           : [];
         if (failedItems.length > 0) {
-          const firstMessage = failedItems[0]?.message || "创建失败";
+          const firstMessage = failedItems[0]?.message || '创建失败';
           toast.error(`失败 ${failedItems.length} 条：${firstMessage}`);
         }
         load(true);
@@ -510,7 +510,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       const recommendedModels = initializationPreset?.recommendedModels || [];
       const createdAccountId = Number(result?.id) || 0;
       const shouldSeedRecommendedModels =
-        credentialMode === "apikey" &&
+        credentialMode === 'apikey' &&
         tokenForm.skipModelFetch &&
         applyCreatePresetModels &&
         recommendedModels.length > 0 &&
@@ -523,13 +523,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           );
           seededRecommendedModels = true;
         } catch (seedErr: any) {
-          toast.error(seedErr?.message || "连接已添加，但推荐模型补录失败");
+          toast.error(seedErr?.message || '连接已添加，但推荐模型补录失败');
         }
       }
       closeAddPanel();
       if (result.queued) {
-        toast.info(result.message || "账号已添加，后台正在同步初始化信息。");
-        const jobId = typeof result.jobId === "string" ? result.jobId : "";
+        toast.info(result.message || '账号已添加，后台正在同步初始化信息。');
+        const jobId = typeof result.jobId === 'string' ? result.jobId : '';
         if (jobId) {
           // Poll init task so runtime health flips from "未知" without manual refresh.
           void (async () => {
@@ -537,8 +537,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             while (Date.now() - startedAt < 90_000) {
               try {
                 const task: any = await api.getTask(jobId);
-                const status = String(task?.status || task?.task?.status || "");
-                if (status === "succeeded" || status === "failed") {
+                const status = String(task?.status || task?.task?.status || '');
+                if (status === 'succeeded' || status === 'failed') {
                   load(true);
                   return;
                 }
@@ -550,13 +550,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             load(true);
           })();
         }
-      } else if (result.tokenType === "apikey") {
-        toast.success("已添加为 API Key 账号（可用于代理转发）");
+      } else if (result.tokenType === 'apikey') {
+        toast.success('已添加为 API Key 账号（可用于代理转发）');
       } else {
         const parts: string[] = [];
-        if (result.usernameDetected) parts.push("用户名已自动识别");
-        if (result.apiTokenFound) parts.push("API Key 已自动获取");
-        const extra = parts.length ? `（${parts.join("，")}）` : "";
+        if (result.usernameDetected) parts.push('用户名已自动识别');
+        if (result.apiTokenFound) parts.push('API Key 已自动获取');
+        const extra = parts.length ? `（${parts.join('，')}）` : '';
         toast.success(`账号已添加${extra}`);
       }
       if (seededRecommendedModels) {
@@ -566,7 +566,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       }
       load(true);
     } catch (e: any) {
-      toast.error(e.message || "添加失败");
+      toast.error(e.message || '添加失败');
     } finally {
       setSaving(false);
     }
@@ -582,7 +582,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       await fn();
       if (successMsg) toast.success(successMsg);
     } catch (e: any) {
-      toast.error(e.message || "操作失败");
+      toast.error(e.message || '操作失败');
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
       void load(true);
@@ -626,8 +626,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         ? {
             models: [],
             pendingDisabled: new Set<string>(),
-            siteName: "",
-            manualModelsInput: "",
+            siteName: '',
+            manualModelsInput: '',
           }
         : {}),
     }));
@@ -643,7 +643,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       }
     } catch (e: any) {
       if (modelModalRequestSeqRef.current !== requestId) return;
-      toast.error(e.message || options.errorMessage || "加载模型列表失败");
+      toast.error(e.message || options.errorMessage || '加载模型列表失败');
       setModelModal((s) =>
         options.closeOnError
           ? { ...s, open: false, account: null, loading: false }
@@ -656,7 +656,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     await loadModelModalModels(account, {
       resetBeforeLoad: true,
       closeOnError: true,
-      errorMessage: "加载模型列表失败",
+      errorMessage: '加载模型列表失败',
     });
   };
 
@@ -666,7 +666,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       ...s,
       open: false,
       account: null,
-      manualModelsInput: "",
+      manualModelsInput: '',
       addingManualModels: false,
     }));
   };
@@ -691,13 +691,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       );
       try {
         await api.rebuildRoutes(false, false);
-        toast.success("模型禁用设置已保存，路由已重建");
+        toast.success('模型禁用设置已保存，路由已重建');
       } catch {
-        toast.error("模型禁用设置已保存，但路由重建失败，请手动刷新路由");
+        toast.error('模型禁用设置已保存，但路由重建失败，请手动刷新路由');
       }
       closeModelModal();
     } catch (e: any) {
-      toast.error(e.message || "保存失败");
+      toast.error(e.message || '保存失败');
     } finally {
       setModelModal((s) => ({ ...s, saving: false }));
     }
@@ -706,7 +706,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const handleAddManualModels = async () => {
     if (!modelModal.account || !modelModal.manualModelsInput.trim()) return;
     const modelsToAdd = modelModal.manualModelsInput
-      .split(",")
+      .split(',')
       .map((m) => m.trim())
       .filter(Boolean);
     if (modelsToAdd.length === 0) return;
@@ -718,30 +718,30 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         modelsToAdd,
       );
       if (res.success) {
-        toast.success("模型已手动添加");
-        setModelModal((s) => ({ ...s, manualModelsInput: "" }));
+        toast.success('模型已手动添加');
+        setModelModal((s) => ({ ...s, manualModelsInput: '' }));
         await loadModelModalModels(modelModal.account, {
           refreshUpstream: false,
         });
       } else {
-        toast.error(res.message || "手动添加模型失败");
+        toast.error(res.message || '手动添加模型失败');
       }
     } catch (e: any) {
-      toast.error(e.message || "手动添加模型失败");
+      toast.error(e.message || '手动添加模型失败');
     } finally {
       setModelModal((s) => ({ ...s, addingManualModels: false }));
     }
   };
 
   const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "10px 14px",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-sm)",
+    width: '100%',
+    padding: '10px 14px',
+    border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)',
     fontSize: 13,
-    outline: "none",
-    background: "var(--color-bg)",
-    color: "var(--color-text-primary)",
+    outline: 'none',
+    background: 'var(--color-bg)',
+    color: 'var(--color-text-primary)',
   };
 
   const runtimeHealthMap: Record<
@@ -754,67 +754,67 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     }
   > = {
     healthy: {
-      label: "健康",
-      cls: "badge-success",
-      dotClass: "status-dot-success",
+      label: '健康',
+      cls: 'badge-success',
+      dotClass: 'status-dot-success',
       pulse: true,
     },
     unhealthy: {
-      label: "异常",
-      cls: "badge-error",
-      dotClass: "status-dot-error",
+      label: '异常',
+      cls: 'badge-error',
+      dotClass: 'status-dot-error',
       pulse: true,
     },
     degraded: {
-      label: "降级",
-      cls: "badge-warning",
-      dotClass: "status-dot-pending",
+      label: '降级',
+      cls: 'badge-warning',
+      dotClass: 'status-dot-pending',
       pulse: true,
     },
     disabled: {
-      label: "已禁用",
-      cls: "badge-muted",
-      dotClass: "status-dot-muted",
+      label: '已禁用',
+      cls: 'badge-muted',
+      dotClass: 'status-dot-muted',
       pulse: false,
     },
     unknown: {
-      label: "未知",
-      cls: "badge-muted",
-      dotClass: "status-dot-pending",
+      label: '未知',
+      cls: 'badge-muted',
+      dotClass: 'status-dot-pending',
       pulse: false,
     },
   };
 
   const resolveRuntimeHealth = (account: any) => {
-    if (account.status === "expired") {
+    if (account.status === 'expired') {
       return {
         ...runtimeHealthMap.unhealthy,
-        label: "已过期",
-        reason: account.runtimeHealth?.reason || "连接凭证已过期，请更新凭证",
+        label: '已过期',
+        reason: account.runtimeHealth?.reason || '连接凭证已过期，请更新凭证',
       };
     }
     const capabilities = resolveAccountCapabilities(account);
     const fallbackState =
-      account.status === "disabled" || account.site?.status === "disabled"
-        ? "disabled"
-        : !capabilities.proxyOnly && account.status === "expired"
-          ? "unhealthy"
-          : "unknown";
+      account.status === 'disabled' || account.site?.status === 'disabled'
+        ? 'disabled'
+        : !capabilities.proxyOnly && account.status === 'expired'
+          ? 'unhealthy'
+          : 'unknown';
     const state = account.runtimeHealth?.state || fallbackState;
     const cfg = runtimeHealthMap[state] || runtimeHealthMap.unknown;
     const reason =
       account.runtimeHealth?.reason ||
-      (state === "disabled"
-        ? "账号或站点已禁用"
-        : state === "unhealthy"
-          ? "最近健康检查失败"
-          : "尚未获取运行健康信息");
+      (state === 'disabled'
+        ? '账号或站点已禁用'
+        : state === 'unhealthy'
+          ? '最近健康检查失败'
+          : '尚未获取运行健康信息');
     return { state, reason, ...cfg };
   };
 
   const resolveAccountCapabilities = (account: any) => {
     const fromServer = account?.capabilities;
-    if (fromServer && typeof fromServer === "object") {
+    if (fromServer && typeof fromServer === 'object') {
       return {
         canCheckin: !!fromServer.canCheckin,
         canRefreshBalance: !!fromServer.canRefreshBalance,
@@ -822,7 +822,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       };
     }
     const hasSession =
-      typeof account?.accessToken === "string" &&
+      typeof account?.accessToken === 'string' &&
       account.accessToken.trim().length > 0;
     return {
       canCheckin: hasSession,
@@ -832,19 +832,19 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   };
 
   const handleRefreshRuntimeHealth = async () => {
-    setActionLoading((s) => ({ ...s, "health-refresh": true }));
+    setActionLoading((s) => ({ ...s, 'health-refresh': true }));
     try {
       const res = await api.refreshAccountHealth();
       if (res?.queued) {
-        toast.info(res.message || "账号状态刷新任务已提交，完成后会自动更新。");
+        toast.info(res.message || '账号状态刷新任务已提交，完成后会自动更新。');
       } else {
-        toast.success(res?.message || "账号状态已刷新");
+        toast.success(res?.message || '账号状态已刷新');
       }
       load(true);
     } catch (e: any) {
-      toast.error(e.message || "刷新账号状态失败");
+      toast.error(e.message || '刷新账号状态失败');
     } finally {
-      setActionLoading((s) => ({ ...s, "health-refresh": false }));
+      setActionLoading((s) => ({ ...s, 'health-refresh': false }));
     }
   };
 
@@ -855,11 +855,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     try {
       await api.updateAccount(account.id, { checkinEnabled: nextEnabled });
       toast.success(
-        nextEnabled ? "已开启签到" : "已关闭签到（全部签到会忽略此账号）",
+        nextEnabled ? '已开启签到' : '已关闭签到（全部签到会忽略此账号）',
       );
       load(true);
     } catch (e: any) {
-      toast.error(e.message || "切换签到状态失败");
+      toast.error(e.message || '切换签到状态失败');
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
@@ -871,10 +871,10 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     setActionLoading((s) => ({ ...s, [key]: true }));
     try {
       await api.updateAccount(account.id, { isPinned: nextPinned });
-      toast.success(nextPinned ? "账号已置顶" : "账号已取消置顶");
+      toast.success(nextPinned ? '账号已置顶' : '账号已取消置顶');
       load(true);
     } catch (e: any) {
-      toast.error(e.message || "切换账号置顶失败");
+      toast.error(e.message || '切换账号置顶失败');
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
@@ -882,7 +882,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
   const handleMoveCustomOrder = async (
     account: any,
-    direction: "up" | "down",
+    direction: 'up' | 'down',
   ) => {
     const key = `reorder-${account.id}`;
     const updates = buildCustomReorderUpdates(accounts, account.id, direction);
@@ -897,7 +897,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       );
       load(true);
     } catch (e: any) {
-      toast.error(e.message || "更新账号排序失败");
+      toast.error(e.message || '更新账号排序失败');
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
@@ -905,7 +905,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
   const parseAccountExtraConfig = (account: any): Record<string, any> => {
     try {
-      return JSON.parse(account?.extraConfig || "{}") || {};
+      return JSON.parse(account?.extraConfig || '{}') || {};
     } catch {
       return {};
     }
@@ -942,7 +942,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     await withLoading(
       `delete-${target.accountId}`,
       () => api.deleteAccount(target.accountId!),
-      "已删除",
+      '已删除',
     );
   };
 
@@ -950,13 +950,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const extractPlatformUserId = (account: any): string => {
     const parsed = parseAccountExtraConfig(account);
     const raw = parsed?.platformUserId;
-    const value = Number.parseInt(String(raw ?? ""), 10);
+    const value = Number.parseInt(String(raw ?? ''), 10);
     if (Number.isFinite(value) && value > 0) return String(value);
     const guessed = Number.parseInt(
-      String(account?.username || "").match(/(\d{3,8})$/)?.[1] || "",
+      String(account?.username || '').match(/(\d{3,8})$/)?.[1] || '',
       10,
     );
-    return Number.isFinite(guessed) && guessed > 0 ? String(guessed) : "";
+    return Number.isFinite(guessed) && guessed > 0 ? String(guessed) : '';
   };
 
   const openRebindPanel = (account: any) => {
@@ -986,16 +986,16 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         platformUserId: rebindForm.platformUserId
           ? Number.parseInt(rebindForm.platformUserId, 10)
           : undefined,
-        credentialMode: "session",
+        credentialMode: 'session',
       });
       setRebindVerifyResult(result);
-      if (result.success && result.tokenType === "session") {
-        toast.success("Session Token 验证成功，可以重新绑定");
-      } else if (result.success && result.tokenType !== "session") {
-        toast.error("当前是 API Key，不是 Session Token");
+      if (result.success && result.tokenType === 'session') {
+        toast.success('Session Token 验证成功，可以重新绑定');
+      } else if (result.success && result.tokenType !== 'session') {
+        toast.error('当前是 API Key，不是 Session Token');
       } else {
         toast.error(
-          normalizeVerifyFailureMessage(result.message || "Token 无效"),
+          normalizeVerifyFailureMessage(result.message || 'Token 无效'),
         );
       }
     } catch (e: any) {
@@ -1011,14 +1011,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     if (
       !(
         rebindVerifyResult?.success &&
-        rebindVerifyResult?.tokenType === "session"
+        rebindVerifyResult?.tokenType === 'session'
       )
     ) {
-      toast.error("请先验证新的 Session Token 成功");
+      toast.error('请先验证新的 Session Token 成功');
       return;
     }
     const isSub2ApiRebindTarget =
-      (rebindTarget?.site?.platform || "").toLowerCase() === "sub2api";
+      (rebindTarget?.site?.platform || '').toLowerCase() === 'sub2api';
     setRebindSaving(true);
     try {
       await api.rebindAccountSession(rebindTarget.id, {
@@ -1035,11 +1035,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             ? Number.parseInt(rebindForm.tokenExpiresAt, 10)
             : undefined,
       });
-      toast.success("账号重新绑定成功，状态已恢复");
+      toast.success('账号重新绑定成功，状态已恢复');
       closeRebindPanel();
       load(true);
     } catch (e: any) {
-      toast.error(e.message || "重新绑定失败");
+      toast.error(e.message || '重新绑定失败');
     } finally {
       setRebindSaving(false);
     }
@@ -1047,7 +1047,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
   useEffect(() => {
     const { accountId, openRebind } = readFocusAccountIntent(location.search);
-    if (!accountId || !loaded || activeSegment === "tokens") return;
+    if (!accountId || !loaded || activeSegment === 'tokens') return;
 
     const cleanedSearch = clearFocusParams(location.search);
     const targetIndex = visibleAccounts.findIndex((account) => account.id === accountId);
@@ -1068,7 +1068,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     const row = rowRefs.current.get(accountId);
     if (!target || !row) return;
 
-    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setHighlightAccountId(accountId);
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     highlightTimerRef.current = setTimeout(() => {
@@ -1079,7 +1079,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
     if (
       openRebind &&
-      target.status === "expired" &&
+      target.status === 'expired' &&
       !resolveAccountCapabilities(target).proxyOnly
     ) {
       setShowAdd(false);
@@ -1107,23 +1107,23 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
   const canAddVerifiedConnection = Boolean(
     verifyResult?.success &&
-    ((activeSegment === "apikey" && verifyResult.tokenType === "apikey") ||
-      (activeSegment === "session" && verifyResult.tokenType === "session")),
+    ((activeSegment === 'apikey' && verifyResult.tokenType === 'apikey') ||
+      (activeSegment === 'session' && verifyResult.tokenType === 'session')),
   );
   const canSubmitApiKeyConnection =
-    activeSegment === "apikey"
+    activeSegment === 'apikey'
       ? isBatchApiKeyInput ||
         canAddVerifiedConnection ||
         !!tokenForm.skipModelFetch
       : canAddVerifiedConnection;
 
   return (
-    <div className={filterSiteId ? "" : "animate-fade-in"}>
+    <div className={filterSiteId ? '' : 'animate-fade-in'}>
       <div className="page-header">
         {!filterSiteId && (
-          <h2 className="page-title">{tr("连接管理")}</h2>
+          <h2 className="page-title">{tr('连接管理')}</h2>
         )}
-        {activeSegment !== "tokens" && (
+        {activeSegment !== 'tokens' && (
           <div className="page-actions accounts-page-actions">
             {isMobile ? (
               <>
@@ -1132,7 +1132,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     type="button"
                     onClick={() => setShowMobileTools(true)}
                     className="btn btn-ghost"
-                    style={{ border: "1px solid var(--color-border)" }}
+                    style={{ border: '1px solid var(--color-border)' }}
                   >
                     排序与操作
                   </button>
@@ -1143,56 +1143,56 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 {!filterSiteId && (
                   <div
                     className="accounts-sort-select"
-                    style={{ minWidth: 156, position: "relative", zIndex: 20 }}
+                    style={{ minWidth: 156, position: 'relative', zIndex: 20 }}
                   >
                     <ModernSelect
                       size="sm"
                       value={sortMode}
                       onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                       options={[
-                        { value: "custom", label: "默认排序" },
-                        { value: "balance-desc", label: "余额高到低" },
-                        { value: "balance-asc", label: "余额低到高" },
+                        { value: 'custom', label: '默认排序' },
+                        { value: 'balance-desc', label: '余额高到低' },
+                        { value: 'balance-asc', label: '余额低到高' },
                       ]}
                       placeholder="默认排序"
                     />
                   </div>
                 )}
-                {!filterSiteId && activeSegment === "session" && (
+                {!filterSiteId && activeSegment === 'session' && (
                   <button
                     onClick={() =>
                       withLoading(
-                        "checkin-all",
+                        'checkin-all',
                         () => api.triggerCheckinAll(),
-                        "已触发全部签到",
+                        '已触发全部签到',
                       )
                     }
-                    disabled={actionLoading["checkin-all"]}
+                    disabled={actionLoading['checkin-all']}
                     className="btn btn-soft-primary"
                   >
-                    {actionLoading["checkin-all"] ? (
+                    {actionLoading['checkin-all'] ? (
                       <>
                         <span className="spinner spinner-sm" />
-                        {tr("签到中...")}
+                        {tr('签到中...')}
                       </>
                     ) : (
-                      tr("全部签到")
+                      tr('全部签到')
                     )}
                   </button>
                 )}
                 {!filterSiteId && (
                   <button
                     onClick={handleRefreshRuntimeHealth}
-                    disabled={actionLoading["health-refresh"]}
+                    disabled={actionLoading['health-refresh']}
                     className="btn btn-soft-primary"
                   >
-                    {actionLoading["health-refresh"] ? (
+                    {actionLoading['health-refresh'] ? (
                       <>
                         <span className="spinner spinner-sm" />
-                        {tr("刷新状态中...")}
+                        {tr('刷新状态中...')}
                       </>
                     ) : (
-                      tr("刷新账户状态")
+                      tr('刷新账户状态')
                     )}
                   </button>
                 )}
@@ -1213,11 +1213,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
               }}
               className="btn btn-primary"
             >
-              {showAdd ? tr("取消") : tr("+ 添加连接")}
+              {showAdd ? tr('取消') : tr('+ 添加连接')}
             </button>
           </div>
         )}
-        {activeSegment === "tokens" && embeddedTokenActions}
+        {activeSegment === 'tokens' && embeddedTokenActions}
       </div>
 
       <ResponsiveFilterPanel
@@ -1226,43 +1226,43 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         onMobileClose={() => setShowMobileTools(false)}
         mobileTitle="连接排序与操作"
         mobileContent={
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 排序方式
               </div>
               <ModernSelect
                 value={sortMode}
                 onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                 options={[
-                  { value: "custom", label: "自定义排序" },
-                  { value: "balance-desc", label: "余额高到低" },
-                  { value: "balance-asc", label: "余额低到高" },
+                  { value: 'custom', label: '自定义排序' },
+                  { value: 'balance-desc', label: '余额高到低' },
+                  { value: 'balance-asc', label: '余额低到高' },
                 ]}
                 placeholder="自定义排序"
               />
             </div>
-            {activeSegment === "session" && (
+            {activeSegment === 'session' && (
               <button
                 onClick={async () => {
                   setShowMobileTools(false);
                   await withLoading(
-                    "checkin-all",
+                    'checkin-all',
                     () => api.triggerCheckinAll(),
-                    "已触发全部签到",
+                    '已触发全部签到',
                   );
                 }}
-                disabled={actionLoading["checkin-all"]}
+                disabled={actionLoading['checkin-all']}
                 className="btn btn-ghost"
-                style={{ border: "1px solid var(--color-border)" }}
+                style={{ border: '1px solid var(--color-border)' }}
               >
-                {actionLoading["checkin-all"] ? (
+                {actionLoading['checkin-all'] ? (
                   <>
                     <span className="spinner spinner-sm" />
-                    {tr("签到中...")}
+                    {tr('签到中...')}
                   </>
                 ) : (
-                  tr("全部签到")
+                  tr('全部签到')
                 )}
               </button>
             )}
@@ -1271,17 +1271,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 setShowMobileTools(false);
                 await handleRefreshRuntimeHealth();
               }}
-              disabled={actionLoading["health-refresh"]}
+              disabled={actionLoading['health-refresh']}
               className="btn btn-ghost"
-              style={{ border: "1px solid var(--color-border)" }}
+              style={{ border: '1px solid var(--color-border)' }}
             >
-              {actionLoading["health-refresh"] ? (
+              {actionLoading['health-refresh'] ? (
                 <>
                   <span className="spinner spinner-sm" />
-                  {tr("刷新状态中...")}
+                  {tr('刷新状态中...')}
                 </>
               ) : (
-                tr("刷新账户状态")
+                tr('刷新账户状态')
               )}
             </button>
           </div>
@@ -1290,13 +1290,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
       <div
         style={{
-          display: "inline-flex",
+          display: 'inline-flex',
           gap: 4,
           padding: 4,
           marginBottom: 16,
-          background: "var(--color-bg-card)",
-          border: "1px solid var(--color-border-light)",
-          borderRadius: "var(--radius-md)",
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border-light)',
+          borderRadius: 'var(--radius-md)',
         }}
       >
         {ACCOUNT_SEGMENTS.map((segment) => (
@@ -1308,23 +1308,23 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             data-tooltip-side={segment.tooltipSide}
             data-tooltip-align={segment.tooltipAlign}
             style={{
-              padding: "8px 12px",
+              padding: '8px 12px',
               borderRadius: 8,
-              border: "none",
-              cursor: "pointer",
+              border: 'none',
+              cursor: 'pointer',
               fontSize: 13,
               fontWeight: 600,
               background:
                 activeSegment === segment.value
-                  ? "var(--color-bg)"
-                  : "transparent",
+                  ? 'var(--color-bg)'
+                  : 'transparent',
               color:
                 activeSegment === segment.value
-                  ? "var(--color-primary)"
-                  : "var(--color-text-secondary)",
+                  ? 'var(--color-primary)'
+                  : 'var(--color-text-secondary)',
               boxShadow:
-                activeSegment === segment.value ? "var(--shadow-sm)" : "none",
-              transition: "all 0.2s ease",
+                activeSegment === segment.value ? 'var(--shadow-sm)' : 'none',
+              transition: 'all 0.2s ease',
             }}
           >
             {segment.label}
@@ -1344,17 +1344,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         )}
         description={
           <>
-            确定要删除连接{" "}
+            确定要删除连接{' '}
             <strong>
               {deleteConfirm?.accountName || `#${deleteConfirm?.accountId}`}
-            </strong>{" "}
+            </strong>{' '}
             吗？
           </>
         }
       />
 
 
-      {activeSegment === "tokens" ? (
+      {activeSegment === 'tokens' ? (
         <TokensPanel
           embedded
           onEmbeddedActionsChange={setEmbeddedTokenActions}
@@ -1366,56 +1366,56 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             open={showAdd}
             onClose={closeAddPanel}
             title={
-              activeSegment === "apikey"
-                ? "添加 API Key 连接"
-                : addMode === "login"
-                  ? "账号密码登录"
-                  : "添加 Session 连接"
+              activeSegment === 'apikey'
+                ? '添加 API Key 连接'
+                : addMode === 'login'
+                  ? '账号密码登录'
+                  : '添加 Session 连接'
             }
             maxWidth={860}
-            bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+            bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
             footer={
               <button onClick={closeAddPanel} className="btn btn-ghost">
                 取消
               </button>
             }
           >
-            {activeSegment === "session" ? (
+            {activeSegment === 'session' ? (
               <>
                 <div
                   style={{
-                    display: "flex",
+                    display: 'flex',
                     gap: 0,
-                    background: "var(--color-bg)",
-                    borderRadius: "var(--radius-sm)",
+                    background: 'var(--color-bg)',
+                    borderRadius: 'var(--radius-sm)',
                     padding: 3,
                     marginBottom: 16,
                   }}
                 >
                   <button
                     onClick={() => {
-                      setAddMode("token");
+                      setAddMode('token');
                       setVerifyResult(null);
                     }}
                     style={{
                       flex: 1,
-                      padding: "8px 0",
+                      padding: '8px 0',
                       borderRadius: 6,
                       fontSize: 13,
                       fontWeight: 500,
-                      border: "none",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
                       background:
-                        addMode === "token"
-                          ? "var(--color-bg-card)"
-                          : "transparent",
+                        addMode === 'token'
+                          ? 'var(--color-bg-card)'
+                          : 'transparent',
                       color:
-                        addMode === "token"
-                          ? "var(--color-primary)"
-                          : "var(--color-text-muted)",
+                        addMode === 'token'
+                          ? 'var(--color-primary)'
+                          : 'var(--color-text-muted)',
                       boxShadow:
-                        addMode === "token" ? "var(--shadow-sm)" : "none",
+                        addMode === 'token' ? 'var(--shadow-sm)' : 'none',
                     }}
                   >
                     Session Token / Cookie
@@ -1423,28 +1423,28 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   {!isSub2ApiSelected && (
                     <button
                       onClick={() => {
-                        setAddMode("login");
+                        setAddMode('login');
                         setVerifyResult(null);
                       }}
                       style={{
                         flex: 1,
-                        padding: "8px 0",
+                        padding: '8px 0',
                         borderRadius: 6,
                         fontSize: 13,
                         fontWeight: 500,
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "all 0.2s",
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
                         background:
-                          addMode === "login"
-                            ? "var(--color-bg-card)"
-                            : "transparent",
+                          addMode === 'login'
+                            ? 'var(--color-bg-card)'
+                            : 'transparent',
                         color:
-                          addMode === "login"
-                            ? "var(--color-primary)"
-                            : "var(--color-text-muted)",
+                          addMode === 'login'
+                            ? 'var(--color-primary)'
+                            : 'var(--color-text-muted)',
                         boxShadow:
-                          addMode === "login" ? "var(--shadow-sm)" : "none",
+                          addMode === 'login' ? 'var(--shadow-sm)' : 'none',
                       }}
                     >
                       账号密码登录
@@ -1452,11 +1452,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   )}
                 </div>
 
-                {addMode === "token" ? (
+                {addMode === 'token' ? (
                   <div
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
+                      display: 'flex',
+                      flexDirection: 'column',
                       gap: 12,
                     }}
                   >
@@ -1476,23 +1476,23 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         <div
                           style={{
                             opacity: 0.7,
-                            borderTop: "1px solid rgba(0,0,0,0.1)",
+                            borderTop: '1px solid rgba(0,0,0,0.1)',
                             paddingTop: 6,
                             marginTop: 6,
                           }}
                         >
-                          获取 Cookie:{" "}
+                          获取 Cookie:{' '}
                           <kbd
                             style={{
-                              padding: "1px 5px",
-                              background: "var(--color-bg-card)",
-                              border: "1px solid var(--color-border)",
+                              padding: '1px 5px',
+                              background: 'var(--color-bg-card)',
+                              border: '1px solid var(--color-border)',
                               borderRadius: 3,
                               fontSize: 11,
                             }}
                           >
                             F12
-                          </kbd>{" "}
+                          </kbd>{' '}
                           → Application → Cookie
                         </div>
                         <div style={{ marginTop: 6 }}>
@@ -1502,8 +1502,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             rel="noopener noreferrer"
                             style={{
                               fontSize: 12,
-                              color: "var(--color-primary)",
-                              textDecoration: "underline",
+                              color: 'var(--color-primary)',
+                              textDecoration: 'underline',
                             }}
                           >
                             查看认证方式与特殊站点说明文档
@@ -1513,17 +1513,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     </div>
                     <div
                       style={{
-                        padding: "9px 12px",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "var(--radius-sm)",
-                        background: "var(--color-bg)",
-                        color: "var(--color-text)",
+                        padding: '9px 12px',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--color-bg)',
+                        color: 'var(--color-text)',
                         fontSize: 13,
                       }}
                     >
                       {selectedTokenSite
                         ? `${selectedTokenSite.name} (${selectedTokenSite.platform})`
-                        : "当前站点"}
+                        : '当前站点'}
                     </div>
                     <input
                       placeholder="连接名称（可选）"
@@ -1548,16 +1548,16 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       }}
                       style={{
                         ...inputStyle,
-                        fontFamily: "var(--font-mono)",
+                        fontFamily: 'var(--font-mono)',
                         height: 72,
-                        resize: "none" as const,
+                        resize: 'none' as const,
                       }}
                     />
                     {platformRequiresUserId(selectedTokenSite?.platform) && (
                       <div
                         style={{
-                          display: "flex",
-                          flexDirection: "column",
+                          display: 'flex',
+                          flexDirection: 'column',
                           gap: 4,
                         }}
                       >
@@ -1567,7 +1567,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           onChange={(e) => {
                             setTokenForm((f) => ({
                               ...f,
-                              platformUserId: e.target.value.replace(/\D/g, ""),
+                              platformUserId: e.target.value.replace(/\D/g, ''),
                             }));
                             setVerifyResult(null);
                           }}
@@ -1576,7 +1576,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         <div
                           style={{
                             fontSize: 12,
-                            color: "var(--color-text-muted)",
+                            color: 'var(--color-text-muted)',
                           }}
                         >
                           若站点要求 New-Api-User / User-ID，请在这里提前填写。
@@ -1587,8 +1587,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       <>
                         <div
                           style={{
-                            display: "flex",
-                            flexDirection: "column",
+                            display: 'flex',
+                            flexDirection: 'column',
                             gap: 4,
                           }}
                         >
@@ -1603,26 +1603,26 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             }
                             style={{
                               ...inputStyle,
-                              fontFamily: "var(--font-mono)",
+                              fontFamily: 'var(--font-mono)',
                             }}
                           />
                           <div
                             style={{
                               fontSize: 12,
-                              color: "var(--color-text-muted)",
+                              color: 'var(--color-text-muted)',
                             }}
                           >
-                            可在浏览器控制台执行{" "}
-                            <code style={{ fontFamily: "var(--font-mono)" }}>
+                            可在浏览器控制台执行{' '}
+                            <code style={{ fontFamily: 'var(--font-mono)' }}>
                               localStorage.getItem('refresh_token')
-                            </code>{" "}
+                            </code>{' '}
                             获取。
                           </div>
                         </div>
                         <div
                           style={{
-                            display: "flex",
-                            flexDirection: "column",
+                            display: 'flex',
+                            flexDirection: 'column',
                             gap: 4,
                           }}
                         >
@@ -1634,7 +1634,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 ...f,
                                 tokenExpiresAt: e.target.value.replace(
                                   /\D/g,
-                                  "",
+                                  '',
                                 ),
                               }))
                             }
@@ -1643,7 +1643,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           <div
                             style={{
                               fontSize: 12,
-                              color: "var(--color-text-muted)",
+                              color: 'var(--color-text-muted)',
                             }}
                           >
                             配置 refresh_token 后，metapi 会在 JWT 临近过期或
@@ -1654,13 +1654,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     )}
                     {verifyResult &&
                       verifyResult.success &&
-                      verifyResult.tokenType === "session" && (
+                      verifyResult.tokenType === 'session' && (
                         <div className="alert alert-success animate-scale-in">
                           <div
                             className="alert-title"
                             style={{
-                              display: "flex",
-                              alignItems: "center",
+                              display: 'flex',
+                              alignItems: 'center',
                               gap: 6,
                             }}
                           >
@@ -1682,14 +1682,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           </div>
                           <div style={{ fontSize: 12, lineHeight: 1.8 }}>
                             <div>
-                              用户名:{" "}
+                              用户名:{' '}
                               <strong>
-                                {verifyResult.userInfo?.username || "未知"}
+                                {verifyResult.userInfo?.username || '未知'}
                               </strong>
                             </div>
                             {verifyResult.balance && (
                               <div>
-                                余额:{" "}
+                                余额:{' '}
                                 <strong>
                                   $
                                   {(verifyResult.balance.balance || 0).toFixed(
@@ -1699,18 +1699,18 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               </div>
                             )}
                             <div>
-                              API Key:{" "}
+                              API Key:{' '}
                               <span
                                 style={{
                                   fontWeight: 500,
                                   color: verifyResult.apiToken
-                                    ? "var(--color-success)"
-                                    : "var(--color-text-muted)",
+                                    ? 'var(--color-success)'
+                                    : 'var(--color-text-muted)',
                                 }}
                               >
                                 {verifyResult.apiToken
                                   ? `已找到 (${verifyResult.apiToken.substring(0, 8)}...)`
-                                  : "未找到"}
+                                  : '未找到'}
                               </span>
                             </div>
                           </div>
@@ -1718,7 +1718,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       )}
                     {verifyResult &&
                       verifyResult.success &&
-                      verifyResult.tokenType === "apikey" && (
+                      verifyResult.tokenType === 'apikey' && (
                         <div className="alert alert-warning animate-scale-in">
                           <div className="alert-title">
                             当前分段仅接受 Session 凭证，请切到「API Key
@@ -1742,20 +1742,20 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           <div className="alert-title">
                             {normalizeVerifyFailureMessage(
                               verifyResult.message,
-                            ) || "Token 无效或已过期"}
+                            ) || 'Token 无效或已过期'}
                           </div>
                           <div
                             style={{
                               fontSize: 12,
-                              color: "var(--color-text-muted)",
+                              color: 'var(--color-text-muted)',
                               marginTop: 4,
                             }}
                           >
-                            {verifyFailureHint || "请检查 Token 是否正确"}
+                            {verifyFailureHint || '请检查 Token 是否正确'}
                           </div>
                         </div>
                       )}
-                    <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
                       <button
                         onClick={handleVerifyToken}
                         disabled={
@@ -1765,8 +1765,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         }
                         className="btn btn-ghost"
                         style={{
-                          border: "1px solid var(--color-border)",
-                          padding: "8px 14px",
+                          border: '1px solid var(--color-border)',
+                          padding: '8px 14px',
                         }}
                       >
                         {verifying ? (
@@ -1775,7 +1775,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             验证中...
                           </>
                         ) : (
-                          "验证 Token"
+                          '验证 Token'
                         )}
                       </button>
                       <button
@@ -1793,14 +1793,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             <span
                               className="spinner spinner-sm"
                               style={{
-                                borderTopColor: "white",
-                                borderColor: "rgba(255,255,255,0.3)",
+                                borderTopColor: 'white',
+                                borderColor: 'rgba(255,255,255,0.3)',
                               }}
                             />
                             添加中...
                           </>
                         ) : (
-                          "添加连接"
+                          '添加连接'
                         )}
                       </button>
                     </div>
@@ -1808,7 +1808,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       <div
                         style={{
                           fontSize: 12,
-                          color: "var(--color-text-muted)",
+                          color: 'var(--color-text-muted)',
                         }}
                       >
                         {addAccountPrereqHint}
@@ -1818,8 +1818,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 ) : (
                   <div
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
+                      display: 'flex',
+                      flexDirection: 'column',
                       gap: 12,
                     }}
                   >
@@ -1828,17 +1828,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     </div>
                     <div
                       style={{
-                        padding: "9px 12px",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "var(--radius-sm)",
-                        background: "var(--color-bg)",
-                        color: "var(--color-text)",
+                        padding: '9px 12px',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--color-bg)',
+                        color: 'var(--color-text)',
                         fontSize: 13,
                       }}
                     >
                       {selectedTokenSite
                         ? `${selectedTokenSite.name} (${selectedTokenSite.platform})`
-                        : "当前站点"}
+                        : '当前站点'}
                     </div>
                     <input
                       placeholder="用户名"
@@ -1861,7 +1861,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           password: e.target.value,
                         }))
                       }
-                      onKeyDown={(e) => e.key === "Enter" && handleLoginAdd()}
+                      onKeyDown={(e) => e.key === 'Enter' && handleLoginAdd()}
                       style={inputStyle}
                     />
                     <button
@@ -1873,21 +1873,21 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         !loginForm.password
                       }
                       className="btn btn-success"
-                      style={{ alignSelf: "flex-start" }}
+                      style={{ alignSelf: 'flex-start' }}
                     >
                       {saving ? (
                         <>
                           <span
                             className="spinner spinner-sm"
                             style={{
-                              borderTopColor: "white",
-                              borderColor: "rgba(255,255,255,0.3)",
+                              borderTopColor: 'white',
+                              borderColor: 'rgba(255,255,255,0.3)',
                             }}
                           />
                           登录并添加...
                         </>
                       ) : (
-                        "登录并添加"
+                        '登录并添加'
                       )}
                     </button>
                   </div>
@@ -1895,7 +1895,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
               </>
             ) : (
               <div
-                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               >
                 <div className="info-tip">
                   API Key
@@ -1910,7 +1910,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     <div
                       style={{
                         fontSize: 12,
-                        color: "var(--color-text-muted)",
+                        color: 'var(--color-text-muted)',
                         marginTop: 4,
                         lineHeight: 1.8,
                       }}
@@ -1918,7 +1918,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       <div>{createIntentPreset.description}</div>
                       <div>
                         推荐模型：
-                        {createIntentPreset.recommendedModels.join(" / ")}
+                        {createIntentPreset.recommendedModels.join(' / ')}
                       </div>
                       {createIntentPreset.recommendedSkipModelFetch && (
                         <div>
@@ -1930,11 +1930,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     {createIntentPreset.recommendedModels.length > 0 && (
                       <label
                         style={{
-                          display: "flex",
-                          alignItems: "center",
+                          display: 'flex',
+                          alignItems: 'center',
                           gap: 8,
                           fontSize: 12,
-                          cursor: "pointer",
+                          cursor: 'pointer',
                           marginTop: 8,
                         }}
                       >
@@ -1958,12 +1958,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     setTokenForm((f) => ({
                       ...f,
                       siteId: nextSiteId,
-                      credentialMode: "apikey",
+                      credentialMode: 'apikey',
                     }));
                     setLoginForm((f) => ({ ...f, siteId: nextSiteId }));
-                    const nextPlatform = sites.find((s) => s.id === nextSiteId)?.platform?.toLowerCase() || "";
-                    if (nextPlatform === "sub2api") {
-                      setAddMode("token");
+                    const nextPlatform = sites.find((s) => s.id === nextSiteId)?.platform?.toLowerCase() || '';
+                    if (nextPlatform === 'sub2api') {
+                      setAddMode('token');
                     }
                     setVerifyResult(null);
                     if (
@@ -1986,7 +1986,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     setTokenForm((f) => ({
                       ...f,
                       username: e.target.value,
-                      credentialMode: "apikey",
+                      credentialMode: 'apikey',
                     }))
                   }
                   style={inputStyle}
@@ -1998,38 +1998,38 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     setTokenForm((f) => ({
                       ...f,
                       accessToken: e.target.value,
-                      credentialMode: "apikey",
+                      credentialMode: 'apikey',
                     }));
                     setVerifyResult(null);
                   }}
                   style={{
                     ...inputStyle,
-                    fontFamily: "var(--font-mono)",
+                    fontFamily: 'var(--font-mono)',
                     height: 72,
-                    resize: "none" as const,
+                    resize: 'none' as const,
                   }}
                 />
                 {parsedApiKeys.length > 0 && (
                   <div
-                    style={{ fontSize: 12, color: "var(--color-text-muted)" }}
+                    style={{ fontSize: 12, color: 'var(--color-text-muted)' }}
                   >
                     已识别 {parsedApiKeys.length} 个 API Key
                     {isBatchApiKeyInput
-                      ? "，添加时会逐条创建同站点连接并参与轮询"
-                      : ""}
+                      ? '，添加时会逐条创建同站点连接并参与轮询'
+                      : ''}
                   </div>
                 )}
-                <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                   支持换行、空格、逗号批量粘贴多个 API Key。
                 </div>
                 <label
                   style={{
-                    display: "flex",
-                    alignItems: "center",
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: 8,
                     fontSize: 13,
-                    cursor: "pointer",
-                    alignSelf: "flex-start",
+                    cursor: 'pointer',
+                    alignSelf: 'flex-start',
                   }}
                 >
                   <input
@@ -2047,13 +2047,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 </label>
                 {verifyResult &&
                   verifyResult.success &&
-                  verifyResult.tokenType === "apikey" && (
+                  verifyResult.tokenType === 'apikey' && (
                     <div className="alert alert-info animate-scale-in">
                       <div
                         className="alert-title"
                         style={{
-                          display: "flex",
-                          alignItems: "center",
+                          display: 'flex',
+                          alignItems: 'center',
                           gap: 6,
                         }}
                       >
@@ -2075,13 +2075,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       </div>
                       <div style={{ fontSize: 12, lineHeight: 1.8 }}>
                         <div>
-                          可用模型:{" "}
+                          可用模型:{' '}
                           <strong>{verifyResult.modelCount} 个</strong>
                         </div>
                         {verifyResult.models && (
-                          <div style={{ color: "var(--color-text-muted)" }}>
-                            包含: {verifyResult.models.join(", ")}
-                            {verifyResult.modelCount > 10 ? " ..." : ""}
+                          <div style={{ color: 'var(--color-text-muted)' }}>
+                            包含: {verifyResult.models.join(', ')}
+                            {verifyResult.modelCount > 10 ? ' ...' : ''}
                           </div>
                         )}
                       </div>
@@ -2089,7 +2089,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   )}
                 {verifyResult &&
                   verifyResult.success &&
-                  verifyResult.tokenType === "session" && (
+                  verifyResult.tokenType === 'session' && (
                     <div className="alert alert-warning animate-scale-in">
                       <div className="alert-title">
                         当前分段仅接受 API Key，请切到「Session 连接」分段创建。
@@ -2111,20 +2111,20 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     <div className="alert alert-error animate-scale-in">
                       <div className="alert-title">
                         {normalizeVerifyFailureMessage(verifyResult.message) ||
-                          "Token 无效或已过期"}
+                          'Token 无效或已过期'}
                       </div>
                       <div
                         style={{
                           fontSize: 12,
-                          color: "var(--color-text-muted)",
+                          color: 'var(--color-text-muted)',
                           marginTop: 4,
                         }}
                       >
-                        {verifyFailureHint || "请检查 Token 是否正确"}
+                        {verifyFailureHint || '请检查 Token 是否正确'}
                       </div>
                     </div>
                   )}
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     onClick={handleVerifyToken}
                     disabled={
@@ -2135,8 +2135,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     }
                     className="btn btn-ghost"
                     style={{
-                      border: "1px solid var(--color-border)",
-                      padding: "8px 14px",
+                      border: '1px solid var(--color-border)',
+                      padding: '8px 14px',
                     }}
                   >
                     {verifying ? (
@@ -2145,9 +2145,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         验证中...
                       </>
                     ) : isBatchApiKeyInput ? (
-                      "批量添加时校验"
+                      '批量添加时校验'
                     ) : (
-                      "验证 API Key"
+                      '验证 API Key'
                     )}
                   </button>
                   <button
@@ -2165,25 +2165,25 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         <span
                           className="spinner spinner-sm"
                           style={{
-                            borderTopColor: "white",
-                            borderColor: "rgba(255,255,255,0.3)",
+                            borderTopColor: 'white',
+                            borderColor: 'rgba(255,255,255,0.3)',
                           }}
                         />
                         添加中...
                       </>
                     ) : isBatchApiKeyInput ? (
-                      "批量添加连接"
+                      '批量添加连接'
                     ) : (
-                      "添加连接"
+                      '添加连接'
                     )}
                   </button>
                 </div>
                 {!verifyResult?.success && (
                   <div
-                    style={{ fontSize: 12, color: "var(--color-text-muted)" }}
+                    style={{ fontSize: 12, color: 'var(--color-text-muted)' }}
                   >
                     {isBatchApiKeyInput
-                      ? "批量模式下无需先点验证，提交后会逐条校验并创建。"
+                      ? '批量模式下无需先点验证，提交后会逐条校验并创建。'
                       : addAccountPrereqHint}
                   </div>
                 )}
@@ -2191,13 +2191,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             )}
           </CenteredModal>
 
-          {activeSegment === "session" && (
+          {activeSegment === 'session' && (
             <CenteredModal
               open={Boolean(rebindTarget)}
               onClose={closeRebindPanel}
               title="重新绑定 Session Token"
               maxWidth={820}
-              bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+              bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               footer={
                 <button onClick={closeRebindPanel} className="btn btn-ghost">
                   取消
@@ -2209,19 +2209,19 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   <div
                     style={{
                       fontSize: 12,
-                      color: "var(--color-text-muted)",
+                      color: 'var(--color-text-muted)',
                       marginBottom: 12,
                     }}
                   >
-                    连接: {resolveAccountDisplayName(activeRebindTarget)} @{" "}
-                    {activeRebindTarget.site?.name || "-"}。请粘贴新的 Session
+                    连接: {resolveAccountDisplayName(activeRebindTarget)} @{' '}
+                    {activeRebindTarget.site?.name || '-'}。请粘贴新的 Session
                     Token，验证成功后再绑定。
                   </div>
 
                   <div
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "minmax(0, 1fr) 220px",
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) 220px',
                       gap: 10,
                       marginBottom: 10,
                     }}
@@ -2238,9 +2238,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       }}
                       style={{
                         ...inputStyle,
-                        fontFamily: "var(--font-mono)",
+                        fontFamily: 'var(--font-mono)',
                         height: 74,
-                        resize: "none" as const,
+                        resize: 'none' as const,
                       }}
                     />
                     {platformRequiresUserId(activeRebindTarget?.site?.platform) && (
@@ -2250,7 +2250,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         onChange={(e) => {
                           setRebindForm((prev) => ({
                             ...prev,
-                            platformUserId: e.target.value.replace(/\D/g, ""),
+                            platformUserId: e.target.value.replace(/\D/g, ''),
                           }));
                           setRebindVerifyResult(null);
                         }}
@@ -2262,8 +2262,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     <>
                       <div
                         style={{
-                          display: "grid",
-                          gridTemplateColumns: "minmax(0, 1fr) 220px",
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(0, 1fr) 220px',
                           gap: 10,
                           marginBottom: 4,
                         }}
@@ -2279,7 +2279,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           }
                           style={{
                             ...inputStyle,
-                            fontFamily: "var(--font-mono)",
+                            fontFamily: 'var(--font-mono)',
                           }}
                         />
                         <input
@@ -2288,7 +2288,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           onChange={(e) =>
                             setRebindForm((prev) => ({
                               ...prev,
-                              tokenExpiresAt: e.target.value.replace(/\D/g, ""),
+                              tokenExpiresAt: e.target.value.replace(/\D/g, ''),
                             }))
                           }
                           style={inputStyle}
@@ -2297,7 +2297,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       <div
                         style={{
                           fontSize: 12,
-                          color: "var(--color-text-muted)",
+                          color: 'var(--color-text-muted)',
                           marginBottom: 10,
                         }}
                       >
@@ -2309,43 +2309,43 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
                   {rebindVerifyResult &&
                     rebindVerifyResult.success &&
-                    rebindVerifyResult.tokenType === "session" && (
+                    rebindVerifyResult.tokenType === 'session' && (
                       <div
                         className="alert alert-success animate-scale-in"
                         style={{ marginBottom: 10 }}
                       >
                         <div className="alert-title">Session Token 有效</div>
                         <div style={{ fontSize: 12, marginTop: 4 }}>
-                          用户:{" "}
-                          {rebindVerifyResult.userInfo?.username || "未知"}
+                          用户:{' '}
+                          {rebindVerifyResult.userInfo?.username || '未知'}
                           {rebindVerifyResult.apiToken
                             ? `，已识别 API Key (${String(rebindVerifyResult.apiToken).slice(0, 8)}...)`
-                            : ""}
+                            : ''}
                         </div>
                       </div>
                     )}
                   {rebindVerifyResult &&
                     (!rebindVerifyResult.success ||
-                      rebindVerifyResult.tokenType !== "session") && (
+                      rebindVerifyResult.tokenType !== 'session') && (
                       <div
                         className="alert alert-error animate-scale-in"
                         style={{ marginBottom: 10 }}
                       >
                         <div className="alert-title">
                           {rebindVerifyResult.message ||
-                            "Token 无效或类型不正确"}
+                            'Token 无效或类型不正确'}
                         </div>
                       </div>
                     )}
 
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       onClick={handleVerifyRebindToken}
                       disabled={
                         rebindVerifying || !rebindForm.accessToken.trim()
                       }
                       className="btn btn-ghost"
-                      style={{ border: "1px solid var(--color-border)" }}
+                      style={{ border: '1px solid var(--color-border)' }}
                     >
                       {rebindVerifying ? (
                         <>
@@ -2353,7 +2353,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           验证中...
                         </>
                       ) : (
-                        "验证 Token"
+                        '验证 Token'
                       )}
                     </button>
                     <button
@@ -2362,7 +2362,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         rebindSaving ||
                         !(
                           rebindVerifyResult?.success &&
-                          rebindVerifyResult?.tokenType === "session"
+                          rebindVerifyResult?.tokenType === 'session'
                         )
                       }
                       className="btn btn-success"
@@ -2372,14 +2372,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           <span
                             className="spinner spinner-sm"
                             style={{
-                              borderTopColor: "white",
-                              borderColor: "rgba(255,255,255,0.3)",
+                              borderTopColor: 'white',
+                              borderColor: 'rgba(255,255,255,0.3)',
                             }}
                           />
                           绑定中...
                         </>
                       ) : (
-                        "确认重新绑定"
+                        '确认重新绑定'
                       )}
                     </button>
                   </div>
@@ -2405,9 +2405,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     const health = resolveRuntimeHealth(a);
                     const isExpanded = expandedAccountIds.includes(a.id);
                     const hintMessage =
-                      a.status === "expired" && !capabilities.proxyOnly
-                        ? "账号已过期，请重新绑定"
-                        : health.reason || "-";
+                      a.status === 'expired' && !capabilities.proxyOnly
+                        ? '账号已过期，请重新绑定'
+                        : health.reason || '-';
                     return (
                       <MobileCard
                         key={a.id}
@@ -2415,18 +2415,18 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         headerActions={
                           <div
                             style={{
-                              display: "flex",
-                              alignItems: "center",
+                              display: 'flex',
+                              alignItems: 'center',
                               gap: 6,
                             }}
                           >
                             <span
-                              className={`badge ${connectionMode === "apikey" ? "badge-warning" : "badge-info"}`}
+                              className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`}
                               style={{ fontSize: 10 }}
                             >
-                              {connectionMode === "apikey"
-                                ? "API Key"
-                                : "Session"}
+                              {connectionMode === 'apikey'
+                                ? 'API Key'
+                                : 'Session'}
                             </span>
                           </div>
                         }
@@ -2437,7 +2437,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               onClick={() => toggleAccountDetails(a.id)}
                               className="btn btn-link"
                             >
-                              {isExpanded ? "收起" : "详情"}
+                              {isExpanded ? '收起' : '详情'}
                             </button>
                             <button
                               onClick={() => openEditPanel(a)}
@@ -2460,8 +2460,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           value={
                             <div
                               style={{
-                                display: "flex",
-                                flexDirection: "column",
+                                display: 'flex',
+                                flexDirection: 'column',
                                 gap: 4,
                               }}
                             >
@@ -2469,14 +2469,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 className={`badge ${health.cls}`}
                                 style={{
                                   fontSize: 11,
-                                  display: "inline-flex",
-                                  alignItems: "center",
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
                                   gap: 4,
-                                  width: "fit-content",
+                                  width: 'fit-content',
                                 }}
                               >
                                 <span
-                                  className={`status-dot ${health.dotClass} ${health.pulse ? "animate-pulse-dot" : ""}`}
+                                  className={`status-dot ${health.dotClass} ${health.pulse ? 'animate-pulse-dot' : ''}`}
                                   style={{ marginRight: 0 }}
                                 />
                                 {health.label}
@@ -2484,11 +2484,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               <span
                                 style={{
                                   fontSize: 11,
-                                  color: "var(--color-text-muted)",
+                                  color: 'var(--color-text-muted)',
                                   maxWidth: 240,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
                                 }}
                                 data-tooltip={health.reason}
                               >
@@ -2502,14 +2502,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           value={
                             <div
                               style={{
-                                display: "flex",
-                                flexWrap: "nowrap",
-                                alignItems: "baseline",
+                                display: 'flex',
+                                flexWrap: 'nowrap',
+                                alignItems: 'baseline',
                                 gap: 4,
-                                justifyContent: "flex-end",
+                                justifyContent: 'flex-end',
                               }}
                             >
-                              <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
+                              <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
                                 ${(a.balance || 0).toFixed(2)}
                               </span>
                               {(a.todayReward || 0) > 0 && (
@@ -2543,28 +2543,28 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 capabilities.canCheckin ? (
                                   <button
                                     type="button"
-                                    className={`checkin-toggle-badge ${a.checkinEnabled ? "is-on" : "is-off"}`}
+                                    className={`checkin-toggle-badge ${a.checkinEnabled ? 'is-on' : 'is-off'}`}
                                     onClick={() => handleToggleCheckin(a)}
                                     disabled={
                                       !!actionLoading[`checkin-toggle-${a.id}`]
                                     }
                                     data-tooltip={
                                       a.checkinEnabled
-                                        ? "点击关闭签到，全部签到会忽略此账号"
-                                        : "点击开启签到"
+                                        ? '点击关闭签到，全部签到会忽略此账号'
+                                        : '点击开启签到'
                                     }
                                     aria-label={
                                       a.checkinEnabled
-                                        ? "点击关闭签到，全部签到会忽略此账号"
-                                        : "点击开启签到"
+                                        ? '点击关闭签到，全部签到会忽略此账号'
+                                        : '点击开启签到'
                                     }
                                   >
                                     {actionLoading[`checkin-toggle-${a.id}`] ? (
                                       <span className="spinner spinner-sm" />
                                     ) : a.checkinEnabled ? (
-                                      "开启"
+                                      '开启'
                                     ) : (
-                                      "关闭"
+                                      '关闭'
                                     )}
                                   </button>
                                 ) : (
@@ -2580,9 +2580,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             <MobileField
                               label="账号状态"
                               value={
-                                a.status === "expired"
-                                  ? "已过期"
-                                  : a.status || "-"
+                                a.status === 'expired'
+                                  ? '已过期'
+                                  : a.status || '-'
                               }
                             />
                             <MobileField
@@ -2594,21 +2594,21 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               <button
                                 onClick={() => handleTogglePin(a)}
                                 disabled={!!actionLoading[`pin-toggle-${a.id}`]}
-                                className={`btn btn-link ${a.isPinned ? "btn-link-warning" : "btn-link-primary"}`}
+                                className={`btn btn-link ${a.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
                               >
                                 {actionLoading[`pin-toggle-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : a.isPinned ? (
-                                  "取消置顶"
+                                  '取消置顶'
                                 ) : (
-                                  "置顶"
+                                  '置顶'
                                 )}
                               </button>
-                              {sortMode === "custom" && (
+                              {sortMode === 'custom' && (
                                 <>
                                   <button
                                     onClick={() =>
-                                      handleMoveCustomOrder(a, "up")
+                                      handleMoveCustomOrder(a, 'up')
                                     }
                                     disabled={
                                       !!actionLoading[`reorder-${a.id}`]
@@ -2619,7 +2619,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   </button>
                                   <button
                                     onClick={() =>
-                                      handleMoveCustomOrder(a, "down")
+                                      handleMoveCustomOrder(a, 'down')
                                     }
                                     disabled={
                                       !!actionLoading[`reorder-${a.id}`]
@@ -2636,7 +2636,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `refresh-${a.id}`,
                                       () => api.refreshBalance(a.id),
-                                      "余额已刷新",
+                                      '余额已刷新',
                                     )
                                   }
                                   disabled={actionLoading[`refresh-${a.id}`]}
@@ -2645,7 +2645,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`refresh-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    "刷新"
+                                    '刷新'
                                   )}
                                 </button>
                               )}
@@ -2655,7 +2655,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `checkin-${a.id}`,
                                       () => api.triggerCheckin(a.id),
-                                      "签到完成",
+                                      '签到完成',
                                     )
                                   }
                                   disabled={actionLoading[`checkin-${a.id}`]}
@@ -2664,11 +2664,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`checkin-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    "签到"
+                                    '签到'
                                   )}
                                 </button>
                               )}
-                              {a.status === "expired" &&
+                              {a.status === 'expired' &&
                                 !capabilities.proxyOnly && (
                                   <button
                                     onClick={() => openRebindPanel(a)}
@@ -2680,7 +2680,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               <button
                                 onClick={() =>
                                   setDeleteConfirm({
-                                    mode: "single",
+                                    mode: 'single',
                                     accountId: a.id,
                                     accountName: resolveAccountDisplayName(a),
                                   })
@@ -2691,7 +2691,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 {actionLoading[`delete-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : (
-                                  "删除"
+                                  '删除'
                                 )}
                               </button>
                             </div>
@@ -2728,22 +2728,22 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             if (node) rowRefs.current.set(a.id, node);
                             else rowRefs.current.delete(a.id);
                           }}
-                          className={`animate-slide-up stagger-${Math.min(i + 1, 5)} ${highlightAccountId === a.id ? "row-focus-highlight" : ""}`.trim()}
+                          className={`animate-slide-up stagger-${Math.min(i + 1, 5)} ${highlightAccountId === a.id ? 'row-focus-highlight' : ''}`.trim()}
                         >
-                          <td className="accounts-name-cell" style={{ color: "var(--color-text-primary)" }}>
+                          <td className="accounts-name-cell" style={{ color: 'var(--color-text-primary)' }}>
                             <div className="inventory-name-title" style={{ fontWeight: 600 }} title={resolveAccountDisplayName(a)}>
                               {resolveAccountDisplayName(a)}
                             </div>
                             <div
-                              style={{ display: "flex", gap: 4, marginTop: 4 }}
+                              style={{ display: 'flex', gap: 4, marginTop: 4 }}
                             >
                               <span
-                                className={`badge ${connectionMode === "apikey" ? "badge-warning" : "badge-info"}`}
+                                className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`}
                                 style={{ fontSize: 10 }}
                               >
-                                {connectionMode === "apikey"
-                                  ? "API Key"
-                                  : "Session"}
+                                {connectionMode === 'apikey'
+                                  ? 'API Key'
+                                  : 'Session'}
                               </span>
                             </div>
                           </td>
@@ -2760,8 +2760,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               return (
                                 <div
                                   style={{
-                                    display: "flex",
-                                    flexDirection: "column",
+                                    display: 'flex',
+                                    flexDirection: 'column',
                                     gap: 4,
                                   }}
                                 >
@@ -2769,14 +2769,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     className={`badge ${health.cls}`}
                                     style={{
                                       fontSize: 11,
-                                      display: "inline-flex",
-                                      alignItems: "center",
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
                                       gap: 4,
-                                      width: "fit-content",
+                                      width: 'fit-content',
                                     }}
                                   >
                                     <span
-                                      className={`status-dot ${health.dotClass} ${health.pulse ? "animate-pulse-dot" : ""}`}
+                                      className={`status-dot ${health.dotClass} ${health.pulse ? 'animate-pulse-dot' : ''}`}
                                       style={{ marginRight: 0 }}
                                     />
                                     {health.label}
@@ -2785,7 +2785,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     className="accounts-health-reason"
                                     style={{
                                       fontSize: 11,
-                                      color: "var(--color-text-muted)",
+                                      color: 'var(--color-text-muted)',
                                     }}
                                     data-tooltip={health.reason}
                                     title={health.reason}
@@ -2796,16 +2796,16 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               );
                             })()}
                           </td>
-                          <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                          <td style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                             <div
                               style={{
-                                display: "flex",
-                                flexWrap: "nowrap",
-                                alignItems: "baseline",
+                                display: 'flex',
+                                flexWrap: 'nowrap',
+                                alignItems: 'baseline',
                                 gap: 4,
                               }}
                             >
-                              <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
+                              <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
                                 ${(a.balance || 0).toFixed(2)}
                               </span>
                               {(a.todayReward || 0) > 0 && (
@@ -2824,28 +2824,28 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             {capabilities.canCheckin ? (
                               <button
                                 type="button"
-                                className={`checkin-toggle-badge ${a.checkinEnabled ? "is-on" : "is-off"}`}
+                                className={`checkin-toggle-badge ${a.checkinEnabled ? 'is-on' : 'is-off'}`}
                                 onClick={() => handleToggleCheckin(a)}
                                 disabled={
                                   !!actionLoading[`checkin-toggle-${a.id}`]
                                 }
                                 data-tooltip={
                                   a.checkinEnabled
-                                    ? "点击关闭签到，全部签到会忽略此账号"
-                                    : "点击开启签到"
+                                    ? '点击关闭签到，全部签到会忽略此账号'
+                                    : '点击开启签到'
                                 }
                                 aria-label={
                                   a.checkinEnabled
-                                    ? "点击关闭签到，全部签到会忽略此账号"
-                                    : "点击开启签到"
+                                    ? '点击关闭签到，全部签到会忽略此账号'
+                                    : '点击开启签到'
                                 }
                               >
                                 {actionLoading[`checkin-toggle-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : a.checkinEnabled ? (
-                                  "开启"
+                                  '开启'
                                 ) : (
-                                  "关闭"
+                                  '关闭'
                                 )}
                               </button>
                             ) : (
@@ -2862,21 +2862,21 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               <button
                                 onClick={() => handleTogglePin(a)}
                                 disabled={!!actionLoading[`pin-toggle-${a.id}`]}
-                                className={`btn btn-link ${a.isPinned ? "btn-link-warning" : "btn-link-primary"}`}
+                                className={`btn btn-link ${a.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
                               >
                                 {actionLoading[`pin-toggle-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : a.isPinned ? (
-                                  "取消置顶"
+                                  '取消置顶'
                                 ) : (
-                                  "置顶"
+                                  '置顶'
                                 )}
                               </button>
-                              {sortMode === "custom" && (
+                              {sortMode === 'custom' && (
                                 <>
                                   <button
                                     onClick={() =>
-                                      handleMoveCustomOrder(a, "up")
+                                      handleMoveCustomOrder(a, 'up')
                                     }
                                     disabled={
                                       !!actionLoading[`reorder-${a.id}`]
@@ -2887,7 +2887,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   </button>
                                   <button
                                     onClick={() =>
-                                      handleMoveCustomOrder(a, "down")
+                                      handleMoveCustomOrder(a, 'down')
                                     }
                                     disabled={
                                       !!actionLoading[`reorder-${a.id}`]
@@ -2904,7 +2904,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `refresh-${a.id}`,
                                       () => api.refreshBalance(a.id),
-                                      "余额已刷新",
+                                      '余额已刷新',
                                     )
                                   }
                                   disabled={actionLoading[`refresh-${a.id}`]}
@@ -2913,7 +2913,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`refresh-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    "刷新"
+                                    '刷新'
                                   )}
                                 </button>
                               )}
@@ -2930,7 +2930,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `checkin-${a.id}`,
                                       () => api.triggerCheckin(a.id),
-                                      "签到完成",
+                                      '签到完成',
                                     )
                                   }
                                   disabled={actionLoading[`checkin-${a.id}`]}
@@ -2939,11 +2939,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`checkin-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    "签到"
+                                    '签到'
                                   )}
                                 </button>
                               )}
-                              {a.status === "expired" &&
+                              {a.status === 'expired' &&
                                 !capabilities.proxyOnly && (
                                   <button
                                     onClick={() => openRebindPanel(a)}
@@ -2961,7 +2961,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               <button
                                 onClick={() =>
                                   setDeleteConfirm({
-                                    mode: "single",
+                                    mode: 'single',
                                     accountId: a.id,
                                     accountName: resolveAccountDisplayName(a),
                                   })
@@ -2972,7 +2972,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 {actionLoading[`delete-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : (
-                                  "删除"
+                                  '删除'
                                 )}
                               </button>
                             </div>
@@ -3006,18 +3006,18 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   />
                 </svg>
                 <div className="empty-state-title">
-                  {activeSegment === "apikey"
-                    ? "暂无 API Key 连接"
-                    : "暂无 Session 连接"}
+                  {activeSegment === 'apikey'
+                    ? '暂无 API Key 连接'
+                    : '暂无 Session 连接'}
                 </div>
                 <div className="empty-state-desc">
-                  {activeSegment === "apikey"
+                  {activeSegment === 'apikey'
                     ? sites.length > 0
-                      ? "请为现有站点补充 API Key 连接"
-                      : "请先添加站点，然后为站点补充 API Key 连接"
+                      ? '请为现有站点补充 API Key 连接'
+                      : '请先添加站点，然后为站点补充 API Key 连接'
                     : sites.length > 0
-                      ? "请为现有站点添加 Session 连接"
-                      : "请先添加站点，然后添加 Session 连接"}
+                      ? '请为现有站点添加 Session 连接'
+                      : '请先添加站点，然后添加 Session 连接'}
                 </div>
               </div>
             )}
@@ -3042,8 +3042,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           if (!modelModal.account) return;
           await loadModelModalModels(modelModal.account, {
             refreshUpstream: true,
-            successMessage: "模型列表已刷新",
-            errorMessage: "刷新失败",
+            successMessage: '模型列表已刷新',
+            errorMessage: '刷新失败',
           });
         }}
         onToggleModelDisabled={toggleModelDisabled}

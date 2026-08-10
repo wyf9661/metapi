@@ -689,7 +689,7 @@ export default function TokenRoutes() {
   const routePatternsKey = visibleRouteRows.map((r) => `${r.id}:${r.modelPattern}:${r.routeMode || 'pattern'}`).join(',');
   const routePatterns = useMemo(
     () => visibleRouteRows.map((r) => ({ id: r.id, modelPattern: r.modelPattern, routeMode: r.routeMode })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // deps intentionally keyed on the serialized routePatternsKey
     [routePatternsKey],
   );
 

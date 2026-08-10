@@ -95,15 +95,15 @@ vi.mock('../../db/index.js', () => ({
 function buildMultipartBody(boundary: string) {
   return Buffer.from(
     `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="model"\r\n\r\n`
-      + `gpt-image-1\r\n`
+      + 'Content-Disposition: form-data; name="model"\r\n\r\n'
+      + 'gpt-image-1\r\n'
       + `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="prompt"\r\n\r\n`
-      + `edit this\r\n`
+      + 'Content-Disposition: form-data; name="prompt"\r\n\r\n'
+      + 'edit this\r\n'
       + `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="image"; filename="cat.png"\r\n`
-      + `Content-Type: image/png\r\n\r\n`
-      + `pngdata\r\n`
+      + 'Content-Disposition: form-data; name="image"; filename="cat.png"\r\n'
+      + 'Content-Type: image/png\r\n\r\n'
+      + 'pngdata\r\n'
       + `--${boundary}--\r\n`,
   );
 }

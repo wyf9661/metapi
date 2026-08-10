@@ -1662,7 +1662,7 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
   );
 
   return (
-    <div className={filterSiteId ? "" : "page-container animate-fade-in"}>
+    <div className={filterSiteId ? '' : 'page-container animate-fade-in'}>
       {!filterSiteId && (
       <div className="page-header">
         <div>

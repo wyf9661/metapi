@@ -27,7 +27,7 @@ describe('final transformer hard-cut architecture', () => {
   it('keeps shared normalized helpers independent from route chatFormats', () => {
     const sharedNormalized = readWorkspaceFile('src/server/transformers/shared/normalized.ts');
 
-    expect(sharedNormalized).not.toContain("../../routes/proxy/chatFormats.js");
+    expect(sharedNormalized).not.toContain('../../routes/proxy/chatFormats.js');
     expect(sharedNormalized).not.toContain("from '../../routes/proxy/chatFormats.js'");
   });
 

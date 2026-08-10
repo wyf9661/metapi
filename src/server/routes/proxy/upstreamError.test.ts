@@ -14,7 +14,7 @@ describe('summarizeUpstreamError', () => {
   });
 
   it('summarizes Cloudflare 5xx HTML page without dumping full body', () => {
-    const html = `<!DOCTYPE html><html><head><title>qaq.al | 502: Bad gateway</title></head><body>Cloudflare Ray ID: abc</body></html>`;
+    const html = '<!DOCTYPE html><html><head><title>qaq.al | 502: Bad gateway</title></head><body>Cloudflare Ray ID: abc</body></html>';
     const message = summarizeUpstreamError(502, html);
 
     expect(message).toContain('Upstream returned HTTP 502');

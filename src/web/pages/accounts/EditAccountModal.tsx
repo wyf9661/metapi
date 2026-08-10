@@ -1,24 +1,24 @@
-import React, { useState } from "react";
-import CenteredModal from "../../components/CenteredModal.js";
-import ResponsiveFormGrid from "../../components/ResponsiveFormGrid.js";
-import ModernSelect from "../../components/ModernSelect.js";
-import { api } from "../../api.js";
-import { useToast } from "../../components/Toast.js";
+import React, { useState } from 'react';
+import CenteredModal from '../../components/CenteredModal.js';
+import ResponsiveFormGrid from '../../components/ResponsiveFormGrid.js';
+import ModernSelect from '../../components/ModernSelect.js';
+import { api } from '../../api.js';
+import { useToast } from '../../components/Toast.js';
 
 const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 14px",
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-sm)",
+  width: '100%',
+  padding: '10px 14px',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-sm)',
   fontSize: 13,
-  outline: "none",
-  background: "var(--color-bg)",
-  color: "var(--color-text-primary)",
+  outline: 'none',
+  background: 'var(--color-bg)',
+  color: 'var(--color-text-primary)',
 };
 
 function parseAccountExtraConfig(account: any): Record<string, any> {
   try {
-    return JSON.parse(account?.extraConfig || "{}") || {};
+    return JSON.parse(account?.extraConfig || '{}') || {};
   } catch {
     return {};
   }
@@ -29,8 +29,8 @@ function extractManagedSub2ApiAuth(account: any) {
   const auth = parsed?.sub2apiAuth || {};
   return {
     refreshToken:
-      typeof auth.refreshToken === "string" ? auth.refreshToken : "",
-    tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : "",
+      typeof auth.refreshToken === 'string' ? auth.refreshToken : '',
+    tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : '',
   };
 }
 
@@ -49,16 +49,16 @@ export default function EditAccountModal({
 }: EditAccountModalProps) {
   const toast = useToast();
   const [editForm, setEditForm] = useState({
-    username: "",
-    status: "active",
+    username: '',
+    status: 'active',
     checkinEnabled: true,
-    unitCost: "",
-    accessToken: "",
-    apiToken: "",
+    unitCost: '',
+    accessToken: '',
+    apiToken: '',
     isPinned: false,
-    refreshToken: "",
-    tokenExpiresAt: "",
-    platformUserId: "",
+    refreshToken: '',
+    tokenExpiresAt: '',
+    platformUserId: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -68,19 +68,19 @@ export default function EditAccountModal({
     lastAccountIdRef.current = account.id;
     const managedAuth = extractManagedSub2ApiAuth(account);
     const nextForm = {
-      username: account?.username || "",
-      status: account?.status || "active",
+      username: account?.username || '',
+      status: account?.status || 'active',
       checkinEnabled: account?.checkinEnabled !== false,
       unitCost:
         account?.unitCost === null || account?.unitCost === undefined
-          ? ""
+          ? ''
           : String(account.unitCost),
-      accessToken: account?.accessToken || "",
-      apiToken: account?.apiToken || "",
+      accessToken: account?.accessToken || '',
+      apiToken: account?.apiToken || '',
       isPinned: !!account?.isPinned,
       refreshToken: managedAuth.refreshToken,
       tokenExpiresAt: managedAuth.tokenExpiresAt,
-      platformUserId: account?.platformUserId ? String(account.platformUserId) : "",
+      platformUserId: account?.platformUserId ? String(account.platformUserId) : '',
     };
     if (JSON.stringify(nextForm) !== JSON.stringify(editForm)) {
       setEditForm(nextForm);
@@ -117,11 +117,11 @@ export default function EditAccountModal({
           ? Number.parseInt(editForm.platformUserId.trim(), 10)
           : null,
       });
-      toast.success("账号已更新");
+      toast.success('账号已更新');
       handleClose();
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "更新账号失败");
+      toast.error(e.message || '更新账号失败');
     } finally {
       setSavingEdit(false);
     }
@@ -133,7 +133,7 @@ export default function EditAccountModal({
       onClose={handleClose}
       title="编辑账号"
       maxWidth={860}
-      bodyStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+      bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       footer={
         <>
           <button onClick={handleClose} className="btn btn-ghost">
@@ -149,14 +149,14 @@ export default function EditAccountModal({
                 <span
                   className="spinner spinner-sm"
                   style={{
-                    borderTopColor: "white",
-                    borderColor: "rgba(255,255,255,0.3)",
+                    borderTopColor: 'white',
+                    borderColor: 'rgba(255,255,255,0.3)',
                   }}
-                />{" "}
+                />{' '}
                 保存中...
               </>
             ) : (
-              "保存修改"
+              '保存修改'
             )}
           </button>
         </>
@@ -181,9 +181,9 @@ export default function EditAccountModal({
               setEditForm((prev) => ({ ...prev, status: value }))
             }
             options={[
-              { value: "active", label: "active" },
-              { value: "disabled", label: "disabled" },
-              { value: "expired", label: "expired" },
+              { value: 'active', label: 'active' },
+              { value: 'disabled', label: 'disabled' },
+              { value: 'expired', label: 'expired' },
             ]}
             placeholder="状态"
           />
@@ -200,8 +200,8 @@ export default function EditAccountModal({
           />
           <label
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 8,
               ...inputStyle,
             }}
@@ -227,16 +227,16 @@ export default function EditAccountModal({
                 accessToken: e.target.value,
               }))
             }
-            style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+            style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
           />
-          {(account?.site?.platform || "").toLowerCase() === "new-api" && (
+          {(account?.site?.platform || '').toLowerCase() === 'new-api' && (
             <input
               placeholder="用户 ID"
               value={editForm.platformUserId}
               onChange={(e) =>
                 setEditForm((prev) => ({
                   ...prev,
-                  platformUserId: e.target.value.replace(/\D/g, ""),
+                  platformUserId: e.target.value.replace(/\D/g, ''),
                 }))
               }
               style={inputStyle}
@@ -251,9 +251,9 @@ export default function EditAccountModal({
                 apiToken: e.target.value,
               }))
             }
-            style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+            style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
           />
-          {(account?.site?.platform || "").toLowerCase() === "sub2api" && (
+          {(account?.site?.platform || '').toLowerCase() === 'sub2api' && (
             <>
               <input
                 placeholder="refresh_token"
@@ -264,7 +264,7 @@ export default function EditAccountModal({
                     refreshToken: e.target.value,
                   }))
                 }
-                style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+                style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
               />
               <input
                 placeholder="token_expires_at"
@@ -272,7 +272,7 @@ export default function EditAccountModal({
                 onChange={(e) =>
                   setEditForm((prev) => ({
                     ...prev,
-                    tokenExpiresAt: e.target.value.replace(/\D/g, ""),
+                    tokenExpiresAt: e.target.value.replace(/\D/g, ''),
                   }))
                 }
                 style={inputStyle}

@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearSnapshotCache,
   readSnapshotCache,
   type PersistedSnapshotRecord,
-} from "./snapshotCacheService.js";
+} from './snapshotCacheService.js';
 
-describe("snapshotCacheService", () => {
+describe('snapshotCacheService', () => {
   let previousVitestEnv: string | undefined;
 
   beforeEach(() => {
@@ -22,30 +22,30 @@ describe("snapshotCacheService", () => {
     }
   });
 
-  it("degrades persistence read and write failures without breaking the read path", async () => {
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it('degrades persistence read and write failures without breaking the read path', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const result = await readSnapshotCache({
-      namespace: "test",
-      key: "persistence-failure",
+      namespace: 'test',
+      key: 'persistence-failure',
       ttlMs: 1000,
       loader: async () => ({ ok: true }),
       persistence: {
         read: async () => {
-          throw new Error("read failed");
+          throw new Error('read failed');
         },
         write: async () => {
-          throw new Error("write failed");
+          throw new Error('write failed');
         },
       },
     });
 
     expect(result.payload).toEqual({ ok: true });
-    expect(result.cacheStatus).toBe("miss");
+    expect(result.cacheStatus).toBe('miss');
     expect(consoleWarn).toHaveBeenCalled();
     consoleWarn.mockRestore();
   });
 
-  it("reuses an in-flight loader after async hydration misses", async () => {
+  it('reuses an in-flight loader after async hydration misses', async () => {
     let loaderCalls = 0;
     const persistenceRead = vi.fn(async (): Promise<PersistedSnapshotRecord<number> | null> => {
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -54,8 +54,8 @@ describe("snapshotCacheService", () => {
 
     const [left, right] = await Promise.all([
       readSnapshotCache({
-        namespace: "test",
-        key: "coalesce",
+        namespace: 'test',
+        key: 'coalesce',
         ttlMs: 1000,
         loader: async () => {
           loaderCalls += 1;
@@ -68,8 +68,8 @@ describe("snapshotCacheService", () => {
         },
       }),
       readSnapshotCache({
-        namespace: "test",
-        key: "coalesce",
+        namespace: 'test',
+        key: 'coalesce',
         ttlMs: 1000,
         loader: async () => {
           loaderCalls += 1;

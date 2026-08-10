@@ -369,11 +369,11 @@ export default function ProbeLogs() {
       const escapedRaw = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const escapedSnippet = readableSnippets.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return (
-        `<div class="probe-binary-notice">`
+        '<div class="probe-binary-notice">'
         + `<div class="probe-binary-hint">⚠ 上游返回了疑似二进制/压缩数据（替换字符 ${replacementCharCount} 个，控制字符 ${controlCharCount} 个），可能未正常解码。</div>`
         + (readableSnippets ? `<div class="probe-binary-snippet">可读片段：${escapedSnippet}</div>` : '')
         + `<details class="probe-binary-details"><summary>查看原始数据（${text.length} 字符）</summary><pre class="probe-binary-raw">${escapedRaw}</pre></details>`
-        + `</div>`
+        + '</div>'
       );
     }
 

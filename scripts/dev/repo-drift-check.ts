@@ -277,7 +277,7 @@ function parseCliOptions(argv: string[]): CliOptions {
     if (arg === '--format') {
       const value = readRequiredValue(arg, index);
       if (value !== 'text' && value !== 'markdown') {
-        throw new Error(`--format must be one of: text, markdown`);
+        throw new Error('--format must be one of: text, markdown');
       }
       options.format = value;
       index += 1;

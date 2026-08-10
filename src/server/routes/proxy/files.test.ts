@@ -23,12 +23,12 @@ vi.mock('../../services/proxyFileStore.js', () => ({
 function buildUploadBody(boundary: string) {
   return Buffer.from(
     `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="purpose"\r\n\r\n`
-      + `assistants\r\n`
+      + 'Content-Disposition: form-data; name="purpose"\r\n\r\n'
+      + 'assistants\r\n'
       + `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="file"; filename="sample.pdf"\r\n`
-      + `Content-Type: application/pdf\r\n\r\n`
-      + `%PDF-1.7\r\n`
+      + 'Content-Disposition: form-data; name="file"; filename="sample.pdf"\r\n'
+      + 'Content-Type: application/pdf\r\n\r\n'
+      + '%PDF-1.7\r\n'
       + `--${boundary}--\r\n`,
   );
 }

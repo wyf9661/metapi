@@ -1,17 +1,17 @@
-import { eq, sql } from "drizzle-orm";
-import { db, schema } from "../db/index.js";
-import { getLocalRangeStartDayKey } from "./localTimeService.js";
+import { eq, sql } from 'drizzle-orm';
+import { db, schema } from '../db/index.js';
+import { getLocalRangeStartDayKey } from './localTimeService.js';
 import {
   readSnapshotCache,
   type SnapshotEnvelope,
-} from "./snapshotCacheService.js";
+} from './snapshotCacheService.js';
 import {
   toRoundedMicroNumber,
-} from "./statsShared.js";
-import { createAdminSnapshotPersistence } from "./adminSnapshotStore.js";
+} from './statsShared.js';
+import { createAdminSnapshotPersistence } from './adminSnapshotStore.js';
 import {
   runUsageAggregationProjectionPass,
-} from "./usageAggregationService.js";
+} from './usageAggregationService.js';
 
 export type SiteStatsSnapshotPayload = {
   distribution: Array<{
@@ -55,7 +55,7 @@ async function loadSiteStatsSnapshotPayload(
     db
       .select()
       .from(schema.sites)
-      .where(eq(schema.sites.status, "active"))
+      .where(eq(schema.sites.status, 'active'))
       .all(),
     db
       .select({
@@ -67,7 +67,7 @@ async function loadSiteStatsSnapshotPayload(
       })
       .from(schema.accounts)
       .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-      .where(eq(schema.sites.status, "active"))
+      .where(eq(schema.sites.status, 'active'))
       .groupBy(schema.sites.id, schema.sites.name, schema.sites.platform)
       .all(),
   ]);
@@ -97,7 +97,7 @@ async function loadSiteStatsSnapshotPayload(
   for (const row of trendRows) {
     const site = activeSiteById.get(row.siteId);
     if (!site) continue;
-    const siteName = site.name || "unknown";
+    const siteName = site.name || 'unknown';
     const date = row.localDay;
 
     if (!dayMap[date]) dayMap[date] = {};
@@ -136,12 +136,12 @@ export async function getSiteStatsSnapshot(options?: {
 }): Promise<SnapshotEnvelope<SiteStatsSnapshotPayload>> {
   const days = Math.max(1, Math.trunc(options?.days || 7));
   return readSnapshotCache({
-    namespace: "site-stats",
+    namespace: 'site-stats',
     key: JSON.stringify({ days }),
     ttlMs: SITE_STATS_TTL_MS,
     forceRefresh: options?.forceRefresh,
     persistence: createAdminSnapshotPersistence<SiteStatsSnapshotPayload>({
-      namespace: "site-stats",
+      namespace: 'site-stats',
       key: JSON.stringify({ days }),
     }),
     loader: async () => loadSiteStatsSnapshotPayload(days),

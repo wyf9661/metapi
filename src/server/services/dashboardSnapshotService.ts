@@ -1,23 +1,23 @@
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
-import { db, schema } from "../db/index.js";
-import { buildModelAnalysisFromDailyUsage } from "./modelAnalysisService.js";
-import { parseCheckinRewardAmount } from "./checkinRewardParser.js";
+import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { db, schema } from '../db/index.js';
+import { buildModelAnalysisFromDailyUsage } from './modelAnalysisService.js';
+import { parseCheckinRewardAmount } from './checkinRewardParser.js';
 import {
   formatUtcSqlDateTime,
   getLocalDayRangeUtc,
   getLocalHourAnchor,
   getLocalHourRangeStartUtc,
   getLocalRangeStartDayKey,
-} from "./localTimeService.js";
+} from './localTimeService.js';
 import {
   readSnapshotCache,
   type SnapshotEnvelope,
-} from "./snapshotCacheService.js";
-import {buildSiteAvailabilitySummariesFromHourlyAggregates, buildModelAvailabilitySummaries, type SiteAvailabilitySiteRow, toRoundedMicroNumber} from "./statsShared.js";
-import { estimateRewardWithTodayIncomeFallback } from "./todayIncomeRewardService.js";
-import { createAdminSnapshotPersistence } from "./adminSnapshotStore.js";
-import { runUsageAggregationProjectionPass } from "./usageAggregationService.js";
-import { calculateProxyQualityMetrics } from "./proxyQualityMetrics.js";
+} from './snapshotCacheService.js';
+import {buildSiteAvailabilitySummariesFromHourlyAggregates, buildModelAvailabilitySummaries, type SiteAvailabilitySiteRow, toRoundedMicroNumber} from './statsShared.js';
+import { estimateRewardWithTodayIncomeFallback } from './todayIncomeRewardService.js';
+import { createAdminSnapshotPersistence } from './adminSnapshotStore.js';
+import { runUsageAggregationProjectionPass } from './usageAggregationService.js';
+import { calculateProxyQualityMetrics } from './proxyQualityMetrics.js';
 
 export type DashboardSummaryPayload = {
   totalBalance: number;
@@ -61,13 +61,13 @@ const DASHBOARD_INSIGHTS_TTL_MS = 20_000;
 const SITE_AVAILABILITY_BUCKET_COUNT = 24;
 const dashboardSummaryPersistence =
   createAdminSnapshotPersistence<DashboardSummaryPayload>({
-    namespace: "dashboard-summary",
-    key: "default",
+    namespace: 'dashboard-summary',
+    key: 'default',
   });
 const dashboardInsightsPersistence =
   createAdminSnapshotPersistence<DashboardInsightsPayload>({
-    namespace: "dashboard-insights",
-    key: "default",
+    namespace: 'dashboard-insights',
+    key: 'default',
   });
 
 async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
@@ -77,7 +77,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     .select()
     .from(schema.accounts)
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-    .where(eq(schema.sites.status, "active"))
+    .where(eq(schema.sites.status, 'active'))
     .all();
   const accounts = accountRows.map((row: any) => row.accounts);
   const totalBalance = accounts.reduce(
@@ -85,7 +85,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     0,
   );
   const activeCount = accounts.filter(
-    (account: any) => account.status === "active",
+    (account: any) => account.status === 'active',
   ).length;
 
   const {
@@ -117,7 +117,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
         and(
           gte(schema.checkinLogs.createdAt, todayStartUtc),
           lt(schema.checkinLogs.createdAt, todayEndUtc),
-          eq(schema.sites.status, "active"),
+          eq(schema.sites.status, 'active'),
         ),
       )
       .all(),
@@ -127,7 +127,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       })
       .from(schema.siteDayUsage)
       .innerJoin(schema.sites, eq(schema.siteDayUsage.siteId, schema.sites.id))
-      .where(eq(schema.sites.status, "active"))
+      .where(eq(schema.sites.status, 'active'))
       .get(),
     db
       .select({
@@ -145,7 +145,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           gte(schema.proxyLogs.createdAt, last24hDate),
-          eq(schema.sites.status, "active"),
+          eq(schema.sites.status, 'active'),
         ),
       )
       .get(),
@@ -163,7 +163,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           gte(schema.proxyLogs.createdAt, lastMinuteDate),
-          eq(schema.sites.status, "active"),
+          eq(schema.sites.status, 'active'),
         ),
       )
       .get(),
@@ -182,7 +182,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           gte(schema.proxyLogs.createdAt, last24hDate),
-          eq(schema.sites.status, "active"),
+          eq(schema.sites.status, 'active'),
         ),
       )
       .orderBy(desc(schema.proxyLogs.createdAt))
@@ -197,7 +197,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .where(
         and(
           eq(schema.siteDayUsage.localDay, today),
-          eq(schema.sites.status, "active"),
+          eq(schema.sites.status, 'active'),
         ),
       )
       .get(),
@@ -205,25 +205,25 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
 
   // Site-level checkin stats: one site counts once today.
   // Repeat attempts only refresh that site's outcome (success if any success/skipped).
-  const siteCheckinOutcome = new Map<number, "success" | "failed">();
+  const siteCheckinOutcome = new Map<number, 'success' | 'failed'>();
   const rewardByAccount: Record<number, number> = {};
   const successCountByAccount: Record<number, number> = {};
   const parsedRewardCountByAccount: Record<number, number> = {};
   for (const row of todayCheckinRows) {
     const checkin = row.checkin_logs;
     const siteId = row.sites.id;
-    const status = String(checkin.status || "");
-    const isSuccessLike = status === "success" || status === "skipped";
+    const status = String(checkin.status || '');
+    const isSuccessLike = status === 'success' || status === 'skipped';
     const prev = siteCheckinOutcome.get(siteId);
     if (isSuccessLike) {
-      siteCheckinOutcome.set(siteId, "success");
-    } else if (status === "failed" && prev !== "success") {
-      siteCheckinOutcome.set(siteId, "failed");
+      siteCheckinOutcome.set(siteId, 'success');
+    } else if (status === 'failed' && prev !== 'success') {
+      siteCheckinOutcome.set(siteId, 'failed');
     } else if (!prev) {
-      siteCheckinOutcome.set(siteId, "failed");
+      siteCheckinOutcome.set(siteId, 'failed');
     }
 
-    if (checkin.status !== "success") continue;
+    if (checkin.status !== 'success') continue;
     const accountId = row.accounts.id;
     successCountByAccount[accountId] =
       (successCountByAccount[accountId] || 0) + 1;
@@ -239,7 +239,7 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
   let checkinSuccess = 0;
   let checkinFailed = 0;
   for (const outcome of siteCheckinOutcome.values()) {
-    if (outcome === "success") checkinSuccess += 1;
+    if (outcome === 'success') checkinSuccess += 1;
     else checkinFailed += 1;
   }
   const checkinTotal = siteCheckinOutcome.size;
@@ -319,7 +319,7 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
           isPinned: schema.sites.isPinned,
         })
         .from(schema.sites)
-        .where(eq(schema.sites.status, "active"))
+        .where(eq(schema.sites.status, 'active'))
         .all(),
       db
         .select()
@@ -352,7 +352,7 @@ async function loadDashboardInsightsPayload(): Promise<DashboardInsightsPayload>
       const leftOrder = Number(left.sortOrder || 0);
       const rightOrder = Number(right.sortOrder || 0);
       if (leftOrder !== rightOrder) return leftOrder - rightOrder;
-      return String(left.name || "").localeCompare(String(right.name || ""));
+      return String(left.name || '').localeCompare(String(right.name || ''));
     },
   );
   const activeSiteIdSet = new Set(sortedSites.map((site: any) => site.id));
@@ -403,8 +403,8 @@ export async function getDashboardSummarySnapshot(options?: {
   forceRefresh?: boolean;
 }): Promise<SnapshotEnvelope<DashboardSummaryPayload>> {
   return readSnapshotCache({
-    namespace: "dashboard-summary",
-    key: "default",
+    namespace: 'dashboard-summary',
+    key: 'default',
     ttlMs: DASHBOARD_SUMMARY_TTL_MS,
     forceRefresh: options?.forceRefresh,
     persistence: dashboardSummaryPersistence,
@@ -416,8 +416,8 @@ export async function getDashboardInsightsSnapshot(options?: {
   forceRefresh?: boolean;
 }): Promise<SnapshotEnvelope<DashboardInsightsPayload>> {
   return readSnapshotCache({
-    namespace: "dashboard-insights",
-    key: "default",
+    namespace: 'dashboard-insights',
+    key: 'default',
     ttlMs: DASHBOARD_INSIGHTS_TTL_MS,
     forceRefresh: options?.forceRefresh,
     persistence: dashboardInsightsPersistence,

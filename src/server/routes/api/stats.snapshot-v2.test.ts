@@ -1,28 +1,28 @@
-import Fastify, { type FastifyInstance } from "fastify";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { formatUtcSqlDateTime } from "../../services/localTimeService.js";
+import Fastify, { type FastifyInstance } from 'fastify';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 
-type DbModule = typeof import("../../db/index.js");
+type DbModule = typeof import('../../db/index.js');
 
-describe("stats snapshot v2 routes", () => {
+describe('stats snapshot v2 routes', () => {
   let app: FastifyInstance;
-  let db: DbModule["db"];
-  let schema: DbModule["schema"];
-  let dataDir = "";
+  let db: DbModule['db'];
+  let schema: DbModule['schema'];
+  let dataDir = '';
   let previousDataDir: string | undefined;
 
   beforeAll(async () => {
     previousDataDir = process.env.DATA_DIR;
-    dataDir = mkdtempSync(join(tmpdir(), "metapi-stats-snapshot-v2-"));
+    dataDir = mkdtempSync(join(tmpdir(), 'metapi-stats-snapshot-v2-'));
     process.env.DATA_DIR = dataDir;
 
-    await import("../../db/migrate.js");
-    const dbModule = await import("../../db/index.js");
-    const routesModule = await import("./stats.js");
-    const sitesRoutesModule = await import("./sites.js");
+    await import('../../db/migrate.js');
+    const dbModule = await import('../../db/index.js');
+    const routesModule = await import('./stats.js');
+    const sitesRoutesModule = await import('./sites.js');
     db = dbModule.db;
     schema = dbModule.schema;
 
@@ -54,14 +54,14 @@ describe("stats snapshot v2 routes", () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it("returns dashboard and site snapshot payloads for progressive loading", async () => {
+  it('returns dashboard and site snapshot payloads for progressive loading', async () => {
     const recentLogCreatedAt = formatUtcSqlDateTime(new Date());
     const site = await db
       .insert(schema.sites)
       .values({
-        name: "stats-site",
-        url: "https://stats-site.example.com",
-        platform: "new-api",
+        name: 'stats-site',
+        url: 'https://stats-site.example.com',
+        platform: 'new-api',
       })
       .returning()
       .get();
@@ -69,10 +69,10 @@ describe("stats snapshot v2 routes", () => {
       .insert(schema.accounts)
       .values({
         siteId: site.id,
-        username: "stats-user",
-        accessToken: "stats-token",
+        username: 'stats-user',
+        accessToken: 'stats-token',
         balance: 42,
-        status: "active",
+        status: 'active',
       })
       .returning()
       .get();
@@ -82,9 +82,9 @@ describe("stats snapshot v2 routes", () => {
       .values([
         {
           accountId: account.id,
-          status: "success",
-          modelRequested: "gpt-4o",
-          modelActual: "gpt-4o",
+          status: 'success',
+          modelRequested: 'gpt-4o',
+          modelActual: 'gpt-4o',
           totalTokens: 120,
           estimatedCost: 0.5,
           latencyMs: 320,
@@ -92,9 +92,9 @@ describe("stats snapshot v2 routes", () => {
         },
         {
           accountId: account.id,
-          status: "failed",
-          modelRequested: "gpt-4o-mini",
-          modelActual: "gpt-4o-mini",
+          status: 'failed',
+          modelRequested: 'gpt-4o-mini',
+          modelActual: 'gpt-4o-mini',
           totalTokens: 60,
           estimatedCost: 0.25,
           latencyMs: 220,
@@ -102,9 +102,9 @@ describe("stats snapshot v2 routes", () => {
         },
         {
           accountId: account.id,
-          status: "success",
-          modelRequested: "gpt-4.1-mini",
-          modelActual: "gpt-4.1-mini",
+          status: 'success',
+          modelRequested: 'gpt-4.1-mini',
+          modelActual: 'gpt-4.1-mini',
           totalTokens: 40,
           estimatedCost: 0.1,
           latencyMs: 180,
@@ -116,11 +116,11 @@ describe("stats snapshot v2 routes", () => {
       .run();
 
     const summaryResponse = await app.inject({
-      method: "GET",
-      url: "/api/stats/dashboard?view=summary",
+      method: 'GET',
+      url: '/api/stats/dashboard?view=summary',
     });
     expect(summaryResponse.statusCode).toBe(200);
-    expect(summaryResponse.headers["x-dashboard-summary-cache"]).toBeTruthy();
+    expect(summaryResponse.headers['x-dashboard-summary-cache']).toBeTruthy();
     const summary = summaryResponse.json() as {
       generatedAt: string;
       totalBalance: number;
@@ -131,8 +131,8 @@ describe("stats snapshot v2 routes", () => {
     expect(summary.proxy24h.total).toBe(2);
 
     const insightsResponse = await app.inject({
-      method: "GET",
-      url: "/api/stats/dashboard?view=insights",
+      method: 'GET',
+      url: '/api/stats/dashboard?view=insights',
     });
     expect(insightsResponse.statusCode).toBe(200);
     const insights = insightsResponse.json() as {
@@ -148,8 +148,8 @@ describe("stats snapshot v2 routes", () => {
     expect(insights.modelAnalysis.totals.calls).toBe(2);
 
     const siteDistributionResponse = await app.inject({
-      method: "GET",
-      url: "/api/stats/site-distribution?days=7",
+      method: 'GET',
+      url: '/api/stats/site-distribution?days=7',
     });
     expect(siteDistributionResponse.statusCode).toBe(200);
     const siteDistribution = siteDistributionResponse.json() as {
@@ -160,8 +160,8 @@ describe("stats snapshot v2 routes", () => {
     ]);
 
     const siteTrendResponse = await app.inject({
-      method: "GET",
-      url: "/api/stats/site-trend?days=7",
+      method: 'GET',
+      url: '/api/stats/site-trend?days=7',
     });
     expect(siteTrendResponse.statusCode).toBe(200);
     const siteTrend = siteTrendResponse.json() as {
@@ -170,13 +170,13 @@ describe("stats snapshot v2 routes", () => {
     expect(siteTrend.trend.length).toBeGreaterThan(0);
 
     const sitesResponse = await app.inject({
-      method: "GET",
-      url: "/api/sites",
+      method: 'GET',
+      url: '/api/sites',
     });
     expect(sitesResponse.statusCode).toBe(200);
     const sites = sitesResponse.json() as Array<{ id: number; name: string }>;
     expect(sites).toEqual([
-      expect.objectContaining({ id: site.id, name: "stats-site" }),
+      expect.objectContaining({ id: site.id, name: 'stats-site' }),
     ]);
   });
 });

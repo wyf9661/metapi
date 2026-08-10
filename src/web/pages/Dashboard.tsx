@@ -1,33 +1,33 @@
-import { Suspense, lazy, useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { api } from "../api.js";
-import { useToast } from "../components/Toast.js";
-import { copyText } from "../clipboard.js";
-import { useIsMobile } from "../components/useIsMobile.js";
-import { formatCompactTokenMetric } from "../numberFormat.js";
+import { Suspense, lazy, useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../api.js';
+import { useToast } from '../components/Toast.js';
+import { copyText } from '../clipboard.js';
+import { useIsMobile } from '../components/useIsMobile.js';
+import { formatCompactTokenMetric } from '../numberFormat.js';
 
 const ModelAnalysisPanel = lazy(
-  () => import("../components/ModelAnalysisPanel.js"),
+  () => import('../components/ModelAnalysisPanel.js'),
 );
 const SiteDistributionChart = lazy(
-  () => import("../components/charts/SiteDistributionChart.js"),
+  () => import('../components/charts/SiteDistributionChart.js'),
 );
 const SiteTrendChart = lazy(
-  () => import("../components/charts/SiteTrendChart.js"),
+  () => import('../components/charts/SiteTrendChart.js'),
 );
 
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 6) return "🌙 夜深了";
-  if (hour < 11) return "☀️ 早上好";
-  if (hour < 13) return "👋 中午好";
-  if (hour < 18) return "🌤️ 下午好";
-  return "🌙 晚上好";
+  if (hour < 6) return '🌙 夜深了';
+  if (hour < 11) return '☀️ 早上好';
+  if (hour < 13) return '👋 中午好';
+  if (hour < 18) return '🌤️ 下午好';
+  return '🌙 晚上好';
 }
 
 function safeNumber(value: unknown): number {
   if (
-    typeof value !== "number" ||
+    typeof value !== 'number' ||
     Number.isNaN(value) ||
     !Number.isFinite(value)
   )
@@ -45,7 +45,7 @@ function ChartFallback({ height = 280 }: { height?: number }) {
       <div
         className="skeleton"
         style={{
-          width: "100%",
+          width: '100%',
           height: Math.max(120, height - 46),
           borderRadius: 10,
         }}
@@ -55,9 +55,9 @@ function ChartFallback({ height = 280 }: { height?: number }) {
 }
 
 type SiteSpeedState =
-  | { status: "loading" }
-  | { status: "timeout" }
-  | { status: "done"; ms: number }
+  | { status: 'loading' }
+  | { status: 'timeout' }
+  | { status: 'done'; ms: number }
   | undefined;
 
 type SiteAvailabilityBucket = {
@@ -95,21 +95,21 @@ type ModelAvailabilitySummary = {
 
 function formatAvailabilityPercent(value: number | null | undefined): string {
   if (
-    typeof value !== "number" ||
+    typeof value !== 'number' ||
     Number.isNaN(value) ||
     !Number.isFinite(value)
   )
-    return "—";
+    return '—';
   return `${Math.round(value)}%`;
 }
 
 function getAvailabilityColor(value: number | null | undefined): string {
   if (
-    typeof value !== "number" ||
+    typeof value !== 'number' ||
     Number.isNaN(value) ||
     !Number.isFinite(value)
   ) {
-    return "transparent";
+    return 'transparent';
   }
   const clamped = Math.max(0, Math.min(100, value));
   // Brighter and more saturated palette for tiny 24h bars
@@ -139,7 +139,7 @@ function getAvailabilityColor(value: number | null | undefined): string {
 }
 
 function padDateTimeSegment(value: number): string {
-  return String(value).padStart(2, "0");
+  return String(value).padStart(2, '0');
 }
 
 function formatDateTimeRouteValue(value: Date): string {
@@ -151,10 +151,10 @@ function buildSiteLogsRoute(
   range?: { from: Date; to: Date },
 ): string {
   const params = new URLSearchParams();
-  params.set("siteId", String(siteId));
+  params.set('siteId', String(siteId));
   if (range) {
-    params.set("from", formatDateTimeRouteValue(range.from));
-    params.set("to", formatDateTimeRouteValue(range.to));
+    params.set('from', formatDateTimeRouteValue(range.from));
+    params.set('to', formatDateTimeRouteValue(range.to));
   }
   return `/logs?${params.toString()}`;
 }
@@ -183,7 +183,7 @@ function buildSiteLast24hLogsRoute(siteId: number): string {
 }
 
 function parseAvailabilityBucketStart(startUtc?: string | null): Date | null {
-  const text = (startUtc || "").trim();
+  const text = (startUtc || '').trim();
   if (!text) return null;
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return null;
@@ -195,7 +195,7 @@ function parseAvailabilityBucketLabel(label: string): Date | null {
     /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/,
   );
   if (!match) return null;
-  const [, year, month, day, hour, minute, second = "0"] = match;
+  const [, year, month, day, hour, minute, second = '0'] = match;
   const parsed = new Date(
     Number(year),
     Number(month) - 1,
@@ -222,10 +222,10 @@ function buildModelLogsRoute(
   range?: { from: Date; to: Date },
 ): string {
   const params = new URLSearchParams();
-  params.set("model", model);
+  params.set('model', model);
   if (range) {
-    params.set("from", formatDateTimeRouteValue(range.from));
-    params.set("to", formatDateTimeRouteValue(range.to));
+    params.set('from', formatDateTimeRouteValue(range.from));
+    params.set('to', formatDateTimeRouteValue(range.to));
   }
   return `/logs?${params.toString()}`;
 }
@@ -269,7 +269,7 @@ function buildAvailabilityBucketLogsRoute(
 }
 
 export default function Dashboard({
-  adminName = "\u7ba1\u7406\u5458",
+  adminName = '\u7ba1\u7406\u5458',
 }: {
   adminName?: string;
 }) {
@@ -298,9 +298,9 @@ export default function Dashboard({
     Record<string, SiteSpeedState>
   >({});
   const [trendDays, setTrendDays] = useState(7);
-  const [observabilityTab, setObservabilityTab] = useState<"sites" | "models">("sites");
+  const [observabilityTab, setObservabilityTab] = useState<'sites' | 'models'>('sites');
   const toast = useToast();
-  const normalizedAdminName = (adminName || "").trim() || "\u7ba1\u7406\u5458";
+  const normalizedAdminName = (adminName || '').trim() || '\u7ba1\u7406\u5458';
 
   const getSiteSpeedKey = (site: any, idx: number) => String(site?.id ?? idx);
 
@@ -320,7 +320,7 @@ export default function Dashboard({
         );
         setData(result);
       } catch (err: any) {
-        const message = err?.message || "加载仪表盘失败";
+        const message = err?.message || '加载仪表盘失败';
         setError(message);
         if (silent) toast.error(message);
       } finally {
@@ -339,7 +339,7 @@ export default function Dashboard({
       );
       setInsightsData(result);
     } catch (err) {
-      console.error("Failed to load dashboard insights:", err);
+      console.error('Failed to load dashboard insights:', err);
     } finally {
       setInsightsLoading(false);
     }
@@ -356,10 +356,10 @@ export default function Dashboard({
         setSiteDistribution(snapshot.distribution || []);
         setSiteTrend(snapshot.trend || []);
         const siteRows = Array.isArray(snapshot.sites) ? snapshot.sites : [];
-        setSites(siteRows.filter((site: any) => site?.status !== "disabled"));
+        setSites(siteRows.filter((site: any) => site?.status !== 'disabled'));
         setSiteSpeedStates({});
       } catch (err) {
-        console.error("Failed to load site stats:", err);
+        console.error('Failed to load site stats:', err);
       } finally {
         setSiteLoading(false);
       }
@@ -385,8 +385,8 @@ export default function Dashboard({
 
     const pollDashboard = async () => {
       if (
-        typeof document !== "undefined" &&
-        document.visibilityState !== "visible"
+        typeof document !== 'undefined' &&
+        document.visibilityState !== 'visible'
       )
         return;
       try {
@@ -412,8 +412,8 @@ export default function Dashboard({
 
     const handleVisibilityChange = () => {
       if (
-        typeof document !== "undefined" &&
-        document.visibilityState === "visible"
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible'
       ) {
         void pollDashboard();
         start();
@@ -423,16 +423,16 @@ export default function Dashboard({
     };
 
     handleVisibilityChange();
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
     return () => {
       disposed = true;
       stop();
-      if (typeof document !== "undefined") {
+      if (typeof document !== 'undefined') {
         document.removeEventListener(
-          "visibilitychange",
+          'visibilitychange',
           handleVisibilityChange,
         );
       }
@@ -527,7 +527,7 @@ export default function Dashboard({
             width: 280,
             height: 32,
             marginBottom: 24,
-            borderRadius: "var(--radius-sm)",
+            borderRadius: 'var(--radius-sm)',
           }}
         />
         <div className="dashboard-stat-grid">
@@ -541,13 +541,13 @@ export default function Dashboard({
                 style={{ width: 80, height: 14, marginBottom: 16 }}
               />
               <div
-                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               >
                 {[...Array(4)].map((__, j) => (
-                  <div key={j} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div
                       className="skeleton"
-                      style={{ width: 36, height: 36, borderRadius: "50%" }}
+                      style={{ width: 36, height: 36, borderRadius: '50%' }}
                     />
                     <div>
                       <div
@@ -573,19 +573,19 @@ export default function Dashboard({
     return (
       <div className="animate-fade-in">
         <h2 className="greeting" style={{ marginBottom: 24 }}>
-          {getGreeting() + "\uFF0C" + normalizedAdminName}
+          {getGreeting() + '\uFF0C' + normalizedAdminName}
         </h2>
-        <div className="card" style={{ padding: 48, textAlign: "center" }}>
+        <div className="card" style={{ padding: 48, textAlign: 'center' }}>
           <div
             style={{
               width: 48,
               height: 48,
-              background: "var(--color-danger-soft)",
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 12px",
+              background: 'var(--color-danger-soft)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 12px',
             }}
           >
             <svg
@@ -607,7 +607,7 @@ export default function Dashboard({
           <div
             style={{
               fontSize: 13,
-              color: "var(--color-text-muted)",
+              color: 'var(--color-text-muted)',
               marginBottom: 16,
             }}
           >
@@ -634,13 +634,13 @@ export default function Dashboard({
   const totalTokens = safeNumber(data?.proxy24h?.totalTokens);
   const requestsPerMinute = safeNumber(data?.performance?.requestsPerMinute);
   const tokensPerMinute = safeNumber(data?.performance?.tokensPerMinute);
-  const qualitySuccessRate = typeof data?.performance?.successRatePercent === "number"
+  const qualitySuccessRate = typeof data?.performance?.successRatePercent === 'number'
     ? data.performance.successRatePercent
     : null;
-  const p95FirstByteLatencyMs = typeof data?.performance?.p95FirstByteLatencyMs === "number"
+  const p95FirstByteLatencyMs = typeof data?.performance?.p95FirstByteLatencyMs === 'number'
     ? data.performance.p95FirstByteLatencyMs
     : null;
-  const p95LatencyMs = typeof data?.performance?.p95LatencyMs === "number"
+  const p95LatencyMs = typeof data?.performance?.p95LatencyMs === 'number'
     ? data.performance.p95LatencyMs
     : null;
   const rawSiteAvailability: SiteAvailabilitySummary[] = Array.isArray(
@@ -665,19 +665,19 @@ export default function Dashboard({
 
   const getLatencyColor = (ms: number) =>
     ms <= 500
-      ? "var(--color-success)"
+      ? 'var(--color-success)'
       : ms <= 1000
-        ? "color-mix(in srgb, var(--color-success) 60%, var(--color-warning))"
+        ? 'color-mix(in srgb, var(--color-success) 60%, var(--color-warning))'
         : ms <= 1500
-          ? "var(--color-warning)"
+          ? 'var(--color-warning)'
           : ms <= 2000
-            ? "color-mix(in srgb, var(--color-warning) 60%, var(--color-danger))"
+            ? 'color-mix(in srgb, var(--color-warning) 60%, var(--color-danger))'
             : ms < 3000
-              ? "color-mix(in srgb, var(--color-warning) 30%, var(--color-danger))"
-              : "var(--color-danger)";
+              ? 'color-mix(in srgb, var(--color-warning) 30%, var(--color-danger))'
+              : 'var(--color-danger)';
 
   const formatDashboardLatency = (ms: number | null | undefined) => {
-    if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return "—";
+    if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '—';
     if (ms >= 1000) {
       const seconds = ms / 1000;
       if (seconds >= 10) return `${Math.round(seconds)}s`;
@@ -690,12 +690,12 @@ export default function Dashboard({
     const siteKey = getSiteSpeedKey(site, idx);
     const speedState = siteSpeedStates[siteKey];
 
-    if (!speedState || speedState.status === "loading") {
-      return speedState ? "..." : "测速";
+    if (!speedState || speedState.status === 'loading') {
+      return speedState ? '...' : '测速';
     }
 
-    if (speedState.status === "timeout") {
-      return "超时";
+    if (speedState.status === 'timeout') {
+      return '超时';
     }
 
     const ms = speedState.ms;
@@ -705,15 +705,15 @@ export default function Dashboard({
       <>
         <span
           style={{
-            display: "inline-block",
+            display: 'inline-block',
             width: 6,
             height: 6,
-            borderRadius: "50%",
+            borderRadius: '50%',
             background: color,
             boxShadow: `0 0 4px ${color}`,
-            animation: "pulse 1.5s ease-in-out infinite",
+            animation: 'pulse 1.5s ease-in-out infinite',
             marginRight: 3,
-            verticalAlign: "middle",
+            verticalAlign: 'middle',
           }}
         />
         <span style={{ color, fontWeight: 600 }}>{formatDashboardLatency(ms)}</span>
@@ -725,16 +725,16 @@ export default function Dashboard({
     <div className="animate-fade-in">
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           marginBottom: 24,
         }}
       >
         <h2 className="greeting">
-          {getGreeting() + "\uFF0C" + normalizedAdminName}
+          {getGreeting() + '\uFF0C' + normalizedAdminName}
         </h2>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => {
               void load(true);
@@ -753,7 +753,7 @@ export default function Dashboard({
               viewBox="0 0 24 24"
               stroke="currentColor"
               style={{
-                animation: refreshing ? "spin 1s linear infinite" : "none",
+                animation: refreshing ? 'spin 1s linear infinite' : 'none',
               }}
             >
               <path
@@ -993,7 +993,7 @@ export default function Dashboard({
                 ${totalBalance.toFixed(2)}
                 <span
                   className="dashboard-stat-inline"
-                  style={{ color: todayReward > 0 ? "var(--color-success)" : "var(--color-text-muted)" }}
+                  style={{ color: todayReward > 0 ? 'var(--color-success)' : 'var(--color-text-muted)' }}
                 >
                   （今日 +{todayReward.toFixed(2)}）
                 </span>
@@ -1012,7 +1012,7 @@ export default function Dashboard({
                 ${totalUsed.toFixed(2)}
                 <span
                   className="dashboard-stat-inline"
-                  style={{ color: todaySpend > 0 ? "var(--color-danger)" : "var(--color-text-muted)" }}
+                  style={{ color: todaySpend > 0 ? 'var(--color-danger)' : 'var(--color-text-muted)' }}
                 >
                   （今日 -{todaySpend.toFixed(2)}）
                 </span>
@@ -1137,7 +1137,7 @@ export default function Dashboard({
             <div className="dashboard-stat-content">
               <div className="stat-label">24h 成功率</div>
               <div className="stat-value animate-count-up">
-                {qualitySuccessRate == null ? "—" : `${qualitySuccessRate.toFixed(1)}%`}
+                {qualitySuccessRate == null ? '—' : `${qualitySuccessRate.toFixed(1)}%`}
               </div>
             </div>
           </div>
@@ -1160,21 +1160,21 @@ export default function Dashboard({
       {/* 站点级分析 */}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           marginBottom: 12,
           marginTop: 8,
         }}
       >
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
+            display: 'flex',
+            alignItems: 'center',
             gap: 6,
             fontSize: 14,
             fontWeight: 600,
-            color: "var(--color-text-primary)",
+            color: 'var(--color-text-primary)',
           }}
         >
           <svg
@@ -1193,23 +1193,23 @@ export default function Dashboard({
           </svg>
           站点分析
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
           {[7, 30, 90].map((d) => (
             <button
               key={d}
               onClick={() => setTrendDays(d)}
               style={{
-                padding: "4px 12px",
+                padding: '4px 12px',
                 borderRadius: 6,
                 fontSize: 12,
                 fontWeight: 500,
-                border: "none",
-                cursor: "pointer",
+                border: 'none',
+                cursor: 'pointer',
                 background:
-                  trendDays === d ? "var(--color-primary)" : "var(--color-bg)",
+                  trendDays === d ? 'var(--color-primary)' : 'var(--color-bg)',
                 color:
-                  trendDays === d ? "white" : "var(--color-text-secondary)",
-                transition: "all 0.2s ease",
+                  trendDays === d ? 'white' : 'var(--color-text-secondary)',
+                transition: 'all 0.2s ease',
               }}
             >
               {d}天
@@ -1220,13 +1220,13 @@ export default function Dashboard({
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
           gap: 16,
           marginBottom: 24,
         }}
       >
-        <div className="chart-panel-enter animate-slide-up stagger-6" style={{ height: "100%" }}>
+        <div className="chart-panel-enter animate-slide-up stagger-6" style={{ height: '100%' }}>
           <Suspense fallback={<ChartFallback height={320} />}>
             <SiteDistributionChart
               data={siteDistribution}
@@ -1234,7 +1234,7 @@ export default function Dashboard({
             />
           </Suspense>
         </div>
-        <div className="chart-panel-enter animate-slide-up stagger-7" style={{ height: "100%" }}>
+        <div className="chart-panel-enter animate-slide-up stagger-7" style={{ height: '100%' }}>
           <Suspense fallback={<ChartFallback height={320} />}>
             <SiteTrendChart data={siteTrend} loading={siteLoading} />
           </Suspense>
@@ -1261,7 +1261,7 @@ export default function Dashboard({
               </svg>
               24 小时可用性观测
               <span className="site-observability-count-badge">
-                {observabilityTab === "sites"
+                {observabilityTab === 'sites'
                   ? activeSites.length
                   : activeModels.length}
               </span>
@@ -1270,19 +1270,19 @@ export default function Dashboard({
               最近 24 小时 · 每色块 = 1h · 按使用量排序
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <div className="pill-tabs">
               <button
                 type="button"
-                className={`pill-tab ${observabilityTab === "sites" ? "active" : ""}`}
-                onClick={() => setObservabilityTab("sites")}
+                className={`pill-tab ${observabilityTab === 'sites' ? 'active' : ''}`}
+                onClick={() => setObservabilityTab('sites')}
               >
                 站点
               </button>
               <button
                 type="button"
-                className={`pill-tab ${observabilityTab === "models" ? "active" : ""}`}
-                onClick={() => setObservabilityTab("models")}
+                className={`pill-tab ${observabilityTab === 'models' ? 'active' : ''}`}
+                onClick={() => setObservabilityTab('models')}
               >
                 模型
               </button>
@@ -1306,9 +1306,9 @@ export default function Dashboard({
           </div>
         </div>
 
-        {observabilityTab === "sites" ? (
+        {observabilityTab === 'sites' ? (
           insightsLoading && rawSiteAvailability.length === 0 ? (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: 'grid', gap: 12 }}>
             {[...Array(4)].map((_, index) => (
               <div
                 key={index}
@@ -1321,11 +1321,11 @@ export default function Dashboard({
                 />
                 <div
                   className="skeleton"
-                  style={{ width: "100%", height: 12, marginBottom: 8 }}
+                  style={{ width: '100%', height: 12, marginBottom: 8 }}
                 />
                 <div
                   className="skeleton"
-                  style={{ width: "100%", height: 18, borderRadius: 8 }}
+                  style={{ width: '100%', height: 18, borderRadius: 8 }}
                 />
               </div>
             ))}
@@ -1335,7 +1335,7 @@ export default function Dashboard({
             {siteAvailability.map((site) => (
               <div
                 key={site.siteId}
-                className={`site-observability-card${site.totalRequests > 0 ? "" : " site-observability-card--inactive"}`}
+                className={`site-observability-card${site.totalRequests > 0 ? '' : ' site-observability-card--inactive'}`}
               >
                 <div className="site-observability-card-top">
                   <div className="site-observability-card-title">
@@ -1388,7 +1388,7 @@ export default function Dashboard({
                   >
                     {site.averageLatencyMs != null
                       ? formatDashboardLatency(site.averageLatencyMs)
-                      : "—"}
+                      : '—'}
                   </span>
                   <span className="site-observability-metric-sep">·</span>
                   <span>{Math.round(site.totalRequests || 0)} 次</span>
@@ -1410,8 +1410,8 @@ export default function Dashboard({
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : "平均响应：—",
-                        ].join(" · ")}
+                            : '平均响应：—',
+                        ].join(' · ')}
                         data-tooltip-align="start"
                         title={[
                           formatAvailabilityBucketLabel(bucket),
@@ -1419,8 +1419,8 @@ export default function Dashboard({
                           `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
                           bucket.averageLatencyMs != null
                             ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : "平均响应 —",
-                        ].join(" | ")}
+                            : '平均响应 —',
+                        ].join(' | ')}
                         aria-label={`${site.siteName} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
                       />
                     ) : (
@@ -1446,7 +1446,7 @@ export default function Dashboard({
           </div>
         )
         ) : insightsLoading && rawModelAvailability.length === 0 ? (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: 'grid', gap: 12 }}>
             {[...Array(4)].map((_, index) => (
               <div
                 key={index}
@@ -1459,11 +1459,11 @@ export default function Dashboard({
                 />
                 <div
                   className="skeleton"
-                  style={{ width: "100%", height: 12, marginBottom: 8 }}
+                  style={{ width: '100%', height: 12, marginBottom: 8 }}
                 />
                 <div
                   className="skeleton"
-                  style={{ width: "100%", height: 18, borderRadius: 8 }}
+                  style={{ width: '100%', height: 18, borderRadius: 8 }}
                 />
               </div>
             ))}
@@ -1473,7 +1473,7 @@ export default function Dashboard({
             {modelAvailability.map((modelRow) => (
               <div
                 key={modelRow.model}
-                className={`site-observability-card${modelRow.totalRequests > 0 ? "" : " site-observability-card--inactive"}`}
+                className={`site-observability-card${modelRow.totalRequests > 0 ? '' : ' site-observability-card--inactive'}`}
               >
                 <div className="site-observability-card-top">
                   <div className="site-observability-card-title">
@@ -1521,7 +1521,7 @@ export default function Dashboard({
                   >
                     {modelRow.averageLatencyMs != null
                       ? formatDashboardLatency(modelRow.averageLatencyMs)
-                      : "—"}
+                      : '—'}
                   </span>
                   <span className="site-observability-metric-sep">·</span>
                   <span>{Math.round(modelRow.totalRequests || 0)} 次</span>
@@ -1543,8 +1543,8 @@ export default function Dashboard({
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : "平均响应：—",
-                        ].join(" · ")}
+                            : '平均响应：—',
+                        ].join(' · ')}
                         data-tooltip-align="start"
                         title={[
                           formatAvailabilityBucketLabel(bucket),
@@ -1552,8 +1552,8 @@ export default function Dashboard({
                           `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
                           bucket.averageLatencyMs != null
                             ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : "平均响应 —",
-                        ].join(" | ")}
+                            : '平均响应 —',
+                        ].join(' | ')}
                         aria-label={`${modelRow.model} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
                       />
                     ) : (
@@ -1582,31 +1582,31 @@ export default function Dashboard({
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 320px",
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 320px',
           gap: 16,
         }}
       >
         <div
           className="chart-container animate-slide-up stagger-8"
-          style={{ height: isMobile ? "auto" : 560, overflow: "hidden" }}
+          style={{ height: isMobile ? 'auto' : 560, overflow: 'hidden' }}
         >
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 12,
               marginBottom: 14,
             }}
           >
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 6,
                 fontSize: 14,
                 fontWeight: 600,
-                color: "var(--color-text-primary)",
+                color: 'var(--color-text-primary)',
               }}
             >
               <svg
@@ -1638,10 +1638,10 @@ export default function Dashboard({
         <div
           className="chart-container animate-slide-up stagger-9"
           style={{
-            display: "flex",
-            flexDirection: "column",
-            height: isMobile ? "auto" : 560,
-            overflow: "hidden",
+            display: 'flex',
+            flexDirection: 'column',
+            height: isMobile ? 'auto' : 560,
+            overflow: 'hidden',
           }}
         >
           <div
@@ -1649,13 +1649,13 @@ export default function Dashboard({
               fontSize: 14,
               fontWeight: 600,
               marginBottom: 16,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              color: "var(--color-text-primary)",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              color: 'var(--color-text-primary)',
             }}
           >
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <svg
                 width="16"
                 height="16"
@@ -1672,40 +1672,40 @@ export default function Dashboard({
               </svg>
               站点信息
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--color-text-muted)", fontWeight: 500 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500 }}>
                 {sites.length} 个站点
               </span>
               {sites.length > 0 && (<button
                 className="btn btn-ghost"
                 style={{
                   fontSize: 11,
-                  padding: "3px 10px",
-                  border: "1px solid var(--color-border)",
+                  padding: '3px 10px',
+                  border: '1px solid var(--color-border)',
                   borderRadius: 6,
-                  display: "inline-flex",
-                  alignItems: "center",
+                  display: 'inline-flex',
+                  alignItems: 'center',
                   gap: 4,
                 }}
                 onClick={async () => {
                   await Promise.all(
                     sites.map(async (s: any, idx: number) => {
                       const siteKey = getSiteSpeedKey(s, idx);
-                      setSiteSpeedState(siteKey, { status: "loading" });
+                      setSiteSpeedState(siteKey, { status: 'loading' });
                       try {
                         const start = performance.now();
                         await fetch(`${s.url}/v1/models`, {
-                          method: "GET",
-                          mode: "no-cors",
+                          method: 'GET',
+                          mode: 'no-cors',
                         });
                         const ms = Math.round(performance.now() - start);
-                        setSiteSpeedState(siteKey, { status: "done", ms });
+                        setSiteSpeedState(siteKey, { status: 'done', ms });
                       } catch {
-                        setSiteSpeedState(siteKey, { status: "timeout" });
+                        setSiteSpeedState(siteKey, { status: 'timeout' });
                       }
                     }),
                   );
-                  toast.success("全部测速完成");
+                  toast.success('全部测速完成');
                 }}
               >
                 <svg
@@ -1730,11 +1730,11 @@ export default function Dashboard({
           <div
             style={{
               flex: 1,
-              display: "flex",
-              flexDirection: "column",
+              display: 'flex',
+              flexDirection: 'column',
               gap: 10,
               minHeight: 0,
-              overflowY: "auto",
+              overflowY: 'auto',
               paddingRight: 4,
             }}
           >
@@ -1743,19 +1743,19 @@ export default function Dashboard({
                 <div
                   key={site.id || idx}
                   style={{
-                    padding: "10px 12px",
-                    border: "1px solid var(--color-border-light)",
-                    borderRadius: "var(--radius-md)",
-                    background: "var(--color-bg)",
+                    padding: '10px 12px',
+                    border: '1px solid var(--color-border-light)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--color-bg)',
                   }}
                 >
                   <div
                     style={{
-                      display: "flex",
-                      alignItems: "center",
+                      display: 'flex',
+                      alignItems: 'center',
                       gap: 8,
                       marginBottom: 6,
-                      flexWrap: "wrap",
+                      flexWrap: 'wrap',
                     }}
                   >
                     <span style={{ fontWeight: 600, fontSize: 13 }}>
@@ -1765,27 +1765,27 @@ export default function Dashboard({
                       className="btn btn-ghost"
                       style={{
                         fontSize: 11,
-                        padding: "2px 8px",
-                        border: "1px solid var(--color-border)",
+                        padding: '2px 8px',
+                        border: '1px solid var(--color-border)',
                         borderRadius: 6,
-                        display: "inline-flex",
-                        alignItems: "center",
+                        display: 'inline-flex',
+                        alignItems: 'center',
                         gap: 3,
                       }}
                       onClick={async () => {
                         const siteKey = getSiteSpeedKey(site, idx);
-                        setSiteSpeedState(siteKey, { status: "loading" });
+                        setSiteSpeedState(siteKey, { status: 'loading' });
                         try {
                           const start = performance.now();
                           await fetch(`${site.url}/v1/models`, {
-                            method: "GET",
-                            mode: "no-cors",
+                            method: 'GET',
+                            mode: 'no-cors',
                           });
                           const ms = Math.round(performance.now() - start);
-                          setSiteSpeedState(siteKey, { status: "done", ms });
+                          setSiteSpeedState(siteKey, { status: 'done', ms });
                           toast.success(`${site.name}: ${formatDashboardLatency(ms)}`);
                         } catch {
-                          setSiteSpeedState(siteKey, { status: "timeout" });
+                          setSiteSpeedState(siteKey, { status: 'timeout' });
                           toast.error(`${site.name}: 测速失败`);
                         }
                       }}
@@ -1813,12 +1813,12 @@ export default function Dashboard({
                       className="btn btn-ghost"
                       style={{
                         fontSize: 11,
-                        padding: "2px 8px",
-                        border: "1px solid var(--color-border)",
+                        padding: '2px 8px',
+                        border: '1px solid var(--color-border)',
                         borderRadius: 6,
-                        textDecoration: "none",
-                        display: "inline-flex",
-                        alignItems: "center",
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
                         gap: 3,
                       }}
                     >
@@ -1845,8 +1845,8 @@ export default function Dashboard({
                     rel="noopener noreferrer"
                     style={{
                       fontSize: 12,
-                      color: "var(--color-info)",
-                      wordBreak: "break-all",
+                      color: 'var(--color-info)',
+                      wordBreak: 'break-all',
                     }}
                   >
                     {site.url}
@@ -1857,10 +1857,10 @@ export default function Dashboard({
               <div
                 style={{
                   flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   gap: 8,
                   padding: 20,
                 }}
@@ -1885,7 +1885,7 @@ export default function Dashboard({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "var(--color-text-secondary)",
+                    color: 'var(--color-text-secondary)',
                   }}
                 >
                   代理端点可用
@@ -1893,37 +1893,37 @@ export default function Dashboard({
                 <div
                   style={{
                     fontSize: 11,
-                    color: "var(--color-text-muted)",
-                    textAlign: "center",
+                    color: 'var(--color-text-muted)',
+                    textAlign: 'center',
                     lineHeight: 1.6,
                   }}
                 >
-                  使用{" "}
+                  使用{' '}
                   <code
                     style={{
-                      background: "var(--color-bg)",
-                      padding: "2px 6px",
+                      background: 'var(--color-bg)',
+                      padding: '2px 6px',
                       borderRadius: 4,
                       fontSize: 10,
                     }}
                   >
                     /v1/chat/completions
-                  </code>{" "}
+                  </code>{' '}
                   访问
                 </div>
               </div>
             )}
             <div
               style={{
-                marginTop: "auto",
+                marginTop: 'auto',
                 paddingTop: 8,
-                borderTop: "1px solid var(--color-border-light)",
+                borderTop: '1px solid var(--color-border-light)',
               }}
             >
               <div
                 style={{
                   fontSize: 11,
-                  color: "var(--color-text-muted)",
+                  color: 'var(--color-text-muted)',
                   marginBottom: 2,
                 }}
               >
@@ -1932,7 +1932,7 @@ export default function Dashboard({
               <div style={{ fontSize: 18, fontWeight: 700 }}>
                 {proxy24hTotal > 0
                   ? `${Math.round(proxy24hSuccess)}/${Math.round(proxy24hTotal)}`
-                  : "—"}
+                  : '—'}
               </div>
             </div>
           </div>

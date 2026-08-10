@@ -101,15 +101,15 @@ describe('/v1/videos routes', () => {
 
   const buildMultipartBody = (boundary: string) => Buffer.from(
     `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="model"\r\n\r\n`
-      + `sora-2\r\n`
+      + 'Content-Disposition: form-data; name="model"\r\n\r\n'
+      + 'sora-2\r\n'
       + `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="prompt"\r\n\r\n`
-      + `a cat walking\r\n`
+      + 'Content-Disposition: form-data; name="prompt"\r\n\r\n'
+      + 'a cat walking\r\n'
       + `--${boundary}\r\n`
-      + `Content-Disposition: form-data; name="input_reference"; filename="cat.png"\r\n`
-      + `Content-Type: image/png\r\n\r\n`
-      + `pngdata\r\n`
+      + 'Content-Disposition: form-data; name="input_reference"; filename="cat.png"\r\n'
+      + 'Content-Type: image/png\r\n\r\n'
+      + 'pngdata\r\n'
       + `--${boundary}--\r\n`,
   );
 

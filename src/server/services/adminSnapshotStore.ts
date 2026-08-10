@@ -1,9 +1,9 @@
-import { and, eq, lt } from "drizzle-orm";
-import { db, runtimeDbDialect, schema } from "../db/index.js";
+import { and, eq, lt } from 'drizzle-orm';
+import { db, runtimeDbDialect, schema } from '../db/index.js';
 import type {
   PersistedSnapshotRecord,
   SnapshotPersistenceAdapter,
-} from "./snapshotCacheService.js";
+} from './snapshotCacheService.js';
 
 type AdminSnapshotIdentity = {
   namespace: string;
@@ -81,7 +81,7 @@ export async function writeAdminSnapshot<T>(
     updatedAt: new Date().toISOString(),
   };
 
-  if (runtimeDbDialect === "mysql") {
+  if (runtimeDbDialect === 'mysql') {
     await (db
       .insert(schema.adminSnapshots)
       .values(values) as any)

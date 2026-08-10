@@ -12,13 +12,13 @@ export async function copyText(text: string): Promise<void> {
     }
   }
 
-  const textarea = document.createElement("textarea");
+  const textarea = document.createElement('textarea');
   textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
   document.body.appendChild(textarea);
   textarea.select();
-  const ok = document.execCommand("copy");
+  const ok = document.execCommand('copy');
   document.body.removeChild(textarea);
-  if (!ok) throw new Error("copy failed");
+  if (!ok) throw new Error('copy failed');
 }

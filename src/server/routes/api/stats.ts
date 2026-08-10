@@ -5,53 +5,53 @@ import {
   getThroughputSampleCount,
   type ThroughputAggregate,
 } from '../../services/marketplaceThroughput.js';
-import { FastifyInstance } from "fastify";
-import { db, schema } from "../../db/index.js";
-import { and, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
-import { config } from "../../config.js";
-import { refreshModelsForAccount } from "../../services/modelService.js";
-import * as routeRefreshWorkflow from "../../services/routeRefreshWorkflow.js";
-import { lookupModelsDevCapabilities } from "../../services/modelCapabilitiesService.js";
+import { FastifyInstance } from 'fastify';
+import { db, schema } from '../../db/index.js';
+import { and, desc, eq, gte, lt, lte, or, sql } from 'drizzle-orm';
+import { config } from '../../config.js';
+import { refreshModelsForAccount } from '../../services/modelService.js';
+import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
+import { lookupModelsDevCapabilities } from '../../services/modelCapabilitiesService.js';
 import {
   fetchModelPricingCatalog,
-} from "../../services/modelPricingService.js";
+} from '../../services/modelPricingService.js';
 import {
   buildModelAvailabilityProbeTaskDedupeKey,
   probeSingleModelAvailability,
   probeSingleModelAvailabilityStream,
   queueModelAvailabilityProbeTask,
   type ModelAvailabilityProbeExecutionResult,
-} from "../../services/modelAvailabilityProbeService.js";
-import { getUpstreamModelDescriptionsCached } from "../../services/upstreamModelDescriptionService.js";
-import {getRunningTaskByDedupeKey, startBackgroundTask, waitForBackgroundTaskCompletion} from "../../services/backgroundTaskService.js";
+} from '../../services/modelAvailabilityProbeService.js';
+import { getUpstreamModelDescriptionsCached } from '../../services/upstreamModelDescriptionService.js';
+import {getRunningTaskByDedupeKey, startBackgroundTask, waitForBackgroundTaskCompletion} from '../../services/backgroundTaskService.js';
 import {
   parseProxyLogBillingDetails,
   withProxyLogSelectFields,
-} from "../../services/proxyLogStore.js";
-import { calculateProxyRequestLevelMetricsFromAggregates } from "../../services/proxyRequestAggregateMetrics.js";
+} from '../../services/proxyLogStore.js';
+import { calculateProxyRequestLevelMetricsFromAggregates } from '../../services/proxyRequestAggregateMetrics.js';
 import {
   clearAllProxyDebugTraces,
   getProxyDebugTraceDetail,
   listProxyDebugTraces,
-} from "../../services/proxyDebugTraceStore.js";
-import { parseProxyLogMessageMeta } from "../../services/proxyLogMessage.js";
-import { requiresManagedAccountTokens } from "../../services/accountExtraConfig.js";
-import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from "../../services/accountTokenService.js";
-import { canonicalizeModelName } from "../../shared/modelCanonicalization.js";
+} from '../../services/proxyDebugTraceStore.js';
+import { parseProxyLogMessageMeta } from '../../services/proxyLogMessage.js';
+import { requiresManagedAccountTokens } from '../../services/accountExtraConfig.js';
+import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from '../../services/accountTokenService.js';
+import { canonicalizeModelName } from '../../shared/modelCanonicalization.js';
 import {
   isModelDisabledForSite,
   loadSiteDisabledModelsIndex,
-} from "../../services/siteDisabledModels.js";
-import {formatUtcSqlDateTime, getLocalRangeStartDayKey, getLocalRangeStartUtc} from "../../services/localTimeService.js";
-import { createRateLimitGuard } from "../../middleware/requestRateLimit.js";
+} from '../../services/siteDisabledModels.js';
+import {formatUtcSqlDateTime, getLocalRangeStartDayKey, getLocalRangeStartUtc} from '../../services/localTimeService.js';
+import { createRateLimitGuard } from '../../middleware/requestRateLimit.js';
 import {
   getDashboardInsightsSnapshot,
   getDashboardSummarySnapshot,
-} from "../../services/dashboardSnapshotService.js";
-import { getSiteStatsSnapshot } from "../../services/siteStatsSnapshotService.js";
+} from '../../services/dashboardSnapshotService.js';
+import { getSiteStatsSnapshot } from '../../services/siteStatsSnapshotService.js';
 import {
   runUsageAggregationProjectionPass,
-} from "../../services/usageAggregationService.js";
+} from '../../services/usageAggregationService.js';
 
 
 import {
@@ -71,7 +71,7 @@ import {
 const MODELS_MARKETPLACE_BASE_TTL_MS = 15_000;
 const MODELS_MARKETPLACE_PRICING_TTL_MS = 90_000;
 const limitModelTokenCandidatesRead = createRateLimitGuard({
-  bucket: "models-token-candidates-read",
+  bucket: 'models-token-candidates-read',
   max: 30,
   windowMs: 60_000,
 });
@@ -82,12 +82,12 @@ type ModelsMarketplaceCacheEntry = {
 };
 
 const modelsMarketplaceCache = new Map<
-  "base" | "pricing",
+  'base' | 'pricing',
   ModelsMarketplaceCacheEntry
 >();
 
 function readModelsMarketplaceCache(includePricing: boolean): any[] | null {
-  const key = includePricing ? "pricing" : "base";
+  const key = includePricing ? 'pricing' : 'base';
   const cached = modelsMarketplaceCache.get(key);
   if (!cached) return null;
   if (Date.now() >= cached.expiresAt) {
@@ -108,7 +108,7 @@ function writeModelsMarketplaceCache(
   const ttl = includePricing
     ? MODELS_MARKETPLACE_PRICING_TTL_MS
     : MODELS_MARKETPLACE_BASE_TTL_MS;
-  const key = includePricing ? "pricing" : "base";
+  const key = includePricing ? 'pricing' : 'base';
   modelsMarketplaceCache.set(key, {
     expiresAt: Date.now() + ttl,
     models,
@@ -116,9 +116,9 @@ function writeModelsMarketplaceCache(
 }
 
 
-type ProxyLogStatusFilter = "all" | "success" | "failed";
+type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
 type ProxyLogClientFilter = {
-  kind: "app" | "family";
+  kind: 'app' | 'family';
   value: string;
 } | null;
 
@@ -128,30 +128,30 @@ type ProxyLogClientOption = {
 };
 
 const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
-  codex: "Codex",
-  claude_code: "Claude Code",
-  gemini_cli: "Gemini CLI",
-  generic: "通用",
+  codex: 'Codex',
+  claude_code: 'Claude Code',
+  gemini_cli: 'Gemini CLI',
+  generic: '通用',
 };
 
 function normalizeProxyLogStatusFilter(raw?: string): ProxyLogStatusFilter {
-  const normalized = (raw || "").trim().toLowerCase();
-  if (normalized === "success") return "success";
-  if (normalized === "failed") return "failed";
-  return "all";
+  const normalized = (raw || '').trim().toLowerCase();
+  if (normalized === 'success') return 'success';
+  if (normalized === 'failed') return 'failed';
+  return 'all';
 }
 
 function normalizeProxyLogModelFilter(raw?: string): string | null {
-  if (typeof raw !== "string") return null;
+  if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
   return canonicalizeModelName(trimmed) || trimmed;
 }
 
 function normalizeProxyLogClientFilter(raw?: string): ProxyLogClientFilter {
-  const text = (raw || "").trim();
+  const text = (raw || '').trim();
   if (!text) return null;
-  const separatorIndex = text.indexOf(":");
+  const separatorIndex = text.indexOf(':');
   if (separatorIndex <= 0) return null;
   const kind = text.slice(0, separatorIndex).trim().toLowerCase();
   const value = text
@@ -159,14 +159,14 @@ function normalizeProxyLogClientFilter(raw?: string): ProxyLogClientFilter {
     .trim()
     .toLowerCase();
   if (!value) return null;
-  if (kind === "app" || kind === "family") {
+  if (kind === 'app' || kind === 'family') {
     return { kind, value };
   }
   return null;
 }
 
 function normalizeProxyLogTimeBoundary(raw?: string): string | null {
-  const text = (raw || "").trim();
+  const text = (raw || '').trim();
   if (!text) return null;
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return null;
@@ -186,10 +186,10 @@ function buildProxyLogSearchCondition(search: string) {
 }
 
 function buildProxyLogStatusCondition(status: ProxyLogStatusFilter) {
-  if (status === "success") {
-    return eq(schema.proxyLogs.status, "success");
+  if (status === 'success') {
+    return eq(schema.proxyLogs.status, 'success');
   }
-  if (status === "failed") {
+  if (status === 'failed') {
     return sql<boolean>`coalesce(${schema.proxyLogs.status}, '') <> 'success'`;
   }
   return null;
@@ -197,7 +197,7 @@ function buildProxyLogStatusCondition(status: ProxyLogStatusFilter) {
 
 function buildProxyLogClientCondition(client: ProxyLogClientFilter) {
   if (!client) return null;
-  if (client.kind === "app") {
+  if (client.kind === 'app') {
     return eq(schema.proxyLogs.clientAppId, client.value);
   }
   return eq(schema.proxyLogs.clientFamily, client.value);
@@ -267,7 +267,7 @@ function resolveProxyLogClientMeta(proxyLog: Record<string, unknown>) {
   }
 
   const legacyMeta = parseProxyLogMessageMeta(
-    typeof proxyLog.errorMessage === "string" ? proxyLog.errorMessage : "",
+    typeof proxyLog.errorMessage === 'string' ? proxyLog.errorMessage : '',
   );
   return {
     clientFamily:
@@ -280,12 +280,12 @@ function resolveProxyLogClientMeta(proxyLog: Record<string, unknown>) {
 
 function normalizeProxyLogUsageSource(
   value: unknown,
-): "upstream" | "self-log" | "unknown" | null {
+): 'upstream' | 'self-log' | 'unknown' | null {
   const normalized = normalizeNullableText(value)?.toLowerCase() || null;
   if (
-    normalized === "upstream" ||
-    normalized === "self-log" ||
-    normalized === "unknown"
+    normalized === 'upstream' ||
+    normalized === 'self-log' ||
+    normalized === 'unknown'
   ) {
     return normalized;
   }
@@ -318,7 +318,7 @@ function buildProxyLogClientOptions(
 
     if (
       clientFamily &&
-      clientFamily !== "generic" &&
+      clientFamily !== 'generic' &&
       !familyOptions.has(clientFamily)
     ) {
       familyOptions.set(clientFamily, {
@@ -330,10 +330,10 @@ function buildProxyLogClientOptions(
 
   return [
     ...Array.from(appOptions.values()).sort((left, right) =>
-      left.label.localeCompare(right.label, "zh-CN"),
+      left.label.localeCompare(right.label, 'zh-CN'),
     ),
     ...Array.from(familyOptions.values()).sort((left, right) =>
-      left.label.localeCompare(right.label, "zh-CN"),
+      left.label.localeCompare(right.label, 'zh-CN'),
     ),
   ];
 }
@@ -363,16 +363,16 @@ function mapProxyLogRow(
 ) {
   const clientMeta = resolveProxyLogClientMeta(row.proxy_logs);
   const legacyMeta = parseProxyLogMessageMeta(
-    typeof row.proxy_logs.errorMessage === "string"
+    typeof row.proxy_logs.errorMessage === 'string'
       ? row.proxy_logs.errorMessage
-      : "",
+      : '',
   );
   return {
     ...row.proxy_logs,
     isStream:
       row.proxy_logs.isStream == null ? null : Boolean(row.proxy_logs.isStream),
     firstByteLatencyMs:
-      typeof row.proxy_logs.firstByteLatencyMs === "number"
+      typeof row.proxy_logs.firstByteLatencyMs === 'number'
         ? row.proxy_logs.firstByteLatencyMs
         : null,
     ...(options?.includeBillingDetails
@@ -403,21 +403,21 @@ function mapProxyLogRow(
 export async function statsRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { refresh?: string; view?: string } }>(
-    "/api/stats/dashboard",
+    '/api/stats/dashboard',
     async (request, reply) => {
       const forceRefresh = parseBooleanFlag(request.query.refresh);
       const view = normalizeDashboardView(request.query.view);
-      if (view === "summary") {
+      if (view === 'summary') {
         const snapshot = await getDashboardSummarySnapshot({ forceRefresh });
-        reply.header("x-dashboard-summary-cache", snapshot.cacheStatus);
+        reply.header('x-dashboard-summary-cache', snapshot.cacheStatus);
         return {
           generatedAt: snapshot.generatedAt,
           ...snapshot.payload,
         };
       }
-      if (view === "insights") {
+      if (view === 'insights') {
         const snapshot = await getDashboardInsightsSnapshot({ forceRefresh });
-        reply.header("x-dashboard-insights-cache", snapshot.cacheStatus);
+        reply.header('x-dashboard-insights-cache', snapshot.cacheStatus);
         return {
           generatedAt: snapshot.generatedAt,
           ...snapshot.payload,
@@ -428,8 +428,8 @@ export async function statsRoutes(app: FastifyInstance) {
         getDashboardSummarySnapshot({ forceRefresh }),
         getDashboardInsightsSnapshot({ forceRefresh }),
       ]);
-      reply.header("x-dashboard-summary-cache", summary.cacheStatus);
-      reply.header("x-dashboard-insights-cache", insights.cacheStatus);
+      reply.header('x-dashboard-summary-cache', summary.cacheStatus);
+      reply.header('x-dashboard-insights-cache', insights.cacheStatus);
       return {
         generatedAt: summary.generatedAt,
         ...summary.payload,
@@ -747,12 +747,12 @@ export async function statsRoutes(app: FastifyInstance) {
       models: (() => {
         const names = new Set<string>();
         for (const row of modelOptionRows || []) {
-          const raw = String(row.modelActual || row.modelRequested || "").trim();
+          const raw = String(row.modelActual || row.modelRequested || '').trim();
           if (!raw) continue;
           names.add(canonicalizeModelName(raw) || raw);
         }
         return Array.from(names).sort((left: string, right: string) =>
-          left.localeCompare(right, "zh-CN"),
+          left.localeCompare(right, 'zh-CN'),
         );
       })(),
     };
@@ -772,12 +772,12 @@ export async function statsRoutes(app: FastifyInstance) {
       to?: string;
       view?: string;
     };
-  }>("/api/stats/proxy-logs", async (request, _reply) => {
+  }>('/api/stats/proxy-logs', async (request, _reply) => {
     const view = normalizeProxyLogsView(request.query.view);
-    if (view === "query") {
+    if (view === 'query') {
       return loadProxyLogsQueryPayload(request.query);
     }
-    if (view === "meta") {
+    if (view === 'meta') {
       return loadProxyLogsMetaPayload(request.query);
     }
     const [queryPayload, metaPayload] = await Promise.all([
@@ -794,11 +794,11 @@ export async function statsRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>(
-    "/api/stats/proxy-logs/:id",
+    '/api/stats/proxy-logs/:id',
     async (request, reply) => {
       const id = Number.parseInt(request.params.id, 10);
       if (!Number.isFinite(id) || id <= 0) {
-        return reply.code(400).send({ message: "proxy log id is invalid" });
+        return reply.code(400).send({ message: 'proxy log id is invalid' });
       }
 
       const row = (await withProxyLogSelectFields(
@@ -852,7 +852,7 @@ export async function statsRoutes(app: FastifyInstance) {
         | undefined;
 
       if (!row) {
-        return reply.code(404).send({ message: "proxy log not found" });
+        return reply.code(404).send({ message: 'proxy log not found' });
       }
 
       return mapProxyLogRow(row, { includeBillingDetails: true });
@@ -860,14 +860,14 @@ export async function statsRoutes(app: FastifyInstance) {
   );
 
   app.get(
-    "/api/stats/proxy-request-metrics",
+    '/api/stats/proxy-request-metrics',
     async (request) => {
       const query = (request.query || {}) as Record<string, unknown>;
       // Keep unbounded scans opt-in: request-level metrics default to the last 24h.
       const defaultSince = formatUtcSqlDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
-      const since = typeof query.since === "string" ? query.since : defaultSince;
-      const until = typeof query.until === "string" ? query.until : null;
-      const model = typeof query.model === "string" ? query.model.trim() : "";
+      const since = typeof query.since === 'string' ? query.since : defaultSince;
+      const until = typeof query.until === 'string' ? query.until : null;
+      const model = typeof query.model === 'string' ? query.model.trim() : '';
       const conditions: any[] = [
         sql`${schema.proxyLogs.requestTraceId} is not null`,
         sql`${schema.proxyLogs.requestTraceId} <> ''`,
@@ -916,7 +916,7 @@ export async function statsRoutes(app: FastifyInstance) {
   );
 
   app.get<{ Querystring: { limit?: string } }>(
-    "/api/stats/proxy-debug/traces",
+    '/api/stats/proxy-debug/traces',
     async (request) => {
       const limit = normalizeProxyLogPageSize(request.query.limit);
       const items = await listProxyDebugTraces({ limit });
@@ -925,18 +925,18 @@ export async function statsRoutes(app: FastifyInstance) {
   );
 
   app.get<{ Params: { id: string } }>(
-    "/api/stats/proxy-debug/traces/:id",
+    '/api/stats/proxy-debug/traces/:id',
     async (request, reply) => {
       const id = Number.parseInt(request.params.id, 10);
       if (!Number.isFinite(id) || id <= 0) {
         return reply
           .code(400)
-          .send({ message: "proxy debug trace id is invalid" });
+          .send({ message: 'proxy debug trace id is invalid' });
       }
 
       const detail = await getProxyDebugTraceDetail(id);
       if (!detail) {
-        return reply.code(404).send({ message: "proxy debug trace not found" });
+        return reply.code(404).send({ message: 'proxy debug trace not found' });
       }
 
       return detail;
@@ -944,7 +944,7 @@ export async function statsRoutes(app: FastifyInstance) {
   );
 
   app.delete(
-    "/api/stats/proxy-debug/traces",
+    '/api/stats/proxy-debug/traces',
     async () => {
       const result = await clearAllProxyDebugTraces();
       return {
@@ -956,7 +956,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
   // Models marketplace - refresh upstream models and aggregate.
   app.get<{ Querystring: { refresh?: string; includePricing?: string } }>(
-    "/api/models/marketplace",
+    '/api/models/marketplace',
     async (request) => {
       const refreshRequested = parseBooleanFlag(request.query.refresh);
       const includePricing = parseBooleanFlag(request.query.includePricing);
@@ -969,17 +969,17 @@ export async function statsRoutes(app: FastifyInstance) {
         modelsMarketplaceCache.clear();
         const { task, reused } = startBackgroundTask(
           {
-            type: "model",
-            title: "刷新模型广场数据",
-            dedupeKey: "refresh-models-and-rebuild-routes",
+            type: 'model',
+            title: '刷新模型广场数据',
+            dedupeKey: 'refresh-models-and-rebuild-routes',
             notifyOnFailure: true,
             successMessage: (currentTask) => {
               const rebuild = (currentTask.result as any)?.rebuild;
-              if (!rebuild) return "模型广场刷新已完成";
+              if (!rebuild) return '模型广场刷新已完成';
               return `模型广场刷新完成：新增路由 ${rebuild.createdRoutes}，移除旧路由 ${rebuild.removedRoutes ?? 0}，新增通道 ${rebuild.createdChannels}，移除通道 ${rebuild.removedChannels}`;
             },
             failureMessage: (currentTask) =>
-              `模型广场刷新失败：${currentTask.error || "unknown error"}`,
+              `模型广场刷新失败：${currentTask.error || 'unknown error'}`,
           },
           async () => routeRefreshWorkflow.refreshModelsAndRebuildRoutes(),
         );
@@ -988,7 +988,7 @@ export async function statsRoutes(app: FastifyInstance) {
         refreshJobId = task.id;
       }
       const runningRefreshTask = getRunningTaskByDedupeKey(
-        "refresh-models-and-rebuild-routes",
+        'refresh-models-and-rebuild-routes',
       );
       if (!refreshJobId && runningRefreshTask)
         refreshJobId = runningRefreshTask.id;
@@ -1031,8 +1031,8 @@ export async function statsRoutes(app: FastifyInstance) {
               schema.accountTokens.valueStatus,
               ACCOUNT_TOKEN_VALUE_STATUS_READY,
             ),
-            eq(schema.accounts.status, "active"),
-            eq(schema.sites.status, "active"),
+            eq(schema.accounts.status, 'active'),
+            eq(schema.sites.status, 'active'),
           ),
         )
         .all();
@@ -1047,8 +1047,8 @@ export async function statsRoutes(app: FastifyInstance) {
         .where(
           and(
             eq(schema.modelAvailability.available, true),
-            eq(schema.accounts.status, "active"),
-            eq(schema.sites.status, "active"),
+            eq(schema.accounts.status, 'active'),
+            eq(schema.sites.status, 'active'),
           ),
         )
         .all();
@@ -1087,7 +1087,7 @@ export async function statsRoutes(app: FastifyInstance) {
       const modelLogStats: Record<string, ModelLogStats> = {};
 
       for (const row of modelLogAggregateRows) {
-        const rawModel = row.modelActual || row.modelRequested || "";
+        const rawModel = row.modelActual || row.modelRequested || '';
         if (!rawModel) continue;
         const model = canonicalizeModelName(rawModel) || rawModel;
         if (!modelLogStats[model]) {
@@ -1102,7 +1102,7 @@ export async function statsRoutes(app: FastifyInstance) {
         }
         const stats = modelLogStats[model];
         stats.total += Number(row.total || 0);
-        if (row.status === "success") {
+        if (row.status === 'success') {
           stats.success += Number(row.successCount || 0);
           const avgLat = Number(row.avgLatencyMs || 0);
           if (Number.isFinite(avgLat) && avgLat >= 0) {
@@ -1127,20 +1127,20 @@ export async function statsRoutes(app: FastifyInstance) {
         .where(
           and(
             gte(schema.proxyLogs.createdAt, last7d),
-            eq(schema.proxyLogs.status, "success"),
+            eq(schema.proxyLogs.status, 'success'),
             eq(schema.proxyLogs.isStream, true),
           ),
         )
         .all();
 
       for (const row of throughputRows) {
-        const rawModel = row.modelActual || row.modelRequested || "";
+        const rawModel = row.modelActual || row.modelRequested || '';
         if (!rawModel) continue;
         const model = canonicalizeModelName(rawModel) || rawModel;
         const stats = modelLogStats[model];
         if (!stats) continue;
         accumulateThroughputSample(stats.throughput, {
-          status: "success",
+          status: 'success',
           latencyMs: row.latencyMs,
           firstByteLatencyMs: row.firstByteLatencyMs,
           completionTokens: row.completionTokens,
@@ -1181,8 +1181,8 @@ export async function statsRoutes(app: FastifyInstance) {
           .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
           .where(
             and(
-              eq(schema.accounts.status, "active"),
-              eq(schema.sites.status, "active"),
+              eq(schema.accounts.status, 'active'),
+              eq(schema.sites.status, 'active'),
             ),
           )
           .all();
@@ -1200,7 +1200,7 @@ export async function statsRoutes(app: FastifyInstance) {
                 accessToken: row.accounts.accessToken,
                 apiToken: row.accounts.apiToken,
               },
-              modelName: "__metadata__",
+              modelName: '__metadata__',
               totalTokens: 0,
             });
 
@@ -1280,12 +1280,12 @@ export async function statsRoutes(app: FastifyInstance) {
         if (
           !m.available ||
           !t.enabled ||
-          a.status !== "active" ||
-          s.status !== "active"
+          a.status !== 'active' ||
+          s.status !== 'active'
         )
           continue;
 
-        const sourceModel = String(m.modelName || "").trim();
+        const sourceModel = String(m.modelName || '').trim();
         if (!sourceModel) continue;
         if (isModelDisabledForSite(disabledModelsIndex, s.id, sourceModel)) continue;
         const canonicalName = canonicalizeModelName(sourceModel) || sourceModel;
@@ -1344,10 +1344,10 @@ export async function statsRoutes(app: FastifyInstance) {
         const m = row.model_availability;
         const a = row.accounts;
         const s = row.sites;
-        if (!m.available || a.status !== "active" || s.status !== "active")
+        if (!m.available || a.status !== 'active' || s.status !== 'active')
           continue;
 
-        const sourceModel = String(m.modelName || "").trim();
+        const sourceModel = String(m.modelName || '').trim();
         if (!sourceModel) continue;
         if (isModelDisabledForSite(disabledModelsIndex, s.id, sourceModel)) continue;
         const canonicalName = canonicalizeModelName(sourceModel) || sourceModel;
@@ -1483,25 +1483,25 @@ export async function statsRoutes(app: FastifyInstance) {
   );
 
   app.get(
-    "/api/models/token-candidates",
+    '/api/models/token-candidates',
     { preHandler: [limitModelTokenCandidatesRead] },
     async () => {
       const resolveTokenGroupLabel = (
         tokenGroup: string | null,
         tokenName: string | null,
       ): string | null => {
-        const explicit = (tokenGroup || "").trim();
+        const explicit = (tokenGroup || '').trim();
         if (explicit) return explicit;
 
-        const name = (tokenName || "").trim();
+        const name = (tokenName || '').trim();
         if (!name) return null;
         const normalized = name.toLowerCase();
         if (
-          normalized === "default" ||
-          normalized === "默认" ||
+          normalized === 'default' ||
+          normalized === '默认' ||
           /^default($|[-_\s])/.test(normalized)
         ) {
-          return "default";
+          return 'default';
         }
         if (/^token-\d+$/.test(normalized)) return null;
         return name;
@@ -1527,8 +1527,8 @@ export async function statsRoutes(app: FastifyInstance) {
               schema.accountTokens.valueStatus,
               ACCOUNT_TOKEN_VALUE_STATUS_READY,
             ),
-            eq(schema.accounts.status, "active"),
-            eq(schema.sites.status, "active"),
+            eq(schema.accounts.status, 'active'),
+            eq(schema.sites.status, 'active'),
           ),
         )
         .all();
@@ -1552,8 +1552,8 @@ export async function statsRoutes(app: FastifyInstance) {
         .where(
           and(
             eq(schema.modelAvailability.available, true),
-            eq(schema.accounts.status, "active"),
-            eq(schema.sites.status, "active"),
+            eq(schema.accounts.status, 'active'),
+            eq(schema.sites.status, 'active'),
           ),
         )
         .all();
@@ -1603,7 +1603,7 @@ export async function statsRoutes(app: FastifyInstance) {
       let hasAnyTokenGroupSignals = false;
 
       for (const row of rows) {
-        const modelName = (row.token_model_availability.modelName || "").trim();
+        const modelName = (row.token_model_availability.modelName || '').trim();
         if (!modelName) continue;
         if (isModelDisabledForSite(disabledModelsIndex, row.sites.id, modelName)) continue;
         const accountModelKey = `${row.accounts.id}::${modelName.toLowerCase()}`;
@@ -1653,7 +1653,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
       for (const row of availableModelRows) {
         if (!requiresManagedAccountTokens(row)) continue;
-        const modelName = (row.modelName || "").trim();
+        const modelName = (row.modelName || '').trim();
         if (!modelName) continue;
         if (isModelDisabledForSite(disabledModelsIndex, row.siteId, modelName)) continue;
         const coverageKey = `${row.accountId}::${modelName.toLowerCase()}`;
@@ -1692,8 +1692,8 @@ export async function statsRoutes(app: FastifyInstance) {
           .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
           .where(
             and(
-              eq(schema.accounts.status, "active"),
-              eq(schema.sites.status, "active"),
+              eq(schema.accounts.status, 'active'),
+              eq(schema.sites.status, 'active'),
             ),
           )
           .all();
@@ -1714,7 +1714,7 @@ export async function statsRoutes(app: FastifyInstance) {
                     accessToken: row.accounts.accessToken,
                     apiToken: row.accounts.apiToken,
                   },
-                  modelName: "__metadata__",
+                  modelName: '__metadata__',
                   totalTokens: 0,
                 });
                 return { accountId: row.accounts.id, catalog };
@@ -1732,11 +1732,11 @@ export async function statsRoutes(app: FastifyInstance) {
         for (const result of metadataResults) {
           if (!result.catalog) continue;
           for (const model of result.catalog.models) {
-            const modelName = (model.modelName || "").trim();
+            const modelName = (model.modelName || '').trim();
             if (!modelName) continue;
             const groups = new Map<string, string>();
             for (const rawGroup of model.enableGroups || []) {
-              const group = String(rawGroup || "").trim();
+              const group = String(rawGroup || '').trim();
               if (!group) continue;
               const groupKey = group.toLowerCase();
               if (!groups.has(groupKey)) groups.set(groupKey, group);
@@ -1752,7 +1752,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
       for (const row of availableModelRows) {
         if (!requiresManagedAccountTokens(row)) continue;
-        const modelName = (row.modelName || "").trim();
+        const modelName = (row.modelName || '').trim();
         if (!modelName) continue;
         const accountModelKey = `${row.accountId}::${modelName.toLowerCase()}`;
 
@@ -1829,11 +1829,11 @@ export async function statsRoutes(app: FastifyInstance) {
 
   // Refresh models for one account and rebuild routes.
   app.post<{ Params: { accountId: string } }>(
-    "/api/models/check/:accountId",
+    '/api/models/check/:accountId',
     async (request) => {
       const accountId = Number.parseInt(request.params.accountId, 10);
       if (Number.isNaN(accountId)) {
-        return { success: false, error: "Invalid account id" };
+        return { success: false, error: 'Invalid account id' };
       }
 
       const refresh = await refreshModelsForAccount(accountId);
@@ -1843,27 +1843,27 @@ export async function statsRoutes(app: FastifyInstance) {
   );
 
   app.post<{ Body?: { accountId?: number; wait?: boolean } }>(
-    "/api/models/probe",
+    '/api/models/probe',
     async (request, reply) => {
       if (!config.modelAvailabilityProbeAllow || !config.modelAvailabilityProbeEnabled) {
         return reply.code(403).send({
           success: false,
-          message: "批量测活已禁用。请使用 /api/models/probe-one 进行单模型定点探测，或设置 MODEL_AVAILABILITY_PROBE_ALLOW=true 后启用批量测活。",
+          message: '批量测活已禁用。请使用 /api/models/probe-one 进行单模型定点探测，或设置 MODEL_AVAILABILITY_PROBE_ALLOW=true 后启用批量测活。',
         });
       }
       const requestBody = request.body;
       if (requestBody !== undefined && !isRecord(requestBody)) {
         return reply
           .code(400)
-          .send({ success: false, message: "请求体必须是对象" });
+          .send({ success: false, message: '请求体必须是对象' });
       }
 
       const rawAccountId = requestBody?.accountId as unknown;
       const normalizedAccountId =
         rawAccountId === undefined || rawAccountId === null
-          ? ""
+          ? ''
           : String(rawAccountId).trim();
-      const hasAccountId = normalizedAccountId !== "";
+      const hasAccountId = normalizedAccountId !== '';
       const parsedAccountId =
         hasAccountId && /^[1-9]\d*$/.test(normalizedAccountId)
           ? Number(normalizedAccountId)
@@ -1877,13 +1877,13 @@ export async function statsRoutes(app: FastifyInstance) {
       if (hasAccountId && accountId === undefined) {
         return reply
           .code(400)
-          .send({ success: false, message: "账号 ID 无效" });
+          .send({ success: false, message: '账号 ID 无效' });
       }
 
       if (wait) {
         const taskTitle = accountId
           ? `探测模型可用性 #${accountId}`
-          : "探测全部模型可用性";
+          : '探测全部模型可用性';
         const dedupeKey = buildModelAvailabilityProbeTaskDedupeKey(accountId);
         const runningTask = getRunningTaskByDedupeKey(dedupeKey);
         const { task, reused } = runningTask
@@ -1898,16 +1898,16 @@ export async function statsRoutes(app: FastifyInstance) {
             .code(500)
             .send({
               success: false,
-              message: "模型可用性探测任务不存在或已过期",
+              message: '模型可用性探测任务不存在或已过期',
             });
         }
-        if (completedTask.status === "failed") {
+        if (completedTask.status === 'failed') {
           return reply.code(500).send({
             success: false,
             reused,
             jobId: completedTask.id,
             status: completedTask.status,
-            message: completedTask.error || "模型可用性探测失败",
+            message: completedTask.error || '模型可用性探测失败',
           });
         }
         const result =
@@ -1918,13 +1918,13 @@ export async function statsRoutes(app: FastifyInstance) {
             reused,
             jobId: completedTask.id,
             status: completedTask.status,
-            message: "模型可用性探测结果为空",
+            message: '模型可用性探测结果为空',
           });
         }
         if (accountId && result.summary.totalAccounts === 0) {
           return reply
             .code(404)
-            .send({ success: false, message: "账号不存在" });
+            .send({ success: false, message: '账号不存在' });
         }
         return {
           success: true,
@@ -1937,7 +1937,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
       const taskTitle = accountId
         ? `探测模型可用性 #${accountId}`
-        : "探测全部模型可用性";
+        : '探测全部模型可用性';
       const { task, reused } = queueModelAvailabilityProbeTask({
         accountId,
         title: taskTitle,
@@ -1950,8 +1950,8 @@ export async function statsRoutes(app: FastifyInstance) {
         jobId: task.id,
         status: task.status,
         message: reused
-          ? "模型可用性探测任务进行中，请稍后查看任务列表"
-          : "已开始模型可用性探测，请稍后查看任务列表",
+          ? '模型可用性探测任务进行中，请稍后查看任务列表'
+          : '已开始模型可用性探测，请稍后查看任务列表',
       });
     },
   );
@@ -1960,36 +1960,36 @@ export async function statsRoutes(app: FastifyInstance) {
   // - model only: probe all accounts that list the model
   // - with siteId/accountId: probe only that supplier/account
   app.post<{ Body?: { model?: string; modelName?: string; siteId?: number | string; accountId?: number | string } }>(
-    "/api/models/probe-one",
+    '/api/models/probe-one',
     async (request, reply) => {
       const requestBody = request.body;
       if (requestBody !== undefined && !isRecord(requestBody)) {
         return reply
           .code(400)
-          .send({ success: false, message: "请求体必须是对象" });
+          .send({ success: false, message: '请求体必须是对象' });
       }
       const modelName = String(
-        requestBody?.modelName ?? requestBody?.model ?? "",
+        requestBody?.modelName ?? requestBody?.model ?? '',
       ).trim();
       if (!modelName) {
         return reply
           .code(400)
-          .send({ success: false, message: "model 不能为空" });
+          .send({ success: false, message: 'model 不能为空' });
       }
 
       const rawSiteId = requestBody?.siteId as unknown;
       const rawAccountId = requestBody?.accountId as unknown;
-      const siteId = rawSiteId === undefined || rawSiteId === null || rawSiteId === ""
+      const siteId = rawSiteId === undefined || rawSiteId === null || rawSiteId === ''
         ? null
         : Number(rawSiteId);
-      const accountId = rawAccountId === undefined || rawAccountId === null || rawAccountId === ""
+      const accountId = rawAccountId === undefined || rawAccountId === null || rawAccountId === ''
         ? null
         : Number(rawAccountId);
       if (siteId != null && (!Number.isFinite(siteId) || siteId <= 0)) {
-        return reply.code(400).send({ success: false, message: "siteId 无效" });
+        return reply.code(400).send({ success: false, message: 'siteId 无效' });
       }
       if (accountId != null && (!Number.isFinite(accountId) || accountId <= 0)) {
-        return reply.code(400).send({ success: false, message: "accountId 无效" });
+        return reply.code(400).send({ success: false, message: 'accountId 无效' });
       }
 
       const result = await probeSingleModelAvailability(modelName, {
@@ -1998,7 +1998,7 @@ export async function statsRoutes(app: FastifyInstance) {
       });
       // Probe mutates model_availability latency/available; drop marketplace cache.
       clearModelsMarketplaceCache();
-      if (result.status === "not_found") {
+      if (result.status === 'not_found') {
         return reply.code(404).send({
           success: false,
           ...result,
@@ -2015,44 +2015,44 @@ export async function statsRoutes(app: FastifyInstance) {
   // Streaming marketplace probe — SSE, one event per account as it finishes.
   // Event types: "start" (targets list), "result" (per-account), "done" (aggregate).
   app.post<{ Body?: { model?: string; modelName?: string; siteId?: number | string; accountId?: number | string } }>(
-    "/api/models/probe-one/stream",
+    '/api/models/probe-one/stream',
     async (request, reply) => {
       const requestBody = request.body;
       if (requestBody !== undefined && !isRecord(requestBody)) {
         return reply
           .code(400)
-          .send({ success: false, message: "请求体必须是对象" });
+          .send({ success: false, message: '请求体必须是对象' });
       }
       const modelName = String(
-        requestBody?.modelName ?? requestBody?.model ?? "",
+        requestBody?.modelName ?? requestBody?.model ?? '',
       ).trim();
       if (!modelName) {
         return reply
           .code(400)
-          .send({ success: false, message: "model 不能为空" });
+          .send({ success: false, message: 'model 不能为空' });
       }
 
       const rawSiteId = requestBody?.siteId as unknown;
       const rawAccountId = requestBody?.accountId as unknown;
-      const siteId = rawSiteId === undefined || rawSiteId === null || rawSiteId === ""
+      const siteId = rawSiteId === undefined || rawSiteId === null || rawSiteId === ''
         ? null
         : Number(rawSiteId);
-      const accountId = rawAccountId === undefined || rawAccountId === null || rawAccountId === ""
+      const accountId = rawAccountId === undefined || rawAccountId === null || rawAccountId === ''
         ? null
         : Number(rawAccountId);
       if (siteId != null && (!Number.isFinite(siteId) || siteId <= 0)) {
-        return reply.code(400).send({ success: false, message: "siteId 无效" });
+        return reply.code(400).send({ success: false, message: 'siteId 无效' });
       }
       if (accountId != null && (!Number.isFinite(accountId) || accountId <= 0)) {
-        return reply.code(400).send({ success: false, message: "accountId 无效" });
+        return reply.code(400).send({ success: false, message: 'accountId 无效' });
       }
 
       reply.hijack();
       reply.raw.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-cache, no-transform",
-        connection: "keep-alive",
-        "x-accel-buffering": "no",
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache, no-transform',
+        connection: 'keep-alive',
+        'x-accel-buffering': 'no',
       });
       const send = (event: string, data: unknown) => {
         try {
@@ -2063,20 +2063,20 @@ export async function statsRoutes(app: FastifyInstance) {
       };
 
       try {
-        send("start", { modelName });
+        send('start', { modelName });
         const result = await probeSingleModelAvailabilityStream(
           modelName,
           { siteId, accountId },
           (row) => {
-            send("result", row);
+            send('result', row);
           },
         );
         clearModelsMarketplaceCache();
-        send("done", { success: true, ...result });
+        send('done', { success: true, ...result });
       } catch (error: any) {
-        send("error", {
+        send('error', {
           success: false,
-          message: error?.message || "探测失败",
+          message: error?.message || '探测失败',
         });
       } finally {
         try { reply.raw.end(); } catch {}
@@ -2087,7 +2087,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
   // Site distribution – per-site aggregate data
   app.get<{ Querystring: { days?: string; refresh?: string } }>(
-    "/api/stats/site-distribution",
+    '/api/stats/site-distribution',
     async (request) => {
       const snapshot = await getSiteStatsSnapshot({
         days: request.query.days ? parseInt(request.query.days, 10) : 7,
@@ -2099,7 +2099,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
   // Site trend – daily spend/calls broken down by site
   app.get<{ Querystring: { days?: string; refresh?: string } }>(
-    "/api/stats/site-trend",
+    '/api/stats/site-trend',
     async (request) => {
       const snapshot = await getSiteStatsSnapshot({
         days: request.query.days ? parseInt(request.query.days, 10) : 7,
@@ -2111,12 +2111,12 @@ export async function statsRoutes(app: FastifyInstance) {
 
   // Model stats by site
   app.get<{ Querystring: { siteId?: string; days?: string } }>(
-    "/api/stats/model-by-site",
+    '/api/stats/model-by-site',
     async (request) => {
       const siteId = request.query.siteId
         ? parseInt(request.query.siteId, 10)
         : null;
-      const days = Math.max(1, parseInt(request.query.days || "7", 10));
+      const days = Math.max(1, parseInt(request.query.days || '7', 10));
       await runUsageAggregationProjectionPass();
       const sinceDay = getLocalRangeStartDayKey(days);
       const rows = siteId != null && Number.isFinite(siteId)
@@ -2142,7 +2142,7 @@ export async function statsRoutes(app: FastifyInstance) {
       > = {};
 
       for (const row of rows) {
-        const model = row.model || "unknown";
+        const model = row.model || 'unknown';
 
         if (!modelMap[model])
           modelMap[model] = { calls: 0, spend: 0, tokens: 0 };

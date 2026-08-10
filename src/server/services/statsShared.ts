@@ -1,12 +1,12 @@
-import { sql } from "drizzle-orm";
-import { schema } from "../db/index.js";
+import { sql } from 'drizzle-orm';
+import { schema } from '../db/index.js';
 import {
   formatLocalDateTime,
   getLocalHourAnchor,
   parseStoredUtcDateTime,
   type StoredUtcDateTimeInput,
-} from "./localTimeService.js";
-import { canonicalizeModelName } from "../shared/modelCanonicalization.js";
+} from './localTimeService.js';
+import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 
 export function proxyCostSqlExpression() {
   return sql<number>`
@@ -199,7 +199,7 @@ export function buildSiteAvailabilitySummaries(
 
     const bucketIndex = Math.floor(diffMs / SITE_AVAILABILITY_BUCKET_MS);
     const bucket = target.buckets[bucketIndex];
-    const isSuccess = (log.status || "").trim().toLowerCase() === "success";
+    const isSuccess = (log.status || '').trim().toLowerCase() === 'success';
 
     target.totalRequests += 1;
     bucket.totalRequests += 1;

@@ -12,6 +12,6 @@ describe('ProxyLogs mobile layout', () => {
     expect(source).toContain('<ResponsiveFilterPanel');
     expect(source).toContain('compact');
     expect(source).toContain('mobile-summary-grid');
-    expect(source).toContain("subtitle={formatDateTimeLocal(log.createdAt)}");
+    expect(source).toContain('subtitle={formatDateTimeLocal(log.createdAt)}');
   });
 });

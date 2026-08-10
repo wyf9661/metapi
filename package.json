@@ -63,7 +63,8 @@
     "smoke:db:mysql": "tsx scripts/dev/db-smoke.ts --db-type mysql",
     "smoke:db:postgres": "tsx scripts/dev/db-smoke.ts --db-type postgres",
     "test": "vitest run --root .",
-    "test:watch": "vitest --root ."
+    "test:watch": "vitest --root .",
+    "lint": "eslint src/ scripts/ --max-warnings 0"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -94,7 +95,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@babel/eslint-parser": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
     "@electron/notarize": "^3.1.0",
+    "@eslint/js": "^9.39.5",
     "@tailwindcss/vite": "^4.3.3",
     "@types/better-sqlite3": "^7.6.11",
     "@types/katex": "^0.16.8",
@@ -112,6 +116,7 @@
     "drizzle-kit": "^0.31.10",
     "electron": "^43.3.0",
     "electron-builder": "^26.0.12",
+    "eslint": "^9.39.5",
     "jsdom": "^29.1.1",
     "mermaid": "^11.16.1",
     "react": "^18.3.1",

@@ -8,6 +8,6 @@ describe('ModelTester mobile layout', () => {
 
     expect(source).toContain("flexDirection: 'column'");
     expect(source).toContain('maxWidth: 720');
-    expect(source).not.toContain("gridTemplateColumns: isMobile");
+    expect(source).not.toContain('gridTemplateColumns: isMobile');
   });
 });

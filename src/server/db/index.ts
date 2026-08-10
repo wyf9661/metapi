@@ -354,7 +354,7 @@ function ensureSiteStatusSchema() {
   }
 
   if (!tableColumnExists('sites', 'status')) {
-    execSqliteLegacyCompat(`ALTER TABLE sites ADD COLUMN status text DEFAULT 'active';`);
+    execSqliteLegacyCompat('ALTER TABLE sites ADD COLUMN status text DEFAULT \'active\';');
   }
 
   execSqliteStatement(`
@@ -380,7 +380,7 @@ function ensureSiteProxySchema() {
   }
 
   if (!tableColumnExists('sites', 'proxy_url')) {
-    execSqliteLegacyCompat(`ALTER TABLE sites ADD COLUMN proxy_url text;`);
+    execSqliteLegacyCompat('ALTER TABLE sites ADD COLUMN proxy_url text;');
   }
 }
 
@@ -390,7 +390,7 @@ function ensureSiteCustomHeadersSchema() {
   }
 
   if (!tableColumnExists('sites', 'custom_headers')) {
-    execSqliteLegacyCompat(`ALTER TABLE sites ADD COLUMN custom_headers text;`);
+    execSqliteLegacyCompat('ALTER TABLE sites ADD COLUMN custom_headers text;');
   }
 }
 
@@ -400,7 +400,7 @@ function ensureSiteCustomHeadersOverrideRequestHeadersSchema() {
   }
 
   if (!tableColumnExists('sites', 'custom_headers_override_request_headers')) {
-    execSqliteLegacyCompat(`ALTER TABLE sites ADD COLUMN custom_headers_override_request_headers integer DEFAULT 0;`);
+    execSqliteLegacyCompat('ALTER TABLE sites ADD COLUMN custom_headers_override_request_headers integer DEFAULT 0;');
   }
 
   execSqliteLegacyCompat(`
@@ -416,7 +416,7 @@ function ensureSiteExternalCheckinUrlSchema() {
   }
 
   if (!tableColumnExists('sites', 'external_checkin_url')) {
-    execSqliteLegacyCompat(`ALTER TABLE sites ADD COLUMN external_checkin_url text;`);
+    execSqliteLegacyCompat('ALTER TABLE sites ADD COLUMN external_checkin_url text;');
   }
 }
 
@@ -426,7 +426,7 @@ function ensureSiteGlobalWeightSchema() {
   }
 
   if (!tableColumnExists('sites', 'global_weight')) {
-    execSqliteLegacyCompat(`ALTER TABLE sites ADD COLUMN global_weight real DEFAULT 1;`);
+    execSqliteLegacyCompat('ALTER TABLE sites ADD COLUMN global_weight real DEFAULT 1;');
   }
 
   execSqliteLegacyCompat(`
@@ -537,43 +537,43 @@ function ensureRouteGroupingSchema() {
   }
 
   if (!tableColumnExists('token_routes', 'display_name')) {
-    execSqliteLegacyCompat(`ALTER TABLE token_routes ADD COLUMN display_name text;`);
+    execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN display_name text;');
   }
 
   if (!tableColumnExists('token_routes', 'display_icon')) {
-    execSqliteLegacyCompat(`ALTER TABLE token_routes ADD COLUMN display_icon text;`);
+    execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN display_icon text;');
   }
 
   if (!tableColumnExists('token_routes', 'route_mode')) {
-    execSqliteLegacyCompat(`ALTER TABLE token_routes ADD COLUMN route_mode text DEFAULT 'pattern';`);
+    execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN route_mode text DEFAULT \'pattern\';');
   }
 
   if (!tableColumnExists('token_routes', 'decision_snapshot')) {
-    execSqliteLegacyCompat(`ALTER TABLE token_routes ADD COLUMN decision_snapshot text;`);
+    execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN decision_snapshot text;');
   }
 
   if (!tableColumnExists('token_routes', 'decision_refreshed_at')) {
-    execSqliteLegacyCompat(`ALTER TABLE token_routes ADD COLUMN decision_refreshed_at text;`);
+    execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN decision_refreshed_at text;');
   }
 
   if (!tableColumnExists('token_routes', 'routing_strategy')) {
-    execSqliteLegacyCompat(`ALTER TABLE token_routes ADD COLUMN routing_strategy text DEFAULT 'weighted';`);
+    execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN routing_strategy text DEFAULT \'weighted\';');
   }
 
   if (!tableColumnExists('route_channels', 'source_model')) {
-    execSqliteLegacyCompat(`ALTER TABLE route_channels ADD COLUMN source_model text;`);
+    execSqliteLegacyCompat('ALTER TABLE route_channels ADD COLUMN source_model text;');
   }
 
   if (!tableColumnExists('route_channels', 'last_selected_at')) {
-    execSqliteLegacyCompat(`ALTER TABLE route_channels ADD COLUMN last_selected_at text;`);
+    execSqliteLegacyCompat('ALTER TABLE route_channels ADD COLUMN last_selected_at text;');
   }
 
   if (!tableColumnExists('route_channels', 'consecutive_fail_count')) {
-    execSqliteLegacyCompat(`ALTER TABLE route_channels ADD COLUMN consecutive_fail_count integer NOT NULL DEFAULT 0;`);
+    execSqliteLegacyCompat('ALTER TABLE route_channels ADD COLUMN consecutive_fail_count integer NOT NULL DEFAULT 0;');
   }
 
   if (!tableColumnExists('route_channels', 'cooldown_level')) {
-    execSqliteLegacyCompat(`ALTER TABLE route_channels ADD COLUMN cooldown_level integer NOT NULL DEFAULT 0;`);
+    execSqliteLegacyCompat('ALTER TABLE route_channels ADD COLUMN cooldown_level integer NOT NULL DEFAULT 0;');
   }
 
   execSqliteLegacyCompat(`

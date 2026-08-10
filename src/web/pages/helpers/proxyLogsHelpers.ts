@@ -4,7 +4,7 @@ import type {
   ProxyLogStatusFilter,
   ProxyLogUsageSource,
   RuntimeSettingsPayload,
-} from "../../api.js";
+} from '../../api.js';
 
 export type ProxyLogRenderItem = ProxyLogListItem & {
   billingDetails?: ProxyLogBillingDetails;
@@ -38,14 +38,14 @@ export const DEFAULT_PAGE_SIZE = 50;
 export const TRACE_TABLE_LIMIT = 20;
 export const DEBUG_TRACE_PAGE_SIZE = 5;
 export const PROXY_LOGS_DEBUG_TRACE_PANEL_STORAGE_KEY =
-  "metapi.proxyLogs.debugTracePanelExpanded";
+  'metapi.proxyLogs.debugTracePanelExpanded';
 export const DEBUG_REFRESH_INTERVAL_MS = 2000;
 
 export const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
-  codex: "Codex",
-  claude_code: "Claude Code",
-  gemini_cli: "Gemini CLI",
-  generic: "通用",
+  codex: 'Codex',
+  claude_code: 'Claude Code',
+  gemini_cli: 'Gemini CLI',
+  generic: '通用',
 };
 
 export const EMPTY_SUMMARY = {
@@ -61,9 +61,9 @@ export const DEFAULT_PROXY_DEBUG_SETTINGS: ProxyDebugSettingsState = {
   proxyDebugCaptureHeaders: true,
   proxyDebugCaptureBodies: false,
   proxyDebugCaptureStreamChunks: false,
-  proxyDebugTargetSessionId: "",
-  proxyDebugTargetClientKind: "",
-  proxyDebugTargetModel: "",
+  proxyDebugTargetSessionId: '',
+  proxyDebugTargetClientKind: '',
+  proxyDebugTargetModel: '',
   proxyDebugRetentionHours: 24,
   proxyDebugMaxBodyBytes: 262144,
 };
@@ -76,53 +76,53 @@ export function formatLatency(ms: number) {
 }
 
 export function latencyColor(ms: number) {
-  if (ms >= 3000) return "var(--color-danger)";
+  if (ms >= 3000) return 'var(--color-danger)';
   if (ms >= 2000)
-    return "color-mix(in srgb, var(--color-warning) 30%, var(--color-danger))";
+    return 'color-mix(in srgb, var(--color-warning) 30%, var(--color-danger))';
   if (ms >= 1500)
-    return "color-mix(in srgb, var(--color-warning) 60%, var(--color-danger))";
-  if (ms >= 1000) return "var(--color-warning)";
+    return 'color-mix(in srgb, var(--color-warning) 60%, var(--color-danger))';
+  if (ms >= 1000) return 'var(--color-warning)';
   if (ms > 500)
-    return "color-mix(in srgb, var(--color-success) 60%, var(--color-warning))";
-  return "var(--color-success)";
+    return 'color-mix(in srgb, var(--color-success) 60%, var(--color-warning))';
+  return 'var(--color-success)';
 }
 
 export function latencyBgColor(ms: number) {
   if (ms >= 3000)
-    return "color-mix(in srgb, var(--color-danger) 12%, transparent)";
+    return 'color-mix(in srgb, var(--color-danger) 12%, transparent)';
   if (ms >= 1000)
-    return "color-mix(in srgb, var(--color-warning) 12%, transparent)";
-  return "color-mix(in srgb, var(--color-success) 12%, transparent)";
+    return 'color-mix(in srgb, var(--color-warning) 12%, transparent)';
+  return 'color-mix(in srgb, var(--color-success) 12%, transparent)';
 }
 
 export function firstByteColor(ms: number) {
-  if (ms >= 3000) return "var(--color-danger)";
-  if (ms >= 1000) return "var(--color-warning)";
-  return "var(--color-primary)";
+  if (ms >= 3000) return 'var(--color-danger)';
+  if (ms >= 1000) return 'var(--color-warning)';
+  return 'var(--color-primary)';
 }
 
 export function firstByteBgColor(ms: number) {
   if (ms >= 3000)
-    return "color-mix(in srgb, var(--color-danger) 12%, transparent)";
+    return 'color-mix(in srgb, var(--color-danger) 12%, transparent)';
   if (ms >= 1000)
-    return "color-mix(in srgb, var(--color-warning) 12%, transparent)";
-  return "color-mix(in srgb, var(--color-primary) 12%, transparent)";
+    return 'color-mix(in srgb, var(--color-warning) 12%, transparent)';
+  return 'color-mix(in srgb, var(--color-primary) 12%, transparent)';
 }
 
 export function formatStreamModeLabel(isStream: boolean | null | undefined) {
   if (isStream == null) return null;
-  return isStream ? "流式" : "非流";
+  return isStream ? '流式' : '非流';
 }
 
 export function formatFirstByteLabel(ms: number | null | undefined) {
-  if (!Number.isFinite(ms) || typeof ms !== "number" || ms < 0) return null;
+  if (!Number.isFinite(ms) || typeof ms !== 'number' || ms < 0) return null;
   return `首字 ${formatLatency(ms)}`;
 }
 
 export function formatCompactNumber(value: number, digits = 6) {
-  if (!Number.isFinite(value)) return "0";
-  const formatted = value.toFixed(digits).replace(/\.?0+$/, "");
-  return formatted || "0";
+  if (!Number.isFinite(value)) return '0';
+  const formatted = value.toFixed(digits).replace(/\.?0+$/, '');
+  return formatted || '0';
 }
 
 export function formatPerMillionPrice(value: number) {
@@ -138,16 +138,16 @@ export function formatBillingDetailSummary(log: ProxyLogRenderItem) {
 export function formatProxyLogUsageSource(
   source: ProxyLogUsageSource | undefined,
 ): string | null {
-  if (source === "upstream") return "上游返回";
-  if (source === "self-log") return "站点日志回填";
-  if (source === "unknown") return "未知";
+  if (source === 'upstream') return '上游返回';
+  if (source === 'self-log') return '站点日志回填';
+  if (source === 'unknown') return '未知';
   return null;
 }
 
 export function formatProxyLogTokenValue(
   value: number | null | undefined,
 ): string {
-  return typeof value === "number" ? value.toLocaleString() : "--";
+  return typeof value === 'number' ? value.toLocaleString() : '--';
 }
 
 export function renderDownstreamKeySummary(log: ProxyLogRenderItem) {
@@ -155,10 +155,10 @@ export function renderDownstreamKeySummary(log: ProxyLogRenderItem) {
     log.downstreamKeyName ? `下游 Key: ${log.downstreamKeyName}` : null,
     log.downstreamKeyGroupName ? `主分组: ${log.downstreamKeyGroupName}` : null,
     Array.isArray(log.downstreamKeyTags) && log.downstreamKeyTags.length > 0
-      ? `标签: ${log.downstreamKeyTags.join(" / ")}`
+      ? `标签: ${log.downstreamKeyTags.join(' / ')}`
       : null,
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join("，") : null;
+  return parts.length > 0 ? parts.join('，') : null;
 }
 
 export function buildBillingProcessLines(log: ProxyLogRenderItem) {
@@ -201,13 +201,13 @@ export function buildBillingProcessLines(log: ProxyLogRenderItem) {
   parts.push(
     `补全 ${detail.usage.completionTokens.toLocaleString()} tokens / 1M tokens * $${formatCompactNumber(detail.breakdown.outputPerMillion)} = $${detail.breakdown.totalCost.toFixed(6)}`,
   );
-  lines.push(parts.join(" + "));
+  lines.push(parts.join(' + '));
 
   return lines;
 }
 
 function padDateTimeSegment(value: number) {
-  return String(value).padStart(2, "0");
+  return String(value).padStart(2, '0');
 }
 
 export function formatDateTimeInputValue(value: Date) {
@@ -215,62 +215,62 @@ export function formatDateTimeInputValue(value: Date) {
 }
 
 export function normalizeRoutePage(raw: string | null): number {
-  const parsed = Number.parseInt(raw || "", 10);
+  const parsed = Number.parseInt(raw || '', 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 1;
   return parsed;
 }
 
 export function normalizeRoutePageSize(raw: string | null): number {
-  const parsed = Number.parseInt(raw || "", 10);
+  const parsed = Number.parseInt(raw || '', 10);
   return PAGE_SIZES.includes(parsed) ? parsed : DEFAULT_PAGE_SIZE;
 }
 
 export function normalizeRouteStatus(raw: string | null): ProxyLogStatusFilter {
-  if (raw === "success" || raw === "failed") return raw;
-  return "all";
+  if (raw === 'success' || raw === 'failed') return raw;
+  return 'all';
 }
 
 export function normalizeRouteSearch(raw: string | null): string {
-  return (raw || "").trim();
+  return (raw || '').trim();
 }
 
 export function normalizeRouteClient(raw: string | null): string {
-  const text = (raw || "").trim();
-  if (!text) return "";
-  return /^((app|family):)/i.test(text) ? text : "";
+  const text = (raw || '').trim();
+  if (!text) return '';
+  return /^((app|family):)/i.test(text) ? text : '';
 }
 
 export function normalizeRouteSiteId(raw: string | null): number | null {
-  const parsed = Number.parseInt(raw || "", 10);
+  const parsed = Number.parseInt(raw || '', 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
 }
 
 export function normalizeRouteDateTimeInput(raw: string | null): string {
-  const text = (raw || "").trim();
-  if (!text) return "";
+  const text = (raw || '').trim();
+  if (!text) return '';
   const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) return "";
+  if (Number.isNaN(parsed.getTime())) return '';
   return formatDateTimeInputValue(parsed);
 }
 
 function normalizeRouteModel(raw: string | null): string {
-  if (!raw) return "";
+  if (!raw) return '';
   return raw.trim();
 }
 
 export function readProxyLogsRouteState(search: string) {
   const params = new URLSearchParams(search);
   return {
-    page: normalizeRoutePage(params.get("page")),
-    pageSize: normalizeRoutePageSize(params.get("pageSize")),
-    status: normalizeRouteStatus(params.get("status")),
-    search: normalizeRouteSearch(params.get("q")),
-    downstreamKeyId: normalizeRouteSiteId(params.get("downstreamKeyId")),
-    siteId: normalizeRouteSiteId(params.get("siteId")),
-    model: normalizeRouteModel(params.get("model")),
-    from: normalizeRouteDateTimeInput(params.get("from")),
-    to: normalizeRouteDateTimeInput(params.get("to")),
+    page: normalizeRoutePage(params.get('page')),
+    pageSize: normalizeRoutePageSize(params.get('pageSize')),
+    status: normalizeRouteStatus(params.get('status')),
+    search: normalizeRouteSearch(params.get('q')),
+    downstreamKeyId: normalizeRouteSiteId(params.get('downstreamKeyId')),
+    siteId: normalizeRouteSiteId(params.get('siteId')),
+    model: normalizeRouteModel(params.get('model')),
+    from: normalizeRouteDateTimeInput(params.get('from')),
+    to: normalizeRouteDateTimeInput(params.get('to')),
   };
 }
 
@@ -286,18 +286,18 @@ export function buildProxyLogsRouteSearch(input: {
   to: string;
 }) {
   const params = new URLSearchParams();
-  if (input.page > 1) params.set("page", String(input.page));
+  if (input.page > 1) params.set('page', String(input.page));
   if (input.pageSize !== DEFAULT_PAGE_SIZE)
-    params.set("pageSize", String(input.pageSize));
-  if (input.status !== "all") params.set("status", input.status);
-  if (input.search.trim()) params.set("q", input.search.trim());
-  if (input.downstreamKeyId) params.set("downstreamKeyId", String(input.downstreamKeyId));
-  if (input.siteId) params.set("siteId", String(input.siteId));
-  if (input.model.trim()) params.set("model", input.model.trim());
-  if (input.from.trim()) params.set("from", input.from.trim());
-  if (input.to.trim()) params.set("to", input.to.trim());
+    params.set('pageSize', String(input.pageSize));
+  if (input.status !== 'all') params.set('status', input.status);
+  if (input.search.trim()) params.set('q', input.search.trim());
+  if (input.downstreamKeyId) params.set('downstreamKeyId', String(input.downstreamKeyId));
+  if (input.siteId) params.set('siteId', String(input.siteId));
+  if (input.model.trim()) params.set('model', input.model.trim());
+  if (input.from.trim()) params.set('from', input.from.trim());
+  if (input.to.trim()) params.set('to', input.to.trim());
   const next = params.toString();
-  return next ? `?${next}` : "";
+  return next ? `?${next}` : '';
 }
 
 export function formatProxyLogClientFamilyLabel(
@@ -305,16 +305,16 @@ export function formatProxyLogClientFamilyLabel(
   options?: { includeGeneric?: boolean },
 ) {
   const normalized =
-    typeof clientFamily === "string" ? clientFamily.trim().toLowerCase() : "";
+    typeof clientFamily === 'string' ? clientFamily.trim().toLowerCase() : '';
   if (!normalized) return null;
-  if (!options?.includeGeneric && normalized === "generic") return null;
+  if (!options?.includeGeneric && normalized === 'generic') return null;
   return PROXY_LOG_CLIENT_FAMILY_LABELS[normalized] || clientFamily || null;
 }
 
 export function resolveProxyLogClientDisplay(
   log: Pick<
     ProxyLogRenderItem,
-    "clientFamily" | "clientAppName" | "clientConfidence"
+    'clientFamily' | 'clientAppName' | 'clientConfidence'
   >,
   options?: { includeGeneric?: boolean },
 ) {
@@ -323,12 +323,12 @@ export function resolveProxyLogClientDisplay(
     options,
   );
   const appName =
-    typeof log.clientAppName === "string" ? log.clientAppName.trim() : "";
+    typeof log.clientAppName === 'string' ? log.clientAppName.trim() : '';
   if (appName) {
     return {
       primary: appName,
       secondary: familyLabel,
-      heuristic: log.clientConfidence === "heuristic",
+      heuristic: log.clientConfidence === 'heuristic',
     };
   }
   return {
@@ -352,9 +352,9 @@ export function normalizeProxyDebugSettings(value: any): ProxyDebugSettingsState
     proxyDebugCaptureHeaders: value?.proxyDebugCaptureHeaders !== false,
     proxyDebugCaptureBodies: !!value?.proxyDebugCaptureBodies,
     proxyDebugCaptureStreamChunks: !!value?.proxyDebugCaptureStreamChunks,
-    proxyDebugTargetSessionId: String(value?.proxyDebugTargetSessionId || ""),
-    proxyDebugTargetClientKind: String(value?.proxyDebugTargetClientKind || ""),
-    proxyDebugTargetModel: String(value?.proxyDebugTargetModel || ""),
+    proxyDebugTargetSessionId: String(value?.proxyDebugTargetSessionId || ''),
+    proxyDebugTargetClientKind: String(value?.proxyDebugTargetClientKind || ''),
+    proxyDebugTargetModel: String(value?.proxyDebugTargetModel || ''),
     proxyDebugRetentionHours: Number(value?.proxyDebugRetentionHours || 24),
     proxyDebugMaxBodyBytes: Number(value?.proxyDebugMaxBodyBytes || 262144),
   };
@@ -383,11 +383,11 @@ export function buildProxyDebugSettingsPayload(
 }
 
 export function formatProxyDebugCaptureSummary(settings: ProxyDebugSettingsState) {
-  const parts = ["路由决策"];
-  if (settings.proxyDebugCaptureHeaders) parts.push("请求/响应头");
-  if (settings.proxyDebugCaptureBodies) parts.push("请求/响应体");
-  if (settings.proxyDebugCaptureStreamChunks) parts.push("流式分片");
-  return parts.join("、");
+  const parts = ['路由决策'];
+  if (settings.proxyDebugCaptureHeaders) parts.push('请求/响应头');
+  if (settings.proxyDebugCaptureBodies) parts.push('请求/响应体');
+  if (settings.proxyDebugCaptureStreamChunks) parts.push('流式分片');
+  return parts.join('、');
 }
 
 export function formatProxyDebugTargetSummary(settings: ProxyDebugSettingsState) {
@@ -402,12 +402,12 @@ export function formatProxyDebugTargetSummary(settings: ProxyDebugSettingsState)
       ? `模型 ${settings.proxyDebugTargetModel}`
       : null,
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join("，") : "不过滤，记录所有命中的新请求";
+  return parts.length > 0 ? parts.join('，') : '不过滤，记录所有命中的新请求';
 }
 
 export function stringifyStoredDebugValue(value: unknown): string | null {
   if (value == null) return null;
-  if (typeof value === "string") return value;
+  if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value, null, 2);
   } catch {
@@ -425,7 +425,7 @@ export function parseStoredDebugPreview(value: unknown): {
   if (!raw) {
     return {
       raw: null,
-      displayText: "-",
+      displayText: '-',
       truncated: false,
       note: null,
     };
@@ -433,10 +433,10 @@ export function parseStoredDebugPreview(value: unknown): {
 
   try {
     const parsed = JSON.parse(raw) as StoredDebugPreviewPayload | string;
-    if (typeof parsed === "string") {
+    if (typeof parsed === 'string') {
       return {
         raw,
-        displayText: parsed || "-",
+        displayText: parsed || '-',
         truncated: false,
         note: null,
       };
@@ -444,20 +444,20 @@ export function parseStoredDebugPreview(value: unknown): {
 
     if (
       parsed &&
-      typeof parsed === "object" &&
+      typeof parsed === 'object' &&
       parsed.__metapiTruncated &&
-      typeof parsed.preview === "string"
+      typeof parsed.preview === 'string'
     ) {
       const originalBytes = Number(parsed.originalBytes || 0);
       const storedBytes = Number(parsed.storedBytes || 0);
       return {
         raw,
-        displayText: parsed.preview || "-",
+        displayText: parsed.preview || '-',
         truncated: true,
         note:
           originalBytes > 0 && storedBytes > 0
             ? `内容已截断展示，原始 ${originalBytes} bytes，当前保留 ${storedBytes} bytes。复制按钮会复制当前数据库里保存的内容。`
-            : "内容已截断展示。复制按钮会复制当前数据库里保存的内容。",
+            : '内容已截断展示。复制按钮会复制当前数据库里保存的内容。',
       };
     }
   } catch {
@@ -478,7 +478,7 @@ export function readStoredDebugTracePanelExpanded(): boolean {
       PROXY_LOGS_DEBUG_TRACE_PANEL_STORAGE_KEY,
     );
     if (stored == null) return true;
-    return stored !== "false";
+    return stored !== 'false';
   } catch {
     return true;
   }
@@ -488,7 +488,7 @@ export function persistDebugTracePanelExpanded(expanded: boolean) {
   try {
     globalThis.localStorage?.setItem(
       PROXY_LOGS_DEBUG_TRACE_PANEL_STORAGE_KEY,
-      expanded ? "true" : "false",
+      expanded ? 'true' : 'false',
     );
   } catch {
     // Ignore storage write failures and keep UI responsive.

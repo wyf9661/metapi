@@ -1,29 +1,29 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { formatUtcSqlDateTime } from "./localTimeService.js";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { formatUtcSqlDateTime } from './localTimeService.js';
 
-type DbModule = typeof import("../db/index.js");
-type ProjectorModule = typeof import("./usageAggregationService.js");
+type DbModule = typeof import('../db/index.js');
+type ProjectorModule = typeof import('./usageAggregationService.js');
 
-describe("usageAggregationService", () => {
-  let db: DbModule["db"];
-  let schema: DbModule["schema"];
-  let runUsageAggregationProjectionPass: ProjectorModule["runUsageAggregationProjectionPass"];
-  let requestUsageAggregatesRecompute: ProjectorModule["requestUsageAggregatesRecompute"];
-  let dataDir = "";
+describe('usageAggregationService', () => {
+  let db: DbModule['db'];
+  let schema: DbModule['schema'];
+  let runUsageAggregationProjectionPass: ProjectorModule['runUsageAggregationProjectionPass'];
+  let requestUsageAggregatesRecompute: ProjectorModule['requestUsageAggregatesRecompute'];
+  let dataDir = '';
   let previousDataDir: string | undefined;
 
   beforeAll(async () => {
     previousDataDir = process.env.DATA_DIR;
-    dataDir = mkdtempSync(join(tmpdir(), "metapi-usage-projector-"));
+    dataDir = mkdtempSync(join(tmpdir(), 'metapi-usage-projector-'));
     process.env.DATA_DIR = dataDir;
 
-    await import("../db/migrate.js");
-    const dbModule = await import("../db/index.js");
-    const projectorModule = await import("./usageAggregationService.js");
+    await import('../db/migrate.js');
+    const dbModule = await import('../db/index.js');
+    const projectorModule = await import('./usageAggregationService.js');
     db = dbModule.db;
     schema = dbModule.schema;
     runUsageAggregationProjectionPass = projectorModule.runUsageAggregationProjectionPass;
@@ -49,14 +49,14 @@ describe("usageAggregationService", () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it("projects proxy logs into day/hour/model aggregates and supports recompute requests", async () => {
+  it('projects proxy logs into day/hour/model aggregates and supports recompute requests', async () => {
     const site = await db
       .insert(schema.sites)
       .values({
-        name: "agg-site",
-        url: "https://agg.example.com",
-        platform: "new-api",
-        status: "active",
+        name: 'agg-site',
+        url: 'https://agg.example.com',
+        platform: 'new-api',
+        status: 'active',
       })
       .returning()
       .get();
@@ -64,9 +64,9 @@ describe("usageAggregationService", () => {
       .insert(schema.accounts)
       .values({
         siteId: site.id,
-        username: "agg-user",
-        accessToken: "agg-token",
-        status: "active",
+        username: 'agg-user',
+        accessToken: 'agg-token',
+        status: 'active',
       })
       .returning()
       .get();
@@ -74,23 +74,23 @@ describe("usageAggregationService", () => {
     await db.insert(schema.proxyLogs).values([
       {
         accountId: account.id,
-        status: "success",
-        modelRequested: "gpt-5",
-        modelActual: "gpt-5",
+        status: 'success',
+        modelRequested: 'gpt-5',
+        modelActual: 'gpt-5',
         totalTokens: 100,
         estimatedCost: 0.2,
         latencyMs: 120,
-        createdAt: formatUtcSqlDateTime(new Date("2026-04-08T02:10:00.000Z")),
+        createdAt: formatUtcSqlDateTime(new Date('2026-04-08T02:10:00.000Z')),
       },
       {
         accountId: account.id,
-        status: "failed",
-        modelRequested: "gpt-5-mini",
-        modelActual: "gpt-5-mini",
+        status: 'failed',
+        modelRequested: 'gpt-5-mini',
+        modelActual: 'gpt-5-mini',
         totalTokens: 50,
         estimatedCost: 0.1,
         latencyMs: 80,
-        createdAt: formatUtcSqlDateTime(new Date("2026-04-08T02:45:00.000Z")),
+        createdAt: formatUtcSqlDateTime(new Date('2026-04-08T02:45:00.000Z')),
       },
     ]).run();
 
@@ -127,13 +127,13 @@ describe("usageAggregationService", () => {
 
     await db.insert(schema.proxyLogs).values({
       accountId: account.id,
-      status: "success",
-      modelRequested: "gpt-5",
-      modelActual: "gpt-5",
+      status: 'success',
+      modelRequested: 'gpt-5',
+      modelActual: 'gpt-5',
       totalTokens: 20,
       estimatedCost: 0.04,
       latencyMs: 60,
-      createdAt: formatUtcSqlDateTime(new Date("2026-04-08T02:50:00.000Z")),
+      createdAt: formatUtcSqlDateTime(new Date('2026-04-08T02:50:00.000Z')),
     }).run();
 
     const secondPass = await runUsageAggregationProjectionPass();
@@ -170,14 +170,14 @@ describe("usageAggregationService", () => {
     expect(recomputedDayRows[0].totalSiteSpend).toBeCloseTo(0.34, 6);
   });
 
-  it("skips projection while another process lease is active and clears lease after success", async () => {
+  it('skips projection while another process lease is active and clears lease after success', async () => {
     const site = await db
       .insert(schema.sites)
       .values({
-        name: "leased-site",
-        url: "https://leased.example.com",
-        platform: "new-api",
-        status: "active",
+        name: 'leased-site',
+        url: 'https://leased.example.com',
+        platform: 'new-api',
+        status: 'active',
       })
       .returning()
       .get();
@@ -185,30 +185,30 @@ describe("usageAggregationService", () => {
       .insert(schema.accounts)
       .values({
         siteId: site.id,
-        username: "leased-user",
-        accessToken: "leased-token",
-        status: "active",
+        username: 'leased-user',
+        accessToken: 'leased-token',
+        status: 'active',
       })
       .returning()
       .get();
 
     await db.insert(schema.proxyLogs).values({
       accountId: account.id,
-      status: "success",
-      modelRequested: "gpt-5",
-      modelActual: "gpt-5",
+      status: 'success',
+      modelRequested: 'gpt-5',
+      modelActual: 'gpt-5',
       totalTokens: 10,
       estimatedCost: 0.02,
       latencyMs: 50,
-      createdAt: formatUtcSqlDateTime(new Date("2026-04-08T03:00:00.000Z")),
+      createdAt: formatUtcSqlDateTime(new Date('2026-04-08T03:00:00.000Z')),
     }).run();
 
     await db.insert(schema.analyticsProjectionCheckpoints).values({
-      projectorKey: "usage-aggregates-v1",
-      timeZone: "Local",
+      projectorKey: 'usage-aggregates-v1',
+      timeZone: 'Local',
       lastProxyLogId: 0,
-      leaseOwner: "other-process",
-      leaseToken: "other-token",
+      leaseOwner: 'other-process',
+      leaseToken: 'other-token',
       leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
     }).run();
 
@@ -221,7 +221,7 @@ describe("usageAggregationService", () => {
       .set({
         leaseExpiresAt: new Date(Date.now() - 60_000).toISOString(),
       })
-      .where(eq(schema.analyticsProjectionCheckpoints.projectorKey, "usage-aggregates-v1"))
+      .where(eq(schema.analyticsProjectionCheckpoints.projectorKey, 'usage-aggregates-v1'))
       .run();
 
     const successfulPass = await runUsageAggregationProjectionPass();
@@ -230,7 +230,7 @@ describe("usageAggregationService", () => {
     const checkpoint = await db
       .select()
       .from(schema.analyticsProjectionCheckpoints)
-      .where(eq(schema.analyticsProjectionCheckpoints.projectorKey, "usage-aggregates-v1"))
+      .where(eq(schema.analyticsProjectionCheckpoints.projectorKey, 'usage-aggregates-v1'))
       .get();
     expect(checkpoint?.leaseOwner).toBeNull();
     expect(checkpoint?.leaseToken).toBeNull();

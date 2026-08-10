@@ -1,26 +1,26 @@
-import { and, eq, gte, lt, sql } from "drizzle-orm";
-import { db, schema } from "../db/index.js";
+import { and, eq, gte, lt, sql } from 'drizzle-orm';
+import { db, schema } from '../db/index.js';
 import {
   getCredentialModeFromExtraConfig,
   hasOauthProvider,
   type AccountCredentialMode,
-} from "./accountExtraConfig.js";
+} from './accountExtraConfig.js';
 import {
   buildRuntimeHealthForAccount,
   type RuntimeHealthInfo,
-} from "./accountHealthService.js";
-import { parseCheckinRewardAmount } from "./checkinRewardParser.js";
-import { getLocalDayRangeUtc } from "./localTimeService.js";
+} from './accountHealthService.js';
+import { parseCheckinRewardAmount } from './checkinRewardParser.js';
+import { getLocalDayRangeUtc } from './localTimeService.js';
 import {
   clearSnapshotCache,
   readSnapshotCache,
   type SnapshotEnvelope,
-} from "./snapshotCacheService.js";
-import { estimateRewardWithTodayIncomeFallback } from "./todayIncomeRewardService.js";
+} from './snapshotCacheService.js';
+import { estimateRewardWithTodayIncomeFallback } from './todayIncomeRewardService.js';
 import {
   createAdminSnapshotPersistence,
   deleteAdminSnapshot,
-} from "./adminSnapshotStore.js";
+} from './adminSnapshotStore.js';
 
 export type AccountCapabilities = {
   canCheckin: boolean;
@@ -45,20 +45,20 @@ export type AccountsSnapshotPayload = {
 const ACCOUNTS_SNAPSHOT_TTL_MS = 15_000;
 const accountsSnapshotPersistence =
   createAdminSnapshotPersistence<AccountsSnapshotPayload>({
-    namespace: "accounts-snapshot",
-    key: "all",
+    namespace: 'accounts-snapshot',
+    key: 'all',
   });
 
 function hasSessionTokenValue(value: string | null | undefined): boolean {
-  return typeof value === "string" && value.trim().length > 0;
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function resolveStoredCredentialMode(
   account: typeof schema.accounts.$inferSelect,
 ): AccountCredentialMode {
   const fromConfig = getCredentialModeFromExtraConfig(account.extraConfig);
-  if (fromConfig && fromConfig !== "auto") return fromConfig;
-  return hasSessionTokenValue(account.accessToken) ? "session" : "apikey";
+  if (fromConfig && fromConfig !== 'auto') return fromConfig;
+  return hasSessionTokenValue(account.accessToken) ? 'session' : 'apikey';
 }
 
 function buildCapabilitiesFromCredentialMode(
@@ -69,7 +69,7 @@ function buildCapabilitiesFromCredentialMode(
     | null
     | Pick<
         typeof schema.accounts.$inferSelect,
-        "extraConfig" | "oauthProvider"
+        'extraConfig' | 'oauthProvider'
       >,
 ): AccountCapabilities {
   if (hasOauthProvider(oauthIdentity)) {
@@ -80,9 +80,9 @@ function buildCapabilitiesFromCredentialMode(
     };
   }
   const sessionCapable =
-    credentialMode === "session"
+    credentialMode === 'session'
       ? hasSessionToken
-      : credentialMode === "apikey"
+      : credentialMode === 'apikey'
         ? false
         : hasSessionToken;
   return {
@@ -150,7 +150,7 @@ async function loadAccountsSnapshotPayload(): Promise<AccountsSnapshotPayload> {
         and(
           gte(schema.checkinLogs.createdAt, startUtc),
           lt(schema.checkinLogs.createdAt, endUtc),
-          eq(schema.checkinLogs.status, "success"),
+          eq(schema.checkinLogs.status, 'success'),
         ),
       )
       .all(),
@@ -224,8 +224,8 @@ export async function getAccountsSnapshot(options?: {
   forceRefresh?: boolean;
 }): Promise<SnapshotEnvelope<AccountsSnapshotPayload>> {
   return readSnapshotCache({
-    namespace: "accounts-snapshot",
-    key: "all",
+    namespace: 'accounts-snapshot',
+    key: 'all',
     ttlMs: ACCOUNTS_SNAPSHOT_TTL_MS,
     forceRefresh: options?.forceRefresh,
     persistence: accountsSnapshotPersistence,
@@ -235,9 +235,9 @@ export async function getAccountsSnapshot(options?: {
 
 /** Drop in-memory + persisted accounts snapshot so connection management cannot show orphans. */
 export async function invalidateAccountsSnapshot(): Promise<void> {
-  clearSnapshotCache("accounts-snapshot");
-  clearSnapshotCache("dashboard-summary");
-  clearSnapshotCache("dashboard-insights");
-  clearSnapshotCache("site-stats");
-  await deleteAdminSnapshot({ namespace: "accounts-snapshot", key: "all" });
+  clearSnapshotCache('accounts-snapshot');
+  clearSnapshotCache('dashboard-summary');
+  clearSnapshotCache('dashboard-insights');
+  clearSnapshotCache('site-stats');
+  await deleteAdminSnapshot({ namespace: 'accounts-snapshot', key: 'all' });
 }

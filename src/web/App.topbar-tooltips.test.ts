@@ -13,6 +13,6 @@ describe('App topbar tooltips', () => {
 
     const topbarSection = source.slice(topbarStart, topbarEnd);
     expect(topbarSection).not.toContain('data-tooltip=');
-    expect(source).toContain("data-tooltip={sidebarCollapsed ? t(item.label) : undefined}");
+    expect(source).toContain('data-tooltip={sidebarCollapsed ? t(item.label) : undefined}');
   });
 });

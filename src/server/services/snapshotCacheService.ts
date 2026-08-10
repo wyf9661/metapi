@@ -1,9 +1,9 @@
 export type SnapshotCacheStatus =
-  | "disabled"
-  | "miss"
-  | "hit"
-  | "stale"
-  | "refresh";
+  | 'disabled'
+  | 'miss'
+  | 'hit'
+  | 'stale'
+  | 'refresh';
 
 export type SnapshotEnvelope<T> = {
   payload: T;
@@ -94,7 +94,7 @@ async function loadAndStoreSnapshot<T>(
   const envelope: SnapshotEnvelope<T> = {
     payload,
     generatedAt: persistedRecord.generatedAt,
-    cacheStatus: "miss",
+    cacheStatus: 'miss',
   };
   setSnapshotCacheEntry(cacheKey, {
     payload,
@@ -140,7 +140,7 @@ export async function readSnapshotCache<T>(
     return {
       payload,
       generatedAt: new Date().toISOString(),
-      cacheStatus: "disabled",
+      cacheStatus: 'disabled',
     };
   }
 
@@ -176,7 +176,7 @@ export async function readSnapshotCache<T>(
     return {
       payload: cached.payload,
       generatedAt: new Date(cached.generatedAtMs).toISOString(),
-      cacheStatus: "hit",
+      cacheStatus: 'hit',
     };
   }
 
@@ -208,7 +208,7 @@ export async function readSnapshotCache<T>(
     return {
       payload: cached.payload,
       generatedAt: new Date(cached.generatedAtMs).toISOString(),
-      cacheStatus: "stale",
+      cacheStatus: 'stale',
     };
   }
 
@@ -219,7 +219,7 @@ export async function readSnapshotCache<T>(
       ...result,
       cacheStatus:
         options.forceRefresh || shared.payload !== undefined
-          ? "refresh"
+          ? 'refresh'
           : result.cacheStatus,
     };
   }
@@ -230,7 +230,7 @@ export async function readSnapshotCache<T>(
       ...result,
       cacheStatus:
         options.forceRefresh || cached.payload !== undefined
-          ? "refresh"
+          ? 'refresh'
           : result.cacheStatus,
     };
   }
@@ -260,10 +260,10 @@ export async function readSnapshotCache<T>(
   return {
     ...result,
     cacheStatus: options.forceRefresh
-      ? "refresh"
+      ? 'refresh'
       : cached?.payload !== undefined
-        ? "refresh"
-        : "miss",
+        ? 'refresh'
+        : 'miss',
   };
 }
 

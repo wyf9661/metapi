@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { api } from "../api.js";
-import { MobileCard, MobileField } from "../components/MobileCard.js";
-import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";
-import { useToast } from "../components/Toast.js";
-import { useIsMobile } from "../components/useIsMobile.js";
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api.js';
+import { MobileCard, MobileField } from '../components/MobileCard.js';
+import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
+import { useToast } from '../components/Toast.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import {
   formatCheckinLogTime,
   parseServerUtcDateTime,
-} from "./helpers/checkinLogTime.js";
-import { tr } from "../i18n.js";
+} from './helpers/checkinLogTime.js';
+import { tr } from '../i18n.js';
 
-type LogFilter = "all" | "success" | "failed" | "skipped";
+type LogFilter = 'all' | 'success' | 'failed' | 'skipped';
 
 type FailureReason = {
   code: string;
@@ -21,7 +21,7 @@ type FailureReason = {
 };
 
 function pad2(value: number) {
-  return String(value).padStart(2, "0");
+  return String(value).padStart(2, '0');
 }
 
 function formatDateTimeInputValue(value: Date) {
@@ -68,16 +68,16 @@ export default function CheckinLog() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
-  const [filter, setFilter] = useState<LogFilter>("all");
+  const [filter, setFilter] = useState<LogFilter>('all');
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const isMobile = useIsMobile();
   const toast = useToast();
 
-  function getStatus(log: any): "success" | "failed" | "skipped" {
-    const raw = (log.checkin_logs?.status || log.status || "failed") as string;
-    if (raw === "success" || raw === "skipped") return raw;
-    return "failed";
+  function getStatus(log: any): 'success' | 'failed' | 'skipped' {
+    const raw = (log.checkin_logs?.status || log.status || 'failed') as string;
+    if (raw === 'success' || raw === 'skipped') return raw;
+    return 'failed';
   }
 
   function getCreatedAtDate(log: any): Date | null {
@@ -118,7 +118,7 @@ export default function CheckinLog() {
 
   const statusFilteredLogs = useMemo(
     () =>
-      filter === "all"
+      filter === 'all'
         ? timeFilteredLogs
         : timeFilteredLogs.filter((log) => getStatus(log) === filter),
     [filter, timeFilteredLogs],
@@ -128,23 +128,23 @@ export default function CheckinLog() {
   const filtered = statusFilteredLogs;
 
   const countBy = useMemo(
-    () => (target: Exclude<LogFilter, "all">) =>
+    () => (target: Exclude<LogFilter, 'all'>) =>
       timeFilteredLogs.filter((log) => getStatus(log) === target).length,
     [timeFilteredLogs],
   );
 
   const clearTimeRange = () => {
-    setFromInput("");
-    setToInput("");
+    setFromInput('');
+    setToInput('');
   };
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api.getCheckinLogs("limit=100");
+      const data = await api.getCheckinLogs('limit=100');
       setLogs(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      toast.error(e.message || "加载签到记录失败");
+      toast.error(e.message || '加载签到记录失败');
     } finally {
       setLoading(false);
     }
@@ -159,28 +159,28 @@ export default function CheckinLog() {
     try {
       const res = await api.triggerCheckinAll();
       if (res?.queued) {
-        toast.info(res.message || "已开始签到，请稍后查看签到记录");
+        toast.info(res.message || '已开始签到，请稍后查看签到记录');
       } else {
-        toast.success(res?.message || "签到已执行");
+        toast.success(res?.message || '签到已执行');
       }
       await load();
     } catch (e: any) {
-      toast.error(e.message || "触发签到失败");
+      toast.error(e.message || '触发签到失败');
     } finally {
       setTriggering(false);
     }
   };
 
-  const statusLabel = (status: "success" | "failed" | "skipped") => {
-    if (status === "success") return "成功";
-    if (status === "skipped") return "跳过";
-    return "失败";
+  const statusLabel = (status: 'success' | 'failed' | 'skipped') => {
+    if (status === 'success') return '成功';
+    if (status === 'skipped') return '跳过';
+    return '失败';
   };
 
-  const statusClass = (status: "success" | "failed" | "skipped") => {
-    if (status === "success") return "badge-success";
-    if (status === "skipped") return "badge-muted";
-    return "badge-error";
+  const statusClass = (status: 'success' | 'failed' | 'skipped') => {
+    if (status === 'success') return 'badge-success';
+    if (status === 'skipped') return 'badge-muted';
+    return 'badge-error';
   };
 
   const getFailureReason = (log: any): FailureReason | null => {
@@ -192,10 +192,10 @@ export default function CheckinLog() {
   const timeRangeControls = (
     <div
       style={{
-        display: "flex",
-        flexWrap: "wrap",
+        display: 'flex',
+        flexWrap: 'wrap',
         gap: 10,
-        alignItems: "center",
+        alignItems: 'center',
       }}
     >
       <label className="proxy-logs-time-field">
@@ -229,18 +229,18 @@ export default function CheckinLog() {
   const filterTabs = (
     <div className="pill-tabs">
       {[
-        { key: "all" as const, label: "全部", count: timeFilteredLogs.length },
-        { key: "success" as const, label: "成功", count: countBy("success") },
-        { key: "failed" as const, label: "失败", count: countBy("failed") },
-        { key: "skipped" as const, label: "跳过", count: countBy("skipped") },
+        { key: 'all' as const, label: '全部', count: timeFilteredLogs.length },
+        { key: 'success' as const, label: '成功', count: countBy('success') },
+        { key: 'failed' as const, label: '失败', count: countBy('failed') },
+        { key: 'skipped' as const, label: '跳过', count: countBy('skipped') },
       ].map((tab) => (
         <button
           key={tab.key}
-          className={`pill-tab ${filter === tab.key ? "active" : ""}`}
+          className={`pill-tab ${filter === tab.key ? 'active' : ''}`}
           onClick={() => setFilter(tab.key)}
         >
-          {tab.label}{" "}
-          <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>
+          {tab.label}{' '}
+          <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>
             {tab.count}
           </span>
         </button>
@@ -251,7 +251,7 @@ export default function CheckinLog() {
   return (
     <div className="animate-fade-in">
       <div className="page-header">
-        <h2 className="page-title">{tr("签到记录")}</h2>
+        <h2 className="page-title">{tr('签到记录')}</h2>
         <button
           onClick={handleTriggerAll}
           disabled={triggering}
@@ -263,7 +263,7 @@ export default function CheckinLog() {
               触发中...
             </>
           ) : (
-            "运行所有签到"
+            '运行所有签到'
           )}
         </button>
       </div>
@@ -275,7 +275,7 @@ export default function CheckinLog() {
         onMobileClose={() => setShowFilters(false)}
         mobileTitle="筛选签到记录"
         mobileContent={(
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {timeRangeControls}
             {hasInvalidTimeRange && (
               <div className="alert alert-error">
@@ -286,20 +286,20 @@ export default function CheckinLog() {
           </div>
         )}
         desktopContent={(
-          <div className="toolbar" style={{ marginBottom: "12px" }}>
+          <div className="toolbar" style={{ marginBottom: '12px' }}>
             <div style={{ minWidth: 280 }}>{filterTabs}</div>
             <div
               style={{
-                flex: "0 0 auto",
-                display: "flex",
-                alignItems: "center",
+                flex: '0 0 auto',
+                display: 'flex',
+                alignItems: 'center',
                 gap: 10,
               }}
             >
               {timeRangeControls}
             </div>
             {hasInvalidTimeRange && (
-              <div className="alert alert-error" style={{ width: "100%" }}>
+              <div className="alert alert-error" style={{ width: '100%' }}>
                 结束时间必须晚于开始时间
               </div>
             )}
@@ -310,7 +310,7 @@ export default function CheckinLog() {
       <div
         className="card"
         style={{
-          overflowX: "auto",
+          overflowX: 'auto',
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
         }}
@@ -319,13 +319,13 @@ export default function CheckinLog() {
           <div
             style={{
               padding: 24,
-              display: "flex",
-              flexDirection: "column",
+              display: 'flex',
+              flexDirection: 'column',
               gap: 10,
             }}
           >
             {[...Array(5)].map((_, i) => (
-              <div key={i} style={{ display: "flex", gap: 16 }}>
+              <div key={i} style={{ display: 'flex', gap: 16 }}>
                 <div className="skeleton" style={{ width: 120, height: 16 }} />
                 <div className="skeleton" style={{ width: 80, height: 16 }} />
                 <div className="skeleton" style={{ width: 120, height: 16 }} />
@@ -346,7 +346,7 @@ export default function CheckinLog() {
               return (
                 <MobileCard
                   key={logId}
-                  title={log.accounts?.username || "未知"}
+                  title={log.accounts?.username || '未知'}
                   headerActions={
                     <span
                       className={`badge ${statusClass(status)}`}
@@ -363,7 +363,7 @@ export default function CheckinLog() {
                         setExpandedLogId(isExpanded ? null : logId)
                       }
                     >
-                      {isExpanded ? "收起" : "详情"}
+                      {isExpanded ? '收起' : '详情'}
                     </button>
                   }
                 >
@@ -387,7 +387,7 @@ export default function CheckinLog() {
                             className="badge badge-muted"
                             style={{ fontSize: 11 }}
                           >
-                            {log.sites?.name || "-"}
+                            {log.sites?.name || '-'}
                           </span>
                         </a>
                       ) : (
@@ -395,7 +395,7 @@ export default function CheckinLog() {
                           className="badge badge-muted"
                           style={{ fontSize: 11 }}
                         >
-                          {log.sites?.name || "-"}
+                          {log.sites?.name || '-'}
                         </span>
                       )
                     }
@@ -417,7 +417,7 @@ export default function CheckinLog() {
                   />
                   <MobileField
                     label="奖励"
-                    value={log.checkin_logs?.reward || "-"}
+                    value={log.checkin_logs?.reward || '-'}
                   />
                   {isExpanded ? (
                     <div className="mobile-card-extra">
@@ -429,7 +429,7 @@ export default function CheckinLog() {
                       <MobileField
                         label="建议"
                         stacked
-                        value={reason?.actionHint || "-"}
+                        value={reason?.actionHint || '-'}
                       />
                     </div>
                   ) : null}
@@ -457,7 +457,7 @@ export default function CheckinLog() {
                 const reason = getFailureReason(log);
                 return (
                   <tr key={log.checkin_logs?.id || log.id}>
-                    <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                       {formatCheckinLogTime(
                         log.checkin_logs?.createdAt || log.createdAt,
                       )}
@@ -465,10 +465,10 @@ export default function CheckinLog() {
                     <td
                       style={{
                         fontWeight: 600,
-                        color: "var(--color-text-primary)",
+                        color: 'var(--color-text-primary)',
                       }}
                     >
-                      {log.accounts?.username || "未知"}
+                      {log.accounts?.username || '未知'}
                     </td>
                     <td>
                       {log.sites?.url ? (
@@ -482,7 +482,7 @@ export default function CheckinLog() {
                             className="badge badge-muted"
                             style={{ fontSize: 11 }}
                           >
-                            {log.sites?.name || "-"}
+                            {log.sites?.name || '-'}
                           </span>
                         </a>
                       ) : (
@@ -490,7 +490,7 @@ export default function CheckinLog() {
                           className="badge badge-muted"
                           style={{ fontSize: 11 }}
                         >
-                          {log.sites?.name || "-"}
+                          {log.sites?.name || '-'}
                         </span>
                       )}
                     </td>
@@ -514,10 +514,10 @@ export default function CheckinLog() {
                     <td style={{ maxWidth: 360 }}>
                       <span
                         style={{
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
+                          display: 'block',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {log.checkin_logs?.message || log.message}
@@ -526,19 +526,19 @@ export default function CheckinLog() {
                     <td style={{ maxWidth: 220 }}>
                       <span
                         style={{
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          color: "var(--color-text-secondary)",
+                          display: 'block',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: 'var(--color-text-secondary)',
                           fontSize: 12,
                         }}
-                        data-tooltip={reason?.detailHint || ""}
+                        data-tooltip={reason?.detailHint || ''}
                       >
-                        {reason?.actionHint || "-"}
+                        {reason?.actionHint || '-'}
                       </span>
                     </td>
-                    <td>{log.checkin_logs?.reward || "-"}</td>
+                    <td>{log.checkin_logs?.reward || '-'}</td>
                   </tr>
                 );
               })}

@@ -42,7 +42,7 @@ describe('site announcements schema', () => {
     expect(artifacts.mysqlBootstrap).toContain('`upstream_created_at` VARCHAR(191)');
     expect(artifacts.mysqlBootstrap).toContain('`site_announcements_site_source_key_unique`');
     expect(artifacts.postgresBootstrap).toContain('CREATE TABLE IF NOT EXISTS "site_announcements"');
-    expect(artifacts.postgresBootstrap).toContain(`"first_seen_at" TEXT DEFAULT to_char(timezone('UTC', CURRENT_TIMESTAMP), 'YYYY-MM-DD HH24:MI:SS')`);
+    expect(artifacts.postgresBootstrap).toContain('"first_seen_at" TEXT DEFAULT to_char(timezone(\'UTC\', CURRENT_TIMESTAMP), \'YYYY-MM-DD HH24:MI:SS\')');
     expect(artifacts.postgresBootstrap).toContain('"upstream_created_at" TEXT');
     expect(artifacts.postgresBootstrap).toContain('"site_announcements_site_source_key_unique"');
   });
