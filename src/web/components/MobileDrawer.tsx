@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useId, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
 type MobileDrawerProps = {

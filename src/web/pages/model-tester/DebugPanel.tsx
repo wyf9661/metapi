@@ -1,4 +1,3 @@
-import React from 'react';
 import { DEBUG_TABS, type DebugTab } from '../helpers/modelTesterSession.js';
 
 type DebugTimelineEntry = {

@@ -1,8 +1,4 @@
-import {
-  normalizeResponsesInputForCompatibility,
-  normalizeResponsesMessageContentBlocks,
-  normalizeResponsesMessageItem,
-} from './normalization.js';
+import {normalizeResponsesInputForCompatibility, normalizeResponsesMessageContentBlocks} from './normalization.js';
 import {
   decodeResponsesMcpCompatToolCall,
   isResponsesMcpItem,
@@ -212,15 +208,6 @@ function normalizeResponsesRequestFieldParity(
   return normalized;
 }
 
-function parseJsonString(raw: string): unknown {
-  const trimmed = raw.trim();
-  if (!trimmed) return {};
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return { value: raw };
-  }
-}
 
 export function extractTextContent(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -525,8 +512,6 @@ const RESPONSES_COMPATIBILITY_FILTER_FIELDS = new Set([
   'response_format',
   'verbosity',
 ]);
-
-const MIN_RESPONSES_MAX_OUTPUT_TOKENS = 128;
 
 export function sanitizeResponsesBodyForProxy(
   body: Record<string, unknown>,

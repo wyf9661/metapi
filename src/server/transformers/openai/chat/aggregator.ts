@@ -1,4 +1,3 @@
-import { type NormalizedFinalResponse, type NormalizedStreamEvent } from '../../shared/normalized.js';
 import type {
   OpenAiChatChoice,
   OpenAiChatChoiceDelta,

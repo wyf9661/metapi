@@ -1,6 +1,4 @@
 import {
-  compareStableVersions,
-  isSameImageTarget,
   resolveUpdateReminderCandidate,
   type UpdateHelperRuntimeLike,
   type UpdateVersionCandidateLike,
@@ -17,10 +15,6 @@ function normalizeString(value?: string | null): string {
   return String(value || '').trim();
 }
 
-function normalizeDigest(value?: string | null): string {
-  const digest = normalizeString(value);
-  return /^sha256:[a-f0-9]{64}$/i.test(digest) ? digest.toLowerCase() : '';
-}
 
 export function buildUpdateReminder(input: {
   currentVersion?: string | null;

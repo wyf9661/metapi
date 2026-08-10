@@ -1,11 +1,7 @@
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
-import {
-  getProxyUrlFromExtraConfig,
-  mergeAccountExtraConfig,
-  resolveProxyUrlFromExtraConfig,
-} from '../accountExtraConfig.js';
+import {getProxyUrlFromExtraConfig, mergeAccountExtraConfig} from '../accountExtraConfig.js';
 import { refreshModelsForAccount } from '../modelService.js';
 import * as routeRefreshWorkflow from '../routeRefreshWorkflow.js';
 import {
@@ -22,14 +18,7 @@ import {
   type OAuthProviderDefinition,
 } from './providers.js';
 import { ensureOauthProviderSite } from './oauthSiteRegistry.js';
-import {
-  buildOauthInfo,
-  buildOauthInfoFromAccount,
-  buildStoredOauthState,
-  buildStoredOauthStateFromAccount,
-  getOauthInfoFromAccount,
-  type OauthInfo,
-} from './oauthAccount.js';
+import {buildOauthInfo, buildOauthInfoFromAccount, buildStoredOauthState, buildStoredOauthStateFromAccount, getOauthInfoFromAccount} from './oauthAccount.js';
 import {
   buildCodexOauthInfo,
   type OauthExtraConfigInput,
@@ -204,7 +193,7 @@ function mapImportedOauthProvider(platform: string): OAuthProviderId | null {
 }
 
 function resolveImportedOauthIdentity(
-  provider: OAuthProviderId,
+  _provider: OAuthProviderId,
   credentials: Record<string, unknown>,
 ): {
   accessToken: string;

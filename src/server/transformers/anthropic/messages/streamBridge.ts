@@ -903,7 +903,7 @@ export function consumeAnthropicSseEvent(
   eventBlock: { event: string; data: string },
   streamContext: StreamTransformContext,
   downstreamContext: ClaudeDownstreamContext,
-  fallbackModel: string,
+  _fallbackModel: string,
 ): AnthropicConsumedSseEvent {
   const context = ensureContext(downstreamContext);
   let parsedPayload: unknown = null;

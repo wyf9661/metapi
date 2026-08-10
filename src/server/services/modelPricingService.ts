@@ -341,7 +341,7 @@ function buildTokenCandidates(input: EstimateProxyCostInput): string[] {
   return Array.from(new Set(candidates));
 }
 
-async function fetchCommonPricing(baseUrl: string, token?: string, sitePlatform?: string): Promise<PricingData | null> {
+async function fetchCommonPricing(baseUrl: string, token?: string, _sitePlatform?: string): Promise<PricingData | null> {
   const shouldTryShieldCookie = !!token && token.includes('=');
   if (shouldTryShieldCookie) {
     const payload = await fetchJsonViaNewApiShield(`${baseUrl}/api/pricing`, token!);
@@ -724,7 +724,7 @@ export async function refreshModelPricingCatalog(input: EstimateProxyCostInput):
   return buildModelPricingCatalogFromData(pricingData);
 }
 
-export function fallbackTokenCost(totalTokens: number, platform: string): number {
+export function fallbackTokenCost(totalTokens: number, _platform: string): number {
   return roundCost(toPositiveInt(totalTokens) / 500_000);
 }
 

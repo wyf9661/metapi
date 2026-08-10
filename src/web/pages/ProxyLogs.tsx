@@ -7,19 +7,7 @@ import React, {
   useCallback,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  api,
-  type RuntimeSettingsPayload,
-  type ProxyDebugTraceDetail,
-  type ProxyDebugTraceListItem,
-  type ProxyLogBillingDetails,
-  type ProxyLogClientOption,
-  type ProxyLogDetail,
-  type ProxyLogListItem,
-  type ProxyLogsSummary,
-  type ProxyLogStatusFilter,
-  type ProxyLogUsageSource,
-} from "../api.js";
+import {api, type ProxyDebugTraceDetail, type ProxyDebugTraceListItem, type ProxyLogDetail, type ProxyLogListItem, type ProxyLogsSummary, type ProxyLogStatusFilter} from "../api.js";
 import { useToast } from "../components/Toast.js";
 import { ModelBadge } from "../components/BrandIcon.js";
 import CenteredModal from "../components/CenteredModal.js";
@@ -32,64 +20,8 @@ import { useIsMobile } from "../components/useIsMobile.js";
 import { formatDateTimeLocal } from "./helpers/checkinLogTime.js";
 import ModernSelect from "../components/ModernSelect.js";
 import { parseProxyLogPathMeta } from "./helpers/proxyLogPathMeta.js";
-import {
-  DEFAULT_PAGE_SIZE,
-  DEFAULT_PROXY_DEBUG_SETTINGS,
-  DEBUG_REFRESH_INTERVAL_MS,
-  DEBUG_TRACE_PAGE_SIZE,
-  EMPTY_SUMMARY,
-  PAGE_SIZES,
-  TRACE_TABLE_LIMIT,
-  buildBillingProcessLines,
-  buildProxyDebugSettingsPayload,
-  buildProxyLogsRouteSearch,
-  firstByteBgColor,
-  firstByteColor,
-  formatBillingDetailSummary,
-  formatCompactNumber,
-  formatDateTimeInputValue,
-  formatFirstByteLabel,
-  formatLatency,
-  formatProxyDebugCaptureSummary,
-  formatProxyDebugTargetSummary,
-  formatProxyLogClientFamilyLabel,
-  formatProxyLogTokenValue,
-  formatProxyLogUsageSource,
-  formatStreamModeLabel,
-  latencyBgColor,
-  latencyColor,
-  normalizeProxyDebugSettings,
-  parseStoredDebugPreview,
-  persistDebugTracePanelExpanded,
-  readProxyLogsRouteState,
-  readStoredDebugTracePanelExpanded,
-  renderDownstreamKeySummary,
-  resolveProxyLogClientDisplay,
-  stringifyStoredDebugValue,
-  toApiTimeBoundary,
-  type ProxyDebugSettingsState,
-  type ProxyLogRenderItem,
-  type StoredDebugPreviewPayload,
-} from "./helpers/proxyLogsHelpers.js";
-import {
-  CompactSummaryMetric,
-  DetailDisclosureCard,
-  copyTextToClipboard,
-  debugCheckboxRowStyle,
-  debugCodeBlockStyle,
-  detailExpandableCardStyle,
-  detailExpandableSummaryStyle,
-  detailInfoGridStyle,
-  detailInfoItemStyle,
-  detailInfoLabelStyle,
-  detailInfoValueStyle,
-  detailSectionTitleStyle,
-  formInputStyle,
-  formSectionLabelStyle,
-  formSectionStyle,
-  renderProxyLogClientCell,
-  StreamModeIcon,
-} from "./helpers/proxyLogsUi.js";
+import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, PAGE_SIZES, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from "./helpers/proxyLogsHelpers.js";
+import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from "./helpers/proxyLogsUi.js";
 import {
   renderStoredDebugDetails,
   renderTraceStatusBadge,

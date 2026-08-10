@@ -1,4 +1,3 @@
-import { schema } from '../../db/index.js';
 import type { OauthQuotaSnapshot } from './quotaTypes.js';
 
 type ParsedOauthInfo = {

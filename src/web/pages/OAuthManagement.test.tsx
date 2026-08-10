@@ -62,13 +62,6 @@ function findOauthSettingInput(root: WebTestRenderer, key: string) {
   ));
 }
 
-function findOauthImportSettingInput(root: WebTestRenderer, key: string) {
-  return root.root.find((node) => (
-    node.type === 'input'
-    && node.props['data-oauth-import-setting'] === key
-  ));
-}
-
 function findAllByClassName(root: WebTestRenderer, className: string) {
   return root.root.findAll((node) => (
     typeof node.props?.className === 'string'

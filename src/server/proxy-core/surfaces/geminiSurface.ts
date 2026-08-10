@@ -327,7 +327,6 @@ export async function geminiProxyRoute(app: FastifyInstance) {
       downstreamPath,
       headers: request.headers as Record<string, unknown>,
     });
-    const requestTraceId = createRequestTraceId();
     const debugTrace = await startSurfaceProxyDebugTrace({
       downstreamPath,
       clientKind: clientContext.clientKind,

@@ -1,24 +1,12 @@
-import { timingSafeEqual } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { minimatch } from 'minimatch';
 import { db, schema } from '../db/index.js';
-import { config } from '../config.js';
 import {
   EMPTY_DOWNSTREAM_ROUTING_POLICY,
   type DownstreamExcludedCredentialRef,
   type DownstreamRoutingPolicy,
 } from './downstreamPolicyTypes.js';
 
-function secretsEqualProxy(left: string, right: string): boolean {
-  const a = Buffer.from(String(left || ''), 'utf8');
-  const b = Buffer.from(String(right || ''), 'utf8');
-  if (a.length === 0 || b.length === 0) return false;
-  if (a.length !== b.length) {
-    timingSafeEqual(a, a);
-    return false;
-  }
-  return timingSafeEqual(a, b);
-}
 
 
 function currentDailyWindowDate(nowMs = Date.now(), timeZone = process.env.TZ || 'Asia/Shanghai'): string {

@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, or } from 'drizzle-orm';
+import {and, eq, gt, inArray, isNotNull} from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { config } from '../config.js';
 import { isUsableAccountToken } from './accountTokenService.js';

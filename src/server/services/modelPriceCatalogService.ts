@@ -128,7 +128,7 @@ export function parseModelsDevPrices(jsonText: string): Map<string, ModelsDevCos
   const providers = payload as Record<string, unknown>;
   const result = new Map<string, ModelsDevCost>();
 
-  const ingestProvider = (providerName: string, value: unknown): void => {
+  const ingestProvider = (_providerName: string, value: unknown): void => {
     if (!value || typeof value !== 'object') return;
     const models = (value as Record<string, unknown>).models;
     if (!models || typeof models !== 'object') return;

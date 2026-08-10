@@ -1,5 +1,3 @@
-import { useId } from 'react';
-
 interface DateTimeInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -26,8 +24,6 @@ export default function DateTimeInput({
   placeholder = '选择日期时间',
   label,
 }: DateTimeInputProps) {
-  const id = useId();
-
   return (
     <span className="dt-input-wrapper">
       {label && <span className="dt-input-label">{label}</span>}

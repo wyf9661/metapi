@@ -175,15 +175,6 @@ function sanitizeAnthropicThinkingConfig(
   return { value: { type } };
 }
 
-function normalizeOpenAiToolArguments(raw: unknown): string {
-  if (typeof raw === 'string') return raw;
-  if (raw === undefined || raw === null) return '';
-  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
-  if (Array.isArray(raw) || isRecord(raw)) {
-    return safeJsonStringify(raw);
-  }
-  return '';
-}
 
 function isAnthropicWebSearchTool(value: Record<string, unknown>): boolean {
   const type = asTrimmedString(value.type).toLowerCase();

@@ -1,4 +1,3 @@
-﻿import Database from 'better-sqlite3';
 import currentSchemaContract from '../db/generated/schemaContract.json' with { type: 'json' };
 import { db, schema } from '../db/index.js';
 import {

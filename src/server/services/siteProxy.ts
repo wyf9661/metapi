@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { db, schema } from '../db/index.js';
-import { eq } from 'drizzle-orm';
-import { config } from '../config.js';
 import { lookup as dnsLookup } from 'node:dns';
 import { isIP, type Socket } from 'node:net';
 import { connect as tlsConnect, type TLSSocket } from 'node:tls';

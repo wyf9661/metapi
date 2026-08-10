@@ -40,17 +40,6 @@ function normalizePlatformName(platform: unknown): string {
 }
 
 /** Site custom headers that look like a Codex client → force responses-first. */
-function siteCustomHeadersPreferResponses(customHeaders: unknown): boolean {
-  const raw = asTrimmedString(customHeaders);
-  if (!raw) return false;
-  const lower = raw.toLowerCase();
-  if (lower.includes('codex_cli_rs') || lower.includes('openai-codex') || lower.includes('codex_vscode')) {
-    return true;
-  }
-  if (lower.includes('user-agent') && lower.includes('codex')) return true;
-  if (lower.includes('originator') && lower.includes('codex')) return true;
-  return false;
-}
 
 function normalizeEndpointTypes(value: unknown): UpstreamEndpoint[] {
   const raw = asTrimmedString(value).toLowerCase();

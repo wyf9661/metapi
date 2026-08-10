@@ -1,10 +1,4 @@
-import {
-  extractGeminiGenerateContentResponseMetadata,
-  extractGeminiGenerateContentTransformerMetadata,
-  geminiGenerateContentResponseBridge,
-  serializeGeminiGenerateContentAggregateResponse,
-} from './responseBridge.js';
-
+import {geminiGenerateContentResponseBridge} from './responseBridge.js';
 export const geminiGenerateContentOutbound = geminiGenerateContentResponseBridge;
 
 export {

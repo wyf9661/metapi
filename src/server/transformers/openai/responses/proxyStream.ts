@@ -9,7 +9,6 @@ import {
   serializeResponsesUpstreamFinalAsStream,
 } from './streamBridge.js';
 import { config } from '../../../config.js';
-import { asTrimmedString } from '../../../shared/trimString.js';
 
 
 type StreamReader = {

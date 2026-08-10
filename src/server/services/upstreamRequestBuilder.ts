@@ -91,7 +91,6 @@ const METAPI_INTERNAL_HEADER_BLOCKLIST = new Set([
   'x-metapi-responses-websocket-transport',
 ]);
 
-const ANTIGRAVITY_RUNTIME_USER_AGENT = 'antigravity/1.19.6 darwin/arm64';
 
 function shouldSkipPassthroughHeader(key: string): boolean {
   if (HOP_BY_HOP_HEADERS.has(key) || BLOCKED_PASSTHROUGH_HEADERS.has(key)) return true;
@@ -228,18 +227,6 @@ function stripClaudeMessagesContinuationFields(
   return next;
 }
 
-function buildAntigravityRuntimeHeaders(input: {
-  baseHeaders: Record<string, string>;
-  stream: boolean;
-}): Record<string, string> {
-  const headers: Record<string, string> = {
-    Authorization: input.baseHeaders.Authorization,
-    'Content-Type': 'application/json',
-    Accept: input.stream ? 'text/event-stream' : 'application/json',
-    'User-Agent': ANTIGRAVITY_RUNTIME_USER_AGENT,
-  };
-  return headers;
-}
 
 function ensureStreamAcceptHeader(
   headers: Record<string, string>,
@@ -450,9 +437,6 @@ function sanitizeResponsesFallbackChatBody(
   return next;
 }
 
-function toFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
 
 function normalizeSub2ApiResponsesBodyForProxy(
   body: Record<string, unknown>,

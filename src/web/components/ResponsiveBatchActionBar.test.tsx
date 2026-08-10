@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { create } from 'react-test-renderer';
 import ResponsiveBatchActionBar from './ResponsiveBatchActionBar.js';

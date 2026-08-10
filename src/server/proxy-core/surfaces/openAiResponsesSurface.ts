@@ -4,13 +4,7 @@ import { config } from '../../config.js';
 import { reportProxyAllFailed } from '../../services/alertService.js';
 import { hasProxyUsagePayload, mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
-import {
-  extractResponsesTerminalResponseId,
-  isResponsesPreviousResponseNotFoundError,
-  shouldInferResponsesPreviousResponseId,
-  stripResponsesPreviousResponseId,
-  withResponsesPreviousResponseId,
-} from '../../transformers/openai/responses/continuation.js';
+import {isResponsesPreviousResponseNotFoundError, shouldInferResponsesPreviousResponseId, stripResponsesPreviousResponseId, withResponsesPreviousResponseId} from '../../transformers/openai/responses/continuation.js';
 import {
   buildUpstreamEndpointRequest,
   resolveUpstreamEndpointCandidates,
@@ -25,7 +19,6 @@ import { ensureModelAllowedForDownstreamKey, getDownstreamRoutingPolicy, recordD
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
 import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
-import { normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
 import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transformers/shared/endpointCompatibility.js';
 
 import {
@@ -50,12 +43,7 @@ import { isCodexResponsesSurface } from '../cliProfiles/codexProfile.js';
 import { getObservedResponseMeta } from '../firstByteTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
 import { runCodexHttpSessionTask } from '../runtime/codexHttpSessionQueue.js';
-import {
-  buildCodexSessionResponseStoreKey,
-  clearCodexSessionResponseId,
-  getCodexSessionResponseId,
-  setCodexSessionResponseId,
-} from '../runtime/codexSessionResponseStore.js';
+import {buildCodexSessionResponseStoreKey, clearCodexSessionResponseId, getCodexSessionResponseId} from '../runtime/codexSessionResponseStore.js';
 import {
   summarizeConversationFileInputsInOpenAiBody,
   summarizeConversationFileInputsInResponsesBody,
@@ -112,20 +100,7 @@ import {
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
 import { canFailoverToNextChannel, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
-import {
-  carriesResponsesFileUrlInput,
-  finalizeRetryAsExecutionFailure,
-  finalizeRetryAsUpstreamFailure,
-  getCodexSessionHeaderValue,
-  hasResponsesReasoningRequest,
-  isRecord,
-  isResponsesWebsocketTransportRequest,
-  normalizeIncludeList,
-  rememberCodexSessionResponseId,
-  shouldRefreshOauthResponsesRequest,
-  wantsNativeResponsesReasoning,
-} from './openAiResponsesSurface.pure.js';
-
+import {carriesResponsesFileUrlInput, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, getCodexSessionHeaderValue, isRecord, isResponsesWebsocketTransportRequest, rememberCodexSessionResponseId, shouldRefreshOauthResponsesRequest, wantsNativeResponsesReasoning} from './openAiResponsesSurface.pure.js';
 type UsageSummary = ReturnType<typeof parseProxyUsage>;
 
 export async function handleOpenAiResponsesSurfaceRequest(

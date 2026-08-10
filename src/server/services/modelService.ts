@@ -9,21 +9,13 @@ import {
   isMaskedTokenValue,
   isUsableAccountToken,
 } from './accountTokenService.js';
-import {
-  getCredentialModeFromExtraConfig,
-  mergeAccountExtraConfig,
-  resolveProxyUrlFromExtraConfig,
-  requiresManagedAccountTokens,
-  resolvePlatformUserId,
-  supportsDirectAccountRoutingConnection,
-} from './accountExtraConfig.js';
+import {mergeAccountExtraConfig, resolveProxyUrlFromExtraConfig, requiresManagedAccountTokens, resolvePlatformUserId, supportsDirectAccountRoutingConnection} from './accountExtraConfig.js';
 import { invalidateTokenRouterCache } from './tokenRouter.js';
 import { config } from '../config.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { clearAllRouteDecisionSnapshots } from './routeDecisionSnapshotStore.js';
 import { rebuildAllPatternRouteChannels } from './patternRouteChannelSyncService.js';
 import { withAccountProxyOverride } from './siteProxy.js';
-import { isCodexPlatform } from './oauth/codexAccount.js';
 import { buildStoredOauthStateFromAccount, getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { refreshOauthAccessTokenSingleflight } from './oauth/refreshSingleflight.js';
 import { listEnabledOauthRouteUnitsWithMembers } from './oauth/routeUnitService.js';

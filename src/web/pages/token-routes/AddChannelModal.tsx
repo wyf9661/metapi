@@ -83,7 +83,6 @@ export default function AddChannelModal({
         delete next[account.id];
         return next;
       }
-      const tokens = candidateView.tokenOptionsByAccountId[account.id] || [];
       return {
         ...prev,
         [account.id]: {

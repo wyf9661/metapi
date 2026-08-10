@@ -13,13 +13,7 @@ import {
   readSnapshotCache,
   type SnapshotEnvelope,
 } from "./snapshotCacheService.js";
-import {
-  buildSiteAvailabilitySummariesFromHourlyAggregates,
-  buildModelAvailabilitySummaries,
-  proxyCostSqlExpression,
-  type SiteAvailabilitySiteRow,
-  toRoundedMicroNumber,
-} from "./statsShared.js";
+import {buildSiteAvailabilitySummariesFromHourlyAggregates, buildModelAvailabilitySummaries, type SiteAvailabilitySiteRow, toRoundedMicroNumber} from "./statsShared.js";
 import { estimateRewardWithTodayIncomeFallback } from "./todayIncomeRewardService.js";
 import { createAdminSnapshotPersistence } from "./adminSnapshotStore.js";
 import { runUsageAggregationProjectionPass } from "./usageAggregationService.js";

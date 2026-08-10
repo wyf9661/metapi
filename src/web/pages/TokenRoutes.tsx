@@ -2,7 +2,7 @@ import { Fragment, startTransition, useCallback, useEffect, useMemo, useRef, use
 import { useNavigate } from 'react-router-dom';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { api } from '../api.js';
-import { BrandGlyph, getBrand, InlineBrandIcon, type BrandInfo } from '../components/BrandIcon.js';
+import { BrandGlyph, getBrand, type BrandInfo } from '../components/BrandIcon.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
@@ -25,7 +25,6 @@ import {
 import { buildVisibleRouteList } from './helpers/routeListVisibility.js';
 import { buildZeroChannelPlaceholderRoutes } from './helpers/zeroChannelRoutes.js';
 import {
-  getRouteRoutingStrategyDescription,
   getRouteRoutingStrategyLabel,
   normalizeRouteRoutingStrategyValue,
 } from './token-routes/routingStrategy.js';
@@ -55,7 +54,6 @@ import {
   resolveRouteIcon,
   toBrandIconValue,
   normalizeRouteDisplayIconValue,
-  inferEndpointTypesFromPlatform,
   getModelPatternError,
 } from './token-routes/utils.js';
 import { applyPriorityRailDrop, isPriorityRailNewLayerId } from './token-routes/priorityRail.js';
@@ -508,12 +506,6 @@ export default function TokenRoutes() {
     }
   };
 
-  const exactRouteCount = useMemo(
-    () => buildVisibleRouteList(routeSummaries, isExactModelPattern, matchesModelPattern)
-      .filter((route) => isRouteExactModel(route)).length,
-    [routeSummaries],
-  );
-
   const zeroChannelPlaceholderRoutes = useMemo(
     () => buildZeroChannelPlaceholderRoutes(routeSummaries, missingTokenModelsByName, missingTokenGroupModelsByName),
     [routeSummaries, missingTokenModelsByName, missingTokenGroupModelsByName],
@@ -861,10 +853,6 @@ export default function TokenRoutes() {
       })
   ), [listVisibleRoutes, routeBrandById]);
 
-  const activeGroupRoute = useMemo(() => {
-    if (typeof activeGroupFilter !== 'number') return null;
-    return listVisibleRoutes.find((route) => route.id === activeGroupFilter) || null;
-  }, [activeGroupFilter, listVisibleRoutes]);
 
   const sortedRoutes = useMemo(() => (
     [...listVisibleRoutes].sort((a, b) => {
@@ -1347,20 +1335,6 @@ export default function TokenRoutes() {
     }
   };
 
-  const handleBatchClearCooldown = async () => {
-    const ids = Array.from(selectedRouteIds).filter((id) => selectableRouteIds.has(id));
-    if (ids.length === 0) return;
-    setBatchUpdatingRoutes(true);
-    try {
-      const res = await api.clearRouteCooldownBatch(ids);
-      toast.success(`已清除 ${res?.clearedRoutes || 0} 条路由冷却（通道 ${res?.clearedChannels || 0}）`);
-      await load();
-    } catch (e: any) {
-      toast.error(e.message || '批量清除冷却失败');
-    } finally {
-      setBatchUpdatingRoutes(false);
-    }
-  };
 
   const toggleExpand = async (routeId: number) => {
     const isCurrentlyExpanded = expandedRouteIds.includes(routeId);

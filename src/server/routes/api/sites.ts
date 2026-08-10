@@ -47,9 +47,6 @@ function normalizePinnedFlag(input: unknown): boolean | null {
   return null;
 }
 
-function normalizeUseSystemProxyFlag(input: unknown): boolean | null {
-  return normalizePinnedFlag(input);
-}
 
 function normalizeCustomHeadersOverrideRequestHeadersFlag(input: unknown): boolean | null {
   return normalizePinnedFlag(input);

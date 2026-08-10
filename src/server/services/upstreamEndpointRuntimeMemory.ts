@@ -210,7 +210,7 @@ function inferSuggestedEndpointFromError(
   return suggestedEndpoint && endpoint !== suggestedEndpoint ? suggestedEndpoint : null;
 }
 
-function endpointTransientBlockTtlMs(status: number, errorText?: string | null): number {
+function endpointTransientBlockTtlMs(_status: number, errorText?: string | null): number {
   const text = String(errorText || '').toLowerCase();
   if (
     text.includes('your request was blocked')

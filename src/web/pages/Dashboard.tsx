@@ -632,13 +632,8 @@ export default function Dashboard({
   const proxy24hSuccess = safeNumber(data?.proxy24h?.success);
   const proxy24hTotal = safeNumber(data?.proxy24h?.total);
   const totalTokens = safeNumber(data?.proxy24h?.totalTokens);
-  const performanceWindowSeconds = Math.max(
-    1,
-    safeNumber(data?.performance?.windowSeconds) || 60,
-  );
   const requestsPerMinute = safeNumber(data?.performance?.requestsPerMinute);
   const tokensPerMinute = safeNumber(data?.performance?.tokensPerMinute);
-  const qualitySampleCount = safeNumber(data?.performance?.qualitySampleCount);
   const qualitySuccessRate = typeof data?.performance?.successRatePercent === "number"
     ? data.performance.successRatePercent
     : null;
@@ -648,7 +643,6 @@ export default function Dashboard({
   const p95LatencyMs = typeof data?.performance?.p95LatencyMs === "number"
     ? data.performance.p95LatencyMs
     : null;
-  const qualitySparse = Boolean(data?.performance?.qualitySparse);
   const rawSiteAvailability: SiteAvailabilitySummary[] = Array.isArray(
     insightsData?.siteAvailability,
   )

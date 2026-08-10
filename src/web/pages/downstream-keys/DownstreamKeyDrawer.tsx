@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, type DownstreamApiKeyTrendResponse } from '../../api.js';
 import { useToast } from '../../components/Toast.js';

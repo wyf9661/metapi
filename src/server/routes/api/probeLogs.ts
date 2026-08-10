@@ -5,7 +5,7 @@ import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
 
 export async function registerProbeLogsRoutes(app: FastifyInstance) {
   // 获取测活日志列表
-  app.get('/api/probe-logs', async (request, reply) => {
+  app.get('/api/probe-logs', async (request, _reply) => {
     const {
       siteId,
       accountId,
@@ -96,7 +96,7 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
   });
 
   // 清理旧的测活日志
-  app.post('/api/probe-logs/cleanup', async (request, reply) => {
+  app.post('/api/probe-logs/cleanup', async (request, _reply) => {
     const { daysToKeep = 7 } = request.body as { daysToKeep?: number };
 
     const cutoffDate = new Date();
@@ -114,7 +114,7 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
   });
 
   // 获取测活筛选选项（站点/账号/模型去重列表）
-  app.get('/api/probe-logs/filters', async (request, reply) => {
+  app.get('/api/probe-logs/filters', async (_request, _reply) => {
     const siteRows = await db
       .selectDistinct({
         siteId: probeLogs.siteId,
@@ -152,7 +152,7 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
   });
 
   // 获取测活统计
-  app.get('/api/probe-logs/stats', async (request, reply) => {
+  app.get('/api/probe-logs/stats', async (request, _reply) => {
     const { startTime, endTime } = request.query as {
       startTime?: string;
       endTime?: string;

@@ -17,7 +17,7 @@ import { decryptAccountPassword } from './accountCredentialService.js';
 import { extractRuntimeHealth, setAccountRuntimeHealth } from './accountHealthService.js';
 import { updateTodayIncomeSnapshot } from './todayIncomeRewardService.js';
 import type { BalanceInfo } from './platforms/base.js';
-import { withAccountProxyOverride, withSiteProxyRequestInit, withSiteRecordProxyRequestInit } from './siteProxy.js';
+import { withAccountProxyOverride, withSiteProxyRequestInit } from './siteProxy.js';
 import {
   isManagedSub2ApiTokenDue,
   isSub2ApiPlatform,
@@ -129,7 +129,7 @@ function extractLogTotal(payload: any): number | null {
   return null;
 }
 
-function resolveQuotaConversionFactor(platform?: string | null): number {
+function resolveQuotaConversionFactor(_platform?: string | null): number {
   return 500_000;
 }
 

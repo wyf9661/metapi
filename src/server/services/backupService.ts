@@ -1126,9 +1126,6 @@ function parseSettingValue(raw: string | null): unknown {
   }
 }
 
-function stringifySettingValue(value: unknown): string {
-  return JSON.stringify(value);
-}
 
 function isValidBackupExportType(value: unknown): value is BackupExportType {
   return value === 'all' || value === 'accounts' || value === 'preferences';

@@ -32,7 +32,7 @@ import type {
   MissingTokenGroupRouteSiteActionItem,
   RouteRoutingStrategy,
 } from './types.js';
-import type { RouteCandidateView, RouteTokenOption } from '../helpers/routeModelCandidatesIndex.js';
+import type { RouteCandidateView } from '../helpers/routeModelCandidatesIndex.js';
 import { SortableChannelRow } from './SortableChannelRow.js';
 import {
   getRouteRoutingStrategyLabel,
@@ -53,7 +53,6 @@ import {
   buildPriorityRailNodeStyle,
   buildPriorityRailSections,
   createPriorityRailNewLayerId,
-  isPriorityRailNewLayerId,
 } from './priorityRail.js';
 import { translateOnlyRectSortingStrategy } from './sortingStrategies.js';
 
@@ -562,8 +561,6 @@ function RouteCardInner({
   onCreateTokenForMissing,
   onAddChannel,
   onSiteBlockModel,
-  expandedSourceGroupMap,
-  onToggleSourceGroup,
 }: RouteCardProps) {
   const routeIcon = resolveRouteIcon(route);
   const exactRoute = isRouteExactModel(route);

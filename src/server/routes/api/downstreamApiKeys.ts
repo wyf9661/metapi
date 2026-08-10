@@ -9,7 +9,6 @@ import {
   toDownstreamApiKeyPolicyView,
   toPersistenceJson,
 } from '../../services/downstreamApiKeyService.js';
-import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import type { DownstreamExcludedCredentialRef } from '../../services/downstreamPolicyTypes.js';
 import {
   readDownstreamApiKeyTrendBuckets,

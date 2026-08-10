@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import cron from 'node-cron';
-import { fetch } from 'undici';
 import { config, normalizeTokenRouterFailureCooldownMaxSec } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
@@ -35,7 +34,6 @@ import {
 } from '../../contracts/settingsRoutePayloads.js';
 import { formatUtcSqlDateTime, getResolvedTimeZone } from '../../services/localTimeService.js';
 import { extractClientIp, findInvalidIpAllowlistEntries, isIpAllowed } from '../../middleware/auth.js';
-import { invalidateSiteProxyCache, normalizeSiteProxyUrl, withExplicitProxyRequestInit } from '../../services/siteProxy.js';
 import { performFactoryReset } from '../../services/factoryResetService.js';
 import { normalizeLogCleanupRetentionDays } from '../../shared/logCleanupRetentionDays.js';
 import { stopProxyLogRetentionService } from '../../services/proxyLogRetentionService.js';
@@ -105,12 +103,6 @@ interface RuntimeSettingsBody {
   proxyEmptyContentFailEnabled?: boolean;
 }
 
-interface DatabaseMigrationBody {
-  dialect?: unknown;
-  connectionString?: unknown;
-  overwrite?: unknown;
-  ssl?: unknown;
-}
 
 interface BackupWebdavConfigBody {
   enabled?: unknown;

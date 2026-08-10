@@ -26,7 +26,6 @@ import {
 } from './helpers/routingProfiles.js';
 import { clearAuthSession } from '../authSession.js';
 import { clearAppInstallationState } from '../appLocalState.js';
-import { tr } from '../i18n.js';
 import {
   CHECKIN_INTERVAL_OPTIONS,
   CHECKIN_SCHEDULE_MODE_OPTIONS,
@@ -37,7 +36,6 @@ import {
   buildShorthandConnectionString,
   createEmptyPayloadRuleDrafts,
   defaultWeights,
-  formatPayloadRuleSectionForEditor,
   getDialectDefaults,
   inferUrlDialect,
   normalizePayloadRulesForEditor,
@@ -255,11 +253,6 @@ export default function Settings() {
     flexDirection: 'column',
     gap: 16,
   };
-  const settingsModernDangerCardStyle: React.CSSProperties = {
-    ...settingsModernCardStyle,
-    borderColor: 'color-mix(in srgb, var(--color-danger) 22%, var(--color-border))',
-    background: 'linear-gradient(180deg, color-mix(in srgb, var(--color-danger-soft) 18%, var(--color-bg-card)) 0%, var(--color-bg-card) 100%)',
-  };
   const settingsModernHeaderStyle: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'space-between',
@@ -287,14 +280,6 @@ export default function Settings() {
     display: 'flex',
     flexWrap: 'wrap',
     gap: 8,
-  };
-  const settingsModernCalloutStyle: React.CSSProperties = {
-    display: 'grid',
-    gap: 6,
-    padding: '14px 16px',
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--color-border-light)',
-    background: 'color-mix(in srgb, var(--color-bg) 82%, var(--color-bg-card))',
   };
   const settingsModernToggleStyle: React.CSSProperties = {
     display: 'flex',

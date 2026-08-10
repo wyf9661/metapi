@@ -110,7 +110,6 @@ describe('Models marketplace text', () => {
         && node.props.className.includes('model-card-action-btn')
         && (node.props['data-tooltip'] === '展开' || node.props['data-tooltip'] === '收起')
       ))[0];
-      const name = expandButton.props['data-tooltip'];
 
       await act(async () => {
         expandButton.props.onClick();

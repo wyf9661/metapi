@@ -1,14 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-  type ReactNode,
-} from 'react';
-import { createPortal } from 'react-dom';
+import {useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent} from 'react';
 import { useLocation } from 'react-router-dom';
 import CenteredModal from '../components/CenteredModal.js';
 import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
@@ -16,45 +6,10 @@ import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
-import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import OAuthModelsModal, { type OAuthModelItem } from './oauth/OAuthModelsModal.js';
-import {
-  QuotaWindowRow,
-  SideDrawer,
-  compactAccountKey,
-  formatResetLabel,
-  hasOauthProxySelection,
-  renderCodeBlock,
-  renderGuideCard,
-  resolveConnectionEmailLabel,
-  resolveConnectionPrimaryTitle,
-  resolveConnectionRouteParticipation,
-  resolveConnectionStatusLabel,
-  resolveModelSyncDetail,
-  resolveModelSyncStatusText,
-  resolveProxyDisplayText,
-  resolveProxyProjectSummary,
-  resolveQuotaSourceLabel,
-  resolveQuotaStatusLabel,
-  resolveQuotaSyncDetail,
-  resolveQuotaSyncStatusText,
-  resolveQuotaWindowPercent,
-  resolveQuotaWindowSummary,
-  resolveRouteParticipationSummary,
-  resolveRouteUnitStrategyLabel,
-} from './oauth/connectionPresentation.js';
-import {
-  api,
-  type OAuthConnectionInfo,
-  type OAuthProviderInfo,
-  type OAuthRouteParticipation,
-  type OAuthRouteUnitStrategy,
-  type OAuthQuotaInfo,
-  type OAuthQuotaWindowInfo,
-  type OAuthStartInstructions,
-} from '../api.js';
-
+import {QuotaWindowRow, SideDrawer, compactAccountKey, hasOauthProxySelection, renderCodeBlock, renderGuideCard, resolveConnectionEmailLabel, resolveConnectionPrimaryTitle, resolveConnectionRouteParticipation, resolveConnectionStatusLabel, resolveModelSyncDetail, resolveModelSyncStatusText, resolveProxyDisplayText, resolveProxyProjectSummary, resolveQuotaSourceLabel, resolveQuotaStatusLabel, resolveQuotaSyncDetail, resolveQuotaSyncStatusText, resolveRouteParticipationSummary, resolveRouteUnitStrategyLabel} from './oauth/connectionPresentation.js';
+import {api, type OAuthConnectionInfo, type OAuthProviderInfo, type OAuthRouteUnitStrategy, type OAuthStartInstructions} from '../api.js';
 const POLL_INTERVAL_MS = 1500;
 const CONNECTION_PAGE_LIMIT = 200;
 const AUTO_REFRESH_OPTIONS = [0, 5, 10, 15, 30] as const;

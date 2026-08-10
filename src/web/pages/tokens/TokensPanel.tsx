@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { copyText } from '../../clipboard.js';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import CenteredModal from '../../components/CenteredModal.js';
 import ResponsiveFilterPanel from '../../components/ResponsiveFilterPanel.js';
@@ -297,7 +297,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
           ? res.groups.map((item: any) => String(item || '').trim()).filter(Boolean)
           : [];
         const normalized = Array.from(new Set(groups));
-        setEditGroupOptions((current) => {
+        setEditGroupOptions((_current) => {
           const next = normalized.length > 0 ? normalized : ['default'];
           if (next.includes(currentGroup)) return next;
           return [...next, currentGroup];

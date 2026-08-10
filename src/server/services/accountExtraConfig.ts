@@ -1,4 +1,3 @@
-import { config } from '../config.js';
 import type { SubscriptionPlanSummary, SubscriptionSummary } from './platforms/base.js';
 
 type AutoReloginConfig = {

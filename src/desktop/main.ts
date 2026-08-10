@@ -21,7 +21,7 @@ import {
   resolveDesktopServerWorkingDir,
   waitForServerReady,
 } from './runtime.js';
-import { getDesktopRuntimeIconPath, getDesktopTrayIconPath } from './iconAssets.js';
+import {getDesktopTrayIconPath} from './iconAssets.js';
 import { attachDesktopNavigationGuard, createSafeOpenExternal } from './navigationGuard.js';
 
 const { autoUpdater } = electronUpdater;

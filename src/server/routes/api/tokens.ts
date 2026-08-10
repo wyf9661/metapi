@@ -626,16 +626,6 @@ async function fetchChannelsForRouteRows(
   return channelsByRoute;
 }
 
-async function fetchChannelsForRoutes(routeIds: number[]): Promise<Map<number, any[]>> {
-  if (routeIds.length === 0) return new Map();
-  return await fetchChannelsForRouteRows(await listRoutesWithSources()).then((channelsByRoute) => {
-    const filtered = new Map<number, any[]>();
-    for (const routeId of routeIds) {
-      filtered.set(routeId, channelsByRoute.get(routeId) || []);
-    }
-    return filtered;
-  });
-}
 
 async function buildRouteChannelSummaryMap(routes: RouteRow[]): Promise<Map<number, RouteChannelSummary>> {
   const channelsByRoute = await fetchChannelsForRouteRows(routes, { includeRouteUnitDetails: false });

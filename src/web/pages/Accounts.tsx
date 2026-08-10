@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import CenteredModal from "../components/CenteredModal.js";
 import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";
-import ResponsiveFormGrid from "../components/ResponsiveFormGrid.js";
 import { useToast } from "../components/Toast.js";
 import ModernSelect from "../components/ModernSelect.js";
 import { MobileCard, MobileField } from "../components/MobileCard.js";
@@ -149,19 +148,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     accountName?: string;
   }>(null);
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState({
-    username: "",
-    status: "active",
-    checkinEnabled: true,
-    unitCost: "",
-    accessToken: "",
-    apiToken: "",
-    isPinned: false,
-    refreshToken: "",
-    tokenExpiresAt: "",
-    platformUserId: "",
-  });
-  const [savingEdit, setSavingEdit] = useState(false);
   const [rebindTarget, setRebindTarget] = useState<any | null>(null);
   const [rebindForm, setRebindForm] = useState(() => createRebindForm());
   const [rebindVerifyResult, setRebindVerifyResult] = useState<any>(null);
@@ -603,45 +589,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     }
   };
 
-  const formatModelSuccess = (refresh: any) => {
-    const models = Array.isArray(refresh?.modelsPreview)
-      ? refresh.modelsPreview
-      : [];
-    const count = Number.isFinite(refresh?.modelCount)
-      ? refresh.modelCount
-      : models.length;
-    if (models.length === 0) return `已获取到模型（共 ${count} 个）`;
-    const preview = models.slice(0, 6).join("、");
-    const suffix = `（共 ${count} 个）`;
-    return `已获取到模型：${preview}${suffix}`;
-  };
 
-  const formatModelFailure = (refresh: any, messageFallback?: string) => {
-    const code = refresh?.errorCode;
-    if (code === "timeout") return "模型获取失败（请求超时）";
-    if (code === "unauthorized") return "模型获取失败，API Key 已无效";
-    if (code === "empty_models") return "模型获取失败：未获取到可用模型";
-    return messageFallback || refresh?.errorMessage || "模型获取失败";
-  };
 
-  const handleCheckModels = async (accountId: number) => {
-    const key = `models-${accountId}`;
-    setActionLoading((s) => ({ ...s, [key]: true }));
-    try {
-      const result = await api.checkModels(accountId);
-      const refresh = result?.refresh;
-      if (!refresh || refresh.status !== "success") {
-        toast.error(formatModelFailure(refresh, result?.message));
-      } else {
-        toast.success(formatModelSuccess(refresh));
-      }
-    } catch (e: any) {
-      toast.error(e.message || "模型获取失败");
-    } finally {
-      setActionLoading((s) => ({ ...s, [key]: false }));
-      void load(true);
-    }
-  };
 
   const applyLoadedModelModal = (account: any, result: any) => {
     const models = Array.isArray(result?.models) ? result.models : [];
@@ -962,74 +911,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     }
   };
 
-  const extractManagedSub2ApiAuth = (account: any) => {
-    const parsed = parseAccountExtraConfig(account);
-    const auth = parsed?.sub2apiAuth || {};
-    return {
-      refreshToken:
-        typeof auth.refreshToken === "string" ? auth.refreshToken : "",
-      tokenExpiresAt: auth.tokenExpiresAt ? String(auth.tokenExpiresAt) : "",
-    };
-  };
 
   const openEditPanel = (account: any) => {
-    const managedAuth = extractManagedSub2ApiAuth(account);
     closeAddPanel();
     setRebindTarget(null);
     setEditingAccount(account);
-    setEditForm({
-      username: account?.username || "",
-      status: account?.status || "active",
-      checkinEnabled: account?.checkinEnabled !== false,
-      unitCost:
-        account?.unitCost === null || account?.unitCost === undefined
-          ? ""
-          : String(account.unitCost),
-      accessToken: account?.accessToken || "",
-      apiToken: account?.apiToken || "",
-      isPinned: !!account?.isPinned,
-      refreshToken: managedAuth.refreshToken,
-      tokenExpiresAt: managedAuth.tokenExpiresAt,
-      platformUserId: account?.platformUserId ? String(account.platformUserId) : "",
-    });
   };
 
   const closeEditPanel = () => {
     setEditingAccount(null);
-    setSavingEdit(false);
   };
 
-  const saveEditPanel = async () => {
-    if (!editingAccount) return;
-    setSavingEdit(true);
-    try {
-      await api.updateAccount(editingAccount.id, {
-        username: editForm.username.trim() || undefined,
-        status: editForm.status,
-        checkinEnabled: editForm.checkinEnabled,
-        unitCost: editForm.unitCost.trim()
-          ? Number(editForm.unitCost.trim())
-          : null,
-        accessToken: editForm.accessToken.trim(),
-        apiToken: editForm.apiToken.trim() || null,
-        isPinned: editForm.isPinned,
-        refreshToken: editForm.refreshToken.trim() || null,
-        tokenExpiresAt: editForm.tokenExpiresAt.trim()
-          ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
-          : null,
-        platformUserId: editForm.platformUserId.trim()
-          ? Number.parseInt(editForm.platformUserId.trim(), 10)
-          : null,
-      });
-      toast.success("账号已更新");
-      closeEditPanel();
-      load(true);
-    } catch (e: any) {
-      toast.error(e.message || "更新账号失败");
-    } finally {
-      setSavingEdit(false);
-    }
-  };
 
 
 

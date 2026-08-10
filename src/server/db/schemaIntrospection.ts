@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import {mkdtempSync, readFileSync, readdirSync} from 'node:fs';
 import mysql from 'mysql2/promise';
 import { tmpdir } from 'node:os';
 import pg from 'pg';
@@ -67,35 +67,9 @@ type SqliteForeignKeyRow = {
   on_delete: string;
 };
 
-type MySqlColumnRow = {
-  table_name: string;
-  column_name: string;
-  data_type: string;
-  column_type: string;
-  is_nullable: 'YES' | 'NO';
-  column_default: string | null;
-};
 
-type MySqlPrimaryKeyRow = {
-  table_name: string;
-  column_name: string;
-};
 
-type MySqlIndexRow = {
-  table_name: string;
-  index_name: string;
-  column_name: string;
-  non_unique: number;
-};
 
-type MySqlForeignKeyRow = {
-  table_name: string;
-  constraint_name: string;
-  column_name: string;
-  referenced_table_name: string;
-  referenced_column_name: string;
-  delete_rule: string | null;
-};
 
 type PostgresColumnRow = {
   table_name: string;

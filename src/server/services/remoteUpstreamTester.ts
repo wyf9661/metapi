@@ -1,12 +1,7 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { fetch, type RequestInit as UndiciRequestInit } from 'undici';
-import { config } from '../config.js';
 import { readRuntimeResponseText } from '../proxy-core/executors/types.js';
-import {
-  normalizeSiteProxyUrl,
-  withExplicitProxyRequestInit,
-} from './siteProxy.js';
 import {
   normalizePlatformBaseUrl,
   resolveVersionedModelsUrl,

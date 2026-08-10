@@ -11,7 +11,6 @@ import { and, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
 import { config } from "../../config.js";
 import { refreshModelsForAccount } from "../../services/modelService.js";
 import * as routeRefreshWorkflow from "../../services/routeRefreshWorkflow.js";
-import { buildModelAnalysis } from "../../services/modelAnalysisService.js";
 import { lookupModelsDevCapabilities } from "../../services/modelCapabilitiesService.js";
 import {
   fetchModelPricingCatalog,
@@ -24,16 +23,8 @@ import {
   type ModelAvailabilityProbeExecutionResult,
 } from "../../services/modelAvailabilityProbeService.js";
 import { getUpstreamModelDescriptionsCached } from "../../services/upstreamModelDescriptionService.js";
+import {getRunningTaskByDedupeKey, startBackgroundTask, waitForBackgroundTaskCompletion} from "../../services/backgroundTaskService.js";
 import {
-  getBackgroundTask,
-  getRunningTaskByDedupeKey,
-  startBackgroundTask,
-  waitForBackgroundTaskCompletion,
-} from "../../services/backgroundTaskService.js";
-import { parseCheckinRewardAmount } from "../../services/checkinRewardParser.js";
-import { estimateRewardWithTodayIncomeFallback } from "../../services/todayIncomeRewardService.js";
-import {
-  getProxyLogBaseSelectFields,
   parseProxyLogBillingDetails,
   withProxyLogSelectFields,
 } from "../../services/proxyLogStore.js";
@@ -51,16 +42,7 @@ import {
   isModelDisabledForSite,
   loadSiteDisabledModelsIndex,
 } from "../../services/siteDisabledModels.js";
-import {
-  formatLocalDateTime,
-  formatUtcSqlDateTime,
-  getLocalDayRangeUtc,
-  getLocalRangeStartDayKey,
-  getLocalRangeStartUtc,
-  parseStoredUtcDateTime,
-  type StoredUtcDateTimeInput,
-  toLocalDayKeyFromStoredUtc,
-} from "../../services/localTimeService.js";
+import {formatUtcSqlDateTime, getLocalRangeStartDayKey, getLocalRangeStartUtc} from "../../services/localTimeService.js";
 import { createRateLimitGuard } from "../../middleware/requestRateLimit.js";
 import {
   getDashboardInsightsSnapshot,
@@ -85,7 +67,6 @@ import {
   toRoundedMicroNumber,
   normalizeNullableText,
   normalizeClientConfidence,
-  roundPercent,
 } from './stats.pure.js';
 const MODELS_MARKETPLACE_BASE_TTL_MS = 15_000;
 const MODELS_MARKETPLACE_PRICING_TTL_MS = 90_000;
@@ -134,14 +115,6 @@ function writeModelsMarketplaceCache(
   });
 }
 
-function proxyCostSqlExpression() {
-  return sql<number>`
-    coalesce(
-      ${schema.proxyLogs.estimatedCost},
-      coalesce(${schema.proxyLogs.totalTokens}, 0) / 500000.0
-    )
-  `;
-}
 
 type ProxyLogStatusFilter = "all" | "success" | "failed";
 type ProxyLogClientFilter = {
@@ -365,169 +338,10 @@ function buildProxyLogClientOptions(
   ];
 }
 
-const SITE_AVAILABILITY_BUCKET_COUNT = 24;
-const SITE_AVAILABILITY_BUCKET_MS = 60 * 60 * 1000;
 
-type SiteAvailabilitySiteRow = {
-  id: number;
-  name: string;
-  url: string | null;
-  platform: string | null;
-  sortOrder: number | null;
-  isPinned: boolean | null;
-};
 
-type SiteAvailabilityLogRow = {
-  siteId: number | null;
-  createdAt: StoredUtcDateTimeInput;
-  status: string | null;
-  latencyMs: number | null;
-};
 
-type SiteAvailabilityBucketAccumulator = {
-  startUtc: string;
-  label: string;
-  totalRequests: number;
-  successCount: number;
-  failedCount: number;
-  latencyTotalMs: number;
-  latencyCount: number;
-};
 
-function buildSiteAvailabilitySummaries(
-  sites: SiteAvailabilitySiteRow[],
-  logs: SiteAvailabilityLogRow[],
-  now = new Date(),
-) {
-  const endLocal = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    now.getHours(),
-    0,
-    0,
-    0,
-  );
-  const startLocal = new Date(
-    endLocal.getTime() -
-      (SITE_AVAILABILITY_BUCKET_COUNT - 1) * SITE_AVAILABILITY_BUCKET_MS,
-  );
-  const startMs = startLocal.getTime();
-  const rangeMs = SITE_AVAILABILITY_BUCKET_COUNT * SITE_AVAILABILITY_BUCKET_MS;
-
-  const createBucketTemplate = (): SiteAvailabilityBucketAccumulator[] =>
-    Array.from({ length: SITE_AVAILABILITY_BUCKET_COUNT }, (_, index) => {
-      const bucketStart = new Date(
-        startMs + index * SITE_AVAILABILITY_BUCKET_MS,
-      );
-      return {
-        startUtc: bucketStart.toISOString(),
-        label: formatLocalDateTime(bucketStart),
-        totalRequests: 0,
-        successCount: 0,
-        failedCount: 0,
-        latencyTotalMs: 0,
-        latencyCount: 0,
-      };
-    });
-
-  const siteMap = new Map<
-    number,
-    {
-      site: SiteAvailabilitySiteRow;
-      totalRequests: number;
-      successCount: number;
-      failedCount: number;
-      latencyTotalMs: number;
-      latencyCount: number;
-      buckets: SiteAvailabilityBucketAccumulator[];
-    }
-  >();
-
-  for (const site of sites) {
-    siteMap.set(site.id, {
-      site,
-      totalRequests: 0,
-      successCount: 0,
-      failedCount: 0,
-      latencyTotalMs: 0,
-      latencyCount: 0,
-      buckets: createBucketTemplate(),
-    });
-  }
-
-  for (const log of logs) {
-    if (log.siteId == null) continue;
-    const target = siteMap.get(log.siteId);
-    if (!target) continue;
-
-    const parsed = parseStoredUtcDateTime(log.createdAt);
-    if (!parsed) continue;
-    const timestampMs = parsed.getTime();
-    const diffMs = timestampMs - startMs;
-    if (diffMs < 0 || diffMs >= rangeMs) continue;
-
-    const bucketIndex = Math.floor(diffMs / SITE_AVAILABILITY_BUCKET_MS);
-    const bucket = target.buckets[bucketIndex];
-    const isSuccess = (log.status || "").trim().toLowerCase() === "success";
-
-    target.totalRequests += 1;
-    bucket.totalRequests += 1;
-    if (isSuccess) {
-      target.successCount += 1;
-      bucket.successCount += 1;
-    } else {
-      target.failedCount += 1;
-      bucket.failedCount += 1;
-    }
-
-    const latencyMs = Number(log.latencyMs);
-    if (Number.isFinite(latencyMs) && latencyMs >= 0) {
-      target.latencyTotalMs += latencyMs;
-      target.latencyCount += 1;
-      bucket.latencyTotalMs += latencyMs;
-      bucket.latencyCount += 1;
-    }
-  }
-
-  return sites.map((site) => {
-    const aggregate = siteMap.get(site.id)!;
-    return {
-      siteId: site.id,
-      siteName: site.name,
-      siteUrl: site.url,
-      platform: site.platform,
-      totalRequests: aggregate.totalRequests,
-      successCount: aggregate.successCount,
-      failedCount: aggregate.failedCount,
-      availabilityPercent:
-        aggregate.totalRequests > 0
-          ? roundPercent(
-              (aggregate.successCount / aggregate.totalRequests) * 100,
-            )
-          : null,
-      averageLatencyMs:
-        aggregate.latencyCount > 0
-          ? Math.round(aggregate.latencyTotalMs / aggregate.latencyCount)
-          : null,
-      buckets: aggregate.buckets.map((bucket) => ({
-        startUtc: bucket.startUtc,
-        label: bucket.label,
-        totalRequests: bucket.totalRequests,
-        successCount: bucket.successCount,
-        failedCount: bucket.failedCount,
-        availabilityPercent:
-          bucket.totalRequests > 0
-            ? roundPercent((bucket.successCount / bucket.totalRequests) * 100)
-            : null,
-        averageLatencyMs:
-          bucket.latencyCount > 0
-            ? Math.round(bucket.latencyTotalMs / bucket.latencyCount)
-            : null,
-      })),
-    };
-  });
-}
 
 function mapProxyLogRow(
   row: {
@@ -584,30 +398,9 @@ function mapProxyLogRow(
   };
 }
 
-function buildProxyLogModelAnalysisSelectFields() {
-  return {
-    createdAt: schema.proxyLogs.createdAt,
-    modelActual: schema.proxyLogs.modelActual,
-    modelRequested: schema.proxyLogs.modelRequested,
-    status: schema.proxyLogs.status,
-    latencyMs: schema.proxyLogs.latencyMs,
-    totalTokens: schema.proxyLogs.totalTokens,
-    estimatedCost: schema.proxyLogs.estimatedCost,
-  };
-}
 
-function buildProxyLogSiteTrendSelectFields() {
-  return {
-    createdAt: schema.proxyLogs.createdAt,
-    estimatedCost: schema.proxyLogs.estimatedCost,
-    totalTokens: schema.proxyLogs.totalTokens,
-  };
-}
 
 export async function statsRoutes(app: FastifyInstance) {
-  const proxyLogBaseFields = getProxyLogBaseSelectFields();
-  const proxyLogModelAnalysisFields = buildProxyLogModelAnalysisSelectFields();
-  const proxyLogSiteTrendFields = buildProxyLogSiteTrendSelectFields();
 
   app.get<{ Querystring: { refresh?: string; view?: string } }>(
     "/api/stats/dashboard",
@@ -979,7 +772,7 @@ export async function statsRoutes(app: FastifyInstance) {
       to?: string;
       view?: string;
     };
-  }>("/api/stats/proxy-logs", async (request, reply) => {
+  }>("/api/stats/proxy-logs", async (request, _reply) => {
     const view = normalizeProxyLogsView(request.query.view);
     if (view === "query") {
       return loadProxyLogsQueryPayload(request.query);

@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { db, schema, runtimeDbDialect } from "../../db/index.js";
 import { insertAndGetById } from "../../db/insertHelpers.js";
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import {and, eq} from "drizzle-orm";
 import { refreshBalance } from "../../services/balanceService.js";
 import { getAdapter } from "../../services/platforms/index.js";
 import {
@@ -22,9 +22,6 @@ import {
 import { encryptAccountPassword } from "../../services/accountCredentialService.js";
 import { applyAccountUpdateWorkflow } from "../../services/accountUpdateWorkflow.js";
 import { startBackgroundTask } from "../../services/backgroundTaskService.js";
-import { parseCheckinRewardAmount } from "../../services/checkinRewardParser.js";
-import { estimateRewardWithTodayIncomeFallback } from "../../services/todayIncomeRewardService.js";
-import { getLocalDayRangeUtc } from "../../services/localTimeService.js";
 import {
   buildRuntimeHealthForAccount,
   setAccountRuntimeHealth,

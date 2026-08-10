@@ -22,17 +22,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { clearFocusParams, readFocusSiteId } from './helpers/navigationFocus.js';
-import {
-  SITE_PLATFORM_OPTIONS,
-  SiteBalanceDisplay,
-  buildSiteApiEndpointSummary,
-  buildSiteConnectionSearchParams,
-  formatUsd,
-  getConfiguredSiteApiEndpoints,
-  hasConfiguredCustomHeaders,
-  platformColors,
-  resolveSiteCreatedSessionLabel,
-} from './sites/sitePresentation.js';
+import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, buildSiteApiEndpointSummary, buildSiteConnectionSearchParams, getConfiguredSiteApiEndpoints, hasConfiguredCustomHeaders, platformColors, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
 import { tr } from '../i18n.js';
 import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';

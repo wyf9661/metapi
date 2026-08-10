@@ -11,7 +11,6 @@ import { resolveClientPagination } from '../components/clientPagination.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useIsMobile } from '../components/useIsMobile.js';
-import { tr } from '../i18n.js';
 import DownstreamKeyEditorModal, {
   TagInput,
   type DownstreamCredentialOption,
@@ -302,7 +301,7 @@ function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined 
 
 function buildEditorForm(
   item?: ManagedItem | DownstreamApiKeyItem | null,
-  routeOptions: RouteSelectorItem[] = [],
+  _routeOptions: RouteSelectorItem[] = [],
 ): DownstreamKeyEditorForm {
   const defaultSelections: { selectedModels: string[]; selectedGroupRouteIds: number[] } = { selectedModels: [], selectedGroupRouteIds: [] };
   const selectedModels = Array.isArray(item?.supportedModels)

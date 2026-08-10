@@ -70,7 +70,7 @@ function normalizeTokenRoutePayloadInput(input: unknown): unknown {
 
 function formatTokenRoutePayloadError(error: z.ZodError): string {
   const firstIssue = error.issues[0];
-  const [firstPath, secondPath, thirdPath] = firstIssue?.path ?? [];
+  const [firstPath, _secondPath, thirdPath] = firstIssue?.path ?? [];
   if (!firstPath) {
     return '请求体必须是对象';
   }

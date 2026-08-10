@@ -43,8 +43,6 @@ describe('Inventory table actions layout', () => {
 
   it('does not reserve oversized right voids for accounts/token action columns', () => {
     expect(accounts).toContain('className="accounts-actions-cell"');
-    const accountsRule = cssRule(css, '.accounts-actions-col,\n.accounts-actions-cell')
-      || cssRule(css, '.accounts-actions-col,\r\n.accounts-actions-cell');
     // selector may span lines — extract by class marker
     const accStart = css.indexOf('.accounts-actions-col,');
     const accBrace = css.indexOf('{', accStart);

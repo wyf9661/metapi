@@ -10,9 +10,6 @@ function isRecord(value: unknown): value is GeminiRecord {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isImageMimeType(mimeType: string): boolean {
-  return mimeType.toLowerCase().startsWith('image/');
-}
 
 function parseJsonIfPossible(value: string): unknown {
   const trimmed = value.trim();

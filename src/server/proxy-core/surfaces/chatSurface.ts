@@ -8,11 +8,7 @@ import { type DownstreamFormat } from '../../transformers/shared/normalized.js';
 import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transformers/shared/endpointCompatibility.js';
 
 import { shouldForceResponsesUpstreamStream } from '../capabilities/responsesCompact.js';
-import {
-  buildClaudeCountTokensUpstreamRequest,
-  buildUpstreamEndpointRequest,
-  resolveUpstreamEndpointCandidates,
-} from '../../services/upstreamEndpointRuntime.js';
+import {buildUpstreamEndpointRequest, resolveUpstreamEndpointCandidates} from '../../services/upstreamEndpointRuntime.js';
 import {
   getUpstreamEndpointRuntimeStateSnapshot,
   recordUpstreamEndpointFailure,
@@ -23,7 +19,7 @@ import {
   getDownstreamRoutingPolicy,
   recordDownstreamCostUsage,
 } from '../../services/downstreamPolicyRequest.js';
-import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
+import {executeEndpointFlow} from '../orchestration/endpointFlow.js';
 import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
 import { anthropicMessagesTransformer } from '../../transformers/anthropic/messages/index.js';
@@ -47,7 +43,6 @@ import {
   createGeminiCliStreamReader,
   unwrapGeminiCliPayload,
 } from '../../transformers/gemini/generate-content/cliBridge.js';
-import { geminiGenerateContentTransformer } from '../../transformers/gemini/generate-content/index.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 import { getObservedResponseMeta } from '../firstByteTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
@@ -93,16 +88,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
-import {
-  asTrimmedString,
-  buildOpenAiFinalFromGeminiNativePayload,
-  buildOpenAiStreamLinesFromGeminiNativeSse,
-  deriveCodexSessionCacheKey,
-  finalizeRetryAsExecutionFailure,
-  finalizeRetryAsUpstreamFailure,
-  isGeminiNativeRuntimePath,
-  isRecord,
-} from './chatSurfaceHelpers.js';
+import {buildOpenAiFinalFromGeminiNativePayload, buildOpenAiStreamLinesFromGeminiNativeSse, deriveCodexSessionCacheKey, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, isGeminiNativeRuntimePath} from './chatSurfaceHelpers.js';
 import { canFailoverToNextChannel, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 

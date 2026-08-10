@@ -19,7 +19,7 @@ function trailingPrefixLength(value: string, prefix: string): number {
 function consumeChunkAgainstTag(
   source: string,
   tag: string,
-  target: 'content' | 'reasoning',
+  _target: 'content' | 'reasoning',
 ): { emitted: string; rest: string; matched: boolean } {
   const sourceLower = source.toLowerCase();
   const tagIndex = sourceLower.indexOf(tag);

@@ -1,46 +1,14 @@
 ﻿import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { upsertSetting } from '../db/upsertSetting.js';
 import {
   config,
   normalizeTokenRouterFailureCooldownMaxSec,
   TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING,
 } from '../config.js';
-import { getCachedModelRoutingReferenceCost, refreshModelPricingCatalog } from './modelPricingService.js';
+import {refreshModelPricingCatalog} from './modelPricingService.js';
 import { proxyChannelCoordinator, type ProxyChannelLoadSnapshot } from './proxyChannelCoordinator.js';
-import { RETRYABLE_TIMEOUT_PATTERNS } from './proxyRetryPolicy.js';
-import {
-  classifyProxyFailure,
-  isTransientSiteRuntimeFailure,
-  isUsageLimitRateLimitFailure,
-  resolveSiteRuntimeFailurePenalty,
-  type SiteRuntimeFailureContext,
-} from './siteFailureClassification.js';
-import type { SiteRuntimeHealthState } from './siteRuntimeHealth.js';
-import {
-  buildRecentOutcomeSnapshot,
-  clampFailureCooldownMs as clampFailureCooldownMsMath,
-  clampNumber,
-  decayRecentOutcomeCount,
-  FAILURE_BACKOFF_BASE_SEC,
-  isContributionCloseToBest,
-  isRecord,
-  MAX_FAILURE_BACKOFF_SEC,
-  readFiniteInteger,
-  readFiniteNumber,
-  readNullableTimestamp,
-  type RecentOutcomeSnapshot,
-  resolveEffectiveFailureCooldownMs as resolveEffectiveFailureCooldownMsMath,
-  resolveFailureBackoffSec,
-  resolveRoundRobinCooldownSec,
-  resolveSiteRuntimeBreakerMs,
-  ROUND_ROBIN_COOLDOWN_LEVELS_SEC,
-  SITE_RECENT_OUTCOME_HALF_LIFE_MS,
-  SITE_RECENT_SUCCESS_CONFIDENCE_SAMPLES,
-  SITE_RECENT_SUCCESS_PRIOR_FAILURES,
-  SITE_RECENT_SUCCESS_PRIOR_SUCCESSES,
-  STABLE_FIRST_SITE_SCORE_RATIO,
-} from './tokenRouterMath.js';
+import {classifyProxyFailure, isUsageLimitRateLimitFailure, type SiteRuntimeFailureContext} from './siteFailureClassification.js';
+import {clampFailureCooldownMs as clampFailureCooldownMsMath, clampNumber, isContributionCloseToBest, resolveEffectiveFailureCooldownMs as resolveEffectiveFailureCooldownMsMath, resolveFailureBackoffSec, resolveRoundRobinCooldownSec, ROUND_ROBIN_COOLDOWN_LEVELS_SEC} from './tokenRouterMath.js';
 import {
   getStableFirstLastSelectedSiteByKey,
   getStableFirstObservationProgressByKey,
@@ -49,22 +17,7 @@ import {
   rememberStableFirstObservationSiteCooldown,
   rememberStableFirstSiteSelectionForKey,
 } from './tokenRouterStableFirstMemory.js';
-import {
-  clearRuntimeHealthStatesForChannels,
-  persistSiteRuntimeHealthState,
-  ensureSiteRuntimeHealthStateLoaded,
-  filterSiteRuntimeBrokenCandidates,
-  filterSiteRuntimeBrokenCandidatesByModel,
-  flushSiteRuntimeHealthPersistence,
-  getSiteRuntimeHealthDetails,
-  getSiteRuntimeHealthMultiplier,
-  isSiteRuntimeBreakerOpen,
-  recordSiteRuntimeFailure,
-  recordSiteRuntimeSuccess,
-  resetSiteRuntimeHealthState,
-  setTokenRouterRuntimeHealthResetHook,
-  type SiteRuntimeHealthDetails,
-} from './tokenRouterRuntimeHealthStore.js';
+import {clearRuntimeHealthStatesForChannels, persistSiteRuntimeHealthState, ensureSiteRuntimeHealthStateLoaded, filterSiteRuntimeBrokenCandidatesByModel, getSiteRuntimeHealthDetails, recordSiteRuntimeFailure, recordSiteRuntimeSuccess, type SiteRuntimeHealthDetails} from './tokenRouterRuntimeHealthStore.js';
 import {
   filterRecentlyFailedCandidates as filterRecentlyFailedCandidatesPure,
   isChannelRecentlyFailed as isChannelRecentlyFailedPure,
@@ -93,33 +46,9 @@ import {
   loadOauthRouteUnitSummariesByIds,
   type OAuthRouteUnitSummary,
 } from './oauth/routeUnitService.js';
-import {
-  buildVisibleEnabledRoutes,
-  channelSupportsRequestedModel,
-  getExposedModelNameForRoute,
-  isExplicitGroupRoute,
-  isModelAllowedByDownstreamPolicy,
-  isRouteDisplayNameMatch,
-  matchesRouteRequestModel,
-  normalizeChannelSourceModel,
-  normalizeModelAlias,
-  normalizeRouteDisplayName,
-  normalizeRouteMode,
-  resolveActualModelForSelectedChannel,
-  resolveMappedModel,
-} from './tokenRouterModelMatching.js';
-import {
-  isExactRouteModelPattern,
-  isRegexModelPattern,
-  matchesModelPattern,
-  parseRegexModelPattern,
-} from './tokenRouterModelPatterns.js';
-import {
-  computeBalanceCoverage,
-  formatShadowSelectionLog,
-  rankShadowCandidates,
-  type ShadowCandidateInput,
-} from './routeScoringShadow.js';
+import {buildVisibleEnabledRoutes, channelSupportsRequestedModel, getExposedModelNameForRoute, isExplicitGroupRoute, isModelAllowedByDownstreamPolicy, isRouteDisplayNameMatch, normalizeChannelSourceModel, normalizeModelAlias, normalizeRouteDisplayName, normalizeRouteMode, resolveActualModelForSelectedChannel, resolveMappedModel} from './tokenRouterModelMatching.js';
+import {isExactRouteModelPattern, matchesModelPattern} from './tokenRouterModelPatterns.js';
+import {formatShadowSelectionLog, rankShadowCandidates, type ShadowCandidateInput} from './routeScoringShadow.js';
 import {
   loadConnectivityLookup,
   resolveCandidateConnectivity,
@@ -164,7 +93,6 @@ interface SelectedChannel {
 }
 
 const SHORT_WINDOW_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
-const MIN_EFFECTIVE_UNIT_COST = 1e-6;
 const ROUND_ROBIN_FAILURE_THRESHOLD = 3;
 const SITE_RECENT_SUCCESS_FALLBACK_RATE = 0.5;
 const SITE_HISTORICAL_HEALTH_MIN_MULTIPLIER = 0.45;
@@ -581,10 +509,6 @@ type CandidateEligibilityOptions = {
   downstreamPolicy?: DownstreamRoutingPolicy;
 };
 
-type CostSignal = {
-  unitCost: number;
-  source: 'observed' | 'configured' | 'catalog' | 'fallback';
-};
 
 function resolveRouteStrategy(route: RouteRow): RouteRoutingStrategy {
   return normalizeRouteRoutingStrategy(route.routingStrategy);

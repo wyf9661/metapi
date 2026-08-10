@@ -4,8 +4,7 @@ import {
   buildNewApiCookieCandidates,
   fetchJsonWithShieldCookieRetry,
 } from './platforms/newApiShield.js';
-import { withExplicitProxyRequestInit, withSiteRecordProxyRequestInit } from './siteProxy.js';
-
+import {withSiteRecordProxyRequestInit} from './siteProxy.js';
 const SELF_LOG_FETCH_TIMEOUT_MS = 8_000;
 const SELF_LOG_PAGE_SIZE = 20;
 const MATCH_LOOKBACK_MS = 25_000;

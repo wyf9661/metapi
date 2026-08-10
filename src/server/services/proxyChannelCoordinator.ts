@@ -21,9 +21,6 @@ type LastSuccessEntry = {
   hitCount?: number;
 };
 
-type ActiveLeaseState = {
-  release: () => void;
-};
 
 type ChannelWaiter = {
   cancelled: boolean;

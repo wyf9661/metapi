@@ -1,4 +1,3 @@
-import React from 'react';
 import CenteredModal from '../../components/CenteredModal.js';
 
 export type OAuthModelItem = {

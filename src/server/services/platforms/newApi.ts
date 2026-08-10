@@ -90,17 +90,6 @@ export class NewApiAdapter extends BasePlatformAdapter {
     return Array.from(new Set(candidates));
   }
 
-  private decodeBase64Loose(value: string): string | null {
-    if (!value) return null;
-    try {
-      return Buffer.from(value, 'base64').toString('utf8');
-    } catch {}
-    try {
-      const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-      return Buffer.from(normalized, 'base64').toString('utf8');
-    } catch {}
-    return null;
-  }
 
   private decodeBase64BufferLoose(value: string): Buffer | null {
     if (!value) return null;
