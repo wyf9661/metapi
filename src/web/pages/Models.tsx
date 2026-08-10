@@ -331,9 +331,10 @@ export default function Models() {
         }
       }
       return next;
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       if (requestId !== latestPrimaryRequestRef.current) return null;
-      setLoadError(error?.message || tr('加载模型广场失败'));
+      setLoadError(errorMessage || tr('加载模型广场失败'));
       return null;
     } finally {
       if (requestId === latestPrimaryRequestRef.current) {
@@ -767,8 +768,9 @@ export default function Models() {
         });
         probeStreamCleanupRef.current = cleanup;
       });
-    } catch (err: any) {
-      const reason = err?.message || '探测失败';
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      const reason = errMessage || '探测失败';
       setProbingAccountIds(new Set());
       setProbeResults((prev) => {
         const existing = prev[name];

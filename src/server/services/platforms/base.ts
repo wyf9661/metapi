@@ -171,8 +171,9 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
         };
       }
       return { success: false, message: res?.message || '登录失败' };
-    } catch (err: any) {
-      return { success: false, message: err.message || '登录请求失败' };
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      return { success: false, message: errMessage || '登录请求失败' };
     }
   }
 

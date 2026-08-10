@@ -59,8 +59,9 @@ export class OneApiAdapter extends BasePlatformAdapter {
         return { success: true, message: res.message || 'Check-in successful', reward: res.data?.reward?.toString() };
       }
       return { success: false, message: res?.message || 'Check-in failed' };
-    } catch (err: any) {
-      return { success: false, message: err.message };
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      return { success: false, message: errMessage };
     }
   }
 

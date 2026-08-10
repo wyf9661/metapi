@@ -332,9 +332,10 @@ export async function completionsProxyRoute(app: FastifyInstance) {
           requestTraceId,
         );
         return reply.send(data);
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         const status = err instanceof SiteApiEndpointRequestError ? (err.status || 0) : 0;
-        const errorText = err?.message || 'network failure';
+        const errorText = errMessage || 'network failure';
         const firstByteLatencyMs = err instanceof SiteApiEndpointRequestError ? err.firstByteLatencyMs : null;
         await recordTokenRouterEventBestEffort('record channel failure', () => tokenRouter.recordFailure(selected.channel.id, {
           status,

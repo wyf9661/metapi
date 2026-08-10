@@ -369,8 +369,9 @@ export default function ImportExport() {
       };
       downloadJsonFile(data, fileName[type]);
       toast.success('导出成功');
-    } catch (err: any) {
-      toast.error(err?.message || '导出失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '导出失败');
     } finally {
       setExportingType('');
     }
@@ -439,8 +440,9 @@ export default function ImportExport() {
       toast.success(buildImportSuccessMessage(result));
       setImportData('');
       setSelectedFileName('');
-    } catch (err: any) {
-      toast.error(err?.message || '导入失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '导入失败');
     } finally {
       setImporting(false);
     }
@@ -466,8 +468,9 @@ export default function ImportExport() {
       const result = await api.saveBackupWebdavConfig(payload as any);
       applyWebdavResponse(result);
       toast.success('WebDAV 配置已保存');
-    } catch (err: any) {
-      toast.error(err?.message || '保存 WebDAV 配置失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存 WebDAV 配置失败');
     } finally {
       setWebdavSaving(false);
     }
@@ -479,8 +482,9 @@ export default function ImportExport() {
       const result = await api.exportBackupToWebdav(webdavConfig.exportType);
       applyWebdavResponse(result);
       toast.success(`已导出到 WebDAV：${result?.fileUrl || webdavConfig.fileUrl}`);
-    } catch (err: any) {
-      toast.error(err?.message || '导出到 WebDAV 失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '导出到 WebDAV 失败');
     } finally {
       setWebdavAction('');
     }
@@ -496,8 +500,9 @@ export default function ImportExport() {
       const result = await api.importBackupFromWebdav();
       applyWebdavResponse(result);
       toast.success(buildImportSuccessMessage(result));
-    } catch (err: any) {
-      toast.error(err?.message || '从 WebDAV 导入失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '从 WebDAV 导入失败');
     } finally {
       setWebdavAction('');
     }

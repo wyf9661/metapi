@@ -178,9 +178,10 @@ export async function searchProxyRoute(app: FastifyInstance) {
           requestTraceId,
         );
         return reply.code(upstream.status).send(data);
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         const status = error instanceof SiteApiEndpointRequestError ? (error.status || 0) : 0;
-        const errorText = error?.message || 'network error';
+        const errorText = errorMessage || 'network error';
         const firstByteLatencyMs = error instanceof SiteApiEndpointRequestError ? error.firstByteLatencyMs : null;
         await recordTokenRouterEventBestEffort('record channel failure', () => tokenRouter.recordFailure(selected.channel.id, {
           status,

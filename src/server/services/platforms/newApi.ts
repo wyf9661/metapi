@@ -1039,10 +1039,11 @@ export class NewApiAdapter extends BasePlatformAdapter {
         success: false,
         message: this.extractResponseMessage(res) || '登录失败：未获取到可用会话凭据，请改用 Cookie/Token 导入',
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return {
         success: false,
-        message: this.formatRequestErrorMessage(err) || err?.message || '登录请求失败',
+        message: this.formatRequestErrorMessage(err) || errMessage || '登录请求失败',
       };
     }
   }

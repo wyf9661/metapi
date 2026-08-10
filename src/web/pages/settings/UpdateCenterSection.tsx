@@ -46,8 +46,9 @@ export default function UpdateCenterSection() {
     try {
       const next = await api.getUpdateCenterStatus() as UpdateCenterStatus;
       setStatus(next);
-    } catch (error: any) {
-      toast.error(error?.message || tr('获取更新中心状态失败'));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || tr('获取更新中心状态失败'));
     }
   }, [toast]);
 
@@ -60,8 +61,9 @@ export default function UpdateCenterSection() {
     try {
       const next = await api.checkUpdateCenter() as UpdateCenterStatus;
       setStatus(next);
-    } catch (error: any) {
-      toast.error(error?.message || tr('检查更新失败'));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || tr('检查更新失败'));
     } finally {
       setChecking(false);
     }

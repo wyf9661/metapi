@@ -119,8 +119,9 @@ export default function ProgramLogs() {
       const loaded = append ? nextOffset + safeRows.length : safeRows.length;
       setOffset(loaded);
       setHasMore(safeRows.length >= PAGE_SIZE);
-    } catch (e: any) {
-      toast.error(e.message || '加载程序日志失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '加载程序日志失败');
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -160,8 +161,9 @@ export default function ProgramLogs() {
       if (onlyUnread) setEvents([]);
       else setEvents((prev) => prev.map((item) => ({ ...item, read: true })));
       toast.success('已标记全部为已读');
-    } catch (e: any) {
-      toast.error(e.message || '标记失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '标记失败');
     } finally {
       setMarkingAll(false);
     }
@@ -175,8 +177,9 @@ export default function ProgramLogs() {
       setOffset(0);
       setHasMore(false);
       toast.success('日志已清空');
-    } catch (e: any) {
-      toast.error(e.message || '清空失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '清空失败');
     } finally {
       setClearing(false);
     }

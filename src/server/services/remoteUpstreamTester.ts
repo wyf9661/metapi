@@ -444,11 +444,12 @@ async function requestRemote(options: {
       ok: response.ok,
       error: response.ok ? undefined : `HTTP ${response.status}`,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const latencyMs = Date.now() - started;
-    const message = error?.name === 'AbortError'
+    const message = error instanceof Error && error.name === 'AbortError'
       ? `request timeout after ${options.timeoutMs}ms`
-      : (error?.message || String(error));
+      : (errorMessage || String(error));
     return {
       statusCode: 0,
       latencyMs,

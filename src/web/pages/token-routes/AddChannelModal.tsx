@@ -121,8 +121,9 @@ export default function AddChannelModal({
       setSearchQuery('');
       onSuccess();
       onClose();
-    } catch (e: any) {
-      toast.error(e.message || '批量添加通道失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '批量添加通道失败');
     } finally {
       setSubmitting(false);
     }

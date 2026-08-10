@@ -426,11 +426,12 @@ export async function sendNotification(
     try {
       await task.run();
       return { channel: task.channel, ok: true as const, error: '' };
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         channel: task.channel,
         ok: false as const,
-        error: error?.message || String(error) || 'unknown error',
+        error: errorMessage || String(error) || 'unknown error',
       };
     }
   }));

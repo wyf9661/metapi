@@ -301,9 +301,10 @@ export default function ProxyLogs() {
         if (seq !== loadSeq.current) return;
         setLogs(Array.isArray(data.items) ? data.items : []);
         setTotal(Number(data.total || 0));
-      } catch (e: any) {
+      } catch (e) {
+        const eMessage = e instanceof Error ? e.message : String(e);
         if (seq !== loadSeq.current) return;
-        if (!silent) toast.error(e.message || '加载日志失败');
+        if (!silent) toast.error(eMessage || '加载日志失败');
       } finally {
         if (seq === loadSeq.current) setLoading(false);
       }
@@ -437,8 +438,9 @@ export default function ProxyLogs() {
           ...current,
           [id]: { loading: false, data },
         }));
-      } catch (e: any) {
-        const message = e?.message || '加载日志详情失败';
+      } catch (e) {
+        const eMessage = e instanceof Error ? e.message : String(e);
+        const message = eMessage || '加载日志详情失败';
         setDetailById((current) => ({
           ...current,
           [id]: { loading: false, error: message },
@@ -490,8 +492,9 @@ export default function ProxyLogs() {
           ...current,
           [id]: { loading: false, data },
         }));
-      } catch (error: any) {
-        const message = error?.message || '加载调试追踪详情失败';
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const message = errorMessage || '加载调试追踪详情失败';
         setDebugDetailById((current) => ({
           ...current,
           [id]: { loading: false, error: message },
@@ -548,9 +551,10 @@ export default function ProxyLogs() {
         await syncDebugTraceItems(items, {
           refreshSelectedDetail: options?.refreshSelectedDetail,
         });
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         if (!options?.suppressToast) {
-          toast.error(error?.message || '加载代理调试追踪失败');
+          toast.error(errorMessage || '加载代理调试追踪失败');
         }
       } finally {
         if (!options?.silent) setDebugPanelLoading(false);
@@ -574,8 +578,9 @@ export default function ProxyLogs() {
           ? traceResponse.items
           : [];
         await syncDebugTraceItems(items, { refreshSelectedDetail: true });
-      } catch (error: any) {
-        toast.error(error?.message || '加载代理调试面板失败');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        toast.error(errorMessage || '加载代理调试面板失败');
       } finally {
         if (!silent) setDebugPanelLoading(false);
       }
@@ -635,8 +640,9 @@ export default function ProxyLogs() {
           suppressToast: true,
         });
         return normalized;
-      } catch (error: any) {
-        toast.error(error?.message || '保存代理调试设置失败');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        toast.error(errorMessage || '保存代理调试设置失败');
         return null;
       } finally {
         setDebugPanelSaving(false);
@@ -684,8 +690,9 @@ export default function ProxyLogs() {
       toast.success(
         `已删除 ${result.deletedTraces} 条调试追踪（尝试 ${result.deletedAttempts} 条），编号已重置`,
       );
-    } catch (error: any) {
-      toast.error(error?.message || '删除调试追踪失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || '删除调试追踪失败');
     } finally {
       setDebugPanelSaving(false);
     }
@@ -725,8 +732,9 @@ export default function ProxyLogs() {
       try {
         await copyTextToClipboard(normalized.raw);
         toast.success(`已复制${label}`);
-      } catch (error: any) {
-        toast.error(error?.message || `复制${label}失败`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        toast.error(errorMessage || `复制${label}失败`);
       }
     },
     [toast],

@@ -931,10 +931,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.modelAvailabilityProbeEnabled, '批量测活开关');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '批量测活开关格式无效',
+          message: errMessage || '批量测活开关格式无效',
         });
       }
 
@@ -981,10 +982,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.codexUpstreamWebsocketEnabled, 'Codex 上游 WebSocket 开关');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || 'Codex 上游 WebSocket 开关格式无效',
+          message: errMessage || 'Codex 上游 WebSocket 开关格式无效',
         });
       }
 
@@ -999,10 +1001,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.responsesCompactFallbackToResponsesEnabled, 'Compact 回退到 Responses 开关');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || 'Compact 回退到 Responses 开关格式无效',
+          message: errMessage || 'Compact 回退到 Responses 开关格式无效',
         });
       }
 
@@ -1017,10 +1020,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.disableCrossProtocolFallback, '跨协议回退开关');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '跨协议回退开关格式无效',
+          message: errMessage || '跨协议回退开关格式无效',
         });
       }
 
@@ -1061,10 +1065,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.proxyDebugTraceEnabled, '代理调试追踪开关');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '代理调试追踪开关格式无效',
+          message: errMessage || '代理调试追踪开关格式无效',
         });
       }
       if (nextValue !== config.proxyDebugTraceEnabled) {
@@ -1078,10 +1083,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.proxyDebugCaptureHeaders, '代理调试请求头采集');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '代理调试请求头采集格式无效',
+          message: errMessage || '代理调试请求头采集格式无效',
         });
       }
       if (nextValue !== config.proxyDebugCaptureHeaders) {
@@ -1095,10 +1101,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.proxyDebugCaptureBodies, '代理调试请求体采集');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '代理调试请求体采集格式无效',
+          message: errMessage || '代理调试请求体采集格式无效',
         });
       }
       if (nextValue !== config.proxyDebugCaptureBodies) {
@@ -1112,10 +1119,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.proxyDebugCaptureStreamChunks, '代理调试流式分片采集');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '代理调试流式分片采集格式无效',
+          message: errMessage || '代理调试流式分片采集格式无效',
         });
       }
       if (nextValue !== config.proxyDebugCaptureStreamChunks) {
@@ -1182,10 +1190,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextKeywords: string[] = [];
       try {
         nextKeywords = parseProxyErrorKeywords(body.proxyErrorKeywords);
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '上游错误关键词格式无效',
+          message: errMessage || '上游错误关键词格式无效',
         });
       }
 
@@ -1200,10 +1209,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       let nextValue = false;
       try {
         nextValue = parseBooleanFlag(body.proxyEmptyContentFailEnabled, '空内容判定失败开关');
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
-          message: err?.message || '空内容判定失败开关格式无效',
+          message: errMessage || '空内容判定失败开关格式无效',
         });
       }
 
@@ -1545,10 +1555,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         message: '数据库运行配置已保存，重启容器后生效',
         ...buildRuntimeDatabaseState(saved),
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || '数据库运行配置保存失败',
+        message: errMessage || '数据库运行配置保存失败',
       });
     }
   });
@@ -1569,10 +1580,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         message: '目标数据库连接成功',
         ...result,
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || '数据库连接失败',
+        message: errMessage || '数据库连接失败',
       });
     }
   });
@@ -1598,10 +1610,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         message: '数据库迁移完成',
         ...result,
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || '数据库迁移失败',
+        message: errMessage || '数据库迁移失败',
       });
     }
   });
@@ -1634,10 +1647,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         message: '导入完成',
         ...result,
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || '导入失败',
+        message: errMessage || '导入失败',
       });
     }
   });
@@ -1668,10 +1682,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         autoSyncCron: body.autoSyncCron === undefined ? undefined : String(body.autoSyncCron || ''),
       });
       return result;
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || 'WebDAV 配置保存失败',
+        message: errMessage || 'WebDAV 配置保存失败',
       });
     }
   });
@@ -1691,10 +1706,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         ? rawType
         : undefined;
       return await exportBackupToWebdav(type);
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || 'WebDAV 导出失败',
+        message: errMessage || 'WebDAV 导出失败',
       });
     }
   });
@@ -1709,10 +1725,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         await reloadBackupWebdavScheduler();
       }
       return result;
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || 'WebDAV 导入失败',
+        message: errMessage || 'WebDAV 导入失败',
       });
     }
   });
@@ -1733,10 +1750,11 @@ export async function settingsRoutes(app: FastifyInstance) {
         success: true,
         message: `测试通知已发送（成功 ${result.succeeded}/${result.attempted}）`,
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({
         success: false,
-        message: err?.message || '测试通知发送失败',
+        message: errMessage || '测试通知发送失败',
       });
     }
   });
@@ -1815,10 +1833,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       return {
         success: true,
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       return reply.code(500).send({
         success: false,
-        message: err?.message || '重新初始化系统失败',
+        message: errMessage || '重新初始化系统失败',
       });
     }
   });

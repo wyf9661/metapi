@@ -218,8 +218,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         tokens: siteFilteredTokens,
         accounts: siteFilteredAccounts,
       };
-    } catch (e: any) {
-      toast.error(e.message || '加载令牌失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '加载令牌失败');
       return {
         tokens: [] as any[],
         accounts: [] as any[],
@@ -542,8 +543,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       toast.success('令牌已更新');
       closeEditPanel();
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '更新令牌失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '更新令牌失败');
     } finally {
       setSavingEdit(false);
     }
@@ -572,8 +574,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         await copyText(tokenValue);
         toast.success(`已复制令牌：${tokenName || `token-${tokenId}`}`);
       });
-    } catch (error: any) {
-      toast.error(error?.message || '复制令牌失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(errorMessage || '复制令牌失败');
     }
   };
 
@@ -605,8 +608,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       setShowAdd(false);
       setCreateHintModelName('');
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '创建令牌失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '创建令牌失败');
     } finally {
       setSaving(false);
     }
@@ -682,8 +686,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         accountIds: [syncingAccountId],
         source: 'account-token-sync',
       });
-    } catch (e: any) {
-      toast.error(e.message || '同步令牌失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '同步令牌失败');
     } finally {
       setSyncing(false);
     }
@@ -743,8 +748,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
 
       await load({ forceSnapshot: true });
       emitTokenCoverageChanged({ source: 'account-token-sync-all' });
-    } catch (e: any) {
-      toast.error(e.message || '全部同步失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '全部同步失败');
     } finally {
       setSyncingAll(false);
     }
@@ -770,8 +776,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       } else {
         toast.info(`站点令牌同步完成：成功 ${success}，失败 ${failed}`);
       }
-    } catch (e: any) {
-      toast.error(e.message || '同步站点令牌失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '同步站点令牌失败');
     } finally {
       setSyncingAll(false);
     }

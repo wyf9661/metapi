@@ -174,9 +174,10 @@ export async function videosProxyRoute(app: FastifyInstance) {
         ));
         recordDownstreamCostUsage(request, estimatedCost);
         return reply.code(upstream.status).send(rewriteVideoResponsePublicId(data, mapping.publicId));
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         const status = error instanceof SiteApiEndpointRequestError ? (error.status || 0) : 0;
-        const errorText = error?.message || 'network failure';
+        const errorText = errorMessage || 'network failure';
         await recordTokenRouterEventBestEffort('record channel failure', () => tokenRouter.recordFailure(selected.channel.id, {
           status,
           errorText,

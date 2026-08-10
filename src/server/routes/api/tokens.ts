@@ -807,8 +807,9 @@ export async function tokensRoutes(app: FastifyInstance) {
         }).run();
         existingPairs.add(pairKey);
         created += 1;
-      } catch (e: any) {
-        errors.push(e.message || `添加通道失败: accountId=${item.accountId}`);
+      } catch (e) {
+        const eMessage = e instanceof Error ? e.message : String(e);
+        errors.push(eMessage || `添加通道失败: accountId=${item.accountId}`);
       }
     }
 

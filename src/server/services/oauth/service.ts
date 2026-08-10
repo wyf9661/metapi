@@ -978,11 +978,12 @@ export async function refreshOauthConnectionQuotaBatch(accountIds: number[]) {
         success: true,
         quota,
       };
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         accountId,
         success: false,
-        error: error?.message || 'oauth quota refresh failed',
+        error: errorMessage || 'oauth quota refresh failed',
       };
     }
   }) satisfies Array<{
@@ -1049,7 +1050,8 @@ export async function importOauthConnectionsFromNativeJson(input: {
         provider: resolvedIdentity.provider,
         accountId: persisted.account?.id,
       });
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       items.push({
         name: resolvedIdentity?.name
           || asNonEmptyString(payload.email)
@@ -1059,7 +1061,7 @@ export async function importOauthConnectionsFromNativeJson(input: {
           || 'unknown',
         status: 'failed',
         provider: resolvedIdentity?.provider || asNonEmptyString(payload.type) || undefined,
-        message: error?.message || 'oauth import failed',
+        message: errorMessage || 'oauth import failed',
       });
       if (!continueOnItemFailure) {
         throw error;

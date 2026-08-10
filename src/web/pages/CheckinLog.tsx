@@ -143,8 +143,9 @@ export default function CheckinLog() {
     try {
       const data = await api.getCheckinLogs('limit=100');
       setLogs(Array.isArray(data) ? data : []);
-    } catch (e: any) {
-      toast.error(e.message || '加载签到记录失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '加载签到记录失败');
     } finally {
       setLoading(false);
     }
@@ -164,8 +165,9 @@ export default function CheckinLog() {
         toast.success(res?.message || '签到已执行');
       }
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '触发签到失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '触发签到失败');
     } finally {
       setTriggering(false);
     }

@@ -120,8 +120,9 @@ export default function EditAccountModal({
       toast.success('账号已更新');
       handleClose();
       onSaved();
-    } catch (e: any) {
-      toast.error(e.message || '更新账号失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '更新账号失败');
     } finally {
       setSavingEdit(false);
     }

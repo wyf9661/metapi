@@ -779,8 +779,9 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         }
 
         successIds.push(id);
-      } catch (error: any) {
-        failedItems.push({ id, message: error?.message || 'Batch operation failed' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        failedItems.push({ id, message: errorMessage || 'Batch operation failed' });
       }
     }
 

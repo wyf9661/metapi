@@ -210,8 +210,9 @@ export async function oauthRoutes(app: FastifyInstance) {
           proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
           requestOrigin: resolveRequestOrigin(request),
         });
-      } catch (error: any) {
-        return reply.code(404).send({ message: error?.message || 'oauth provider not found' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return reply.code(404).send({ message: errorMessage || 'oauth provider not found' });
       }
     },
   );
@@ -248,8 +249,9 @@ export async function oauthRoutes(app: FastifyInstance) {
           state: request.params.state,
           callbackUrl,
         });
-      } catch (error: any) {
-        const message = error?.message || 'oauth callback submission failed';
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const message = errorMessage || 'oauth callback submission failed';
         if (message === 'invalid oauth callback url' || message === 'oauth callback state mismatch') {
           return reply.code(400).send({ message });
         }
@@ -311,8 +313,9 @@ export async function oauthRoutes(app: FastifyInstance) {
             proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
           },
         );
-      } catch (error: any) {
-        return reply.code(404).send({ message: error?.message || 'oauth account not found' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return reply.code(404).send({ message: errorMessage || 'oauth account not found' });
       }
     },
   );
@@ -345,8 +348,9 @@ export async function oauthRoutes(app: FastifyInstance) {
           accountId,
           proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
         });
-      } catch (error: any) {
-        const message = error?.message || 'oauth account not found';
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const message = errorMessage || 'oauth account not found';
         if (message === 'oauth account not found' || message === 'account is not managed by oauth') {
           return reply.code(404).send({ message });
         }
@@ -366,8 +370,9 @@ export async function oauthRoutes(app: FastifyInstance) {
       }
       try {
         return await deleteOauthConnection(accountId);
-      } catch (error: any) {
-        return reply.code(404).send({ message: error?.message || 'oauth account not found' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return reply.code(404).send({ message: errorMessage || 'oauth account not found' });
       }
     },
   );
@@ -382,8 +387,9 @@ export async function oauthRoutes(app: FastifyInstance) {
       }
       try {
         return await refreshOauthConnectionQuota(accountId);
-      } catch (error: any) {
-        return reply.code(404).send({ message: error?.message || 'oauth account not found' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return reply.code(404).send({ message: errorMessage || 'oauth account not found' });
       }
     },
   );
@@ -438,8 +444,9 @@ export async function oauthRoutes(app: FastifyInstance) {
           items: hasBatchItems ? parsedBody.data.items : undefined,
           proxyUrl: normalizedProxyUrl.present ? normalizedProxyUrl.proxyUrl : undefined,
         });
-      } catch (error: any) {
-        const message = error?.message || 'oauth import failed';
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const message = errorMessage || 'oauth import failed';
         if (error instanceof OauthImportValidationError) {
           return reply.code(400).send({ message });
         }
@@ -469,8 +476,9 @@ export async function oauthRoutes(app: FastifyInstance) {
           name: parsedBody.data.name || '',
           strategy: parsedBody.data.strategy || 'round_robin',
         });
-      } catch (error: any) {
-        const message = error?.message || 'oauth route unit creation failed';
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const message = errorMessage || 'oauth route unit creation failed';
         if (message === 'oauth route unit accounts not found' || message === 'oauth route unit not found') {
           return reply.code(404).send({ message });
         }
@@ -515,8 +523,9 @@ export async function oauthRoutes(app: FastifyInstance) {
           name: parsedBody.data.name,
           strategy: parsedBody.data.strategy,
         });
-      } catch (error: any) {
-        const message = error?.message || 'oauth route unit update failed';
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const message = errorMessage || 'oauth route unit update failed';
         if (message === 'oauth route unit not found') {
           return reply.code(404).send({ message });
         }
@@ -545,8 +554,9 @@ export async function oauthRoutes(app: FastifyInstance) {
       }
       try {
         return await deleteOauthRouteUnit(routeUnitId);
-      } catch (error: any) {
-        const message = error?.message || 'oauth route unit not found';
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const message = errorMessage || 'oauth route unit not found';
         if (message === 'oauth route unit not found') {
           return reply.code(404).send({ message });
         }

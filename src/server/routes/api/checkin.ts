@@ -171,8 +171,9 @@ export async function checkinRoutes(app: FastifyInstance) {
         cron: nextCron,
         intervalHours: normalizedIntervalHours,
       };
-    } catch (err: any) {
-      return { error: err.message };
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      return { error: errMessage };
     }
   });
 }

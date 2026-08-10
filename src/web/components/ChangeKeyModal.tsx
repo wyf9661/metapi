@@ -51,8 +51,9 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
       } else {
         setError(res.message || '更新失败');
       }
-    } catch (e: any) {
-      setError(e.message || '更新失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      setError(eMessage || '更新失败');
     } finally {
       setSaving(false);
     }

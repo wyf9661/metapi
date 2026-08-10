@@ -98,8 +98,9 @@ export default function NotificationSettings() {
                     ? Math.max(0, Math.trunc(Number(runtimeInfo.notifyCooldownSec)))
                     : 300,
             });
-        } catch (err: any) {
-            toast.error(err?.message || '加载通知设置失败');
+        } catch (err) {
+          const errMessage = err instanceof Error ? err.message : String(err);
+            toast.error(errMessage || '加载通知设置失败');
         } finally {
             setLoading(false);
         }
@@ -147,8 +148,9 @@ export default function NotificationSettings() {
             setTelegramBotToken('');
             setSmtpPass('');
             toast.success('通知设置已保存');
-        } catch (err: any) {
-            toast.error(err?.message || '保存失败');
+        } catch (err) {
+          const errMessage = err instanceof Error ? err.message : String(err);
+            toast.error(errMessage || '保存失败');
         } finally {
             setSavingNotify(false);
         }
@@ -159,8 +161,9 @@ export default function NotificationSettings() {
         try {
             const res = await api.testNotification();
             toast.success(res?.message || '测试通知已发送');
-        } catch (err: any) {
-            toast.error(err?.message || '触发测试通知失败');
+        } catch (err) {
+          const errMessage = err instanceof Error ? err.message : String(err);
+            toast.error(errMessage || '触发测试通知失败');
         } finally {
             setTestingNotify(false);
         }

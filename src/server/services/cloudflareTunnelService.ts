@@ -546,8 +546,9 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
     });
 
     return getCloudflareTunnelStatus();
-  } catch (error: any) {
-    lastError = error?.message || String(error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    lastError = errorMessage || String(error);
     try {
       if (child) child.kill('SIGTERM');
     } catch {

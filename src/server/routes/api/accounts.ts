@@ -439,8 +439,9 @@ async function refreshRuntimeHealthForRow(
       state: runtimeHealth.state,
       message: runtimeHealth.reason,
     };
-  } catch (error: any) {
-    const message = String(error?.message || '健康检查失败');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const message = String(errorMessage || '健康检查失败');
     const unhealthy = isTokenExpiredError({ message });
     const state = unhealthy ? 'unhealthy' : 'degraded';
     setAccountRuntimeHealth(accountId, {
@@ -889,7 +890,8 @@ export async function accountsRoutes(app: FastifyInstance) {
             modelCount: availableModels.length,
             models: availableModels.slice(0, 10),
           };
-        } catch (err: any) {
+        } catch (err) {
+          const errMessage = err instanceof Error ? err.message : String(err);
           if (isVerificationTimeoutError(err)) {
             const failure = buildVerificationFailureResponse(
               await diagnoseVerificationFailure({
@@ -900,7 +902,7 @@ export async function accountsRoutes(app: FastifyInstance) {
           }
           return {
             success: false,
-            message: err?.message || 'API Key 验证失败',
+            message: errMessage || 'API Key 验证失败',
           };
         }
       }
@@ -913,7 +915,8 @@ export async function accountsRoutes(app: FastifyInstance) {
           ACCOUNT_VERIFY_TIMEOUT_MS,
           `Token verification timed out (${Math.max(1, Math.round(ACCOUNT_VERIFY_TIMEOUT_MS / 1000))}s)`,
         );
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         if (isVerificationTimeoutError(err)) {
           const failure = buildVerificationFailureResponse(
             await diagnoseVerificationFailure(),
@@ -923,7 +926,7 @@ export async function accountsRoutes(app: FastifyInstance) {
         return {
           success: false,
           message: appendSessionTokenRebindHint(
-            err?.message || 'Token 验证失败',
+            errMessage || 'Token 验证失败',
           ),
         };
       }
@@ -1149,11 +1152,12 @@ export async function accountsRoutes(app: FastifyInstance) {
               candidatePlatformUserId,
             ),
         );
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply.code(400).send({
           success: false,
           message: appendSessionTokenRebindHint(
-            err?.message || 'Token 验证失败',
+            errMessage || 'Token 验证失败',
           ),
         });
       }
@@ -1336,12 +1340,16 @@ export async function accountsRoutes(app: FastifyInstance) {
             message: created.message || null,
             modelCount: created.modelCount || 0,
           });
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const requiresVerification = error instanceof Error && 'requiresVerification' in error
+            ? (error as Error & { requiresVerification?: boolean }).requiresVerification === true
+            : false;
           items.push({
             index,
             status: 'failed',
-            message: error?.message || '创建失败',
-            requiresVerification: error?.requiresVerification === true,
+            message: errorMessage || '创建失败',
+            requiresVerification,
           });
         }
       }
@@ -1389,14 +1397,18 @@ export async function accountsRoutes(app: FastifyInstance) {
         jobId: created.jobId,
         message: created.message,
       };
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      const requiresVerification = err instanceof Error && 'requiresVerification' in err
+        ? (err as Error & { requiresVerification?: boolean }).requiresVerification === true
+        : false;
       return reply.code(400).send({
         success: false,
-        requiresVerification: err?.requiresVerification === true,
+        requiresVerification,
         message:
           credentialMode !== 'apikey'
-            ? appendSessionTokenRebindHint(err?.message || 'Token 验证失败')
-            : err?.message || 'API Key 验证失败',
+            ? appendSessionTokenRebindHint(errMessage || 'Token 验证失败')
+            : errMessage || 'API Key 验证失败',
       });
     }
   });
@@ -1652,10 +1664,11 @@ export async function accountsRoutes(app: FastifyInstance) {
         }
 
         successIds.push(id);
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         failedItems.push({
           id,
-          message: error?.message || 'Batch operation failed',
+          message: errorMessage || 'Batch operation failed',
         });
       }
     }
@@ -1750,9 +1763,10 @@ export async function accountsRoutes(app: FastifyInstance) {
           return { message: 'account not found or platform not supported' };
         }
         return result;
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         reply.code(400);
-        return { message: err?.message || 'failed to fetch balance' };
+        return { message: errMessage || 'failed to fetch balance' };
       }
     },
   );
@@ -1931,10 +1945,11 @@ export async function accountsRoutes(app: FastifyInstance) {
         await rebuildRoutesBestEffort();
 
         return { success: true };
-      } catch (err: any) {
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return reply
           .code(500)
-          .send({ success: false, message: err?.message || '保存失败' });
+          .send({ success: false, message: errMessage || '保存失败' });
       }
     },
   );

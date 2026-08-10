@@ -346,8 +346,9 @@ export async function refreshBalance(accountId: number) {
 
   try {
     balanceInfo = await readBalance(activeAccessToken);
-  } catch (err: any) {
-    const message = err?.message || 'unknown error';
+  } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    const message = errMessage || 'unknown error';
     const canTryManagedSub2ApiRefresh =
       isSub2ApiPlatform(site.platform)
       && !!getSub2ApiAuthFromExtraConfig(activeExtraConfig)?.refreshToken

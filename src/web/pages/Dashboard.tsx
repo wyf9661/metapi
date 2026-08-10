@@ -319,8 +319,9 @@ export default function Dashboard({
           silent ? { refresh: true } : undefined,
         );
         setData(result);
-      } catch (err: any) {
-        const message = err?.message || '加载仪表盘失败';
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        const message = errMessage || '加载仪表盘失败';
         setError(message);
         if (silent) toast.error(message);
       } finally {
@@ -445,8 +446,9 @@ export default function Dashboard({
       const res = await api.getTunnelStatus() as any;
       setTunnel(res?.tunnel || res || null);
       setTunnelError(null);
-    } catch (err: any) {
-      setTunnelError(err?.message || '加载隧道状态失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      setTunnelError(errMessage || '加载隧道状态失败');
     }
   }, []);
 
@@ -480,9 +482,10 @@ export default function Dashboard({
       const res = await api.setTunnelDashboardAccess(next) as any;
       setTunnel(res?.tunnel || { ...(tunnel || {}), dashboardAccess: next });
       toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
-    } catch (err: any) {
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
       setTunnel((current: any) => ({ ...(current || {}), dashboardAccess: prev }));
-      toast.error(err?.message || '更新失败');
+      toast.error(errMessage || '更新失败');
     }
   };
 
@@ -509,9 +512,10 @@ export default function Dashboard({
         }
       }
       await refreshTunnel();
-    } catch (err: any) {
-      setTunnelError(err?.message || '隧道操作失败');
-      toast.error(err?.message || '隧道操作失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      setTunnelError(errMessage || '隧道操作失败');
+      toast.error(errMessage || '隧道操作失败');
       await refreshTunnel();
     } finally {
       setTunnelBusy(false);

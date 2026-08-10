@@ -1988,11 +1988,12 @@ export async function exportBackupToWebdav(type?: BackupExportType) {
       lastSyncAt: syncedAt,
       lastError: null,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const previousState = await loadBackupWebdavState();
     await writeBackupWebdavState({
       lastSyncAt: previousState.lastSyncAt,
-      lastError: error?.message || 'WebDAV 导出失败',
+      lastError: errorMessage || 'WebDAV 导出失败',
     });
     throw error;
   }
@@ -2039,11 +2040,12 @@ export async function importBackupFromWebdav() {
       lastError: null,
       ...result,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const previousState = await loadBackupWebdavState();
     await writeBackupWebdavState({
       lastSyncAt: previousState.lastSyncAt,
-      lastError: error?.message || 'WebDAV 导入失败',
+      lastError: errorMessage || 'WebDAV 导入失败',
     });
     throw error;
   }

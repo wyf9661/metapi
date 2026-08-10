@@ -2073,10 +2073,11 @@ export async function statsRoutes(app: FastifyInstance) {
         );
         clearModelsMarketplaceCache();
         send('done', { success: true, ...result });
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         send('error', {
           success: false,
-          message: error?.message || '探测失败',
+          message: errorMessage || '探测失败',
         });
       } finally {
         try { reply.raw.end(); } catch {}

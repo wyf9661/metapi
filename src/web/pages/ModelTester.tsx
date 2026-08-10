@@ -152,10 +152,11 @@ export default function ModelTester() {
       }
 
       setModel((prev) => (prev && nextModels.includes(prev) ? prev : nextModels[0]));
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       setModels([]);
       setModel('');
-      setListError(error?.message || '拉取模型列表失败');
+      setListError(errorMessage || '拉取模型列表失败');
     } finally {
       setListing(false);
     }
@@ -185,8 +186,9 @@ export default function ModelTester() {
       if (!result.ok) {
         setProbeError(result.error || `HTTP ${result.statusCode || 0}`);
       }
-    } catch (error: any) {
-      setProbeError(error?.message || '检测失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setProbeError(errorMessage || '检测失败');
     } finally {
       setProbing(false);
     }

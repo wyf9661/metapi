@@ -153,8 +153,9 @@ export async function refreshSub2ApiManagedSession(params: {
       payload = await response.json().catch(() => null);
       rawText = payload == null ? '' : JSON.stringify(payload);
     }
-  } catch (err: any) {
-    throw new Error(err?.message || 'sub2api token refresh request failed');
+  } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    throw new Error(errMessage || 'sub2api token refresh request failed');
   }
 
   const refreshed = parseSub2ApiRefreshPayload(payload);

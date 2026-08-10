@@ -1056,8 +1056,9 @@ export async function sitesRoutes(app: FastifyInstance) {
           await applySiteStatusSideEffects(id, existingSite.name, nextStatus);
         }
         successIds.push(id);
-      } catch (error: any) {
-        failedItems.push({ id, message: error?.message || 'Batch operation failed' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        failedItems.push({ id, message: errorMessage || 'Batch operation failed' });
       }
     }
 
@@ -1228,8 +1229,9 @@ export async function sitesRoutes(app: FastifyInstance) {
         if (!probeAbort.signal.aborted) {
           sseWrite(reply.raw, 'complete', result);
         }
-      } catch (err: any) {
-        sseWrite(reply.raw, 'error', { message: err?.message || '探测失败' });
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        sseWrite(reply.raw, 'error', { message: errMessage || '探测失败' });
       }
       reply.raw.end();
     },

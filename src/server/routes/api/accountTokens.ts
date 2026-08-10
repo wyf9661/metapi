@@ -256,12 +256,13 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
             defaultTokenId: convergence.defaultTokenId,
           };
         }
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         return {
           ...base,
           status: 'failed',
           reason: 'sync_error',
-          message: error?.message || 'sync failed',
+          message: errorMessage || 'sync failed',
           synced: false,
           created: 0,
           updated: 0,
@@ -354,12 +355,13 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
       synced: true,
       ...synced,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       ...base,
       status: 'failed',
       reason: 'sync_error',
-      message: error?.message || 'sync failed',
+      message: errorMessage || 'sync failed',
       synced: false,
       created: 0,
       updated: 0,
@@ -762,8 +764,9 @@ export async function accountTokensRoutes(app: FastifyInstance) {
         }
 
         successIds.push(id);
-      } catch (error: any) {
-        failedItems.push({ id, message: error?.message || 'Batch operation failed' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        failedItems.push({ id, message: errorMessage || 'Batch operation failed' });
       }
     }
 
@@ -956,10 +959,11 @@ export async function accountTokensRoutes(app: FastifyInstance) {
       );
       const normalized = Array.from(new Set((groups || []).map((item) => String(item || '').trim()).filter(Boolean)));
       return { success: true, groups: normalized.length > 0 ? normalized : ['default'] };
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return reply.code(502).send({
         success: false,
-        message: error?.message || '拉取分组失败',
+        message: errorMessage || '拉取分组失败',
       });
     }
   });

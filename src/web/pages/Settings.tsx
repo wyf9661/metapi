@@ -480,8 +480,9 @@ export default function Settings() {
           : null,
         restartRequired: !!runtimeDatabaseInfo?.restartRequired,
       });
-    } catch (err: any) {
-      toast.error(err?.message || '加载设置失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '加载设置失败');
     } finally {
       setLoading(false);
     }
@@ -510,8 +511,9 @@ export default function Settings() {
         logCleanupRetentionDays: runtime.logCleanupRetentionDays,
       });
       toast.success('定时任务设置已保存');
-    } catch (err: any) {
-      toast.error(err?.message || '保存失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存失败');
     } finally {
       setSavingSchedule(false);
     }
@@ -522,8 +524,9 @@ export default function Settings() {
     try {
       await api.triggerCheckinAll();
       toast.success('已开始全部签到，请稍后查看签到日志');
-    } catch (err: any) {
-      toast.error(err?.message || '触发签到失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '触发签到失败');
     } finally {
       setTestingCheckin(false);
     }
@@ -556,8 +559,9 @@ export default function Settings() {
           : prev.proxySessionChannelQueueWaitMs,
       }));
       toast.success('传输与会话并发设置已保存');
-    } catch (err: any) {
-      toast.error(err?.message || '保存失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存失败');
     } finally {
       setSavingProxyTransport(false);
     }
@@ -584,8 +588,9 @@ export default function Settings() {
       }));
       setProxyErrorKeywordsText(nextKeywords.join('\n'));
       toast.success('代理失败规则已保存');
-    } catch (err: any) {
-      toast.error(err?.message || '保存失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存失败');
     } finally {
       setSavingProxyFailureRules(false);
     }
@@ -608,8 +613,9 @@ export default function Settings() {
       syncPayloadRuleDraftsFromObject(res?.payloadRules);
       syncPayloadVisualRulesFromObject(res?.payloadRules);
       toast.success('Payload 规则已保存');
-    } catch (err: any) {
-      toast.error(err?.message || '保存 Payload 规则失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存 Payload 规则失败');
     } finally {
       setSavingPayloadRules(false);
     }
@@ -681,8 +687,9 @@ export default function Settings() {
         disableCrossProtocolFallback: runtime.disableCrossProtocolFallback,
       });
       toast.success('Routing weights saved');
-    } catch (err: any) {
-      toast.error(err?.message || '保存失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存失败');
     } finally {
       setSavingRouting(false);
     }
@@ -717,8 +724,9 @@ export default function Settings() {
           : prev.currentAdminIp,
       }));
       toast.success('Security settings saved');
-    } catch (err: any) {
-      toast.error(err?.message || '保存失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存失败');
     } finally {
       setSavingSecurity(false);
     }
@@ -731,8 +739,9 @@ export default function Settings() {
     try {
       const res = await api.clearRuntimeCache();
       toast.success(`缓存已清理（模型缓存 ${res.deletedModelAvailability || 0} 条）`);
-    } catch (err: any) {
-      toast.error(err?.message || '清理缓存失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '清理缓存失败');
     } finally {
       setClearingCache(false);
     }
@@ -755,8 +764,9 @@ export default function Settings() {
           : prev.antiProbeMinTextLength,
       }));
       toast.success('反探测设置已保存');
-    } catch (err: any) {
-      toast.error(err?.message || '保存失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存失败');
     } finally {
       setSavingSecurity(false);
     }
@@ -768,8 +778,9 @@ export default function Settings() {
     try {
       const res = await api.clearUsageData();
       toast.success(`占用统计已清理（日志 ${res.deletedProxyLogs || 0} 条）`);
-    } catch (err: any) {
-      toast.error(err?.message || '清理占用失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '清理占用失败');
     } finally {
       setClearingUsage(false);
     }
@@ -788,8 +799,9 @@ export default function Settings() {
       await api.factoryReset();
       clearAppInstallationState(localStorage);
       window.location.reload();
-    } catch (err: any) {
-      toast.error(err?.message || '重新初始化系统失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '重新初始化系统失败');
       setFactoryResetting(false);
     }
   };
@@ -814,8 +826,9 @@ export default function Settings() {
         ssl: migrationSsl,
       });
       toast.success(`Connection success: ${res.connection || migrationDialect}`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Target database connection failed');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || 'Target database connection failed');
     } finally {
       setTestingMigrationConnection(false);
     }
@@ -848,8 +861,9 @@ export default function Settings() {
       });
       setMigrationSummary(res);
       toast.success(res?.message || 'Database migration completed');
-    } catch (err: any) {
-      toast.error(err?.message || 'Database migration failed');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || 'Database migration failed');
     } finally {
       setMigratingDatabase(false);
     }
@@ -890,8 +904,9 @@ export default function Settings() {
         restartRequired: !!res?.restartRequired,
       });
       toast.success(res?.message || 'Runtime database config saved');
-    } catch (err: any) {
-      toast.error(err?.message || 'Runtime database config save failed');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || 'Runtime database config save failed');
     } finally {
       setSavingRuntimeDatabase(false);
     }
@@ -967,9 +982,10 @@ export default function Settings() {
                 try {
                   await api.setTunnelDashboardAccess(next);
                   toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
-                } catch (err: any) {
+                } catch (err) {
+                  const errMessage = err instanceof Error ? err.message : String(err);
                   setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: !next }));
-                  toast.error(err?.message || '更新失败');
+                  toast.error(errMessage || '更新失败');
                 }
               }}
               style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}

@@ -34,10 +34,11 @@ export async function tunnelRoutes(app: FastifyInstance) {
         message: status.running ? '隧道已启用' : '隧道启动中',
         tunnel: status,
       };
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return reply.code(500).send({
         success: false,
-        message: error?.message || '启用隧道失败',
+        message: errorMessage || '启用隧道失败',
         tunnel: getCloudflareTunnelStatus(),
       });
     }

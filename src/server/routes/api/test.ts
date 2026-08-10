@@ -815,10 +815,11 @@ export async function testRoutes(app: FastifyInstance) {
           timeoutMs: typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
         });
         return reply.send(result);
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         return reply.code(400).send({
           ok: false,
-          error: error?.message || 'invalid remote models request',
+          error: errorMessage || 'invalid remote models request',
         });
       }
     },
@@ -840,10 +841,11 @@ export async function testRoutes(app: FastifyInstance) {
           timeoutMs: typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
         });
         return reply.send(result);
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         return reply.code(400).send({
           ok: false,
-          error: error?.message || 'invalid remote probe request',
+          error: errorMessage || 'invalid remote probe request',
         });
       }
     },

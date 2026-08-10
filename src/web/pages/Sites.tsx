@@ -442,8 +442,9 @@ export default function Sites() {
       } catch {
         toast.error('禁用模型列表已保存，但路由重建失败，请手动刷新路由');
       }
-    } catch (e: any) {
-      toast.error(e.message || '保存禁用模型失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '保存禁用模型失败');
     } finally {
       setDisabledModelsSaving(false);
     }
@@ -464,8 +465,9 @@ export default function Sites() {
         : s,
       ));
       toast.success('刷新后探测设置已保存');
-    } catch (e: any) {
-      toast.error(e.message || '保存失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '保存失败');
     } finally {
       setProbeSaving(false);
     }
@@ -591,13 +593,14 @@ export default function Sites() {
           if (data) handleSseEvent(eventType, data);
         }
       }
-    } catch (e: any) {
-      if (e?.name === 'AbortError') {
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      if (e instanceof Error && e.name === 'AbortError') {
         setProbeLog((prev) => [...prev, { time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text: '已手动停止', color: 'var(--color-text-muted)' }]);
         return;
       }
-      addLog(e?.message || '探测失败', 'var(--color-error, #ef4444)');
-      toast.error(e?.message || '探测失败');
+      addLog(eMessage || '探测失败', 'var(--color-error, #ef4444)');
+      toast.error(eMessage || '探测失败');
     } finally {
       setProbing(false);
       probeAbortRef.current = null;
@@ -686,8 +689,9 @@ export default function Sites() {
       }
       closeEditor();
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '保存失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '保存失败');
     } finally {
       setSaving(false);
     }
@@ -861,8 +865,9 @@ export default function Sites() {
       } else {
         toast.error(result?.error || '无法识别平台类型');
       }
-    } catch (e: any) {
-      toast.error(e.message || '自动检测失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '自动检测失败');
     } finally {
       setDetecting(false);
     }
@@ -879,8 +884,9 @@ export default function Sites() {
       await api.updateSite(site.id, { status: nextStatus });
       toast.success(nextStatus === 'disabled' ? `站点 "${site.name}" 已禁用` : `站点 "${site.name}" 已启用`);
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '切换站点状态失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '切换站点状态失败');
     } finally {
       setTogglingSiteId(null);
     }
@@ -905,8 +911,9 @@ export default function Sites() {
       await api.updateSite(site.id, { isPinned: nextPinned });
       toast.success(nextPinned ? `站点 "${site.name}" 已置顶` : `站点 "${site.name}" 已取消置顶`);
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '切换置顶失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '切换置顶失败');
     } finally {
       setPinningSiteId(null);
     }
@@ -920,8 +927,9 @@ export default function Sites() {
     try {
       await Promise.all(updates.map((update) => api.updateSite(update.id, { sortOrder: update.sortOrder })));
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '更新排序失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '更新排序失败');
     } finally {
       setOrderingSiteId(null);
     }
@@ -945,8 +953,9 @@ export default function Sites() {
       await api.deleteSite(target.siteId);
       toast.success(`站点 "${target.siteName || target.siteId}" 已删除`);
       await load();
-    } catch (e: any) {
-      toast.error(e.message || '删除失败');
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '删除失败');
     } finally {
       setDeleting(null);
     }
@@ -988,8 +997,9 @@ export default function Sites() {
               try {
                 const res = await api.triggerCheckinAll();
                 toast.success(res?.message || '已触发全部签到');
-              } catch (e: any) {
-                toast.error(e?.message || '签到触发失败');
+              } catch (e) {
+                const eMessage = e instanceof Error ? e.message : String(e);
+                toast.error(eMessage || '签到触发失败');
               }
             }}
             className="btn btn-soft-primary"
@@ -1005,8 +1015,9 @@ export default function Sites() {
                 } else {
                   toast.success(res?.message || '账号状态已刷新');
                 }
-              } catch (e: any) {
-                toast.error(e?.message || '刷新状态失败');
+              } catch (e) {
+                const eMessage = e instanceof Error ? e.message : String(e);
+                toast.error(eMessage || '刷新状态失败');
               }
             }}
             className="btn btn-soft-primary"
@@ -1022,8 +1033,9 @@ export default function Sites() {
                 } else {
                   toast.success('同步全部账号令牌完成');
                 }
-              } catch (e: any) {
-                toast.error(e?.message || '同步失败');
+              } catch (e) {
+                const eMessage = e instanceof Error ? e.message : String(e);
+                toast.error(eMessage || '同步失败');
               }
             }}
             className="btn btn-soft-primary"

@@ -491,9 +491,10 @@ export default function DownstreamKeys() {
         enabled: !!row.enabled,
       })));
       setLoadError(null);
-    } catch (err: any) {
-      setLoadError(err?.message || '加载下游密钥列表失败');
-      toast.error(err?.message || '加载下游密钥列表失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      setLoadError(errMessage || '加载下游密钥列表失败');
+      toast.error(errMessage || '加载下游密钥列表失败');
     } finally {
       setLoading(false);
     }
@@ -573,8 +574,9 @@ export default function DownstreamKeys() {
         )),
       );
       setExclusionSourceLoaded(true);
-    } catch (err: any) {
-      toast.error(err?.message || '加载可排除站点与令牌失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '加载可排除站点与令牌失败');
     } finally {
       setExclusionSourceLoading(false);
     }
@@ -825,8 +827,9 @@ export default function DownstreamKeys() {
       }
       closeEditor();
       await load();
-    } catch (err: any) {
-      toast.error(err?.message || '保存下游密钥失败');
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || '保存下游密钥失败');
     } finally {
       setSaving(false);
     }
@@ -883,8 +886,9 @@ export default function DownstreamKeys() {
         resetBatchMetadataForm();
       }
       await load();
-    } catch (err: any) {
-      toast.error(err?.message || `${label}失败`);
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errMessage || `${label}失败`);
     } finally {
       setBatchActionLoading(false);
     }

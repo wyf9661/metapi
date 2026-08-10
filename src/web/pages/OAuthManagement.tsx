@@ -149,11 +149,12 @@ async function readOauthImportDrafts(
         sourceName,
         rawText: await file.text(),
       };
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         sourceName,
         rawText: '',
-        error: error?.message || '读取文件失败',
+        error: errorMessage || '读取文件失败',
       };
     }
   }));
@@ -290,11 +291,12 @@ function parseOauthImportPreview(source: OAuthImportSource): OAuthImportPreview 
       disabled: payload.disabled === true,
       parsedData: payload,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       sourceName: source.sourceName,
       valid: false,
-      error: error?.message || 'JSON 结构无效',
+      error: errorMessage || 'JSON 结构无效',
     };
   }
 }
@@ -454,9 +456,10 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
       const nextProviders = Array.isArray(providersResponse?.providers) ? providersResponse.providers : [];
       setProviders(nextProviders);
       setSelectedProviderKey((current) => current || nextProviders[0]?.provider || '');
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('failed to load oauth management data', error);
-      setSessionError(error?.message || 'OAuth 管理数据加载失败');
+      setSessionError(errorMessage || 'OAuth 管理数据加载失败');
     } finally {
       setLoaded(true);
     }
@@ -528,9 +531,10 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
 
         setSessionError(`授权失败：${session.error || '未知错误'}`);
         setActiveSession(null);
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         if (cancelled) return;
-        setSessionError(error?.message || 'OAuth 会话状态查询失败');
+        setSessionError(errorMessage || 'OAuth 会话状态查询失败');
         setActiveSession(null);
       }
     };
@@ -750,8 +754,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
       setDrawerOpen(false);
       resetOauthProxySettings();
       setSessionSuccess('代理已保存');
-    } catch (error: any) {
-      setSessionError(error?.message || '保存代理失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setSessionError(errorMessage || '保存代理失败');
     } finally {
       setActionLoadingKey('');
     }
@@ -815,8 +820,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
       });
       resetOauthProxySettings();
       openOAuthPopup(provider.provider, started.authorizationUrl);
-    } catch (error: any) {
-      setSessionError(error?.message || '无法启动 OAuth 授权');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setSessionError(errorMessage || '无法启动 OAuth 授权');
     } finally {
       setActionLoadingKey('');
     }
@@ -833,8 +839,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
     try {
       await api.submitOAuthManualCallback(activeSession.state, callbackUrl);
       setSessionInfo('回调已提交，等待授权完成');
-    } catch (error: any) {
-      setSessionError(error?.message || '提交回调 URL 失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setSessionError(errorMessage || '提交回调 URL 失败');
     } finally {
       setManualCallbackSubmitting(false);
     }
@@ -852,8 +859,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
       setSessionSuccess('连接已删除');
       await loadConnections();
       setSelectedConnectionIds((current) => current.filter((id) => id !== accountId));
-    } catch (error: any) {
-      setSessionError(error?.message || '删除 OAuth 连接失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setSessionError(errorMessage || '删除 OAuth 连接失败');
     } finally {
       setActionLoadingKey('');
     }
@@ -888,8 +896,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
       await api.refreshOAuthConnectionQuota(accountId);
       setSessionSuccess('额度信息已刷新');
       await loadConnections();
-    } catch (error: any) {
-      setSessionError(error?.message || '刷新额度失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setSessionError(errorMessage || '刷新额度失败');
     } finally {
       setActionLoadingKey('');
     }
@@ -906,8 +915,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
       } else {
         setSessionSuccess(`已批量刷新 ${result.refreshed} 个 OAuth 连接`);
       }
-    } catch (error: any) {
-      setSessionError(error?.message || '批量刷新额度失败');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setSessionError(errorMessage || '批量刷新额度失败');
     } finally {
       setActionLoadingKey('');
     }
@@ -961,9 +971,10 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
         await loadConnections();
         setSessionSuccess('模型列表已刷新');
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       if (modelsModalRequestSeqRef.current !== requestId) return;
-      setSessionError(error?.message || '加载模型列表失败');
+      setSessionError(errorMessage || '加载模型列表失败');
       setModelsModal((current) => (
         options.closeOnError
           ? {
@@ -1094,8 +1105,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
         setSessionSuccess(importMessage);
       }
       closeImportModal();
-    } catch (error: any) {
-      const message = error?.message || '导入 OAuth JSON 失败';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const message = errorMessage || '导入 OAuth JSON 失败';
       toast.error(message);
       setSessionError(message);
     } finally {
@@ -1146,8 +1158,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
           routeUnit,
         });
       }
-    } catch (error: any) {
-      const message = error?.message || '创建路由池失败';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const message = errorMessage || '创建路由池失败';
       toast.error(message);
       setSessionError(message);
     } finally {
@@ -1182,8 +1195,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
           routeUnit: routeUnitFeedback,
         });
       }
-    } catch (error: any) {
-      const message = error?.message || '拆回单体失败';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const message = errorMessage || '拆回单体失败';
       toast.error(message);
       setSessionError(message);
     } finally {
