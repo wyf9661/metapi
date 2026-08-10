@@ -615,7 +615,31 @@ async function runPostRefreshProbeIfEnabled(params: {
   };
 }
 
-export async function refreshModelsForAccount(
+// Per-account in-flight guard: concurrent refreshes of the same account
+// (manual UI refresh + proxy-triggered full refresh) race on
+// delete-then-insert of model_availability and hit the
+// (account_id, model_name) unique index. Reuse the running refresh instead.
+const modelRefreshInFlight = new Map<string, Promise<ModelRefreshResult>>();
+
+export function refreshModelsForAccount(
+  accountId: number,
+  options?: { allowInactive?: boolean },
+): Promise<ModelRefreshResult> {
+  const key = `${accountId}:${options?.allowInactive === true}`;
+  const existing = modelRefreshInFlight.get(key);
+  if (existing) return existing;
+
+  const run = doRefreshModelsForAccount(accountId, options);
+  modelRefreshInFlight.set(key, run);
+  run.finally(() => {
+    modelRefreshInFlight.delete(key);
+  }).catch(() => {
+    // finality handled by caller; keep the map clean
+  });
+  return run;
+}
+
+async function doRefreshModelsForAccount(
   accountId: number,
   options?: { allowInactive?: boolean },
 ): Promise<ModelRefreshResult> {
@@ -683,12 +707,12 @@ export async function refreshModelsForAccount(
     if (previousModelAvailability.length > 0) {
       await db.insert(schema.modelAvailability).values(
         previousModelAvailability.map(({ id: _id, ...row }) => row),
-      ).run();
+      ).onConflictDoNothing().run();
     }
     if (previousTokenModelAvailability.length > 0) {
       await db.insert(schema.tokenModelAvailability).values(
         previousTokenModelAvailability.map(({ id: _id, ...row }) => row),
-      ).run();
+      ).onConflictDoNothing().run();
     }
   };
 
@@ -743,7 +767,7 @@ export async function refreshModelsForAccount(
             latencyMs: Date.now() - startedAt,
             checkedAt,
           })),
-        ).run();
+        ).onConflictDoNothing().run();
       }
       await updateOauthModelDiscoveryState({
         account: discoveryAccount,
@@ -829,7 +853,7 @@ export async function refreshModelsForAccount(
             latencyMs: Date.now() - startedAt,
             checkedAt,
           })),
-        ).run();
+        ).onConflictDoNothing().run();
       }
       await updateOauthModelDiscoveryState({
         account: discoveryAccount,
@@ -929,7 +953,7 @@ export async function refreshModelsForAccount(
             latencyMs: Date.now() - startedAt,
             checkedAt,
           })),
-        ).run();
+        ).onConflictDoNothing().run();
       }
       await updateOauthModelDiscoveryState({
         account: discoveryAccount,
@@ -1015,7 +1039,7 @@ export async function refreshModelsForAccount(
             latencyMs: Date.now() - startedAt,
             checkedAt,
           })),
-        ).run();
+        ).onConflictDoNothing().run();
       }
       await updateOauthModelDiscoveryState({
         account: discoveryAccount,
@@ -1251,7 +1275,7 @@ export async function refreshModelsForAccount(
         latencyMs,
         checkedAt,
       })),
-    ).run();
+    ).onConflictDoNothing().run();
 
     scannedTokenCount++;
     mergeDiscoveredModels(models, latencyMs);
@@ -1295,7 +1319,7 @@ export async function refreshModelsForAccount(
         latencyMs: modelLatency.get(modelName.toLowerCase()) ?? null,
         checkedAt,
       })),
-    ).run();
+    ).onConflictDoNothing().run();
   }
 
   await setAccountRuntimeHealth(account.id, {
