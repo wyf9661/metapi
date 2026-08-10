@@ -5859,6 +5859,22 @@ textarea {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 10px;
   padding: 3px;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* 窄屏下 tab 栏超出容器时出现细滚动条，横向滑动查看全部 tab */
+.pill-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+.pill-tabs::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(128, 128, 128, 0.4);
+}
+.pill-tabs::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 [data-theme="dark"] .pill-tabs {
