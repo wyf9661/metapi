@@ -3,13 +3,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('docker workflows', () => {
-  it('publishes armv7 docker images in ci and release workflows', () => {
+  it('publishes armv7 docker images in release workflow only', () => {
     const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
     const releaseWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/release.yml'), 'utf8');
 
-    expect(ciWorkflow).toContain('arch: armv7');
-    expect(ciWorkflow).toContain('platform: linux/arm/v7');
-    expect(ciWorkflow).toContain('"${tag}-armv7"');
+    // Docker publishing moved out of CI entirely (2026-08): only the release
+    // workflow on version tags builds and pushes images.
+    expect(ciWorkflow).not.toContain('arch: armv7');
+    expect(ciWorkflow).not.toContain('publish-docker');
 
     expect(releaseWorkflow).toContain('arch: armv7');
     expect(releaseWorkflow).toContain('platform: linux/arm/v7');
@@ -17,11 +18,7 @@ describe('docker workflows', () => {
   });
 
   it('derives Docker Hub image names from the configured username secret', () => {
-    const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
     const releaseWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/release.yml'), 'utf8');
-
-    expect(ciWorkflow).toContain('DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/metapi');
-    expect(ciWorkflow).not.toContain('images: 1467078763/metapi');
 
     expect(releaseWorkflow).toContain('DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/metapi');
     expect(releaseWorkflow).not.toContain('1467078763/metapi');
