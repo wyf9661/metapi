@@ -115,7 +115,7 @@
     "cross-env": "^7.0.3",
     "drizzle-kit": "^0.31.10",
     "electron": "^43.3.0",
-    "electron-builder": "^26.0.12",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.39.5",
     "jsdom": "^29.1.1",
     "mermaid": "^11.16.1",
