@@ -1404,60 +1404,6 @@ export default function Sites() {
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
               按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。
             </div>
-            <div style={{ marginTop: 12, padding: 14, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>请求体参数覆盖（paramOverride）</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>
-                JSON 对象，转发请求时合并进上游请求体（顶层字段覆盖客户端传参）。例如：
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{'{"max_tokens": 64, "temperature": 0}'}</code>。留空表示不覆盖。
-              </div>
-              <textarea
-                placeholder='{"max_tokens": 64, "temperature": 0}'
-                value={form.paramOverride}
-                onChange={(e) => setForm((prev) => ({ ...prev, paramOverride: e.target.value }))}
-                rows={3}
-                style={{
-                  ...formInputStyle,
-                  width: '100%',
-                  fontFamily: 'var(--font-mono)',
-                  resize: 'vertical',
-                  minHeight: 72,
-                }}
-              />
-            </div>
-            <div style={{ marginTop: 12, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>凭证提示</div>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 4 }}>
-                {(['auto', 'api_key', 'session'] as const).map((mode) => (
-                  <label
-                    key={mode}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      color: 'var(--color-text-secondary)',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="credentialMode"
-                      value={mode}
-                      checked={form.protocolProfile.credentialMode === mode}
-                      onChange={(e) => setForm((prev) => ({
-                        ...prev,
-                        protocolProfile: { ...prev.protocolProfile, credentialMode: e.target.value },
-                      }))}
-                      style={{ accentColor: 'var(--color-primary)', width: 14, height: 14 }}
-                    />
-                    {mode === 'auto' ? '自动' : mode === 'api_key' ? 'API Key（sk-...）' : 'Session Cookie'}
-                  </label>
-                ))}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                添加账号时的凭证验证策略提示
-              </div>
-            </div>
             {isEditing && (
               <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>禁用模型管理</div>
@@ -1599,6 +1545,63 @@ export default function Sites() {
                 )}
               </div>
             )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
+            <div style={{ padding: 14, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'color-mix(in srgb, var(--color-surface) 82%, transparent)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>请求体参数覆盖（paramOverride）</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>
+                JSON 对象，转发请求时合并进上游请求体（顶层字段覆盖客户端传参）。例如：
+                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{'{"max_tokens": 64, "temperature": 0}'}</code>。留空表示不覆盖。
+              </div>
+              <textarea
+                placeholder='{"max_tokens": 64, "temperature": 0}'
+                value={form.paramOverride}
+                onChange={(e) => setForm((prev) => ({ ...prev, paramOverride: e.target.value }))}
+                rows={3}
+                style={{
+                  ...formInputStyle,
+                  width: '100%',
+                  fontFamily: 'var(--font-mono)',
+                  resize: 'vertical',
+                  minHeight: 72,
+                }}
+              />
+            </div>
+            <div style={{ padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'color-mix(in srgb, var(--color-surface) 82%, transparent)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>凭证提示</div>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 4, flexWrap: 'wrap' }}>
+                {(['auto', 'api_key', 'session'] as const).map((mode) => (
+                  <label
+                    key={mode}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="credentialMode"
+                      value={mode}
+                      checked={form.protocolProfile.credentialMode === mode}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        protocolProfile: { ...prev.protocolProfile, credentialMode: e.target.value },
+                      }))}
+                      style={{ accentColor: 'var(--color-primary)', width: 14, height: 14 }}
+                    />
+                    {mode === 'auto' ? '自动' : mode === 'api_key' ? 'API Key（sk-...）' : 'Session Cookie'}
+                  </label>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                添加账号时的凭证验证策略提示
+              </div>
+            </div>
           </div>
 
           {isEditing && (
