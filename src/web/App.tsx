@@ -1,4 +1,5 @@
 ﻿import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import { copyText } from './clipboard.js';
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { ToastProvider, useToast } from './components/Toast.js';
 import SearchModal from './components/SearchModal.js';
@@ -272,7 +273,7 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
                     type="button"
                     className="btn btn-ghost btn-xs"
                     onClick={() => {
-                      navigator.clipboard?.writeText(bootstrapToken).catch(() => {});
+                      copyText(bootstrapToken).catch(() => {});
                     }}
                   >
                     {t('复制')}

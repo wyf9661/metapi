@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useToast } from "../components/Toast.js";
+import { copyText } from "../clipboard.js";
 import { useIsMobile } from "../components/useIsMobile.js";
 import { formatCompactTokenMetric } from "../numberFormat.js";
 
@@ -830,23 +831,7 @@ export default function Dashboard({
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}
               onClick={() => {
-                // navigator.clipboard 只在安全上下文（HTTPS/localhost）可用，
-                // 局域网 HTTP 访问需 fallback 到 execCommand。
-                const copyText = async () => {
-                  if (navigator.clipboard?.writeText) {
-                    await navigator.clipboard.writeText(localAddress.baseUrl);
-                    return;
-                  }
-                  const textarea = document.createElement('textarea');
-                  textarea.value = localAddress.baseUrl;
-                  textarea.style.position = 'fixed';
-                  textarea.style.opacity = '0';
-                  document.body.appendChild(textarea);
-                  textarea.select();
-                  document.execCommand('copy');
-                  document.body.removeChild(textarea);
-                };
-                copyText()
+                copyText(localAddress.baseUrl)
                   .then(() => { toast.success('地址已复制'); })
                   .catch(() => { toast.error('复制失败'); });
               }}
@@ -951,7 +936,7 @@ export default function Dashboard({
                 onClick={async () => {
                   const url = String(tunnel?.publicUrl || tunnel?.tunnelUrl || '');
                   try {
-                    await navigator.clipboard.writeText(url);
+                    await copyText(url);
                     toast.success('已复制公网地址');
                   } catch {
                     toast.error('复制失败');

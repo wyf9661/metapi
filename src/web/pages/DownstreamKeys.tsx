@@ -1,4 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
@@ -235,22 +236,6 @@ function tagChipStyle(kind: 'normal' | 'accent' = 'normal'): React.CSSProperties
   };
 }
 
-async function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  textarea.style.left = '-9999px';
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  document.execCommand('copy');
-  document.body.removeChild(textarea);
-}
 
 function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined }) {
   const toast = useToast();
@@ -301,7 +286,7 @@ function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined 
           return;
         }
         try {
-          await copyToClipboard(full);
+          await copyText(full);
           toast.success('已复制到剪贴板');
         } catch {
           toast.error('复制失败');

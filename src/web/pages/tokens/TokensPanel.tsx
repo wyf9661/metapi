@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { copyText } from '../../clipboard.js';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import CenteredModal from '../../components/CenteredModal.js';
@@ -129,23 +130,6 @@ const resolveAccountLabel = (result: AccountTokenSyncResult | null | undefined) 
   return '未知账号';
 };
 
-async function copyText(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  textarea.style.left = '-9999px';
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  document.execCommand('copy');
-  document.body.removeChild(textarea);
-}
 
 export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId: filterSiteId }: TokensPanelProps) {
   const location = useLocation();

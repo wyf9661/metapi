@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { copyText } from '../clipboard.js';
 import { useLocation } from 'react-router-dom';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { api } from '../api.js';
@@ -545,7 +546,7 @@ export default function Models() {
 
   /* ---- copy ---- */
   const copyName = (name: string) => {
-    navigator.clipboard.writeText(name).catch(() => { });
+    copyText(name).catch(() => { });
     setCopied(name);
     setTimeout(() => setCopied(null), 1500);
   };
