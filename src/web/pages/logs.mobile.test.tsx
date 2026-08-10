@@ -7,7 +7,7 @@ describe('ProxyLogs mobile layout', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/web/pages/ProxyLogs.tsx'), 'utf8');
     expect(source).toContain('MobileCard');
     expect(source).toContain(
-      'import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";',
+      'import ResponsiveFilterPanel from \'../components/ResponsiveFilterPanel.js\';',
     );
     expect(source).toContain('<ResponsiveFilterPanel');
     expect(source).toContain('compact');

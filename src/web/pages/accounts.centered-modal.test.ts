@@ -7,7 +7,7 @@ describe('Accounts centered modal adoption', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/web/pages/Accounts.tsx'), 'utf8');
 
     expect(source).toContain(
-      'import CenteredModal from "../components/CenteredModal.js";',
+      'import CenteredModal from \'../components/CenteredModal.js\';',
     );
     expect(source).toContain('<CenteredModal');
     expect(source).not.toContain('className={`card panel-presence rebind-panel');
