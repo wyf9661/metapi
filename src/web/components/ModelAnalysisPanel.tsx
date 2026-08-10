@@ -39,8 +39,9 @@ function toSafeNumber(value: unknown): number {
 function formatCurrency(value: number): string {
   const n = toSafeNumber(value);
   if (n >= 1000) return `$${n.toFixed(2)}`;
-  if (n >= 1) return `$${n.toFixed(3)}`;
-  return `$${n.toFixed(6)}`;
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  // <1: keep 4 decimals max so small balances fit their card on mobile.
+  return `$${n.toFixed(4)}`;
 }
 
 function formatPercent(value: number): string {
@@ -136,16 +137,16 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 16 }}>
         <div className="stat-summary-card stat-summary-purple" style={{ minHeight: 72, padding: '12px 14px' }}>
-          <div className="stat-summary-card-label">今日消耗</div>
-          <div className="stat-summary-card-value" style={{ fontSize: 20 }}>{formatCurrency(totals.spend)}</div>
+          <div className="stat-summary-card-label" style={{ whiteSpace: 'nowrap' }}>今日消耗</div>
+          <div className="stat-summary-card-value" style={{ fontSize: 18, whiteSpace: 'nowrap' }}>{formatCurrency(totals.spend)}</div>
         </div>
         <div className="stat-summary-card stat-summary-blue" style={{ minHeight: 72, padding: '12px 14px' }}>
-          <div className="stat-summary-card-label">今日调用</div>
-          <div className="stat-summary-card-value" style={{ fontSize: 20 }}>{Math.round(totals.calls).toLocaleString()}</div>
+          <div className="stat-summary-card-label" style={{ whiteSpace: 'nowrap' }}>今日调用</div>
+          <div className="stat-summary-card-value" style={{ fontSize: 18, whiteSpace: 'nowrap' }}>{Math.round(totals.calls).toLocaleString()}</div>
         </div>
         <div className="stat-summary-card stat-summary-green" style={{ minHeight: 72, padding: '12px 14px' }}>
-          <div className="stat-summary-card-label">今日 Tokens</div>
-          <div className="stat-summary-card-value" style={{ fontSize: 20 }}>{formatCompactTokenMetric(totals.tokens)}</div>
+          <div className="stat-summary-card-label" style={{ whiteSpace: 'nowrap' }}>今日 Tokens</div>
+          <div className="stat-summary-card-value" style={{ fontSize: 18, whiteSpace: 'nowrap' }}>{formatCompactTokenMetric(totals.tokens)}</div>
         </div>
       </div>
 
@@ -221,8 +222,8 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       )}
 
       {activeTab === 'rank' && (
-        <div style={{ overflow: 'hidden', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>
-          <table className="data-table" style={{ width: '100%' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>
+          <table className="data-table" style={{ width: '100%', minWidth: 560 }}>
             <thead>
               <tr>
                 <th style={{ width: 36, textAlign: 'center' }}>#</th>
