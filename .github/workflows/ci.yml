@@ -54,6 +54,10 @@ jobs:
     name: Test Core
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
       - name: Checkout
@@ -68,10 +72,18 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Run tests
+      - name: Cache vitest transform cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.vitest
+          key: vitest-cache-${{ runner.os }}-${{ hashFiles('package-lock.json', 'vitest.config.ts') }}
+          restore-keys: |
+            vitest-cache-${{ runner.os }}-
+
+      - name: Run tests (shard ${{ matrix.shard }}/2)
         env:
           DB_PARITY_SKIP_LIVE_SCHEMA: 'true'
-        run: npm test
+        run: npm test -- --shard=${{ matrix.shard }}/2
 
   build-web:
     name: Build Web

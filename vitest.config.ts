@@ -21,5 +21,11 @@ export default defineConfig({
     // vitest's 5s default on slow CI runners. Double the budget so cold-start
     // and load spikes do not turn into flaky failures.
     testTimeout: 10_000,
+    // Persist the transform/deps cache under node_modules so CI can cache it
+    // across runs (deps + vite transform results only change with the
+    // lockfile or config, matching the setup-node cache key).
+    cache: {
+      dir: 'node_modules/.vitest',
+    },
   },
 });
