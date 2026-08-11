@@ -194,7 +194,11 @@ export default function SiteTrendChart() {
         domainLine: { visible: false },
       },
     ],
-    color: COLOR_PALETTE,
+    color: {
+      field: 'site',
+      domain: allSites,
+      range: COLOR_PALETTE,
+    },
     background: 'transparent',
     padding: { left: 20, right: 16, top: 8, bottom: 8 },
   };
@@ -238,6 +242,12 @@ export default function SiteTrendChart() {
         <VChart
           spec={spec as any}
           style={{ width: '100%', height: '100%' }}
+          onClick={(params: any) => {
+            const site = params?.datum?.site ?? params?.event?.target?.datum?.site;
+            if (typeof site === 'string' && site) {
+              toggleFocusedSite(site);
+            }
+          }}
         />
       </div>
       {/* Site list / selector (replaces chart built-in legend) */}

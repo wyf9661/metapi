@@ -423,6 +423,7 @@ export type ProxyLogListItem = {
   promptTokens?: number | null;
   completionTokens?: number | null;
   estimatedCost?: number | null;
+  requestTraceId?: string | null;
 };
 
 export type ProxyLogDetail = ProxyLogListItem & {

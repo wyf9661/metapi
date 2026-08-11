@@ -25,8 +25,8 @@ interface ModelAnalysisPanelProps {
 }
 
 const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
-  { key: 'spend', label: '今日消耗', icon: '💰' },
-  { key: 'trend', label: 'Token 分布', icon: '📊' },
+  { key: 'spend', label: '花费分布', icon: '💰' },
+  { key: 'trend', label: '用量分布', icon: '📊' },
   { key: 'calls', label: '调用分布', icon: '🔄' },
   { key: 'rank', label: '模型排行', icon: '🏆' },
 ];
@@ -131,22 +131,6 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
 
   return (
     <div>
-      {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 16 }}>
-        <div className="stat-summary-card stat-summary-purple" style={{ minHeight: 72, padding: '12px 14px' }}>
-          <div className="stat-summary-card-label" style={{ whiteSpace: 'nowrap' }}>今日消耗</div>
-          <div className="stat-summary-card-value" style={{ fontSize: 18, whiteSpace: 'nowrap' }}>{formatCurrency(totals.spend)}</div>
-        </div>
-        <div className="stat-summary-card stat-summary-blue" style={{ minHeight: 72, padding: '12px 14px' }}>
-          <div className="stat-summary-card-label" style={{ whiteSpace: 'nowrap' }}>今日调用</div>
-          <div className="stat-summary-card-value" style={{ fontSize: 18, whiteSpace: 'nowrap' }}>{Math.round(totals.calls).toLocaleString()}</div>
-        </div>
-        <div className="stat-summary-card stat-summary-green" style={{ minHeight: 72, padding: '12px 14px' }}>
-          <div className="stat-summary-card-label" style={{ whiteSpace: 'nowrap' }}>今日 Tokens</div>
-          <div className="stat-summary-card-value" style={{ fontSize: 18, whiteSpace: 'nowrap' }}>{formatCompactTokenMetric(totals.tokens)}</div>
-        </div>
-      </div>
-
       {/* Pill Tabs */}
       <div style={{ marginBottom: 16 }}>
         <div className="pill-tabs">

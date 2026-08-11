@@ -139,7 +139,7 @@ describe('Dashboard site observability panel', () => {
         && node.props.className.includes('site-observability-log-link')
       ));
 
-      expect(collectText(panel)).toContain('24 小时可用性观测');
+      expect(collectText(panel)).toContain('站点与模型分析');
       expect(collectText(panel)).toContain('Demo Site');
       expect(collectText(panel)).toContain('75%');
       expect(collectText(panel)).toContain('320ms');

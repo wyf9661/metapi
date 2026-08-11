@@ -41,7 +41,7 @@ describe('ModelAnalysisPanel token summaries', () => {
     globalThis.MutationObserver = originalMutationObserver;
   });
 
-  it('renders today token summaries with compact units', () => {
+  it('renders model tabs without duplicated summary cards', () => {
     let root!: WebTestRenderer;
 
     act(() => {
@@ -60,8 +60,10 @@ describe('ModelAnalysisPanel token summaries', () => {
 
     const rendered = collectText(root!.root);
 
-    expect(rendered).toContain('今日 Tokens');
-    expect(rendered).toContain('611.5M');
+    expect(rendered).toContain('花费分布');
+    expect(rendered).toContain('用量分布');
+    expect(rendered).toContain('调用分布');
+    expect(rendered).toContain('模型排行');
 
     root?.unmount();
   });
@@ -114,7 +116,7 @@ describe('ModelAnalysisPanel token summaries', () => {
     });
 
     const tokenTab = root!.root.find((node) => (
-      node.type === 'button' && collectText(node).includes('Token 分布')
+      node.type === 'button' && collectText(node).includes('用量分布')
     ));
     await act(async () => {
       tokenTab.props.onClick();

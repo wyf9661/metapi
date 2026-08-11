@@ -84,7 +84,12 @@ describe('Dashboard performance stat card', () => {
         requestsPerMinute: 17,
         tokensPerMinute: 7_974,
       },
-      modelAnalysis: null,
+      modelAnalysis: {
+        totals: { spend: 0, calls: 0, tokens: 606_573_377 },
+        spendDistribution: [],
+        callsDistribution: [],
+        callRanking: [],
+      },
     });
 
     let root!: WebTestRenderer;
@@ -114,7 +119,7 @@ describe('Dashboard performance stat card', () => {
       expect(collectText(statGrid)).toContain('17');
       expect(collectText(statGrid)).toContain('TPM');
       expect(collectText(statGrid)).toContain('8K');
-      expect(collectText(statGrid)).toContain('24h Tokens');
+      expect(collectText(statGrid)).toContain('今日 Tokens');
       expect(collectText(statGrid)).toContain('24h 成功率');
       expect(collectText(statGrid)).toContain('97.5%');
       expect(collectText(statGrid)).toContain('P95 首包 / 总耗时');

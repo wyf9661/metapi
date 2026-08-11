@@ -86,8 +86,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   const [viewMode, setViewMode] = useState<ViewMode>('balance');
   const labelColor = useThemeLabelColor();
 
-  // 横向柱状图：每站点一行，按值降序，站点多时可滚动
-  const MAX_VISIBLE_HEIGHT = 344;
+  // 横向柱状图：每站点一行，按值降序
   const ROW_HEIGHT = 30; // 每行条形高度（含间距）
   const AXIS_RESERVE = 44; // x 轴标签预留
 
@@ -101,13 +100,14 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
         accountCount: safeNumber(item.accountCount),
       }))
       .filter((d) => d.value > 0)
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
   }, [data, viewMode]);
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
 
-  const chartHeight = Math.max(200, chartData.length * ROW_HEIGHT + AXIS_RESERVE);
-  const needsScroll = chartHeight > MAX_VISIBLE_HEIGHT;
+  // Top10 固定 10 行，无需滚动
+  const chartHeight = 10 * ROW_HEIGHT + AXIS_RESERVE;
 
   const BAR_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
@@ -123,9 +123,16 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       data: [{ id: 'siteData', values: chartData.map((d) => ({ ...d, pct: total > 0 ? (d.value / total * 100) : 0 })) }],
       xField: 'value',
       yField: 'siteName',
-      seriesField: 'siteName',
       direction: 'horizontal' as const,
-      bar: { style: { cornerRadius: 3 } },
+      bar: {
+        style: {
+          cornerRadius: 3,
+          fill: (datum: any) => {
+            const idx = chartData.findIndex((d) => d.siteName === datum?.siteName);
+            return BAR_COLORS[Math.max(0, idx) % BAR_COLORS.length];
+          },
+        },
+      },
       label: {
         visible: true,
         position: 'right',
@@ -152,7 +159,6 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           tick: { visible: false },
         },
       ],
-      legends: { visible: false },
       tooltip: {
         mark: {
           content: [
@@ -185,7 +191,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           ] as any,
         },
       },
-      color: BAR_COLORS,
+      legends: { visible: false },
       animation: true,
       background: 'transparent',
       padding: { top: 0, bottom: 0, left: 0, right: 0 },
@@ -236,7 +242,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
             />
           </svg>
-          站点分布
+          站点分布 Top10
         </div>
 
         {/* Toggle buttons */}
@@ -297,8 +303,6 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           <div
             style={{
               width: '100%',
-              overflowY: needsScroll ? 'auto' : 'hidden',
-              maxHeight: needsScroll ? MAX_VISIBLE_HEIGHT : undefined,
               flexShrink: 1,
               minHeight: 0,
             }}
