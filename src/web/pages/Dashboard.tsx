@@ -291,13 +291,11 @@ export default function Dashboard({
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [siteDistribution, setSiteDistribution] = useState<any[]>([]);
-  const [siteTrend, setSiteTrend] = useState<any[]>([]);
   const [siteLoading, setSiteLoading] = useState(true);
   const [sites, setSites] = useState<any[]>([]);
   const [siteSpeedStates, setSiteSpeedStates] = useState<
     Record<string, SiteSpeedState>
   >({});
-  const [trendDays, setTrendDays] = useState(7);
   const [observabilityTab, setObservabilityTab] = useState<'sites' | 'models'>('sites');
   const toast = useToast();
   const normalizedAdminName = (adminName || '').trim() || '\u7ba1\u7406\u5458';
@@ -351,11 +349,10 @@ export default function Dashboard({
       setSiteLoading(true);
       try {
         const snapshot = await api.getSiteSnapshot(
-          trendDays,
+          7,
           forceRefresh ? { refresh: true } : undefined,
         );
         setSiteDistribution(snapshot.distribution || []);
-        setSiteTrend(snapshot.trend || []);
         const siteRows = Array.isArray(snapshot.sites) ? snapshot.sites : [];
         setSites(siteRows.filter((site: any) => site?.status !== 'disabled'));
         setSiteSpeedStates({});
@@ -365,7 +362,7 @@ export default function Dashboard({
         setSiteLoading(false);
       }
     },
-    [trendDays],
+    [],
   );
 
   useEffect(() => {
@@ -1197,30 +1194,7 @@ export default function Dashboard({
           </svg>
           站点分析
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              onClick={() => setTrendDays(d)}
-              style={{
-                padding: '4px 12px',
-                borderRadius: 6,
-                fontSize: 12,
-                fontWeight: 500,
-                border: 'none',
-                cursor: 'pointer',
-                background:
-                  trendDays === d ? 'var(--color-primary)' : 'var(--color-bg)',
-                color:
-                  trendDays === d ? 'white' : 'var(--color-text-secondary)',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {d}天
-            </button>
-          ))}
-        </div>
-      </div>
+              </div>
 
       <div
         style={{
@@ -1231,7 +1205,7 @@ export default function Dashboard({
         }}
       >
         <div className="chart-panel-enter animate-slide-up stagger-6" style={{ height: '100%' }}>
-          <Suspense fallback={<ChartFallback height={320} />}>
+          <Suspense fallback={<ChartFallback height={344} />}>
             <SiteDistributionChart
               data={siteDistribution}
               loading={siteLoading}
@@ -1239,8 +1213,8 @@ export default function Dashboard({
           </Suspense>
         </div>
         <div className="chart-panel-enter animate-slide-up stagger-7" style={{ height: '100%' }}>
-          <Suspense fallback={<ChartFallback height={320} />}>
-            <SiteTrendChart data={siteTrend} loading={siteLoading} />
+          <Suspense fallback={<ChartFallback height={344} />}>
+            <SiteTrendChart />
           </Suspense>
         </div>
       </div>

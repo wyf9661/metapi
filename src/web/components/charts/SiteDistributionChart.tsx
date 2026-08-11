@@ -26,32 +26,25 @@ function safeNumber(value: unknown): number {
   return value;
 }
 
-function SkeletonCircle() {
+function SkeletonBars() {
   return (
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
+        flexDirection: 'column',
         justifyContent: 'center',
-        padding: '40px 0',
+        gap: 14,
+        padding: '24px 8px',
+        maxWidth: 320,
+        margin: '0 auto',
       }}
     >
-      <div
-        className="skeleton"
-        style={{
-          width: 200,
-          height: 200,
-          borderRadius: '50%',
-        }}
-      />
-      <div style={{ marginLeft: 32, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {[...Array(4)].map((_, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="skeleton" style={{ width: 12, height: 12, borderRadius: 3 }} />
-            <div className="skeleton" style={{ width: 80 + i * 10, height: 12 }} />
-          </div>
-        ))}
-      </div>
+      {[...Array(6)].map((_, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="skeleton" style={{ width: 80, height: 12, borderRadius: 3, flexShrink: 0 }} />
+          <div className="skeleton" style={{ width: 140 + i * 18, height: 16, borderRadius: 3 }} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -93,6 +86,11 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   const [viewMode, setViewMode] = useState<ViewMode>('balance');
   const labelColor = useThemeLabelColor();
 
+  // 横向柱状图：每站点一行，按值降序，站点多时可滚动
+  const MAX_VISIBLE_HEIGHT = 344;
+  const ROW_HEIGHT = 30; // 每行条形高度（含间距）
+  const AXIS_RESERVE = 44; // x 轴标签预留
+
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
     return data
@@ -102,25 +100,58 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
         value: safeNumber(viewMode === 'balance' ? item.totalBalance : item.totalSpend),
         accountCount: safeNumber(item.accountCount),
       }))
-      .filter((d) => d.value > 0);
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value);
   }, [data, viewMode]);
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
 
-  const PIE_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+  const chartHeight = Math.max(200, chartData.length * ROW_HEIGHT + AXIS_RESERVE);
+  const needsScroll = chartHeight > MAX_VISIBLE_HEIGHT;
+
+  const BAR_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+  const formatValue = (value: number): string => `$${value.toFixed(2)}`;
 
   const spec = useMemo(() => {
     if (!hasData) return null;
 
+    const total = chartData.reduce((s, d) => s + d.value, 0);
+
     return {
-      type: 'pie' as const,
-      data: [{ id: 'siteData', values: (() => { const total = chartData.reduce((s, d) => s + d.value, 0); return chartData.map(d => ({ ...d, pctLabel: total > 0 ? (d.value / total * 100).toFixed(1) : '0.0' })); })() }],
-      valueField: 'value',
-      categoryField: 'siteName',
-      outerRadius: 0.8,
-      innerRadius: 0.55,
-      pie: { style: { cornerRadius: 4, padAngle: 0.02 } },
-      label: { visible: true, position: 'outside', format: '{pctLabel}%', style: { fill: labelColor } },
+      type: 'bar' as const,
+      data: [{ id: 'siteData', values: chartData.map((d) => ({ ...d, pct: total > 0 ? (d.value / total * 100) : 0 })) }],
+      xField: 'value',
+      yField: 'siteName',
+      seriesField: 'siteName',
+      direction: 'horizontal' as const,
+      bar: { style: { cornerRadius: 3 } },
+      label: {
+        visible: true,
+        position: 'right',
+        formatMethod: (text: string | number) => formatValue(Number(text)),
+        style: { fill: labelColor, fontSize: 11, stroke: 'transparent' },
+      },
+      axes: [
+        {
+          orient: 'left',
+          label: {
+            visible: true,
+            style: { fill: labelColor, fontSize: 11 },
+            maxWidth: 140,
+            overflow: 'truncate',
+          },
+          domainLine: { visible: false },
+          tick: { visible: false },
+        },
+        {
+          orient: 'bottom',
+          label: { visible: true, format: (value: unknown) => formatValue(safeNumber(value)), style: { fill: labelColor, fontSize: 11 } },
+          grid: { visible: false },
+          domainLine: { visible: false },
+          tick: { visible: false },
+        },
+      ],
       legends: { visible: false },
       tooltip: {
         mark: {
@@ -133,14 +164,14 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               value: (datum: unknown) => {
                 const item = coerceDatumRecord(datum);
                 const val = safeNumber(item.value);
-                return `$${val.toFixed(2)}`;
+                return `${formatValue(val)}`;
               },
             },
             {
               key: '占比',
               value: (datum: unknown) => {
                 const item = coerceDatumRecord(datum);
-                const pct = safeNumber(item._percent_);
+                const pct = safeNumber(item.pct);
                 return `${pct.toFixed(1)}%`;
               },
             },
@@ -154,17 +185,12 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           ] as any,
         },
       },
-      color: PIE_COLORS,
+      color: BAR_COLORS,
       animation: true,
       background: 'transparent',
+      padding: { top: 0, bottom: 0, left: 0, right: 0 },
     };
   }, [chartData, hasData, labelColor]);
-
-  const formatValue = (value: number): string => {
-    if (value >= 1000) return `$${value.toFixed(2)}`;
-    if (value >= 1) return `$${value.toFixed(3)}`;
-    return `$${value.toFixed(6)}`;
-  };
 
   return (
     <div
@@ -263,18 +289,28 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
 
       {/* Content */}
       {loading ? (
-        <SkeletonCircle />
+        <SkeletonBars />
       ) : !hasData ? (
         <EmptyState />
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ width: '100%', height: 320, flexShrink: 0 }}>
-            {spec && <VChart spec={spec} style={{ width: '100%', height: '100%' }} />}
+          <div
+            style={{
+              width: '100%',
+              overflowY: needsScroll ? 'auto' : 'hidden',
+              maxHeight: needsScroll ? MAX_VISIBLE_HEIGHT : undefined,
+              flexShrink: 1,
+              minHeight: 0,
+            }}
+          >
+            <div style={{ width: '100%', height: chartHeight }}>
+              {spec && <VChart spec={spec} style={{ width: '100%', height: '100%' }} />}
+            </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px', flexShrink: 0 }}>
             {chartData.map((d, idx) => (
               <span key={d.siteName} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: PIE_COLORS[idx % PIE_COLORS.length], flexShrink: 0 }} />
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: BAR_COLORS[idx % BAR_COLORS.length], flexShrink: 0 }} />
                 <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.siteName}</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                   {formatValue(d.value)}

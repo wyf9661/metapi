@@ -1083,9 +1083,8 @@ export const api = {
       days,
       ...(options?.refresh ? { refresh: 1 } : {}),
     });
-    const [distribution, trend, sites] = await Promise.all([
+    const [distribution, sites] = await Promise.all([
       request<{ distribution: any[] }>(`/api/stats/site-distribution${query}`),
-      request<{ trend: any[] }>(`/api/stats/site-trend${query}`),
       request<any[]>('/api/sites'),
     ]);
     return {
@@ -1093,7 +1092,6 @@ export const api = {
       distribution: Array.isArray(distribution?.distribution)
         ? distribution.distribution
         : [],
-      trend: Array.isArray(trend?.trend) ? trend.trend : [],
       sites: Array.isArray(sites) ? sites : [],
     };
   },

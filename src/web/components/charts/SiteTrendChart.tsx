@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
+import { api } from '../../api.js';
+import { useThemeLabelColor } from '../useThemeLabelColor.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -8,11 +10,6 @@ import { VChart } from '@visactor/react-vchart';
 interface SiteTrendData {
   date: string;
   sites: Record<string, { spend: number; calls: number }>;
-}
-
-interface SiteTrendChartProps {
-  data: SiteTrendData[];
-  loading?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -41,9 +38,33 @@ const COLOR_PALETTE = [
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
+export default function SiteTrendChart() {
   const [metric, setMetric] = useState<Metric>('spend');
+  const labelColor = useThemeLabelColor();
   const [focusedSite, setFocusedSite] = useState<string | null>(null);
+  const [trendDays, setTrendDays] = useState(7);
+  const [data, setData] = useState<SiteTrendData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.getSiteTrend(trendDays)
+      .then((res) => {
+        if (cancelled) return;
+        const trend = Array.isArray((res as { trend?: unknown })?.trend) ? (res as { trend: SiteTrendData[] }).trend : [];
+        setData(trend);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('Failed to load site trend:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trendDays]);
 
   const allSites = useMemo(() => {
     if (!data || data.length === 0) return [] as string[];
@@ -155,14 +176,19 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
     axes: [
       {
         orient: 'bottom',
-        label: { style: { fontSize: 11, fill: 'var(--color-text-muted)' } },
+        label: { style: { fontSize: 11, fill: labelColor } },
         domainLine: { style: { stroke: 'var(--color-border-light)' } },
         tick: { style: { stroke: 'var(--color-border-light)' } },
       },
       {
         orient: 'left',
         label: {
-          style: { fontSize: 11, fill: 'var(--color-text-muted)' },
+          visible: true,
+          formatMethod: (value: string | number) => {
+            const v = Number(value);
+            return metric === 'spend' ? `$${v.toFixed(2)}` : String(Math.round(v));
+          },
+          style: { fontSize: 11, fill: labelColor },
         },
         grid: { style: { stroke: 'var(--color-border-light)', lineDash: [4, 4] } },
         domainLine: { visible: false },
@@ -170,7 +196,7 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
     ],
     color: COLOR_PALETTE,
     background: 'transparent',
-    padding: { left: 8, right: 16, top: 8, bottom: 8 },
+    padding: { left: 20, right: 16, top: 8, bottom: 8 },
   };
 
   /* ---------- render ---------- */
@@ -179,6 +205,21 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
     <div style={containerStyle}>
       <div style={headerStyle}>
         <MetricToggle metric={metric} onChange={setMetric} />
+        <div style={toggleGroupStyle}>
+          {[7, 30, 90].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setTrendDays(d)}
+              style={{
+                ...toggleBtnBase,
+                ...(trendDays === d ? toggleBtnActive : toggleBtnInactive),
+              }}
+            >
+              {d}天
+            </button>
+          ))}
+        </div>
         {focusedSite && (
           <div style={focusChipStyle}>
             <span>当前查看：</span>
@@ -193,7 +234,7 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
           </div>
         )}
       </div>
-      <div style={{ width: '100%', height: 320, flex: 1, minHeight: 320 }}>
+      <div style={{ width: '100%', height: 344, flex: 1, minHeight: 344 }}>
         <VChart
           spec={spec as any}
           style={{ width: '100%', height: '100%' }}
@@ -345,8 +386,9 @@ const focusClearBtnStyle: React.CSSProperties = {
 const legendFallbackStyle: React.CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
-  gap: '6px 10px',
+  gap: '6px 14px',
   marginTop: 10,
+  padding: '0 4px',
 };
 
 const legendChipStyle: React.CSSProperties = {
@@ -355,8 +397,9 @@ const legendChipStyle: React.CSSProperties = {
   gap: 6,
   borderRadius: 999,
   border: '1px solid transparent',
-  padding: '3px 10px',
-  fontSize: 12,
+  padding: '0 10px',
+  fontSize: 11,
+  lineHeight: '16px',
   color: 'var(--color-text-secondary)',
   cursor: 'pointer',
   background: 'transparent',
