@@ -20,4 +20,23 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('DeepSeek-V4-Flash-fast')).toBe('deepseek-v4-flash-fast');
     expect(canonicalizeModelName('DeepSeek-V4-Flash-think')).toBe('deepseek-v4-flash-think');
   });
+
+  it('strips date suffixes so snapshots share the base model key', () => {
+    expect(canonicalizeModelName('deepseek-v4-flash-0731')).toBe('deepseek-v4-flash');
+    expect(canonicalizeModelName('deepseek-v4-flash-20260731')).toBe('deepseek-v4-flash');
+    expect(canonicalizeModelName('deepseek-v4-flash-260731')).toBe('deepseek-v4-flash');
+    expect(canonicalizeModelName('deepseek-ai/deepseek-v4-flash-0731')).toBe('deepseek-v4-flash');
+    expect(canonicalizeModelName('glm-5.2-0715')).toBe('glm-5.2');
+  });
+
+  it('keeps non-date numeric suffixes and true variants intact', () => {
+    // 1m / 262k are context-window variants, not dates.
+    expect(canonicalizeModelName('glm-5.2-1m')).toBe('glm-5.2-1m');
+    expect(canonicalizeModelName('glm-5.2-262k')).toBe('glm-5.2-262k');
+    expect(canonicalizeModelName('deepseek-v4-flash-fast')).toBe('deepseek-v4-flash-fast');
+    // Full ISO date ends in 2-digit day; must not be stripped.
+    expect(canonicalizeModelName('gpt-4o-2024-05-13')).toBe('gpt-4o-2024-05-13');
+    // Official snapshot names of other families must stay intact.
+    expect(canonicalizeModelName('claude-sonnet-4-5-20250929')).toBe('claude-sonnet-4-5-20250929');
+  });
 });

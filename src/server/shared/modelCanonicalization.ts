@@ -23,5 +23,18 @@ export function canonicalizeModelName(modelName: string): string {
   if (/^glm-5\.2(?:-(?:1m|262k|think|1m-think|262k-think))?$/.test(value)) return value;
   if (/^deepseek-v4-flash(?:-(?:fast|think|fast-think))?$/.test(value)) return value;
 
+  // Date-suffix snapshots (deepseek-v4-flash-0731 / -20260731) are alias
+  // labels of the same base model. Only strip them for known families so
+  // official snapshot names (e.g. claude-sonnet-4-5-20250929) stay intact.
+  const stripped = value.replace(/-(?:\d{4}|\d{6}|\d{8})$/i, '');
+  if (stripped !== value) {
+    if (/^deepseek-v4-flash(?:-(?:fast|think|fast-think))?$/.test(stripped)) {
+      return stripped;
+    }
+    if (/^glm-5\.2(?:-(?:1m|262k|think|1m-think|262k-think))?$/.test(stripped)) {
+      return stripped;
+    }
+  }
+
   return value;
 }
