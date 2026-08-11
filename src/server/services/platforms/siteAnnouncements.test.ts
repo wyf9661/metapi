@@ -33,7 +33,7 @@ class SingleNoticeAdapter extends UnsupportedAnnouncementAdapter {
   override async getSiteAnnouncements(): Promise<SiteAnnouncement[]> {
     return [{
       sourceKey: 'notice:welcome',
-      title: 'Site notice',
+      title: '站点通知',
       content: 'Welcome to the site',
       level: 'info',
       sourceUrl: '/api/notice',

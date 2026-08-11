@@ -871,7 +871,7 @@ describe('NewApiAdapter', () => {
     expect(rows).toEqual([
       {
         sourceKey: `notice:${createHash('sha1').update('Welcome to the site').digest('hex')}`,
-        title: 'Site notice',
+        title: '站点通知',
         content: 'Welcome to the site',
         level: 'info',
         sourceUrl: '/api/notice',

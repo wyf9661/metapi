@@ -138,6 +138,31 @@ describe('proxyChannelCoordinator', () => {
     })).toBeNull();
   });
 
+  it('keeps last-success beyond any time window until explicitly cleared', () => {
+    proxyChannelCoordinator.rememberLastSuccessChannel({
+      requestedModel: 'kimi-k2',
+      downstreamApiKeyId: 7,
+      channelId: 77,
+    });
+    // Advancing well past the old 30s/5min TTL must NOT drop the binding:
+    // last-success lifetime is event-driven (hit cap / failure cooldown),
+    // not time-based.
+    vi.setSystemTime(Date.now() + 24 * 60 * 60 * 1000);
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'kimi-k2',
+      downstreamApiKeyId: 7,
+    })).toBe(77);
+    proxyChannelCoordinator.clearLastSuccessChannel({
+      requestedModel: 'kimi-k2',
+      downstreamApiKeyId: 7,
+      channelId: 77,
+    });
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'kimi-k2',
+      downstreamApiKeyId: 7,
+    })).toBeNull();
+  });
+
   it('persists sticky + last-success affinity and reloads after process-local reset', async () => {
     const stickyKey = proxyChannelCoordinator.buildStickySessionKey({
       clientKind: 'generic',
@@ -173,6 +198,34 @@ describe('proxyChannelCoordinator', () => {
       requestedModel: 'glm-5.2',
       downstreamApiKeyId: 2,
     })).toBe(502);
+  });
+
+  it('hydrates legacy last-success rows persisted with expiresAtMs', async () => {
+    // Simulate a settings row written by an older build (expiresAtMs field,
+    // no lastSuccessAtMs). hydrateLastSuccessMap must accept it and fall back
+    // to the current time as the sort key instead of dropping the entry.
+    settingsStore.set(
+      'proxy_channel_affinity_v1',
+      JSON.stringify({
+        version: 1,
+        savedAtMs: Date.now(),
+        sticky: {},
+        lastSuccess: {
+          'key:4|legacy-model': {
+            channelId: 601,
+            expiresAtMs: Date.now() + 30_000,
+            hitCount: 2,
+          },
+        },
+      }),
+    );
+    markProxyChannelAffinityUnloadedForTests();
+    await ensureProxyChannelAffinityLoaded();
+
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'legacy-model',
+      downstreamApiKeyId: 4,
+    })).toBe(601);
   });
 
   it('treats structured oauth providers as session-scoped even when extraConfig omits oauth.provider', () => {

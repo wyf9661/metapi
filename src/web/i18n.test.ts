@@ -50,4 +50,9 @@ describe('translateText', () => {
       expect(translated).not.toMatch(/[\u3400-\u9fff]/);
     }
   });
+
+  it('translates the site notice placeholder title for english mode', () => {
+    expect(translateText('站点通知', 'en')).toBe('Site Notice');
+    expect(translateText('站点通知', 'zh')).toBe('站点通知');
+  });
 });

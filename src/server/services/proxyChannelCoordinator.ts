@@ -17,7 +17,11 @@ type StickyEntry = {
 
 type LastSuccessEntry = {
   channelId: number;
-  expiresAtMs: number;
+  // When this channel last succeeded for the model. Used ONLY as the
+  // persistence sort key (keep freshest entries under the cap); runtime
+  // logic never consults it — last-success is dropped by the sticky
+  // max-hits cap or by tokenRouter failure cooldown, never by time.
+  lastSuccessAtMs: number;
   /** Consecutive affinity hits since the binding was (re)created. */
   hitCount?: number;
 };
@@ -98,22 +102,9 @@ function cleanupExpiredStickyBindings(nowMs = Date.now()): void {
       stickySessionBindings.delete(key);
     }
   }
-  for (const [key, entry] of lastSuccessByModelKey.entries()) {
-    if (entry.expiresAtMs <= nowMs) {
-      lastSuccessByModelKey.delete(key);
-    }
-  }
-}
-
-function getLastSuccessMaxAgeMs(): number {
-  // Last-success is a "most recently verified working channel" hint, not a
-  // lease. Keep it effectively permanent (365d): a channel that once worked
-  // for a model stays the preferred first attempt until real evidence
-  // replaces it — a failed attempt routes through tokenRouter's failure
-  // cooldown, after which selectPreferredChannel can no longer return it and
-  // channelSelection clears the binding. Dense same-key traffic is protected
-  // from pinning by proxyStickyMaxHits (see incrementLastSuccessHitCount).
-  return 365 * 24 * 60 * 60 * 1000;
+  // last-success entries never expire by time: they are dropped only by the
+  // sticky max-hits cap (incrementLastSuccessHitCount) or by tokenRouter
+  // failure cooldown via channelSelection's clearLastSuccessChannel.
 }
 
 function buildLastSuccessKey(input: {
@@ -201,12 +192,8 @@ function isFinitePositiveChannelId(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-function isAffinityEntry(value: unknown): value is StickyEntry {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return isFinitePositiveChannelId(record.channelId)
-    && typeof record.expiresAtMs === 'number'
-    && Number.isFinite(record.expiresAtMs);
+function normalizeAffinityHitCount(value: unknown): number {
+  return typeof value === 'number' ? Math.max(0, Math.trunc(value)) : 0;
 }
 
 function hydrateAffinityMap(
@@ -218,16 +205,56 @@ function hydrateAffinityMap(
   for (const [key, entryRaw] of Object.entries(raw as Record<string, unknown>)) {
     const normalizedKey = String(key || '').trim();
     if (!normalizedKey || !isAffinityEntry(entryRaw)) continue;
-    if (entryRaw.expiresAtMs <= nowMs) continue;
+    if (
+      typeof entryRaw.expiresAtMs !== 'number'
+      || !Number.isFinite(entryRaw.expiresAtMs)
+      || entryRaw.expiresAtMs <= nowMs
+    ) continue;
     target.set(normalizedKey, {
       channelId: Math.trunc(entryRaw.channelId),
       expiresAtMs: Math.trunc(entryRaw.expiresAtMs),
-      hitCount: typeof entryRaw.hitCount === 'number' ? Math.max(0, Math.trunc(entryRaw.hitCount)) : 0,
+      hitCount: normalizeAffinityHitCount(entryRaw.hitCount),
     });
   }
 }
 
-function serializeAffinityMap(source: Map<string, StickyEntry>, nowMs: number): Record<string, StickyEntry> {
+function hydrateLastSuccessMap(
+  target: Map<string, LastSuccessEntry>,
+  raw: unknown,
+): void {
+  if (!raw || typeof raw !== 'object') return;
+  for (const [key, entryRaw] of Object.entries(raw as Record<string, unknown>)) {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey || !isAffinityEntry(entryRaw)) continue;
+    // last-success entries never expire by time; hydrate every valid one.
+    // The sort key falls back to the current time when the persisted row
+    // predates the lastSuccessAtMs field (legacy schema).
+    target.set(normalizedKey, {
+      channelId: Math.trunc(entryRaw.channelId),
+      lastSuccessAtMs:
+        typeof entryRaw.lastSuccessAtMs === 'number'
+          ? Math.trunc(entryRaw.lastSuccessAtMs)
+          : Date.now(),
+      hitCount: normalizeAffinityHitCount(entryRaw.hitCount),
+    });
+  }
+}
+
+function isAffinityEntry(value: unknown): value is Record<string, unknown> & {
+  channelId: number;
+  expiresAtMs?: number;
+  lastSuccessAtMs?: number;
+  hitCount?: number;
+} {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return isFinitePositiveChannelId(record.channelId);
+}
+
+function serializeAffinityMap(
+  source: Map<string, StickyEntry>,
+  nowMs: number,
+): Record<string, StickyEntry> {
   const out: Record<string, StickyEntry> = {};
   // Prefer freshest entries when over the hard cap.
   const live = [...source.entries()]
@@ -244,13 +271,33 @@ function serializeAffinityMap(source: Map<string, StickyEntry>, nowMs: number): 
   return out;
 }
 
+function serializeLastSuccessMap(
+  source: Map<string, LastSuccessEntry>,
+): Record<string, LastSuccessEntry> {
+  const out: Record<string, LastSuccessEntry> = {};
+  // No time-based eviction: keep freshest-by-last-success entries only when
+  // over the hard cap. Entries survive until the hit cap or failure cooldown
+  // clears them.
+  const live = [...source.entries()]
+    .sort((a, b) => b[1].lastSuccessAtMs - a[1].lastSuccessAtMs)
+    .slice(0, PROXY_CHANNEL_AFFINITY_MAX_ENTRIES);
+  for (const [key, entry] of live) {
+    out[key] = {
+      channelId: entry.channelId,
+      lastSuccessAtMs: entry.lastSuccessAtMs,
+      ...(typeof entry.hitCount === 'number' ? { hitCount: entry.hitCount } : {}),
+    };
+  }
+  return out;
+}
+
 function buildAffinityPersistencePayload(nowMs = Date.now()): AffinityPersistencePayload {
   cleanupExpiredStickyBindings(nowMs);
   return {
     version: 1,
     savedAtMs: nowMs,
     sticky: serializeAffinityMap(stickySessionBindings, nowMs),
-    lastSuccess: serializeAffinityMap(lastSuccessByModelKey, nowMs),
+    lastSuccess: serializeLastSuccessMap(lastSuccessByModelKey),
   };
 }
 
@@ -271,7 +318,7 @@ async function loadProxyChannelAffinityFromSettings(): Promise<void> {
   const record = parsed as Record<string, unknown>;
   const nowMs = Date.now();
   hydrateAffinityMap(stickySessionBindings, record.sticky, nowMs);
-  hydrateAffinityMap(lastSuccessByModelKey, record.lastSuccess, nowMs);
+  hydrateLastSuccessMap(lastSuccessByModelKey, record.lastSuccess);
 }
 
 export async function ensureProxyChannelAffinityLoaded(): Promise<void> {
@@ -406,15 +453,13 @@ class ProxyChannelCoordinator {
   getLastSuccessChannelId(input: {
     requestedModel?: string | null;
     downstreamApiKeyId?: number | null;
-  }, nowMs = Date.now()): number | null {
-    cleanupExpiredStickyBindings(nowMs);
+  }): number | null {
     const key = buildLastSuccessKey(input);
     if (!key) return null;
+    // Event-driven lifetime: entries are not time-expired. They survive until
+    // the hit-count cap rebalances traffic or a failure cooldown clears them.
     const entry = lastSuccessByModelKey.get(key);
-    if (!entry || entry.expiresAtMs <= nowMs) {
-      lastSuccessByModelKey.delete(key);
-      return null;
-    }
+    if (!entry) return null;
     return entry.channelId;
   }
 
@@ -431,7 +476,7 @@ class ProxyChannelCoordinator {
     const previous = lastSuccessByModelKey.get(key);
     lastSuccessByModelKey.set(key, {
       channelId,
-      expiresAtMs: Date.now() + getLastSuccessMaxAgeMs(),
+      lastSuccessAtMs: Date.now(),
       hitCount: previous?.channelId === channelId ? (previous.hitCount ?? 0) : 0,
     });
     scheduleProxyChannelAffinityPersistence();

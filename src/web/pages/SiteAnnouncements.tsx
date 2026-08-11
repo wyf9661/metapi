@@ -221,7 +221,7 @@ export default function SiteAnnouncements() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 6 }}>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{row.title}</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{tr(row.title)}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span className="badge badge-muted">{siteNameById.get(row.siteId) || `站点 #${row.siteId}`}</span>
                   <span className="badge badge-info">{row.platform}</span>

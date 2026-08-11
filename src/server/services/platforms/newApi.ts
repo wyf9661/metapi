@@ -25,7 +25,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       if (!content) return [];
       return [{
         sourceKey: this.buildNoticeSourceKey(content),
-        title: 'Site notice',
+        // Chinese is the source language; the web UI translates titles for
+        // English mode (i18n: 站点通知 -> Site Notice).
+        title: '站点通知',
         content,
         level: 'info',
         sourceUrl: '/api/notice',

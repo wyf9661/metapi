@@ -814,4 +814,148 @@ describe('stats proxy logs routes', () => {
       ]),
     );
   });
+
+  it('aggregates retry attempts with the same requestTraceId into one row with retryCount', async () => {
+    const site = await db
+      .insert(schema.sites)
+      .values({
+        name: 'agg-site',
+        url: 'https://agg-site.example.com',
+        platform: 'new-api',
+      })
+      .returning()
+      .get();
+
+    const account = await db
+      .insert(schema.accounts)
+      .values({
+        siteId: site.id,
+        username: 'agg-user',
+        accessToken: 'agg-token',
+        status: 'active',
+      })
+      .returning()
+      .get();
+
+    const timestamps = [
+      formatUtcSqlDateTime(new Date('2026-03-10T08:00:00.000Z')),
+      formatUtcSqlDateTime(new Date('2026-03-10T08:01:00.000Z')),
+      formatUtcSqlDateTime(new Date('2026-03-10T08:02:00.000Z')),
+    ];
+
+    // Two failed attempts + one final success, all sharing one requestTraceId.
+    await db
+      .insert(schema.proxyLogs)
+      .values([
+        {
+          accountId: account.id,
+          modelRequested: 'deepseek-v4-flash',
+          modelActual: 'deepseek-v4-flash',
+          status: 'failed',
+          isStream: 0,
+          httpStatus: 403,
+          requestTraceId: 'r_agg_trace_1',
+          retryCount: 0,
+          promptTokens: 1,
+          completionTokens: 1,
+          totalTokens: 2,
+          estimatedCost: 0.001,
+          createdAt: timestamps[0],
+        },
+        {
+          accountId: account.id,
+          modelRequested: 'deepseek-v4-flash',
+          modelActual: 'deepseek-v4-flash',
+          status: 'failed',
+          isStream: 0,
+          httpStatus: 408,
+          requestTraceId: 'r_agg_trace_1',
+          retryCount: 1,
+          promptTokens: 1,
+          completionTokens: 1,
+          totalTokens: 2,
+          estimatedCost: 0.001,
+          createdAt: timestamps[1],
+        },
+        {
+          accountId: account.id,
+          modelRequested: 'deepseek-v4-flash',
+          modelActual: 'deepseek-v4-flash',
+          status: 'success',
+          isStream: 1,
+          httpStatus: 200,
+          requestTraceId: 'r_agg_trace_1',
+          retryCount: 2,
+          promptTokens: 10,
+          completionTokens: 5,
+          totalTokens: 15,
+          estimatedCost: 0.01,
+          createdAt: timestamps[2],
+        },
+        // A standalone request without requestTraceId must stay a row.
+        {
+          accountId: account.id,
+          modelRequested: 'glm-5.2',
+          modelActual: 'glm-5.2',
+          status: 'success',
+          isStream: 0,
+          httpStatus: 200,
+          requestTraceId: null,
+          retryCount: 0,
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+          estimatedCost: 0.002,
+          createdAt: timestamps[2],
+        },
+      ])
+      .run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/stats/proxy-logs?limit=20&offset=0&model=deepseek-v4-flash',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{
+        modelRequested: string;
+        status: string;
+        retryCount: number;
+        requestTraceId?: string | null;
+      }>;
+      total: number;
+    };
+
+    // 3 attempts appear as separate rows; total reflects the raw row count.
+    // The frontend (aggregateProxyLogRetries) collapses them client-side.
+    expect(body.total).toBe(3);
+    expect(body.items).toHaveLength(3);
+    // Newest row first (createdAt desc)
+    expect(body.items[0]?.modelRequested).toBe('deepseek-v4-flash');
+    expect(body.items[0]?.status).toBe('success');
+    expect(body.items[0]?.retryCount).toBe(2);
+    expect(body.items[0]?.requestTraceId).toBe('r_agg_trace_1');
+
+    // The standalone row without a trace id is unaffected.
+    const allResponse = await app.inject({
+      method: 'GET',
+      url: '/api/stats/proxy-logs?limit=20&offset=0',
+    });
+    const allBody = allResponse.json() as {
+      items: Array<{
+        modelRequested: string;
+        status: string;
+        retryCount: number;
+      }>;
+      total: number;
+    };
+    expect(allBody.total).toBe(4);
+    expect(allBody.items).toHaveLength(4);
+    const standalone = allBody.items.find(
+      (item) => item.modelRequested === 'glm-5.2',
+    );
+    expect(standalone?.status).toBe('success');
+    expect(standalone?.retryCount).toBe(0);
+  });
 });

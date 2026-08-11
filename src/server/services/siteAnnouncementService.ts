@@ -29,7 +29,13 @@ function toStoredPayload(rawPayload: unknown): string | null {
 function buildAnnouncementMessage(row: SiteAnnouncement): string {
   const title = String(row.title || '').trim();
   const content = String(row.content || '').trim();
-  if (title && content && title !== content && title.toLowerCase() !== 'site notice') {
+  // The placeholder title (used when the upstream notice has no meaningful
+  // title) should not be duplicated in front of the content.
+  const normalizedTitle = title.toLowerCase();
+  const isPlaceholderTitle = normalizedTitle === 'site notice'
+    || normalizedTitle === '站点通知'
+    || normalizedTitle === '站点公告';
+  if (title && content && title !== content && !isPlaceholderTitle) {
     return `${title}\n${content}`;
   }
   return content || title;

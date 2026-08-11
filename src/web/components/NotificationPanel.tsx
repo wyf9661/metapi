@@ -154,7 +154,7 @@ export default function NotificationPanel({
               }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 500, fontSize: 13 }}>{ev.title}</span>
+                  <span style={{ fontWeight: 500, fontSize: 13 }}>{tr(ev.title)}</span>
                   <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: 'var(--color-bg)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-light)' }}>
                     {tr(typeLabels[ev.type] || ev.type)}
                   </span>

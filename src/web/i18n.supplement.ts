@@ -1248,6 +1248,7 @@ export const zhToEnSupplemental: Record<string, string> = {
   '站点倍率 JSON 解析失败': 'Failed to parse site multiplier JSON',
   '站点倍率必须是 JSON 对象': 'Site multiplier must be a JSON object',
   '站点公告': 'Site Announcements',
+  '站点通知': 'Site Notice',
   '站点屏蔽模型失败': 'Failed to block model at site',
   '结构无效': 'Invalid structure',
   '结构有效': 'Valid structure',

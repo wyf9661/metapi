@@ -518,6 +518,7 @@ export async function statsRoutes(app: FastifyInstance) {
       { includeBillingDetails: false, includeRequestTraceId: true },
     )) as Array<{
       proxy_logs: Record<string, unknown> & { billingDetails?: string | null };
+      attemptCount?: number | string | null;
       accounts: { username?: string | null } | null;
       sites: {
         id?: number | null;
