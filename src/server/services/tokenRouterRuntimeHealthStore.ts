@@ -4,7 +4,6 @@ import { upsertSetting } from '../db/upsertSetting.js';
 import { blendRecentOutcomeSnapshots as blendRecentOutcomeSnapshotsMath, clampNumber, isRecord, type RecentOutcomeSnapshot } from './tokenRouterMath.js';
 import {
   applyRuntimeHealthFailure,
-  applyRuntimeHealthSoftFailure,
   applyRuntimeHealthSuccess,
   cloneSiteRuntimeHealthState,
   createSiteRuntimeHealthState,
@@ -17,7 +16,7 @@ import {
   SITE_RUNTIME_MIN_MULTIPLIER,
   type SiteRuntimeHealthState,
 } from './siteRuntimeHealth.js';
-import { isWafBlockedRuntimeFailure, type SiteRuntimeFailureContext } from './siteFailureClassification.js';
+import { type SiteRuntimeFailureContext } from './siteFailureClassification.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { isExactRouteModelPattern } from './tokenRouterModelPatterns.js';
 
@@ -258,15 +257,13 @@ export async function ensureSiteRuntimeHealthStateLoaded(): Promise<void> {
 }
 
 export function recordSiteRuntimeFailure(siteId: number, context: SiteRuntimeFailureContext = {}, nowMs = Date.now()): void {
-  // WAF 403 is usually model/path scoped. Soft-penalize the site-global bucket
-  // but open the hard short breaker only on the site+model bucket so other models
-  // on the same site remain eligible.
+  // Cloudflare/edge WAF blocks ("Your request was blocked") apply to the
+  // whole site (IP/path rules), not one model. Treat them as a hard global
+  // failure so the site-level streak accumulates across models — otherwise
+  // each model's bucket sits at 1 hit and the site breaker never opens while
+  // different models keep burning requests on the blocked site.
   const globalState = getOrCreateSiteRuntimeHealthState(siteId, nowMs);
-  if (isWafBlockedRuntimeFailure(context)) {
-    applyRuntimeHealthSoftFailure(globalState, context, nowMs);
-  } else {
-    applyRuntimeHealthFailure(globalState, context, nowMs);
-  }
+  applyRuntimeHealthFailure(globalState, context, nowMs);
   const modelState = getOrCreateSiteModelRuntimeHealthState(siteId, context.modelName, nowMs);
   if (modelState) {
     applyRuntimeHealthFailure(modelState, context, nowMs);

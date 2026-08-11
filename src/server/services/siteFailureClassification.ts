@@ -404,7 +404,11 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       retryChannel: true,
       cascadeEndpoint: false,
       cooldownWeight: 2.0,
-      cooldownScope: 'endpoint',
+      // Cloudflare/edge WAF blocks the whole site (bot detection, path
+      // rules), not a single endpoint. Scope the cooldown to the site so
+      // every model/channel on that site stops hitting it until the block
+      // clears, instead of each channel-model pair burning one request.
+      cooldownScope: 'site',
     };
   }
 
