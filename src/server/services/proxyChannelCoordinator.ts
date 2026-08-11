@@ -6,6 +6,7 @@ import {
   getCredentialModeFromExtraConfig,
   hasOauthProvider,
 } from './accountExtraConfig.js';
+import { normalizeModelAlias } from './tokenRouterModelMatching.js';
 
 type StickyEntry = {
   channelId: number;
@@ -105,16 +106,22 @@ function cleanupExpiredStickyBindings(nowMs = Date.now()): void {
 }
 
 function getLastSuccessTtlMs(): number {
-  // Keep last-success in the same short window as sticky so dense same-key
-  // traffic rebalances instead of pinning one site for minutes.
-  return getStickySessionTtlMs();
+  // Use a generous window (default 5 min) so low-traffic models still hit
+  // the last-success channel on the next request. High-traffic models are
+  // protected from pinning one site by the sticky max-hits cap (see
+  // proxyStickyMaxHits). Falls back to the shorter sticky TTL when the
+  // operator explicitly sets a tighter sticky window.
+  return Math.max(300_000, getStickySessionTtlMs());
 }
 
 function buildLastSuccessKey(input: {
   requestedModel?: string | null;
   downstreamApiKeyId?: number | null;
 }): string | null {
-  const model = String(input.requestedModel || '').trim().toLowerCase();
+  // Normalize the model name (strip provider prefixes / date suffixes such as
+  // "deepseek-ai/deepseek-v4-flash" vs "deepseek-v4-flash-0731") so that
+  // last-success affinity is shared across alias spellings of the same model.
+  const model = normalizeModelAlias(String(input.requestedModel || '').trim());
   if (!model) return null;
   const owner = typeof input.downstreamApiKeyId === 'number' && Number.isFinite(input.downstreamApiKeyId)
     ? `key:${Math.trunc(input.downstreamApiKeyId)}`

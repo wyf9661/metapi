@@ -50,7 +50,6 @@ type EndpointRuntimeState = {
 
 const ENDPOINT_RUNTIME_PREFERRED_TTL_MS = 24 * 60 * 60 * 1000;
 const ENDPOINT_RUNTIME_BLOCK_TTL_MS = 6 * 60 * 60 * 1000;
-const ENDPOINT_RUNTIME_WAF_BLOCK_TTL_MS = 10 * 60 * 1000;
 const MAX_ENDPOINT_RUNTIME_STATES = 512;
 export const MAX_ENDPOINT_RUNTIME_MODEL_KEY_LENGTH = 64;
 export const MODEL_KEY_HASH_SUFFIX_LENGTH = 8;
@@ -210,16 +209,22 @@ function inferSuggestedEndpointFromError(
   return suggestedEndpoint && endpoint !== suggestedEndpoint ? suggestedEndpoint : null;
 }
 
-function endpointTransientBlockTtlMs(_status: number, errorText?: string | null): number {
+// WAF/edge blocks ("your request was blocked", Cloudflare 1010, cf-ray) are
+// site-wide bot/capacity rejections, NOT endpoint-protocol problems. Blocking
+// the chat endpoint would force a pointless messages fallback that hits the
+// same WAF. Endpoint selection stays untouched so the channel failover
+// machinery (which understands WAF cooldowns) handles it instead.
+function endpointTransientBlockTtlMs(): number {
+  return 0;
+}
+
+function isWafBlockText(errorText?: string | null): boolean {
   const text = String(errorText || '').toLowerCase();
-  if (
+  return (
     text.includes('your request was blocked')
     || text.includes('error code: 1010')
     || text.includes('cf-ray')
-  ) {
-    return ENDPOINT_RUNTIME_WAF_BLOCK_TTL_MS;
-  }
-  return 0;
+  );
 }
 
 function shouldBlockEndpointByError(
@@ -228,6 +233,9 @@ function shouldBlockEndpointByError(
   errorText?: string | null,
 ): boolean {
   if (isEndpointDispatchDeniedError(status, errorText)) return true;
+  // Site-wide WAF/edge rejections are not endpoint protocol failures — do not
+  // block the endpoint (would only cause a useless fallback that is also WAF'd).
+  if (isWafBlockText(errorText)) return false;
   if (status === 404 || status === 405 || status === 415 || status === 501) return true;
   if (isUnsupportedMediaTypeError(status, errorText)) return true;
 
@@ -411,7 +419,7 @@ export function recordUpstreamEndpointFailure(input: {
     requestCapabilities: input.requestCapabilities,
   });
   if (!shouldUseEndpointRuntimeMemory(capabilityProfile)) return null;
-  const transientBlockTtlMs = endpointTransientBlockTtlMs(input.status, input.errorText);
+  const transientBlockTtlMs = endpointTransientBlockTtlMs();
   if (!shouldBlockEndpointByError(input.endpoint, input.status, input.errorText) && transientBlockTtlMs <= 0) return null;
 
   const nowMs = Date.now();

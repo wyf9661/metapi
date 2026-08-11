@@ -564,7 +564,11 @@ describe('resolveUpstreamEndpointCandidates', () => {
     });
   });
 
-  it('remembers WAF blocks briefly for the same site/model/endpoint', async () => {
+  it('does not block endpoints on site-wide WAF rejections', async () => {
+    // WAF blocks ("your request was blocked", error code 1010) are site-wide
+    // bot/capacity rejections, not endpoint-protocol problems. The endpoint
+    // memory should NOT block the chat endpoint, so the channel failover
+    // machinery handles the WAF cooldown instead.
     const memoryWrite = recordUpstreamEndpointFailure({
       siteId: baseContext.site.id,
       endpoint: 'chat',
@@ -573,11 +577,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       status: 403,
       errorText: 'Your request was blocked. error code: 1010',
     });
-    expect(memoryWrite).toMatchObject({
-      action: 'failure',
-      endpoint: 'chat',
-      blockedEndpoint: 'chat',
-    });
+    expect(memoryWrite).toBeNull();
 
     const order = await resolveUpstreamEndpointCandidates(
       {
@@ -587,7 +587,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'glm-5.2',
       'openai',
     );
-    expect(order).toEqual(['messages', 'responses']);
+    expect(order).toEqual(['chat', 'messages', 'responses']);
   });
 
   it('keeps transient 504 failures out of endpoint runtime blocking', async () => {
