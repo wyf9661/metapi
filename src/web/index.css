@@ -6582,19 +6582,36 @@ textarea {
 /* Grid layout: 2 columns by default, 3 on wide screens */
 .site-observability-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 @media (min-width: 1400px) {
   .site-observability-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 780px) {
   .site-observability-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-observability-panel {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .site-observability-card {
+    min-width: 0;
+  }
+
+  .site-observability-card-title .site-observability-site-name {
+    max-width: 140px;
+  }
+
+  .site-availability-strip-compact {
+    gap: 2px;
   }
 }
 
@@ -6604,6 +6621,9 @@ textarea {
   border: 1px solid var(--color-border-light);
   background: color-mix(in srgb, var(--color-bg) 88%, white);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .site-observability-card:hover {
@@ -6626,6 +6646,7 @@ textarea {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
+  min-width: 0;
 }
 
 .site-observability-card-title {
@@ -6634,6 +6655,7 @@ textarea {
   gap: 6px;
   min-width: 0;
   overflow: hidden;
+  flex: 1;
 }
 
 .site-observability-card-title .site-observability-site-name {
@@ -6643,6 +6665,8 @@ textarea {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary);
+  max-width: 100%;
+  min-width: 0;
 }
 
 .site-observability-card-metrics {
@@ -6687,16 +6711,17 @@ textarea {
 }
 
 .site-availability-strip-compact {
-  display: grid;
-  grid-template-columns: repeat(24, 10px);
+  display: flex;
   gap: 4px;
-  align-items: end;
-  justify-content: space-between;
+  align-items: flex-end;
+  min-width: 0;
   padding: 2px 0;
 }
 
 .site-availability-strip-compact .site-availability-cell {
-  width: 10px;
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
   height: 22px;
   border-radius: 4px;
 }
