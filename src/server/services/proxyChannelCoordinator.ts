@@ -105,13 +105,15 @@ function cleanupExpiredStickyBindings(nowMs = Date.now()): void {
   }
 }
 
-function getLastSuccessTtlMs(): number {
-  // Use a generous window (default 5 min) so low-traffic models still hit
-  // the last-success channel on the next request. High-traffic models are
-  // protected from pinning one site by the sticky max-hits cap (see
-  // proxyStickyMaxHits). Falls back to the shorter sticky TTL when the
-  // operator explicitly sets a tighter sticky window.
-  return Math.max(300_000, getStickySessionTtlMs());
+function getLastSuccessMaxAgeMs(): number {
+  // Last-success is a "most recently verified working channel" hint, not a
+  // lease. Keep it effectively permanent (365d): a channel that once worked
+  // for a model stays the preferred first attempt until real evidence
+  // replaces it — a failed attempt routes through tokenRouter's failure
+  // cooldown, after which selectPreferredChannel can no longer return it and
+  // channelSelection clears the binding. Dense same-key traffic is protected
+  // from pinning by proxyStickyMaxHits (see incrementLastSuccessHitCount).
+  return 365 * 24 * 60 * 60 * 1000;
 }
 
 function buildLastSuccessKey(input: {
@@ -429,7 +431,7 @@ class ProxyChannelCoordinator {
     const previous = lastSuccessByModelKey.get(key);
     lastSuccessByModelKey.set(key, {
       channelId,
-      expiresAtMs: Date.now() + getLastSuccessTtlMs(),
+      expiresAtMs: Date.now() + getLastSuccessMaxAgeMs(),
       hitCount: previous?.channelId === channelId ? (previous.hitCount ?? 0) : 0,
     });
     scheduleProxyChannelAffinityPersistence();
