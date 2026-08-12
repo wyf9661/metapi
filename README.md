@@ -318,6 +318,8 @@ Docker Compose、桌面安装包、反向代理、升级与数据库选项等详
 
 📖 **[环境变量与配置](./docs/configuration.md)** · **[客户端接入指南](./docs/client-integration.md)** · **[常见问题](./docs/faq.md)**
 
+🤖 **Agent 自动化运维**：本仓库提供面向 AI Agent 的运维 Skill（[`docs/skills/metapi-user-agent/`](./docs/skills/metapi-user-agent/SKILL.md)）。将 `SKILL.md` 与 `references/` 目录放入你的 Agent 技能目录后，Agent 即可通过管理 API 帮你完成添加站点、添加账号、同步 Token、模型测活、自动签到、查统计与故障排查，无需人工点击管理界面。
+
 ---
 
 ## 🏗️ 技术栈

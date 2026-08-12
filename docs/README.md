@@ -35,6 +35,7 @@ npm run docs:build
 | 环境变量、参数和配置项 | [配置说明](./configuration.md) | 设置页 / 通知设置 / 下游密钥这些 UI 入口变化，或仅剩 env-only 的部署级参数变化时 |
 | 客户端与工具接入 | [客户端接入](./client-integration.md) | Open WebUI、Cherry Studio、Cursor 等接入方式变化时 |
 | 管理后台脚本化调用 | [管理 API](./management-api.md) | 需要说明如何用脚本批量导入站点/账号，或对接外部自动化时 |
+| Agent 自动化运维 | [Agent 运维 Skill](./skills/metapi-user-agent/SKILL.md) | 新增/调整面向 AI Agent 的运维能力（站点、账号、测活、签到）时 |
 | 运维排障与日常维护 | [运维手册](./operations.md) / [常见问题](./faq.md) | 新排障案例、备份恢复、健康检查、典型报错变化时 |
 | FAQ / 教程协作沉淀 | [FAQ/教程贡献规范](./community/faq-tutorial-guidelines.md) | 需要新增教程、FAQ 模板、内容提交流程时 |
 | 仓库目录与组织约定 | [目录规范](./project-structure.md) | 目录结构、归档策略或命名约定变化时 |
