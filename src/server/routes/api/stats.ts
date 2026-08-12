@@ -67,11 +67,24 @@ import {
   toRoundedMicroNumber,
   normalizeNullableText,
   normalizeClientConfidence,
+  mapWithConcurrency,
 } from './stats.pure.js';
 const MODELS_MARKETPLACE_BASE_TTL_MS = 15_000;
 const MODELS_MARKETPLACE_PRICING_TTL_MS = 90_000;
 const limitModelTokenCandidatesRead = createRateLimitGuard({
   bucket: 'models-token-candidates-read',
+  max: 30,
+  windowMs: 60_000,
+});
+// Probe endpoints hit upstreams directly — bound them so a loop cannot
+// turn into an upstream probe storm.
+const limitModelProbe = createRateLimitGuard({
+  bucket: 'models-probe',
+  max: 20,
+  windowMs: 60_000,
+});
+const limitModelCheck = createRateLimitGuard({
+  bucket: 'models-check',
   max: 30,
   windowMs: 60_000,
 });
@@ -866,7 +879,12 @@ export async function statsRoutes(app: FastifyInstance) {
       const query = (request.query || {}) as Record<string, unknown>;
       // Keep unbounded scans opt-in: request-level metrics default to the last 24h.
       const defaultSince = formatUtcSqlDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
-      const since = typeof query.since === 'string' ? query.since : defaultSince;
+      const MIN_SINCE_MS = 90 * 24 * 60 * 60 * 1000;
+      let since = typeof query.since === 'string' ? query.since : defaultSince;
+      const sinceMs = Date.parse(since);
+      if (!Number.isFinite(sinceMs) || Date.now() - sinceMs > MIN_SINCE_MS) {
+        since = defaultSince;
+      }
       const until = typeof query.until === 'string' ? query.until : null;
       const model = typeof query.model === 'string' ? query.model.trim() : '';
       const conditions: any[] = [
@@ -1188,8 +1206,10 @@ export async function statsRoutes(app: FastifyInstance) {
           )
           .all();
 
-        const metadataResults = await Promise.all(
-          activeAccountRows.map(async (row: any) => {
+        const metadataResults = await mapWithConcurrency(
+          activeAccountRows,
+          6,
+          async (row: any) => {
             const catalog = await fetchModelPricingCatalog({
               site: {
                 id: row.sites.id,
@@ -1210,7 +1230,7 @@ export async function statsRoutes(app: FastifyInstance) {
               site: row.sites,
               catalog,
             };
-          }),
+          },
         );
 
         for (const result of metadataResults) {
@@ -1699,35 +1719,36 @@ export async function statsRoutes(app: FastifyInstance) {
           )
           .all();
 
-        const metadataResults = await Promise.all(
+        const metadataResults = await mapWithConcurrency(
           accountRows
-            .filter((row: any) => accountIdsForGroupHints.has(row.accounts.id))
-            .map(async (row: any) => {
-              try {
-                const catalog = await fetchModelPricingCatalog({
-                  site: {
-                    id: row.sites.id,
-                    url: row.sites.url,
-                    platform: row.sites.platform,
-                  },
-                  account: {
-                    id: row.accounts.id,
-                    accessToken: row.accounts.accessToken,
-                    apiToken: row.accounts.apiToken,
-                  },
-                  modelName: '__metadata__',
-                  totalTokens: 0,
-                });
-                return { accountId: row.accounts.id, catalog };
-              } catch {
-                return {
-                  accountId: row.accounts.id,
-                  catalog: null as Awaited<
-                    ReturnType<typeof fetchModelPricingCatalog>
-                  >,
-                };
-              }
-            }),
+            .filter((row: any) => accountIdsForGroupHints.has(row.accounts.id)),
+          6,
+          async (row: any) => {
+            try {
+              const catalog = await fetchModelPricingCatalog({
+                site: {
+                  id: row.sites.id,
+                  url: row.sites.url,
+                  platform: row.sites.platform,
+                },
+                account: {
+                  id: row.accounts.id,
+                  accessToken: row.accounts.accessToken,
+                  apiToken: row.accounts.apiToken,
+                },
+                modelName: '__metadata__',
+                totalTokens: 0,
+              });
+              return { accountId: row.accounts.id, catalog };
+            } catch {
+              return {
+                accountId: row.accounts.id,
+                catalog: null as Awaited<
+                  ReturnType<typeof fetchModelPricingCatalog>
+                >,
+              };
+            }
+          },
         );
 
         for (const result of metadataResults) {
@@ -1831,10 +1852,19 @@ export async function statsRoutes(app: FastifyInstance) {
   // Refresh models for one account and rebuild routes.
   app.post<{ Params: { accountId: string } }>(
     '/api/models/check/:accountId',
-    async (request) => {
+    { preHandler: [limitModelCheck] },
+    async (request, reply) => {
       const accountId = Number.parseInt(request.params.accountId, 10);
-      if (Number.isNaN(accountId)) {
-        return { success: false, error: 'Invalid account id' };
+      if (!Number.isFinite(accountId) || accountId <= 0) {
+        return reply.code(400).send({ success: false, error: 'Invalid account id' });
+      }
+      const accountExists = await db
+        .select({ id: schema.accounts.id })
+        .from(schema.accounts)
+        .where(eq(schema.accounts.id, accountId))
+        .get();
+      if (!accountExists) {
+        return reply.code(404).send({ success: false, error: 'Account not found' });
       }
 
       const refresh = await refreshModelsForAccount(accountId);
@@ -1962,6 +1992,7 @@ export async function statsRoutes(app: FastifyInstance) {
   // - with siteId/accountId: probe only that supplier/account
   app.post<{ Body?: { model?: string; modelName?: string; siteId?: number | string; accountId?: number | string } }>(
     '/api/models/probe-one',
+    { preHandler: [limitModelProbe] },
     async (request, reply) => {
       const requestBody = request.body;
       if (requestBody !== undefined && !isRecord(requestBody)) {
@@ -2017,6 +2048,7 @@ export async function statsRoutes(app: FastifyInstance) {
   // Event types: "start" (targets list), "result" (per-account), "done" (aggregate).
   app.post<{ Body?: { model?: string; modelName?: string; siteId?: number | string; accountId?: number | string } }>(
     '/api/models/probe-one/stream',
+    { preHandler: [limitModelProbe] },
     async (request, reply) => {
       const requestBody = request.body;
       if (requestBody !== undefined && !isRecord(requestBody)) {
@@ -2091,8 +2123,12 @@ export async function statsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { days?: string; refresh?: string } }>(
     '/api/stats/site-distribution',
     async (request) => {
+      const rawDays = request.query.days ? parseInt(request.query.days, 10) : 7;
+      const days = Number.isFinite(rawDays)
+        ? Math.max(1, Math.min(365, rawDays))
+        : 7;
       const snapshot = await getSiteStatsSnapshot({
-        days: request.query.days ? parseInt(request.query.days, 10) : 7,
+        days,
         forceRefresh: parseBooleanFlag(request.query.refresh),
       });
       return { distribution: snapshot.payload.distribution };
@@ -2103,8 +2139,12 @@ export async function statsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { days?: string; refresh?: string } }>(
     '/api/stats/site-trend',
     async (request) => {
+      const rawDays = request.query.days ? parseInt(request.query.days, 10) : 7;
+      const days = Number.isFinite(rawDays)
+        ? Math.max(1, Math.min(365, rawDays))
+        : 7;
       const snapshot = await getSiteStatsSnapshot({
-        days: request.query.days ? parseInt(request.query.days, 10) : 7,
+        days,
         forceRefresh: parseBooleanFlag(request.query.refresh),
       });
       return { trend: snapshot.payload.trend };

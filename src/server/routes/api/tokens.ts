@@ -1162,16 +1162,22 @@ export async function tokensRoutes(app: FastifyInstance) {
   });
 
   // Delete a route
-  app.delete<{ Params: { id: string } }>('/api/routes/:id', async (request) => {
+  app.delete<{ Params: { id: string } }>('/api/routes/:id', async (request, reply) => {
     const id = parseInt(request.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return reply.code(400).send({ message: 'Invalid route id' });
+    }
     const existingRoute = await db.select().from(schema.tokenRoutes).where(eq(schema.tokenRoutes.id, id)).get();
+    if (!existingRoute) {
+      return reply.code(404).send({ message: 'Route not found' });
+    }
     await clearDependentExplicitGroupSnapshotsBySourceRouteIds([id]);
     await db.delete(schema.tokenRoutes).where(eq(schema.tokenRoutes.id, id)).run();
     await syncPatternRouteChannelsAfterAffectedRouteChanges({
-      removedRoutes: existingRoute ? [{
+      removedRoutes: [{
         modelPattern: existingRoute.modelPattern,
         routeMode: existingRoute.routeMode,
-      }] : [],
+      }],
     });
     invalidateTokenRouterCache();
     return { success: true };

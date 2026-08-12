@@ -1,12 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { db, schema } from '../../db/index.js';
 import { and, desc, eq, sql } from 'drizzle-orm';
+import { normalizePageOffset, normalizePageSize } from './paginationNormalizers.js';
 
 export async function eventsRoutes(app: FastifyInstance) {
   // List events
   app.get<{ Querystring: { limit?: string; offset?: string; type?: string; read?: string } }>('/api/events', async (request) => {
-    const limit = Math.max(1, Math.min(500, parseInt(request.query.limit || '30', 10)));
-    const offset = Math.max(0, parseInt(request.query.offset || '0', 10));
+    const limit = normalizePageSize(request.query.limit, 30, 500);
+    const offset = normalizePageOffset(request.query.offset);
     const type = request.query.type;
     const readQuery = request.query.read;
 

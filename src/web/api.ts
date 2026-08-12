@@ -156,7 +156,11 @@ async function fetchAuthenticatedResponse(
       signal: controller.signal,
       headers,
     });
-    if (res.status === 401 || res.status === 403) {
+    // Only 401 means the admin session itself is invalid. 403 has other
+    // meanings (tunnel access denied, IP not allowed, insufficient
+    // permission) and must NOT clear the session or force a reload —
+    // that would log the admin out on every denied request.
+    if (res.status === 401) {
       const hadToken = !!getAuthToken(localStorage);
       clearAuthSession(localStorage);
       if (
@@ -1363,7 +1367,10 @@ export const api = {
   clearRuntimeCache: () =>
     request('/api/settings/maintenance/clear-cache', { method: 'POST' }),
   clearUsageData: () =>
-    request('/api/settings/maintenance/clear-usage', { method: 'POST' }),
+    request('/api/settings/maintenance/clear-usage', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
   factoryReset: () =>
     request('/api/settings/maintenance/factory-reset', { method: 'POST' }),
   testNotification: () =>

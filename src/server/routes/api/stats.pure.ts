@@ -102,3 +102,34 @@ export function roundPercent(value: number | null): number | null {
   if (value == null || !Number.isFinite(value)) return null;
   return Math.round(value * 10) / 10;
 }
+
+/**
+ * Map an array with a bounded concurrency pool. Prevents N upstream calls
+ * from firing simultaneously (e.g. pricing catalog fetch per active account).
+ */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const limit = Math.max(1, Math.trunc(concurrency));
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+
+  const workers: Promise<void>[] = [];
+  const workerCount = Math.min(limit, items.length);
+  for (let i = 0; i < workerCount; i += 1) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+  return results;
+}

@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
+import { config } from '../config.js';
 
 type RateLimitOptions = {
   bucket: string;
@@ -27,6 +28,17 @@ function normalizeIp(rawIp: string | null | undefined): string {
 }
 
 function extractClientIp(request: FastifyRequest): string {
+  // Only trust X-Forwarded-For when a reverse proxy is configured; otherwise
+  // an attacker could forge the header to bypass per-IP rate limits.
+  if (config.trustProxy) {
+    const xff = request.headers['x-forwarded-for'];
+    if (Array.isArray(xff)) {
+      const first = xff.find((item) => item && item.trim().length > 0);
+      if (first) return normalizeIp(first.split(',')[0]);
+    } else if (typeof xff === 'string' && xff.trim().length > 0) {
+      return normalizeIp(xff.split(',')[0]);
+    }
+  }
   return normalizeIp(request.ip);
 }
 

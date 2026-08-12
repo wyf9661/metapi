@@ -2,6 +2,58 @@ import { z } from 'zod';
 
 const accountCredentialModeSchema = z.enum(['auto', 'session', 'apikey']);
 
+export const ACCOUNT_STATUS_VALUES = ['active', 'disabled', 'expired'] as const;
+export type AccountStatusValue = (typeof ACCOUNT_STATUS_VALUES)[number];
+
+// Whitelist of extraConfig top-level keys the API accepts. Anything else is
+// dropped to prevent mass-assignment of internal/derived fields (e.g.
+// autoRelogin.passwordCipher managed by the server, oauth identity keys).
+const EXTRA_CONFIG_ALLOWED_KEYS = new Set([
+  'credentialMode',
+  'platformUserId',
+  'proxyUrl',
+  'autoRelogin',
+  'newApiManagedAuth',
+  'sub2apiAuth',
+  'oauth',
+  'subscriptionSummary',
+  'websockets',
+  'siteCascadeDisabled',
+]);
+
+export function normalizeExtraConfigInput(
+  input: unknown,
+): Record<string, unknown> | null | undefined {
+  if (input === undefined) return undefined;
+  if (input === null) return null;
+  if (typeof input === 'string') {
+    if (!input.trim()) return {};
+    try {
+      const parsed = JSON.parse(input) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return filterExtraConfigKeys(parsed as Record<string, unknown>);
+      }
+    } catch {
+      return {};
+    }
+    return {};
+  }
+  if (typeof input === 'object' && !Array.isArray(input)) {
+    return filterExtraConfigKeys(input as Record<string, unknown>);
+  }
+  return {};
+}
+
+function filterExtraConfigKeys(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (EXTRA_CONFIG_ALLOWED_KEYS.has(key)) out[key] = value;
+  }
+  return out;
+}
+
 const accountCreatePayloadSchema = z.object({
   siteId: z.number().int().positive(),
   username: z.string().optional(),
@@ -20,9 +72,9 @@ const accountUpdatePayloadSchema = z.object({
   username: z.string().optional(),
   accessToken: z.string().optional(),
   apiToken: z.union([z.string(), z.null()]).optional(),
-  status: z.string().optional(),
+  status: z.enum(ACCOUNT_STATUS_VALUES).optional(),
   checkinEnabled: z.boolean().optional(),
-  unitCost: z.union([z.number(), z.null()]).optional(),
+  unitCost: z.union([z.number().min(0), z.null()]).optional(),
   extraConfig: z.union([z.string(), z.record(z.string(), z.unknown()), z.null()]).optional(),
   refreshToken: z.union([z.string(), z.null()]).optional(),
   tokenExpiresAt: z.union([z.number(), z.string(), z.null()]).optional(),

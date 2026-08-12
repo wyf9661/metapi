@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { db, schema, runtimeDbDialect } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
-import {and, eq} from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { refreshBalance } from '../../services/balanceService.js';
 import { getAdapter } from '../../services/platforms/index.js';
 import {
@@ -39,6 +39,7 @@ import { createRateLimitGuard } from '../../middleware/requestRateLimit.js';
 import { getAccountsSnapshot } from '../../services/accountsOverviewService.js';
 import {
   type AccountCreatePayload,
+  normalizeExtraConfigInput,
   parseAccountBatchPayload,
   parseAccountCreatePayload,
   parseAccountHealthRefreshPayload,
@@ -217,15 +218,12 @@ function normalizeManagedTokenExpiresAt(input: unknown): number | undefined {
 }
 
 async function getNextAccountSortOrder(): Promise<number> {
-  const rows = await db
-    .select({ sortOrder: schema.accounts.sortOrder })
+  const row = await db
+    .select({ maxSortOrder: sql<number>`max(${schema.accounts.sortOrder})` })
     .from(schema.accounts)
-    .all();
-  const max = rows.reduce(
-    (currentMax: any, row: any) => Math.max(currentMax, row.sortOrder || 0),
-    -1,
-  );
-  return max + 1;
+    .get();
+  const currentMax = Number(row?.maxSortOrder ?? -1);
+  return Number.isFinite(currentMax) ? Math.max(0, currentMax + 1) : 0;
 }
 
 type LoginFailureInfo = {
@@ -1444,7 +1442,13 @@ export async function accountsRoutes(app: FastifyInstance) {
         'unitCost',
         'extraConfig',
       ]) {
-        if (body[key] !== undefined) updates[key] = body[key];
+        if (body[key] === undefined) continue;
+        if (key === 'extraConfig') {
+          updates.extraConfig = normalizeExtraConfigInput(body.extraConfig);
+          if (updates.extraConfig === undefined) continue;
+        } else {
+          updates[key] = body[key];
+        }
       }
 
       const wantsManagedSub2ApiAuthPatch =
@@ -1596,8 +1600,16 @@ export async function accountsRoutes(app: FastifyInstance) {
   // Delete an account
   app.delete<{ Params: { id: string } }>(
     '/api/accounts/:id',
-    async (request) => {
+    async (request, reply) => {
       const id = parseInt(request.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return reply.code(400).send({ message: 'Invalid account id' });
+      }
+      const existing = await db.select({ id: schema.accounts.id })
+        .from(schema.accounts).where(eq(schema.accounts.id, id)).get();
+      if (!existing) {
+        return reply.code(404).send({ message: 'Account not found' });
+      }
       await db.delete(schema.accounts).where(eq(schema.accounts.id, id)).run();
       await rebuildRoutesBestEffort();
       return { success: true };

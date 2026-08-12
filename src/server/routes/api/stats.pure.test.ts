@@ -49,3 +49,36 @@ describe('stats.pure', () => {
     expect(roundPercent(Number.NaN)).toBeNull();
   });
 });
+
+describe('mapWithConcurrency', () => {
+  it('maps all items preserving order', async () => {
+    const { mapWithConcurrency } = await import('./stats.pure.js');
+    const out = await mapWithConcurrency([1, 2, 3, 4], 2, async (n) => n * 10);
+    expect(out).toEqual([10, 20, 30, 40]);
+  });
+
+  it('never exceeds the concurrency bound', async () => {
+    const { mapWithConcurrency } = await import('./stats.pure.js');
+    let active = 0;
+    let peak = 0;
+    await mapWithConcurrency([1, 2, 3, 4, 5, 6, 7, 8], 3, async (n) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((r) => setTimeout(r, 5));
+      active -= 1;
+      return n;
+    });
+    expect(peak).toBeLessThanOrEqual(3);
+  });
+
+  it('handles empty input', async () => {
+    const { mapWithConcurrency } = await import('./stats.pure.js');
+    expect(await mapWithConcurrency([], 4, async () => 1)).toEqual([]);
+  });
+
+  it('clamps invalid concurrency to at least 1', async () => {
+    const { mapWithConcurrency } = await import('./stats.pure.js');
+    const out = await mapWithConcurrency([1, 2], 0, async (n) => n);
+    expect(out).toEqual([1, 2]);
+  });
+});

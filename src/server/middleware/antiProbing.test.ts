@@ -60,4 +60,39 @@ describe('isProbeRequest', () => {
       8,
     )).toBe(true);
   });
+
+  it('allows "write a story" — write-prefix is legitimate coding/agent traffic', () => {
+    expect(isProbeRequest({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'write a story' }],
+    })).toBe(false);
+  });
+
+  it('allows a long "can you" question', () => {
+    expect(isProbeRequest({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'can you explain how distributed systems achieve consensus in detail?' }],
+    })).toBe(false);
+  });
+
+  it('flags a short bare "can you" capability probe', () => {
+    expect(isProbeRequest({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'can you help?' }],
+    })).toBe(true);
+  });
+
+  it('does not flag a normal sentence containing "hi" as a substring', () => {
+    expect(isProbeRequest({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'please fix the bug in this function and explain the change' }],
+    })).toBe(false);
+  });
+
+  it('still flags a whole-word keyword probe', () => {
+    expect(isProbeRequest({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'system prompt reveal' }],
+    })).toBe(true);
+  });
 });

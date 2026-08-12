@@ -50,7 +50,7 @@ export default function EditAccountModal({
   const toast = useToast();
   const [editForm, setEditForm] = useState({
     username: '',
-    status: 'active',
+    status: 'active' as 'active' | 'disabled' | 'expired',
     checkinEnabled: true,
     unitCost: '',
     accessToken: '',
@@ -69,7 +69,9 @@ export default function EditAccountModal({
     const managedAuth = extractManagedSub2ApiAuth(account);
     const nextForm = {
       username: account?.username || '',
-      status: account?.status || 'active',
+      status: (account?.status === 'disabled' || account?.status === 'expired'
+        ? account.status
+        : 'active') as 'active' | 'disabled' | 'expired',
       checkinEnabled: account?.checkinEnabled !== false,
       unitCost:
         account?.unitCost === null || account?.unitCost === undefined
@@ -179,7 +181,12 @@ export default function EditAccountModal({
           <ModernSelect
             value={editForm.status}
             onChange={(value) =>
-              setEditForm((prev) => ({ ...prev, status: value }))
+              setEditForm((prev) => ({
+                ...prev,
+                status: (value === 'disabled' || value === 'expired'
+                  ? value
+                  : 'active') as 'active' | 'disabled' | 'expired',
+              }))
             }
             options={[
               { value: 'active', label: 'active' },

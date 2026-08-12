@@ -183,6 +183,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRebindTargetRef = useRef<any | null>(null);
   const modelModalRequestSeqRef = useRef(0);
+  const mountedRef = useRef(true);
   const toast = useToast();
   if (rebindTarget) lastRebindTargetRef.current = rebindTarget;
   const activeRebindTarget = rebindTarget || lastRebindTargetRef.current;
@@ -209,6 +210,10 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   };
   useEffect(() => {
     void load();
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const selectedTokenSite = useMemo(
@@ -536,14 +541,15 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         const jobId = typeof result.jobId === 'string' ? result.jobId : '';
         if (jobId) {
           // Poll init task so runtime health flips from "未知" without manual refresh.
+          // Guarded by mountedRef: never setState after unmount.
           void (async () => {
             const startedAt = Date.now();
-            while (Date.now() - startedAt < 90_000) {
+            while (mountedRef.current && Date.now() - startedAt < 90_000) {
               try {
                 const task: any = await api.getTask(jobId);
                 const status = String(task?.status || task?.task?.status || '');
                 if (status === 'succeeded' || status === 'failed') {
-                  load(true);
+                  if (mountedRef.current) load(true);
                   return;
                 }
               } catch {
@@ -551,7 +557,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
               }
               await new Promise((resolve) => setTimeout(resolve, 1500));
             }
-            load(true);
+            if (mountedRef.current) load(true);
           })();
         }
       } else if (result.tokenType === 'apikey') {

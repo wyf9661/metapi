@@ -7,6 +7,7 @@ import { checkinAccount, checkinAll } from '../../services/checkinService.js';
 import { updateCheckinSchedule } from '../../services/checkinScheduler.js';
 import { startBackgroundTask, summarizeCheckinResults } from '../../services/backgroundTaskService.js';
 import { classifyFailureReason } from '../../services/failureReasonService.js';
+import { normalizePageOffset, normalizePageSize } from './paginationNormalizers.js';
 
 function buildCheckinAccountLabel(item: any): string {
   const username = item?.username || (item?.accountId ? `#${item.accountId}` : 'unknown');
@@ -108,16 +109,24 @@ export async function checkinRoutes(app: FastifyInstance) {
   });
 
   // Trigger check-in for a specific account
-  app.post<{ Params: { id: string } }>('/api/checkin/trigger/:id', async (request) => {
+  app.post<{ Params: { id: string } }>('/api/checkin/trigger/:id', async (request, reply) => {
     const id = parseInt(request.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return reply.code(400).send({ success: false, message: 'Invalid account id' });
+    }
+    const existing = await db.select({ id: schema.accounts.id })
+      .from(schema.accounts).where(eq(schema.accounts.id, id)).get();
+    if (!existing) {
+      return reply.code(404).send({ success: false, message: 'Account not found' });
+    }
     const result = await checkinAccount(id, { scheduleMode: config.checkinScheduleMode });
     return result;
   });
 
   // Get check-in logs
   app.get<{ Querystring: { limit?: string; offset?: string; accountId?: string } }>('/api/checkin/logs', async (request) => {
-    const limit = parseInt(request.query.limit || '50', 10);
-    const offset = parseInt(request.query.offset || '0', 10);
+    const limit = normalizePageSize(request.query.limit, 50, 200);
+    const offset = normalizePageOffset(request.query.offset);
     let query = db.select().from(schema.checkinLogs)
       .innerJoin(schema.accounts, eq(schema.checkinLogs.accountId, schema.accounts.id))
       .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))

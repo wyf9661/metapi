@@ -394,20 +394,30 @@ export async function sitesRoutes(app: FastifyInstance) {
   ) {
     const now = new Date().toISOString();
     if (normalizedStatus === 'disabled') {
-      await db.update(schema.accounts)
-        .set({ status: 'disabled', updatedAt: now })
-        .where(eq(schema.accounts.siteId, siteId))
-        .run();
+      const siteAccounts = await db.select().from(schema.accounts)
+        .where(and(eq(schema.accounts.siteId, siteId), eq(schema.accounts.status, 'active')))
+        .all();
+      for (const account of siteAccounts) {
+        let extraConfig: Record<string, unknown> = {};
+        if (typeof account.extraConfig === 'string' && account.extraConfig.trim()) {
+          try { extraConfig = JSON.parse(account.extraConfig) as Record<string, unknown>; } catch { /* keep empty */ }
+        }
+        if (typeof account.extraConfig === 'object' && account.extraConfig !== null) {
+          extraConfig = { ...(account.extraConfig as Record<string, unknown>) };
+        }
+        extraConfig.siteCascadeDisabled = true;
+        await db.update(schema.accounts)
+          .set({ status: 'disabled', extraConfig: JSON.stringify(extraConfig), updatedAt: now })
+          .where(eq(schema.accounts.id, account.id))
+          .run();
+      }
 
       // Also disable all route channels belonging to this site's accounts.
-      const siteAccountIds = await db.select({ id: schema.accounts.id })
-        .from(schema.accounts)
-        .where(eq(schema.accounts.siteId, siteId))
-        .all();
+      const siteAccountIds = siteAccounts.map((row: any) => row.id);
       if (siteAccountIds.length > 0) {
         await db.update(schema.routeChannels)
           .set({ enabled: false, updatedAt: now })
-          .where(inArray(schema.routeChannels.accountId, siteAccountIds.map((row: any) => row.id)))
+          .where(inArray(schema.routeChannels.accountId, siteAccountIds))
           .run();
         invalidateTokenRouterCache();
       }
@@ -427,22 +437,45 @@ export async function sitesRoutes(app: FastifyInstance) {
       return;
     }
 
-    await db.update(schema.accounts)
-      .set({ status: 'active', updatedAt: now })
+    // Re-enable only accounts that were cascade-disabled by this site toggle
+    // (extraConfig.siteCascadeDisabled). Accounts the admin disabled manually
+    // must NOT be silently resurrected.
+    const disabledAccounts = await db.select().from(schema.accounts)
       .where(and(eq(schema.accounts.siteId, siteId), eq(schema.accounts.status, 'disabled')))
-      .run();
-
-    // Re-enable route channels for this site's accounts that are now active.
-    const activeAccountIds = await db.select({ id: schema.accounts.id })
-      .from(schema.accounts)
-      .where(and(eq(schema.accounts.siteId, siteId), eq(schema.accounts.status, 'active')))
       .all();
+    const cascadeDisabledIds: number[] = [];
+    for (const account of disabledAccounts) {
+      let extraConfig: Record<string, unknown> = {};
+      if (typeof account.extraConfig === 'string' && account.extraConfig.trim()) {
+        try { extraConfig = JSON.parse(account.extraConfig) as Record<string, unknown>; } catch { /* keep empty */ }
+      } else if (typeof account.extraConfig === 'object' && account.extraConfig !== null) {
+        extraConfig = { ...(account.extraConfig as Record<string, unknown>) };
+      }
+      if (extraConfig.siteCascadeDisabled === true) {
+        cascadeDisabledIds.push(account.id);
+        delete extraConfig.siteCascadeDisabled;
+        await db.update(schema.accounts)
+          .set({ status: 'active', extraConfig: JSON.stringify(extraConfig), updatedAt: now })
+          .where(eq(schema.accounts.id, account.id))
+          .run();
+      }
+    }
+
+    // Re-enable route channels for this site's accounts that are now active,
+    // but only channels the admin has NOT manually overridden.
+    const activeAccountIds = cascadeDisabledIds.length > 0
+      ? await db.select({ id: schema.accounts.id })
+        .from(schema.accounts)
+        .where(and(eq(schema.accounts.siteId, siteId), eq(schema.accounts.status, 'active')))
+        .all()
+      : [];
     if (activeAccountIds.length > 0) {
       await db.update(schema.routeChannels)
         .set({ enabled: true, updatedAt: now })
         .where(and(
           inArray(schema.routeChannels.accountId, activeAccountIds.map((row: any) => row.id)),
           eq(schema.routeChannels.enabled, false),
+          eq(schema.routeChannels.manualOverride, false),
         ))
         .run();
       invalidateTokenRouterCache();
@@ -453,7 +486,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       await db.insert(schema.events).values({
         type: 'status',
         title: '站点已启用',
-        message: `${existingSiteName} 已启用，关联禁用账号及路由通道已恢复`,
+        message: `${existingSiteName} 已启用，级联禁用的账号与路由通道已恢复（手动禁用的保持禁用）`,
         level: 'info',
         relatedId: siteId,
         relatedType: 'site',
@@ -1002,8 +1035,16 @@ export async function sitesRoutes(app: FastifyInstance) {
   await invalidateAccountsSnapshot();
 }
 
-  app.delete<{ Params: { id: string } }>('/api/sites/:id', async (request) => {
+  app.delete<{ Params: { id: string } }>('/api/sites/:id', async (request, reply) => {
     const id = parseInt(request.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return reply.code(400).send({ error: 'Invalid site id' });
+    }
+    const existingSite = await db.select({ id: schema.sites.id })
+      .from(schema.sites).where(eq(schema.sites.id, id)).get();
+    if (!existingSite) {
+      return reply.code(404).send({ error: 'Site not found' });
+    }
     await deleteSiteAndRelatedData(id);
     invalidateSiteCaches();
     return { success: true };
@@ -1113,15 +1154,17 @@ export async function sitesRoutes(app: FastifyInstance) {
       .filter((m) => m.length > 0);
     const uniqueModels = Array.from(new Set(models));
 
-    await db.delete(schema.siteDisabledModels)
-      .where(eq(schema.siteDisabledModels.siteId, id))
-      .run();
+    await db.transaction(async (tx: any) => {
+      await tx.delete(schema.siteDisabledModels)
+        .where(eq(schema.siteDisabledModels.siteId, id))
+        .run();
 
-    if (uniqueModels.length > 0) {
-      await db.insert(schema.siteDisabledModels).values(
-        uniqueModels.map((modelName) => ({ siteId: id, modelName })),
-      ).run();
-    }
+      if (uniqueModels.length > 0) {
+        await tx.insert(schema.siteDisabledModels).values(
+          uniqueModels.map((modelName) => ({ siteId: id, modelName })),
+        ).run();
+      }
+    });
 
     invalidateSiteCaches();
     clearModelsMarketplaceCache();

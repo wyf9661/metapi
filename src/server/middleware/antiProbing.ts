@@ -12,6 +12,10 @@ import { getProxyAuthContext } from './auth.js';
 
 // ── Probe patterns ──────────────────────────────────────────────────────────
 // Messages matching any of these (case-insensitive, trimmed) are blocked.
+// `write` / `output` prefixes are intentionally NOT here: they are high-frequency
+// in real coding/agent traffic ("write a test", "write a function") and were
+// killing legitimate requests. `can you`-style capability prefixes are handled
+// separately with a length bound so real questions are not blocked.
 const PROBE_PATTERNS: RegExp[] = [
   // Minimal greetings / pings
   /^(hi|hello|hey|yo|ping|test|testing|123|1\+1|2\+2|ok|ok\.|hey)\s*$/i,
@@ -24,16 +28,22 @@ const PROBE_PATTERNS: RegExp[] = [
   // Very short mixed text (< 5 chars, no spaces)
   /^[\w\u4e00-\u9fff]{1,4}$/,
   // "say X" / "repeat X" / "echo X" — classic probe
-  /^(say|repeat|echo|print|output|write)\s+.{1,15}\s*$/i,
+  /^(say|repeat|echo|print)\s+.{1,15}\s*$/i,
   // "what model" / "what are you" / "who are you"
   /^(what|who)\s+(model|are you|is your|version)/i,
   // API key / system prompt probing
   /(api[_\s-]?key|system[_\s-]?prompt|ignore\s+(previous|above|all)\s+instructions)/i,
   // "translate to English" — common minimal probe
   /^translate\s+.{1,30}\s*$/i,
-  // "can you" / "are you" — capability probing
-  /^(can you|are you|do you|will you|shall you)\s+/i,
 ];
+
+// Capability-probing prefixes ("can you X"). Only treated as a probe when the
+// whole message is short — a real question ("can you explain how X works in
+// detail...") is longer than this and must pass through.
+const CAPABILITY_PROBE_PATTERN = /^(can you|are you|do you|will you|shall you)\s+/i;
+const CAPABILITY_PROBE_MAX_CHARS = 40;
+// Messages at or above this length are never treated as probes.
+const LONG_MESSAGE_ALLOW_CHARS = 60;
 
 // ── Sensitive keyword list ──────────────────────────────────────────────────
 // Requests whose last user message contains any of these (case-insensitive)
@@ -239,6 +249,10 @@ export function isProbeRequest(body: unknown, minTextLength = MIN_TEXT_LENGTH): 
   const text = extractLastUserMessageText(body).trim();
   if (!text) return false;
 
+  // Long messages are never probes — real questions, code, and explanations
+  // are longer than any probe payload.
+  if (text.length >= LONG_MESSAGE_ALLOW_CHARS) return false;
+
   // Short text = likely probe... unless it's a follow-up in an ongoing
   // conversation, which is normal usage ("谢谢", "继续", "next").
   if (text.length < minTextLength) {
@@ -249,13 +263,34 @@ export function isProbeRequest(body: unknown, minTextLength = MIN_TEXT_LENGTH): 
   // Pattern match
   if (PROBE_PATTERNS.some((pattern) => pattern.test(text))) return true;
 
-  // Sensitive keyword match
+  // Capability prefix ("can you ...") only when the message is short.
+  if (
+    text.length <= CAPABILITY_PROBE_MAX_CHARS
+    && CAPABILITY_PROBE_PATTERN.test(text)
+  ) return true;
+
+  // Sensitive keyword match (whole-word boundary for Latin keywords so
+  // "this" is not flagged by "hi", "book" not flagged by "ok").
   if (SENSITIVE_KEYWORDS.length > 0) {
     const lower = text.toLowerCase();
-    if (SENSITIVE_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()))) return true;
+    if (SENSITIVE_KEYWORDS.some((kw) => matchesSensitiveKeyword(lower, kw))) return true;
   }
 
   return false;
+}
+
+function matchesSensitiveKeyword(lowerText: string, keyword: string): boolean {
+  const kw = keyword.toLowerCase();
+  // Latin keywords: whole-word boundary match.
+  if (/^[\x00-\x7F]+$/.test(kw)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(kw)}([^a-z0-9]|$)`).test(lowerText);
+  }
+  // CJK / mixed keywords have no word boundaries — substring match.
+  return lowerText.includes(kw);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Paths that carry request bodies to check.

@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import cron from 'node-cron';
+import { sql } from 'drizzle-orm';
 import { config, normalizeTokenRouterFailureCooldownMaxSec } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
@@ -18,6 +19,11 @@ import {
   type BackupExportType,
 } from '../../services/backupService.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
+import {
+  deleteAdminSnapshot,
+  readAdminSnapshot,
+  writeAdminSnapshot,
+} from '../../services/adminSnapshotStore.js';
 import {
   maskConnectionString,
   migrateCurrentDatabase,
@@ -1760,10 +1766,6 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/settings/maintenance/clear-cache', async (_, reply) => {
-    const deletedModelAvailability = (await db.delete(schema.modelAvailability).run()).changes;
-    const deletedRouteChannels = (await db.delete(schema.routeChannels).run()).changes;
-    const deletedTokenRoutes = (await db.delete(schema.tokenRoutes).run()).changes;
-
     const { task, reused } = startBackgroundTask(
       {
         type: 'maintenance',
@@ -1777,7 +1779,52 @@ export async function settingsRoutes(app: FastifyInstance) {
         },
         failureMessage: (currentTask) => `缓存清理后重建失败：${currentTask.error || 'unknown error'}`,
       },
-      async () => routeRefreshWorkflow.refreshModelsAndRebuildRoutes(),
+      async () => {
+        const tokenRoutesSnapshot = await db.select().from(schema.tokenRoutes).all();
+        const SNAPSHOT_NS = 'clear-cache-rollback';
+        const SNAPSHOT_KEY = 'tokenRoutes';
+        const nowIso = new Date().toISOString();
+        if (tokenRoutesSnapshot.length > 0) {
+          await writeAdminSnapshot(
+            { namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY },
+            { payload: tokenRoutesSnapshot, generatedAt: nowIso, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), staleUntil: nowIso },
+          );
+        }
+
+        try {
+          await db.delete(schema.modelAvailability).run();
+          await db.delete(schema.routeChannels).run();
+          await db.delete(schema.tokenRoutes).run();
+
+          const rebuild = await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+          await deleteAdminSnapshot({ namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY });
+          return { rebuild, deletedModelAvailability: true, deletedRouteChannels: true, deletedTokenRoutes: true };
+        } catch (rebuildErr) {
+          try {
+            const snapshot = await readAdminSnapshot<typeof tokenRoutesSnapshot>(
+              { namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY },
+            );
+            if (snapshot && snapshot.payload.length > 0) {
+              const rows = snapshot.payload;
+              if (runtimeDbDialect === 'mysql') {
+                for (let i = 0; i < rows.length; i += 200) {
+                  const batch = rows.slice(i, i + 200);
+                  await (db.insert(schema.tokenRoutes).values(batch) as any).onDuplicateKeyUpdate({ set: { model: sql`VALUES(model)`, channelId: sql`VALUES(channel_id)`, priority: sql`VALUES(priority)`, weight: sql`VALUES(weight)` } });
+                }
+              } else {
+                for (let i = 0; i < rows.length; i += 200) {
+                  const batch = rows.slice(i, i + 200);
+                  await db.insert(schema.tokenRoutes).values(batch).onConflictDoNothing().run();
+                }
+              }
+            }
+            await deleteAdminSnapshot({ namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY });
+          } catch {
+            /* rollback best-effort */
+          }
+          throw rebuildErr;
+        }
+      },
     );
 
     return reply.code(202).send({
@@ -1785,14 +1832,18 @@ export async function settingsRoutes(app: FastifyInstance) {
       queued: true,
       reused,
       jobId: task.id,
-      message: '缓存已清理，重建路由已开始执行',
-      deletedModelAvailability,
-      deletedRouteChannels,
-      deletedTokenRoutes,
+      message: '缓存清理与路由重建已排入后台任务',
     });
   });
 
-  app.post('/api/settings/maintenance/clear-usage', async () => {
+  app.post('/api/settings/maintenance/clear-usage', async (request, reply) => {
+    const body = (request.body || {}) as { confirm?: unknown };
+    if (body.confirm !== true) {
+      return reply.code(400).send({
+        success: false,
+        message: '危险操作需要确认：请携带 confirm:true 后重试',
+      });
+    }
     const deletedProxyLogs = (await db.delete(schema.proxyLogs).run()).changes;
 
     await db.update(schema.routeChannels).set({

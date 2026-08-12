@@ -209,10 +209,18 @@ export default function ProxyLogs() {
       { replace: true },
     );
   }, [
+    page,
+    pageSize,
+    statusFilter,
+    searchInput,
     downstreamKeyFilter,
     siteFilter,
-    statusFilter,
+    modelFilter,
+    fromInput,
     toInput,
+    location.search,
+    location.pathname,
+    navigate,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));

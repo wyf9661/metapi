@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { db } from '../../db/index.js';
 import { probeLogs, sites, accounts } from '../../db/schema.js';
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
+import { normalizePageOffset, normalizePageSize } from './paginationNormalizers.js';
 
 export async function registerProbeLogsRoutes(app: FastifyInstance) {
   // 获取测活日志列表
@@ -54,8 +55,8 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const limitNum = typeof limit === 'string' ? parseInt(limit) : limit;
-    const offsetNum = typeof offset === 'string' ? parseInt(offset) : offset;
+    const limitNum = normalizePageSize(limit, 100, 200);
+    const offsetNum = normalizePageOffset(offset);
 
     const logs = await db
       .select({
