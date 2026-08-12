@@ -101,33 +101,36 @@ export function canRetryProxyChannelWithBudget(
 
 /**
  * First-byte timeout for channel attempt N.
- * - retryCount=0 (first attempt): use the full configured timeout.
- * - retryCount>=1 (probe attempts): use `clamp(full/2, 10s, 30s)` so we do not
- *   spend a full generation timeout validating bad channels, while still
- *   tolerating slow-but-alive relay sites.
- * - full<=0 (disabled): probes are also disabled so explicit opt-out is
- *   respected end-to-end.
+ *
+ * - All attempts (first + failover probes) use the FULL configured timeout.
+ *   Slow-but-alive relay sites legitimately take 30-60s to emit the first
+ *   byte (MiMo/glm relays etc.); halving the timeout for failover probes
+ *   killed exactly those sites — the request that fails over onto a slow
+ *   site would time out at full/2 even though the site is fine. Dead
+ *   channels are already rejected quickly via connection errors and
+ *   immediate 4xx/5xx, so a shorter first-byte timeout is not needed to
+ *   prune them.
+ * - full<=0 (disabled): returns 0 so explicit opt-out is respected
+ *   end-to-end.
  */
-export function resolveProxyChannelFirstByteTimeoutMs(retryCount: number): number {
+export function resolveProxyChannelFirstByteTimeoutMs(_retryCount: number): number {
   const fullMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
-  if (retryCount <= 0) return fullMs;
   if (fullMs <= 0) return 0;
-  const halfMs = Math.floor(fullMs / 2);
-  return Math.min(
-    PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_CAP_MS,
-    Math.max(PROXY_CHANNEL_FAILOVER_PROBE_FIRST_BYTE_TIMEOUT_FLOOR_MS, halfMs),
-  );
+  return fullMs;
 }
 
 /**
  * Derived failover budget when env does not pin an explicit value:
- * `full + 2 * probe` covers the first attempt plus two probe attempts, which
- * matches the default soft attempt cap of 8 for typical pool sizes.
+ * `full + probe` covers the first attempt plus one failover target that may
+ * be slow-but-alive (first-byte probe timeout equals the full timeout, so a
+ * relay site that legitimately needs 30-60s for the first byte is not killed
+ * by a halved probe timeout). Total ≈ 2× the first-byte timeout, which fits
+ * inside common client-side disconnect thresholds (60-120s).
  */
 export function resolveProxyFailoverDerivedBudgetMs(): number {
   const fullMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
   if (fullMs <= 0) return 0;
-  return fullMs + 2 * resolveProxyChannelFirstByteTimeoutMs(1);
+  return fullMs + resolveProxyChannelFirstByteTimeoutMs(1);
 }
 
 export type FailoverStreakState = {

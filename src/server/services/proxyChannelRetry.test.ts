@@ -91,24 +91,23 @@ describe('proxyChannelRetry', () => {
     expect(canRetryProxyChannelWithBudget(5, 100, 10_000, 5)).toBe(false);
   });
 
-  it('derives probe first-byte timeout as clamp(full/2, 10s, 30s)', () => {
-    // full = 60s → probe = 30s (capped)
+  it('uses the full first-byte timeout for every attempt (probe = full)', () => {
+    // Slow-but-alive relay sites legitimately take 30-60s for the first byte;
+    // halving the timeout on failover probes killed exactly those sites.
     (config as any).proxyFirstByteTimeoutSec = 60;
     expect(resolveProxyChannelFirstByteTimeoutMs(0)).toBe(60_000);
-    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(30_000);
-    expect(resolveProxyChannelFirstByteTimeoutMs(5)).toBe(30_000);
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(60_000);
+    expect(resolveProxyChannelFirstByteTimeoutMs(5)).toBe(60_000);
 
-    // full = 30s → probe = 15s (half, within bounds)
     (config as any).proxyFirstByteTimeoutSec = 30;
-    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(15_000);
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(30_000);
 
-    // full = 10s → probe = 10s (floor)
     (config as any).proxyFirstByteTimeoutSec = 10;
     expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(10_000);
 
-    // full = 300s → probe = 30s (capped)
+    // full = 300s → probe still 300s (no cap: a slow site gets the full wait)
     (config as any).proxyFirstByteTimeoutSec = 300;
-    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(30_000);
+    expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(300_000);
 
     // full = 0 (disabled) → probes also disabled
     (config as any).proxyFirstByteTimeoutSec = 0;
@@ -116,14 +115,14 @@ describe('proxyChannelRetry', () => {
     expect(resolveProxyChannelFirstByteTimeoutMs(1)).toBe(0);
   });
 
-  it('derives failover budget as full + 2*probe', () => {
+  it('derives failover budget as full + probe (≈ 2× full)', () => {
     (config as any).proxyFirstByteTimeoutSec = 60;
-    // 60s + 2*30s = 120s
+    // 60s + 60s = 120s
     expect(resolveProxyFailoverDerivedBudgetMs()).toBe(120_000);
     expect(getProxyEffectiveFailoverBudgetMs(3)).toBe(120_000);
 
     (config as any).proxyFirstByteTimeoutSec = 30;
-    // 30s + 2*15s = 60s
+    // 30s + 30s = 60s
     expect(resolveProxyFailoverDerivedBudgetMs()).toBe(60_000);
 
     // disabled → 0 (no budget cap)
