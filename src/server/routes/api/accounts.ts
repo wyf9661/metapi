@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { db, schema, runtimeDbDialect } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { refreshBalance } from '../../services/balanceService.js';
 import { getAdapter } from '../../services/platforms/index.js';
 import {
@@ -1635,53 +1635,50 @@ export async function accountsRoutes(app: FastifyInstance) {
     const failedItems: Array<{ id: number; message: string }> = [];
     let shouldRebuildRoutes = false;
 
-    for (const id of ids) {
-      try {
-        if (action === 'refreshBalance') {
+    if (action === 'refreshBalance') {
+      // External API calls — cannot batch, keep sequential loop.
+      for (const id of ids) {
+        try {
           const result = await refreshBalance(id);
           if (!result) {
-            failedItems.push({
-              id,
-              message: 'Account not found or balance refresh unsupported',
-            });
+            failedItems.push({ id, message: 'Account not found or balance refresh unsupported' });
             continue;
           }
           successIds.push(id);
-          continue;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          failedItems.push({ id, message: errorMessage || 'Batch operation failed' });
         }
-
-        const existing = await db
-          .select()
-          .from(schema.accounts)
-          .where(eq(schema.accounts.id, id))
-          .get();
-        if (!existing) {
+      }
+    } else {
+      // Bulk existence check: one query instead of N.
+      const existingRows = await db
+        .select({ id: schema.accounts.id })
+        .from(schema.accounts)
+        .where(inArray(schema.accounts.id, ids))
+        .all();
+      const existingIdSet = new Set(existingRows.map((r: any) => Number(r.id)));
+      for (const id of ids) {
+        if (!existingIdSet.has(id)) {
           failedItems.push({ id, message: 'Account not found' });
-          continue;
         }
+      }
+      const foundIds = ids.filter((id) => existingIdSet.has(id));
 
+      if (foundIds.length > 0) {
         if (action === 'delete') {
-          await db
-            .delete(schema.accounts)
-            .where(eq(schema.accounts.id, id))
+          await db.delete(schema.accounts)
+            .where(inArray(schema.accounts.id, foundIds))
             .run();
           shouldRebuildRoutes = true;
         } else {
           const nextStatus = action === 'enable' ? 'active' : 'disabled';
-          await db
-            .update(schema.accounts)
+          await db.update(schema.accounts)
             .set({ status: nextStatus, updatedAt: new Date().toISOString() })
-            .where(eq(schema.accounts.id, id))
+            .where(inArray(schema.accounts.id, foundIds))
             .run();
         }
-
-        successIds.push(id);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        failedItems.push({
-          id,
-          message: errorMessage || 'Batch operation failed',
-        });
+        successIds.push(...foundIds);
       }
     }
 

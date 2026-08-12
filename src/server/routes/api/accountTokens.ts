@@ -1,5 +1,5 @@
 ﻿import { FastifyInstance } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
 import {
@@ -722,51 +722,88 @@ export async function accountTokensRoutes(app: FastifyInstance) {
     const successIds: number[] = [];
     const failedItems: Array<{ id: number; message: string }> = [];
 
+    // Bulk fetch: 2 queries instead of 2N.
+    type AccountTokenRow = typeof schema.accountTokens.$inferSelect;
+    type AccountRow = typeof schema.accounts.$inferSelect;
+    const tokenRows = await db.select().from(schema.accountTokens)
+      .where(inArray(schema.accountTokens.id, ids)).all() as AccountTokenRow[];
+    const tokenMap = new Map<number, AccountTokenRow>(tokenRows.map((t) => [Number(t.id), t]));
+    const ownerAccountIds = [...new Set(tokenRows.map((t) => Number(t.accountId)))];
+    const ownerRows = ownerAccountIds.length > 0
+      ? await db.select().from(schema.accounts)
+          .where(inArray(schema.accounts.id, ownerAccountIds)).all() as AccountRow[]
+      : [];
+    const ownerMap = new Map<number, AccountRow>(ownerRows.map((a) => [Number(a.id), a]));
+
+    const enableDisableValidIds: number[] = [];
+
     for (const id of ids) {
-      try {
-        const existing = await db.select().from(schema.accountTokens).where(eq(schema.accountTokens.id, id)).get();
-        if (!existing) {
-          failedItems.push({ id, message: 'Token not found' });
-          continue;
-        }
+      const existing = tokenMap.get(id);
+      if (!existing) {
+        failedItems.push({ id, message: 'Token not found' });
+        continue;
+      }
 
-        const owner = await db.select().from(schema.accounts).where(eq(schema.accounts.id, existing.accountId)).get();
-        if (!owner) {
-          failedItems.push({ id, message: 'Account not found' });
-          continue;
-        }
-        if (isApiKeyConnection(owner)) {
-          failedItems.push({ id, message: 'API Key 连接不支持管理账号令牌' });
-          continue;
-        }
+      const owner = ownerMap.get(Number(existing.accountId));
+      if (!owner) {
+        failedItems.push({ id, message: 'Account not found' });
+        continue;
+      }
+      if (isApiKeyConnection(owner)) {
+        failedItems.push({ id, message: 'API Key 连接不支持管理账号令牌' });
+        continue;
+      }
 
-        if (action === 'delete') {
+      if (action === 'delete') {
+        // deleteAccountTokenById has complex default-token repair logic — keep sequential.
+        try {
           const result = await deleteAccountTokenById(id);
           if (!result.success) {
             failedItems.push({ id, message: result.message || 'Batch operation failed' });
             continue;
           }
-        } else {
-          if (isMaskedPendingAccountToken(existing)) {
-            failedItems.push({ id, message: '待补全令牌不能修改启用状态，请先补全明文 token' });
-            continue;
-          }
-          await db.update(schema.accountTokens)
-            .set({
-              enabled: action === 'enable',
-              updatedAt: new Date().toISOString(),
-            })
-            .where(eq(schema.accountTokens.id, id))
-            .run();
-          if (existing.isDefault && action === 'disable') {
-            repairDefaultToken(existing.accountId);
+          successIds.push(id);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          failedItems.push({ id, message: errorMessage || 'Batch operation failed' });
+        }
+      } else {
+        if (isMaskedPendingAccountToken(existing)) {
+          failedItems.push({ id, message: '待补全令牌不能修改启用状态，请先补全明文 token' });
+          continue;
+        }
+        enableDisableValidIds.push(id);
+      }
+    }
+
+    // Batch enable/disable: one UPDATE instead of N.
+    if (action === 'enable' || action === 'disable') {
+      const validIds = enableDisableValidIds;
+      if (validIds.length > 0) {
+        await db.update(schema.accountTokens)
+          .set({ enabled: action === 'enable', updatedAt: new Date().toISOString() })
+          .where(inArray(schema.accountTokens.id, validIds))
+          .run();
+        if (action === 'disable') {
+          // Repair default tokens for accounts whose default token was disabled.
+          const disabledDefaultAccountIds = [
+            ...new Set(
+              validIds
+                .map((vid) => tokenMap.get(vid))
+                .filter((t): t is AccountTokenRow => Boolean(t && t.isDefault))
+                .map((t) => Number(t.accountId)),
+            ),
+          ];
+          for (const accountId of disabledDefaultAccountIds) {
+            try {
+              await repairDefaultToken(accountId);
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.warn(`[account-tokens/batch] repairDefaultToken(${accountId}) failed: ${errorMessage}`);
+            }
           }
         }
-
-        successIds.push(id);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        failedItems.push({ id, message: errorMessage || 'Batch operation failed' });
+        successIds.push(...validIds);
       }
     }
 

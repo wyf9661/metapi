@@ -404,13 +404,18 @@ function parseBatchRouteDecisionModels(
 
   const dedupe = new Set<string>();
   const normalized: string[] = [];
+  // Refresh-pricing is a heavy operation (one upstream catalog fetch per
+  // model) — cap it much tighter than plain explainSelection.
+  const refreshPricingCatalog =
+    (input as { refreshPricingCatalog?: unknown }).refreshPricingCatalog === true;
+  const maxModels = refreshPricingCatalog ? 50 : 500;
   for (const raw of models) {
     if (typeof raw !== 'string') continue;
     const trimmed = raw.trim();
     if (!trimmed || dedupe.has(trimmed)) continue;
     dedupe.add(trimmed);
     normalized.push(trimmed);
-    if (normalized.length >= 500) break;
+    if (normalized.length >= maxModels) break;
   }
 
   if (normalized.length === 0) {
@@ -420,7 +425,7 @@ function parseBatchRouteDecisionModels(
   return {
     ok: true,
     models: normalized,
-    refreshPricingCatalog: (input as { refreshPricingCatalog?: unknown }).refreshPricingCatalog === true,
+    refreshPricingCatalog,
     persistSnapshots: (input as { persistSnapshots?: unknown }).persistSnapshots === true,
   };
 }
@@ -439,6 +444,11 @@ function parseBatchRouteDecisionRouteModels(
 
   const dedupe = new Set<string>();
   const normalized: Array<{ routeId: number; model: string }> = [];
+  // Refresh-pricing is a heavy operation (one upstream catalog fetch per
+  // route+model) — cap it much tighter than plain explainSelection.
+  const refreshPricingCatalog =
+    (input as { refreshPricingCatalog?: unknown }).refreshPricingCatalog === true;
+  const maxItems = refreshPricingCatalog ? 50 : 500;
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
     const routeIdRaw = (item as { routeId?: unknown }).routeId;
@@ -454,7 +464,7 @@ function parseBatchRouteDecisionRouteModels(
     if (dedupe.has(key)) continue;
     dedupe.add(key);
     normalized.push({ routeId, model });
-    if (normalized.length >= 500) break;
+    if (normalized.length >= maxItems) break;
   }
 
   if (normalized.length === 0) {
@@ -464,7 +474,7 @@ function parseBatchRouteDecisionRouteModels(
   return {
     ok: true,
     items: normalized,
-    refreshPricingCatalog: (input as { refreshPricingCatalog?: unknown }).refreshPricingCatalog === true,
+    refreshPricingCatalog,
     persistSnapshots: (input as { persistSnapshots?: unknown }).persistSnapshots === true,
   };
 }

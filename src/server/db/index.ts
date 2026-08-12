@@ -1258,43 +1258,101 @@ function resetSchemaCapabilityCache() {
   proxyLogRequestTraceIdColumnAvailable = null;
 }
 
+// ── Database switch drain ───────────────────────────────────────────────────
+// When switchRuntimeDatabase() runs, in-flight queries must be allowed to
+// finish before the old pool/connection is closed, otherwise they hit a
+// closed connection and 500. New queries issued during the switch wait for
+// the drain (bounded) instead of failing immediately.
+let dbSwitching = false;
+let dbInFlightQueries = 0;
+const dbDrainWaiters: Array<() => void> = [];
+const DB_SWITCH_DRAIN_TIMEOUT_MS = 10_000;
+
+export function isDbSwitching(): boolean {
+  return dbSwitching;
+}
+
+async function acquireDbQuery(): Promise<void> {
+  if (!dbSwitching) return;
+  await new Promise<void>((resolve) => {
+    dbDrainWaiters.push(resolve);
+  });
+}
+
+function releaseDbQuery(): void {
+  if (dbInFlightQueries > 0) dbInFlightQueries -= 1;
+  if (dbInFlightQueries === 0 && dbSwitching) {
+    for (const resolve of dbDrainWaiters) resolve();
+    dbDrainWaiters.length = 0;
+  }
+}
+
+async function waitForInFlightQueriesToDrain(): Promise<void> {
+  if (dbInFlightQueries === 0) return;
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      dbDrainWaiters.push(resolve);
+    }),
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, DB_SWITCH_DRAIN_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+function notifyDrainWaiters(): void {
+  for (const resolve of dbDrainWaiters) resolve();
+  dbDrainWaiters.length = 0;
+}
+
 async function sqliteProxyQuery(sqlText: string, params: unknown[], method: SqlMethod) {
-  const sqlite = requireSqliteConnection();
-  const statement = sqlite.prepare(sqlText);
-  if (method === 'run' || method === 'execute') {
-    const result = statement.run(...params);
-    return {
-      rows: [],
-      changes: Number(result.changes || 0),
-      lastInsertRowid: Number(result.lastInsertRowid || 0),
-    };
-  }
+  dbInFlightQueries += 1;
+  try {
+    await acquireDbQuery();
+    const sqlite = requireSqliteConnection();
+    const statement = sqlite.prepare(sqlText);
+    if (method === 'run' || method === 'execute') {
+      const result = statement.run(...params);
+      return {
+        rows: [],
+        changes: Number(result.changes || 0),
+        lastInsertRowid: Number(result.lastInsertRowid || 0),
+      };
+    }
 
-  if (method === 'get') {
-    const row = statement.raw().get(...params) as unknown[] | undefined;
-    return { rows: row as any };
-  }
+    if (method === 'get') {
+      const row = statement.raw().get(...params) as unknown[] | undefined;
+      return { rows: row as any };
+    }
 
-  const rows = statement.raw().all(...params) as unknown[][];
-  return { rows };
+    const rows = statement.raw().all(...params) as unknown[][];
+    return { rows };
+  } finally {
+    releaseDbQuery();
+  }
 }
 
 type MysqlQueryable = mysql.Pool | mysql.PoolConnection;
 async function mysqlProxyQuery(executor: MysqlQueryable, sqlText: string, params: unknown[], method: SqlMethod) {
-  const queryOptions = {
-    sql: sqlText,
-    rowsAsArray: method === 'all' || method === 'values',
-  };
-  const [rows] = await executor.query(queryOptions as mysql.QueryOptions, params as any[]);
+  dbInFlightQueries += 1;
+  try {
+    await acquireDbQuery();
+    const queryOptions = {
+      sql: sqlText,
+      rowsAsArray: method === 'all' || method === 'values',
+    };
+    const [rows] = await executor.query(queryOptions as mysql.QueryOptions, params as any[]);
 
-  if (method === 'all' || method === 'values') {
-    return { rows: Array.isArray(rows) ? rows : [] };
-  }
+    if (method === 'all' || method === 'values') {
+      return { rows: Array.isArray(rows) ? rows : [] };
+    }
 
-  if (Array.isArray(rows)) {
-    return { rows };
+    if (Array.isArray(rows)) {
+      return { rows };
+    }
+    return { rows: [rows] };
+  } finally {
+    releaseDbQuery();
   }
-  return { rows: [rows] };
 }
 
 type PgQueryable = pg.Pool | pg.PoolClient;
@@ -1304,46 +1362,52 @@ function parseInsertTableName(sqlText: string): string | null {
 }
 
 async function pgProxyQuery(executor: PgQueryable, sqlText: string, params: unknown[], method: SqlMethod) {
-  const trimmedLower = sqlText.trim().toLowerCase();
-  const values = params as any[];
+  dbInFlightQueries += 1;
+  try {
+    await acquireDbQuery();
+    const trimmedLower = sqlText.trim().toLowerCase();
+    const values = params as any[];
 
-  if (method === 'all' || method === 'values') {
+    if (method === 'all' || method === 'values') {
+      const result = await executor.query({
+        text: sqlText,
+        values,
+        rowMode: 'array',
+      } as pg.QueryConfig);
+      return { rows: result.rows };
+    }
+
+    if (trimmedLower.startsWith('insert') && method === 'execute') {
+      const tableName = parseInsertTableName(sqlText);
+      const canReturnId = tableName !== null && TABLES_WITH_NUMERIC_ID.has(tableName) && !trimmedLower.includes(' returning ');
+      if (canReturnId) {
+        const result = await executor.query({
+          text: `${sqlText} returning id`,
+          values,
+        } as pg.QueryConfig);
+        const insertedId = Number((result.rows?.[0] as { id?: unknown } | undefined)?.id ?? 0);
+        return {
+          rows: [{
+            changes: Number(result.rowCount || 0),
+            lastInsertRowid: Number.isFinite(insertedId) ? insertedId : 0,
+          }],
+        };
+      }
+    }
+
     const result = await executor.query({
       text: sqlText,
       values,
-      rowMode: 'array',
     } as pg.QueryConfig);
-    return { rows: result.rows };
-  }
 
-  if (trimmedLower.startsWith('insert') && method === 'execute') {
-    const tableName = parseInsertTableName(sqlText);
-    const canReturnId = tableName !== null && TABLES_WITH_NUMERIC_ID.has(tableName) && !trimmedLower.includes(' returning ');
-    if (canReturnId) {
-      const result = await executor.query({
-        text: `${sqlText} returning id`,
-        values,
-      } as pg.QueryConfig);
-      const insertedId = Number((result.rows?.[0] as { id?: unknown } | undefined)?.id ?? 0);
-      return {
-        rows: [{
-          changes: Number(result.rowCount || 0),
-          lastInsertRowid: Number.isFinite(insertedId) ? insertedId : 0,
-        }],
-      };
+    if (trimmedLower.startsWith('select')) {
+      return { rows: result.rows };
     }
+
+    return { rows: [{ changes: Number(result.rowCount || 0) }] };
+  } finally {
+    releaseDbQuery();
   }
-
-  const result = await executor.query({
-    text: sqlText,
-    values,
-  } as pg.QueryConfig);
-
-  if (trimmedLower.startsWith('select')) {
-    return { rows: result.rows };
-  }
-
-  return { rows: [{ changes: Number(result.rowCount || 0) }] };
 }
 
 function normalizeAllResult(result: unknown): unknown[] {
@@ -1668,7 +1732,17 @@ export async function switchRuntimeDatabase(nextDialect: RuntimeDbDialect, nextD
   const previousConfigDialect = config.dbType;
   const previousDbSsl = config.dbSsl;
 
-  await closeDbConnections();
+  // Drain: stop accepting new queries and wait (bounded) for in-flight ones
+  // to finish before closing the old connection — otherwise they hit a
+  // closed pool/connection and 500.
+  dbSwitching = true;
+  try {
+    await waitForInFlightQueriesToDrain();
+    await closeDbConnections();
+  } finally {
+    notifyDrainWaiters();
+    dbSwitching = false;
+  }
 
   runtimeDbDialect = nextDialect;
   config.dbType = nextDialect;
@@ -1707,4 +1781,12 @@ export const __dbProxyTestUtils = {
   ensurePostgresJsonTextParsers: installPostgresJsonTextParsers,
   resetPostgresJsonTextParsersInstallStateForTests,
   pg,
+  isDbSwitching,
+  getDbInFlightQueries: () => dbInFlightQueries,
+  setDbSwitchingForTests: (value: boolean) => { dbSwitching = value; },
+  resetDbDrainStateForTests: () => {
+    dbSwitching = false;
+    dbInFlightQueries = 0;
+    notifyDrainWaiters();
+  },
 };

@@ -1068,8 +1068,14 @@ export async function sitesRoutes(app: FastifyInstance) {
     const successIds: number[] = [];
     const failedItems: Array<{ id: number; message: string }> = [];
 
+    // Bulk existence check: one query instead of N.
+    type SiteRow = typeof schema.sites.$inferSelect;
+    const siteRows = await db.select().from(schema.sites)
+      .where(inArray(schema.sites.id, ids)).all() as SiteRow[];
+    const siteMap = new Map<number, SiteRow>(siteRows.map((s) => [Number(s.id), s]));
+
     for (const id of ids) {
-      const existingSite = await db.select().from(schema.sites).where(eq(schema.sites.id, id)).get();
+      const existingSite = siteMap.get(id);
       if (!existingSite) {
         failedItems.push({ id, message: 'Site not found' });
         continue;
@@ -1077,13 +1083,9 @@ export async function sitesRoutes(app: FastifyInstance) {
 
       try {
         if (action === 'delete') {
+          // deleteSiteAndRelatedData has cascade deletion — keep sequential.
           await deleteSiteAndRelatedData(id);
-        } else if (action === 'enableSystemProxy') {
-          await db.update(schema.sites)
-            .set({ updatedAt: new Date().toISOString() })
-            .where(eq(schema.sites.id, id))
-            .run();
-        } else if (action === 'disableSystemProxy') {
+        } else if (action === 'enableSystemProxy' || action === 'disableSystemProxy') {
           await db.update(schema.sites)
             .set({ updatedAt: new Date().toISOString() })
             .where(eq(schema.sites.id, id))
@@ -1094,6 +1096,7 @@ export async function sitesRoutes(app: FastifyInstance) {
             .set({ status: nextStatus, updatedAt: new Date().toISOString() })
             .where(eq(schema.sites.id, id))
             .run();
+          // Per-site cascade side effects (account status, routes) — must stay sequential.
           await applySiteStatusSideEffects(id, existingSite.name, nextStatus);
         }
         successIds.push(id);
