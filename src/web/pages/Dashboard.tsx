@@ -448,9 +448,11 @@ export default function Dashboard({
 
   useEffect(() => {
     void refreshTunnel();
+    // Tunnel state changes rarely; poll at the same cadence as the dashboard
+    // snapshot instead of every 8s to cut redundant requests.
     const timer = window.setInterval(() => {
       void refreshTunnel();
-    }, 8000);
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [refreshTunnel]);
 

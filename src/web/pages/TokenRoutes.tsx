@@ -1,4 +1,4 @@
-import { Fragment, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { api } from '../api.js';
@@ -195,6 +195,9 @@ export default function TokenRoutes() {
   const [endpointTypesByModel, setEndpointTypesByModel] = useState<Record<string, string[]>>({});
 
   const [search, setSearch] = useState('');
+  // Defer the filter computation so typing stays smooth even with hundreds
+  // of routes (same pattern as ProxyLogs/DownstreamKeys).
+  const deferredSearch = useDeferredValue(search);
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [activeSite, setActiveSite] = useState<string | null>(null);
   const [activeEndpointType, setActiveEndpointType] = useState<string | null>(null);
@@ -902,8 +905,8 @@ export default function TokenRoutes() {
       );
     }
 
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.trim().toLowerCase();
       list = list.filter((route) => {
         const modelPattern = route.modelPattern.toLowerCase();
         const displayName = (route.displayName || '').toLowerCase();
@@ -913,7 +916,7 @@ export default function TokenRoutes() {
     }
 
     return list;
-  }, [sortedRoutes, activeGroupFilter, activeBrand, activeSite, activeEndpointType, search, routeBrandById, routeEndpointTypesByRouteId]);
+  }, [sortedRoutes, activeGroupFilter, activeBrand, activeSite, activeEndpointType, deferredSearch, routeBrandById, routeEndpointTypesByRouteId]);
 
   const enabledCounts = useMemo(() => {
     let enabled = 0;

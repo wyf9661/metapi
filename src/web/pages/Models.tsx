@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { copyText } from '../clipboard.js';
 import { useLocation } from 'react-router-dom';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
@@ -244,6 +244,8 @@ export default function Models() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  // Defer filtering so typing stays smooth while the model list is large.
+  const deferredSearch = useDeferredValue(search);
   const [sortBy, setSortBy] = useState<SortColumn>('accountCount');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [activeSite, setActiveSite] = useState<string | null>(null);
@@ -480,13 +482,13 @@ export default function Models() {
       list = list.filter(m => m.accounts.some(a => a.site === activeSite));
     }
 
-    if (search) {
-      const q = search.toLowerCase();
+    if (deferredSearch) {
+      const q = deferredSearch.toLowerCase();
       list = list.filter(m => m.name.toLowerCase().includes(q));
     }
 
     return list;
-  }, [data.models, search, activeSite, activeBrand]);
+  }, [data.models, deferredSearch, activeSite, activeBrand]);
 
   // Keep expanded detail consistent with filters (especially site filter).
   // The list-level filter uses "model has at least one account on this site" semantics;

@@ -264,7 +264,7 @@ export default function ProbeLogs() {
     setShowFilters(false);
   };
 
-  const totalPages = Math.ceil(total / pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const formatLatency = (ms: number | null) => {
     if (!ms) return '-';
