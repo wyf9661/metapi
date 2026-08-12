@@ -849,7 +849,7 @@ export async function tokensRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { limit?: string } }>('/api/routes/selections/recent', async (request) => {
     const raw = Number.parseInt(String(request.query.limit || '20'), 10);
-    const limit = Number.isFinite(raw) ? raw : 20;
+    const limit = Number.isFinite(raw) ? Math.max(1, Math.min(200, raw)) : 20;
     return {
       success: true,
       items: getRecentRouteSelections(limit),

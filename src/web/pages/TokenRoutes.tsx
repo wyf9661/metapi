@@ -1379,7 +1379,30 @@ export default function TokenRoutes() {
       }
       setClosingDesktopDetailRouteIds((prev) => prev.filter((id) => id !== routeId));
       loadCandidates();
-      setExpandedRouteIds((prev) => [...prev, routeId]);
+      // Mutually exclusive expansion: opening one route closes any other
+      // currently expanded route (the UI expects a single expanded model).
+      const otherExpandedIds = expandedRouteIds.filter((id) => id !== routeId);
+      if (otherExpandedIds.length > 0 && !isMobile) {
+        // Desktop detail rows play a collapse animation; keep the old rows in
+        // the "closing" set so the animation still runs for them.
+        setClosingDesktopDetailRouteIds((prev) => Array.from(new Set([...prev, ...otherExpandedIds])));
+        for (const otherId of otherExpandedIds) {
+          const timer = desktopDetailCloseTimersRef.current[otherId];
+          if (timer) {
+            globalThis.clearTimeout(timer);
+            delete desktopDetailCloseTimersRef.current[otherId];
+          }
+          const closeTimer = globalThis.setTimeout(() => {
+            setClosingDesktopDetailRouteIds((prev) => prev.filter((id) => id !== otherId));
+            delete desktopDetailCloseTimersRef.current[otherId];
+          }, DESKTOP_DETAIL_COLLAPSE_MS);
+          desktopDetailCloseTimersRef.current[otherId] = closeTimer;
+        }
+      } else {
+        setClosingDesktopDetailRouteIds((prev) => prev.filter((id) => otherExpandedIds.includes(id)));
+      }
+      // Replace the whole array so exactly one route stays expanded.
+      setExpandedRouteIds([routeId]);
       // Load channels on demand
       const route = routeById.get(routeId) || null;
       const isReadOnlyRoute = route?.kind === 'zero_channel' || route?.readOnly === true || route?.isVirtual === true;

@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import cron from 'node-cron';
-import { sql } from 'drizzle-orm';
 import { config, normalizeTokenRouterFailureCooldownMaxSec } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
@@ -1780,14 +1779,22 @@ export async function settingsRoutes(app: FastifyInstance) {
         failureMessage: (currentTask) => `缓存清理后重建失败：${currentTask.error || 'unknown error'}`,
       },
       async () => {
+        // Snapshot BEFORE any deletion so a failed rebuild can restore the
+        // exact previous routing state (routes + group-source links).
         const tokenRoutesSnapshot = await db.select().from(schema.tokenRoutes).all();
+        const groupSourcesSnapshot = await db.select().from(schema.routeGroupSources).all();
         const SNAPSHOT_NS = 'clear-cache-rollback';
-        const SNAPSHOT_KEY = 'tokenRoutes';
+        const SNAPSHOT_KEY = 'routes';
         const nowIso = new Date().toISOString();
-        if (tokenRoutesSnapshot.length > 0) {
+        if (tokenRoutesSnapshot.length > 0 || groupSourcesSnapshot.length > 0) {
           await writeAdminSnapshot(
             { namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY },
-            { payload: tokenRoutesSnapshot, generatedAt: nowIso, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), staleUntil: nowIso },
+            {
+              payload: { tokenRoutes: tokenRoutesSnapshot, groupSources: groupSourcesSnapshot },
+              generatedAt: nowIso,
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              staleUntil: nowIso,
+            },
           );
         }
 
@@ -1800,23 +1807,28 @@ export async function settingsRoutes(app: FastifyInstance) {
           await deleteAdminSnapshot({ namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY });
           return { rebuild, deletedModelAvailability: true, deletedRouteChannels: true, deletedTokenRoutes: true };
         } catch (rebuildErr) {
+          // Rollback best-effort: the tables are empty at this point, so a
+          // plain re-insert (with preserved ids) restores the exact state.
           try {
-            const snapshot = await readAdminSnapshot<typeof tokenRoutesSnapshot>(
+            const snapshot = await readAdminSnapshot<{
+              tokenRoutes: typeof tokenRoutesSnapshot;
+              groupSources: typeof groupSourcesSnapshot;
+            }>(
               { namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY },
             );
-            if (snapshot && snapshot.payload.length > 0) {
-              const rows = snapshot.payload;
-              if (runtimeDbDialect === 'mysql') {
-                for (let i = 0; i < rows.length; i += 200) {
-                  const batch = rows.slice(i, i + 200);
-                  await (db.insert(schema.tokenRoutes).values(batch) as any).onDuplicateKeyUpdate({ set: { model: sql`VALUES(model)`, channelId: sql`VALUES(channel_id)`, priority: sql`VALUES(priority)`, weight: sql`VALUES(weight)` } });
-                }
-              } else {
-                for (let i = 0; i < rows.length; i += 200) {
-                  const batch = rows.slice(i, i + 200);
-                  await db.insert(schema.tokenRoutes).values(batch).onConflictDoNothing().run();
-                }
+            if (snapshot) {
+              const { tokenRoutes: savedRoutes, groupSources: savedGroupSources } = snapshot.payload;
+              for (let i = 0; i < savedRoutes.length; i += 200) {
+                await db.insert(schema.tokenRoutes).values(savedRoutes.slice(i, i + 200)).run();
               }
+              for (let i = 0; i < savedGroupSources.length; i += 200) {
+                await db.insert(schema.routeGroupSources).values(savedGroupSources.slice(i, i + 200)).run();
+              }
+              // Rebuild route channels from the restored routes so the router
+              // has working channels again even if the model refresh failed.
+              try {
+                await routeRefreshWorkflow.rebuildRoutesOnly();
+              } catch { /* best-effort */ }
             }
             await deleteAdminSnapshot({ namespace: SNAPSHOT_NS, key: SNAPSHOT_KEY });
           } catch {
