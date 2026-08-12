@@ -64,7 +64,7 @@ import {
 } from '../../services/proxyChannelRetry.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlace } from '../../services/proxyRetryPolicy.js';
+import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce } from '../../services/proxyRetryPolicy.js';
 import {
   acquireSurfaceChannelLease,
   bindSurfaceStickyChannel,
@@ -1006,7 +1006,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	                // Grace window: stay on the same channel for a configurable grace
 	                // period on transient-recovering failures (WAF/429/5xx) before
 	                // failing over, so the upstream gets a chance to self-heal.
-	                if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+	                if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
                 graceRetriedOnce = true;
 	                  inPlaceRetryChannel = selected;
 	                  await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1336,7 +1336,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	            // Grace window: stay on the same channel for a configurable grace
 	            // period on transient-recovering failures (WAF/429/5xx) before
 	            // failing over, so the upstream gets a chance to self-heal.
-	            if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+	            if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
                 graceRetriedOnce = true;
 	              inPlaceRetryChannel = selected;
 	              await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1460,7 +1460,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               // Grace window: stay on the same channel for a configurable grace
               // period on transient-recovering failures (WAF/429/5xx) before
               // failing over, so the upstream gets a chance to self-heal.
-              if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err?.message || null)) {
+              if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err?.message || null)) {
                 graceRetriedOnce = true;
                 inPlaceRetryChannel = selected;
                 await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
@@ -1512,7 +1512,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             // Grace window: stay on the same channel for a configurable grace
             // period on transient-recovering failures (WAF/429/5xx) before
             // failing over, so the upstream gets a chance to self-heal.
-            if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, 502, err?.message || null)) {
+            if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, 502, err?.message || null)) {
                 graceRetriedOnce = true;
               inPlaceRetryChannel = selected;
               await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));

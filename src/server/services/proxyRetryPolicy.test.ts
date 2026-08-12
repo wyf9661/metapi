@@ -6,6 +6,7 @@ import {
   resolveFailoverBackoffMs,
   shouldAbortSameSiteEndpointFallback,
   shouldGraceRetryInPlace,
+  shouldGraceRetryInPlaceOnce,
   shouldRetryProxyRequest,
 } from './proxyRetryPolicy.js';
 
@@ -216,5 +217,24 @@ describe('proxyRetryPolicy', () => {
     // Invalid elapsed time → never.
     expect(shouldGraceRetryInPlace(-1, 8000, 403, 'forbidden')).toBe(false);
     expect(shouldGraceRetryInPlace(Number.NaN, 8000, 403, 'forbidden')).toBe(false);
+  });
+
+  it('allows at most one grace-window in-place retry per request', () => {
+    // First recovering failure inside the window → allowed.
+    expect(shouldGraceRetryInPlaceOnce(false, 1000, 8000, 403, 'forbidden')).toBe(true);
+    expect(shouldGraceRetryInPlaceOnce(false, 1000, 8000, 429, 'rate limit')).toBe(true);
+    expect(shouldGraceRetryInPlaceOnce(false, 1000, 8000, 503, 'unavailable')).toBe(true);
+    // Second failure (already grace-retried) → NOT allowed, even inside window:
+    // a block that survived the first grace retry is unlikely to clear within
+    // the same window, so we hand off to multi-channel failover.
+    expect(shouldGraceRetryInPlaceOnce(true, 1000, 8000, 403, 'forbidden')).toBe(false);
+    expect(shouldGraceRetryInPlaceOnce(true, 1000, 8000, 429, 'rate limit')).toBe(false);
+    expect(shouldGraceRetryInPlaceOnce(true, 1000, 8000, 503, 'unavailable')).toBe(false);
+    // Window expired → never, even without a prior grace retry.
+    expect(shouldGraceRetryInPlaceOnce(false, 9000, 8000, 403, 'forbidden')).toBe(false);
+    // Feature disabled → never.
+    expect(shouldGraceRetryInPlaceOnce(false, 0, 0, 403, 'forbidden')).toBe(false);
+    // Non-recovering failure → never.
+    expect(shouldGraceRetryInPlaceOnce(false, 1000, 8000, 401, 'invalid access token')).toBe(false);
   });
 });

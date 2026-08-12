@@ -430,4 +430,58 @@ describe('proxyChannelCoordinator', () => {
     proxyChannelCoordinator.rememberLastSuccessChannel({ ...input, channelId: 88 });
     expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(1);
   });
+
+  it('clearing last-success for a failed channel removes only that channel affinity', () => {
+    // The failure-invalidates-last-success rule: when a channel fails, the
+    // surface calls clearLastSuccessChannel({ channelId }). The model must
+    // then re-enter the balanced pool (getLastSuccessChannelId → null) while
+    // a DIFFERENT model's last-success binding stays untouched.
+    proxyChannelCoordinator.rememberLastSuccessChannel({
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+      channelId: 11843,
+    });
+    proxyChannelCoordinator.rememberLastSuccessChannel({
+      requestedModel: 'glm-5.2',
+      downstreamApiKeyId: 1,
+      channelId: 40197,
+    });
+
+    // Simulate a failure on deepseek-v4-flash channel 11843.
+    proxyChannelCoordinator.clearLastSuccessChannel({
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+      channelId: 11843,
+    });
+
+    // deepseek's affinity is gone → next request re-enters the pool.
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+    })).toBeNull();
+    // glm-5.2's affinity for a different channel is untouched.
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'glm-5.2',
+      downstreamApiKeyId: 1,
+    })).toBe(40197);
+  });
+
+  it('clearing last-success for a different channel keeps the remembered one', () => {
+    // clearLastSuccessChannel({ channelId }) must only remove the binding
+    // when the channel matches; clearing another channel is a no-op.
+    proxyChannelCoordinator.rememberLastSuccessChannel({
+      requestedModel: 'mimo-v2.5-pro',
+      downstreamApiKeyId: 2,
+      channelId: 10753,
+    });
+    proxyChannelCoordinator.clearLastSuccessChannel({
+      requestedModel: 'mimo-v2.5-pro',
+      downstreamApiKeyId: 2,
+      channelId: 99999, // not the remembered channel
+    });
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'mimo-v2.5-pro',
+      downstreamApiKeyId: 2,
+    })).toBe(10753);
+  });
 });

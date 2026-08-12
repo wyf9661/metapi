@@ -136,3 +136,24 @@ export function shouldGraceRetryInPlace(
   if (elapsedMs >= graceMs) return false;
   return isRecoveringTransientFailure(status, upstreamErrorText);
 }
+
+/**
+ * Grace-window same-channel retry bounded to ONE per request.
+ *
+ * The grace window exists because WAF 403 / 429 / 5xx often clear within
+ * seconds (a slow-but-alive relay may just need more time). But a block that
+ * survives the FIRST grace retry is unlikely to clear within the same window,
+ * so a second same-channel retry only burns time that a different channel
+ * could use. Returns true only when the caller has not yet used its one
+ * in-place grace retry AND the failure is still inside the grace window.
+ */
+export function shouldGraceRetryInPlaceOnce(
+  alreadyGraceRetried: boolean,
+  elapsedMs: number,
+  graceMs: number,
+  status: number,
+  upstreamErrorText?: string | null,
+): boolean {
+  if (alreadyGraceRetried) return false;
+  return shouldGraceRetryInPlace(elapsedMs, graceMs, status, upstreamErrorText);
+}
