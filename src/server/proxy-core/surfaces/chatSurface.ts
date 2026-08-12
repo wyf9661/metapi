@@ -255,6 +255,11 @@ export async function handleChatSurfaceRequest(
     // already terminates well below this.
     let loopGuard = 0;
     const LOOP_GUARD_MAX = 16;
+    // Grace-window in-place retries are bounded to ONE per request: a WAF
+    // block that survives the first grace retry is unlikely to clear within
+    // the same window, so a second same-channel retry only burns time that
+    // a different channel could use.
+    let graceRetriedOnce = false;
 
   while (true) {
     if (++loopGuard > LOOP_GUARD_MAX) break;
@@ -822,6 +827,16 @@ export async function handleChatSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel:
+            // a channel that just failed should not keep its "preferred next
+            // hop" status (it may be persistently blocked / dead), so the
+            // next request re-enters the balanced pool instead of retrying
+            // the same failing channel first.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
             const failureOutcome = await failureToolkit.handleDetectedFailure({
               selected,
             requestedModel,
@@ -851,8 +866,11 @@ export async function handleChatSurfaceRequest(
               // Grace window: transient-recovering failures (WAF/429/5xx) often
               // clear within seconds. Stay on the same channel for a configurable
               // grace period before switching, so recovery is observed instead of
-              // burning the failover budget on a cascade.
-              if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+              // burning the failover budget on a cascade. Bounded to ONE in-place
+              // retry: a second same-channel retry rarely helps and delays
+              // genuine multi-channel failover.
+              if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+                graceRetriedOnce = true;
                 inPlaceRetryChannel = selected;
                 await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
                 continue;
@@ -887,6 +905,12 @@ export async function handleChatSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Same failure-invalidates-last-success rule as the non-stream path.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
             await failureToolkit.recordStreamFailure({
               selected,
             requestedModel,
@@ -1095,7 +1119,9 @@ export async function handleChatSurfaceRequest(
           }
           // Grace window: stay on the same channel for a configurable grace period
           // on transient-recovering failures (WAF/429/5xx) before failing over.
-          if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+          // Bounded to ONE in-place retry per request.
+          if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+            graceRetriedOnce = true;
             inPlaceRetryChannel = selected;
             await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
             continue;
@@ -1218,7 +1244,8 @@ export async function handleChatSurfaceRequest(
           if (!isRecoveringTransientFailure(endpointFailureStatus || 502, err.message || null)) {
             allFailuresRecovering = false;
           }
-          if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err.message || null)) {
+          if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err.message || null)) {
+            graceRetriedOnce = true;
             inPlaceRetryChannel = selected;
             await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err.message || null, config.proxyFailoverBackoffMs));
             continue;

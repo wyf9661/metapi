@@ -242,6 +242,9 @@ export async function handleOpenAiResponsesSurfaceRequest(
     let recoveryPass = false;
     let inPlaceRetryChannel: Awaited<ReturnType<typeof tokenRouter.selectChannel>> = null;
 
+    // Grace-window in-place retries are bounded to ONE per request (see
+    // chatSurface for rationale): a second same-channel retry rarely helps.
+    let graceRetriedOnce = false;
     while (true) {
       if (retryCount > maxRetries && !recoveryPass) {
         if (allFailuresRecovering && config.proxyFailoverBackoffMs > 0) {
@@ -742,6 +745,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
       const busyMessage = buildSurfaceChannelBusyMessage(leaseResult.waitMs);
       await failureToolkit.log({
         selected,
@@ -897,6 +906,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
               await failureToolkit.recordStreamFailure({
 	                  selected,
             requestedModel,
@@ -956,6 +971,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
 	              const failureOutcome = await failureToolkit.handleDetectedFailure({
 	                selected,
             requestedModel,
@@ -985,7 +1006,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	                // Grace window: stay on the same channel for a configurable grace
 	                // period on transient-recovering failures (WAF/429/5xx) before
 	                // failing over, so the upstream gets a chance to self-heal.
-	                if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+	                if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+                graceRetriedOnce = true;
 	                  inPlaceRetryChannel = selected;
 	                  await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
 	                  continue;
@@ -1020,6 +1042,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
               await failureToolkit.recordStreamFailure({
 	                selected,
             requestedModel,
@@ -1182,6 +1210,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
 	            await failureToolkit.recordStreamFailure({
 	              selected,
             requestedModel,
@@ -1267,6 +1301,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
 	          const failureOutcome = await failureToolkit.handleDetectedFailure({
 	            selected,
             requestedModel,
@@ -1296,7 +1336,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	            // Grace window: stay on the same channel for a configurable grace
 	            // period on transient-recovering failures (WAF/429/5xx) before
 	            // failing over, so the upstream gets a chance to self-heal.
-	            if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+	            if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
+                graceRetriedOnce = true;
 	              inPlaceRetryChannel = selected;
 	              await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
 	              continue;
@@ -1377,6 +1418,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // Failure invalidates last-success affinity for this channel.
+            proxyChannelCoordinator.clearLastSuccessChannel({
+              requestedModel,
+              downstreamApiKeyId,
+              channelId: selected.channel.id,
+            });
           const endpointFailureStatus = typeof err?.status === 'number' ? err.status : null;
           const isSiteApiEndpointFailure = (
             err instanceof SiteApiEndpointRequestError
@@ -1413,7 +1460,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
               // Grace window: stay on the same channel for a configurable grace
               // period on transient-recovering failures (WAF/429/5xx) before
               // failing over, so the upstream gets a chance to self-heal.
-              if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err?.message || null)) {
+              if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err?.message || null)) {
+                graceRetriedOnce = true;
                 inPlaceRetryChannel = selected;
                 await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
                 continue;
@@ -1464,7 +1512,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
             // Grace window: stay on the same channel for a configurable grace
             // period on transient-recovering failures (WAF/429/5xx) before
             // failing over, so the upstream gets a chance to self-heal.
-            if (shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, 502, err?.message || null)) {
+            if (!graceRetriedOnce && shouldGraceRetryInPlace(Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, 502, err?.message || null)) {
+                graceRetriedOnce = true;
               inPlaceRetryChannel = selected;
               await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
               continue;
