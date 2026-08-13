@@ -177,6 +177,10 @@ describe('proxyRetryPolicy', () => {
     expect(isRecoveringTransientFailure(401, 'invalid access token')).toBe(false);
     expect(isRecoveringTransientFailure(400, 'invalid request body')).toBe(false);
     expect(isRecoveringTransientFailure(422, 'unprocessable')).toBe(false);
+    // Site/organization-level credential death is never recovering.
+    expect(isRecoveringTransientFailure(403, 'This organization has been disabled.')).toBe(false);
+    expect(isRecoveringTransientFailure(403, 'Your access was terminated')).toBe(false);
+    expect(isRecoveringTransientFailure(401, 'This account has been deactivated.')).toBe(false);
   });
 
   it('returns zero backoff when disabled or not a recovering failure', () => {

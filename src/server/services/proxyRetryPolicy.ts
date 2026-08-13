@@ -60,6 +60,8 @@ export function isRecoveringTransientFailure(status: number, upstreamErrorText?:
   if (status === 429) return true;
   if (status >= 500) return true;
   const decision = classifyProxyFailure({ status, errorText: upstreamErrorText || '' });
+  // Site/organization-level credential death is permanent, never recovering.
+  if (decision.class === 'credential_invalid') return false;
   if (decision.class === 'waf_blocked') return true;
   // Bare 403/forbidden: WAF vocabulary may be absent (e.g. Nginx/CF without
   // the usual body) yet the block is still temporary edge filtering.

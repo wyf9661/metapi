@@ -32,6 +32,7 @@ export type ProxyFailureClass =
   | 'waf_blocked'
   | 'rate_limit'
   | 'quota_or_credit'
+  | 'credential_invalid'
   | 'auth_channel'
   | 'model_unsupported'
   | 'protocol_hint'
@@ -70,6 +71,21 @@ const AUTH_CHANNEL_PATTERNS: RegExp[] = [
   /authentication/i,
   /token\s+expired/i,
   /access\s+token.*expired/i,
+];
+
+/** Site/organization-level credential death: the account itself is dead, not
+ *  just a particular key or token. Unlike auth_channel (which retries other
+ *  channels on the same site), these will never self-heal and should skip
+ *  the entire site. */
+const CREDENTIAL_INVALID_PATTERNS: RegExp[] = [
+  /organization\s+has\s+been\s+(?:disabled|restricted)/i,
+  /your\s+access\s+was\s+terminated/i,
+  /violation\s+of\s+(?:our\s+)?policies/i,
+  /account\s+has\s+been\s+deactivated/i,
+  /account\s+is\s+not\s+authorized/i,
+  /operation\s+not\s+allowed/i,
+  /security\s+token\s+included\s+in\s+the\s+request\s+is\s+invalid/i,
+  /已欠费/i,
 ];
 
 const AMBIGUOUS_CLIENT_PATTERNS: RegExp[] = [
@@ -252,6 +268,12 @@ export function resolveSiteRuntimeFailurePenalty(context: SiteRuntimeFailureCont
     return 3.0;
   }
 
+  // Site/organization credential death is permanent — the highest possible
+  // penalty so the site is avoided immediately.
+  if (isCredentialInvalidFailure({ status, errorText })) {
+    return 3.0;
+  }
+
   // WAF blocks should rank high enough to open a model-scoped breaker quickly,
   // but stay below hard 5xx so genuine gateway outages still outrank them.
   if (isWafBlockedRuntimeFailure({ status, errorText })) {
@@ -296,6 +318,10 @@ export function isTransientSiteRuntimeFailure(context: SiteRuntimeFailureContext
   if (isValidationRuntimeFailure({ status, errorText })) {
     return false;
   }
+  // Site/organization credential death is permanent, not transient.
+  if (isCredentialInvalidFailure({ status, errorText })) {
+    return false;
+  }
   // WAF 403 is temporary edge filtering — count toward the short model breaker.
   if (isWafBlockedRuntimeFailure({ status, errorText })) {
     return true;
@@ -316,6 +342,16 @@ function isQuotaOrCreditFailure(context: SiteRuntimeFailureContext = {}): boolea
   const status = typeof context.status === 'number' ? context.status : 0;
   if (status === 402) return true;
   return matchesAnyPattern(QUOTA_OR_CREDIT_PATTERNS, context.errorText);
+}
+
+/** Site/organization-level credential death: account disabled, access
+ *  terminated, policy violation, etc. These failures are permanent on the
+ *  site — no amount of key-switching or endpoint-cascading will help. */
+export function isCredentialInvalidFailure(context: SiteRuntimeFailureContext = {}): boolean {
+  const status = typeof context.status === 'number' ? context.status : 0;
+  if (status !== 401 && status !== 403) return false;
+  if (isWafBlockedRuntimeFailure(context)) return false;
+  return matchesAnyPattern(CREDENTIAL_INVALID_PATTERNS, context.errorText);
 }
 
 function isAuthChannelFailure(context: SiteRuntimeFailureContext = {}): boolean {
@@ -428,6 +464,18 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       retryChannel: true,
       cascadeEndpoint: false,
       cooldownWeight: 2.2,
+      cooldownScope: 'credential',
+    };
+  }
+
+  // Site/organization-level credential death: the account is dead, not just
+  // a specific key. Skip the entire site — no key-switching will help.
+  if (isCredentialInvalidFailure(ctx)) {
+    return {
+      class: 'credential_invalid',
+      retryChannel: false,
+      cascadeEndpoint: false,
+      cooldownWeight: 3.0,
       cooldownScope: 'credential',
     };
   }
@@ -591,7 +639,8 @@ export function shouldAbortSameSiteEndpointForFailure(context: SiteRuntimeFailur
  */
 export function isLowValueFailoverFailureClass(failureClass: ProxyFailureClass): boolean {
   if (failureClass === 'waf_blocked') return false;
-  return failureClass === 'model_unsupported'
+  return failureClass === 'credential_invalid'
+    || failureClass === 'model_unsupported'
     || failureClass === 'quota_or_credit'
     || failureClass === 'endpoint_pool_down'
     || failureClass === 'ambiguous_client'
@@ -606,6 +655,7 @@ export function isLowValueFailoverFailureClass(failureClass: ProxyFailureClass):
 export function shouldExcludeSiteForRequestFailure(context: SiteRuntimeFailureContext = {}): boolean {
   const decision = classifyProxyFailure(context);
   if (decision.class === 'waf_blocked'
+    || decision.class === 'credential_invalid'
     || decision.class === 'timeout'
     || decision.class === 'transient_upstream'
     || decision.class === 'endpoint_pool_down'

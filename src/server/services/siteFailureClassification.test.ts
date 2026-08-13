@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isModelScopedRuntimeFailure,
   isProtocolRuntimeFailure,
+  isCredentialInvalidFailure,
   isTransientSiteRuntimeFailure,
   isUsageLimitRateLimitFailure,
   isValidationRuntimeFailure,
@@ -66,6 +67,42 @@ describe('siteFailureClassification', () => {
     expect(resolveSiteRuntimeFailurePenalty(ctx)).toBe(2.4);
     // Plain auth 403 without WAF vocabulary stays non-transient.
     expect(isTransientSiteRuntimeFailure({ status: 403, errorText: 'invalid api key' })).toBe(false);
+  });
+
+  it('isCredentialInvalidFailure detects site-level credential death, not WAF/bare forbidden', () => {
+    // Organization disabled → credential_invalid
+    expect(isCredentialInvalidFailure({ status: 401, errorText: 'This organization has been disabled.' })).toBe(true);
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'This organization has been restricted.' })).toBe(true);
+    // Access terminated / policy violation
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'Your access was terminated due to violation of our policies.' })).toBe(true);
+    // Account deactivated / not authorized
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'This account has been deactivated.' })).toBe(true);
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'Your account is not authorized to use this API.' })).toBe(true);
+    // Operation not allowed / security token invalid
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'Operation not allowed.' })).toBe(true);
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'The security token included in the request is invalid.' })).toBe(true);
+    // 已欠费
+    expect(isCredentialInvalidFailure({ status: 403, errorText: '已欠费' })).toBe(true);
+    // WAF text → NOT credential_invalid
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'Your request was blocked. CF-RAY: xyz' })).toBe(false);
+    // Bare forbidden → NOT credential_invalid (stays protocol_hint)
+    expect(isCredentialInvalidFailure({ status: 403, errorText: 'forbidden' })).toBe(false);
+    // Key-level auth failure → NOT credential_invalid (stays auth_channel)
+    expect(isCredentialInvalidFailure({ status: 401, errorText: 'invalid api key' })).toBe(false);
+    // Non-401/403 status → false
+    expect(isCredentialInvalidFailure({ status: 500, errorText: 'organization disabled' })).toBe(false);
+  });
+
+  it('credential_invalid is not transient, has highest penalty, stops failover', () => {
+    const ctx = { status: 403, errorText: 'This organization has been disabled.' };
+    expect(isTransientSiteRuntimeFailure(ctx)).toBe(false);
+    expect(resolveSiteRuntimeFailurePenalty(ctx)).toBe(3.0);
+    const decision = classifyProxyFailure(ctx);
+    expect(decision.class).toBe('credential_invalid');
+    expect(decision.retryChannel).toBe(false);
+    expect(decision.cascadeEndpoint).toBe(false);
+    expect(decision.cooldownScope).toBe('credential');
+    expect(isLowValueFailoverFailureClass('credential_invalid')).toBe(true);
   });
 
   it('classifyProxyFailure drives cascade/retry/cooldown consistently', () => {
