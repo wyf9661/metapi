@@ -86,7 +86,7 @@ describe('siteFailureClassification', () => {
     expect(timeout.cascadeEndpoint).toBe(false);
     expect(timeout.retryChannel).toBe(true);
 
-    expect(isLowValueFailoverFailureClass('waf_blocked')).toBe(true);
+    expect(isLowValueFailoverFailureClass('waf_blocked')).toBe(false);
     expect(isLowValueFailoverFailureClass('timeout')).toBe(true);
     expect(isLowValueFailoverFailureClass('transient_upstream')).toBe(true);
     expect(isLowValueFailoverFailureClass('protocol_hint')).toBe(false);
@@ -96,7 +96,8 @@ describe('siteFailureClassification', () => {
     const { shouldExcludeSiteForRequestFailure } = await import('./siteFailureClassification.js');
     expect(shouldExcludeSiteForRequestFailure({ status: 408, errorText: 'first byte timeout' })).toBe(true);
     expect(shouldExcludeSiteForRequestFailure({ status: 503, errorText: 'bad gateway' })).toBe(true);
-    expect(shouldExcludeSiteForRequestFailure({ status: 403, errorText: 'Your request was blocked. CF-RAY' })).toBe(true);
+    expect(shouldExcludeSiteForRequestFailure({ status: 403, errorText: 'forbidden' })).toBe(true);
+    expect(shouldExcludeSiteForRequestFailure({ status: 403, errorText: 'access denied' })).toBe(true);
     expect(shouldExcludeSiteForRequestFailure({ status: 400, errorText: 'please use /v1/responses' })).toBe(false);
     expect(shouldExcludeSiteForRequestFailure({ status: 400, errorText: 'invalid json' })).toBe(false);
   });

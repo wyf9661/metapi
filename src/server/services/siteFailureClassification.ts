@@ -585,10 +585,13 @@ export function shouldAbortSameSiteEndpointForFailure(context: SiteRuntimeFailur
  * Failover stop signal: consecutive failures of these classes rarely improve by
  * burning more channels (still allow one switch; stop after repeated hits).
  * Includes high-cost operational failures (timeout/5xx) observed in live traces.
+ * WAF blocks are intentionally excluded: a 403 edge block is site-scoped, so
+ * the caller should continue probing other sites rather than stop after two
+ * blocked candidates.
  */
 export function isLowValueFailoverFailureClass(failureClass: ProxyFailureClass): boolean {
-  return failureClass === 'waf_blocked'
-    || failureClass === 'model_unsupported'
+  if (failureClass === 'waf_blocked') return false;
+  return failureClass === 'model_unsupported'
     || failureClass === 'quota_or_credit'
     || failureClass === 'endpoint_pool_down'
     || failureClass === 'ambiguous_client'
@@ -602,10 +605,14 @@ export function isLowValueFailoverFailureClass(failureClass: ProxyFailureClass):
  */
 export function shouldExcludeSiteForRequestFailure(context: SiteRuntimeFailureContext = {}): boolean {
   const decision = classifyProxyFailure(context);
-  return decision.class === 'waf_blocked'
+  if (decision.class === 'waf_blocked'
     || decision.class === 'timeout'
     || decision.class === 'transient_upstream'
     || decision.class === 'endpoint_pool_down'
     || decision.class === 'rate_limit'
-    || decision.class === 'quota_or_credit';
+    || decision.class === 'quota_or_credit'
+    || (context.status === 403)) {
+    return true;
+  }
+  return false;
 }
