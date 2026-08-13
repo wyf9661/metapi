@@ -1805,7 +1805,7 @@ export default function Sites() {
         </CenteredModal>
       )}
 
-      <div className="card" style={{ overflowX: 'auto' }}>
+      <div className="card" style={{ overflowX: 'auto', paddingBottom: 12 }}>
         {sites.length > 0 ? (
           isMobile ? (
             <div className="mobile-card-list">

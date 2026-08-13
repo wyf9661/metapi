@@ -1208,7 +1208,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         </div>
       </CenteredModal>
 
-      <div className="card" style={{ overflowX: 'auto' }}>
+      <div className="card" style={{ overflowX: 'auto', paddingBottom: 12 }}>
         {loading ? (
           <div style={{ padding: 20 }}>
             <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />

@@ -5891,6 +5891,11 @@ textarea {
   font-size: 13px;
   color: var(--color-text-muted);
   margin: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  height: 32px;
+  padding-bottom: 4px;
 }
 
 .pagination-size {

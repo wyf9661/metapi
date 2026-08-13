@@ -2833,6 +2833,7 @@ export default function ProxyLogs() {
               fontSize: 12,
               color: 'var(--color-text-muted)',
               marginRight: 'auto',
+              marginLeft: 12,
             }}
           >
             显示第 {displayedStart} - {displayedEnd} 条，共 {total} 条

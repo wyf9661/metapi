@@ -2416,7 +2416,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             onSaved={() => load(true)}
           />
 
-          <div className="card">
+          <div className="card" style={{ paddingBottom: 12 }}>
             {visibleAccounts.length > 0 ? (
               isMobile ? (
                 <div className="mobile-card-list">

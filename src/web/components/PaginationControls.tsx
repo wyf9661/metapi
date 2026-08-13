@@ -30,7 +30,7 @@ export default function PaginationControls({
       >
         上一页
       </button>
-      <span>
+      <span className="pagination-info">
         第 {page} / {totalPages} 页
       </span>
       <button
