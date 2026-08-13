@@ -24,6 +24,44 @@ const SITE_RUNTIME_HEALTH_SETTING_KEY = 'token_router_site_runtime_health_v1';
 const SITE_RUNTIME_HEALTH_PERSIST_DEBOUNCE_MS = 500;
 const SITE_RECENT_MODEL_WEIGHT = 0.65;
 
+// --- Sliding window failure rate breaker ---
+// Backstop: regardless of failure classification, if a site's recent failure
+// rate exceeds this threshold, open a short breaker. This catches cases that
+// the per-classification streak logic might miss (e.g. mixed 5xx + timeout +
+// 429 that individually stay below the streak threshold but collectively
+// indicate the site is malfunctioning).
+const SLIDING_WINDOW_SIZE_MS = 5 * 60 * 1000; // 5-minute window
+const SLIDING_WINDOW_FAILURE_THRESHOLD = 0.8; // 80% failure rate → breaker
+const SLIDING_WINDOW_MINIMUM_REQUESTS = 5; // minimum total requests to consider
+const SLIDING_WINDOW_BREAKER_MS = 2 * 60 * 1000; // 2-minute breaker
+
+interface SlidingWindowEntry {
+  /** Positive timestamp = success, negative = failure. */
+  timestamps: number[];
+}
+
+const slidingWindowStore = new Map<number, SlidingWindowEntry>();
+
+function slideSlidingWindow(siteId: number, success: boolean, nowMs: number): void {
+  let entry = slidingWindowStore.get(siteId);
+  if (!entry) {
+    entry = { timestamps: [] };
+    slidingWindowStore.set(siteId, entry);
+  }
+  entry.timestamps.push(success ? nowMs : -nowMs);
+  const cutoff = nowMs - SLIDING_WINDOW_SIZE_MS;
+  entry.timestamps = entry.timestamps.filter((t) => Math.abs(t) >= cutoff);
+}
+
+function getSlidingWindowFailureInfo(siteId: number): { failureRate: number; totalRequests: number } | null {
+  const entry = slidingWindowStore.get(siteId);
+  if (!entry) return null;
+  const total = entry.timestamps.length;
+  if (total < SLIDING_WINDOW_MINIMUM_REQUESTS) return null;
+  const failures = entry.timestamps.filter((t) => t < 0).length;
+  return { failureRate: failures / total, totalRequests: total };
+}
+
 export type SiteRuntimeHealthDetails = {
   globalMultiplier: number;
   modelMultiplier: number;
@@ -268,6 +306,13 @@ export function recordSiteRuntimeFailure(siteId: number, context: SiteRuntimeFai
   if (modelState) {
     applyRuntimeHealthFailure(modelState, context, nowMs);
   }
+  // Sliding window failure rate backstop: if the site's recent failure rate
+  // exceeds the threshold, open a short breaker regardless of classification.
+  slideSlidingWindow(siteId, false, nowMs);
+  const info = getSlidingWindowFailureInfo(siteId);
+  if (info && info.failureRate >= SLIDING_WINDOW_FAILURE_THRESHOLD) {
+    globalState.breakerUntilMs = nowMs + SLIDING_WINDOW_BREAKER_MS;
+  }
   scheduleSiteRuntimeHealthPersistence();
 }
 
@@ -277,12 +322,15 @@ export function recordSiteRuntimeSuccess(siteId: number, latencyMs: number, mode
   if (modelState) {
     applyRuntimeHealthSuccess(modelState, latencyMs, nowMs);
   }
+  // Record a success in the sliding window so the failure rate trends down.
+  slideSlidingWindow(siteId, true, nowMs);
   scheduleSiteRuntimeHealthPersistence();
 }
 
 export function resetSiteRuntimeHealthState(): void {
   siteRuntimeHealthStates.clear();
   siteModelRuntimeHealthStates.clear();
+  slidingWindowStore.clear();
   siteRuntimeHealthLoaded = false;
   siteRuntimeHealthLoadPromise = null;
   if (siteRuntimeHealthSaveTimer) {
