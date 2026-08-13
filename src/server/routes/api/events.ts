@@ -41,8 +41,15 @@ export async function eventsRoutes(app: FastifyInstance) {
   });
 
   // Mark one as read
-  app.post<{ Params: { id: string } }>('/api/events/:id/read', async (request) => {
+  app.post<{ Params: { id: string } }>('/api/events/:id/read', async (request, reply) => {
     const id = parseInt(request.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return reply.code(400).send({ success: false, message: 'Invalid event id' });
+    }
+    const existing = await db.select({ id: schema.events.id }).from(schema.events).where(eq(schema.events.id, id)).get();
+    if (!existing) {
+      return reply.code(404).send({ success: false, message: 'Event not found' });
+    }
     await db.update(schema.events).set({ read: true }).where(eq(schema.events.id, id)).run();
     return { success: true };
   });

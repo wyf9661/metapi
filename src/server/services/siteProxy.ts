@@ -36,6 +36,25 @@ type DispatcherCacheEntry = {
 };
 
 const dispatcherCache = new Map<string, DispatcherCacheEntry>();
+const DISPATCHER_CACHE_SWEEP_MS = 60_000;
+let dispatcherCacheSweepTimer: ReturnType<typeof setInterval> | null = null;
+
+function sweepExpiredDispatchers(nowMs = Date.now()): void {
+  for (const [key, entry] of dispatcherCache.entries()) {
+    if (nowMs - entry.lastUsedAtMs > DISPATCHER_CACHE_TTL_MS) {
+      dispatcherCache.delete(key);
+      closeDispatcherIfPossible(entry.dispatcher);
+    }
+  }
+}
+
+function ensureDispatcherCacheSweep(): void {
+  if (dispatcherCacheSweepTimer) return;
+  dispatcherCacheSweepTimer = setInterval(() => {
+    sweepExpiredDispatchers();
+  }, DISPATCHER_CACHE_SWEEP_MS);
+  dispatcherCacheSweepTimer.unref?.();
+}
 const SUPPORTED_PROXY_PROTOCOLS = new Set([
   'http:',
   'https:',
@@ -209,6 +228,7 @@ function getDispatcherByProxyUrl(proxyUrl: string, skipCache = false): Dispatche
         dispatcher,
         lastUsedAtMs: Date.now(),
       });
+      ensureDispatcherCacheSweep();
     }
     return dispatcher;
   } catch {

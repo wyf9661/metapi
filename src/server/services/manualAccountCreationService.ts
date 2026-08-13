@@ -287,6 +287,23 @@ export async function createManualAccount({
   }
   const extraConfig = mergeAccountExtraConfig(undefined, extraConfigPatch);
 
+  const existingAccounts = await db.select().from(schema.accounts)
+    .where(eq(schema.accounts.siteId, body.siteId))
+    .all();
+  const nextApiToken = apiToken || '';
+  const nextAccessToken = accessToken || '';
+  const duplicate = existingAccounts.find((row: typeof schema.accounts.$inferSelect) => {
+    const existingApi = String(row.apiToken || '').trim();
+    const existingAccess = String(row.accessToken || '').trim();
+    if (resolvedCredentialMode === 'apikey') {
+      return nextApiToken.length > 0 && existingApi === nextApiToken;
+    }
+    return nextAccessToken.length > 0 && existingAccess === nextAccessToken;
+  });
+  if (duplicate) {
+    throw new Error('该站点已存在相同 Token 的账号');
+  }
+
   const result = await insertAndGetById<typeof schema.accounts.$inferSelect>({
     table: schema.accounts,
     idColumn: schema.accounts.id,

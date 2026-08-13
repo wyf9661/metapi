@@ -2158,7 +2158,9 @@ export async function statsRoutes(app: FastifyInstance) {
       const siteId = request.query.siteId
         ? parseInt(request.query.siteId, 10)
         : null;
-      const days = Math.max(1, parseInt(request.query.days || '7', 10));
+    const days = Number.isFinite(parseInt(request.query.days || '7', 10))
+      ? Math.max(1, Math.min(365, parseInt(request.query.days || '7', 10)))
+      : 7;
       await runUsageAggregationProjectionPass();
       const sinceDay = getLocalRangeStartDayKey(days);
       const rows = siteId != null && Number.isFinite(siteId)

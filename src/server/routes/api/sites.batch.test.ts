@@ -36,7 +36,7 @@ describe('sites batch routes', () => {
     delete process.env.DATA_DIR;
   });
 
-  it('enables system proxy for selected sites and reports failures', async () => {
+  it('rejects the old no-op system-proxy batch actions', async () => {
     await db.insert(schema.sites).values([
       {
         id: 1,
@@ -61,15 +61,8 @@ describe('sites batch routes', () => {
       },
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json() as {
-      successIds?: number[];
-      failedItems?: Array<{ id: number; message: string }>;
-    };
-    expect(body.successIds).toEqual([1, 2]);
-    expect(body.failedItems).toHaveLength(1);
-    expect(body.failedItems?.[0]?.id).toBe(999);
-
+    expect(response.statusCode).toBe(400);
+    expect((response.json() as { message?: string }).message).toContain('action');
   });
 
   it('rejects invalid sites batch action', async () => {

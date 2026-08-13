@@ -176,4 +176,14 @@ describe('probeRuntimeModel', () => {
     expect(reason).toContain('本站其他模型可能仍正常');
   });
 
+  it('uses max_completion_tokens for o1/gpt-5.1 style models and max_tokens otherwise', async () => {
+    const { buildRuntimeProbeChatBody, usesMaxCompletionTokens } = await import('./runtimeModelProbe.js');
+    expect(usesMaxCompletionTokens('o1')).toBe(true);
+    expect(usesMaxCompletionTokens('gpt-5.1-2025-11-13')).toBe(true);
+    expect(usesMaxCompletionTokens('gpt-4o')).toBe(false);
+    expect(buildRuntimeProbeChatBody('o1', 'ping')).toMatchObject({ max_completion_tokens: 256 });
+    expect(buildRuntimeProbeChatBody('gpt-4o', 'ping')).toMatchObject({ max_tokens: 256 });
+    expect(buildRuntimeProbeChatBody('gpt-4o', 'ping')).not.toHaveProperty('max_completion_tokens');
+  });
+
 });

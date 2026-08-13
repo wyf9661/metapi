@@ -147,6 +147,8 @@ describe('accountsOverviewService', () => {
     expect(a1?.capabilities.canRefreshBalance).toBe(true);
     expect(a1?.capabilities.proxyOnly).toBe(false);
     expect(a1?.runtimeHealth).toBeDefined();
+    expect(String(a1?.accessToken || '')).not.toContain('sk-token');
+    expect(String(a1?.accessToken || '')).toContain('***');
 
     // Account 2: apikey-only -> proxyOnly, spend 0.75
     const a2 = byUsername.get('user-b');

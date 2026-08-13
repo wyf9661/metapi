@@ -25,6 +25,13 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+function parseClampedWeight(value: string | undefined, fallback: number): number {
+  const parsed = parseNumber(value, fallback);
+  if (parsed < 0) return 0;
+  if (parsed > 10) return 10;
+  return parsed;
+}
+
 function parseCsvList(value: string | undefined): string[] {
   if (!value) return [];
   return value
@@ -220,11 +227,11 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     },
     payloadRules: normalizePayloadRulesConfig(parseJsonValue(env.PAYLOAD_RULES_JSON || env.PAYLOAD_RULES)),
     routingWeights: {
-      baseWeightFactor: parseNumber(env.BASE_WEIGHT_FACTOR, 0.5),
-      valueScoreFactor: parseNumber(env.VALUE_SCORE_FACTOR, 0.5),
-      costWeight: parseNumber(env.COST_WEIGHT, 0.4),
-      balanceWeight: parseNumber(env.BALANCE_WEIGHT, 0.3),
-      usageWeight: parseNumber(env.USAGE_WEIGHT, 0.3),
+      baseWeightFactor: parseClampedWeight(env.BASE_WEIGHT_FACTOR, 0.5),
+      valueScoreFactor: parseClampedWeight(env.VALUE_SCORE_FACTOR, 0.5),
+      costWeight: parseClampedWeight(env.COST_WEIGHT, 0.4),
+      balanceWeight: parseClampedWeight(env.BALANCE_WEIGHT, 0.3),
+      usageWeight: parseClampedWeight(env.USAGE_WEIGHT, 0.3),
     },
   };
 }

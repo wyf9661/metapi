@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { tr } from '../i18n.js';
 import { buildUpdateReminder } from './helpers/updateCenterPresentation.js';
 
-const VERSION = (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.4.3').trim();
+const VERSION = (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0').trim();
 
 const FEATURES = [
   { icon: '🌐', title: '统一代理网关', desc: '一个 Key、一个入口，兼容 OpenAI / Claude 下游格式' },

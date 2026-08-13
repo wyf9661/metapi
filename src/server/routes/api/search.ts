@@ -42,7 +42,11 @@ export async function searchRoutes(app: FastifyInstance) {
       return { accounts: [], accountTokens: [], sites: [], checkinLogs: [], proxyLogs: [], models: [] };
     }
 
-    const q = `%${query.trim()}%`;
+    const rawQuery = String(query || '').trim().slice(0, 64).replace(/[%_]/g, '');
+    if (!rawQuery) {
+      return { accounts: [], accountTokens: [], sites: [], checkinLogs: [], proxyLogs: [], models: [] };
+    }
+    const q = `%${rawQuery}%`;
     const perCategory = Math.min(Math.ceil(limit / 6), 10);
 
     // Search sites

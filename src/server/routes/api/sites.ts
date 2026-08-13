@@ -980,60 +980,55 @@ export async function sitesRoutes(app: FastifyInstance) {
 
   // Delete a site
   async function deleteSiteAndRelatedData(siteId: number): Promise<void> {
-  // Explicit cleanup so connection management cannot keep orphan keys, even when:
-  // - foreign_keys are temporarily off in a runtime path
-  // - API Key accounts store the key only on accounts.api_token (no account_tokens rows)
-  // - OAuth unit membership / checkin logs still reference the account
-  const accountRows = await db.select({ id: schema.accounts.id })
-    .from(schema.accounts)
-    .where(eq(schema.accounts.siteId, siteId))
-    .all();
-  const accountIds = accountRows.map((row: any) => row.id).filter((id: any) => Number.isFinite(id) && id > 0);
+    await db.transaction(async (tx: typeof db) => {
+      const accountRows = await tx.select({ id: schema.accounts.id })
+        .from(schema.accounts)
+        .where(eq(schema.accounts.siteId, siteId))
+        .all();
+      const accountIds = accountRows.map((row: any) => row.id).filter((id: any) => Number.isFinite(id) && id > 0);
 
-  if (accountIds.length > 0) {
-    const tokenRows = await db.select({ id: schema.accountTokens.id })
-      .from(schema.accountTokens)
-      .where(inArray(schema.accountTokens.accountId, accountIds))
-      .all();
-    const tokenIds = tokenRows.map((row: any) => row.id).filter((id: any) => Number.isFinite(id) && id > 0);
+      if (accountIds.length > 0) {
+        const tokenRows = await tx.select({ id: schema.accountTokens.id })
+          .from(schema.accountTokens)
+          .where(inArray(schema.accountTokens.accountId, accountIds))
+          .all();
+        const tokenIds = tokenRows.map((row: any) => row.id).filter((id: any) => Number.isFinite(id) && id > 0);
 
-    if (tokenIds.length > 0) {
-      await db.delete(schema.tokenModelAvailability)
-        .where(inArray(schema.tokenModelAvailability.tokenId, tokenIds))
-        .run();
-    }
+        if (tokenIds.length > 0) {
+          await tx.delete(schema.tokenModelAvailability)
+            .where(inArray(schema.tokenModelAvailability.tokenId, tokenIds))
+            .run();
+        }
 
-    await db.delete(schema.oauthRouteUnitMembers)
-      .where(inArray(schema.oauthRouteUnitMembers.accountId, accountIds))
-      .run();
-    await db.delete(schema.routeChannels)
-      .where(inArray(schema.routeChannels.accountId, accountIds))
-      .run();
-    await db.delete(schema.modelAvailability)
-      .where(inArray(schema.modelAvailability.accountId, accountIds))
-      .run();
-    await db.delete(schema.checkinLogs)
-      .where(inArray(schema.checkinLogs.accountId, accountIds))
-      .run();
-    await db.delete(schema.accountTokens)
-      .where(inArray(schema.accountTokens.accountId, accountIds))
-      .run();
-    // API Key connections store credentials on accounts.api_token / accounts.access_token.
-    await db.delete(schema.accounts)
-      .where(inArray(schema.accounts.id, accountIds))
-      .run();
+        await tx.delete(schema.oauthRouteUnitMembers)
+          .where(inArray(schema.oauthRouteUnitMembers.accountId, accountIds))
+          .run();
+        await tx.delete(schema.routeChannels)
+          .where(inArray(schema.routeChannels.accountId, accountIds))
+          .run();
+        await tx.delete(schema.modelAvailability)
+          .where(inArray(schema.modelAvailability.accountId, accountIds))
+          .run();
+        await tx.delete(schema.checkinLogs)
+          .where(inArray(schema.checkinLogs.accountId, accountIds))
+          .run();
+        await tx.delete(schema.accountTokens)
+          .where(inArray(schema.accountTokens.accountId, accountIds))
+          .run();
+        await tx.delete(schema.accounts)
+          .where(inArray(schema.accounts.id, accountIds))
+          .run();
+      }
+
+      await tx.delete(schema.oauthRouteUnits).where(eq(schema.oauthRouteUnits.siteId, siteId)).run();
+      await tx.delete(schema.siteApiEndpoints).where(eq(schema.siteApiEndpoints.siteId, siteId)).run();
+      await tx.delete(schema.siteDisabledModels).where(eq(schema.siteDisabledModels.siteId, siteId)).run();
+      await tx.delete(schema.siteAnnouncements).where(eq(schema.siteAnnouncements.siteId, siteId)).run();
+      await tx.delete(schema.sites).where(eq(schema.sites.id, siteId)).run();
+    });
+    await rebuildRoutesBestEffort();
+    await invalidateAccountsSnapshot();
   }
-
-  // Related site-scoped rows that must not linger after site removal.
-  await db.delete(schema.oauthRouteUnits).where(eq(schema.oauthRouteUnits.siteId, siteId)).run();
-  await db.delete(schema.siteApiEndpoints).where(eq(schema.siteApiEndpoints.siteId, siteId)).run();
-  await db.delete(schema.siteDisabledModels).where(eq(schema.siteDisabledModels.siteId, siteId)).run();
-  await db.delete(schema.siteAnnouncements).where(eq(schema.siteAnnouncements.siteId, siteId)).run();
-  await db.delete(schema.sites).where(eq(schema.sites.id, siteId)).run();
-  await rebuildRoutesBestEffort();
-  // Connection management reads accounts-snapshot; drop it immediately so orphans disappear.
-  await invalidateAccountsSnapshot();
-}
 
   app.delete<{ Params: { id: string } }>('/api/sites/:id', async (request, reply) => {
     const id = parseInt(request.params.id);
@@ -1061,7 +1056,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (ids.length === 0) {
       return reply.code(400).send({ message: 'ids is required' });
     }
-    if (!['enable', 'disable', 'delete', 'enableSystemProxy', 'disableSystemProxy'].includes(action)) {
+    if (!['enable', 'disable', 'delete'].includes(action)) {
       return reply.code(400).send({ message: 'Invalid action' });
     }
 
@@ -1085,11 +1080,6 @@ export async function sitesRoutes(app: FastifyInstance) {
         if (action === 'delete') {
           // deleteSiteAndRelatedData has cascade deletion — keep sequential.
           await deleteSiteAndRelatedData(id);
-        } else if (action === 'enableSystemProxy' || action === 'disableSystemProxy') {
-          await db.update(schema.sites)
-            .set({ updatedAt: new Date().toISOString() })
-            .where(eq(schema.sites.id, id))
-            .run();
         } else {
           const nextStatus = action === 'enable' ? 'active' : 'disabled';
           await db.update(schema.sites)

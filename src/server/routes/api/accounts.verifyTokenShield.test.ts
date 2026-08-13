@@ -103,7 +103,7 @@ describe('accounts verify-token shield detection', () => {
       platform: 'new-api',
     }).returning().get();
 
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
       const response = await app.inject({
         method: 'POST',
         url: '/api/accounts/verify-token',

@@ -98,7 +98,8 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
 
   // 清理旧的测活日志
   app.post('/api/probe-logs/cleanup', async (request, _reply) => {
-    const { daysToKeep = 7 } = request.body as { daysToKeep?: number };
+    const rawDays = Number((request.body as { daysToKeep?: unknown } | undefined)?.daysToKeep ?? 7);
+    const daysToKeep = Number.isFinite(rawDays) ? Math.min(3650, Math.max(1, Math.trunc(rawDays))) : 7;
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);

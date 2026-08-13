@@ -69,6 +69,22 @@ describe('getAdapter platform aliases', () => {
     expect(gemini?.platformName).toBe('gemini');
   });
 
+  it('detects OpenAI-compatible gateways that require an API key', async () => {
+    await withHttpServer((req, res) => {
+      if (req.url === '/v1/models' || req.url === '/models') {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: { message: 'API key is required', type: 'invalid_request_error', code: 'missing_api_key' },
+        }));
+        return;
+      }
+      res.writeHead(404).end();
+    }, async (baseUrl) => {
+      const adapter = await detectPlatform(baseUrl);
+      expect(adapter?.platformName).toBe('openai');
+    });
+  });
+
   it('falls back to new-api by title when api/status is unavailable', async () => {
     await withHttpServer((req, res) => {
       if (req.url === '/') {

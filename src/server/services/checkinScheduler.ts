@@ -20,6 +20,7 @@ let balanceTask: ScheduledTask | null = null;
 let dailySummaryTask: ScheduledTask | null = null;
 let logCleanupTask: ScheduledTask | null = null;
 const intervalAttemptByAccount = new Map<number, number>();
+let checkinPassInFlight: Promise<void> | null = null;
 
 const DAILY_SUMMARY_DEFAULT_CRON = '58 23 * * *';
 const LOG_CLEANUP_DEFAULT_CRON = '0 6 * * *';
@@ -175,6 +176,14 @@ export function selectDueIntervalCheckinAccountIds(
 }
 
 async function runIntervalCheckinPass(now = new Date()) {
+  if (checkinPassInFlight) return checkinPassInFlight;
+  checkinPassInFlight = executeIntervalCheckinPass(now).finally(() => {
+    checkinPassInFlight = null;
+  });
+  return checkinPassInFlight;
+}
+
+async function executeIntervalCheckinPass(now = new Date()) {
   const rows = await db
     .select()
     .from(schema.accounts)

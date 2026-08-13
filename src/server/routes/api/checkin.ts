@@ -9,6 +9,8 @@ import { startBackgroundTask, summarizeCheckinResults } from '../../services/bac
 import { classifyFailureReason } from '../../services/failureReasonService.js';
 import { normalizePageOffset, normalizePageSize } from './paginationNormalizers.js';
 
+const singleAccountCheckinInFlight = new Map<number, Promise<unknown>>();
+
 function buildCheckinAccountLabel(item: any): string {
   const username = item?.username || (item?.accountId ? `#${item.accountId}` : 'unknown');
   const site = item?.site || 'unknown-site';
@@ -119,8 +121,21 @@ export async function checkinRoutes(app: FastifyInstance) {
     if (!existing) {
       return reply.code(404).send({ success: false, message: 'Account not found' });
     }
-    const result = await checkinAccount(id, { scheduleMode: config.checkinScheduleMode });
-    return result;
+    const inflight = singleAccountCheckinInFlight.get(id);
+    if (inflight) {
+      return reply.code(202).send({
+        success: true,
+        queued: true,
+        reused: true,
+        message: '该账号签到任务执行中，请稍后查看签到日志',
+      });
+    }
+    const pending = checkinAccount(id, { scheduleMode: config.checkinScheduleMode })
+      .finally(() => {
+        singleAccountCheckinInFlight.delete(id);
+      });
+    singleAccountCheckinInFlight.set(id, pending);
+    return pending;
   });
 
   // Get check-in logs

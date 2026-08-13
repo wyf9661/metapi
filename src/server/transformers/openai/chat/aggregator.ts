@@ -149,16 +149,19 @@ export function finalizeOpenAiChatAggregate(
 
   const finalizedChoices: OpenAiChatChoice[] = Array.from(state.choices.values())
     .sort((left, right) => left.index - right.index)
-    .map((choice) => ({
-      index: choice.index,
-      ...(choice.role ? { role: choice.role } : {}),
-      content: choice.content.join(''),
-      reasoningContent: choice.reasoning.join(''),
-      toolCalls: choice.toolCalls.filter((item) => item.id || item.name || item.arguments),
-      finishReason: choice.finishReason || (choice.toolCalls.length > 0 ? 'tool_calls' : 'stop'),
-      ...(choice.annotations.length > 0 ? { annotations: choice.annotations } : {}),
-      ...(choice.citations.size > 0 ? { citations: Array.from(choice.citations).sort() } : {}),
-    }));
+    .map((choice) => {
+      const toolCalls = choice.toolCalls.filter((item) => item.id || item.name || item.arguments);
+      return {
+        index: choice.index,
+        ...(choice.role ? { role: choice.role } : {}),
+        content: choice.content.join(''),
+        reasoningContent: choice.reasoning.join(''),
+        toolCalls,
+        finishReason: choice.finishReason || (toolCalls.length > 0 ? 'tool_calls' : 'stop'),
+        ...(choice.annotations.length > 0 ? { annotations: choice.annotations } : {}),
+        ...(choice.citations.size > 0 ? { citations: Array.from(choice.citations).sort() } : {}),
+      };
+    });
 
   const primaryChoice = finalizedChoices[0];
   const normalizedChoices = Array.isArray(normalized.choices) ? normalized.choices : [];

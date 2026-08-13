@@ -11,6 +11,7 @@ import {
 } from './accountHealthService.js';
 import { parseCheckinRewardAmount } from './checkinRewardParser.js';
 import { getLocalDayRangeUtc } from './localTimeService.js';
+import { maskToken } from './accountTokenService.js';
 import {
   clearSnapshotCache,
   readSnapshotCache,
@@ -190,6 +191,8 @@ async function loadAccountsSnapshotPayload(): Promise<AccountsSnapshotPayload> {
       const capabilities = buildCapabilitiesForAccount(row.accounts);
       return {
         ...row.accounts,
+        accessToken: maskToken(row.accounts.accessToken, row.sites.platform),
+        apiToken: maskToken(row.accounts.apiToken, row.sites.platform),
         site: row.sites,
         credentialMode,
         capabilities,

@@ -64,6 +64,10 @@ import {
   stopRouteDecisionRefreshScheduler,
 } from './services/routeDecisionRefreshScheduler.js';
 import {
+  startOauthTokenRefreshScheduler,
+  stopOauthTokenRefreshScheduler,
+} from './services/oauth/oauthRefreshScheduler.js';
+import {
   ensureProxyChannelAffinityLoaded,
 } from './services/proxyChannelCoordinator.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
@@ -333,6 +337,7 @@ startUpdateCenterPolling();
 startUsageAggregationProjectorScheduler();
 startAdminSnapshotWarmScheduler();
 startRouteDecisionRefreshScheduler();
+startOauthTokenRefreshScheduler();
 try {
   await startOAuthLoopbackCallbackServers();
 } catch (error) {
@@ -351,6 +356,7 @@ app.addHook('onClose', async () => {
   await stopAdminSnapshotWarmScheduler();
   stopRouteDecisionRefreshScheduler();
   await stopSub2ApiManagedRefreshScheduler();
+  await stopOauthTokenRefreshScheduler();
   await stopOAuthLoopbackCallbackServers();
 });
 

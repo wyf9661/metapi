@@ -37,6 +37,39 @@ export function getAdapter(platform: string): PlatformAdapter | undefined {
 
 const titleFirstPlatforms = new Set<string>(['sub2api']);
 
+async function looksLikeOpenAiCompatibleGateway(url: string): Promise<boolean> {
+  const candidates = [
+    `${url.replace(/\/+$/, '')}/v1/models`,
+    `${url.replace(/\/+$/, '')}/models`,
+  ];
+  for (const target of candidates) {
+    try {
+      const { fetch } = await import('undici');
+      const res = await fetch(target, { method: 'GET' });
+      const text = await res.text();
+      const lowered = text.toLowerCase();
+      if (
+        lowered.includes('missing_api_key')
+        || lowered.includes('api key is required')
+        || lowered.includes('invalid_api_key')
+        || lowered.includes('incorrect api key')
+        || (res.status === 401 && (lowered.includes('unauthorized') || lowered.includes('api key')))
+      ) {
+        return true;
+      }
+      try {
+        const payload = JSON.parse(text) as { data?: unknown; object?: unknown };
+        if (Array.isArray(payload.data) || payload.object === 'list') return true;
+      } catch {
+        // ignore non-json
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return false;
+}
+
 export async function detectPlatform(url: string): Promise<PlatformAdapter | undefined> {
   const urlHint = detectPlatformByUrlHint(url);
   if (urlHint) {
@@ -54,6 +87,10 @@ export async function detectPlatform(url: string): Promise<PlatformAdapter | und
 
   if (titleHint) {
     return getAdapter(titleHint);
+  }
+
+  if (await looksLikeOpenAiCompatibleGateway(url)) {
+    return getAdapter('openai');
   }
 
   return undefined;

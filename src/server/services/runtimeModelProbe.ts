@@ -96,19 +96,34 @@ export function classifyProbeFailureReason(status: number, rawErrorText: string)
   return text || `probe failed with status ${status || 0}`;
 }
 
-function buildProbeBody(modelName: string): { body: Record<string, unknown>, question: ProbeQuestion } {
-  const question = getRandomProbeQuestion();
-  const body = {
+const MAX_COMPLETION_TOKENS_MODEL_PATTERN =
+  /(^|[-_/])(o1|o3|o4|gpt-5\.1|gpt-5\.5|gpt-chat-latest)($|[-_/])/i;
+const PROBE_COMPLETION_BUDGET = 256;
+
+export function usesMaxCompletionTokens(modelName: string): boolean {
+  return MAX_COMPLETION_TOKENS_MODEL_PATTERN.test(String(modelName || '').trim());
+}
+
+export function buildRuntimeProbeChatBody(
+  modelName: string,
+  questionText: string,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
     model: modelName,
-    messages: [
-      {
-        role: 'user',
-        content: question.question,
-      },
-    ],
+    messages: [{ role: 'user', content: questionText }],
     stream: false,
   };
-  return { body, question };
+  if (usesMaxCompletionTokens(modelName)) {
+    body.max_completion_tokens = PROBE_COMPLETION_BUDGET;
+  } else {
+    body.max_tokens = PROBE_COMPLETION_BUDGET;
+  }
+  return body;
+}
+
+function buildProbeBody(modelName: string): { body: Record<string, unknown>, question: ProbeQuestion } {
+  const question = getRandomProbeQuestion();
+  return { body: buildRuntimeProbeChatBody(modelName, question.question), question };
 }
 
 /**

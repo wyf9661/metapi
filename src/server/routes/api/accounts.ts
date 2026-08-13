@@ -93,7 +93,7 @@ const limitAccountLogin = createRateLimitGuard({
 
 const limitAccountVerifyToken = createRateLimitGuard({
   bucket: 'accounts-verify-token',
-  max: 5,
+  max: 30,
   windowMs: 60_000,
 });
 
@@ -191,7 +191,7 @@ function resolveRequestedCreateTokens(
 
   const batchTokens = parseBatchApiKeys(body.accessTokens);
   if (batchTokens.length > 0) return batchTokens;
-  return parseBatchApiKeys(body.accessToken);
+  return parseBatchApiKeys(body.accessToken || body.apiToken);
 }
 
 function normalizeSortOrder(input: unknown): number | null {
