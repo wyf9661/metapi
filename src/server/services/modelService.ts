@@ -697,7 +697,7 @@ async function doRefreshModelsForAccount(
     await clearExistingAvailability();
     if (previousModelAvailability.length > 0) {
       await db.insert(schema.modelAvailability).values(
-        previousModelAvailability.map(({ id: _id, ...row }) => row),
+        previousModelAvailability.map((item: typeof previousModelAvailability[number]) => { const { id: _id, ...row } = item; return row; }),
       ).onConflictDoNothing().run();
     }
     if (previousTokenModelAvailability.length > 0) {

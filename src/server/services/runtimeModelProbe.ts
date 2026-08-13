@@ -405,7 +405,7 @@ export async function probeRuntimeModel(input: {
         status: 'success',
         latencyMs,
         tokensUsed,
-      }).catch(err => console.error('[probe-log] Failed to insert probe log:', err));
+      }).catch((err: unknown) => console.error('[probe-log] Failed to insert probe log:', err));
 
       return {
         status: 'supported',
@@ -429,7 +429,7 @@ export async function probeRuntimeModel(input: {
       latencyMs,
       tokensUsed: null,
       errorMessage: classifyProbeFailureReason(result.status || 0, rawErrorText),
-    }).catch(err => console.error('[probe-log] Failed to insert probe log:', err));
+    }).catch((err: unknown) => console.error('[probe-log] Failed to insert probe log:', err));
 
     return {
       status: probeStatus,
@@ -453,7 +453,7 @@ export async function probeRuntimeModel(input: {
       latencyMs,
       tokensUsed: null,
       errorMessage,
-    }).catch(err => console.error('[probe-log] Failed to insert probe log:', err));
+    }).catch((err: unknown) => console.error('[probe-log] Failed to insert probe log:', err));
 
     return {
       status: 'inconclusive',

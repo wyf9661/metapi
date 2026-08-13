@@ -865,7 +865,7 @@ export function buildClaudeCountTokensUpstreamRequest(input: {
       .filter(Boolean),
     ...betas,
   ];
-  const effectiveClaudeHeaders = {
+  const effectiveClaudeHeaders: Record<string, string> = {
     ...claudeHeaders,
     ...(mergedBetas.length > 0
       ? { 'anthropic-beta': Array.from(new Set(mergedBetas)).join(',') }
