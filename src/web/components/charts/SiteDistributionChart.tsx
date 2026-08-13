@@ -157,6 +157,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           grid: { visible: false },
           domainLine: { visible: false },
           tick: { visible: false },
+          max: Math.ceil(chartData.reduce((s, d) => Math.max(s, d.value), 0) * 1.18),
         },
       ],
       tooltip: {
