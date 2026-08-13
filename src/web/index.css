@@ -6323,6 +6323,14 @@ textarea {
     padding-bottom: 96px;
   }
 
+  /* Proxy Logs page only: the mobile main-content reserves 96px bottom
+     padding for the batch-action floating bar, which this page never
+     shows. Cancel it so the sticky pagination bar sits flush with the
+     viewport bottom when scrolled to the end. */
+  .proxy-logs-page {
+    margin-bottom: -96px;
+  }
+
   .page-header {
     flex-direction: column;
     align-items: flex-start;
