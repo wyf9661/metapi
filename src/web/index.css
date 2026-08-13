@@ -85,6 +85,64 @@ body {
   min-height: 100vh;
 }
 
+/* Desktop: lock the chrome so only the main pane scrolls.
+   Without this, body scroll lets a tall logs page stretch .app-layout,
+   and position:sticky on .sidebar slides up at the bottom. */
+html[data-layout="desktop"],
+html[data-layout="desktop"] body {
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+html[data-layout="desktop"] #root {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+html[data-layout="desktop"] .topbar {
+  flex-shrink: 0;
+  position: relative;
+  top: auto;
+}
+
+html[data-layout="desktop"] .app-layout {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html[data-layout="desktop"] .sidebar {
+  position: relative;
+  top: auto;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+html[data-layout="desktop"] .main-content {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 0;
+  overflow-anchor: none;
+}
+
+/* Proxy Logs page only: the pagination bar sticks to the bottom of the
+   scroll pane. The page root itself stays a plain block so the debug
+   trace panel and every other child keep their original layout. */
+.proxy-logs-page > .pagination {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-bg);
+  margin-top: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
 /* ===== Animations ===== */
 @keyframes spin {
   to {
@@ -756,7 +814,7 @@ body {
 
 .main-content {
   flex: 1;
-  padding: 24px;
+  padding: 24px 24px 12px;
   overflow-x: clip;
   min-width: 0;
 }
@@ -4770,12 +4828,14 @@ textarea {
   transform: translateY(-6px) scale(0.98);
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  display: none;
 }
 
 .modern-select.is-open .modern-select-panel {
   opacity: 1;
   transform: translateY(0) scale(1);
   pointer-events: auto;
+  display: block;
 }
 
 .modern-select-search-shell {
@@ -5790,7 +5850,7 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 16px 0;
+  padding: 12px 0 4px;
   flex-wrap: wrap;
 }
 

@@ -15,7 +15,6 @@ import {
   type RouteCandidateView,
   type RouteModelCandidatesByModelName,
 } from './helpers/routeModelCandidatesIndex.js';
-import { getInitialVisibleCount, getNextVisibleCount } from './helpers/progressiveRender.js';
 import {
   buildRouteMissingTokenIndex,
   normalizeMissingTokenModels,
@@ -43,7 +42,6 @@ import type {
   GroupRouteItem,
 } from './token-routes/types.js';
 import {
-  ROUTE_RENDER_CHUNK,
   isExplicitGroupRoute,
   isExactModelPattern,
   isRouteExactModel,
@@ -247,7 +245,6 @@ export default function TokenRoutes() {
   const [loadingRecentSelections, setLoadingRecentSelections] = useState(false);
   const [showRecentSelections, setShowRecentSelections] = useState(false);
 
-  const [visibleRouteCount, setVisibleRouteCount] = useState(ROUTE_RENDER_CHUNK);
   const [expandedSourceGroupMap, setExpandedSourceGroupMap] = useState<Record<string, boolean>>({});
   const [expandedRouteIds, setExpandedRouteIds] = useState<number[]>([]);
   const [closingDesktopDetailRouteIds, setClosingDesktopDetailRouteIds] = useState<number[]>([]);
@@ -999,32 +996,9 @@ export default function TokenRoutes() {
     }
   };
 
-  useEffect(() => {
-    setVisibleRouteCount(getInitialVisibleCount(filteredRoutes.length, ROUTE_RENDER_CHUNK));
-  }, [filteredRoutes.length]);
-
-  const handleLoadMoreRoutes = useCallback(() => {
-    setVisibleRouteCount((current) => getNextVisibleCount(current, filteredRoutes.length, ROUTE_RENDER_CHUNK));
-  }, [filteredRoutes.length]);
-
-  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
-
-  const shouldShowLoadMore = filteredRoutes.length > 0 && visibleRouteCount < filteredRoutes.length;
-
-  useEffect(() => {
-    const el = loadMoreSentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0]?.isIntersecting) handleLoadMoreRoutes(); },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [handleLoadMoreRoutes, shouldShowLoadMore]);
-
   const visibleRoutes = useMemo(
-    () => filteredRoutes.slice(0, visibleRouteCount),
-    [filteredRoutes, visibleRouteCount],
+    () => filteredRoutes,
+    [filteredRoutes],
   );
 
   // Lazy per-route candidate index — only computes for routes actually accessed
@@ -2184,15 +2158,6 @@ export default function TokenRoutes() {
           );
         })}
       </div>
-
-      {shouldShowLoadMore && (
-        <div
-          ref={loadMoreSentinelRef}
-          style={{ textAlign: 'center', padding: '12px 0', fontSize: 12, color: 'var(--color-text-muted)' }}
-        >
-          {tr('当前已加载路由')} {visibleRouteCount} / {filteredRoutes.length}
-        </div>
-      )}
 
       {filteredRoutes.length === 0 && (
         <div className="card">

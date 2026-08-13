@@ -1353,7 +1353,7 @@ export default function ProxyLogs() {
   );
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in proxy-logs-page">
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div>
           <h2 className="page-title">{tr('使用日志')}</h2>
