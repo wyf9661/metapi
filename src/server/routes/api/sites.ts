@@ -6,6 +6,7 @@ import { detectSite } from '../../services/siteDetector.js';
 import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services/siteProxy.js';
 import { formatUtcSqlDateTime, getLocalDayRangeUtc } from '../../services/localTimeService.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
+import { scheduleRouteDecisionRefresh } from '../../services/routeDecisionRefreshScheduler.js';
 import { parseSiteParamOverrideInput } from '../../services/siteParamOverride.js';
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
 import { getCredentialModeFromExtraConfig, getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
@@ -821,6 +822,8 @@ export async function sitesRoutes(app: FastifyInstance) {
     invalidateSiteCaches();
     // Connection management site dropdown reads accounts-snapshot.
     await invalidateAccountsSnapshot();
+    // New site can affect routing weights; schedule a lightweight probability refresh.
+    scheduleRouteDecisionRefresh();
     return result;
   });
 
@@ -933,6 +936,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (body.isPinned !== undefined) updates.isPinned = normalizedPinned;
     if (body.sortOrder !== undefined) updates.sortOrder = normalizedSortOrder;
     if (body.globalWeight !== undefined) updates.globalWeight = normalizedGlobalWeight;
+    const weightChanged = body.globalWeight !== undefined;
     const anyBody = body as Record<string, unknown>;
     if (anyBody.postRefreshProbeEnabled !== undefined) updates.postRefreshProbeEnabled = anyBody.postRefreshProbeEnabled === true || anyBody.postRefreshProbeEnabled === 1;
     if (anyBody.postRefreshProbeModel !== undefined) updates.postRefreshProbeModel = String(anyBody.postRefreshProbeModel || '').trim();
@@ -974,6 +978,8 @@ export async function sitesRoutes(app: FastifyInstance) {
 
     invalidateSiteCaches();
     await invalidateAccountsSnapshot();
+    // Global weight change affects routing probabilities; schedule a lightweight refresh.
+    if (weightChanged) scheduleRouteDecisionRefresh();
 
     return await loadSiteWithApiEndpoints(id);
   });
