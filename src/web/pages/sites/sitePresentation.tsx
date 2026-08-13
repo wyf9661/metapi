@@ -47,7 +47,7 @@ export function formatUsd(value?: number | null): string {
 
 export function resolveSiteCreatedSessionLabel(platform?: string | null): string {
   const normalized = String(platform || '').trim().toLowerCase();
-  if (normalized === 'codex') return '添加 OAuth 连接';
+  if (normalized === 'codex' || normalized === 'claude' || normalized === 'gemini-cli' || normalized === 'antigravity') return '添加 OAuth 连接';
   return '添加账号（用户名密码登录）';
 }
 
@@ -197,5 +197,4 @@ export const SITE_PLATFORM_OPTIONS = [
   { value: 'codex', label: 'codex', description: 'Codex OAuth / Session 优先入口' },
   { value: 'claude', label: 'claude', description: '通用 Claude / Anthropic 兼容接口' },
   { value: 'gemini', label: 'gemini', description: '通用 Gemini / Google AI 兼容接口' },
-  { value: 'cliproxyapi', label: 'cliproxyapi', description: 'CPA接入口' },
 ];

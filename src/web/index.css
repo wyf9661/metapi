@@ -143,6 +143,38 @@ html[data-layout="desktop"] .main-content {
   border-top: 1px solid var(--color-border);
 }
 
+.oauth-site-config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-bg));
+}
+
+.oauth-site-config-title {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.oauth-site-config-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.oauth-site-config-row strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 /* ===== Animations ===== */
 @keyframes spin {
   to {

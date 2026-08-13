@@ -667,6 +667,7 @@ export function listOauthProviders() {
     const state = getOAuthLoopbackCallbackServerState(definition.metadata.provider);
     return {
       ...definition.metadata,
+      siteUrl: definition.site.url,
       enabled: state.ready || !state.attempted,
     };
   });

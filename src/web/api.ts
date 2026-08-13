@@ -547,6 +547,7 @@ export type OAuthProviderInfo = {
   supportsDirectAccountRouting: boolean;
   supportsCloudValidation: boolean;
   supportsNativeProxy: boolean;
+  siteUrl: string;
 };
 
 export type OAuthProvidersResponse = {

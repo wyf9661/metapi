@@ -8,6 +8,7 @@ import Sites from './Sites.js';
 const { apiMock, toastMock } = vi.hoisted(() => ({
   apiMock: {
     getSites: vi.fn(),
+    getOAuthProviders: vi.fn().mockResolvedValue({ providers: [] }),
     getSiteDisabledModels: vi.fn(),
     getSiteAvailableModels: vi.fn(),
     updateSiteDisabledModels: vi.fn(),

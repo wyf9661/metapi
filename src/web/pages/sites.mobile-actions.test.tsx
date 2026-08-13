@@ -7,6 +7,7 @@ import Sites from './Sites.js';
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     getSites: vi.fn(),
+    getOAuthProviders: vi.fn().mockResolvedValue({ providers: [] }),
     batchUpdateSites: vi.fn(),
   },
 }));

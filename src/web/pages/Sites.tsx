@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, type OAuthProviderInfo } from '../api.js';
 import { getAuthToken } from '../authSession.js';
 import { getBrand } from '../components/BrandIcon.js';
 import CenteredModal from '../components/CenteredModal.js';
@@ -43,7 +43,6 @@ import {
 import {
   detectSiteInitializationPreset,
   getSiteInitializationPreset,
-  listSiteInitializationPresets,
 } from '../../shared/siteInitializationPresets.js';
 import { analyzePrimarySiteUrl } from '../../shared/sitePrimaryUrl.js';
 
@@ -140,6 +139,7 @@ export default function Sites() {
     initializationPresetId?: string | null;
   } | null>(null);
   const [selectedInitializationPresetId, setSelectedInitializationPresetId] = useState<string | null>(null);
+  const [oauthProviders, setOauthProviders] = useState<OAuthProviderInfo[]>([]);
   const isMobile = useIsMobile();
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
@@ -169,7 +169,6 @@ export default function Sites() {
   const probeLogEndRef = useRef<HTMLDivElement | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [disabledModelSearch, setDisabledModelSearch] = useState('');
-  const initializationPresetOptions = useMemo(() => listSiteInitializationPresets(), []);
   const selectedInitializationPreset = useMemo(
     () => getSiteInitializationPreset(selectedInitializationPresetId),
     [selectedInitializationPresetId],
@@ -178,6 +177,12 @@ export default function Sites() {
   const latestPrimarySiteUrlRef = useRef(form.url);
   const latestPlatformRef = useRef(form.platform);
   const latestInitializationPresetIdRef = useRef(selectedInitializationPresetId);
+
+  useEffect(() => {
+    void api.getOAuthProviders()
+      .then((response) => setOauthProviders(Array.isArray(response?.providers) ? response.providers : []))
+      .catch(() => setOauthProviders([]));
+  }, []);
 
   useEffect(() => {
     latestPrimarySiteUrlRef.current = form.url;
@@ -222,7 +227,7 @@ export default function Sites() {
   }, [availableModels, disabledModels]);
 
   const filteredBrandGroups = useMemo(() => {
-    const q = disabledModelSearch.trim().toLowerCase();
+    const q = String(disabledModelSearch ?? '').trim().toLowerCase();
     if (!q) return brandGroups;
     return brandGroups
       .map(([brandName, models]) => [brandName, models.filter((m) => m.toLowerCase().includes(q))] as [string, string[]])
@@ -280,30 +285,41 @@ export default function Sites() {
     }
   }, [location.search, safePage, setPage]);
 
+  const normalizedFormPlatform = String(form.platform ?? '').trim();
   const platformOptions = useMemo(() => {
-    const current = form.platform.trim();
-    const genericOptions = (!current || SITE_PLATFORM_OPTIONS.some((option) => option.value === current))
-      ? SITE_PLATFORM_OPTIONS
+    const current = normalizedFormPlatform;
+    const oauthPlatformIds = new Set(oauthProviders.map((provider) => provider.platform));
+    const genericPlatformOptions = SITE_PLATFORM_OPTIONS
+      .filter((option) => !oauthPlatformIds.has(option.value))
+      .map((option) => option.value === 'claude'
+        ? { ...option, label: 'claude API', description: '通用 Claude / Anthropic API 接入' }
+        : option);
+    const genericOptions = (!current || genericPlatformOptions.some((option) => option.value === current))
+      ? genericPlatformOptions
       : [
-        ...SITE_PLATFORM_OPTIONS,
+        ...genericPlatformOptions,
         { value: current, label: `${current}（当前值）` },
       ];
-    const presetOptions = initializationPresetOptions.map((preset) => ({
-      value: `preset:${preset.id}`,
-      label: preset.label,
-      description: [
-        preset.defaultUrl ? '自动填充官方地址' : '',
-        preset.recommendedSkipModelFetch ? 'API Key 优先初始化' : '',
-      ].filter(Boolean).join(' · '),
+    const oauthOptions = oauthProviders.map((provider) => ({
+      value: provider.platform,
+      label: `${provider.label} OAuth`,
+      description: provider.requiresProjectId
+        ? 'OAuth 登录，需 Google Cloud Project ID；官方地址自动配置'
+        : 'OAuth 登录；官方地址自动配置',
     }));
     return [
       genericOptions[0]!,
-      ...presetOptions,
+      { value: '__api_group__', label: 'API / 聚合平台', disabled: true },
       ...genericOptions.slice(1),
+      { value: '__oauth_group__', label: 'OAuth / CLI 平台', disabled: true },
+      ...oauthOptions,
     ];
-  }, [form.platform, initializationPresetOptions]);
-  const activeInitializationPreset = selectedInitializationPreset;
-  const platformSelectValue = selectedInitializationPreset ? `preset:${selectedInitializationPreset.id}` : form.platform;
+  }, [normalizedFormPlatform, oauthProviders]);
+  const selectedOauthProvider = useMemo(
+    () => oauthProviders.find((provider) => provider.platform === normalizedFormPlatform) || null,
+    [normalizedFormPlatform, oauthProviders],
+  );
+  const platformSelectValue = form.platform;
 
   useEffect(() => {
     return () => {
@@ -420,7 +436,7 @@ export default function Sites() {
   };
 
   const handleAddDisabledModel = () => {
-    const model = disabledModelInput.trim();
+    const model = String(disabledModelInput ?? '').trim();
     if (!model) return;
     if (disabledModels.includes(model)) {
       toast.info(`模型 "${model}" 已在禁用列表中`);
@@ -456,12 +472,12 @@ export default function Sites() {
     try {
       await api.updateSite(editor.editingSiteId, {
         postRefreshProbeEnabled: probeEnabled,
-        postRefreshProbeModel: probeModel.trim(),
+        postRefreshProbeModel: String(probeModel ?? '').trim(),
         postRefreshProbeScope: probeScope,
         postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0),
       });
       setSites((prev) => prev.map((s) => s.id === editor.editingSiteId
-        ? { ...s, postRefreshProbeEnabled: probeEnabled, postRefreshProbeModel: probeModel.trim(), postRefreshProbeScope: probeScope, postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0) }
+        ? { ...s, postRefreshProbeEnabled: probeEnabled, postRefreshProbeModel: String(probeModel ?? '').trim(), postRefreshProbeScope: probeScope, postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0) }
         : s,
       ));
       toast.success('刷新后探测设置已保存');
@@ -490,7 +506,7 @@ export default function Sites() {
     try {
       const token = getAuthToken(localStorage);
       const params = new URLSearchParams({ scope: probeScope });
-      if (probeScope === 'single' && probeModel.trim()) params.set('modelName', probeModel.trim());
+      if (probeScope === 'single' && String(probeModel ?? '').trim()) params.set('modelName', String(probeModel ?? '').trim());
       const threshold = parseInt(probeLatencyThreshold, 10);
       if (Number.isFinite(threshold) && threshold > 0) params.set('latencyThresholdMs', String(threshold));
 
@@ -626,24 +642,30 @@ export default function Sites() {
     }
 
     const payload = {
-      name: form.name.trim(),
-      url: primarySiteUrlAnalysis.persistedUrl || form.url.trim(),
-      platform: form.platform.trim(),
+      name: String(form.name ?? '').trim(),
+      url: primarySiteUrlAnalysis.persistedUrl || String(form.url ?? '').trim(),
+      platform: normalizedFormPlatform,
       initializationPresetId: selectedInitializationPresetId,
-      proxyUrl: form.proxyUrl.trim(),
-      apiEndpoints: serializedApiEndpoints.apiEndpoints,
-      customHeaders: serializedCustomHeaders.customHeaders,
-      customHeadersOverrideRequestHeaders: !!form.customHeadersOverrideRequestHeaders,
-      paramOverride: form.paramOverride.trim() || null,
+      proxyUrl: String(form.proxyUrl ?? '').trim(),
+      apiEndpoints: selectedOauthProvider ? [] : serializedApiEndpoints.apiEndpoints,
+      customHeaders: selectedOauthProvider ? '' : serializedCustomHeaders.customHeaders,
+      customHeadersOverrideRequestHeaders: selectedOauthProvider ? false : !!form.customHeadersOverrideRequestHeaders,
+      paramOverride: selectedOauthProvider ? null : (String(form.paramOverride ?? '').trim() || null),
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
-      protocolProfile: JSON.stringify(form.protocolProfile),
+      protocolProfile: selectedOauthProvider
+        ? JSON.stringify({ preferResponses: false, requireCodexClient: false, credentialMode: 'auto' })
+        : JSON.stringify(form.protocolProfile),
       postRefreshProbeEnabled: probeEnabled,
-      postRefreshProbeModel: probeModel.trim(),
+      postRefreshProbeModel: String(probeModel ?? '').trim(),
       postRefreshProbeScope: probeScope,
       postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0),
     };
     if (!payload.name || !payload.url) {
       toast.error('请填写站点名称和 URL');
+      return;
+    }
+    if (editor.mode === 'add' && !payload.platform) {
+      toast.error('无法自动识别站点类型，请手动选择站点类型后再保存');
       return;
     }
 
@@ -653,12 +675,12 @@ export default function Sites() {
       if (action.kind === 'add') {
         const created = await api.addSite(action.payload);
         toast.success(`站点 "${payload.name}" 已添加`);
+        const createdUrl = typeof created?.url === 'string' ? created.url.trim() : '';
         if (
           primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix'
-          && typeof created?.url === 'string'
-          && created.url.trim()
+          && createdUrl
         ) {
-          toast.info(`已自动规范化主站点 URL 为 ${created.url.trim()}`);
+          toast.info(`已自动规范化主站点 URL 为 ${createdUrl}`);
         }
         const createdSiteId = Number(created?.id) || 0;
         if (createdSiteId > 0) {
@@ -679,12 +701,12 @@ export default function Sites() {
       } else {
         const updated = await api.updateSite(action.id, action.payload);
         toast.success(`站点 "${payload.name}" 已更新`);
+        const updatedUrl = typeof updated?.url === 'string' ? updated.url.trim() : '';
         if (
           primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix'
-          && typeof updated?.url === 'string'
-          && updated.url.trim()
+          && updatedUrl
         ) {
-          toast.info(`已自动规范化主站点 URL 为 ${updated.url.trim()}`);
+          toast.info(`已自动规范化主站点 URL 为 ${updatedUrl}`);
         }
       }
       closeEditor();
@@ -776,15 +798,15 @@ export default function Sites() {
     initializationPresetId?: string | null;
     choice: 'session' | 'apikey';
   }) => {
-    const platform = input.platform?.toLowerCase().trim();
+    const platform = String(input.platform ?? '').toLowerCase().trim();
     const params = buildSiteConnectionSearchParams({
       siteId: input.siteId,
       initializationPresetId: input.initializationPresetId,
     });
 
     if (input.choice === 'session') {
-      if (platform === 'codex') {
-        params.set('provider', 'codex');
+      if (platform === 'codex' || platform === 'claude' || platform === 'gemini-cli' || platform === 'antigravity') {
+        params.set('provider', platform);
         navigate(`/oauth?${params.toString()}`);
         return;
       }
@@ -815,8 +837,8 @@ export default function Sites() {
   };
 
   const handleDetect = async () => {
-    const requestedUrl = form.url.trim();
-    const requestedPlatform = form.platform.trim();
+    const requestedUrl = String(form.url ?? '').trim();
+    const requestedPlatform = normalizedFormPlatform;
     const requestedInitializationPresetId = selectedInitializationPresetId;
     if (!requestedUrl) {
       toast.error('请先输入 URL');
@@ -827,8 +849,8 @@ export default function Sites() {
     try {
       const result = await api.detectSite(requestedUrl);
       if (
-        latestPrimarySiteUrlRef.current.trim() !== requestedUrl
-        || latestPlatformRef.current.trim() !== requestedPlatform
+        String(latestPrimarySiteUrlRef.current ?? '').trim() !== requestedUrl
+        || String(latestPlatformRef.current ?? '').trim() !== requestedPlatform
         || latestInitializationPresetIdRef.current !== requestedInitializationPresetId
       ) {
         return;
@@ -840,8 +862,8 @@ export default function Sites() {
           platform: result.platform,
           url: requestedPrimarySiteUrl.action === 'auto_strip_known_api_suffix'
             && typeof result?.url === 'string'
-            && result.url.trim()
-            ? result.url.trim()
+            && String(result.url).trim()
+            ? String(result.url).trim()
             : prev.url,
         }));
         setSelectedInitializationPresetId((current) => {
@@ -853,9 +875,9 @@ export default function Sites() {
         if (
           requestedPrimarySiteUrl.action === 'auto_strip_known_api_suffix'
           && typeof result?.url === 'string'
-          && result.url.trim()
+            && String(result.url).trim()
         ) {
-          toast.info(`已自动规范化主站点 URL 为 ${result.url.trim()}`);
+          toast.info(`已自动规范化主站点 URL 为 ${String(result.url).trim()}`);
         }
         toast.success(
           detectedPreset
@@ -1092,6 +1114,7 @@ export default function Sites() {
           siteName={createdSiteForChoice.name}
           initialSegment={resolveInitialConnectionSegment(createdSiteForChoice.platform)}
           sessionLabel={resolveSiteCreatedSessionLabel(createdSiteForChoice.platform)}
+          oauthOnly={['codex', 'claude', 'gemini-cli', 'antigravity'].includes(String(createdSiteForChoice.platform || '').trim().toLowerCase())}
           onChoice={handleSiteCreatedChoice}
           onClose={() => {
             setCreatedSiteForChoice(null);
@@ -1125,7 +1148,7 @@ export default function Sites() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !form.name.trim() || !form.url.trim()}
+                disabled={saving || !String(form.name ?? '').trim() || !String(form.url ?? '').trim()}
                 className="btn btn-primary"
               >
                 {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : (isEditing ? '保存修改' : '保存站点')}
@@ -1140,34 +1163,36 @@ export default function Sites() {
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               style={formInputStyle}
             />
-            <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row' }}>
-              <input
-                data-testid="site-primary-url-input"
-                placeholder="准确主站点 URL（面板/登录/签到地址，如 https://nih.cc）"
-                value={form.url}
-                onChange={(e) => setForm((prev) => ({ ...prev, url: e.target.value }))}
-                onBlur={() => {
-                  if (form.url.trim() && !form.platform.trim()) {
-                    handleDetect();
-                  }
-                }}
-                style={{ ...formInputStyle, flex: 1 }}
-              />
-              <button
-                onClick={handleDetect}
-                disabled={detecting || !form.url.trim()}
-                className="btn btn-ghost"
-                style={{ padding: '10px 14px', minWidth: 96, border: '1px solid var(--color-border)' }}
-              >
-                {detecting ? <><span className="spinner spinner-sm" /> 检测中</> : '自动检测'}
-              </button>
-            </div>
+            {!selectedOauthProvider && (
+              <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row' }}>
+                <input
+                  data-testid="site-primary-url-input"
+                  placeholder="准确主站点 URL（面板/登录/签到地址，如 https://nih.cc）"
+                  value={form.url}
+                  onChange={(e) => setForm((prev) => ({ ...prev, url: e.target.value }))}
+                  onBlur={() => {
+                    if (String(form.url ?? '').trim() && !normalizedFormPlatform) {
+                      handleDetect();
+                    }
+                  }}
+                  style={{ ...formInputStyle, flex: 1 }}
+                />
+                <button
+                  onClick={handleDetect}
+                  disabled={detecting || !String(form.url ?? '').trim()}
+                  className="btn btn-ghost"
+                  style={{ padding: '10px 14px', minWidth: 96, border: '1px solid var(--color-border)' }}
+                >
+                  {detecting ? <><span className="spinner spinner-sm" /> 检测中</> : '自动检测'}
+                </button>
+              </div>
+            )}
             <div
               style={{
-                border: `1px solid ${form.platform.trim() ? 'color-mix(in srgb, var(--color-primary) 28%, var(--color-border))' : 'var(--color-border)'}`,
+                border: `1px solid ${normalizedFormPlatform ? 'color-mix(in srgb, var(--color-primary) 28%, var(--color-border))' : 'var(--color-border)'}`,
                 borderRadius: 'var(--radius-sm)',
                 background: 'var(--color-bg)',
-                boxShadow: form.platform.trim() ? '0 0 0 2px color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'none',
+                boxShadow: normalizedFormPlatform ? '0 0 0 2px color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'none',
                 transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
               }}
             >
@@ -1175,14 +1200,29 @@ export default function Sites() {
                 data-testid="site-platform-select"
                 value={platformSelectValue}
                 onChange={(value) => {
+                  const oauthProvider = oauthProviders.find((provider) => provider.platform === value);
+                  if (oauthProvider) {
+                    setSelectedInitializationPresetId(null);
+                    setForm((prev) => ({
+                      ...prev,
+                      platform: oauthProvider.platform,
+                      url: oauthProvider.siteUrl,
+                      apiEndpoints: [],
+                      customHeaders: [],
+                      customHeadersOverrideRequestHeaders: false,
+                      paramOverride: '',
+                      protocolProfile: { preferResponses: false, requireCodexClient: false, credentialMode: 'auto' },
+                    }));
+                    return;
+                  }
                   if (value.startsWith('preset:')) {
                     const preset = getSiteInitializationPreset(value.slice('preset:'.length));
                     if (!preset) return;
                     setSelectedInitializationPresetId(preset.id);
                     setForm((prev) => {
-                      const currentUrl = prev.url.trim();
+                      const currentUrl = String(prev.url ?? '').trim();
                       const shouldFillDefaultUrl = !currentUrl
-                        || (activeInitializationPreset?.defaultUrl && currentUrl === activeInitializationPreset.defaultUrl);
+                        || (selectedInitializationPreset?.defaultUrl && currentUrl === selectedInitializationPreset.defaultUrl);
                       return {
                         ...prev,
                         platform: preset.platform,
@@ -1191,7 +1231,20 @@ export default function Sites() {
                     });
                     return;
                   }
-                  setForm((prev) => ({ ...prev, platform: value }));
+                  setForm((prev) => ({
+                    ...prev,
+                    platform: value,
+                    ...(oauthProviders.some((provider) => provider.platform === value)
+                      ? {
+                        url: oauthProviders.find((provider) => provider.platform === value)?.siteUrl || prev.url,
+                        apiEndpoints: [],
+                        customHeaders: [],
+                        customHeadersOverrideRequestHeaders: false,
+                        paramOverride: '',
+                        protocolProfile: { preferResponses: false, requireCodexClient: false, credentialMode: 'auto' },
+                      }
+                      : {}),
+                  }));
                   setSelectedInitializationPresetId(null);
                 }}
                 options={platformOptions}
@@ -1199,20 +1252,10 @@ export default function Sites() {
               />
             </div>
           </ResponsiveFormGrid>
-          {activeInitializationPreset && (
-            <div className="alert alert-info animate-scale-in">
-              <div className="alert-title">已应用官方预设 · {activeInitializationPreset.label}</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                <div>{activeInitializationPreset.description}</div>
-                {form.url.trim() === activeInitializationPreset.defaultUrl && (
-                  <div>当前已自动填入官方地址；如需走自建网关，也可以直接改 URL。</div>
-                )}
-                <div>推荐模型：{activeInitializationPreset.recommendedModels.join(' / ')}</div>
-              </div>
-            </div>
-          )}
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-            请填写准确的主站点 URL。这里填写主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径直接填到主站点 URL；如果 API 请求地址和主站点不同，请在下面的 API 请求地址池里填写。
+            {selectedOauthProvider
+              ? '该平台使用 OAuth 授权，官方连接地址已自动配置。'
+              : '请填写准确的主站点 URL。这里填写主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径直接填到主站点 URL；如果 API 请求地址和主站点不同，请在下面的 API 请求地址池里填写。'}
           </div>
           {primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix' && primarySiteUrlAnalysis.persistedUrl ? (
             <div className="alert alert-info animate-scale-in">
@@ -1240,7 +1283,7 @@ export default function Sites() {
           ) : null}
           <div
             style={{
-              display: 'flex',
+              display: selectedOauthProvider ? 'none' : 'flex',
               flexDirection: 'column',
               gap: 10,
               padding: 12,
@@ -1331,7 +1374,7 @@ export default function Sites() {
           </div>
           <div
             style={{
-              display: 'flex',
+              display: selectedOauthProvider ? 'none' : 'flex',
               flexDirection: 'column',
               gap: 10,
               padding: 12,
@@ -1557,7 +1600,7 @@ export default function Sites() {
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
+          <div style={{ display: selectedOauthProvider ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
             <div style={{ padding: 14, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'color-mix(in srgb, var(--color-surface) 82%, transparent)' }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>请求体参数覆盖（paramOverride）</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>

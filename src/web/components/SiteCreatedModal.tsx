@@ -6,6 +6,7 @@ type Props = {
   siteName: string;
   initialSegment?: 'session' | 'apikey';
   sessionLabel?: string;
+  oauthOnly?: boolean;
   onChoice: (choice: NextStepChoice) => void;
   onClose: () => void;
 };
@@ -14,6 +15,7 @@ export default function SiteCreatedModal({
   siteName,
   initialSegment = 'session',
   sessionLabel = '添加账号（用户名密码登录）',
+  oauthOnly = false,
   onChoice,
   onClose,
 }: Props) {
@@ -54,13 +56,15 @@ export default function SiteCreatedModal({
           <button onClick={() => onChoice('later')} className="btn btn-ghost">
             稍后配置
           </button>
-          <button
-            onClick={() => onChoice(secondaryAction.choice)}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
-          >
-            {secondaryAction.label}
-          </button>
+          {!oauthOnly && (
+            <button
+              onClick={() => onChoice(secondaryAction.choice)}
+              className="btn btn-ghost"
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              {secondaryAction.label}
+            </button>
+          )}
           <button
             onClick={() => onChoice(primaryAction.choice)}
             className="btn btn-primary"
