@@ -60,10 +60,11 @@ function aggregateProxyLogRetries(
   const groups = new Map<string, import('../api.js').ProxyLogListItem[]>();
   const singles: import('../api.js').ProxyLogListItem[] = [];
   for (const item of items) {
-    if (item.requestTraceId) {
-      const list = groups.get(item.requestTraceId) || [];
+    if (item.requestTraceId && item.siteId != null) {
+      const groupKey = `${item.requestTraceId}:site:${item.siteId}`;
+      const list = groups.get(groupKey) || [];
       list.push(item);
-      groups.set(item.requestTraceId, list);
+      groups.set(groupKey, list);
     } else {
       singles.push(item);
     }
