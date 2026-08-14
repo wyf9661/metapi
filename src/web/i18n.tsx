@@ -496,8 +496,16 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const observer = new MutationObserver((records) => {
-      for (const record of records) {
+    let pendingRecords: MutationRecord[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let disposed = false;
+
+    const flushPendingRecords = () => {
+      flushTimer = null;
+      if (disposed) return;
+      const recordsToProcess = pendingRecords;
+      pendingRecords = [];
+      for (const record of recordsToProcess) {
         if (record.type === 'characterData') {
           processTextNode(record.target as Text);
           continue;
@@ -514,6 +522,19 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
+    };
+
+    const scheduleFlush = (records: MutationRecord[]) => {
+      pendingRecords.push(...records);
+      if (flushTimer !== null) return;
+      // Coalesce bursts from React renders and frequently refreshed log pages.
+      // A short timer keeps translation out of the MutationObserver callback and
+      // prevents one recursive walk per DOM mutation.
+      flushTimer = setTimeout(flushPendingRecords, 0);
+    };
+
+    const observer = new MutationObserver((records) => {
+      scheduleFlush(records);
     });
 
     observer.observe(root, {
@@ -525,6 +546,9 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
+      disposed = true;
+      if (flushTimer !== null) clearTimeout(flushTimer);
+      pendingRecords = [];
       observer.disconnect();
     };
   }, [language]);
