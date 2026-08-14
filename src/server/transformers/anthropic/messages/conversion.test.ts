@@ -423,6 +423,30 @@ describe('convertOpenAiBodyToAnthropicMessagesBody', () => {
     ]);
   });
 
+  it('drops top-level reasoning_content when no valid Anthropic signature is present', () => {
+    const body = convertOpenAiBodyToAnthropicMessagesBody(
+      {
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'assistant',
+            content: 'final answer',
+            reasoning_content: 'internal reasoning without a provider signature',
+          },
+        ],
+      },
+      'claude-opus-4-6',
+      false,
+    );
+
+    expect(body.messages).toEqual([
+      {
+        role: 'assistant',
+        content: 'final answer',
+      },
+    ]);
+  });
+
   it('preserves top-level reasoning_signature when rebuilding assistant thinking blocks for messages fallback', () => {
     const body = convertOpenAiBodyToAnthropicMessagesBody(
       {

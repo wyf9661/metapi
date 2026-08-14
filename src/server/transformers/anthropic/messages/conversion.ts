@@ -912,12 +912,17 @@ export function convertOpenAiBodyToAnthropicMessagesBody(
     if (role !== 'assistant') return;
 
     const contentBlocks = convertOpenAiContentToAnthropicBlocks(item.content);
-    const reasoningCarrier = sanitizeAnthropicContentBlock({
-      type: 'thinking',
-      thinking: asTrimmedString(item.reasoning_content ?? item.reasoning),
+    const reasoningSignature = resolveAnthropicThinkingSignature({
       reasoning_signature: item.reasoning_signature,
       signature: item.signature,
     });
+    const reasoningCarrier = reasoningSignature
+      ? sanitizeAnthropicContentBlock({
+        type: 'thinking',
+        thinking: asTrimmedString(item.reasoning_content ?? item.reasoning),
+        signature: reasoningSignature,
+      })
+      : null;
     if (reasoningCarrier) {
       contentBlocks.unshift(reasoningCarrier);
     }
