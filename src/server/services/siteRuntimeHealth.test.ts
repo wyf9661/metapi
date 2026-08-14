@@ -92,11 +92,13 @@ describe('siteRuntimeHealth', () => {
     const waf = { status: 403, errorText: 'Your request was blocked. Error code: 1010' };
 
     applyRuntimeHealthFailure(state, waf, now);
-    expect(isRuntimeHealthBreakerOpen(state, now)).toBe(false);
+    expect(isRuntimeHealthBreakerOpen(state, now)).toBe(true);
+    expect(state.breakerLevel).toBe(SITE_WAF_BREAKER_LEVEL);
+    expect(state.breakerUntilMs).toBe(now + SITE_WAF_BREAKER_TTL_MS);
 
     applyRuntimeHealthFailure(state, waf, now + 1_000);
     expect(isRuntimeHealthBreakerOpen(state, now + 1_000)).toBe(true);
-    expect(state.breakerLevel).toBe(SITE_WAF_BREAKER_LEVEL);
+    expect(state.breakerLevel).toBeGreaterThanOrEqual(SITE_WAF_BREAKER_LEVEL);
     expect(state.breakerUntilMs).toBe(now + 1_000 + SITE_WAF_BREAKER_TTL_MS);
     expect(SITE_WAF_BREAKER_TTL_MS).toBe(10 * 60_000);
 

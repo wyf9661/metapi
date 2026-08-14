@@ -38,8 +38,8 @@ export const SITE_RUNTIME_LATENCY_WINDOW_MS = 30_000;
 export const SITE_RUNTIME_MAX_LATENCY_PENALTY = 0.35;
 export const SITE_RUNTIME_LATENCY_EMA_ALPHA = 0.3;
 export const SITE_RUNTIME_BREAKER_STREAK_THRESHOLD = 3;
-/** WAF 403 is sticky enough that two hits within the streak window should short-circuit the site+model. */
-export const SITE_WAF_BREAKER_STREAK_THRESHOLD = 2;
+/** WAF 403 is sticky enough that one hit should short-circuit the site+model. */
+export const SITE_WAF_BREAKER_STREAK_THRESHOLD = 1;
 export const SITE_TRANSIENT_STREAK_WINDOW_MS = 5 * 60 * 1000;
 /** First WAF model breaker level (metadata only; duration uses SITE_WAF_BREAKER_TTL_MS). */
 export const SITE_WAF_BREAKER_LEVEL = 2;
