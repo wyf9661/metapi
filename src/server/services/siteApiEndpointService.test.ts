@@ -14,6 +14,7 @@ describe('siteApiEndpointService', () => {
   let recordSiteApiEndpointFailure: SiteApiEndpointServiceModule['recordSiteApiEndpointFailure'];
   let recordSiteApiEndpointSuccess: SiteApiEndpointServiceModule['recordSiteApiEndpointSuccess'];
   let recordSiteApiEndpointSuccessByBaseUrl: SiteApiEndpointServiceModule['recordSiteApiEndpointSuccessByBaseUrl'];
+  let classifySiteApiEndpointFailure: SiteApiEndpointServiceModule['classifySiteApiEndpointFailure'];
   let dataDir = '';
 
   beforeAll(async () => {
@@ -30,6 +31,7 @@ describe('siteApiEndpointService', () => {
     recordSiteApiEndpointFailure = serviceModule.recordSiteApiEndpointFailure;
     recordSiteApiEndpointSuccess = serviceModule.recordSiteApiEndpointSuccess;
     recordSiteApiEndpointSuccessByBaseUrl = serviceModule.recordSiteApiEndpointSuccessByBaseUrl;
+    classifySiteApiEndpointFailure = serviceModule.classifySiteApiEndpointFailure;
   });
 
   beforeEach(async () => {
@@ -222,6 +224,28 @@ describe('siteApiEndpointService', () => {
       endpoint: expect.objectContaining({
         cooldownUntil: '2026-03-31T12:05:00.000Z',
       }),
+    });
+  });
+
+  it('treats a WAF block as retryable endpoint rotation without protocol blocking', () => {
+    expect(classifySiteApiEndpointFailure({
+      status: 403,
+      message: 'Your request was blocked. Error code: 1010',
+    })).toEqual({
+      retryable: true,
+      rotateToNextEndpoint: true,
+      failureReason: 'HTTP 403: Your request was blocked. Error code: 1010',
+    });
+  });
+
+  it('keeps ordinary credential 403 failures non-retryable', () => {
+    expect(classifySiteApiEndpointFailure({
+      status: 403,
+      message: 'Invalid API key',
+    })).toEqual({
+      retryable: false,
+      rotateToNextEndpoint: false,
+      failureReason: 'HTTP 403: Invalid API key',
     });
   });
 

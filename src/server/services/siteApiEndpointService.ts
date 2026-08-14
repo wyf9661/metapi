@@ -1,6 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { RETRYABLE_TIMEOUT_PATTERNS } from './proxyRetryPolicy.js';
+import { isWafBlockedRuntimeFailure as isWafBlockFailure } from './siteFailureClassification.js';
 
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 const NON_RETRYABLE_STATUS_CODES = new Set([400, 401, 403, 404, 422]);
@@ -134,6 +135,11 @@ export function classifySiteApiEndpointFailure(
   const failureReason = formatFailureReason(status, message);
 
   if (status !== null) {
+    if (isWafBlockFailure({ status, errorText: message })) {
+      // WAF blocks may be path-specific. Rotate to another configured endpoint,
+      // but do not record the protocol as unsupported in endpoint runtime memory.
+      return { retryable: true, rotateToNextEndpoint: true, failureReason };
+    }
     if (RETRYABLE_STATUS_CODES.has(status)) {
       return { retryable: true, rotateToNextEndpoint: true, failureReason };
     }
