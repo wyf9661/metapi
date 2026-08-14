@@ -140,6 +140,11 @@ export const SITE_MODEL_FAILURE_PATTERNS: RegExp[] = [
   /model.*does\s+not\s+exist/i,
   /当前\s*api\s*不支持所选模型/i,
   /不支持所选模型/i,
+  // NewAPI/OneAPI group-capacity wording: "Model \"X\" is not supported by
+  // any configured account in this group" — the quoted model name sits
+  // between "model" and "not supported", so the plain adjacency pattern
+  // above cannot match it.
+  /is\s+not\s+supported\s+by\s+any/i,
 ];
 
 export const SITE_VALIDATION_FAILURE_PATTERNS: RegExp[] = [

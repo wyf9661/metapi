@@ -30,8 +30,19 @@ describe('siteFailureClassification', () => {
   it('classifies model / protocol / validation failures', () => {
     expect(isModelScopedRuntimeFailure({ errorText: 'unsupported model' })).toBe(true);
     expect(isModelScopedRuntimeFailure({ errorText: '不支持所选模型' })).toBe(true);
+    expect(isModelScopedRuntimeFailure({ errorText: 'Model "gpt-5.6-luna" is not supported by any configured account in this group' })).toBe(true);
     expect(isProtocolRuntimeFailure({ errorText: 'please use /v1/responses' })).toBe(true);
     expect(isValidationRuntimeFailure({ errorText: 'invalid request body' })).toBe(true);
+  });
+
+  it('classifies group-capacity 404 as model_unsupported with channel_model cooldown', () => {
+    const decision = classifyProxyFailure({
+      status: 404,
+      errorText: 'Model "gpt-5.6-luna" is not supported by any configured account in this group',
+    });
+    expect(decision.class).toBe('model_unsupported');
+    expect(decision.cooldownScope).toBe('channel_model');
+    expect(decision.retryChannel).toBe(true);
   });
 
   it('resolveSiteRuntimeFailurePenalty ranks transient 5xx highest', () => {
