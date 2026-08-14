@@ -1158,6 +1158,7 @@ export default function Sites() {
         >
           <ResponsiveFormGrid>
             <input
+              aria-label="站点名称"
               placeholder="站点名称"
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -1166,6 +1167,7 @@ export default function Sites() {
             {!selectedOauthProvider && (
               <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row' }}>
                 <input
+                  aria-label="主站点 URL"
                   data-testid="site-primary-url-input"
                   placeholder="准确主站点 URL（面板/登录/签到地址，如 https://nih.cc）"
                   value={form.url}
@@ -1407,12 +1409,14 @@ export default function Sites() {
                 }}
               >
                 <input
+                  aria-label={`自定义请求头 ${index + 1} 名称`}
                   placeholder="Header 名称"
                   value={header.key}
                   onChange={(e) => updateCustomHeaderRow(index, 'key', e.target.value)}
                   style={{ ...formInputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}
                 />
                 <input
+                  aria-label={`自定义请求头 ${index + 1} 值`}
                   placeholder="Header 值"
                   value={header.value}
                   onChange={(e) => updateCustomHeaderRow(index, 'value', e.target.value)}

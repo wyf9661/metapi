@@ -119,7 +119,7 @@ describe('accounts api today reward fallback', () => {
       reward: '1.8',
       createdAt: new Date().toISOString(),
     }).run();
-    await repairStoredCreatedAtValues();
+    await repairStoredCreatedAtValues(new Date(), { force: true });
 
     const response = await app.inject({
       method: 'GET',
@@ -263,7 +263,7 @@ describe('accounts api today reward fallback', () => {
       estimatedCost: 2.25,
       createdAt: inRangeIso,
     }).run();
-    await repairStoredCreatedAtValues();
+    await repairStoredCreatedAtValues(new Date(), { force: true });
 
     const response = await app.inject({
       method: 'GET',

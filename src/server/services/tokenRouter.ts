@@ -1,4 +1,4 @@
-﻿import { and, eq, inArray, isNull } from 'drizzle-orm';
+﻿import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import {
   config,
@@ -1767,6 +1767,8 @@ export class TokenRouter {
     await ensureSiteRuntimeHealthStateLoaded();
     const runtimeHealthRows = await db.select({
       siteId: schema.accounts.siteId,
+      accountId: schema.routeChannels.accountId,
+      tokenId: schema.routeChannels.tokenId,
       sourceModel: schema.routeChannels.sourceModel,
       routeModelPattern: schema.tokenRoutes.modelPattern,
     }).from(schema.routeChannels)
@@ -1782,6 +1784,44 @@ export class TokenRouter {
       cooldownLevel: 0,
       cooldownUntil: null,
     }).where(inArray(schema.routeChannels.id, normalizedChannelIds)).run();
+
+    // Manual cooldown clearing means "allow a fresh attempt", not "proven
+    // healthy". Reset only matching false connectivity evidence to unknown so
+    // the channel can re-enter selection without fabricating a successful probe.
+    const accountModels = new Map<number, Set<string>>();
+    const tokenModels = new Map<number, Set<string>>();
+    for (const row of runtimeHealthRows) {
+      const modelNames = [row.sourceModel, row.routeModelPattern]
+        .map((value) => String(value || '').trim())
+        .filter((value) => value && !value.toLowerCase().startsWith('re:') && !/[?*]/.test(value));
+      if (modelNames.length === 0) continue;
+      if (!accountModels.has(row.accountId)) accountModels.set(row.accountId, new Set());
+      for (const modelName of modelNames) accountModels.get(row.accountId)!.add(modelName);
+      if (typeof row.tokenId === 'number' && row.tokenId > 0) {
+        if (!tokenModels.has(row.tokenId)) tokenModels.set(row.tokenId, new Set());
+        for (const modelName of modelNames) tokenModels.get(row.tokenId)!.add(modelName);
+      }
+    }
+    for (const [accountId, modelNames] of accountModels) {
+      await db.update(schema.modelAvailability)
+        .set({ connectivity: null })
+        .where(and(
+          eq(schema.modelAvailability.accountId, accountId),
+          eq(schema.modelAvailability.connectivity, false),
+          inArray(sql<string>`lower(trim(${schema.modelAvailability.modelName}))`, [...modelNames].map((name) => name.toLowerCase())),
+        ))
+        .run();
+    }
+    for (const [tokenId, modelNames] of tokenModels) {
+      await db.update(schema.tokenModelAvailability)
+        .set({ connectivity: null })
+        .where(and(
+          eq(schema.tokenModelAvailability.tokenId, tokenId),
+          eq(schema.tokenModelAvailability.connectivity, false),
+          inArray(sql<string>`lower(trim(${schema.tokenModelAvailability.modelName}))`, [...modelNames].map((name) => name.toLowerCase())),
+        ))
+        .run();
+    }
 
     if (clearRuntimeHealthStatesForChannels(runtimeHealthRows)) {
       await persistSiteRuntimeHealthState();

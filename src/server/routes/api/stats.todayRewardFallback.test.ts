@@ -113,7 +113,7 @@ describe('stats dashboard today reward fallback', () => {
       reward: '3.6',
       createdAt: new Date().toISOString(),
     }).run();
-    await repairStoredCreatedAtValues();
+    await repairStoredCreatedAtValues(new Date(), { force: true });
 
     const response = await app.inject({
       method: 'GET',
@@ -199,7 +199,7 @@ describe('stats dashboard today reward fallback', () => {
       estimatedCost: 6.4,
       createdAt: inRangeIso,
     }).run();
-    await repairStoredCreatedAtValues();
+    await repairStoredCreatedAtValues(new Date(), { force: true });
 
     const response = await app.inject({
       method: 'GET',

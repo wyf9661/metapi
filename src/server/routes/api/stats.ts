@@ -546,22 +546,30 @@ export async function statsRoutes(app: FastifyInstance) {
       } | null;
     }>;
 
-    let totalQuery = db
+    // Keep count queries on proxy_logs alone unless a filter actually needs a
+    // related table. The previous unconditional joins made every unfiltered
+    // pagination count perform three needless PK lookups per log row.
+    let totalQuery: any = db
       .select({
         total: sql<number>`count(*)`,
       })
-      .from(schema.proxyLogs)
-      .leftJoin(
-        schema.accounts,
-        eq(schema.proxyLogs.accountId, schema.accounts.id),
-      )
-      .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-      .leftJoin(
+      .from(schema.proxyLogs);
+    if (siteId) {
+      totalQuery = totalQuery
+        .leftJoin(
+          schema.accounts,
+          eq(schema.proxyLogs.accountId, schema.accounts.id),
+        )
+        .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id));
+    }
+    if (search) {
+      totalQuery = totalQuery.leftJoin(
         schema.downstreamApiKeys,
         eq(schema.proxyLogs.downstreamApiKeyId, schema.downstreamApiKeys.id),
       );
+    }
     if (listWhere) {
-      totalQuery = totalQuery.where(listWhere) as typeof totalQuery;
+      totalQuery = totalQuery.where(listWhere);
     }
     const totalRow = await totalQuery.get();
 

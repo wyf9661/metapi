@@ -906,6 +906,56 @@ describe('TokenRouter selection scoring', () => {
     expect((recoveredCandidateB?.probability || 0)).toBeLessThan(70);
   });
 
+  it('resets false connectivity to unknown when channel failure state is manually cleared', async () => {
+    const route = await createRoute('gpt-*');
+    const site = await createSite('clear-connectivity');
+    const account = await createAccount(site.id, 'clear-connectivity-user');
+    const token = await createToken(account.id, 'clear-connectivity-token');
+    const channel = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      tokenId: token.id,
+      sourceModel: 'GPT-5.6-SOL',
+      enabled: true,
+    }).returning().get();
+
+    const accountAvailability = await db.insert(schema.modelAvailability).values({
+      accountId: account.id,
+      modelName: 'gpt-5.6-sol',
+      available: true,
+      connectivity: false,
+      checkedAt: new Date().toISOString(),
+    }).returning().get();
+    const tokenAvailability = await db.insert(schema.tokenModelAvailability).values({
+      tokenId: token.id,
+      modelName: 'gpt-5.6-sol',
+      available: true,
+      connectivity: false,
+      checkedAt: new Date().toISOString(),
+    }).returning().get();
+    const unrelatedAvailability = await db.insert(schema.modelAvailability).values({
+      accountId: account.id,
+      modelName: 'gpt-5.6-terra',
+      available: true,
+      connectivity: false,
+      checkedAt: new Date().toISOString(),
+    }).returning().get();
+
+    const router = new TokenRouter();
+    await router.clearChannelFailureState([channel.id]);
+
+    const refreshedAccount = await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.id, accountAvailability.id)).get();
+    const refreshedToken = await db.select().from(schema.tokenModelAvailability)
+      .where(eq(schema.tokenModelAvailability.id, tokenAvailability.id)).get();
+    const unrelated = await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.id, unrelatedAvailability.id)).get();
+
+    expect(refreshedAccount?.connectivity).toBeNull();
+    expect(refreshedToken?.connectivity).toBeNull();
+    expect(unrelated?.connectivity).toBe(false);
+  });
+
   it('does not open a site breaker for repeated timeout validation errors', async () => {
     config.routingWeights = {
       baseWeightFactor: 1,
