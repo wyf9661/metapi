@@ -33,6 +33,31 @@ import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService
 import { buildStartupSummaryLines } from './services/startupInfo.js';
 import { repairStoredCreatedAtValues } from './services/storedTimestampRepairService.js';
 import { migrateSiteApiKeysToAccounts } from './services/siteApiKeyMigrationService.js';
+
+function installProcessCrashHandlers(): void {
+  const crashLog = (kind: string, error: unknown) => {
+    const detail = error instanceof Error
+      ? `${error.name}: ${error.message}\n${error.stack || ''}`
+      : String(error);
+    console.error(`[process] unhandled ${kind}:\n${detail}`);
+  };
+
+  // An unhandled rejection is not necessarily fatal: log it so the failure is
+  // visible in the journal instead of being silently dropped by the runtime.
+  process.on('unhandledRejection', (reason) => {
+    crashLog('rejection', reason);
+  });
+
+  // An uncaught exception leaves the process in an undefined state. Log it and
+  // exit with a non-zero code so systemd/docker restarts the unit instead of
+  // serving traffic with a corrupted internal state.
+  process.on('uncaughtException', (error) => {
+    crashLog('exception', error);
+    process.exit(1);
+  });
+}
+
+installProcessCrashHandlers();
 import { ensureDefaultSitesSeeded } from './services/defaultSiteSeedService.js';
 import { ensureOauthIdentityBackfill } from './services/oauth/oauthIdentityBackfill.js';
 import { startOAuthLoopbackCallbackServers, stopOAuthLoopbackCallbackServers } from './services/oauth/localCallbackServer.js';
