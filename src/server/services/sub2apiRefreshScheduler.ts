@@ -1,6 +1,10 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { getSub2ApiAuthFromExtraConfig } from './accountExtraConfig.js';
+import {
+  getSub2ApiAuthFromExtraConfig,
+  mergeAccountExtraConfig,
+  resolveSub2ApiRefreshBackoffMs,
+} from './accountExtraConfig.js';
 import {
   isManagedSub2ApiTokenDue,
   isSub2ApiPlatform,
@@ -47,7 +51,29 @@ function shouldRefreshManagedSub2ApiAccount(input: {
   const managedAuth = getSub2ApiAuthFromExtraConfig(input.account.extraConfig);
   if (!managedAuth?.refreshToken || !managedAuth.tokenExpiresAt) return false;
 
+  // Skip accounts whose last refresh attempt failed within the backoff window.
+  // A persistent upstream failure (e.g. HTTP 405 on the refresh endpoint) must
+  // not turn the 60s scheduler into an infinite retry loop against the site.
+  if (typeof managedAuth.refreshRetryAtMs === 'number' && managedAuth.refreshRetryAtMs > input.nowMs) {
+    return false;
+  }
+
   return isManagedSub2ApiTokenDue(managedAuth.tokenExpiresAt, input.nowMs);
+}
+
+function buildBackoffExtraConfigPatch(currentExtraConfig: string | null, nowMs: number): Record<string, unknown> {
+  const managedAuth = getSub2ApiAuthFromExtraConfig(currentExtraConfig);
+  const previousFailCount = typeof managedAuth?.refreshFailCount === 'number' ? managedAuth.refreshFailCount : 0;
+  const failCount = previousFailCount + 1;
+  const backoffMs = resolveSub2ApiRefreshBackoffMs(failCount);
+  return {
+    sub2apiAuth: {
+      ...(managedAuth ? { refreshToken: managedAuth.refreshToken } : {}),
+      ...(managedAuth?.tokenExpiresAt != null ? { tokenExpiresAt: managedAuth.tokenExpiresAt } : {}),
+      refreshFailCount: failCount,
+      refreshRetryAtMs: nowMs + backoffMs,
+    },
+  };
 }
 
 export async function executeSub2ApiManagedRefreshPass(input: {
@@ -91,11 +117,35 @@ export async function executeSub2ApiManagedRefreshPass(input: {
           currentExtraConfig: row.accounts.extraConfig,
         });
         refreshedAccountIds.push(row.accounts.id);
+        // Refresh succeeded: clear any previously recorded failure backoff so a
+        // subsequent failure starts from a fresh backoff schedule.
+        const refreshedManagedAuth = getSub2ApiAuthFromExtraConfig(row.accounts.extraConfig);
+        if (refreshedManagedAuth?.refreshFailCount || refreshedManagedAuth?.refreshRetryAtMs) {
+          await db.update(schema.accounts).set({
+            extraConfig: mergeAccountExtraConfig(row.accounts.extraConfig, {
+              sub2apiAuth: {
+                refreshToken: refreshedManagedAuth.refreshToken,
+                ...(refreshedManagedAuth.tokenExpiresAt != null ? { tokenExpiresAt: refreshedManagedAuth.tokenExpiresAt } : {}),
+                refreshFailCount: 0,
+              },
+            }),
+            updatedAt: new Date().toISOString(),
+          }).where(eq(schema.accounts.id, row.accounts.id)).run();
+        }
       } catch (error) {
         failedAccountIds.push(row.accounts.id);
         console.warn(
           `[sub2api-refresh] failed to refresh account ${row.accounts.id}: ${(error as Error)?.message || 'unknown error'}`,
         );
+        // Persist the failure so the scheduler backs off instead of retrying
+        // every 60s against an endpoint that keeps rejecting the request.
+        await db.update(schema.accounts).set({
+          extraConfig: mergeAccountExtraConfig(
+            row.accounts.extraConfig,
+            buildBackoffExtraConfigPatch(row.accounts.extraConfig, nowMs),
+          ),
+          updatedAt: new Date().toISOString(),
+        }).where(eq(schema.accounts.id, row.accounts.id)).run();
       }
     }
   }));

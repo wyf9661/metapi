@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 
 const refreshSub2ApiManagedSessionSingleflightMock = vi.fn();
 
@@ -286,5 +287,88 @@ describe('sub2apiRefreshScheduler', () => {
       failed: 0,
       skipped: 1,
     });
+  });
+
+  it('backs off after a refresh failure and skips the account until the retry window elapses', async () => {
+    const nowMs = Date.parse('2026-04-06T02:00:00.000Z');
+    vi.setSystemTime(nowMs);
+
+    const activeSub2ApiSite = await db.insert(schema.sites).values({
+      name: 'sub2-backoff-site',
+      url: 'https://sub2-backoff.example.com',
+      platform: 'sub2api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: activeSub2ApiSite.id,
+      username: 'backoff@example.com',
+      accessToken: 'backoff-access-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: buildSub2ApiExtraConfig({
+        refreshToken: 'backoff-refresh-token',
+        tokenExpiresAt: nowMs - 1_000,
+      }),
+    }).returning().get();
+
+    refreshSub2ApiManagedSessionSingleflightMock.mockRejectedValue(new Error('HTTP 405'));
+
+    const firstResult = await executeSub2ApiManagedRefreshPass({ nowMs });
+    expect(firstResult.failedAccountIds).toEqual([account.id]);
+
+    const rowAfterFailure = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(rowAfterFailure?.extraConfig).toContain('refreshFailCount');
+    expect(rowAfterFailure?.extraConfig).toContain('refreshRetryAtMs');
+
+    // A second pass inside the backoff window must skip the account entirely.
+    const secondResult = await executeSub2ApiManagedRefreshPass({ nowMs: nowMs + 60_000 });
+    expect(secondResult.failedAccountIds).toEqual([]);
+    expect(secondResult.refreshedAccountIds).toEqual([]);
+    expect(refreshSub2ApiManagedSessionSingleflightMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the failure backoff after a successful refresh', async () => {
+    const nowMs = Date.parse('2026-04-06T02:00:00.000Z');
+    vi.setSystemTime(nowMs);
+
+    const activeSub2ApiSite = await db.insert(schema.sites).values({
+      name: 'sub2-backoff-clear-site',
+      url: 'https://sub2-backoff-clear.example.com',
+      platform: 'sub2api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: activeSub2ApiSite.id,
+      username: 'backoff-clear@example.com',
+      accessToken: 'backoff-clear-access-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        sub2apiAuth: {
+          refreshToken: 'backoff-clear-refresh-token',
+          tokenExpiresAt: nowMs - 1_000,
+          refreshFailCount: 3,
+          refreshRetryAtMs: nowMs - 60_000,
+        },
+      }),
+    }).returning().get();
+
+    refreshSub2ApiManagedSessionSingleflightMock.mockResolvedValue({
+      accessToken: 'refreshed-access-token',
+      extraConfig: buildSub2ApiExtraConfig({
+        refreshToken: 'refreshed-refresh-token',
+        tokenExpiresAt: nowMs + (60 * 60 * 1000),
+      }),
+    });
+
+    const result = await executeSub2ApiManagedRefreshPass({ nowMs });
+    expect(result.refreshedAccountIds).toEqual([account.id]);
+
+    const rowAfterSuccess = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(rowAfterSuccess?.extraConfig).not.toContain('refreshRetryAtMs');
+    expect(rowAfterSuccess?.extraConfig).toContain('refreshFailCount');
   });
 });
