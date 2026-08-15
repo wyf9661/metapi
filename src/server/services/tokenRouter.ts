@@ -31,6 +31,7 @@ import {
   rankContributionIndices,
   selectWeightedIndex,
 } from './tokenRouterProbability.js';
+import { selectWithBoundedGap, type BoundedGapState } from './boundedGapSelection.js';
 import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
@@ -131,6 +132,17 @@ const STABLE_FIRST_TRUSTED_RECENT_CONFIDENCE = 0.5;
 const STABLE_FIRST_TRUSTED_HISTORICAL_CALLS = 8;
 const STABLE_FIRST_OBSERVATION_REQUEST_INTERVAL = 24;
 const STABLE_FIRST_OBSERVATION_SITE_COOLDOWN_MS = 30 * 60 * 1000;
+
+const boundedGapStates = new Map<string, BoundedGapState>();
+
+function getBoundedGapState(requestedModel: string, siteId: number): BoundedGapState {
+  const key = `${requestedModel}\u0000${siteId}`;
+  const existing = boundedGapStates.get(key);
+  if (existing) return existing;
+  const state = { sequence: 0, lastSelectedSequence: null };
+  boundedGapStates.set(key, state);
+  return state;
+}
 
 function resolveConfiguredFailureCooldownMaxMs(): number {
   const normalized = normalizeTokenRouterFailureCooldownMaxSec(config.tokenRouterFailureCooldownMaxSec)
@@ -2100,18 +2112,25 @@ export class TokenRouter {
       const ranked = rankShadowCandidates(inputs);
       const active = ranked.candidates.filter((c) => !c.factors.exclusion && c.score > 0 && c.probability > 0);
       let selectedId = ranked.selectedChannelId;
-      // Probability-proportional selection: sample from ALL active candidates
-      // weighted by score. This ensures displayed probabilities match behavior.
+      // Probability-proportional selection with a bounded gap. Normal traffic
+      // remains score-weighted, but a healthy low-probability candidate that has
+      // reached ceil(1 / probability) calls since its last selection gets one
+      // real request before weighted sampling resumes.
       if (active.length > 1) {
-        const total = active.reduce((sum, row) => sum + row.score, 0);
-        let rand = Math.random() * total;
-        selectedId = active[active.length - 1]!.channelId;
+        const siteScores = new Map<number, number>();
         for (const row of active) {
-          rand -= row.score;
-          if (rand <= 0) {
-            selectedId = row.channelId;
-            break;
-          }
+          siteScores.set(row.siteId, (siteScores.get(row.siteId) ?? 0) + row.score);
+        }
+        const siteIds = [...siteScores.keys()];
+        const bounded = selectWithBoundedGap(
+          siteIds.map((siteId) => siteScores.get(siteId) ?? 0),
+          siteIds.map((siteId) => getBoundedGapState(requestedModel, siteId)),
+        );
+        if (bounded) {
+          const selectedSiteId = siteIds[bounded.selectedIndex];
+          selectedId = active
+            .filter((row) => row.siteId === selectedSiteId)
+            .sort((left, right) => right.score - left.score)[0]?.channelId ?? selectedId;
         }
       }
       const selected = candidates.find((c) => c.channel.id === selectedId) ?? candidates[0] ?? null;
