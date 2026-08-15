@@ -127,6 +127,15 @@ class MemoryOAuthSessionStore implements OAuthSessionStore {
 
 let oauthSessionStore: OAuthSessionStore = new MemoryOAuthSessionStore();
 
+// OAuth interaction sessions stay in-process on purpose. Persisting them would
+// require making the store async (it is deliberately sync today) and would
+// write the PKCE codeVerifier to the settings table in plaintext — a secret
+// that must not be persisted. Sessions live for SESSION_TTL_MS (10 minutes)
+// and are only needed while the user is mid-authorization; a restart losing
+// them simply means the user starts the flow again. Keep it memory-only.
+// If persistence is ever required, rework the interface to async and encrypt
+// the codeVerifier (AES-256-GCM) before storing.
+
 export function setOauthSessionStore(store: OAuthSessionStore) {
   oauthSessionStore = store;
 }
