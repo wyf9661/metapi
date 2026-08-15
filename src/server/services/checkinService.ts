@@ -329,7 +329,9 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
   };
 }
 
-export async function checkinAll(options?: { accountIds?: number[]; scheduleMode?: 'cron' | 'interval' }) {
+export async function checkinAll(
+  options?: { accountIds?: number[]; scheduleMode?: 'cron' | 'interval' },
+): Promise<CheckinTaskResultItem[]> {
   const rows = await db
     .select()
     .from(schema.accounts)
@@ -343,7 +345,7 @@ export async function checkinAll(options?: { accountIds?: number[]; scheduleMode
     .all();
 
   const scopedAccountIds = options?.accountIds ? new Set(options.accountIds) : null;
-  const results: Array<{ accountId: number; username: string | null; site: string; result: any }> = [];
+  const results: CheckinTaskResultItem[] = [];
 
   const grouped = new Map<number, typeof rows>();
   for (const row of rows) {
@@ -371,3 +373,23 @@ export async function checkinAll(options?: { accountIds?: number[]; scheduleMode
   await Promise.all(promises);
   return results;
 }
+
+/**
+ * One entry of the `checkinAll` result list. The `result` payload is a
+ * CheckinResult augmented by `checkinAccount` with `status`, `skipped`,
+ * `reason` and other site-specific fields.
+ */
+export type CheckinTaskResultItem = {
+  accountId: number;
+  username: string | null;
+  site: string;
+  result: {
+    success: boolean;
+    message?: string;
+    status?: string;
+    skipped?: boolean;
+    reason?: string;
+    reward?: string;
+    [key: string]: unknown;
+  };
+};

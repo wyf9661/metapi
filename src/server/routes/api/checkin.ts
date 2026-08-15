@@ -4,6 +4,7 @@ import { db, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
 import { eq, desc } from 'drizzle-orm';
 import { checkinAccount, checkinAll } from '../../services/checkinService.js';
+import type { CheckinTaskResultItem } from '../../services/checkinService.js';
 import { updateCheckinSchedule } from '../../services/checkinScheduler.js';
 import { startBackgroundTask, summarizeCheckinResults } from '../../services/backgroundTaskService.js';
 import { classifyFailureReason } from '../../services/failureReasonService.js';
@@ -11,20 +12,20 @@ import { normalizePageOffset, normalizePageSize } from './paginationNormalizers.
 
 const singleAccountCheckinInFlight = new Map<number, Promise<unknown>>();
 
-function buildCheckinAccountLabel(item: any): string {
+function buildCheckinAccountLabel(item: CheckinTaskResultItem): string {
   const username = item?.username || (item?.accountId ? `#${item.accountId}` : 'unknown');
   const site = item?.site || 'unknown-site';
   return `${username} @ ${site}`;
 }
 
-function buildCheckinReason(item: any): string {
+function buildCheckinReason(item: CheckinTaskResultItem): string {
   const message = String(item?.result?.message || '').trim();
   if (!message) return '';
   if (message.length <= 32) return message;
   return `${message.slice(0, 32)}...`;
 }
 
-function buildCheckinTaskDetailMessage(results: any[]): string {
+function buildCheckinTaskDetailMessage(results: CheckinTaskResultItem[]): string {
   if (!Array.isArray(results) || results.length === 0) return '';
 
   const successRows = results.filter((item) => {
@@ -42,7 +43,7 @@ function buildCheckinTaskDetailMessage(results: any[]): string {
     return !item?.result?.success;
   });
 
-  const renderRows = (rows: any[], withReason = false) => {
+  const renderRows = (rows: CheckinTaskResultItem[], withReason = false) => {
     const sliced = rows.slice(0, 12).map((item) => {
       const base = buildCheckinAccountLabel(item);
       if (!withReason) return base;

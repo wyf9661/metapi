@@ -753,7 +753,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
     return {
       clientOptions: buildProxyLogClientOptions(clientOptionRows),
-      downstreamKeys: downstreamKeyRows.map((row: any) => ({
+      downstreamKeys: downstreamKeyRows.map((row: { id: number; name: string | null; groupName: string | null }) => ({
         id: row.id,
         name: row.name || '',
         groupName: row.groupName || null,
