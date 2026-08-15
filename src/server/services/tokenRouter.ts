@@ -33,6 +33,11 @@ import {
 } from './tokenRouterProbability.js';
 import { selectWithBoundedGap, type BoundedGapState } from './boundedGapSelection.js';
 import {
+  attachBoundedGapStateMap,
+  ensureBoundedGapStatesLoaded,
+  markBoundedGapStateDirty,
+} from './boundedGapPersistence.js';
+import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
 } from './routeRoutingStrategy.js';
@@ -134,6 +139,7 @@ const STABLE_FIRST_OBSERVATION_REQUEST_INTERVAL = 24;
 const STABLE_FIRST_OBSERVATION_SITE_COOLDOWN_MS = 30 * 60 * 1000;
 
 const boundedGapStates = new Map<string, BoundedGapState>();
+attachBoundedGapStateMap(boundedGapStates);
 
 function getBoundedGapState(requestedModel: string, siteId: number): BoundedGapState {
   const key = `${requestedModel}\u0000${siteId}`;
@@ -845,6 +851,7 @@ export class TokenRouter {
   async selectChannel(requestedModel: string, downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY): Promise<SelectedChannel | null> {
     if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
     await ensureSiteRuntimeHealthStateLoaded();
+    await ensureBoundedGapStatesLoaded();
 
     const match = await this.findRoute(requestedModel, downstreamPolicy);
     if (!match) return null;
@@ -857,6 +864,7 @@ export class TokenRouter {
   ): Promise<SelectedChannel | null> {
     if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
     await ensureSiteRuntimeHealthStateLoaded();
+    await ensureBoundedGapStatesLoaded();
 
     const match = await this.findRoute(requestedModel, downstreamPolicy);
     if (!match) return null;
@@ -2131,6 +2139,7 @@ export class TokenRouter {
           selectedId = active
             .filter((row) => row.siteId === selectedSiteId)
             .sort((left, right) => right.score - left.score)[0]?.channelId ?? selectedId;
+          markBoundedGapStateDirty();
         }
       }
       const selected = candidates.find((c) => c.channel.id === selectedId) ?? candidates[0] ?? null;
