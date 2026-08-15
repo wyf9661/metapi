@@ -553,7 +553,19 @@ export async function authorizeDownstreamToken(token: string): Promise<Downstrea
 }
 
 
-/** In-process per-key rolling 60s window. Multi-process deployments should put a shared limiter in front. */
+/**
+ * In-process per-key rolling 60s RPM window.
+ *
+ * Single-process semantics (current deployment: one systemd unit, one Node
+ * process). `checkManagedKeyRpmLimit` is fully synchronous, so the
+ * read→filter→write cycle is atomic within the event loop and cannot
+ * interleave between concurrent requests in the same process.
+ *
+ * Multi-process deployments (cluster / pm2 / multiple containers) must put a
+ * SHARED limiter in front: each process keeps its own window, so N processes
+ * would otherwise permit N × maxRpm per minute. Do not rely on this map for
+ * cross-process enforcement.
+ */
 const managedKeyRpmWindows = new Map<number, number[]>();
 
 export function __resetManagedKeyRpmWindowsForTests(): void {
