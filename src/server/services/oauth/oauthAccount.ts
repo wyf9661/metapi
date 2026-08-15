@@ -16,6 +16,8 @@ type ParsedOauthInfo = {
   lastModelSyncAt?: unknown;
   lastModelSyncError?: unknown;
   lastDiscoveredModels?: unknown;
+  refreshFailCount?: unknown;
+  refreshRetryAtMs?: unknown;
 };
 
 type ParsedExtraConfig = {
@@ -42,6 +44,8 @@ export type OauthInfo = {
   lastModelSyncAt?: string;
   lastModelSyncError?: string;
   lastDiscoveredModels?: string[];
+  refreshFailCount?: number;
+  refreshRetryAtMs?: number;
 };
 
 export type StoredOauthState = Omit<OauthInfo, 'provider' | 'accountId' | 'accountKey' | 'projectId'>;
@@ -85,6 +89,17 @@ function asPositiveInteger(value: unknown): number | undefined {
   if (typeof value === 'string') {
     const parsed = Number.parseInt(value.trim(), 10);
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+}
+
+function asNonNegativeInteger(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value.trim(), 10);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return undefined;
 }
@@ -151,6 +166,8 @@ function parseStoredOauthRuntimeState(extraConfig?: ExtraConfigInput): Partial<O
     lastModelSyncAt: asIsoDateTime(parsed.lastModelSyncAt),
     lastModelSyncError: asTrimmedString(parsed.lastModelSyncError),
     lastDiscoveredModels: asStringArray(parsed.lastDiscoveredModels),
+    refreshFailCount: asNonNegativeInteger(parsed.refreshFailCount),
+    refreshRetryAtMs: asPositiveInteger(parsed.refreshRetryAtMs),
   };
 }
 
@@ -175,6 +192,8 @@ export function getOauthInfoFromExtraConfig(extraConfig?: ExtraConfigInput): Oau
     lastModelSyncAt: runtime?.lastModelSyncAt,
     lastModelSyncError: runtime?.lastModelSyncError,
     lastDiscoveredModels: runtime?.lastDiscoveredModels,
+    refreshFailCount: runtime?.refreshFailCount,
+    refreshRetryAtMs: runtime?.refreshRetryAtMs,
   };
 }
 

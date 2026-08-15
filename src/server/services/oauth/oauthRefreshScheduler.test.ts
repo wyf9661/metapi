@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 
 const refreshOauthAccessTokenSingleflightMock = vi.fn();
 
@@ -327,5 +328,89 @@ describe('oauthRefreshScheduler', () => {
     releaseRefresh?.();
     await stopPromise;
     expect(stopResolved).toBe(true);
+  });
+
+  it('backs off after a refresh failure and skips the account until the retry window elapses', async () => {
+    const nowMs = Date.parse('2026-04-05T12:00:00.000Z');
+    vi.setSystemTime(nowMs);
+
+    const site = await db.insert(schema.sites).values({
+      name: 'oauth-backoff-site',
+      url: 'https://oauth-backoff.example.com',
+      platform: 'antigravity',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'oauth-backoff@example.com',
+      accessToken: 'oauth-backoff-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'antigravity',
+      oauthAccountKey: 'oauth-backoff@example.com',
+      extraConfig: buildOauthExtraConfig({
+        provider: 'antigravity',
+        refreshToken: 'oauth-backoff-refresh-token',
+        tokenExpiresAt: nowMs - 1_000,
+      }),
+    }).returning().get();
+
+    refreshOauthAccessTokenSingleflightMock.mockRejectedValue(new Error('HTTP 400 invalid_grant'));
+
+    const firstResult = await executeOauthTokenAutoRefreshPass({ nowMs });
+    expect(firstResult.failedAccountIds).toEqual([account.id]);
+
+    const rowAfterFailure = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(rowAfterFailure?.extraConfig).toContain('refreshFailCount');
+    expect(rowAfterFailure?.extraConfig).toContain('refreshRetryAtMs');
+
+    // A second pass inside the backoff window must skip the account entirely.
+    const secondResult = await executeOauthTokenAutoRefreshPass({ nowMs: nowMs + 60_000 });
+    expect(secondResult.failedAccountIds).toEqual([]);
+    expect(secondResult.refreshedAccountIds).toEqual([]);
+    expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the failure backoff after a successful refresh', async () => {
+    const nowMs = Date.parse('2026-04-05T12:00:00.000Z');
+    vi.setSystemTime(nowMs);
+
+    const site = await db.insert(schema.sites).values({
+      name: 'oauth-backoff-clear-site',
+      url: 'https://oauth-backoff-clear.example.com',
+      platform: 'antigravity',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'oauth-backoff-clear@example.com',
+      accessToken: 'oauth-backoff-clear-access-token',
+      apiToken: null,
+      status: 'active',
+      oauthProvider: 'antigravity',
+      oauthAccountKey: 'oauth-backoff-clear@example.com',
+      extraConfig: JSON.stringify({
+        credentialMode: 'session',
+        oauth: {
+          provider: 'antigravity',
+          email: 'oauth-backoff-clear@example.com',
+          accountKey: 'oauth-backoff-clear@example.com',
+          refreshToken: 'oauth-backoff-clear-refresh-token',
+          tokenExpiresAt: nowMs - 1_000,
+          refreshFailCount: 3,
+          refreshRetryAtMs: nowMs - 60_000,
+        },
+      }),
+    }).returning().get();
+
+    refreshOauthAccessTokenSingleflightMock.mockResolvedValue(undefined as never);
+
+    const result = await executeOauthTokenAutoRefreshPass({ nowMs });
+    expect(result.refreshedAccountIds).toEqual([account.id]);
+
+    const rowAfterSuccess = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(rowAfterSuccess?.extraConfig).not.toContain('refreshRetryAtMs');
   });
 });

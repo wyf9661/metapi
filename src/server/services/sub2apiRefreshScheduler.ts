@@ -3,8 +3,8 @@ import { db, schema } from '../db/index.js';
 import {
   getSub2ApiAuthFromExtraConfig,
   mergeAccountExtraConfig,
-  resolveSub2ApiRefreshBackoffMs,
 } from './accountExtraConfig.js';
+import { advanceRefreshBackoff, isRefreshBackoffActive } from './refreshBackoff.js';
 import {
   isManagedSub2ApiTokenDue,
   isSub2ApiPlatform,
@@ -54,7 +54,7 @@ function shouldRefreshManagedSub2ApiAccount(input: {
   // Skip accounts whose last refresh attempt failed within the backoff window.
   // A persistent upstream failure (e.g. HTTP 405 on the refresh endpoint) must
   // not turn the 60s scheduler into an infinite retry loop against the site.
-  if (typeof managedAuth.refreshRetryAtMs === 'number' && managedAuth.refreshRetryAtMs > input.nowMs) {
+  if (isRefreshBackoffActive(managedAuth.refreshRetryAtMs, input.nowMs)) {
     return false;
   }
 
@@ -63,15 +63,16 @@ function shouldRefreshManagedSub2ApiAccount(input: {
 
 function buildBackoffExtraConfigPatch(currentExtraConfig: string | null, nowMs: number): Record<string, unknown> {
   const managedAuth = getSub2ApiAuthFromExtraConfig(currentExtraConfig);
-  const previousFailCount = typeof managedAuth?.refreshFailCount === 'number' ? managedAuth.refreshFailCount : 0;
-  const failCount = previousFailCount + 1;
-  const backoffMs = resolveSub2ApiRefreshBackoffMs(failCount);
+  const { failCount, retryAtMs } = advanceRefreshBackoff(
+    managedAuth?.refreshFailCount,
+    nowMs,
+  );
   return {
     sub2apiAuth: {
       ...(managedAuth ? { refreshToken: managedAuth.refreshToken } : {}),
       ...(managedAuth?.tokenExpiresAt != null ? { tokenExpiresAt: managedAuth.tokenExpiresAt } : {}),
       refreshFailCount: failCount,
-      refreshRetryAtMs: nowMs + backoffMs,
+      refreshRetryAtMs: retryAtMs,
     },
   };
 }

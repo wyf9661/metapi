@@ -1216,6 +1216,10 @@ export async function refreshOauthAccessToken(accountId: number) {
     refreshToken: refreshed.refreshToken || oauth.refreshToken,
     tokenExpiresAt: refreshed.tokenExpiresAt || oauth.tokenExpiresAt,
     idToken: refreshed.idToken || oauth.idToken,
+    // A successful refresh resets the failure backoff recorded by the
+    // scheduler, so a later failure starts from a fresh backoff schedule.
+    refreshFailCount: 0,
+    refreshRetryAtMs: 0,
     providerData: {
       ...(oauth.providerData || {}),
       ...(refreshed.providerData || {}),

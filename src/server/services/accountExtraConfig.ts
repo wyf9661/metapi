@@ -1,4 +1,9 @@
 import type { SubscriptionPlanSummary, SubscriptionSummary } from './platforms/base.js';
+export {
+  REFRESH_BACKOFF_BASE_MS as SUB2API_REFRESH_BACKOFF_BASE_MS,
+  REFRESH_BACKOFF_MAX_MS as SUB2API_REFRESH_BACKOFF_MAX_MS,
+  resolveRefreshBackoffMs as resolveSub2ApiRefreshBackoffMs,
+} from './refreshBackoff.js';
 
 type AutoReloginConfig = {
   username?: unknown;
@@ -218,17 +223,6 @@ export type ManagedSub2ApiAuth = {
   refreshFailCount?: number;
   refreshRetryAtMs?: number;
 };
-
-/** Base backoff for repeated sub2api refresh failures (5 minutes). */
-export const SUB2API_REFRESH_BACKOFF_BASE_MS = 5 * 60 * 1000;
-/** Cap for sub2api refresh failure backoff (60 minutes). */
-export const SUB2API_REFRESH_BACKOFF_MAX_MS = 60 * 60 * 1000;
-
-export function resolveSub2ApiRefreshBackoffMs(failCount: number): number {
-  if (!Number.isFinite(failCount) || failCount <= 0) return 0;
-  const exponent = Math.min(failCount - 1, 8);
-  return Math.min(SUB2API_REFRESH_BACKOFF_BASE_MS * (2 ** exponent), SUB2API_REFRESH_BACKOFF_MAX_MS);
-}
 
 export type StoredSub2ApiSubscriptionSummary = SubscriptionSummary & {
   updatedAt: number;

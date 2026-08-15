@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
-import { getOauthInfoFromAccount } from './oauthAccount.js';
+import { getOauthInfoFromAccount, buildStoredOauthStateFromAccount } from './oauthAccount.js';
+import { advanceRefreshBackoff, isRefreshBackoffActive } from '../refreshBackoff.js';
+import { mergeAccountExtraConfig } from '../accountExtraConfig.js';
 import { refreshOauthAccessTokenSingleflight } from './refreshSingleflight.js';
 
 const OAUTH_REFRESH_SCHEDULER_INTERVAL_MS = 60_000;
@@ -44,7 +46,37 @@ function shouldRefreshOauthAccount(input: {
     return false;
   }
 
+  // Skip accounts whose last refresh attempt failed within the backoff window.
+  // A persistent upstream failure must not turn the 60s scheduler into an
+  // infinite retry loop against the provider.
+  if (isRefreshBackoffActive(oauth.refreshRetryAtMs, input.nowMs)) {
+    return false;
+  }
+
   return oauth.tokenExpiresAt - input.nowMs <= getOauthRefreshLeadMs(oauth.provider);
+}
+
+function buildOauthBackoffExtraConfigPatch(
+  account: typeof schema.accounts.$inferSelect,
+  nowMs: number,
+): Record<string, unknown> {
+  const oauth = getOauthInfoFromAccount(account);
+  const { failCount, retryAtMs } = advanceRefreshBackoff(oauth?.refreshFailCount, nowMs);
+  const nextOauth = buildStoredOauthStateFromAccount(account, {
+    refreshFailCount: failCount,
+    refreshRetryAtMs: retryAtMs,
+  });
+  return { oauth: nextOauth };
+}
+
+function buildOauthClearBackoffExtraConfigPatch(
+  account: typeof schema.accounts.$inferSelect,
+): Record<string, unknown> {
+  const nextOauth = buildStoredOauthStateFromAccount(account, {
+    refreshFailCount: 0,
+    refreshRetryAtMs: undefined,
+  });
+  return { oauth: nextOauth };
 }
 
 export async function executeOauthTokenAutoRefreshPass(input: {
@@ -76,11 +108,32 @@ export async function executeOauthTokenAutoRefreshPass(input: {
     try {
       await refreshOauthAccessTokenSingleflight(row.accounts.id);
       refreshedAccountIds.push(row.accounts.id);
+      // Refresh succeeded: clear any previously recorded failure backoff so a
+      // subsequent failure starts from a fresh backoff schedule.
+      const oauth = getOauthInfoFromAccount(row.accounts);
+      if (oauth?.refreshFailCount || oauth?.refreshRetryAtMs) {
+        await db.update(schema.accounts).set({
+          extraConfig: mergeAccountExtraConfig(
+            row.accounts.extraConfig,
+            buildOauthClearBackoffExtraConfigPatch(row.accounts),
+          ),
+          updatedAt: new Date().toISOString(),
+        }).where(eq(schema.accounts.id, row.accounts.id)).run();
+      }
     } catch (error) {
       failedAccountIds.push(row.accounts.id);
       console.warn(
         `[oauth-refresh] failed to refresh account ${row.accounts.id}: ${(error as Error)?.message || 'unknown error'}`,
       );
+      // Persist the failure so the scheduler backs off instead of retrying
+      // every 60s against a provider endpoint that keeps rejecting the request.
+      await db.update(schema.accounts).set({
+        extraConfig: mergeAccountExtraConfig(
+          row.accounts.extraConfig,
+          buildOauthBackoffExtraConfigPatch(row.accounts, nowMs),
+        ),
+        updatedAt: new Date().toISOString(),
+      }).where(eq(schema.accounts.id, row.accounts.id)).run();
     }
   }
 
