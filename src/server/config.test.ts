@@ -64,7 +64,7 @@ describe('buildConfig', () => {
     expect(config.claudeClientId).toBe('9d1c250a-e61b-44d9-88ed-5944d1962f5e');
     expect(config.claudeClientSecret).toBe('');
     expect(config.geminiCliClientId).toBe('681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com');
-    expect(config.geminiCliClientSecret).toBe('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');
+    expect(config.geminiCliClientSecret).toBe('');
   });
 
   it('allows overriding the codex websocket beta gate from environment', () => {
