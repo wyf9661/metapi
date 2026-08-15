@@ -84,6 +84,11 @@ const GENERIC_PASSTHROUGH_ALLOWED_HEADERS = new Set([
   'x-codex-turn-metadata',
   'x-codex-turn-state',
 ]);
+// Matches the official OpenAI SDK user-agent across language bindings
+// (OpenAI/NodeJS 4.x, OpenAI/Python 1.x, OpenAI/Go, ...). Many NewAPI-class
+// relays fronted by Cloudflare WAF treat these as bot/abuse traffic and
+// respond 403 "Your request was blocked".
+const OPENAI_SDK_USER_AGENT_PATTERN = /^OpenAI\/(?:NodeJS|Python|Go|Java|Ruby|CSharp|PHP|TypeScript|Deno)\b/i;
 const METAPI_INTERNAL_HEADER_BLOCKLIST = new Set([
   'x-metapi-tester-request',
   'x-metapi-tester-forced-channel-id',
@@ -112,6 +117,15 @@ function extractSafePassthroughHeaders(
 
     const value = headerValueToString(rawValue);
     if (!value) continue;
+    // Many NewAPI-class relays fronted by Cloudflare WAF block the official
+    // OpenAI SDK user-agent (OpenAI/NodeJS, OpenAI/Python, ...) as bot/abuse
+    // traffic (403 "Your request was blocked"), while the same request with a
+    // browser/tool UA succeeds. Strip it so those relays accept the proxied
+    // call. Keep every other UA untouched so genuine UA-based behavior is
+    // preserved (e.g. codex fingerprint headers are injected separately).
+    if (key === 'user-agent' && OPENAI_SDK_USER_AGENT_PATTERN.test(value)) {
+      continue;
+    }
     forwarded[key] = value;
   }
 
