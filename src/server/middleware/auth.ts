@@ -149,7 +149,7 @@ export function isIpAllowed(clientIp: string, allowlist: string[]): boolean {
 }
 
 
-function secretsEqual(left: string, right: string): boolean {
+export function secretsEqual(left: string, right: string): boolean {
   const a = Buffer.from(String(left || ''), 'utf8');
   const b = Buffer.from(String(right || ''), 'utf8');
   if (a.length === 0 || b.length === 0) return false;

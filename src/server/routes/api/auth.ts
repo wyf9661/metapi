@@ -4,6 +4,7 @@ import { config } from '../../config.js';
 import { eq } from 'drizzle-orm';
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { createRateLimitGuard } from '../../middleware/requestRateLimit.js';
+import { secretsEqual } from '../../middleware/auth.js';
 import { parseAuthChangePayload } from '../../contracts/supportRoutePayloads.js';
 import { isLikelyTunnelRequest } from '../../services/cloudflareTunnelService.js';
 
@@ -41,7 +42,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ success: false, message: '新 Token 至少 8 个字符' });
     }
 
-    if (oldToken !== config.authToken) {
+    if (!secretsEqual(oldToken, config.authToken)) {
       return reply.code(403).send({ success: false, message: '旧 Token 验证失败' });
     }
 
