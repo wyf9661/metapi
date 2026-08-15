@@ -72,6 +72,10 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), 'metapi-oauth-routes-'));
     process.env.DATA_DIR = dataDir;
+    // Gemini CLI OAuth cases exercise the real provider config path; the
+    // secret has no default since the hardcoded fallback was removed, so give
+    // the test environment an explicit (fake) value before config is built.
+    process.env.GEMINI_CLI_CLIENT_SECRET = 'test-gemini-cli-client-secret';
     vi.resetModules();
 
     await import('../../db/migrate.js');
