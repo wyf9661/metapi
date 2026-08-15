@@ -66,6 +66,11 @@ export abstract class StandardApiProviderAdapterBase extends BasePlatformAdapter
         headers: options.headers,
       });
     } catch {
+      // Network/transport failures return an empty list on purpose: the caller
+      // treats an empty catalog as "unknown" (e.g. verifyToken falls back to
+      // tokenType 'unknown') instead of aborting the whole discovery flow.
+      // Mapper bugs and invalid payload shapes below still throw on purpose so
+      // code defects are not silently swallowed.
       return [];
     }
 
