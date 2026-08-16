@@ -11,6 +11,10 @@ import { parseSiteParamOverrideInput } from '../../services/siteParamOverride.js
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
 import { getCredentialModeFromExtraConfig, getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
 import {
+  extractRuntimeHealth,
+  type RuntimeHealthInfo,
+} from '../../services/accountHealthService.js';
+import {
   parseSiteBatchPayload,
   parseSiteCreatePayload,
   parseSiteDetectPayload,
@@ -510,6 +514,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     const accountRows = await db.select({
       id: schema.accounts.id,
       siteId: schema.accounts.siteId,
+      status: schema.accounts.status,
       balance: schema.accounts.balance,
       balanceUsed: schema.accounts.balanceUsed,
       extraConfig: schema.accounts.extraConfig,
@@ -596,6 +601,23 @@ export async function sitesRoutes(app: FastifyInstance) {
       }
     }
 
+    // 按站点汇总健康状态
+    const siteHealthState: Record<number, RuntimeHealthInfo> = {};
+    for (const row of accountRows) {
+      const health = extractRuntimeHealth(row.extraConfig);
+      const existing = siteHealthState[row.siteId];
+      if (!existing) {
+        siteHealthState[row.siteId] = health ?? {
+          state: 'unknown', reason: '尚未检测', source: 'none', checkedAt: null,
+        };
+      } else if (health && health.state === 'unhealthy' && existing.state !== 'unhealthy') {
+        // 任一账号 unhealthy 则站点标记 unhealthy
+        siteHealthState[row.siteId] = health;
+      } else if (health && health.state === 'degraded' && existing.state === 'healthy') {
+        siteHealthState[row.siteId] = health;
+      }
+    }
+
     return siteRowsWithApiEndpoints.map((site) => ({
       ...site,
       totalBalance: Math.round((totalBalanceBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
@@ -603,6 +625,9 @@ export async function sitesRoutes(app: FastifyInstance) {
       todayReward: Math.round((totalTodayRewardBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
       todaySpend: Math.round((totalTodaySpendBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
       subscriptionSummary: subscriptionBySiteId[site.id] || null,
+      healthState: siteHealthState[site.id] ?? {
+        state: 'unknown', reason: '尚未检测', source: 'none', checkedAt: null,
+      },
       connectionStats: {
         accounts: accountCountBySiteId[site.id] || 0,
         sessions: sessionCountBySiteId[site.id] || 0,

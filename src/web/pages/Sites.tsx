@@ -73,6 +73,12 @@ type SiteRow = {
   todayReward?: number;
   todaySpend?: number;
   subscriptionSummary?: SiteSubscriptionSummary | null;
+  healthState?: {
+    state: 'healthy' | 'unhealthy' | 'degraded' | 'unknown' | 'disabled';
+    reason: string;
+    source: string;
+    checkedAt: string | null;
+  };
   connectionStats?: {
     accounts: number;
     sessions: number;
@@ -1949,6 +1955,32 @@ export default function Sites() {
                         />
                       )}
                     />
+                    <MobileField
+                      label="健康"
+                      value={(
+                        <span
+                          className={`badge ${site.healthState?.state === 'healthy'
+                            ? 'badge-success'
+                            : site.healthState?.state === 'unhealthy'
+                              ? 'badge-danger'
+                              : site.healthState?.state === 'degraded'
+                                ? 'badge-warning'
+                                : 'badge-muted'}`}
+                          title={site.healthState?.reason || '尚未检测'}
+                          style={{ fontSize: 11 }}
+                        >
+                          {site.healthState?.state === 'healthy'
+                            ? '正常'
+                            : site.healthState?.state === 'unhealthy'
+                              ? '异常'
+                              : site.healthState?.state === 'degraded'
+                                ? '降级'
+                                : site.healthState?.state === 'disabled'
+                                  ? '禁用'
+                                  : '未检测'}
+                        </span>
+                      )}
+                    />
                     <MobileField label="权重" value={(site.globalWeight || 1).toFixed(2)} />
                     <MobileField
                       label="连接"
@@ -2067,6 +2099,7 @@ export default function Sites() {
                   <th>创建时间</th>
                   <th>余额</th>
                   <th>状态</th>
+                  <th>健康</th>
                   <th>权重</th>
                   <th>平台</th>
                   <th>连接</th>
@@ -2128,6 +2161,28 @@ export default function Sites() {
                     <td>
                       <span className={`badge ${site.status === 'disabled' ? 'badge-muted' : 'badge-success'}`} style={{ fontSize: 11 }}>
                         {site.status === 'disabled' ? '禁用' : '启用'}
+                      </span>
+                    </td>
+                    <td title={site.healthState?.reason || '尚未检测'}>
+                      <span
+                        className={`badge ${site.healthState?.state === 'healthy'
+                          ? 'badge-success'
+                          : site.healthState?.state === 'unhealthy'
+                            ? 'badge-danger'
+                            : site.healthState?.state === 'degraded'
+                              ? 'badge-warning'
+                              : 'badge-muted'}`}
+                        style={{ fontSize: 11 }}
+                      >
+                        {site.healthState?.state === 'healthy'
+                          ? '正常'
+                          : site.healthState?.state === 'unhealthy'
+                            ? '异常'
+                            : site.healthState?.state === 'degraded'
+                              ? '降级'
+                              : site.healthState?.state === 'disabled'
+                                ? '禁用'
+                                : '未检测'}
                       </span>
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
