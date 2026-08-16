@@ -19,6 +19,7 @@ import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
+import PageJumpInput from '../components/PageJumpInput.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
 import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, PAGE_SIZES, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
 import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
@@ -1873,6 +1874,7 @@ export default function ProxyLogs() {
                     />
                   </svg>
                 </button>
+                <PageJumpInput totalPages={debugTraceTotalPages} onJump={setDebugTracePage} />
               </div>
             ) : null}
           </div>
@@ -2888,6 +2890,7 @@ export default function ProxyLogs() {
               />
             </svg>
           </button>
+          <PageJumpInput totalPages={totalPages} onJump={setPage} />
           <div className="pagination-size">
             每页条数:
             <div style={{ minWidth: 86 }}>

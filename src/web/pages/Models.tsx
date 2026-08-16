@@ -10,6 +10,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import PageJumpInput from '../components/PageJumpInput.js';
 import { mergeMarketplaceMetadata, shouldHydrateMarketplaceMetadata } from './helpers/modelsMarketplaceMetadata.js';
 import { tr } from '../i18n.js';
 import { TOKEN_COVERAGE_CHANGED_EVENT } from '../dataEvents.js';
@@ -1636,6 +1637,7 @@ export default function Models() {
             <button className="pagination-btn" disabled={safePageVal >= totalPages} onClick={() => setPage(p => p + 1)}>
               <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
             </button>
+            <PageJumpInput totalPages={totalPages} onJump={setPage} />
             <div className="pagination-size">
               {tr('每页条数')}:
               <div style={{ minWidth: 86 }}>
