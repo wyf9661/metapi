@@ -138,6 +138,59 @@ describe('proxyChannelCoordinator', () => {
     })).toBeNull();
   });
 
+  it('counts preferred uses and forces exploration at the configured interval', () => {
+    const input = {
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+      channelId: 148827,
+    };
+    proxyChannelCoordinator.rememberLastSuccessChannel(input);
+
+    expect(proxyChannelCoordinator.shouldExploreFromLastSuccess({
+      requestedModel: input.requestedModel,
+      downstreamApiKeyId: input.downstreamApiKeyId,
+      explorationInterval: 3,
+    })).toBe(false);
+    expect(proxyChannelCoordinator.shouldExploreFromLastSuccess({
+      requestedModel: input.requestedModel,
+      downstreamApiKeyId: input.downstreamApiKeyId,
+      explorationInterval: 3,
+    })).toBe(false);
+    expect(proxyChannelCoordinator.shouldExploreFromLastSuccess({
+      requestedModel: input.requestedModel,
+      downstreamApiKeyId: input.downstreamApiKeyId,
+      explorationInterval: 3,
+    })).toBe(true);
+    // A failed exploration does not delete the old safety-net channel.
+    expect(proxyChannelCoordinator.getLastSuccessChannelId(input)).toBe(input.channelId);
+  });
+
+  it('records last-success even when sticky sessions are disabled', () => {
+    // Model-level last-success is an independent safety net: disabling
+    // PROXY_STICKY_SESSION_ENABLED must NOT stop success recording, or the
+    // fallback-to-last-good guarantee silently dies while the read side
+    // (getLastSuccessChannelId) never checks that flag.
+    config.proxyStickySessionEnabled = false;
+    proxyChannelCoordinator.rememberLastSuccessChannel({
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+      channelId: 148827,
+    });
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+    })).toBe(148827);
+    proxyChannelCoordinator.clearLastSuccessChannel({
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+      channelId: 148827,
+    });
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'deepseek-v4-flash',
+      downstreamApiKeyId: 1,
+    })).toBeNull();
+  });
+
   it('keeps last-success beyond any time window until explicitly cleared', () => {
     proxyChannelCoordinator.rememberLastSuccessChannel({
       requestedModel: 'kimi-k2',
@@ -415,20 +468,6 @@ describe('proxyChannelCoordinator', () => {
 
     proxyChannelCoordinator.bindStickyChannel(key, 43, JSON.stringify({ credentialMode: 'session' }));
     expect(proxyChannelCoordinator.incrementStickyHitCount(key)).toBe(1);
-  });
-
-  it('increments last-success hit count across same-channel rebinds and resets on channel change', () => {
-    const input = { requestedModel: 'grok-4.5', downstreamApiKeyId: 3 };
-    proxyChannelCoordinator.rememberLastSuccessChannel({ ...input, channelId: 77 });
-
-    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(1);
-    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(2);
-
-    proxyChannelCoordinator.rememberLastSuccessChannel({ ...input, channelId: 77 });
-    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(3);
-
-    proxyChannelCoordinator.rememberLastSuccessChannel({ ...input, channelId: 88 });
-    expect(proxyChannelCoordinator.incrementLastSuccessHitCount(input)).toBe(1);
   });
 
   it('clearing last-success for a failed channel removes only that channel affinity', () => {

@@ -217,17 +217,17 @@ export async function selectProxyChannelForAttempt(input: {
         downstreamApiKeyId: input.downstreamApiKeyId,
       });
       if (lastSuccessChannelId) {
-        const hitCount = proxyChannelCoordinator.incrementLastSuccessHitCount({
+        const explore = proxyChannelCoordinator.shouldExploreFromLastSuccess({
           requestedModel: input.requestedModel,
           downstreamApiKeyId: input.downstreamApiKeyId,
+          explorationInterval: config.proxyLastSuccessExplorationInterval,
         });
-        if (hitCount > config.proxyStickyMaxHits) {
-          proxyChannelCoordinator.clearLastSuccessChannel({
-            requestedModel: input.requestedModel,
-            downstreamApiKeyId: input.downstreamApiKeyId,
-            channelId: lastSuccessChannelId,
-          });
-        } else {
+        if (!explore) {
+          // Model-level last-success affinity is an event-driven safety net:
+          // it has no hit-count cap (unlike the session-level sticky binding,
+          // which re-balances to avoid one client monopolizing a channel).
+          // A good channel stays preferred until it fails or an exploration
+          // replaces it with another successful channel.
           selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
         }
       }

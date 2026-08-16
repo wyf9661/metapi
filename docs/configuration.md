@@ -222,7 +222,8 @@ Metapi 当前有三类主要配置入口：
 | `PROXY_CHANNEL_FAILOVER_MAX_ATTEMPTS` | 单次请求最多尝试的通道数上限（min(候选池, 上限)，防止候选过多时客户端被反复切换拖死） | `8` |
 | `PROXY_MAX_CHANNEL_ATTEMPTS` | 候选通道数统计失败时的兜底尝试次数 | `5` |
 | `PROXY_STICKY_SESSION_ENABLED` | 是否启用会话粘性（同一会话尽量复用同一通道） | `true` |
-| `PROXY_STICKY_MAX_HITS` | 粘性/最近成功通道连续命中次数上限，超过后丢弃会话级粘性、重新进入均衡选择（防止单站垄断） | `5` |
+| `PROXY_STICKY_MAX_HITS` | 会话级粘性连续命中次数上限，超过后丢弃会话级粘性、重新进入均衡选择（防止单会话独占单站）。**只作用于会话粘性，不影响 last_success 保底** | `5` |
+| `PROXY_LAST_SUCCESS_EXPLORATION_INTERVAL` | last_success（最近成功通道保底）连续使用次数上限，达到后让出 1 次给 balanced-v2 探索其他健康候选。探索成功会自动更新保底指向新站点；探索失败保留原保底。设为 `1` 表示每次都探索（等效关闭保底优先），调大表示更黏好站点 | `10` |
 | `PROXY_SESSION_CHANNEL_CONCURRENCY_LIMIT` | 会话级通道并发上限（0 = 不限制） | `3` |
 | `PROXY_SESSION_CHANNEL_QUEUE_WAIT_MS` | 并发超限时的排队等待时间（毫秒） | `1500` |
 | `PROXY_SESSION_CHANNEL_LEASE_TTL_MS` | 会话级通道租约 TTL（毫秒） | `90000` |

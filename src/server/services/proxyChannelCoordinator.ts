@@ -19,10 +19,10 @@ type LastSuccessEntry = {
   channelId: number;
   // When this channel last succeeded for the model. Used ONLY as the
   // persistence sort key (keep freshest entries under the cap); runtime
-  // logic never consults it — last-success is dropped by the sticky
-  // max-hits cap or by tokenRouter failure cooldown, never by time.
+  // selection uses the entry as a safety net and periodically explores the
+  // balanced pool.
   lastSuccessAtMs: number;
-  /** Consecutive affinity hits since the binding was (re)created. */
+  /** Successful preferred uses since the last balanced exploration. */
   hitCount?: number;
 };
 
@@ -102,9 +102,9 @@ function cleanupExpiredStickyBindings(nowMs = Date.now()): void {
       stickySessionBindings.delete(key);
     }
   }
-  // last-success entries never expire by time: they are dropped only by the
-  // sticky max-hits cap (incrementLastSuccessHitCount) or by tokenRouter
-  // failure cooldown via channelSelection's clearLastSuccessChannel.
+  // last-success entries remain available until an exploration replaces the
+  // channel after a successful request, or tokenRouter failure handling clears
+  // the channel affinity.
 }
 
 function buildLastSuccessKey(input: {
@@ -468,7 +468,11 @@ class ProxyChannelCoordinator {
     downstreamApiKeyId?: number | null;
     channelId: number;
   }): void {
-    if (!config.proxyStickySessionEnabled) return;
+    // Model-level last-success affinity is an independent safety net from the
+    // session-level sticky binding. It must keep recording successes even when
+    // PROXY_STICKY_SESSION_ENABLED is off — otherwise the fallback-to-last-good
+    // guarantee silently dies the moment sticky sessions are disabled, while
+    // the read side (getLastSuccessChannelId) never checks that flag.
     const key = buildLastSuccessKey(input);
     const channelId = Math.trunc(input.channelId || 0);
     if (!key || channelId <= 0) return;
@@ -515,18 +519,31 @@ class ProxyChannelCoordinator {
     return entry.hitCount;
   }
 
-  /** Increment the consecutive-hit counter for a live last-success binding. */
-  incrementLastSuccessHitCount(input: {
+  /**
+   * Consume one last-success preference opportunity. Returns true when the
+   * caller should explore balanced-v2 instead of using the preferred channel.
+   * The old preference remains intact if exploration fails; a later request can
+   * still use it as a fallback.
+   */
+  shouldExploreFromLastSuccess(input: {
     requestedModel?: string | null;
     downstreamApiKeyId?: number | null;
-  }): number {
+    explorationInterval: number;
+  }): boolean {
     const key = buildLastSuccessKey(input);
-    if (!key) return 0;
+    if (!key) return false;
     const entry = lastSuccessByModelKey.get(key);
-    if (!entry) return 0;
-    entry.hitCount = Math.max(0, (entry.hitCount ?? 0)) + 1;
+    if (!entry) return false;
+    const interval = Math.max(1, Math.trunc(input.explorationInterval || 1));
+    const hitCount = Math.max(0, entry.hitCount ?? 0);
+    if (hitCount + 1 >= interval) {
+      entry.hitCount = 0;
+      scheduleProxyChannelAffinityPersistence();
+      return true;
+    }
+    entry.hitCount = hitCount + 1;
     scheduleProxyChannelAffinityPersistence();
-    return entry.hitCount;
+    return false;
   }
 
   getActiveChannelIds(): number[] {
