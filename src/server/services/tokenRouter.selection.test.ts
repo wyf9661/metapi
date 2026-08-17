@@ -247,6 +247,86 @@ describe('TokenRouter selection scoring', () => {
     expect(reselected?.channel.failCount).toBe(0);
   });
 
+  it('clearFailureCooldown resets oauth route-unit member cooldown state', async () => {
+    const route = await createRoute('gpt-5.4');
+    const site = await db.insert(schema.sites).values({
+      name: 'oauth-recovery-site',
+      url: 'https://oauth-recovery-site.example.com',
+      platform: 'codex',
+      status: 'active',
+    }).returning().get();
+    const accountA = await createAccount(site.id, 'oauth-recovery-a');
+    const accountB = await createAccount(site.id, 'oauth-recovery-b');
+    const unit = await db.insert(schema.oauthRouteUnits).values({
+      siteId: site.id,
+      provider: 'codex',
+      name: 'OAuth Recovery Pool',
+      strategy: 'round_robin',
+      enabled: true,
+    }).returning().get();
+    await db.insert(schema.oauthRouteUnitMembers).values([
+      {
+        unitId: unit.id,
+        accountId: accountA.id,
+        sortOrder: 0,
+        failCount: 3,
+        lastFailAt: new Date().toISOString(),
+        cooldownUntil: new Date(Date.now() + 60_000).toISOString(),
+        consecutiveFailCount: 2,
+        cooldownLevel: 1,
+      },
+      {
+        unitId: unit.id,
+        accountId: accountB.id,
+        sortOrder: 1,
+        failCount: 4,
+        lastFailAt: new Date().toISOString(),
+        cooldownUntil: new Date(Date.now() + 60_000).toISOString(),
+        consecutiveFailCount: 1,
+        cooldownLevel: 2,
+      },
+    ]).run();
+    const channel = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: accountA.id,
+      oauthRouteUnitId: unit.id,
+      tokenId: null,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+      failCount: 5,
+      lastFailAt: new Date().toISOString(),
+      cooldownUntil: new Date(Date.now() + 60_000).toISOString(),
+      consecutiveFailCount: 2,
+      cooldownLevel: 2,
+    }).returning().get();
+
+    const router = new TokenRouter();
+    await router.clearFailureCooldown(channel.id);
+
+    const clearedChannel = await db.select().from(schema.routeChannels)
+      .where(eq(schema.routeChannels.id, channel.id)).get();
+    expect(clearedChannel).toMatchObject({
+      failCount: 0,
+      lastFailAt: null,
+      cooldownUntil: null,
+      consecutiveFailCount: 0,
+      cooldownLevel: 0,
+    });
+    const clearedMembers = await db.select().from(schema.oauthRouteUnitMembers)
+      .where(eq(schema.oauthRouteUnitMembers.unitId, unit.id)).all();
+    expect(clearedMembers).toHaveLength(2);
+    for (const member of clearedMembers) {
+      expect(member).toMatchObject({
+        failCount: 0,
+        lastFailAt: null,
+        cooldownUntil: null,
+        consecutiveFailCount: 0,
+        cooldownLevel: 0,
+      });
+    }
+  });
+
   it('round-robins inside an oauth route unit while keeping one outer channel', async () => {
     const route = await createRoute('gpt-5.4');
     const site = await db.insert(schema.sites).values({

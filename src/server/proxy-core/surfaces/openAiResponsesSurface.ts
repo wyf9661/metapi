@@ -262,6 +262,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             downstreamApiKeyId,
           });
           if (lsChannelId) {
+            await tokenRouter.clearFailureCooldown(lsChannelId);
             const lsSelected = await tokenRouter.selectPreferredChannel(
               requestedModel, lsChannelId, downstreamPolicy, [],
             );

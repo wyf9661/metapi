@@ -2008,20 +2008,36 @@ export class TokenRouter {
   async clearFailureCooldown(channelId: number): Promise<void> {
     const normalizedChannelId = Math.trunc(channelId || 0);
     if (normalizedChannelId <= 0) return;
-    await db.update(schema.routeChannels).set({
+
+    const channelRow = await db.select({
+      routeId: schema.routeChannels.routeId,
+      oauthRouteUnitId: schema.routeChannels.oauthRouteUnitId,
+    }).from(schema.routeChannels)
+      .where(eq(schema.routeChannels.id, normalizedChannelId))
+      .get();
+    if (!channelRow) return;
+
+    const clearedState = {
       failCount: 0,
       lastFailAt: null,
       cooldownUntil: null,
       consecutiveFailCount: 0,
       cooldownLevel: 0,
-    }).where(eq(schema.routeChannels.id, normalizedChannelId)).run();
+    };
+    await db.update(schema.routeChannels).set(clearedState)
+      .where(eq(schema.routeChannels.id, normalizedChannelId)).run();
+
+    if (typeof channelRow.oauthRouteUnitId === 'number' && channelRow.oauthRouteUnitId > 0) {
+      await db.update(schema.oauthRouteUnitMembers).set({
+        ...clearedState,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(schema.oauthRouteUnitMembers.unitId, channelRow.oauthRouteUnitId)).run();
+    }
+
     patchCachedChannel(normalizedChannelId, (channel) => {
-      channel.failCount = 0;
-      channel.lastFailAt = null;
-      channel.cooldownUntil = null;
-      channel.consecutiveFailCount = 0;
-      channel.cooldownLevel = 0;
+      Object.assign(channel, clearedState);
     });
+    invalidateRouteScopedCache(channelRow.routeId);
   }
 
   /**

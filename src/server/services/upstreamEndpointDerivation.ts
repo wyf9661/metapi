@@ -199,7 +199,7 @@ export async function resolveUpstreamEndpointCandidates(
   // Runtime endpoint memory may promote a previously successful chat/messages
   // endpoint; for Codex-compat sites that must never demote responses.
   if (siteProtocolPrefersResponses({
-    protocolProfile: (context.site as any).protocolProfile,
+    protocolProfile: context.site.protocolProfile,
     customHeaders: (context.site as any).customHeaders,
   })) {
     const candidates = finalizeCandidates(['responses', 'messages', 'chat']);
