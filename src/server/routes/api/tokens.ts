@@ -14,6 +14,9 @@ import {
   type RouteRoutingStrategy,
 } from '../../services/routeRoutingStrategy.js';
 import { invalidateTokenRouterCache, matchesModelPattern, tokenRouter } from '../../services/tokenRouter.js';
+import { toPersistenceJson } from '../../services/downstreamApiKeyService.js';
+import { listPerformanceShadowMetrics } from '../../services/performanceShadow.js';
+import { normalizeRequestOverrideRules } from '../../services/requestOverride.js';
 import { getRecentRouteSelections } from '../../services/routeSelectionLog.js';
 import { appendBackgroundTaskLog, startBackgroundTask } from '../../services/backgroundTaskService.js';
 import {
@@ -811,6 +814,7 @@ export async function tokensRoutes(app: FastifyInstance) {
           accountId: item.accountId,
           tokenId: effectiveTokenId,
           sourceModel: sourceModel || null,
+          requestOverrideRules: toPersistenceJson(normalizeRequestOverrideRules(item.requestOverrideRules)),
           priority: 0,
           weight: 10,
           manualOverride: true,
@@ -1287,6 +1291,7 @@ export async function tokensRoutes(app: FastifyInstance) {
       accountId: body.accountId,
       tokenId: body.tokenId,
       sourceModel: sourceModel || null,
+      requestOverrideRules: toPersistenceJson(normalizeRequestOverrideRules(body.requestOverrideRules)),
       priority: body.priority ?? 0,
       weight: body.weight ?? 10,
     }).run();
@@ -1384,6 +1389,7 @@ export async function tokensRoutes(app: FastifyInstance) {
     if (body.priority !== undefined) updates.priority = body.priority;
     if (body.weight !== undefined) updates.weight = body.weight;
     if (body.enabled !== undefined) updates.enabled = body.enabled;
+    if (body.requestOverrideRules !== undefined) updates.requestOverrideRules = toPersistenceJson(body.requestOverrideRules);
     if (body.tokenId !== undefined) updates.tokenId = nextTokenId;
 
     await db.update(schema.routeChannels).set(updates).where(eq(schema.routeChannels.id, channelId)).run();
@@ -1395,6 +1401,56 @@ export async function tokensRoutes(app: FastifyInstance) {
     invalidateTokenRouterCache();
     return await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, channelId)).get();
   });
+
+  // Channel diagnostics: aggregate channel row, performance shadow, and recent debug traces.
+  app.get<{ Params: { channelId: string } }>(
+    '/api/channels/:channelId/diagnostics',
+    async (request, reply) => {
+      const channelId = parseInt(request.params.channelId, 10);
+      if (!Number.isFinite(channelId) || channelId <= 0) {
+        return reply.code(400).send({ success: false, message: 'channelId 无效' });
+      }
+      const channel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, channelId)).get();
+      if (!channel) return reply.code(404).send({ success: false, message: '通道不存在' });
+
+      const performance = listPerformanceShadowMetrics().filter(
+        (metric) => metric.routeId === channel.routeId,
+      );
+
+      const result: Record<string, unknown> = {
+        channelId: channel.id,
+        routeId: channel.routeId,
+        accountId: channel.accountId,
+        sourceModel: channel.sourceModel ?? null,
+        priority: channel.priority ?? 0,
+        weight: channel.weight ?? 10,
+        enabled: !!channel.enabled,
+        manualOverride: !!channel.manualOverride,
+        requestOverrideRules: normalizeRequestOverrideRules(channel.requestOverrideRules),
+        cooldown: {
+          level: channel.cooldownLevel ?? 0,
+          until: channel.cooldownUntil ?? null,
+          failCount: channel.failCount ?? 0,
+          consecutiveFailCount: channel.consecutiveFailCount ?? 0,
+          lastFailAt: channel.lastFailAt ?? null,
+        },
+        performance,
+      };
+
+      const recentTraceRows = await db.select({
+        id: schema.proxyDebugTraces.id,
+      })
+        .from(schema.proxyDebugTraces)
+        .where(eq(schema.proxyDebugTraces.selectedChannelId, channelId))
+        .orderBy(schema.proxyDebugTraces.id)
+        .limit(5)
+        .all()
+        .catch(() => []);
+      result.recentTraceIds = (recentTraceRows as Array<{ id: number }>).map((row) => row.id);
+
+      return result;
+    },
+  );
 
   // Delete a channel
   app.delete<{ Params: { channelId: string } }>('/api/channels/:channelId', async (request) => {

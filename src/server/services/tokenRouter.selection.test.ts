@@ -138,6 +138,42 @@ describe('TokenRouter selection scoring', () => {
     }).returning().get();
   }
 
+  it('round_robin stays within the highest healthy priority layer', async () => {
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'priority-round-robin',
+      routingStrategy: 'round_robin',
+      enabled: true,
+    }).returning().get();
+    const highSiteA = await createSite('rr-high-a');
+    const highSiteB = await createSite('rr-high-b');
+    const lowSite = await createSite('rr-low');
+    const highAccountA = await createAccount(highSiteA.id, 'rr-high-a');
+    const highAccountB = await createAccount(highSiteB.id, 'rr-high-b');
+    const lowAccount = await createAccount(lowSite.id, 'rr-low');
+    const highA = await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: highAccountA.id, priority: 0, weight: 10, enabled: true,
+    }).returning().get();
+    const highB = await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: highAccountB.id, priority: 0, weight: 10, enabled: true,
+    }).returning().get();
+    const low = await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: lowAccount.id, priority: 5, weight: 10, enabled: true,
+    }).returning().get();
+
+    const router = new TokenRouter();
+    const first = await router.selectChannel('priority-round-robin');
+    const second = await router.selectChannel('priority-round-robin');
+    expect([first?.channel.id, second?.channel.id].sort()).toEqual([highA.id, highB.id].sort());
+    expect(first?.channel.id).not.toBe(low.id);
+    expect(second?.channel.id).not.toBe(low.id);
+
+    const decision = await router.explainSelection('priority-round-robin');
+    expect(decision.selectedChannelId).not.toBe(low.id);
+    expect(decision.summary.some((item) => item.includes('分层轮询：P0'))).toBe(true);
+    expect(decision.candidates.find((item) => item.channelId === low.id)?.reasonCodes)
+      .toContain('round_robin_waiting');
+  });
+
   it('reuses a preferred channel only while it remains healthy', async () => {
     config.routingWeights = {
       baseWeightFactor: 1,

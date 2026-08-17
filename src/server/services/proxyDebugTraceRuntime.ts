@@ -15,9 +15,53 @@ import {
   type HeadersLike,
 } from './proxyDebugTraceStore.js';
 
+export type RouteDecisionTraceEvent = {
+  sequence: number;
+  stage: 'selection' | 'candidates' | 'endpoint_attempt' | 'final';
+  recordedAt: string;
+  details: Record<string, unknown>;
+};
+
 type MutableProxyDebugTraceSession = ProxyDebugTraceSession & {
   nextAttemptIndex?: number;
+  routeDecisionEvents?: RouteDecisionTraceEvent[];
 };
+
+export function appendRouteDecisionTraceEvent(
+  session: ProxyDebugTraceSession | null,
+  stage: RouteDecisionTraceEvent['stage'],
+  details: Record<string, unknown>,
+): RouteDecisionTraceEvent[] {
+  if (!session) return [];
+  const mutableSession = session as MutableProxyDebugTraceSession;
+  const events = mutableSession.routeDecisionEvents ?? [];
+  events.push({
+    sequence: events.length,
+    stage,
+    recordedAt: new Date().toISOString(),
+    details,
+  });
+  mutableSession.routeDecisionEvents = events;
+  return [...events];
+}
+
+function withRouteDecisionEvents(
+  session: ProxyDebugTraceSession | null,
+  decisionSummary: unknown,
+): unknown {
+  if (!session) return decisionSummary;
+  const events = (session as MutableProxyDebugTraceSession).routeDecisionEvents ?? [];
+  if (decisionSummary && typeof decisionSummary === 'object' && !Array.isArray(decisionSummary)) {
+    return {
+      ...(decisionSummary as Record<string, unknown>),
+      routeDecisionEvents: [...events],
+    };
+  }
+  return {
+    summary: decisionSummary ?? null,
+    routeDecisionEvents: [...events],
+  };
+}
 
 function parseDebugTextPayload(rawText: string): unknown {
   if (!rawText) return null;
@@ -51,8 +95,12 @@ export async function safeUpdateSurfaceProxyDebugSelection(
   input: Parameters<typeof updateProxyDebugTraceSelection>[1],
 ): Promise<void> {
   if (!session) return;
+  appendRouteDecisionTraceEvent(session, 'selection', { ...input });
   try {
     await updateProxyDebugTraceSelection(session.traceId, input);
+    await updateProxyDebugTraceCandidates(session.traceId, {
+      decisionSummary: withRouteDecisionEvents(session, null),
+    });
   } catch (error) {
     console.warn('[proxy-debug] failed to update selection', error);
   }
@@ -63,8 +111,16 @@ export async function safeUpdateSurfaceProxyDebugCandidates(
   input: Parameters<typeof updateProxyDebugTraceCandidates>[1],
 ): Promise<void> {
   if (!session) return;
+  appendRouteDecisionTraceEvent(session, 'candidates', {
+    endpointCandidates: input.endpointCandidates ?? null,
+    endpointRuntimeState: input.endpointRuntimeState ?? null,
+    decisionSummary: input.decisionSummary ?? null,
+  });
   try {
-    await updateProxyDebugTraceCandidates(session.traceId, input);
+    await updateProxyDebugTraceCandidates(session.traceId, {
+      ...input,
+      decisionSummary: withRouteDecisionEvents(session, input.decisionSummary),
+    });
   } catch (error) {
     console.warn('[proxy-debug] failed to update endpoint candidates', error);
   }
@@ -75,6 +131,16 @@ export async function safeInsertSurfaceProxyDebugAttempt(
   input: Omit<Parameters<typeof insertProxyDebugAttempt>[0], 'traceId'>,
 ): Promise<void> {
   if (!session) return;
+  appendRouteDecisionTraceEvent(session, 'endpoint_attempt', {
+    attemptIndex: input.attemptIndex,
+    endpoint: input.endpoint,
+    requestPath: input.requestPath,
+    targetUrl: input.targetUrl,
+    runtimeExecutor: input.runtimeExecutor ?? null,
+    responseStatus: input.responseStatus ?? null,
+    recoverApplied: input.recoverApplied === true,
+    downgradeDecision: input.downgradeDecision === true,
+  });
   try {
     await insertProxyDebugAttempt({
       ...input,
@@ -110,7 +176,15 @@ export async function safeFinalizeSurfaceProxyDebugTrace(
   input: Parameters<typeof finalizeProxyDebugTrace>[1],
 ): Promise<void> {
   if (!session) return;
+  appendRouteDecisionTraceEvent(session, 'final', {
+    finalStatus: input.finalStatus ?? null,
+    finalHttpStatus: input.finalHttpStatus ?? null,
+    finalUpstreamPath: input.finalUpstreamPath ?? null,
+  });
   try {
+    await updateProxyDebugTraceCandidates(session.traceId, {
+      decisionSummary: withRouteDecisionEvents(session, null),
+    });
     await finalizeProxyDebugTrace(session.traceId, {
       ...input,
       finalResponseHeaders: session.options.captureHeaders ? input.finalResponseHeaders : null,

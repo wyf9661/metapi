@@ -55,6 +55,7 @@ vi.mock('../../services/modelService.js', () => ({
 }));
 
 vi.mock('../../services/alertService.js', () => ({
+  resetTokenExpiredSightings: async () => undefined,
   reportProxyAllFailed: (...args: unknown[]) => reportProxyAllFailedMock(...args),
   reportTokenExpired: (...args: unknown[]) => reportTokenExpiredMock(...args),
 }));
@@ -86,6 +87,11 @@ vi.mock('../../services/modelPricingService.js', () => ({
 }));
 
 vi.mock('../../services/proxyRetryPolicy.js', () => ({
+  resolveFailoverBackoffMs: () => 0,
+  sleepMs: async () => undefined,
+  shouldGraceRetryInPlaceOnce: () => false,
+  canRetryInPlaceForRecoveringFailure: () => false,
+  isRecoveringTransientFailure: () => false,
   shouldRetryProxyRequest: () => false,
   shouldAbortSameSiteEndpointFallback: () => false,
   RETRYABLE_TIMEOUT_PATTERNS: [/(request timed out|connection timed out|read timeout|\btimed out\b)/i],

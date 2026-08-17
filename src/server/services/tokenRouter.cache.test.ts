@@ -701,7 +701,7 @@ describe('TokenRouter runtime cache', () => {
     ]));
   });
 
-  it('round robins across all available channels regardless of priority', async () => {
+  it('round robins only within the highest healthy priority layer', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'round-robin-site',
       url: 'https://round-robin-site.example.com',
@@ -745,8 +745,8 @@ describe('TokenRouter runtime cache', () => {
     const fourth = await router.selectChannel('gpt-4o-mini');
 
     expect(first?.channel.id).toBe(channels[0].id);
-    expect(second?.channel.id).toBe(channels[1].id);
-    expect(third?.channel.id).toBe(channels[2].id);
+    expect(second?.channel.id).toBe(channels[0].id);
+    expect(third?.channel.id).toBe(channels[0].id);
     expect(fourth?.channel.id).toBe(channels[0].id);
   });
 

@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.js';
 import {
   EMPTY_DOWNSTREAM_ROUTING_POLICY,
   type DownstreamExcludedCredentialRef,
+  type DownstreamModelMapping,
   type DownstreamRoutingPolicy,
 } from './downstreamPolicyTypes.js';
 
@@ -40,6 +41,37 @@ function resolveDailyUsage(row: Pick<DownstreamApiKeyRow, 'dailyUsedRequests' | 
   };
 }
 
+export function normalizeModelMappingsInput(input: unknown): DownstreamModelMapping[] {
+  const raw = typeof input === 'string' ? parseJson(input) : input;
+  if (!Array.isArray(raw)) return [];
+  const mappings: DownstreamModelMapping[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const from = String((item as Record<string, unknown>).from || '').trim();
+    const to = String((item as Record<string, unknown>).to || '').trim();
+    if (!from || !to || from.length > 256 || to.length > 256) continue;
+    if (from.toLowerCase().startsWith('re:')) {
+      const pattern = parseRegexModelPattern(from);
+      if (!pattern) continue;
+    }
+    mappings.push({ from, to });
+    if (mappings.length >= 100) break;
+  }
+  return mappings;
+}
+
+export function resolveDownstreamModelMapping(
+  requestedModel: string,
+  mappings: DownstreamModelMapping[],
+): string {
+  const model = requestedModel.trim();
+  if (!model) return model;
+  for (const mapping of mappings) {
+    if (matchesDownstreamModelPattern(model, mapping.from)) return mapping.to;
+  }
+  return model;
+}
+
 export type DownstreamApiKeyRow = typeof schema.downstreamApiKeys.$inferSelect;
 
 export type DownstreamApiKeyPolicyView = {
@@ -64,6 +96,7 @@ export type DownstreamApiKeyPolicyView = {
   dailyWindowDate: string | null;
   sensitiveWordDetection: boolean | null;
   supportedModels: string[];
+  modelMappings: DownstreamModelMapping[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
   excludedSiteIds: number[];
@@ -382,6 +415,7 @@ export async function isModelAllowedByPolicyOrAllowedRoutes(model: string, polic
 
 export function toDownstreamApiKeyPolicyView(row: DownstreamApiKeyRow): DownstreamApiKeyPolicyView {
   const supportedModels = normalizeSupportedModelsInput(parseJson(row.supportedModels));
+  const modelMappings = normalizeModelMappingsInput(parseJson(row.modelMappings));
   const allowedRouteIds = normalizeAllowedRouteIdsInput(parseJson(row.allowedRouteIds));
   const siteWeightMultipliers = normalizeSiteWeightMultipliersInput(parseJson(row.siteWeightMultipliers));
   const excludedSiteIds = normalizeExcludedSiteIdsInput(parseJson(row.excludedSiteIds));
@@ -409,6 +443,7 @@ export function toDownstreamApiKeyPolicyView(row: DownstreamApiKeyRow): Downstre
     dailyWindowDate: resolveDailyUsage(row).windowDate,
     sensitiveWordDetection: row.sensitiveWordDetection === null || row.sensitiveWordDetection === undefined ? null : !!row.sensitiveWordDetection,
     supportedModels,
+    modelMappings,
     allowedRouteIds,
     siteWeightMultipliers,
     excludedSiteIds,
@@ -419,9 +454,10 @@ export function toDownstreamApiKeyPolicyView(row: DownstreamApiKeyRow): Downstre
   };
 }
 
-export function toPolicyFromView(view: Pick<DownstreamApiKeyPolicyView, 'supportedModels' | 'allowedRouteIds' | 'siteWeightMultipliers' | 'excludedSiteIds' | 'excludedCredentialRefs'>): DownstreamRoutingPolicy {
+export function toPolicyFromView(view: Pick<DownstreamApiKeyPolicyView, 'supportedModels' | 'modelMappings' | 'allowedRouteIds' | 'siteWeightMultipliers' | 'excludedSiteIds' | 'excludedCredentialRefs'>): DownstreamRoutingPolicy {
   return {
     supportedModels: normalizeSupportedModelsInput(view.supportedModels),
+    modelMappings: normalizeModelMappingsInput(view.modelMappings),
     allowedRouteIds: normalizeAllowedRouteIdsInput(view.allowedRouteIds),
     siteWeightMultipliers: normalizeSiteWeightMultipliersInput(view.siteWeightMultipliers),
     excludedSiteIds: normalizeExcludedSiteIdsInput(view.excludedSiteIds),
@@ -671,6 +707,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
   maxDailyCost?: unknown;
   sensitiveWordDetection?: unknown;
   supportedModels?: unknown;
+  modelMappings?: unknown;
   allowedRouteIds?: unknown;
   siteWeightMultipliers?: unknown;
   excludedSiteIds?: unknown;
@@ -708,6 +745,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
       ? null
       : !!input.sensitiveWordDetection;
   const supportedModels = normalizeSupportedModelsInput(input.supportedModels);
+  const modelMappings = normalizeModelMappingsInput(input.modelMappings);
   const allowedRouteIds = normalizeAllowedRouteIdsInput(input.allowedRouteIds);
   const siteWeightMultipliers = normalizeSiteWeightMultipliersInput(input.siteWeightMultipliers);
   const excludedSiteIds = normalizeExcludedSiteIdsInput(input.excludedSiteIds);
@@ -728,6 +766,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
     maxDailyCost,
     sensitiveWordDetection,
     supportedModels,
+    modelMappings,
     allowedRouteIds,
     siteWeightMultipliers,
     excludedSiteIds,

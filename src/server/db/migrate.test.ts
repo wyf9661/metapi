@@ -400,6 +400,7 @@ describe('sqlite migrate bootstrap', () => {
       '0030_downstream_api_key_max_rpm',
       '0031_downstream_api_key_daily_quota',
       '0033_downstream_key_sensitive_word_detection',
+      '0037_downstream_api_key_model_mappings',
     ]);
     const appliedEntries = journalEntries.filter((entry) => !missingTags.has(entry.tag));
 

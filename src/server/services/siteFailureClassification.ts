@@ -40,6 +40,7 @@ export type ProxyFailureClass =
   | 'request_validation'
   | 'ambiguous_client'
   | 'endpoint_pool_down'
+  | 'local_capacity'
   | 'unknown';
 
 export type ProxyFailureDecision = {
@@ -409,6 +410,16 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
   const errorText = (context.errorText || '').trim();
   const ctx = { status, errorText, modelName: context.modelName };
 
+  if (status === 503 && /Channel busy:|no session slot available|session slot available/i.test(errorText)) {
+    return {
+      class: 'local_capacity',
+      retryChannel: true,
+      cascadeEndpoint: false,
+      cooldownWeight: 0,
+      cooldownScope: 'none',
+    };
+  }
+
   if (isProtocolPolicyFailure(ctx)) {
     return {
       class: 'protocol_policy',
@@ -618,6 +629,43 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
     cascadeEndpoint: false,
     cooldownWeight: 1.0,
     cooldownScope: status >= 400 ? 'channel' : 'none',
+  };
+}
+
+export type ProxyRetryAction =
+  | 'retry_same_endpoint'
+  | 'cascade_endpoint'
+  | 'refresh_auth'
+  | 'failover_channel'
+  | 'terminal';
+
+export type ProxyFailureDisposition = ProxyFailureDecision & {
+  retryAction: ProxyRetryAction;
+  incrementFailure: boolean;
+  clearSticky: boolean;
+  clearLastSuccess: boolean;
+};
+
+export function buildProxyFailureDisposition(
+  context: SiteRuntimeFailureContext = {},
+): ProxyFailureDisposition {
+  const status = typeof context.status === 'number' ? context.status : 0;
+  const decision = classifyProxyFailure(context);
+  const retryAction: ProxyRetryAction = decision.cascadeEndpoint
+    ? 'cascade_endpoint'
+    : (decision.class === 'auth_channel'
+      ? 'refresh_auth'
+      : (decision.retryChannel ? 'failover_channel' : 'terminal'));
+  const incrementFailure = decision.cooldownScope !== 'none'
+    || (status === 0 && retryAction === 'failover_channel');
+  const clearSticky = incrementFailure && retryAction !== 'cascade_endpoint';
+  const clearLastSuccess = decision.class === 'credential_invalid';
+  return {
+    ...decision,
+    retryAction,
+    incrementFailure,
+    clearSticky,
+    clearLastSuccess,
   };
 }
 

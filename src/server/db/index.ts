@@ -576,6 +576,10 @@ function ensureRouteGroupingSchema() {
     execSqliteLegacyCompat('ALTER TABLE route_channels ADD COLUMN cooldown_level integer NOT NULL DEFAULT 0;');
   }
 
+  if (!tableColumnExists('route_channels', 'request_override_rules')) {
+    execSqliteLegacyCompat('ALTER TABLE route_channels ADD COLUMN request_override_rules text;');
+  }
+
   execSqliteLegacyCompat(`
     CREATE TABLE IF NOT EXISTS route_group_sources (
       id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -644,6 +648,10 @@ function ensureDownstreamApiKeySchema() {
 
   if (!tableColumnExists('downstream_api_keys', 'sensitive_word_detection')) {
     execSqliteLegacyCompat('ALTER TABLE downstream_api_keys ADD COLUMN sensitive_word_detection integer DEFAULT 0;');
+  }
+
+  if (!tableColumnExists('downstream_api_keys', 'model_mappings')) {
+    execSqliteLegacyCompat('ALTER TABLE downstream_api_keys ADD COLUMN model_mappings text;');
   }
 }
 

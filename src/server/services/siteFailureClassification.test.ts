@@ -11,10 +11,64 @@ import {
   resolveSiteRuntimeFailurePenalty,
   SITE_TRANSIENT_FAILURE_PATTERNS,
   classifyProxyFailure,
+  buildProxyFailureDisposition,
   isLowValueFailoverFailureClass,
 } from './siteFailureClassification.js';
 
 describe('siteFailureClassification', () => {
+  it('builds one disposition for retry and health mutation consumers', () => {
+    expect(buildProxyFailureDisposition({
+      status: 400,
+      errorText: 'invalid request body',
+    })).toMatchObject({
+      class: 'request_validation',
+      retryAction: 'terminal',
+      retryChannel: false,
+      cooldownScope: 'none',
+      incrementFailure: false,
+      clearSticky: false,
+      clearLastSuccess: false,
+    });
+
+    expect(buildProxyFailureDisposition({
+      status: 404,
+      errorText: 'unsupported model: gpt-5',
+    })).toMatchObject({
+      class: 'model_unsupported',
+      retryAction: 'failover_channel',
+      cooldownScope: 'channel_model',
+      incrementFailure: true,
+      clearSticky: true,
+    });
+
+    expect(buildProxyFailureDisposition({
+      status: 403,
+      errorText: 'This organization has been disabled.',
+    })).toMatchObject({
+      class: 'credential_invalid',
+      retryAction: 'terminal',
+      cooldownScope: 'credential',
+      incrementFailure: true,
+      clearSticky: true,
+      clearLastSuccess: true,
+    });
+  });
+
+  it('classifies local channel capacity as non-health failure', () => {
+    expect(buildProxyFailureDisposition({
+      status: 503,
+      errorText: 'Channel busy: no session slot available',
+    })).toMatchObject({
+      class: 'local_capacity',
+      retryAction: 'failover_channel',
+      retryChannel: true,
+      cooldownScope: 'none',
+      incrementFailure: false,
+      clearSticky: false,
+      clearLastSuccess: false,
+    });
+  });
+
   it('matchesAnyPattern handles empty / whitespace input', () => {
     expect(matchesAnyPattern([/x/], '')).toBe(false);
     expect(matchesAnyPattern([/x/], '   ')).toBe(false);

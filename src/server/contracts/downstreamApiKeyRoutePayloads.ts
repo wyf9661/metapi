@@ -26,6 +26,7 @@ const downstreamApiKeyPayloadSchema = z.object({
   maxRequests: z.union([z.number(), z.string(), z.null()]).optional(),
   sensitiveWordDetection: z.union([z.boolean(), z.null()]).optional(),
   supportedModels: z.union([z.string(), z.array(z.string())]).optional(),
+  modelMappings: z.union([z.string(), z.array(z.object({ from: z.string(), to: z.string() }))]).optional(),
   allowedRouteIds: z.union([z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
   siteWeightMultipliers: z.union([
     z.string(),
@@ -89,6 +90,9 @@ function formatDownstreamApiKeyPayloadError(error: z.ZodError): string {
   }
   if (firstPath === 'supportedModels') {
     return 'Invalid supportedModels. Expected string or string[].';
+  }
+  if (firstPath === 'modelMappings') {
+    return 'Invalid modelMappings. Expected JSON string or {from,to}[].';
   }
   if (firstPath === 'allowedRouteIds') {
     return 'Invalid allowedRouteIds. Expected string or array.';

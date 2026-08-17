@@ -41,6 +41,7 @@ import {
   normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
 } from './routeRoutingStrategy.js';
+import { resolveDownstreamPolicyModel } from './downstreamPolicyTypes.js';
 import { type DownstreamRoutingPolicy, EMPTY_DOWNSTREAM_ROUTING_POLICY } from './downstreamPolicyTypes.js';
 import { isUsableAccountToken } from './accountTokenService.js';
 import { getCredentialModeFromExtraConfig } from './accountExtraConfig.js';
@@ -52,7 +53,7 @@ import {
   loadOauthRouteUnitSummariesByIds,
   type OAuthRouteUnitSummary,
 } from './oauth/routeUnitService.js';
-import {buildVisibleEnabledRoutes, channelSupportsRequestedModel, getExposedModelNameForRoute, isExplicitGroupRoute, isModelAllowedByDownstreamPolicy, isRouteDisplayNameMatch, normalizeChannelSourceModel, normalizeModelAlias, normalizeRouteDisplayName, normalizeRouteMode, resolveActualModelForSelectedChannel, resolveMappedModel} from './tokenRouterModelMatching.js';
+import {buildVisibleEnabledRoutes, channelSupportsRequestedModel, getExposedModelNameForRoute, isExplicitGroupRoute, isModelAllowedByDownstreamPolicy, isRouteDisplayNameMatch, normalizeChannelSourceModel, normalizeModelAlias, normalizeRouteDisplayName, normalizeRouteMode, resolveMappedModel, resolveModelResolution, type ModelResolution} from './tokenRouterModelMatching.js';
 import {isExactRouteModelPattern, matchesModelPattern} from './tokenRouterModelPatterns.js';
 import {formatShadowSelectionLog, rankShadowCandidates, type ShadowCandidateInput} from './routeScoringShadow.js';
 import {
@@ -66,6 +67,7 @@ import { siteProtocolAffinityFactor } from '../shared/siteProtocolProfile.js';
 import {
   type RouteDecision,
   type RouteDecisionCandidate,
+  type RouteDecisionReasonCode,
   type RouteMode,
 } from '../../shared/tokenRouteContract.js';
 
@@ -502,6 +504,7 @@ export type RouteDecisionExplanation = RouteDecision & {
   routeId?: number;
   modelPattern?: string;
   selectedAccountId?: number;
+  modelResolution?: ModelResolution;
 };
 
 const DEFAULT_DOWNSTREAM_POLICY: DownstreamRoutingPolicy = EMPTY_DOWNSTREAM_ROUTING_POLICY;
@@ -518,6 +521,23 @@ type PricingReferenceRefreshOptions = {
   downstreamPolicy?: DownstreamRoutingPolicy;
   refreshedKeys?: Set<string>;
 };
+
+type CandidateEligibilityReason = {
+  code: RouteDecisionReasonCode;
+  message: string;
+  details?: Record<string, unknown>;
+};
+
+function setCandidateDecisionReason(
+  candidate: RouteDecisionCandidate,
+  code: RouteDecisionReasonCode,
+  reason: string,
+  details?: Record<string, unknown>,
+): void {
+  candidate.reason = reason;
+  candidate.reasonCodes = [code];
+  candidate.reasonDetails = details;
+}
 
 type CandidateEligibilityOptions = {
   requestedModel: string;
@@ -849,26 +869,28 @@ export class TokenRouter {
    * Returns null if no route/channel available.
    */
   async selectChannel(requestedModel: string, downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY): Promise<SelectedChannel | null> {
-    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
+    const effectiveModel = resolveDownstreamPolicyModel(requestedModel, downstreamPolicy);
+    if (!isModelAllowedByDownstreamPolicy(effectiveModel, downstreamPolicy)) return null;
     await ensureSiteRuntimeHealthStateLoaded();
     await ensureBoundedGapStatesLoaded();
 
-    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    const match = await this.findRoute(effectiveModel, downstreamPolicy);
     if (!match) return null;
-    return await this.selectFromMatch(match, requestedModel, downstreamPolicy);
+    return await this.selectFromMatch(match, effectiveModel, downstreamPolicy);
   }
 
   async previewSelectedChannel(
     requestedModel: string,
     downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
   ): Promise<SelectedChannel | null> {
-    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
+    const effectiveModel = resolveDownstreamPolicyModel(requestedModel, downstreamPolicy);
+    if (!isModelAllowedByDownstreamPolicy(effectiveModel, downstreamPolicy)) return null;
     await ensureSiteRuntimeHealthStateLoaded();
     await ensureBoundedGapStatesLoaded();
 
-    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    const match = await this.findRoute(effectiveModel, downstreamPolicy);
     if (!match) return null;
-    return await this.selectFromMatch(match, requestedModel, downstreamPolicy, [], false);
+    return await this.selectFromMatch(match, effectiveModel, downstreamPolicy, [], false);
   }
 
   /**
@@ -883,15 +905,16 @@ export class TokenRouter {
     downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
     excludeChannelIds: number[] = [],
   ): Promise<number> {
-    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return 0;
+    const effectiveModel = resolveDownstreamPolicyModel(requestedModel, downstreamPolicy);
+    if (!isModelAllowedByDownstreamPolicy(effectiveModel, downstreamPolicy)) return 0;
     await ensureSiteRuntimeHealthStateLoaded();
-    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    const match = await this.findRoute(effectiveModel, downstreamPolicy);
     if (!match) return 0;
     const nowIso = new Date().toISOString();
-    const requestedByDisplayName = isRouteDisplayNameMatch(requestedModel, match.route.displayName);
+    const requestedByDisplayName = isRouteDisplayNameMatch(effectiveModel, match.route.displayName);
     return match.channels.filter((candidate) => (
       this.getCandidateEligibilityReasons(candidate, {
-        requestedModel,
+        requestedModel: effectiveModel,
         bypassSourceModelCheck: requestedByDisplayName,
         excludeChannelIds,
         nowIso,
@@ -905,12 +928,13 @@ export class TokenRouter {
     excludeChannelIds: number[],
     downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
   ): Promise<SelectedChannel | null> {
-    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
+    const effectiveModel = resolveDownstreamPolicyModel(requestedModel, downstreamPolicy);
+    if (!isModelAllowedByDownstreamPolicy(effectiveModel, downstreamPolicy)) return null;
     await ensureSiteRuntimeHealthStateLoaded();
 
-    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    const match = await this.findRoute(effectiveModel, downstreamPolicy);
     if (!match) return null;
-    return await this.selectFromMatch(match, requestedModel, downstreamPolicy, excludeChannelIds);
+    return await this.selectFromMatch(match, effectiveModel, downstreamPolicy, excludeChannelIds);
   }
 
   /**
@@ -1043,6 +1067,11 @@ export class TokenRouter {
     const bypassSourceModelCheck = (options.bypassSourceModelCheck ?? false) || requestedByDisplayName;
     const useChannelSourceModelForCost = (options.useChannelSourceModelForCost ?? false) || requestedByDisplayName;
     const mappedModel = resolveMappedModel(requestedModel, match.route.modelMapping);
+    const baseModelResolution = resolveModelResolution({
+      requestedModel,
+      route: match.route,
+      modelMapping: match.route.modelMapping,
+    });
     const routeStrategy = resolveRouteStrategy(match.route);
     const runtimeModelResolver = requestedByDisplayName
       ? ((candidate: RouteChannelCandidate) => normalizeChannelSourceModel(candidate.channel.sourceModel) || mappedModel)
@@ -1065,7 +1094,7 @@ export class TokenRouter {
     const candidateMap = new Map<number, RouteDecisionCandidate>();
 
     for (const row of match.channels) {
-      const reasonParts = this.getCandidateEligibilityReasons(row, {
+      const eligibilityReasons = this.getCandidateEligibilityReasons(row, {
         requestedModel,
         bypassSourceModelCheck,
         excludeChannelIds,
@@ -1076,7 +1105,12 @@ export class TokenRouter {
       const recentlyFailed = routeStrategy !== 'round_robin'
         ? isChannelRecentlyFailed(row.channel, nowMs)
         : false;
-      const eligible = reasonParts.length === 0;
+      const eligible = eligibilityReasons.length === 0;
+      const reasonDetails = Object.fromEntries(
+        eligibilityReasons
+          .filter((item) => item.details !== undefined)
+          .map((item) => [item.code, item.details]),
+      );
       const candidate: RouteDecisionCandidate = {
         channelId: row.channel.id,
         accountId: row.account.id,
@@ -1090,7 +1124,9 @@ export class TokenRouter {
         recentlyFailed,
         avoidedByRecentFailure: false,
         probability: 0,
-        reason: eligible ? '可用' : reasonParts.join('、'),
+        reason: eligible ? '可用' : eligibilityReasons.map((item) => item.message).join('、'),
+        reasonCodes: eligible ? ['eligible'] : eligibilityReasons.map((item) => item.code),
+        reasonDetails: Object.keys(reasonDetails).length > 0 ? reasonDetails : undefined,
       };
       candidates.push(candidate);
       candidateMap.set(candidate.channelId, candidate);
@@ -1110,6 +1146,7 @@ export class TokenRouter {
         modelPattern: match.route.modelPattern,
         summary,
         candidates,
+        modelResolution: baseModelResolution,
       };
     }
 
@@ -1141,39 +1178,60 @@ export class TokenRouter {
         const target = candidateMap.get(item.candidate.channel.id);
         if (!target) continue;
         target.probability = 0;
-        target.reason = item.reason;
+        setCandidateDecisionReason(target, 'connectivity_avoided', item.reason);
       }
       summary.push(`连通性软避让 ${connectivityFiltered.avoided.length}`);
     }
     const routePool = connectivityFiltered.candidates;
 
     if (routeStrategy === 'round_robin') {
-      const rawOrdered = this.getRoundRobinCandidates(routePool);
-      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(rawOrdered, runtimeModelResolver, nowMs);
-      if (breakerFiltered.avoided.length > 0) {
+      const layers = new Map<number, RouteChannelCandidate[]>();
+      for (const candidate of routePool) {
+        const priority = candidate.channel.priority ?? 0;
+        if (!layers.has(priority)) layers.set(priority, []);
+        layers.get(priority)!.push(candidate);
+      }
+      const sortedPriorities = [...layers.keys()].sort((left, right) => left - right);
+      let selected: RouteChannelCandidate | null = null;
+      let selectedPriority = 0;
+      let ordered: RouteChannelCandidate[] = [];
+      for (const [layerIndex, priority] of sortedPriorities.entries()) {
+        const rawLayer = this.getRoundRobinCandidates(layers.get(priority) ?? []);
+        const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(rawLayer, runtimeModelResolver, nowMs);
         for (const item of breakerFiltered.avoided) {
           const target = candidateMap.get(item.candidate.channel.id);
-          if (!target) continue;
-          target.reason = item.reason;
+          if (target) setCandidateDecisionReason(target, 'runtime_health_avoided', item.reason);
         }
-        const breakerSummaryLabel = breakerFiltered.avoided.some((item) => item.reason.includes('模型熔断'))
-          ? '运行时熔断避让'
-          : '站点熔断避让';
-        summary.push(`${breakerSummaryLabel} ${breakerFiltered.avoided.length}`);
+        const hasFreshCandidate = breakerFiltered.candidates.some(
+          (candidate) => !isChannelRecentlyFailed(candidate.channel, nowMs),
+        );
+        if (!hasFreshCandidate && layerIndex < sortedPriorities.length - 1) continue;
+        ordered = this.getRoundRobinCandidates(filterRecentlyFailedCandidates(breakerFiltered.candidates, nowMs));
+        if (ordered.length === 0) continue;
+        selected = ordered[0] ?? null;
+        selectedPriority = priority;
+        break;
       }
-      const ordered = breakerFiltered.candidates;
-      let selected: RouteChannelCandidate | null = null;
 
+      for (const candidate of candidates) {
+        if ((candidate.priority ?? 0) > selectedPriority && candidate.eligible) {
+          setCandidateDecisionReason(candidate, 'round_robin_waiting', `等待更高优先级 P${selectedPriority} 耗尽`, {
+            selectedPriority,
+          });
+        }
+      }
       for (let index = 0; index < ordered.length; index += 1) {
         const target = candidateMap.get(ordered[index].channel.id);
         if (!target || !target.eligible) continue;
         target.probability = index === 0 ? 100 : 0;
-        target.reason = index === 0
-          ? `轮询命中（全局第 1 / ${ordered.length} 位，忽略优先级）`
-          : `轮询排队中（全局第 ${index + 1} / ${ordered.length} 位，忽略优先级）`;
-        if (index === 0) {
-          selected = ordered[index];
-        }
+        setCandidateDecisionReason(
+          target,
+          index === 0 ? 'round_robin_selected' : 'round_robin_waiting',
+          index === 0
+            ? `P${selectedPriority} 层内轮询命中（第 1 / ${ordered.length} 位）`
+            : `P${selectedPriority} 层内轮询排队（第 ${index + 1} / ${ordered.length} 位）`,
+          { priority: selectedPriority, position: index + 1, candidateCount: ordered.length },
+        );
       }
 
       if (!selected) {
@@ -1193,13 +1251,14 @@ export class TokenRouter {
       const selectedLabel = selectedChannel
         ? `${selectedChannel.username} @ ${selectedChannel.siteName} / ${selectedChannel.tokenName}`
         : `channel-${selected.channel.id}`;
-      const actualModel = resolveActualModelForSelectedChannel(
+      const modelResolution = resolveModelResolution({
         requestedModel,
-        match.route,
-        mappedModel,
-        selected.channel.sourceModel,
-      );
-      summary.push(`全局轮询：可用 ${ordered.length}，忽略优先级`);
+        route: match.route,
+        modelMapping: match.route.modelMapping,
+        channelSourceModel: selected.channel.sourceModel,
+      });
+      const actualModel = modelResolution.upstreamModel;
+      summary.push(`分层轮询：P${selectedPriority} 可用 ${ordered.length}`);
       summary.push(`最终选择：${selectedLabel}`);
       if (actualModel !== mappedModel) {
         summary.push(`实际转发模型：${actualModel}`);
@@ -1216,6 +1275,7 @@ export class TokenRouter {
         selectedLabel,
         summary,
         candidates,
+        modelResolution,
       };
     }
 
@@ -1225,7 +1285,7 @@ export class TokenRouter {
         for (const item of breakerFiltered.avoided) {
           const target = candidateMap.get(item.candidate.channel.id);
           if (!target) continue;
-          target.reason = item.reason;
+          setCandidateDecisionReason(target, 'runtime_health_avoided', item.reason);
         }
       }
 
@@ -1236,7 +1296,10 @@ export class TokenRouter {
           const target = candidateMap.get(row.channel.id);
           if (!target) continue;
           target.avoidedByRecentFailure = true;
-          target.reason = `最近失败，优先避让（${resolveFailureBackoffSec(row.channel.failCount)} 秒窗口）`;
+          setCandidateDecisionReason(target, 'recent_failure_avoided', `最近失败，优先避让（${resolveFailureBackoffSec(row.channel.failCount)} 秒窗口）`, {
+            failCount: row.channel.failCount ?? 0,
+            cooldownSeconds: resolveFailureBackoffSec(row.channel.failCount),
+          });
         }
       }
 
@@ -1289,9 +1352,14 @@ export class TokenRouter {
         if (!target) continue;
         target.probability = Number((detail.probability * (useObservationNow ? 0 : 100)).toFixed(2));
         if (target.eligible && !target.avoidedByRecentFailure) {
-          target.reason = useObservationNow
-            ? `主池：本次让位给观察池灰度请求；${detail.reason}`
-            : `主池：${detail.reason}`;
+          setCandidateDecisionReason(
+            target,
+            'stable_first_scored',
+            useObservationNow
+              ? `主池：本次让位给观察池灰度请求；${detail.reason}`
+              : `主池：${detail.reason}`,
+            { probability: target.probability, pool: 'primary' },
+          );
         }
       }
       for (const detail of observationWeighted.details) {
@@ -1307,9 +1375,14 @@ export class TokenRouter {
             : (observationBlockedByCooldown
               ? '当前已到灰度窗口，但观察站点仍在冷却'
               : `当前还需 ${remainingPrimaryRequestsBeforeObservation} 次主池请求`);
-          target.reason = poolPlan.observationSiteIds.has(detail.candidate.site.id)
-            ? `${siteState?.observationReason || '观察池'}；${observationWindowPrefix}；${detail.reason}`
-            : `观察池：${observationWindowPrefix}；${detail.reason}`;
+          setCandidateDecisionReason(
+            target,
+            'stable_first_scored',
+            poolPlan.observationSiteIds.has(detail.candidate.site.id)
+              ? `${siteState?.observationReason || '观察池'}；${observationWindowPrefix}；${detail.reason}`
+              : `观察池：${observationWindowPrefix}；${detail.reason}`,
+            { probability: target.probability, pool: 'observation' },
+          );
         }
       }
 
@@ -1363,12 +1436,13 @@ export class TokenRouter {
       const selectedLabel = selectedChannel
         ? `${selectedChannel.username} @ ${selectedChannel.siteName} / ${selectedChannel.tokenName}`
         : `channel-${weighted.selected.channel.id}`;
-      const actualModel = resolveActualModelForSelectedChannel(
+      const modelResolution = resolveModelResolution({
         requestedModel,
-        match.route,
-        mappedModel,
-        weighted.selected.channel.sourceModel,
-      );
+        route: match.route,
+        modelMapping: match.route.modelMapping,
+        channelSourceModel: weighted.selected.channel.sourceModel,
+      });
+      const actualModel = modelResolution.upstreamModel;
       summary.push(`最终选择：${selectedLabel}（P${weighted.selected.channel.priority ?? 0}）`);
       if (actualModel !== mappedModel) {
         summary.push(`实际转发模型：${actualModel}`);
@@ -1385,6 +1459,7 @@ export class TokenRouter {
         selectedLabel,
         summary,
         candidates,
+        modelResolution,
       };
     }
 
@@ -1409,7 +1484,7 @@ export class TokenRouter {
           const target = candidateMap.get(item.candidate.channel.id);
           if (!target) continue;
           target.probability = 0;
-          target.reason = item.reason;
+          setCandidateDecisionReason(target, 'runtime_health_avoided', item.reason);
         }
       }
 
@@ -1421,7 +1496,15 @@ export class TokenRouter {
           if (!target) continue;
           target.avoidedByRecentFailure = true;
           target.probability = 0;
-          target.reason = `最近失败，优先避让（${resolveFailureBackoffSec(row.channel.failCount)} 秒窗口）`;
+          setCandidateDecisionReason(
+            target,
+            'recent_failure_avoided',
+            `最近失败，优先避让（${resolveFailureBackoffSec(row.channel.failCount)} 秒窗口）`,
+            {
+              failCount: row.channel.failCount ?? 0,
+              cooldownSeconds: resolveFailureBackoffSec(row.channel.failCount),
+            },
+          );
         }
       }
 
@@ -1450,13 +1533,19 @@ export class TokenRouter {
           const connText = scored.factors.connectivity >= 1.2
             ? '通'
             : (scored.factors.connectivity <= 0.2 ? '不通' : '未知');
-          target.reason = (
+          setCandidateDecisionReason(
+            target,
+            'weighted_scored',
             `balanced-v2（W=${row.channel.weight ?? 10}，凭证=${scored.factors.credential.toFixed(2)}，`
-            + `余额=${scored.factors.balance.toFixed(2)}，成本=${scored.factors.cost.toFixed(2)}，`
-            + `可靠=${scored.factors.reliability.toFixed(2)}，健康=${scored.factors.health.toFixed(2)}，`
-            + `连通=${scored.factors.connectivity.toFixed(2)}(${connText})，`
-            + `协议=${scored.factors.protocolAffinity.toFixed(2)}，负载=${scored.factors.load.toFixed(2)}，`
-            + `概率≈${(scored.probability * 100).toFixed(1)}%）`
+              + `余额=${scored.factors.balance.toFixed(2)}，成本=${scored.factors.cost.toFixed(2)}，`
+              + `可靠=${scored.factors.reliability.toFixed(2)}，健康=${scored.factors.health.toFixed(2)}，`
+              + `连通=${scored.factors.connectivity.toFixed(2)}(${connText})，`
+              + `协议=${scored.factors.protocolAffinity.toFixed(2)}，负载=${scored.factors.load.toFixed(2)}，`
+              + `概率≈${(scored.probability * 100).toFixed(1)}%）`,
+            {
+              probability: target.probability,
+              factors: scored.factors,
+            },
           );
         }
       }
@@ -1492,6 +1581,7 @@ export class TokenRouter {
         modelPattern: match.route.modelPattern,
         summary,
         candidates,
+        modelResolution: baseModelResolution,
       };
     }
 
@@ -1499,12 +1589,13 @@ export class TokenRouter {
     const selectedLabel = selectedChannel
       ? `${selectedChannel.username} @ ${selectedChannel.siteName} / ${selectedChannel.tokenName}`
       : `channel-${selected.channel.id}`;
-    const actualModel = resolveActualModelForSelectedChannel(
+    const modelResolution = resolveModelResolution({
       requestedModel,
-      match.route,
-      mappedModel,
-      selected.channel.sourceModel,
-    );
+      route: match.route,
+      modelMapping: match.route.modelMapping,
+      channelSourceModel: selected.channel.sourceModel,
+    });
+    const actualModel = modelResolution.upstreamModel;
     summary.push(`最终选择：${selectedLabel}（P${selectedPriority}）`);
     if (actualModel !== mappedModel) {
       summary.push(`实际转发模型：${actualModel}`);
@@ -1521,6 +1612,7 @@ export class TokenRouter {
       selectedLabel,
       summary,
       candidates,
+      modelResolution,
     };
   }
 
@@ -2289,35 +2381,50 @@ export class TokenRouter {
     const routePool = connectivityFiltered.candidates;
 
     if (routeStrategy === 'round_robin') {
-      const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(routePool, runtimeModelResolver, nowMs);
-      const selected = this.selectRoundRobinCandidate(breakerFiltered.candidates);
-      if (!selected) return null;
-      const resolvedRoundRobin = await this.finalizeSelectedCandidateForDispatch(
-        selected,
-        match,
-        requestedModel,
-        mappedModel,
-        downstreamPolicy,
-        recordSelection,
-        nowIso,
-        nowMs,
-        undefined,
-        undefined,
-        false,
-        excludeChannelIds,
-      );
-      if (resolvedRoundRobin) {
+      const layers = new Map<number, RouteChannelCandidate[]>();
+      for (const candidate of routePool) {
+        const priority = candidate.channel.priority ?? 0;
+        if (!layers.has(priority)) layers.set(priority, []);
+        layers.get(priority)!.push(candidate);
+      }
+      const sortedPriorities = [...layers.keys()].sort((left, right) => left - right);
+      for (const [layerIndex, priority] of sortedPriorities.entries()) {
+        const rawLayer = layers.get(priority) ?? [];
+        const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(rawLayer, runtimeModelResolver, nowMs);
+        const hasFreshCandidate = breakerFiltered.candidates.some(
+          (candidate) => !isChannelRecentlyFailed(candidate.channel, nowMs),
+        );
+        if (!hasFreshCandidate && layerIndex < sortedPriorities.length - 1) continue;
+        const candidates = filterRecentlyFailedCandidates(breakerFiltered.candidates, nowMs);
+        const selected = this.selectRoundRobinCandidate(candidates);
+        if (!selected) continue;
+        const resolvedRoundRobin = await this.finalizeSelectedCandidateForDispatch(
+          selected,
+          match,
+          requestedModel,
+          mappedModel,
+          downstreamPolicy,
+          recordSelection,
+          nowIso,
+          nowMs,
+          undefined,
+          undefined,
+          false,
+          excludeChannelIds,
+        );
+        if (!resolvedRoundRobin) continue;
         this.logShadowSelectionForCandidates(
           requestedModel,
           resolvedRoundRobin.channel.id,
-          breakerFiltered.candidates,
+          candidates,
           runtimeModelResolver,
           downstreamPolicy,
           nowMs,
           connectivityLookup,
         );
+        return resolvedRoundRobin;
       }
-      return resolvedRoundRobin;
+      return null;
     }
 
     if (routeStrategy === 'stable_first') {
@@ -2833,17 +2940,25 @@ export class TokenRouter {
   private getCandidateEligibilityReasons(
     candidate: RouteChannelCandidate,
     options: CandidateEligibilityOptions,
-  ): string[] {
-    const reasonParts: string[] = [];
+  ): CandidateEligibilityReason[] {
+    const reasons: CandidateEligibilityReason[] = [];
+    const addReason = (
+      code: RouteDecisionReasonCode,
+      message: string,
+      details?: Record<string, unknown>,
+    ) => reasons.push({ code, message, details });
     const bypassSourceModelCheck = options.bypassSourceModelCheck ?? false;
     const excludeChannelIds = options.excludeChannelIds ?? [];
     const nowIso = options.nowIso ?? new Date().toISOString();
 
     if (!bypassSourceModelCheck && !channelSupportsRequestedModel(candidate.channel.sourceModel, options.requestedModel)) {
-      reasonParts.push(`来源模型不匹配=${candidate.channel.sourceModel || ''}`);
+      addReason('source_model_mismatch', `来源模型不匹配=${candidate.channel.sourceModel || ''}`, {
+        sourceModel: candidate.channel.sourceModel || null,
+        requestedModel: options.requestedModel,
+      });
     }
 
-    if (!candidate.channel.enabled) reasonParts.push('通道禁用');
+    if (!candidate.channel.enabled) addReason('channel_disabled', '通道禁用');
 
     if (isOauthRouteUnitCandidate(candidate)) {
       if (excludeChannelIds.includes(candidate.channel.id)) {
@@ -2852,40 +2967,46 @@ export class TokenRouter {
       }
 
       if (this.getEligibleRouteUnitMembers(candidate, options).length === 0) {
-        reasonParts.push(`路由池成员不可用（${candidate.routeUnit?.name || getOauthRouteUnitStrategyLabel(candidate.routeUnit?.strategy || 'round_robin')}）`);
+        addReason(
+          'route_unit_unavailable',
+          `路由池成员不可用（${candidate.routeUnit?.name || getOauthRouteUnitStrategyLabel(candidate.routeUnit?.strategy || 'round_robin')}）`,
+          { routeUnitId: candidate.routeUnit?.id ?? null },
+        );
       }
-      return reasonParts;
+      return reasons;
     }
 
     if (isExplicitTokenChannel(candidate)) {
       if (candidate.account.status === 'disabled') {
-        reasonParts.push(`账号状态=${candidate.account.status}`);
+        addReason('account_unavailable', `账号状态=${candidate.account.status}`, { status: candidate.account.status });
       }
     } else if (candidate.account.status !== 'active') {
-      reasonParts.push(`账号状态=${candidate.account.status}`);
+      addReason('account_unavailable', `账号状态=${candidate.account.status}`, { status: candidate.account.status });
     }
 
     if (isSiteDisabled(candidate.site.status)) {
-      reasonParts.push(`站点状态=${candidate.site.status || 'disabled'}`);
+      addReason('site_disabled', `站点状态=${candidate.site.status || 'disabled'}`, {
+        status: candidate.site.status || 'disabled',
+      });
     }
 
     const downstreamExclusionReason = this.resolveDownstreamExclusionReason(candidate, options.downstreamPolicy);
     if (downstreamExclusionReason) {
-      reasonParts.push(downstreamExclusionReason);
+      addReason('downstream_excluded', downstreamExclusionReason);
     }
 
     if (excludeChannelIds.includes(candidate.channel.id)) {
-      reasonParts.push('当前请求已尝试');
+      addReason('already_attempted', '当前请求已尝试');
     }
 
     const tokenValue = this.resolveChannelTokenValue(candidate);
-    if (!tokenValue) reasonParts.push('令牌不可用');
+    if (!tokenValue) addReason('token_unavailable', '令牌不可用');
 
     if (candidate.channel.cooldownUntil && candidate.channel.cooldownUntil > nowIso) {
-      reasonParts.push('冷却中');
+      addReason('channel_cooldown', '冷却中', { cooldownUntil: candidate.channel.cooldownUntil });
     }
 
-    return reasonParts;
+    return reasons;
   }
 
   private getRoundRobinCandidates(candidates: RouteChannelCandidate[]): RouteChannelCandidate[] {
@@ -2956,7 +3077,7 @@ export class TokenRouter {
     selected: RouteChannelCandidate,
     match: RouteMatch,
     requestedModel: string,
-    mappedModel: string,
+    _mappedModel: string,
     downstreamPolicy: DownstreamRoutingPolicy,
     recordSelection: boolean,
     nowIso: string,
@@ -3003,12 +3124,13 @@ export class TokenRouter {
       await this.recordChannelSelection(selected.channel.id);
     }
 
-    const actualModel = resolveActualModelForSelectedChannel(
+    const modelResolution = resolveModelResolution({
       requestedModel,
-      match.route,
-      mappedModel,
-      selected.channel.sourceModel,
-    );
+      route: match.route,
+      modelMapping: match.route.modelMapping,
+      channelSourceModel: selected.channel.sourceModel,
+    });
+    const actualModel = modelResolution.upstreamModel;
 
     return {
       ...dispatchCandidate,

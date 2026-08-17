@@ -1,1 +1,1 @@
-ALTER TABLE "sites" ADD COLUMN "param_override" TEXT;
+-- no schema changes detected for postgres

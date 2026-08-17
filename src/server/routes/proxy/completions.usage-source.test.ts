@@ -45,6 +45,7 @@ vi.mock('../../services/routeRefreshWorkflow.js', async () => {
 });
 
 vi.mock('../../services/alertService.js', () => ({
+  resetTokenExpiredSightings: async () => undefined,
   reportProxyAllFailed: (...args: unknown[]) => reportProxyAllFailedMock(...args),
   reportTokenExpired: (...args: unknown[]) => reportTokenExpiredMock(...args),
 }));

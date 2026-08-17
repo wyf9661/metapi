@@ -4,6 +4,7 @@ const routeChannelCreatePayloadSchema = z.object({
   accountId: z.number().int().positive(),
   tokenId: z.union([z.number().int().positive(), z.null()]).optional(),
   sourceModel: z.string().optional(),
+  requestOverrideRules: z.union([z.string(), z.array(z.record(z.string(), z.unknown()))]).optional(),
   priority: z.number().optional(),
   weight: z.number().optional(),
 }).passthrough();
@@ -13,6 +14,7 @@ const routeChannelBatchCreatePayloadSchema = z.object({
     accountId: z.number().int().positive(),
     tokenId: z.union([z.number().int().positive(), z.null()]).optional(),
     sourceModel: z.string().optional(),
+    requestOverrideRules: z.union([z.string(), z.array(z.record(z.string(), z.unknown()))]).optional(),
   }).passthrough()).min(1),
 }).passthrough();
 
@@ -22,6 +24,7 @@ const routeChannelUpdatePayloadSchema = z.object({
   priority: z.number().optional(),
   weight: z.number().optional(),
   enabled: z.boolean().optional(),
+  requestOverrideRules: z.union([z.string(), z.array(z.record(z.string(), z.unknown()))]).optional(),
 }).passthrough();
 
 const tokenRouteCreatePayloadSchema = z.object({

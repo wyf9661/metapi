@@ -260,6 +260,9 @@ export async function handleChatSurfaceRequest(
     // the same window, so a second same-channel retry only burns time that
     // a different channel could use.
     let graceRetriedOnce = false;
+    const lastRetryFailure = {
+      current: null as ReturnType<typeof finalizeRetryAsUpstreamFailure> | null,
+    };
 
   while (true) {
     if (++loopGuard > LOOP_GUARD_MAX) break;
@@ -308,6 +311,11 @@ export async function handleChatSurfaceRequest(
     inPlaceRetryChannel = null;
 
     if (!selected) {
+      if (lastRetryFailure.current) {
+        const terminalFailure = lastRetryFailure.current;
+        await finalizeDebugFailure(terminalFailure.status, terminalFailure.payload, null);
+        return reply.code(terminalFailure.status).send(terminalFailure.payload);
+      }
       const noChannelMessage = buildForcedChannelUnavailableMessage(forcedChannelId);
       await reportProxyAllFailed({
         model: requestedModel,
@@ -486,6 +494,7 @@ export async function handleChatSurfaceRequest(
       const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
       return executeEndpointFlow({
         siteUrl: siteApiBaseUrl,
+        requestOverrideRules: selected.channel.requestOverrideRules ?? null,
         paramOverride: selected.site.paramOverride ?? null,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
         firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
@@ -888,6 +897,7 @@ export async function handleChatSurfaceRequest(
                 continue;
               }
               if (failureOutcome.action === 'retry') {
+                lastRetryFailure.current = finalizeRetryAsUpstreamFailure(failure.status, failure.reason);
                 await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
               }
               await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1139,6 +1149,7 @@ export async function handleChatSurfaceRequest(
             continue;
           }
           if (failureOutcome.action === 'retry') {
+            lastRetryFailure.current = finalizeRetryAsUpstreamFailure(failure.status, failure.reason);
             await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
           }
           await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1266,6 +1277,10 @@ export async function handleChatSurfaceRequest(
             continue;
           }
           if (failureOutcome.action === 'retry') {
+            lastRetryFailure.current = finalizeRetryAsUpstreamFailure(
+              endpointFailureStatus || 502,
+              err.message || 'unknown error',
+            );
             await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
           }
           await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err.message || null, config.proxyFailoverBackoffMs));
@@ -1316,6 +1331,7 @@ export async function handleChatSurfaceRequest(
           continue;
         }
         if (failureOutcome.action === 'retry') {
+          lastRetryFailure.current = finalizeRetryAsExecutionFailure(err?.message || 'network failure');
           await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
         }
         await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));

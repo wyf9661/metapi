@@ -1,4 +1,5 @@
 import { fetch } from 'undici';
+import { applyRequestOverrideRules } from '../../services/requestOverride.js';
 import { readRuntimeResponseText } from '../executors/types.js';
 import { fetchWithObservedFirstByte, isObservedFirstByteTimeoutResponse } from '../firstByteTimeout.js';
 import { withSiteProxyRequestInit } from '../../services/siteProxy.js';
@@ -65,7 +66,8 @@ export type EndpointFlowResult =
 export type ExecuteEndpointFlowInput = {
   siteUrl: string;
   proxyUrl?: string | null;
-  /** Site-level JSON body override merged into every outbound JSON request. */
+  /** Route-channel declarative body operations applied before legacy site override. */
+  requestOverrideRules?: unknown;
   paramOverride?: string | null;
   disableCrossProtocolFallback?: boolean;
   endpointCandidates: UpstreamEndpoint[];
@@ -118,6 +120,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
   for (let endpointIndex = 0; endpointIndex < endpointCount; endpointIndex += 1) {
     const endpoint = input.endpointCandidates[endpointIndex] as UpstreamEndpoint;
     const request = input.buildRequest(endpoint, endpointIndex);
+    if (input.requestOverrideRules) {
+      request.body = applyRequestOverrideRules(request.body, input.requestOverrideRules);
+    }
     if (input.paramOverride) {
       request.body = mergeParamOverrideIntoBody(request.body, input.paramOverride);
     }

@@ -63,6 +63,7 @@ import {
   resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
+import { mapUpstreamErrorForClient } from '../../shared/siteProtocolProfile.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce } from '../../services/proxyRetryPolicy.js';
 import {
@@ -245,6 +246,22 @@ export async function handleOpenAiResponsesSurfaceRequest(
     // Grace-window in-place retries are bounded to ONE per request (see
     // chatSurface for rationale): a second same-channel retry rarely helps.
     let graceRetriedOnce = false;
+    const lastRetryFailure = {
+      current: null as ReturnType<typeof finalizeRetryAsUpstreamFailure> | null,
+    };
+    const rememberRetryFailure = (status: number, message: string) => {
+      const mapped = mapUpstreamErrorForClient(status, message);
+      lastRetryFailure.current = {
+        action: 'respond' as const,
+        status: mapped.status ?? status,
+        payload: {
+          error: {
+            message: mapped.message,
+            type: 'upstream_error' as const,
+          },
+        },
+      };
+    };
     while (true) {
       if (retryCount > maxRetries && !recoveryPass) {
         if (allFailuresRecovering && config.proxyFailoverBackoffMs > 0) {
@@ -290,6 +307,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
       inPlaceRetryChannel = null;
 
       if (!selected) {
+        if (lastRetryFailure.current) {
+          const terminalFailure = lastRetryFailure.current;
+          await finalizeDebugFailure(
+            terminalFailure.status,
+            terminalFailure.payload,
+            null,
+          );
+          return reply.code(terminalFailure.status).send(terminalFailure.payload);
+        }
         const noChannelMessage = buildForcedChannelUnavailableMessage(forcedChannelId);
         await reportProxyAllFailed({
         model: requestedModel,
@@ -644,6 +670,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
         return executeEndpointFlow({
           siteUrl: siteApiBaseUrl,
+          requestOverrideRules: selected.channel.requestOverrideRules ?? null,
           paramOverride: selected.site.paramOverride ?? null,
           disableCrossProtocolFallback: isCompactRequest || config.disableCrossProtocolFallback,
           firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
@@ -1019,6 +1046,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	                  continue;
 	                }
 	                if (failureOutcome.action === 'retry') {
+                  rememberRetryFailure(failure.status, failure.reason);
 	                  await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
 	                }
 	                await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1349,6 +1377,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	              continue;
 	            }
 	            if (failureOutcome.action === 'retry') {
+                rememberRetryFailure(failure.status, failure.reason);
 	              await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
 	            }
 	            await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
@@ -1473,6 +1502,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 continue;
               }
               if (failureOutcome.action === 'retry') {
+                rememberRetryFailure(
+                  endpointFailureStatus || 502,
+                  err?.message || 'unknown error',
+                );
                 await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
               }
               await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));

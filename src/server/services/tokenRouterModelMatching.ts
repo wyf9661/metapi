@@ -204,3 +204,50 @@ export function resolveActualModelForSelectedChannel(
   }
   return mappedModel;
 }
+
+export type ModelResolutionStage = 'route_mapping' | 'channel_source';
+
+export type ModelResolution = {
+  requestedModel: string;
+  effectiveModel: string;
+  routeModel: string;
+  sourceModel: string | null;
+  upstreamModel: string;
+  transformations: Array<{
+    stage: ModelResolutionStage;
+    from: string;
+    to: string;
+  }>;
+};
+
+export function resolveModelResolution(input: {
+  requestedModel: string;
+  route?: Pick<RouteModelMatchInput, 'displayName'> | null;
+  modelMapping?: string | Record<string, unknown> | null;
+  channelSourceModel?: string | null;
+}): ModelResolution {
+  const requestedModel = input.requestedModel;
+  const routeModel = resolveMappedModel(requestedModel, input.modelMapping);
+  const sourceModel = normalizeChannelSourceModel(input.channelSourceModel) || null;
+  const upstreamModel = input.route
+    ? resolveActualModelForSelectedChannel(requestedModel, input.route, routeModel, sourceModel)
+    : (sourceModel && isModelAliasEquivalent(sourceModel, routeModel) ? sourceModel : routeModel);
+  const transformations: ModelResolution['transformations'] = [];
+  if (routeModel !== requestedModel) {
+    transformations.push({ stage: 'route_mapping', from: requestedModel, to: routeModel });
+  }
+  if (sourceModel && upstreamModel !== routeModel) {
+    transformations.push({ stage: 'channel_source', from: routeModel, to: upstreamModel });
+  }
+  return {
+    requestedModel,
+    // Downstream key mappings are not part of this helper yet. Keep the field
+    // explicit so later key-level mapping can be inserted without renaming the
+    // existing route model semantics.
+    effectiveModel: requestedModel,
+    routeModel,
+    sourceModel,
+    upstreamModel,
+    transformations,
+  };
+}

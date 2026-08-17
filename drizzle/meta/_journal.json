@@ -253,6 +253,20 @@
       "when": 1786189190603,
       "tag": "0036_site_param_override",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1786947566551,
+      "tag": "0037_downstream_api_key_model_mappings",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1786947566552,
+      "tag": "0038_route_channel_request_override_rules",
+      "breakpoints": true
     }
   ]
 }

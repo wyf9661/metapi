@@ -573,6 +573,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "model_mappings": {
+          "logicalType": "json",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },
@@ -1716,6 +1722,12 @@
         },
         "oauth_route_unit_id": {
           "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "request_override_rules": {
+          "logicalType": "text",
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false

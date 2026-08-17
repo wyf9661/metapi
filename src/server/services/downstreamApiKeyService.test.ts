@@ -34,6 +34,23 @@ describe('downstreamApiKeyService', () => {
     delete process.env.DATA_DIR;
   });
 
+  it('normalizes and resolves first-match model mappings once', () => {
+    const mappings = service.normalizeModelMappingsInput([
+      { from: 'client-claude', to: 'claude-sonnet-4' },
+      { from: 'claude-*', to: 'should-not-chain' },
+      { from: 're:^gpt-5', to: 'gpt-5.6-sol' },
+      { from: 're:[', to: 'invalid' },
+    ]);
+    expect(mappings).toEqual([
+      { from: 'client-claude', to: 'claude-sonnet-4' },
+      { from: 'claude-*', to: 'should-not-chain' },
+      { from: 're:^gpt-5', to: 'gpt-5.6-sol' },
+    ]);
+    expect(service.resolveDownstreamModelMapping('client-claude', mappings)).toBe('claude-sonnet-4');
+    expect(service.resolveDownstreamModelMapping('gpt-5.2', mappings)).toBe('gpt-5.6-sol');
+    expect(service.resolveDownstreamModelMapping('claude-sonnet-4', mappings)).toBe('should-not-chain');
+  });
+
   it('rejects managed keys by lifecycle guards (disabled, expired, over budget, over requests)', async () => {
     const now = Date.now();
 

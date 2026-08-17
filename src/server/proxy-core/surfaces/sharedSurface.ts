@@ -7,13 +7,17 @@ import { resolveProxyUsageWithSelfLogFallback } from '../../services/proxyUsageF
 import type { DownstreamRoutingPolicy } from '../../services/downstreamPolicyTypes.js';
 import { reportProxyAllFailed, reportTokenExpired, resetTokenExpiredSightings } from '../../services/alertService.js';
 import { isTokenExpiredError } from '../../services/alertRules.js';
-import { shouldRetryProxyRequest, canRetryInPlaceForRecoveringFailure } from '../../services/proxyRetryPolicy.js';
+import { canRetryInPlaceForRecoveringFailure } from '../../services/proxyRetryPolicy.js';
 import {
   createFailoverStreakState,
   noteFailoverFailureAndShouldStop,
   type FailoverStreakState,
 } from '../../services/proxyChannelRetry.js';
-import { shouldExcludeSiteForRequestFailure } from '../../services/siteFailureClassification.js';
+import {
+  buildProxyFailureDisposition,
+  shouldExcludeSiteForRequestFailure,
+  type ProxyFailureDisposition,
+} from '../../services/siteFailureClassification.js';
 import { mapUpstreamErrorForClient } from '../../shared/siteProtocolProfile.js';
 import { composeProxyLogMessage } from '../../services/proxyLogMessage.js';
 import { resolveProxyLogBilling } from '../../services/proxyBilling.js';
@@ -25,6 +29,7 @@ import { buildUpstreamUrl } from '../orchestration/upstreamRequest.js';
 import { recordOauthQuotaHeadersSnapshot, recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
+import { recordPerformanceShadowSample } from '../../services/performanceShadow.js';
 import { readRuntimeResponseText } from '../executors/types.js';
 import { selectProxyChannelForAttempt } from '../channelSelection.js';
 
@@ -36,6 +41,8 @@ type SurfaceSelectedChannel = {
   account: { id: number; username?: string | null };
   site: { id?: number | null; name?: string | null };
   actualModel?: string | null;
+  requestOverrideRules?: unknown;
+  routeId?: number | null;
 };
 
 type SurfaceFailureResponse = {
@@ -498,6 +505,17 @@ export async function recordSurfaceSuccess(input: {
     estimatedCost,
     input.modelName,
   );
+  recordPerformanceShadowSample({
+    key: {
+      routeId: input.selected.channel.routeId,
+      siteId: input.selected.site.id,
+      modelName: input.modelName,
+      isStream: input.isStream === true,
+    },
+    latencyMs: input.latencyMs,
+    firstByteLatencyMs: input.firstByteLatencyMs,
+    completionTokens: resolvedUsage.completionTokens,
+  });
   // A successful upstream call proves the credential works; clear any
   // pending token-expiry sightings for this account.
   if (input.selected.account?.id != null) {
@@ -614,7 +632,13 @@ export function createSurfaceFailureToolkit(input: {
     });
   };
 
-  const maybeRetry = (retryCount: number, status: number, errorText?: string | null, selected?: SurfaceSelectedChannel) => {
+  const maybeRetry = (
+    retryCount: number,
+    status: number,
+    errorText?: string | null,
+    selected?: SurfaceSelectedChannel,
+    disposition: ProxyFailureDisposition = buildProxyFailureDisposition({ status, errorText }),
+  ) => {
     if (retryCount >= input.maxRetries) {
       // Budget exhausted: allow exactly one in-place retry after the backoff
       // window for transient-recovering failures (403 blocks / 429 / 5xx that
@@ -625,7 +649,7 @@ export function createSurfaceFailureToolkit(input: {
       }
       return null;
     }
-    if (!shouldRetryProxyRequest(status, errorText)) return null;
+    if (!disposition.retryChannel) return null;
     if (noteFailoverFailureAndShouldStop(failoverStreak, status, errorText)) {
       return null;
     }
@@ -661,11 +685,18 @@ export function createSurfaceFailureToolkit(input: {
       retryCount: number;
     }): Promise<SurfaceFailureOutcome> {
       const rawErrText = args.rawErrText || args.errText;
-      await tokenRouter.recordFailure(args.selected.channel.id, {
+      const disposition = buildProxyFailureDisposition({
         status: args.status,
         errorText: rawErrText,
         modelName: args.modelName,
       });
+      if (disposition.incrementFailure) {
+        await tokenRouter.recordFailure(args.selected.channel.id, {
+          status: args.status,
+          errorText: rawErrText,
+          modelName: args.modelName,
+        });
+      }
       await log({
         selected: args.selected,
         modelRequested: args.requestedModel,
@@ -694,7 +725,7 @@ export function createSurfaceFailureToolkit(input: {
         }));
       }
 
-      const retry = maybeRetry(args.retryCount, args.status, args.errText, args.selected);
+      const retry = maybeRetry(args.retryCount, args.status, args.errText, args.selected, disposition);
       if (retry) return retry;
 
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
@@ -735,11 +766,18 @@ export function createSurfaceFailureToolkit(input: {
       totalTokens?: number | null;
       upstreamPath?: string | null;
     }): Promise<SurfaceFailureOutcome> {
-      await tokenRouter.recordFailure(args.selected.channel.id, {
+      const disposition = buildProxyFailureDisposition({
         status: args.failure.status,
         errorText: args.failure.reason,
         modelName: args.modelName,
       });
+      if (disposition.incrementFailure) {
+        await tokenRouter.recordFailure(args.selected.channel.id, {
+          status: args.failure.status,
+          errorText: args.failure.reason,
+          modelName: args.modelName,
+        });
+      }
       await log({
         selected: args.selected,
         modelRequested: args.requestedModel,
@@ -756,7 +794,13 @@ export function createSurfaceFailureToolkit(input: {
         upstreamPath: args.upstreamPath,
       });
 
-      const retryDetected = maybeRetry(args.retryCount, args.failure.status, args.failure.reason, args.selected);
+      const retryDetected = maybeRetry(
+        args.retryCount,
+        args.failure.status,
+        args.failure.reason,
+        args.selected,
+        disposition,
+      );
       if (retryDetected) return retryDetected;
 
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({
@@ -793,10 +837,17 @@ export function createSurfaceFailureToolkit(input: {
       latencyMs: number;
       retryCount: number;
     }): Promise<SurfaceFailureOutcome> {
-      await tokenRouter.recordFailure(args.selected.channel.id, {
+      const disposition = buildProxyFailureDisposition({
+        status: 0,
         errorText: args.errorMessage,
         modelName: args.modelName,
       });
+      if (disposition.incrementFailure) {
+        await tokenRouter.recordFailure(args.selected.channel.id, {
+          errorText: args.errorMessage,
+          modelName: args.modelName,
+        });
+      }
       await log({
         selected: args.selected,
         modelRequested: args.requestedModel,
@@ -809,7 +860,7 @@ export function createSurfaceFailureToolkit(input: {
         retryCount: args.retryCount,
       });
 
-      const retryExec = maybeRetry(args.retryCount, 0, args.errorMessage, args.selected);
+      const retryExec = maybeRetry(args.retryCount, 0, args.errorMessage, args.selected, disposition);
       if (retryExec) return retryExec;
 
       runBestEffort('report terminal proxy failure', () => reportProxyAllFailed({

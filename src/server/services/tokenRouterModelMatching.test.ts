@@ -5,6 +5,7 @@ import {
   isModelAllowedByDownstreamPolicy,
   resolveActualModelForSelectedChannel,
   resolveMappedModel,
+  resolveModelResolution,
 } from './tokenRouterModelMatching.js';
 import { EMPTY_DOWNSTREAM_ROUTING_POLICY } from './downstreamPolicyTypes.js';
 
@@ -59,6 +60,24 @@ describe('tokenRouterModelMatching', () => {
     })).toBe(false);
   });
 
+  it('builds an explicit model resolution chain', () => {
+    expect(resolveModelResolution({
+      requestedModel: 'client-claude',
+      route: { displayName: null },
+      modelMapping: { 'client-claude': 'claude-sonnet-4' },
+      channelSourceModel: 'Claude-Sonnet-4',
+    })).toEqual({
+      requestedModel: 'client-claude',
+      effectiveModel: 'client-claude',
+      routeModel: 'claude-sonnet-4',
+      sourceModel: 'Claude-Sonnet-4',
+      upstreamModel: 'Claude-Sonnet-4',
+      transformations: [
+        { stage: 'route_mapping', from: 'client-claude', to: 'claude-sonnet-4' },
+        { stage: 'channel_source', from: 'claude-sonnet-4', to: 'Claude-Sonnet-4' },
+      ],
+    });
+  });
   it('prefers channel source model when alias matches mapping', () => {
     expect(resolveActualModelForSelectedChannel(
       'Claude Sonnet',

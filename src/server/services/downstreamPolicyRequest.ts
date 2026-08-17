@@ -1,12 +1,33 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { getProxyAuthContext } from '../middleware/auth.js';
-import { isModelAllowedByPolicyOrAllowedRoutes, recordManagedKeyCostUsage } from './downstreamApiKeyService.js';
-import { EMPTY_DOWNSTREAM_ROUTING_POLICY, type DownstreamRoutingPolicy } from './downstreamPolicyTypes.js';
+import {
+  isModelAllowedByPolicyOrAllowedRoutes,
+  recordManagedKeyCostUsage,
+} from './downstreamApiKeyService.js';
+import {
+  EMPTY_DOWNSTREAM_ROUTING_POLICY,
+  resolveDownstreamPolicyModel,
+  type DownstreamRoutingPolicy,
+} from './downstreamPolicyTypes.js';
 
 export function getDownstreamRoutingPolicy(request: FastifyRequest): DownstreamRoutingPolicy {
   const authContext = getProxyAuthContext(request);
   if (!authContext) return EMPTY_DOWNSTREAM_ROUTING_POLICY;
   return authContext.policy;
+}
+
+export function resolveModelForDownstreamKey(
+  request: FastifyRequest,
+  requestedModel: string,
+): { requestedModel: string; effectiveModel: string; mapped: boolean } {
+  const normalizedRequestedModel = requestedModel.trim();
+  const authContext = getProxyAuthContext(request);
+  const effectiveModel = resolveDownstreamPolicyModel(normalizedRequestedModel, authContext?.policy ?? EMPTY_DOWNSTREAM_ROUTING_POLICY);
+  return {
+    requestedModel: normalizedRequestedModel,
+    effectiveModel,
+    mapped: effectiveModel !== normalizedRequestedModel,
+  };
 }
 
 export async function ensureModelAllowedForDownstreamKey(
@@ -17,7 +38,8 @@ export async function ensureModelAllowedForDownstreamKey(
   const authContext = getProxyAuthContext(request);
   if (!authContext) return true;
 
-  if (await isModelAllowedByPolicyOrAllowedRoutes(requestedModel, authContext.policy)) {
+  const effectiveModel = resolveDownstreamPolicyModel(requestedModel, authContext.policy);
+  if (await isModelAllowedByPolicyOrAllowedRoutes(effectiveModel, authContext.policy)) {
     return true;
   }
 

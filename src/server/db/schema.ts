@@ -225,6 +225,7 @@ export const routeChannels = sqliteTable('route_channels', {
   weight: integer('weight').default(10),
   enabled: integer('enabled', { mode: 'boolean' }).default(true),
   manualOverride: integer('manual_override', { mode: 'boolean' }).default(false),
+  requestOverrideRules: text('request_override_rules'), // JSON array of safe body operations
   successCount: integer('success_count').default(0),
   failCount: integer('fail_count').default(0),
   totalLatencyMs: integer('total_latency_ms').default(0),
@@ -539,6 +540,7 @@ export const downstreamApiKeys = sqliteTable('downstream_api_keys', {
   dailyWindowDate: text('daily_window_date'),
   sensitiveWordDetection: integer('sensitive_word_detection', { mode: 'boolean' }),
   supportedModels: text('supported_models'), // JSON array<string>
+  modelMappings: text('model_mappings'), // JSON array<{from,to}>; first match wins, applied once
   allowedRouteIds: text('allowed_route_ids'), // JSON array<number>
   siteWeightMultipliers: text('site_weight_multipliers'), // JSON object { [siteId]: multiplier }
   excludedSiteIds: text('excluded_site_ids'), // JSON array<number>

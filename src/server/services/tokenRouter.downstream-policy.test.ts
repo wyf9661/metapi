@@ -424,6 +424,7 @@ describe('TokenRouter downstream policy', () => {
     expect(pick).toBeNull();
     expect(candidate?.eligible).toBe(false);
     expect(candidate?.reason).toContain('站点已被下游密钥排除');
+    expect(candidate?.reasonCodes).toContain('downstream_excluded');
   });
 
   it('excludes explicitly bound tokens by downstream credential refs', async () => {
