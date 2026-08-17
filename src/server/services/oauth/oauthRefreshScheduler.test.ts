@@ -287,9 +287,9 @@ describe('oauthRefreshScheduler', () => {
     const nowMs = Date.parse('2026-04-05T12:00:00.000Z');
     vi.setSystemTime(nowMs);
 
-    let releaseRefresh: (() => void) | null = null;
+    const gate = { release: null as (() => void) | null };
     refreshOauthAccessTokenSingleflightMock.mockImplementation(() => new Promise<void>((resolve) => {
-      releaseRefresh = resolve;
+      gate.release = resolve;
     }));
 
     const site = await db.insert(schema.sites).values({
@@ -325,7 +325,7 @@ describe('oauthRefreshScheduler', () => {
     await Promise.resolve();
     expect(stopResolved).toBe(false);
 
-    releaseRefresh?.();
+    gate.release?.();
     await stopPromise;
     expect(stopResolved).toBe(true);
   });

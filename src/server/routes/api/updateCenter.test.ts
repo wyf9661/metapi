@@ -3,7 +3,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { eq } from 'drizzle-orm';
 
 const {
   fetchLatestStableGitHubReleaseMock,
@@ -23,7 +22,6 @@ vi.mock('../../services/updateCenterVersionService.js', async () => {
 });
 
 type DbModule = typeof import('../../db/index.js');
-type ConfigModule = typeof import('../../config.js');
 type RuntimeStateModule = typeof import('../../services/updateCenterRuntimeStateService.js');
 
 const GITHUB_RELEASE = {

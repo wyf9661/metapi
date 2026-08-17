@@ -3,7 +3,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
-import { eq } from 'drizzle-orm';
 import { mergeAccountExtraConfig } from '../../services/accountExtraConfig.js';
 
 type DbModule = typeof import('../../db/index.js');

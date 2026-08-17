@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Response as UndiciResponse } from 'undici';
 
 import {
   fetchWithObservedFirstByte,
@@ -6,7 +7,7 @@ import {
   isObservedFirstByteTimeoutResponse,
 } from './firstByteTimeout.js';
 
-function buildDelayedResponse(bodyText: string, delayMs: number, status = 200): Response {
+function buildDelayedResponse(bodyText: string, delayMs: number, status = 200): UndiciResponse {
   const encoder = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -16,7 +17,7 @@ function buildDelayedResponse(bodyText: string, delayMs: number, status = 200): 
       }, delayMs);
     },
   });
-  return new Response(body, {
+  return new UndiciResponse(body, {
     status,
     headers: { 'content-type': 'text/plain; charset=utf-8' },
   });

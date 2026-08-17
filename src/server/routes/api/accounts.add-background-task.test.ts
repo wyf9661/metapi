@@ -111,9 +111,9 @@ describe('accounts background initialization', () => {
     rebuildTokenRoutesFromAvailabilityMock.mockResolvedValue(undefined);
     syncTokensFromUpstreamMock.mockResolvedValue(undefined);
 
-    let releaseTokens: ((value: Array<{ name: string; value: string }>) => void) | null = null;
+    const tokensGate = { release: null as ((value: Array<{ name: string; value: string }>) => void) | null };
     const pendingTokens = new Promise<Array<{ name: string; value: string }>>((resolve) => {
-      releaseTokens = resolve;
+      tokensGate.release = resolve;
     });
     getApiTokensMock.mockReturnValue(pendingTokens);
 
@@ -158,10 +158,10 @@ describe('accounts background initialization', () => {
         status: expect.stringMatching(/pending|running/),
       });
 
-      releaseTokens?.([{ name: 'default', value: 'sk-demo' }]);
+      tokensGate.release?.([{ name: 'default', value: 'sk-demo' }]);
 
       const task = await waitForBackgroundTaskToReachTerminalState(
-        (taskId) => getBackgroundTask?.(taskId) ?? null,
+        (taskId) => (getBackgroundTask?.(taskId) ?? null) as Awaited<ReturnType<typeof waitForBackgroundTaskToReachTerminalState>> | null,
         body.jobId!,
       );
 
@@ -171,7 +171,7 @@ describe('accounts background initialization', () => {
       expect(rebuildTokenRoutesFromAvailabilityMock).toHaveBeenCalledTimes(1);
       expect(task).toMatchObject({ status: 'succeeded' });
     } finally {
-      releaseTokens?.([]);
+      tokensGate.release?.([]);
       await responsePromise.catch(() => undefined);
     }
   });

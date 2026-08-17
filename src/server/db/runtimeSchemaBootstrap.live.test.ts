@@ -1,11 +1,15 @@
-import baselineContract from './generated/fixtures/2026-03-14-baseline.schemaContract.json' with { type: 'json' };
-import currentContract from './generated/schemaContract.json' with { type: 'json' };
+import baselineContractJson from './generated/fixtures/2026-03-14-baseline.schemaContract.json' with { type: 'json' };
+import currentContractJson from './generated/schemaContract.json' with { type: 'json' };
 import mysql from 'mysql2/promise';
 import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { generateBootstrapSql } from './schemaArtifactGenerator.js';
 import { __schemaIntrospectionTestUtils, introspectLiveSchema } from './schemaIntrospection.js';
 import { bootstrapRuntimeDatabaseSchema } from './runtimeSchemaBootstrap.js';
+import type { SchemaContract } from './schemaContract.js';
+
+const baselineContract = baselineContractJson as unknown as SchemaContract;
+const currentContract = currentContractJson as unknown as SchemaContract;
 
 const mysqlRuntime = process.env.DB_PARITY_MYSQL_URL ? it : it.skip;
 const postgresRuntime = process.env.DB_PARITY_POSTGRES_URL ? it : it.skip;

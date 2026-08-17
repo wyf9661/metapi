@@ -1,13 +1,9 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { once } from 'node:events';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
-import { createServer } from 'node:http';
-import { connect as connectSocket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { SocksClient } from 'socks';
-import { Headers, fetch } from 'undici';
+import { Headers } from 'undici';
 
 type DbModule = typeof import('../db/index.js');
 

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Response as UndiciResponse } from 'undici';
 import { EMPTY_DOWNSTREAM_ROUTING_POLICY } from '../../services/downstreamPolicyTypes.js';
 
 const selectChannelMock = vi.fn();
@@ -380,7 +381,7 @@ describe('selectSurfaceChannelForAttempt', () => {
         clientKind: 'codex',
         clientAppId: 'app-id',
         clientAppName: 'App',
-        clientConfidence: 'high',
+        clientConfidence: 'high' as unknown as undefined,
         sessionId: 'sess-1',
         traceHint: 'trace-1',
       },
@@ -429,11 +430,11 @@ describe('selectSurfaceChannelForAttempt', () => {
   it('builds runtime dispatch requests with site proxy initialization', async () => {
     const site = { url: 'https://upstream.example.com' };
     const request = {
-      endpoint: 'responses',
+      endpoint: 'responses' as const,
       path: '/v1/responses',
       headers: { authorization: 'Bearer test' },
       body: { model: 'gpt-5.2', input: 'hello' },
-      runtime: { executor: 'default' },
+      runtime: { executor: 'default' as const },
     };
     resolveChannelProxyUrlMock.mockReturnValue('http://proxy.example.com');
     withSiteRecordProxyRequestInitMock.mockImplementation(async (_site, init, proxyUrl) => ({
@@ -843,7 +844,7 @@ describe('selectSurfaceChannelForAttempt', () => {
         ok: false,
         status: 401,
         text: vi.fn(),
-      },
+      } as any,
       rawErrText: 'expired token',
     };
     refreshOauthAccessTokenSingleflightMock.mockResolvedValue({
@@ -903,7 +904,7 @@ describe('selectSurfaceChannelForAttempt', () => {
         ok: false,
         status: 401,
         text: vi.fn(),
-      },
+      } as unknown as UndiciResponse,
       rawErrText: 'expired token',
     };
     const selected = {
@@ -961,7 +962,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       selected: {
         channel: { id: 11, routeId: 22 },
         account: { id: 33, username: 'oauth-user' },
-        site: { id: 44, url: 'https://upstream.example.com', name: 'Codex OAuth' },
+        site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api', name: 'Codex OAuth' },
         tokenValue: 'live-token',
         tokenName: 'default',
         actualModel: 'upstream-model',
@@ -972,6 +973,9 @@ describe('selectSurfaceChannelForAttempt', () => {
         promptTokens: 10,
         completionTokens: 5,
         totalTokens: 15,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        promptTokensIncludeCache: null,
       },
       requestStartedAtMs: 1000,
       latencyMs: 250,
@@ -982,7 +986,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     });
 
     expect(resolveProxyUsageWithSelfLogFallbackMock).toHaveBeenCalledWith({
-      site: { id: 44, url: 'https://upstream.example.com', name: 'Codex OAuth' },
+      site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api', name: 'Codex OAuth' },
       account: { id: 33, username: 'oauth-user' },
       tokenValue: 'live-token',
       tokenName: 'default',
@@ -998,13 +1002,16 @@ describe('selectSurfaceChannelForAttempt', () => {
       },
     });
     expect(resolveProxyLogBillingMock).toHaveBeenCalledWith({
-      site: { id: 44, url: 'https://upstream.example.com', name: 'Codex OAuth' },
+      site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api', name: 'Codex OAuth' },
       account: { id: 33, username: 'oauth-user' },
       modelName: 'upstream-model',
       parsedUsage: {
         promptTokens: 10,
         completionTokens: 5,
         totalTokens: 15,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        promptTokensIncludeCache: null,
       },
       resolvedUsage: {
         promptTokens: 20,
@@ -1022,7 +1029,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       selected: {
         channel: { id: 11, routeId: 22 },
         account: { id: 33, username: 'oauth-user' },
-        site: { id: 44, url: 'https://upstream.example.com', name: 'Codex OAuth' },
+        site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api', name: 'Codex OAuth' },
         tokenValue: 'live-token',
         tokenName: 'default',
         actualModel: 'upstream-model',
@@ -1090,6 +1097,9 @@ describe('selectSurfaceChannelForAttempt', () => {
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        promptTokensIncludeCache: null,
       },
       requestStartedAtMs: 1000,
       latencyMs: 250,
@@ -1131,7 +1141,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       selected: {
         channel: { id: 11, routeId: 22 },
         account: { id: 33, username: 'oauth-user' },
-        site: { id: 44, url: 'https://upstream.example.com', name: 'Codex OAuth' },
+        site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api', name: 'Codex OAuth' },
         tokenValue: 'live-token',
         tokenName: 'default',
         actualModel: 'upstream-model',
@@ -1142,6 +1152,9 @@ describe('selectSurfaceChannelForAttempt', () => {
         promptTokens: 10,
         completionTokens: 5,
         totalTokens: 15,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        promptTokensIncludeCache: null,
       },
       requestStartedAtMs: 1000,
       latencyMs: 250,
@@ -1172,7 +1185,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       selected: {
         channel: { id: 11, routeId: 22 },
         account: { id: 33, username: 'oauth-user' },
-        site: { id: 44, url: 'https://upstream.example.com', name: 'Codex OAuth' },
+        site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api', name: 'Codex OAuth' },
         tokenValue: 'live-token',
         tokenName: 'default',
         actualModel: 'upstream-model',
@@ -1183,6 +1196,9 @@ describe('selectSurfaceChannelForAttempt', () => {
         promptTokens: 10,
         completionTokens: 5,
         totalTokens: 15,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        promptTokensIncludeCache: null,
       },
       requestStartedAtMs: 1000,
       latencyMs: 250,

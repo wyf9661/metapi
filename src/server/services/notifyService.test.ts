@@ -15,7 +15,7 @@ vi.mock('nodemailer', () => ({
 
 vi.mock('undici', () => ({
   Agent: class MockUndiciAgent {
-    constructor(...args: unknown[]) {}
+    constructor(..._args: unknown[]) {}
   },
   setGlobalDispatcher: () => {},
 
@@ -30,7 +30,7 @@ const withExplicitProxyRequestInitMock = vi.fn(
 );
 
 vi.mock('./siteProxy.js', () => ({
-  withExplicitProxyRequestInit: (...args: unknown[]) => withExplicitProxyRequestInitMock(...args),
+  withExplicitProxyRequestInit: (...args: unknown[]) => withExplicitProxyRequestInitMock(...(args as Parameters<typeof withExplicitProxyRequestInitMock>)),
 }));
 
 describe('notifyService', () => {

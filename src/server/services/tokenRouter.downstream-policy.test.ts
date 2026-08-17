@@ -90,11 +90,15 @@ describe('TokenRouter downstream policy', () => {
       allowedRouteIds: [routeAllowed.id],
       supportedModels: [],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
     });
     const blockedPick = await router.selectChannel('gpt-4o-mini', {
       allowedRouteIds: [routeAllowed.id],
       supportedModels: [],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
     });
 
     expect(allowedPick).toBeTruthy();
@@ -137,6 +141,8 @@ describe('TokenRouter downstream policy', () => {
       allowedRouteIds: [],
       supportedModels: [],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
       denyAllWhenEmpty: true,
     });
 
@@ -213,6 +219,8 @@ describe('TokenRouter downstream policy', () => {
           [siteHigh.id]: 4,
           [siteLow.id]: 1,
         },
+        excludedSiteIds: [],
+        excludedCredentialRefs: [],
       },
     );
 
@@ -296,6 +304,8 @@ describe('TokenRouter downstream policy', () => {
           [siteGlobalHigh.id]: 0.5,
           [siteGlobalLow.id]: 1,
         },
+        excludedSiteIds: [],
+        excludedCredentialRefs: [],
       },
     );
 
@@ -357,6 +367,8 @@ describe('TokenRouter downstream policy', () => {
       allowedRouteIds: [claudeGroupRoute.id],
       supportedModels: ['gpt-4o-mini'],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
     };
 
     const claudePick = await router.selectChannel('claude-opus-4-6', policy);

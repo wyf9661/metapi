@@ -464,12 +464,12 @@ describe('modelAvailabilityProbeService', () => {
       checkedAt: '2026-03-20T00:00:00.000Z',
     }).run();
 
-    let releaseFirstProbe: (() => void) | null = null;
+    const gate = { release: null as (() => void) | null };
     const firstProbeStarted = new Promise<void>((resolve) => {
       dispatchRuntimeRequestMock.mockImplementationOnce(async () => {
         resolve();
         await new Promise<void>((release) => {
-          releaseFirstProbe = release;
+          gate.release = release;
         });
         return new Response(JSON.stringify({
           id: 'resp_probe',
@@ -492,7 +492,7 @@ describe('modelAvailabilityProbeService', () => {
       rebuildRoutes: false,
     });
 
-    releaseFirstProbe?.();
+    gate.release?.();
     await firstProbe;
 
     expect(overlappingProbe.summary).toMatchObject({

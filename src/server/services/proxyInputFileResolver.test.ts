@@ -35,7 +35,7 @@ describe('proxyInputFileResolver', () => {
 
     await expect(resolveResponsesBodyInputFiles(
       body,
-      { ownerType: 'global_proxy_token', ownerId: 'global' },
+      { ownerType: 'managed_key', ownerId: 'global' },
     )).resolves.toEqual(body);
     expect(getProxyFileByPublicIdForOwnerMock).not.toHaveBeenCalled();
   }, 15_000);

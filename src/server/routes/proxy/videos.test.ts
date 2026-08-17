@@ -9,7 +9,7 @@ const recordFailureMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const reportProxyAllFailedMock = vi.fn();
 const reportTokenExpiredMock = vi.fn();
-const estimateProxyCostMock = vi.fn(async () => 0);
+const estimateProxyCostMock = vi.fn(async (_arg: any) => 0);
 const shouldRetryProxyRequestMock = vi.fn();
 const saveProxyVideoTaskMock = vi.fn();
 const getProxyVideoTaskByPublicIdMock = vi.fn();

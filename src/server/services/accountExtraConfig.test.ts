@@ -15,7 +15,6 @@ import {
   requiresManagedAccountTokens,
   supportsDirectAccountRoutingConnection,
 } from './accountExtraConfig.js';
-import { config } from '../config.js';
 
 describe('accountExtraConfig', () => {
   it('reads platformUserId from extra config when present', () => {

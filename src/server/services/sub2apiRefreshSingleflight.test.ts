@@ -14,10 +14,10 @@ describe('sub2apiRefreshSingleflight', () => {
   });
 
   it('coalesces concurrent refreshes for the same account id', async () => {
-    let resolveRefresh: ((value: { accessToken: string; extraConfig: string }) => void) | null = null;
+    const gate = { resolve: null as ((value: { accessToken: string; extraConfig: string }) => void) | null };
     refreshSub2ApiManagedSessionMock.mockImplementation(
       () => new Promise((resolve) => {
-        resolveRefresh = resolve;
+        gate.resolve = resolve;
       }),
     );
 
@@ -39,7 +39,7 @@ describe('sub2apiRefreshSingleflight', () => {
 
     expect(refreshSub2ApiManagedSessionMock).toHaveBeenCalledTimes(1);
 
-    resolveRefresh?.({
+    gate.resolve?.({
       accessToken: 'fresh-access-token',
       extraConfig: '{"sub2apiAuth":{"refreshToken":"next-refresh-token"}}',
     });
@@ -55,10 +55,10 @@ describe('sub2apiRefreshSingleflight', () => {
   });
 
   it('cleans up in-flight state after a rejected refresh so the next attempt can retry', async () => {
-    let rejectRefresh: ((error: Error) => void) | null = null;
+    const gate = { reject: null as ((error: Error) => void) | null };
     refreshSub2ApiManagedSessionMock.mockImplementation(
       () => new Promise((_resolve, reject) => {
-        rejectRefresh = reject;
+        gate.reject = reject;
       }),
     );
 
@@ -80,7 +80,7 @@ describe('sub2apiRefreshSingleflight', () => {
 
     expect(refreshSub2ApiManagedSessionMock).toHaveBeenCalledTimes(1);
 
-    rejectRefresh?.(new Error('refresh rejected'));
+    gate.reject?.(new Error('refresh rejected'));
 
     await expect(first).rejects.toThrow('refresh rejected');
     await expect(second).rejects.toThrow('refresh rejected');

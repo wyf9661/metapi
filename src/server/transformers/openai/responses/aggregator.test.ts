@@ -8,7 +8,7 @@ import {
   serializeConvertedResponsesEvents,
 } from './aggregator.js';
 
-function parseSsePayloads(lines: string[]): Array<Record<string, unknown>> {
+function parseSsePayloads(lines: string[]): any[] {
   return lines
     .flatMap((line) => line.split('\n\n').filter((block) => block.trim().length > 0))
     .map((block) => {
@@ -17,12 +17,12 @@ function parseSsePayloads(lines: string[]): Array<Record<string, unknown>> {
         .find((line) => line.startsWith('data: '));
       if (!dataLine) return null;
       try {
-        return JSON.parse(dataLine.slice('data: '.length)) as Record<string, unknown>;
+        return JSON.parse(dataLine.slice('data: '.length)) as unknown;
       } catch {
         return null;
       }
     })
-    .filter((item): item is Record<string, unknown> => !!item);
+    .filter((item) => !!item);
 }
 
 function parseSseEvents(lines: string[]): Array<{ event: string | null; payload: Record<string, unknown> | '[DONE]' }> {

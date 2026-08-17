@@ -77,7 +77,7 @@ describe('executeEndpointFlow', () => {
 
     expect(result.ok).toBe(true);
     expect(dispatchRequest).toHaveBeenCalledTimes(1);
-    expect(dispatchRequest.mock.calls[0]?.[1]).toBe('https://example.com/v1/responses');
+    expect((dispatchRequest.mock.calls[0] as any[])?.[1]).toBe('https://example.com/v1/responses');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

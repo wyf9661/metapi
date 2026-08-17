@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BuiltEndpointRequest } from './endpointFlow.js';
+import type { UpstreamEndpoint } from '../../proxy-core/orchestration/upstreamRequest.js';
 
 function requestFor(path: string): BuiltEndpointRequest {
   return {
@@ -61,7 +62,7 @@ describe('executeEndpointFlow first-byte timeout', () => {
     const result = await executeEndpointFlow({
       siteUrl: 'https://example.com',
       endpointCandidates: ['responses', 'chat'],
-      buildRequest: (endpoint: 'responses' | 'chat') => endpoint === 'responses'
+      buildRequest: (endpoint: UpstreamEndpoint) => endpoint === 'responses'
         ? requestFor('/v1/responses')
         : { ...requestFor('/v1/chat/completions'), endpoint },
       dispatchRequest,
@@ -88,7 +89,7 @@ describe('executeEndpointFlow first-byte timeout', () => {
       siteUrl: 'https://example.com',
       endpointCandidates: ['responses', 'chat'],
       disableCrossProtocolFallback: true,
-      buildRequest: (endpoint: 'responses' | 'chat') => endpoint === 'responses'
+      buildRequest: (endpoint: UpstreamEndpoint) => endpoint === 'responses'
         ? requestFor('/v1/responses')
         : { ...requestFor('/v1/chat/completions'), endpoint },
       dispatchRequest: async (

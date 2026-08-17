@@ -66,7 +66,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let rebuildRoutesOnly: RouteRefreshWorkflowModule['rebuildRoutesOnly'];
-  let config: typeof import('../../config.js').config;
   let dataDir = '';
 
   beforeAll(async () => {
@@ -82,11 +81,9 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     const dbModule = await import('../../db/index.js');
     const routesModule = await import('./oauth.js');
     const routeRefreshWorkflow = await import('../../services/routeRefreshWorkflow.js');
-    const configModule = await import('../../config.js');
     db = dbModule.db;
     schema = dbModule.schema;
     rebuildRoutesOnly = routeRefreshWorkflow.rebuildRoutesOnly;
-    config = configModule.config;
 
     app = Fastify();
     await app.register(routesModule.oauthRoutes);
@@ -96,7 +93,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
     fetchMock.mockReset();
     undiciAgentCtorMock.mockReset();
     undiciProxyAgentCtorMock.mockReset();
-    config.systemProxyUrl = '';
     const { resetRequestRateLimitStore } = await import('../../middleware/requestRateLimit.js');
     const { resetOauthSensitiveRouteLimiterForTests } = await import('./oauth.js');
     resetRequestRateLimitStore();
@@ -728,7 +724,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   });
 
   it('updates oauth account proxy settings without starting reauthorization and refreshes route coverage', async () => {
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -815,7 +810,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   });
 
   it('updates oauth account proxy settings without creating a new oauth session and rebuilds routes', async () => {
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -1110,7 +1104,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         chatgpt_plan_type: 'plus',
       },
     });
-    const discoveryGate = createDeferred<ResponseLike>();
+    const discoveryGate = createDeferred<Response>();
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
@@ -1161,7 +1155,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         models: [{ id: 'gpt-5.4' }],
       }),
       text: async () => JSON.stringify({ ok: true }),
-    } as ResponseLike);
+    } as Response);
 
     const callbackResponse = await callbackPromise;
     expect(callbackResponse.statusCode).toBe(200);
@@ -2403,7 +2397,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
   });
 
   it('imports multiple native oauth json objects with shared proxy settings in one request', async () => {
-    config.systemProxyUrl = 'http://127.0.0.1:7890';
     fetchMock
       .mockResolvedValueOnce({
         ok: true,

@@ -693,6 +693,6 @@ describe('convertClaudeRequestToOpenAiBody', () => {
     const toolMessage = messages.find((message) => message.role === 'tool');
     expect(toolMessage).toBeTruthy();
     expect(Array.isArray(toolMessage?.content)).toBe(true);
-    expect(toolMessage?.content.some((part: any) => part?.type === 'image_url')).toBe(true);
+    expect((toolMessage?.content as any[])?.some((part: any) => part?.type === 'image_url')).toBe(true);
   });
 });

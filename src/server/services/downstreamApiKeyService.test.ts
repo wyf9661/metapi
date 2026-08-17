@@ -5,13 +5,11 @@ import { join } from 'node:path';
 
 type DbModule = typeof import('../db/index.js');
 type ServiceModule = typeof import('./downstreamApiKeyService.js');
-type ConfigModule = typeof import('../config.js');
 
 describe('downstreamApiKeyService', () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let service: ServiceModule;
-  let config: ConfigModule['config'];
   let dataDir = '';
 
   beforeAll(async () => {
@@ -20,12 +18,10 @@ describe('downstreamApiKeyService', () => {
 
     await import('../db/migrate.js');
     const dbModule = await import('../db/index.js');
-    const configModule = await import('../config.js');
     const serviceModule = await import('./downstreamApiKeyService.js');
 
     db = dbModule.db;
     schema = dbModule.schema;
-    config = configModule.config;
     service = serviceModule;
   });
 
@@ -122,6 +118,8 @@ describe('downstreamApiKeyService', () => {
       supportedModels: ['gpt-4o-mini'],
       allowedRouteIds: [claudeGroup.id],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
     };
 
     expect(service.isModelAllowedByPolicy('claude-4-6-group', policy)).toBe(false);
@@ -136,6 +134,8 @@ describe('downstreamApiKeyService', () => {
       supportedModels: [],
       allowedRouteIds: [],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
       denyAllWhenEmpty: false,
     };
 
@@ -153,6 +153,8 @@ describe('downstreamApiKeyService', () => {
       supportedModels: [],
       allowedRouteIds: [virtualModelGroup.id],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
     };
 
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('claude-opus-4-6', policy)).toBe(true);
@@ -170,6 +172,8 @@ describe('downstreamApiKeyService', () => {
       supportedModels: [],
       allowedRouteIds: [aliasRoute.id],
       siteWeightMultipliers: {},
+      excludedSiteIds: [],
+      excludedCredentialRefs: [],
     };
 
     expect(await service.isModelAllowedByPolicyOrAllowedRoutes('claude-opus-4-6', policy)).toBe(true);

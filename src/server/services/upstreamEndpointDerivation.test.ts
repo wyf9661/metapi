@@ -14,7 +14,8 @@ const baseContext = {
     id: 1,
     url: 'https://upstream.example.com',
     platform: 'new-api',
-    apiKey: null,
+    apiKey: 'sk-demo',
+    protocolProfile: null as string | null,
   },
   account: {
     id: 2,

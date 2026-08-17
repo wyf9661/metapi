@@ -82,7 +82,6 @@ describe('refreshModelsForAccount credential discovery', () => {
     await db.delete(schema.siteApiEndpoints).run();
     await db.delete(schema.settings).run();
     await db.delete(schema.sites).run();
-    const { config } = await import('../config.js');
     const { invalidateSiteProxyCache } = await import('./siteProxy.js');
     invalidateSiteProxyCache();
   });

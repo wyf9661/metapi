@@ -1881,7 +1881,7 @@ describe('gemini native proxy routes', () => {
     });
     expect(events[0]).not.toHaveProperty('responseId');
     expect(events[0]).not.toHaveProperty('modelVersion');
-    expect(events[0].candidates?.[0]).not.toHaveProperty('finishReason');
+    expect((events[0] as Record<string, unknown>).candidates).not.toHaveProperty('finishReason');
     expect(events[1]).toMatchObject({
       serverContent: {
         modelTurn: {

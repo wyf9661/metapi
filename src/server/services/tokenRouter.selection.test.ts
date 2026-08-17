@@ -190,6 +190,63 @@ describe('TokenRouter selection scoring', () => {
     await expect(router.selectPreferredChannel('gpt-5.2', preferredChannel.id)).resolves.toBeNull();
   });
 
+  it('clearFailureCooldown lets a recently-failed preferred channel be re-selected (recovery pass path)', async () => {
+    config.routingWeights = {
+      baseWeightFactor: 1,
+      valueScoreFactor: 0,
+      costWeight: 0,
+      balanceWeight: 0,
+      usageWeight: 0,
+    };
+
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'gpt-5.2',
+      routingStrategy: 'stable_first',
+      enabled: true,
+    }).returning().get();
+    const site = await createSite('sticky-site');
+    const account = await createAccount(site.id, 'sticky-user');
+    const tokenA = await createToken(account.id, 'sticky-a');
+    const tokenB = await createToken(account.id, 'sticky-b');
+
+    const preferredChannel = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      tokenId: tokenA.id,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+      failCount: 0,
+    }).returning().get();
+
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      tokenId: tokenB.id,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+      failCount: 0,
+    }).run();
+
+    const router = new TokenRouter();
+    await db.update(schema.routeChannels).set({
+      failCount: 4,
+      lastFailAt: new Date().toISOString(),
+    }).where(eq(schema.routeChannels.id, preferredChannel.id)).run();
+    invalidateTokenRouterCache();
+
+    // Blocked while cooling down...
+    await expect(router.selectPreferredChannel('gpt-5.2', preferredChannel.id)).resolves.toBeNull();
+
+    // ...but the recovery pass clears the cooldown first, so the channel is
+    // selectable again on the recovery hop.
+    await router.clearFailureCooldown(preferredChannel.id);
+    const reselected = await router.selectPreferredChannel('gpt-5.2', preferredChannel.id);
+    expect(reselected?.channel.id).toBe(preferredChannel.id);
+    expect(reselected?.channel.failCount).toBe(0);
+  });
+
   it('round-robins inside an oauth route unit while keeping one outer channel', async () => {
     const route = await createRoute('gpt-5.4');
     const site = await db.insert(schema.sites).values({

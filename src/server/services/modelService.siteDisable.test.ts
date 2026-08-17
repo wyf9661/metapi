@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 type DbModule = typeof import('../db/index.js');
 type ModelServiceModule = typeof import('./modelService.js');

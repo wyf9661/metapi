@@ -8,7 +8,7 @@ import {
 } from './base.js';
 
 class UnsupportedAnnouncementAdapter extends BasePlatformAdapter {
-  override readonly platformName = 'unsupported';
+  override readonly platformName: string = 'unsupported';
 
   override async detect(): Promise<boolean> {
     return false;

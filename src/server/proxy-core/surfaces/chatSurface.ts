@@ -275,6 +275,12 @@ export async function handleChatSurfaceRequest(
           downstreamApiKeyId,
         });
         if (lsChannelId) {
+          // The last-success channel just failed in the transient burst, so it
+          // is still inside its failure backoff. Clear the cooldown so the
+          // recovery hop can actually retry it — otherwise selectPreferredChannel
+          // (and the balanced-v2 fallback) both skip it and the recovery pass
+          // degenerates into another weighted re-select of already-failed sites.
+          await tokenRouter.clearFailureCooldown(lsChannelId);
           const lsSelected = await tokenRouter.selectPreferredChannel(
             requestedModel, lsChannelId, downstreamPolicy, [],
           );

@@ -1610,6 +1610,7 @@ export class TokenRouter {
           totalLatencyMs: memberTotalLatencyMs,
           totalCost: memberTotalCost,
           lastUsedAt: nowIso,
+          failCount: 0,
           cooldownUntil: null,
           lastFailAt: null,
           consecutiveFailCount: 0,
@@ -1630,6 +1631,7 @@ export class TokenRouter {
       totalLatencyMs: nextTotalLatencyMs,
       totalCost: nextTotalCost,
       lastUsedAt: nowIso,
+      failCount: 0,
       cooldownUntil: null,
       lastFailAt: null,
       consecutiveFailCount: 0,
@@ -1641,6 +1643,7 @@ export class TokenRouter {
       channel.totalLatencyMs = nextTotalLatencyMs;
       channel.totalCost = nextTotalCost;
       channel.lastUsedAt = nowIso;
+      channel.failCount = 0;
       channel.cooldownUntil = null;
       channel.lastFailAt = null;
       channel.consecutiveFailCount = 0;
@@ -1996,6 +1999,32 @@ export class TokenRouter {
   }
 
   /**
+   * Clear failure cooldown state for a channel (failCount / lastFailAt /
+   * cooldownUntil / consecutiveFailCount / cooldownLevel). Used by the proxy
+   * recovery pass: after a burst of transient failures (403/429/5xx) the
+   * last-success channel deserves one retry instead of being parked in
+   * backoff for the full cooldown window.
+   */
+  async clearFailureCooldown(channelId: number): Promise<void> {
+    const normalizedChannelId = Math.trunc(channelId || 0);
+    if (normalizedChannelId <= 0) return;
+    await db.update(schema.routeChannels).set({
+      failCount: 0,
+      lastFailAt: null,
+      cooldownUntil: null,
+      consecutiveFailCount: 0,
+      cooldownLevel: 0,
+    }).where(eq(schema.routeChannels.id, normalizedChannelId)).run();
+    patchCachedChannel(normalizedChannelId, (channel) => {
+      channel.failCount = 0;
+      channel.lastFailAt = null;
+      channel.cooldownUntil = null;
+      channel.consecutiveFailCount = 0;
+      channel.cooldownLevel = 0;
+    });
+  }
+
+  /**
    * Get all available models (aggregated from all routes).
    */
   async getAvailableModels(): Promise<string[]> {
@@ -2341,10 +2370,24 @@ export class TokenRouter {
     }
 
     const sortedPriorities = Array.from(layers.keys()).sort((a, b) => a - b);
-    for (const priority of sortedPriorities) {
+    for (const [layerIndex, priority] of sortedPriorities.entries()) {
       const rawLayer = layers.get(priority) ?? [];
       const breakerFiltered = filterSiteRuntimeBrokenCandidatesByModel(rawLayer, runtimeModelResolver, nowMs);
-      const candidates = filterRecentlyFailedCandidates(breakerFiltered.candidates, nowMs);
+      const layerCandidates = breakerFiltered.candidates;
+      const hasFreshCandidate = layerCandidates.some(
+        (candidate) => !isChannelRecentlyFailed(candidate.channel, nowMs),
+      );
+      // A fully cooling-down layer must not block lower-priority layers: the
+      // fallback in filterRecentlyFailedCandidates would otherwise return the
+      // whole pool and weightedRandomSelect would burn a hop on a channel that
+      // just failed. Only the last layer keeps the least-bad fallback when
+      // nothing fresh exists anywhere in the route.
+      if (layerCandidates.length > 0
+        && !hasFreshCandidate
+        && layerIndex < sortedPriorities.length - 1) {
+        continue;
+      }
+      const candidates = filterRecentlyFailedCandidates(layerCandidates, nowMs);
       const selected = this.weightedRandomSelect(
         candidates,
         requestedByDisplayName ? runtimeModelResolver : mappedModel,

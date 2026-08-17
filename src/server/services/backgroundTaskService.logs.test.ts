@@ -14,9 +14,9 @@ describe('background task log streaming', () => {
   });
 
   it('appends log entries in order and exposes them through task lookups', async () => {
-    let releaseRunner: (() => void) | null = null;
+    const gate = { release: null as (() => void) | null };
     const runnerGate = new Promise<void>((resolve) => {
-      releaseRunner = resolve;
+      gate.release = resolve;
     });
 
     const { task } = startBackgroundTask(
@@ -39,13 +39,13 @@ describe('background task log streaming', () => {
       expect.objectContaining({ seq: 2, message: 'Running helm upgrade' }),
     ]);
 
-    releaseRunner?.();
+    gate.release?.();
   });
 
   it('notifies subscribers when new log entries arrive', async () => {
-    let releaseRunner: (() => void) | null = null;
+    const gate = { release: null as (() => void) | null };
     const runnerGate = new Promise<void>((resolve) => {
-      releaseRunner = resolve;
+      gate.release = resolve;
     });
 
     const { task } = startBackgroundTask(
@@ -73,13 +73,13 @@ describe('background task log streaming', () => {
     ]);
 
     unsubscribe();
-    releaseRunner?.();
+    gate.release?.();
   });
 
   it('trims old log entries to a bounded buffer', async () => {
-    let releaseRunner: (() => void) | null = null;
+    const gate = { release: null as (() => void) | null };
     const runnerGate = new Promise<void>((resolve) => {
-      releaseRunner = resolve;
+      gate.release = resolve;
     });
 
     const { task } = startBackgroundTask(
@@ -108,6 +108,6 @@ describe('background task log streaming', () => {
       message: 'line-250',
     });
 
-    releaseRunner?.();
+    gate.release?.();
   });
 });

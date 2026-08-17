@@ -9,8 +9,8 @@ const allMock = vi.fn();
 
 vi.mock('node-cron', () => ({
   default: {
-    schedule: (...args: unknown[]) => scheduleMock(...args),
-    validate: (...args: unknown[]) => validateMock(...args),
+    schedule: (...args: unknown[]) => scheduleMock(...(args as Parameters<typeof scheduleMock>)),
+    validate: (...args: unknown[]) => validateMock(...(args as Parameters<typeof validateMock>)),
   },
 }));
 

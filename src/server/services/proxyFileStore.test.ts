@@ -36,7 +36,7 @@ describe('proxyFileStore', () => {
 
   it('creates, lists, and reads files within one owner namespace', async () => {
     const created = await store.saveProxyFile({
-      ownerType: 'global_proxy_token',
+      ownerType: 'managed_key',
       ownerId: 'global',
       purpose: 'assistants',
       filename: 'sample.pdf',
@@ -48,12 +48,12 @@ describe('proxyFileStore', () => {
     expect(created.byteSize).toBeGreaterThan(0);
     expect(created.mimeType).toBe('application/pdf');
 
-    const listed = await store.listProxyFilesByOwner({ ownerType: 'global_proxy_token', ownerId: 'global' });
+    const listed = await store.listProxyFilesByOwner({ ownerType: 'managed_key', ownerId: 'global' });
     expect(listed).toHaveLength(1);
     expect(listed[0]?.publicId).toBe(created.publicId);
 
     const loaded = await store.getProxyFileByPublicIdForOwner(created.publicId, {
-      ownerType: 'global_proxy_token',
+      ownerType: 'managed_key',
       ownerId: 'global',
     });
     expect(loaded?.filename).toBe('sample.pdf');
@@ -71,7 +71,7 @@ describe('proxyFileStore', () => {
     });
 
     await store.saveProxyFile({
-      ownerType: 'global_proxy_token',
+      ownerType: 'managed_key',
       ownerId: 'global',
       purpose: 'assistants',
       filename: 'global.json',
@@ -80,7 +80,7 @@ describe('proxyFileStore', () => {
     });
 
     const managedFiles = await store.listProxyFilesByOwner({ ownerType: 'managed_key', ownerId: '12' });
-    const globalFiles = await store.listProxyFilesByOwner({ ownerType: 'global_proxy_token', ownerId: 'global' });
+    const globalFiles = await store.listProxyFilesByOwner({ ownerType: 'managed_key', ownerId: 'global' });
 
     expect(managedFiles.map((item) => item.publicId)).toEqual([managed.publicId]);
     expect(globalFiles).toHaveLength(1);
@@ -117,7 +117,7 @@ describe('proxyFileStore', () => {
     await db.insert(schema.proxyFiles).values([
       {
         publicId: 'file-metapi-old',
-        ownerType: 'global_proxy_token',
+        ownerType: 'managed_key',
         ownerId: 'global',
         filename: 'old.txt',
         mimeType: 'text/plain',
@@ -131,7 +131,7 @@ describe('proxyFileStore', () => {
       },
       {
         publicId: 'file-metapi-new',
-        ownerType: 'global_proxy_token',
+        ownerType: 'managed_key',
         ownerId: 'global',
         filename: 'new.txt',
         mimeType: 'text/plain',

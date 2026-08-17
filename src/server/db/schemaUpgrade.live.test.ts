@@ -1,7 +1,11 @@
-import baselineContract from './generated/fixtures/2026-03-14-baseline.schemaContract.json' with { type: 'json' };
-import currentContract from './generated/schemaContract.json' with { type: 'json' };
+import baselineContractJson from './generated/fixtures/2026-03-14-baseline.schemaContract.json' with { type: 'json' };
+import currentContractJson from './generated/schemaContract.json' with { type: 'json' };
 import { applyContractFixtureThenUpgrade, introspectLiveSchema } from './schemaIntrospection.js';
+import type { SchemaContract } from './schemaContract.js';
 import { describe, expect, it } from 'vitest';
+
+const baselineContract = baselineContractJson as unknown as SchemaContract;
+const currentContract = currentContractJson as unknown as SchemaContract;
 
 const skipLiveSchema = process.env.DB_PARITY_SKIP_LIVE_SCHEMA === 'true';
 const sqliteUpgrade = !skipLiveSchema && process.env.DB_PARITY_SQLITE !== 'false' ? it : it.skip;

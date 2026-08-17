@@ -16,11 +16,11 @@ const handleChatSurfaceRequestMock = vi.fn(async (_request, reply, downstreamFor
 const ensureResponsesWebsocketTransportMock = vi.fn();
 
 vi.mock('../../proxy-core/surfaces/openAiResponsesSurface.js', () => ({
-  handleOpenAiResponsesSurfaceRequest: (...args: unknown[]) => handleOpenAiResponsesSurfaceRequestMock(...args),
+  handleOpenAiResponsesSurfaceRequest: (...args: unknown[]) => handleOpenAiResponsesSurfaceRequestMock(...(args as Parameters<typeof handleOpenAiResponsesSurfaceRequestMock>)),
 }));
 
 vi.mock('../../proxy-core/surfaces/chatSurface.js', () => ({
-  handleChatSurfaceRequest: (...args: unknown[]) => handleChatSurfaceRequestMock(...args),
+  handleChatSurfaceRequest: (...args: unknown[]) => handleChatSurfaceRequestMock(...(args as Parameters<typeof handleChatSurfaceRequestMock>)),
   handleClaudeCountTokensSurfaceRequest: vi.fn(),
 }));
 

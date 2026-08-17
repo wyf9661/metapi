@@ -1,5 +1,5 @@
-import baselineContract from './generated/fixtures/2026-03-14-baseline.schemaContract.json' with { type: 'json' };
-import currentContract from './generated/schemaContract.json' with { type: 'json' };
+import baselineContractJson from './generated/fixtures/2026-03-14-baseline.schemaContract.json' with { type: 'json' };
+import currentContractJson from './generated/schemaContract.json' with { type: 'json' };
 import { classifyLegacyCompatMutation } from './legacySchemaCompat.js';
 import { generateUpgradeSql } from './schemaArtifactGenerator.js';
 import type { SchemaContract, SchemaContractColumn } from './schemaContract.js';
@@ -10,6 +10,9 @@ import {
   type RuntimeSchemaClient,
   type RuntimeSchemaDialect,
 } from './runtimeSchemaBootstrap.js';
+
+const baselineContract = baselineContractJson as unknown as SchemaContract;
+const currentContract = currentContractJson as unknown as SchemaContract;
 
 function createStubClient(dialect: RuntimeSchemaDialect, executedSql: string[]): RuntimeSchemaClient {
   return {

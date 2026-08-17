@@ -27,6 +27,7 @@ type ChannelContext = {
     platform: string;
     apiKey?: string | null;
     customHeaders?: string | null;
+    protocolProfile?: string | null;
   };
   account: {
     id: number;

@@ -97,6 +97,7 @@ describe('proxyUsageFallbackService', () => {
         quota: 1000,
         createdAtMs: 1_700_000_000_000,
         requestTimeMs: 800,
+        billingMeta: null,
       },
       {
         modelName: 'gpt-4o',
@@ -107,6 +108,7 @@ describe('proxyUsageFallbackService', () => {
         quota: 4500,
         createdAtMs: 1_700_000_007_000,
         requestTimeMs: 3100,
+        billingMeta: null,
       },
       {
         modelName: 'gpt-4o-mini',
@@ -117,6 +119,7 @@ describe('proxyUsageFallbackService', () => {
         quota: 9999,
         createdAtMs: 1_700_000_007_000,
         requestTimeMs: 3100,
+        billingMeta: null,
       },
     ];
 
@@ -141,6 +144,7 @@ describe('proxyUsageFallbackService', () => {
         quota: 3300,
         createdAtMs: 1_700_000_123_000,
         requestTimeMs: 1450,
+        billingMeta: null,
       },
     ];
 
@@ -165,6 +169,7 @@ describe('proxyUsageFallbackService', () => {
         quota: 1890000,
         createdAtMs: 1_772_024_884_000,
         requestTimeMs: 59_000,
+        billingMeta: null,
       },
     ];
 

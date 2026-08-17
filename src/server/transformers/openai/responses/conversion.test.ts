@@ -1410,7 +1410,7 @@ describe('convertResponsesBodyToOpenAiBody', () => {
       source,
       'gpt-5',
       false,
-    );
+    ) as Record<string, any>;
 
     expect(openAiBody.messages).toHaveLength(1);
     expect(openAiBody.messages[0]).toMatchObject({

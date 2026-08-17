@@ -7,14 +7,12 @@ import { eq } from 'drizzle-orm';
 
 type DbModule = typeof import('../../db/index.js');
 type ConfigModule = typeof import('../../config.js');
-type ServiceModule = typeof import('../../services/factoryResetService.js');
 
 describe('settings factory reset api', () => {
   let app: FastifyInstance;
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let config: ConfigModule['config'];
-  let FACTORY_RESET_ADMIN_TOKEN: ServiceModule['FACTORY_RESET_ADMIN_TOKEN'];
   let dataDir = '';
 
   beforeAll(async () => {
@@ -24,13 +22,11 @@ describe('settings factory reset api', () => {
     await import('../../db/migrate.js');
     const dbModule = await import('../../db/index.js');
     const configModule = await import('../../config.js');
-    const serviceModule = await import('../../services/factoryResetService.js');
     const settingsRoutesModule = await import('./settings.js');
 
     db = dbModule.db;
     schema = dbModule.schema;
     config = configModule.config;
-    FACTORY_RESET_ADMIN_TOKEN = serviceModule.FACTORY_RESET_ADMIN_TOKEN;
 
     app = Fastify();
     await app.register(settingsRoutesModule.settingsRoutes);

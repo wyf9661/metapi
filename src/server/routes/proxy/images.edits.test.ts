@@ -9,7 +9,7 @@ const recordFailureMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const reportProxyAllFailedMock = vi.fn();
 const reportTokenExpiredMock = vi.fn();
-const estimateProxyCostMock = vi.fn(async () => 0);
+const estimateProxyCostMock = vi.fn(async (_arg: any) => 0);
 const dbInsertMock = vi.fn((_arg?: any) => ({
   values: () => ({
     run: () => undefined,

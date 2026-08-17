@@ -16,7 +16,7 @@ const { fetchMock, withSiteProxyRequestInitMock } = vi.hoisted(() => ({
 
 vi.mock('undici', () => ({
   Agent: class MockUndiciAgent {
-    constructor(...args: unknown[]) {}
+    constructor(..._args: unknown[]) {}
   },
   setGlobalDispatcher: () => {},
 

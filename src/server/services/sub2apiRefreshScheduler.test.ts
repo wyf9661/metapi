@@ -42,7 +42,6 @@ describe('sub2apiRefreshScheduler', () => {
   let schema: DbModule['schema'];
   let executeSub2ApiManagedRefreshPass: SchedulerModule['executeSub2ApiManagedRefreshPass'];
   let sub2ApiRefreshSchedulerConcurrency: number;
-  let startSub2ApiManagedRefreshScheduler: SchedulerModule['startSub2ApiManagedRefreshScheduler'];
   let stopSub2ApiManagedRefreshScheduler: SchedulerModule['stopSub2ApiManagedRefreshScheduler'];
   let resetSub2ApiManagedRefreshSchedulerForTests: SchedulerModule['__resetSub2ApiManagedRefreshSchedulerForTests'];
   let dataDir = '';
@@ -61,7 +60,6 @@ describe('sub2apiRefreshScheduler', () => {
     schema = dbModule.schema;
     executeSub2ApiManagedRefreshPass = schedulerModule.executeSub2ApiManagedRefreshPass;
     sub2ApiRefreshSchedulerConcurrency = schedulerModule.SUB2API_REFRESH_SCHEDULER_CONCURRENCY;
-    startSub2ApiManagedRefreshScheduler = schedulerModule.startSub2ApiManagedRefreshScheduler;
     stopSub2ApiManagedRefreshScheduler = schedulerModule.stopSub2ApiManagedRefreshScheduler;
     resetSub2ApiManagedRefreshSchedulerForTests = schedulerModule.__resetSub2ApiManagedRefreshSchedulerForTests;
   });
