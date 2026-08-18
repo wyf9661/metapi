@@ -19,10 +19,12 @@ export default function SiteCreatedModal({
   onChoice,
   onClose,
 }: Props) {
-  const apiKeyFirst = initialSegment === 'apikey';
-  const helperText = apiKeyFirst
-    ? '该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。'
-    : '接下来您可以继续补充登录连接或 API Key。';
+  const apiKeyFirst = initialSegment === 'apikey' && !oauthOnly;
+  const helperText = oauthOnly
+    ? '该平台使用 OAuth 授权登录，点击下方按钮开始授权流程。'
+    : apiKeyFirst
+      ? '该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。'
+      : '接下来您可以继续补充登录连接或 API Key。';
   const primaryAction = apiKeyFirst
     ? {
       choice: 'apikey' as const,
