@@ -207,6 +207,11 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
     config.proxyFirstByteTimeoutSec = Math.max(0, Math.trunc(proxyFirstByteTimeoutSec));
   }
 
+  const proxyRouteProbeRate = parseSettingFromMap<number>(settingsMap, 'proxy_route_probe_rate');
+  if (typeof proxyRouteProbeRate === 'number' && Number.isFinite(proxyRouteProbeRate) && proxyRouteProbeRate >= 0 && proxyRouteProbeRate <= 1) {
+    config.proxyRouteProbeRate = Math.min(1, Math.max(0, proxyRouteProbeRate));
+  }
+
   const tokenRouterFailureCooldownMaxSec = parseSettingFromMap<number>(settingsMap, 'token_router_failure_cooldown_max_sec');
   const normalizedFailureCooldownMaxSec = normalizeTokenRouterFailureCooldownMaxSec(tokenRouterFailureCooldownMaxSec);
   if (normalizedFailureCooldownMaxSec != null) {

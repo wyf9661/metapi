@@ -73,6 +73,7 @@ type RuntimeSettings = {
   proxySessionChannelQueueWaitMs: number;
   routingFallbackUnitCost: number;
   proxyFirstByteTimeoutSec: number;
+  proxyRouteProbeRate: number;
   routeFailureCooldownMaxValue: number;
   routeFailureCooldownMaxUnit: RouteCooldownUnit;
   routingWeights: RoutingWeights;
@@ -142,6 +143,7 @@ export default function Settings() {
     proxySessionChannelQueueWaitMs: 1500,
     routingFallbackUnitCost: 1,
     proxyFirstByteTimeoutSec: 15,
+    proxyRouteProbeRate: 0.15,
     routeFailureCooldownMaxValue: 30,
     routeFailureCooldownMaxUnit: 'day',
     routingWeights: defaultWeights,
@@ -431,7 +433,10 @@ export default function Settings() {
           : 1,
         proxyFirstByteTimeoutSec: Number(runtimeInfo.proxyFirstByteTimeoutSec) >= 0
           ? Math.trunc(Number(runtimeInfo.proxyFirstByteTimeoutSec))
-          : 0,
+          : 15,
+        proxyRouteProbeRate: Number(runtimeInfo.proxyRouteProbeRate) >= 0 && Number(runtimeInfo.proxyRouteProbeRate) <= 1
+          ? Number(runtimeInfo.proxyRouteProbeRate)
+          : 0.15,
         routeFailureCooldownMaxValue: routeCooldownInput.value,
         routeFailureCooldownMaxUnit: routeCooldownInput.unit,
         routingWeights: {
@@ -680,6 +685,9 @@ export default function Settings() {
         proxyFirstByteTimeoutSec: Number.isFinite(runtime.proxyFirstByteTimeoutSec)
           ? Math.max(0, Math.trunc(runtime.proxyFirstByteTimeoutSec))
           : 0,
+        proxyRouteProbeRate: Number.isFinite(runtime.proxyRouteProbeRate)
+          ? Math.min(1, Math.max(0, runtime.proxyRouteProbeRate))
+          : 0.15,
         tokenRouterFailureCooldownMaxSec: toRouteCooldownSeconds(
           runtime.routeFailureCooldownMaxValue,
           runtime.routeFailureCooldownMaxUnit,
@@ -1644,6 +1652,32 @@ export default function Settings() {
             />
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
               默认 15 秒；`0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换渠道，已经开始输出的请求不会被这项超时打断。
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+              路由探测率（跳过亲和性，直接走加权随机）
+            </div>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              aria-label="路由探测率"
+              value={runtime.proxyRouteProbeRate}
+              onChange={(e) => {
+                const nextValue = Number(e.target.value);
+                setRuntime((prev) => ({
+                  ...prev,
+                  proxyRouteProbeRate: Number.isFinite(nextValue)
+                    ? Math.min(1, Math.max(0, nextValue))
+                    : prev.proxyRouteProbeRate,
+                }));
+              }}
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
+              默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。
             </div>
           </div>
 

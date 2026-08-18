@@ -357,6 +357,7 @@ export type RuntimeSettingsPayload = {
   adminIpAllowlist?: string[] | string;
   routingFallbackUnitCost?: number;
   proxyFirstByteTimeoutSec?: number;
+  proxyRouteProbeRate?: number;
   tokenRouterFailureCooldownMaxSec?: number;
   routingWeights?: RuntimeRoutingWeightsPayload;
   proxyErrorKeywords?: string[] | string;

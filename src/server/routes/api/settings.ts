@@ -102,6 +102,7 @@ interface RuntimeSettingsBody {
   tunnelDashboardAccess?: boolean;
   routingFallbackUnitCost?: number;
   proxyFirstByteTimeoutSec?: number;
+  proxyRouteProbeRate?: number;
   tokenRouterFailureCooldownMaxSec?: number;
   routingWeights?: Partial<RoutingWeights>;
   proxyErrorKeywords?: string[] | string;
@@ -535,6 +536,12 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.proxyFirstByteTimeoutSec = Math.max(0, Math.trunc(n));
       return;
     }
+    case 'proxy_route_probe_rate': {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0 || n > 1) return;
+      config.proxyRouteProbeRate = Math.min(1, Math.max(0, n));
+      return;
+    }
     case 'token_router_failure_cooldown_max_sec': {
       const normalized = normalizeTokenRouterFailureCooldownMaxSec(value);
       if (normalized == null) return;
@@ -582,6 +589,7 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     proxyDebugMaxBodyBytes: config.proxyDebugMaxBodyBytes,
     routingFallbackUnitCost: config.routingFallbackUnitCost,
     proxyFirstByteTimeoutSec: config.proxyFirstByteTimeoutSec,
+    proxyRouteProbeRate: config.proxyRouteProbeRate,
     tokenRouterFailureCooldownMaxSec: config.tokenRouterFailureCooldownMaxSec,
     routingWeights: config.routingWeights,
     webhookUrl: config.webhookUrl,
@@ -1480,6 +1488,19 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.proxyFirstByteTimeoutSec = normalized;
       upsertSetting('proxy_first_byte_timeout_sec', normalized);
+    }
+
+    if (body.proxyRouteProbeRate !== undefined) {
+      const nextProxyRouteProbeRate = Number(body.proxyRouteProbeRate);
+      if (!Number.isFinite(nextProxyRouteProbeRate) || nextProxyRouteProbeRate < 0 || nextProxyRouteProbeRate > 1) {
+        return reply.code(400).send({ success: false, message: '探测率必须是 0 到 1 之间的数字' });
+      }
+      const normalized = Math.min(1, Math.max(0, nextProxyRouteProbeRate));
+      if (Math.abs(normalized - config.proxyRouteProbeRate) > 1e-9) {
+        changedLabels.push(`路由探测率（${config.proxyRouteProbeRate} -> ${normalized}）`);
+      }
+      config.proxyRouteProbeRate = normalized;
+      upsertSetting('proxy_route_probe_rate', normalized);
     }
 
     if (body.tokenRouterFailureCooldownMaxSec !== undefined) {
