@@ -107,6 +107,16 @@ function cleanupExpiredStickyBindings(nowMs = Date.now()): void {
   // the channel affinity.
 }
 
+function touchAffinityEntry<T>(source: Map<string, T>, key: string, entry: T): void {
+  source.delete(key);
+  source.set(key, entry);
+  while (source.size > PROXY_CHANNEL_AFFINITY_MAX_ENTRIES) {
+    const oldestKey = source.keys().next().value;
+    if (!oldestKey) break;
+    source.delete(oldestKey);
+  }
+}
+
 function buildLastSuccessKey(input: {
   requestedModel?: string | null;
   downstreamApiKeyId?: number | null;
@@ -424,7 +434,7 @@ class ProxyChannelCoordinator {
     if (!normalizedKey || !Number.isFinite(channelId) || channelId <= 0) return;
     cleanupExpiredStickyBindings();
     const previous = stickySessionBindings.get(normalizedKey);
-    stickySessionBindings.set(normalizedKey, {
+    touchAffinityEntry(stickySessionBindings, normalizedKey, {
       channelId: Math.trunc(channelId),
       expiresAtMs: Date.now() + getStickySessionTtlMs(),
       // Successful sticky dispatch refreshes TTL after every turn; preserve its
@@ -478,7 +488,7 @@ class ProxyChannelCoordinator {
     if (!key || channelId <= 0) return;
     cleanupExpiredStickyBindings();
     const previous = lastSuccessByModelKey.get(key);
-    lastSuccessByModelKey.set(key, {
+    touchAffinityEntry(lastSuccessByModelKey, key, {
       channelId,
       lastSuccessAtMs: Date.now(),
       hitCount: previous?.channelId === channelId ? (previous.hitCount ?? 0) : 0,

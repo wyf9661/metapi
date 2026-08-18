@@ -216,6 +216,41 @@ describe('proxyChannelCoordinator', () => {
     })).toBeNull();
   });
 
+  it('bounds runtime sticky and last-success affinity maps with LRU eviction', () => {
+    const firstStickyKey = proxyChannelCoordinator.buildStickySessionKey({
+      clientKind: 'generic',
+      sessionId: 'session-0',
+      requestedModel: 'model-0',
+      downstreamPath: '/v1/chat/completions',
+      downstreamApiKeyId: 1,
+    });
+    for (let index = 0; index <= 2_000; index += 1) {
+      const stickyKey = proxyChannelCoordinator.buildStickySessionKey({
+        clientKind: 'generic',
+        sessionId: `session-${index}`,
+        requestedModel: `model-${index}`,
+        downstreamPath: '/v1/chat/completions',
+        downstreamApiKeyId: 1,
+      });
+      proxyChannelCoordinator.bindStickyChannel(stickyKey, index + 1);
+      proxyChannelCoordinator.rememberLastSuccessChannel({
+        requestedModel: `model-${index}`,
+        downstreamApiKeyId: 1,
+        channelId: index + 1,
+      });
+    }
+
+    expect(proxyChannelCoordinator.getStickyChannelId(firstStickyKey)).toBeNull();
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'model-0',
+      downstreamApiKeyId: 1,
+    })).toBeNull();
+    expect(proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: 'model-2000',
+      downstreamApiKeyId: 1,
+    })).toBe(2_001);
+  });
+
   it('persists sticky + last-success affinity and reloads after process-local reset', async () => {
     const stickyKey = proxyChannelCoordinator.buildStickySessionKey({
       clientKind: 'generic',
