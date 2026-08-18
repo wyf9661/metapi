@@ -15,7 +15,7 @@ import {
 } from '../../services/routeRoutingStrategy.js';
 import { invalidateTokenRouterCache, matchesModelPattern, tokenRouter } from '../../services/tokenRouter.js';
 import { toPersistenceJson } from '../../services/downstreamApiKeyService.js';
-import { listPerformanceShadowMetrics } from '../../services/performanceShadow.js';
+import { listPerformanceShadowMetricsByRouteId } from '../../services/performanceShadow.js';
 import { normalizeRequestOverrideRules } from '../../services/requestOverride.js';
 import { getRecentRouteSelections } from '../../services/routeSelectionLog.js';
 import { appendBackgroundTaskLog, startBackgroundTask } from '../../services/backgroundTaskService.js';
@@ -1413,9 +1413,7 @@ export async function tokensRoutes(app: FastifyInstance) {
       const channel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, channelId)).get();
       if (!channel) return reply.code(404).send({ success: false, message: '通道不存在' });
 
-      const performance = listPerformanceShadowMetrics().filter(
-        (metric) => metric.routeId === channel.routeId,
-      );
+      const performance = listPerformanceShadowMetricsByRouteId(channel.routeId);
 
       const result: Record<string, unknown> = {
         channelId: channel.id,

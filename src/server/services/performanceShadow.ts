@@ -20,7 +20,21 @@ export type PerformanceShadowMetrics = {
 
 const DEFAULT_ALPHA = 0.3;
 const MIN_TPS_COMPLETION_TOKENS = 2;
+const PERFORMANCE_SHADOW_TTL_MS = 72 * 60 * 60 * 1000;
+const PERFORMANCE_SHADOW_MAX_ENTRIES = 5_000;
 const metricsByKey = new Map<string, PerformanceShadowMetrics>();
+
+function sweepPerformanceShadowMetrics(nowMs = Date.now()): void {
+  const cutoff = nowMs - PERFORMANCE_SHADOW_TTL_MS;
+  for (const [key, value] of metricsByKey.entries()) {
+    if (value.updatedAtMs < cutoff) metricsByKey.delete(key);
+  }
+  while (metricsByKey.size > PERFORMANCE_SHADOW_MAX_ENTRIES) {
+    const oldestKey = metricsByKey.keys().next().value;
+    if (!oldestKey) break;
+    metricsByKey.delete(oldestKey);
+  }
+}
 
 function normalizeModelName(modelName: string): string {
   return modelName.trim().toLowerCase();
@@ -81,17 +95,34 @@ export function recordPerformanceShadowSample(input: {
     sampleCount: (previous?.sampleCount ?? 0) + 1,
     updatedAtMs: input.nowMs ?? Date.now(),
   };
+  metricsByKey.delete(key);
   metricsByKey.set(key, next);
+  sweepPerformanceShadowMetrics(next.updatedAtMs);
   return { ...next };
 }
 
-export function getPerformanceShadowMetrics(key: PerformanceShadowKey): PerformanceShadowMetrics | null {
-  const value = metricsByKey.get(buildPerformanceShadowKey(key));
+export function getPerformanceShadowMetrics(key: PerformanceShadowKey, nowMs = Date.now()): PerformanceShadowMetrics | null {
+  sweepPerformanceShadowMetrics(nowMs);
+  const storeKey = buildPerformanceShadowKey(key);
+  const value = metricsByKey.get(storeKey);
+  if (value) {
+    metricsByKey.delete(storeKey);
+    metricsByKey.set(storeKey, value);
+  }
   return value ? { ...value } : null;
 }
 
 export function listPerformanceShadowMetrics(): PerformanceShadowMetrics[] {
+  sweepPerformanceShadowMetrics();
   return [...metricsByKey.values()].map((value) => ({ ...value }));
+}
+
+export function listPerformanceShadowMetricsByRouteId(routeId: number, nowMs = Date.now()): PerformanceShadowMetrics[] {
+  sweepPerformanceShadowMetrics(nowMs);
+  const normalizedRouteId = Math.trunc(routeId);
+  return [...metricsByKey.values()]
+    .filter((value) => value.routeId === normalizedRouteId)
+    .map((value) => ({ ...value }));
 }
 
 export function clearPerformanceShadowMetrics(): void {
@@ -101,4 +132,6 @@ export function clearPerformanceShadowMetrics(): void {
 export const performanceShadowConstants = {
   defaultAlpha: DEFAULT_ALPHA,
   minTpsCompletionTokens: MIN_TPS_COMPLETION_TOKENS,
+  ttlMs: PERFORMANCE_SHADOW_TTL_MS,
+  maxEntries: PERFORMANCE_SHADOW_MAX_ENTRIES,
 };

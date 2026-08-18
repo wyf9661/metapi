@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import {
   clearPerformanceShadowMetrics,
   getPerformanceShadowMetrics,
+  listPerformanceShadowMetricsByRouteId,
   performanceShadowConstants,
   recordPerformanceShadowSample,
 } from './performanceShadow.js';
@@ -19,7 +20,7 @@ describe('performanceShadow', () => {
     });
     expect(getPerformanceShadowMetrics({
       routeId: 1, siteId: 2, modelName: 'gpt-5', isStream: true,
-    })).toMatchObject({
+    }, 10)).toMatchObject({
       ttftEwmaMs: 500,
       tpsEwma: 100,
       e2eLatencyEwmaMs: 2_000,
@@ -27,7 +28,7 @@ describe('performanceShadow', () => {
     });
     expect(getPerformanceShadowMetrics({
       routeId: 1, siteId: 2, modelName: 'gpt-5', isStream: false,
-    })).toBeNull();
+    }, 10)).toBeNull();
   });
 
   it('uses EWMA and protects TPS from missing or tiny usage samples', () => {
@@ -47,7 +48,7 @@ describe('performanceShadow', () => {
     });
     expect(getPerformanceShadowMetrics({
       routeId: 1, siteId: 2, modelName: 'gpt-5', isStream: true,
-    })).toMatchObject({
+    }, 20)).toMatchObject({
       ttftEwmaMs: 650,
       tpsEwma: 115,
       e2eLatencyEwmaMs: 2_300,
@@ -59,10 +60,44 @@ describe('performanceShadow', () => {
       latencyMs: 4_000,
       firstByteLatencyMs: 1_000,
       completionTokens: 1,
+      nowMs: 30,
     });
     expect(getPerformanceShadowMetrics({
       routeId: 1, siteId: 2, modelName: 'gpt-5', isStream: true,
-    })?.tpsEwma).toBe(115);
+    }, 30)?.tpsEwma).toBe(115);
+  });
+
+  it('evicts expired and least-recent performance metrics', () => {
+    for (let index = 0; index <= 5_000; index += 1) {
+      recordPerformanceShadowSample({
+        key: { routeId: index + 1, siteId: 1, modelName: `model-${index}`, isStream: false },
+        latencyMs: 100,
+        nowMs: index,
+      });
+    }
+    expect(getPerformanceShadowMetrics({
+      routeId: 1, siteId: 1, modelName: 'model-0', isStream: false,
+    }, 5_000)).toBeNull();
+    expect(getPerformanceShadowMetrics({
+      routeId: 5_001, siteId: 1, modelName: 'model-5000', isStream: false,
+    }, 5_000)).not.toBeNull();
+
+    expect(getPerformanceShadowMetrics({
+      routeId: 5_001, siteId: 1, modelName: 'model-5000', isStream: false,
+    }, 5_000 + performanceShadowConstants.ttlMs + 1)).toBeNull();
+  });
+
+  it('lists performance metrics directly by route id', () => {
+    recordPerformanceShadowSample({
+      key: { routeId: 7, siteId: 2, modelName: 'model-a', isStream: false },
+      latencyMs: 100,
+    });
+    recordPerformanceShadowSample({
+      key: { routeId: 8, siteId: 3, modelName: 'model-b', isStream: false },
+      latencyMs: 200,
+    });
+    expect(listPerformanceShadowMetricsByRouteId(7)).toHaveLength(1);
+    expect(listPerformanceShadowMetricsByRouteId(7)[0]?.modelName).toBe('model-a');
   });
 
   it('records non-streaming E2E without fabricating TTFT or TPS', () => {
