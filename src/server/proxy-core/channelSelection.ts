@@ -195,23 +195,33 @@ export async function selectProxyChannelForAttempt(input: {
   };
 
   if (input.retryCount === 0) {
-    if (input.stickySessionKey) {
+    // Probability-Guarded Routing: each first-hop request independently skips
+    // sticky and last-success affinity with probability `probeRate`, forcing
+    // a balanced-v2 weighted sample. This keeps short-session traffic
+    // converging to the configured weights without waiting for a long sticky
+    // hit-chain to reach its cap. The last-success anchor is unaffected:
+    // failover paths (retryCount > 0) still prefer the known-good channel.
+    const shouldProbe = !input.forcedChannelId
+      && Math.random() < config.proxyRouteProbeRate;
+    if (!shouldProbe && input.stickySessionKey) {
       const stickyChannelId = proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey);
       if (stickyChannelId) {
         const hitCount = proxyChannelCoordinator.incrementStickyHitCount(input.stickySessionKey);
         if (hitCount > config.proxyStickyMaxHits) {
-          // Consecutive-hit cap reached: discard the session-level affinity for
-          // this sticky binding so dense same-key traffic re-enters balanced-v2
-          // instead of monopolizing one site. Keep the model-level last-success
-          // memory intact so a transiently-pinned channel can be re-selected on
-          // the very next retry rather than being permanently forgotten.
+          // Consecutive-hit cap reached: discard the session-level affinity so
+          // dense same-key traffic re-enters balanced-v2 instead of
+          // monopolizing one site. IMPORTANT: do NOT fall through into
+          // last_success here — the model-level memory would point at the same
+          // channel (it was successful before), silently re-locking the site
+          // and starving the weighted distribution. Forcing balanced-v2 keeps
+          // the long-run request mix aligned with the configured weights.
           proxyChannelCoordinator.clearStickyChannel(input.stickySessionKey, stickyChannelId);
         } else {
           selected = await tryPreferredChannel(stickyChannelId, 'sticky');
         }
       }
     }
-    if (!selected) {
+    if (!selected && !shouldProbe) {
       const lastSuccessChannelId = proxyChannelCoordinator.getLastSuccessChannelId({
         requestedModel: input.requestedModel,
         downstreamApiKeyId: input.downstreamApiKeyId,
@@ -231,6 +241,24 @@ export async function selectProxyChannelForAttempt(input: {
           selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
         }
       }
+    }
+  }
+
+  if (!selected && input.retryCount > 0) {
+    // Failover recovery anchor: when the current channel failed and we are
+    // switching sites, prefer the model-level last-success memory so a good
+    // channel (successful moments ago and not yet excluded) is tried before
+    // falling back to weighted randomness. The surface already clears that
+    // memory for the failing channel itself, so this only helps when another
+    // healthy channel is known-good. This applies regardless of the first-hop
+    // sticky cap: a failed attempt should always fall back to the known-good
+    // anchor before burning more budget on random choices.
+    const lastSuccessChannelId = proxyChannelCoordinator.getLastSuccessChannelId({
+      requestedModel: input.requestedModel,
+      downstreamApiKeyId: input.downstreamApiKeyId,
+    });
+    if (lastSuccessChannelId) {
+      selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
     }
   }
 
