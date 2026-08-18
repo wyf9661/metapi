@@ -307,7 +307,11 @@ export async function runWithSiteApiEndpointPool<T>(
   let lastError: unknown;
 
   while (true) {
-    const target = await selectSiteApiEndpointTarget(site);
+    // Half-open: when every endpoint is cooling down (e.g. one transient 5xx on
+    // a single-endpoint site), probe the earliest-expiring one with this real
+    // user request instead of declaring the whole site unavailable. The loop's
+    // attemptedEndpointIds guard still bounds it to a single probe attempt.
+    const target = await selectSiteApiEndpointTarget(site, undefined, { allowHalfOpen: true });
     if (!target) {
       if (lastError) throw lastError;
       throw new Error('当前站点的 API 请求地址均不可用');
