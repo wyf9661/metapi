@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
+import { useIsMobile } from '../useIsMobile.js';
 
 interface SiteDistributionData {
   siteName: string;
@@ -85,6 +86,7 @@ function EmptyState() {
 export default function SiteDistributionChart({ data, loading }: SiteDistributionChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('balance');
   const labelColor = useThemeLabelColor();
+  const isMobile = useIsMobile();
 
   // 横向柱状图：每站点一行，按值降序
   const ROW_HEIGHT = 30; // 每行条形高度（含间距）
@@ -118,6 +120,12 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
 
     const total = chartData.reduce((s, d) => s + d.value, 0);
 
+    // Reserve more horizontal headroom on narrow screens so right-positioned
+    // value labels ($xxx.xx) are not clipped by the plot edge.
+    const axisHeadroom = isMobile ? 1.55 : 1.18;
+    const maxValue = chartData.reduce((s, d) => Math.max(s, d.value), 0);
+    const yAxisMaxWidth = isMobile ? 76 : 140;
+
     return {
       type: 'bar' as const,
       data: [{ id: 'siteData', values: chartData.map((d) => ({ ...d, pct: total > 0 ? (d.value / total * 100) : 0 })) }],
@@ -145,7 +153,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           label: {
             visible: true,
             style: { fill: labelColor, fontSize: 11 },
-            maxWidth: 140,
+            maxWidth: yAxisMaxWidth,
             overflow: 'truncate',
           },
           domainLine: { visible: false },
@@ -157,7 +165,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           grid: { visible: false },
           domainLine: { visible: false },
           tick: { visible: false },
-          max: Math.ceil(chartData.reduce((s, d) => Math.max(s, d.value), 0) * 1.18),
+          max: Math.ceil(maxValue * axisHeadroom),
         },
       ],
       tooltip: {
@@ -197,7 +205,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       background: 'transparent',
       padding: { top: 0, bottom: 0, left: 0, right: 0 },
     };
-  }, [chartData, hasData, labelColor]);
+  }, [chartData, hasData, labelColor, isMobile]);
 
   return (
     <div
