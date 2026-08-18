@@ -74,6 +74,10 @@ type SurfaceOauthRefreshContext<TRequest extends BuiltEndpointRequest> = {
   request: TRequest;
   response: Awaited<ReturnType<typeof dispatchRuntimeRequest>>;
   rawErrText: string;
+  dispatchRecoveryRequest: (
+    request: TRequest,
+    targetUrl?: string,
+  ) => Promise<Awaited<ReturnType<typeof dispatchRuntimeRequest>>>;
 };
 
 type SurfaceSuccessSelectedChannel = SurfaceSelectedChannel & {
@@ -364,10 +368,6 @@ export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpo
   selected: SurfaceOauthRefreshSelectedChannel;
   siteUrl: string;
   buildRequest: (endpoint: TRequest['endpoint']) => TRequest;
-  dispatchRequest: (
-    request: TRequest,
-    targetUrl: string,
-  ) => Promise<Awaited<ReturnType<typeof dispatchRuntimeRequest>>>;
   captureFailureBody?: boolean;
 }): Promise<{
   upstream: Awaited<ReturnType<typeof dispatchRuntimeRequest>>;
@@ -386,7 +386,7 @@ export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpo
 
     const refreshedRequest = input.buildRequest(input.ctx.request.endpoint);
     const refreshedTargetUrl = buildUpstreamUrl(input.siteUrl, refreshedRequest.path);
-    const refreshedResponse = await input.dispatchRequest(refreshedRequest, refreshedTargetUrl);
+    const refreshedResponse = await input.ctx.dispatchRecoveryRequest(refreshedRequest, refreshedTargetUrl);
     if (refreshedResponse.ok) {
       return {
         upstream: refreshedResponse,

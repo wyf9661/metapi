@@ -474,7 +474,6 @@ export async function handleChatSurfaceRequest(
           endpoint,
           { forceNormalizeClaudeBody },
         ),
-        dispatchRequest,
       });
       const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
         if ((ctx.response.status === 401 || ctx.response.status === 403) && oauth) {
@@ -483,7 +482,6 @@ export async function handleChatSurfaceRequest(
             selected,
             siteUrl: siteApiBaseUrl,
             buildRequest: (endpoint) => buildEndpointRequest(endpoint),
-            dispatchRequest,
           });
           if (recovered?.upstream?.ok) {
             return recovered;

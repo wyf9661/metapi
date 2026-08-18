@@ -32,6 +32,10 @@ export type EndpointAttemptContext = {
   response: Awaited<ReturnType<typeof fetch>>;
   rawErrText: string;
   recoverApplied?: boolean;
+  dispatchRecoveryRequest: (
+    request: BuiltEndpointRequest,
+    targetUrl?: string,
+  ) => Promise<Awaited<ReturnType<typeof fetch>>>;
 };
 
 export type EndpointAttemptSuccessContext = {
@@ -132,22 +136,33 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       : defaultTarget;
 
     const attemptStartedAtMs = Date.now();
-    let response = await fetchWithObservedFirstByte(
-      async (signal) => (
-        input.dispatchRequest
-          ? await input.dispatchRequest(request, targetUrl, signal)
-          : await fetch(targetUrl, await withSiteProxyRequestInit(targetUrl, {
-            method: 'POST',
-            headers: request.headers,
-            body: JSON.stringify(request.body),
-            signal,
-          }))
-      ),
-      {
-        firstByteTimeoutMs: input.firstByteTimeoutMs,
-        startedAtMs: attemptStartedAtMs,
-      },
-    );
+    const dispatchWithRemainingFirstByteBudget = (
+      requestToDispatch: BuiltEndpointRequest,
+      targetUrlToDispatch = targetUrl,
+    ) => {
+      const configuredTimeoutMs = Math.max(0, Math.trunc(input.firstByteTimeoutMs ?? 0));
+      const elapsedMs = Math.max(0, Date.now() - attemptStartedAtMs);
+      const remainingTimeoutMs = configuredTimeoutMs > 0
+        ? Math.max(1, configuredTimeoutMs - elapsedMs)
+        : 0;
+      return fetchWithObservedFirstByte(
+        async (signal) => (
+          input.dispatchRequest
+            ? await input.dispatchRequest(requestToDispatch, targetUrlToDispatch, signal)
+            : await fetch(targetUrlToDispatch, await withSiteProxyRequestInit(targetUrlToDispatch, {
+              method: 'POST',
+              headers: requestToDispatch.headers,
+              body: JSON.stringify(requestToDispatch.body),
+              signal,
+            }))
+        ),
+        {
+          firstByteTimeoutMs: remainingTimeoutMs,
+          startedAtMs: attemptStartedAtMs,
+        },
+      );
+    };
+    let response = await dispatchWithRemainingFirstByteBudget(request, targetUrl);
 
     if (response.ok) {
       await runEndpointFlowHook(input.onAttemptSuccess, {
@@ -174,6 +189,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       response,
       rawErrText,
       recoverApplied: false,
+      dispatchRecoveryRequest: dispatchWithRemainingFirstByteBudget,
     };
     const isLastEndpoint = endpointIndex >= endpointCount - 1;
 
@@ -228,6 +244,12 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
           upstream: recovered.upstream,
           upstreamPath: recovered.upstreamPath,
         };
+      }
+      if (recovered?.upstream) {
+        baseContext.request = recovered.request ?? baseContext.request;
+        baseContext.targetUrl = recovered.targetUrl ?? baseContext.targetUrl;
+        baseContext.response = recovered.upstream;
+        baseContext.rawErrText = await readRuntimeResponseText(recovered.upstream).catch(() => 'unknown error');
       }
     }
 

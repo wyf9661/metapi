@@ -24,6 +24,10 @@ type EndpointAttemptContext = {
   targetUrl: string;
   response: UndiciResponse;
   rawErrText: string;
+  dispatchRecoveryRequest: (
+    request: CompatibilityRequest,
+    targetUrl?: string,
+  ) => Promise<UndiciResponse>;
 };
 
 type EndpointRecoverResult = {
@@ -33,16 +37,10 @@ type EndpointRecoverResult = {
   targetUrl?: string;
 } | null;
 
-type UpstreamResponse = Exclude<EndpointRecoverResult, null>['upstream'];
-
 type CreateResponsesEndpointStrategyInput = {
   isStream: boolean;
   requiresNativeResponsesFileUrl: boolean;
   sitePlatform?: string;
-  dispatchRequest: (
-    request: CompatibilityRequest,
-    targetUrl?: string,
-  ) => Promise<UpstreamResponse>;
 };
 
 export function createResponsesEndpointStrategy(input: CreateResponsesEndpointStrategyInput) {
@@ -77,7 +75,7 @@ export function createResponsesEndpointStrategy(input: CreateResponsesEndpointSt
               ...ctx.request,
               headers: compatibilityHeadersCandidate,
             };
-            const compatibilityResponse = await input.dispatchRequest(
+            const compatibilityResponse = await ctx.dispatchRecoveryRequest(
               compatibilityRequest,
               ctx.targetUrl,
             );
@@ -101,7 +99,7 @@ export function createResponsesEndpointStrategy(input: CreateResponsesEndpointSt
               headers: compatibilityHeadersCandidate,
               body: compatibilityBody,
             };
-            const compatibilityResponse = await input.dispatchRequest(
+            const compatibilityResponse = await ctx.dispatchRecoveryRequest(
               compatibilityRequest,
               ctx.targetUrl,
             );
@@ -131,7 +129,7 @@ export function createResponsesEndpointStrategy(input: CreateResponsesEndpointSt
           stream: input.isStream,
         }),
       };
-      const minimalResponse = await input.dispatchRequest(minimalRequest, ctx.targetUrl);
+      const minimalResponse = await ctx.dispatchRecoveryRequest(minimalRequest, ctx.targetUrl);
       if (minimalResponse.ok) {
         return {
           upstream: minimalResponse,

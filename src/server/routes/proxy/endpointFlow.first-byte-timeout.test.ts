@@ -82,6 +82,75 @@ describe('executeEndpointFlow first-byte timeout', () => {
     expect(failures[0]).toContain('first byte timeout');
   }, 15_000);
 
+  it('applies the first-byte timeout to recovery dispatches', async () => {
+    const { executeEndpointFlow } = await import('./endpointFlow.js');
+    let recoverySignal: AbortSignal | undefined;
+    const result = await executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: ['responses'],
+      buildRequest: () => requestFor('/v1/responses'),
+      dispatchRequest: async (request, _targetUrl, signal) => {
+        if (request.body.compatibility === true) {
+          recoverySignal = signal;
+          return buildDelayedResponse(
+            JSON.stringify({ ok: true }),
+            60,
+            200,
+            signal,
+          ) as any;
+        }
+        return new Response(JSON.stringify({ error: 'retry with compatibility body' }), {
+          status: 415,
+          headers: { 'content-type': 'application/json' },
+        }) as unknown as Awaited<ReturnType<typeof import('undici').fetch>>;
+      },
+      firstByteTimeoutMs: 10,
+      tryRecover: async (ctx) => ({
+        upstream: await ctx.dispatchRecoveryRequest(
+          { ...ctx.request, body: { ...ctx.request.body, compatibility: true } },
+          ctx.targetUrl,
+        ),
+        upstreamPath: ctx.request.path,
+      }),
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(408);
+      expect(result.errText).toContain('first byte timeout');
+    }
+    expect(recoverySignal).toBeDefined();
+    expect(recoverySignal?.aborted).toBe(true);
+  });
+
+  it('shares the remaining first-byte budget with recovery dispatches', async () => {
+    const { executeEndpointFlow } = await import('./endpointFlow.js');
+    const startedAt = Date.now();
+    const result = await executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: ['responses'],
+      buildRequest: () => requestFor('/v1/responses'),
+      dispatchRequest: async (_request, _targetUrl, signal) => buildDelayedResponse(
+        JSON.stringify({ error: 'retry with compatibility body' }),
+        25,
+        415,
+        signal,
+      ) as unknown as Awaited<ReturnType<typeof import('undici').fetch>>,
+      firstByteTimeoutMs: 40,
+      tryRecover: async (ctx) => ({
+        upstream: await ctx.dispatchRecoveryRequest(
+          { ...ctx.request, body: { ...ctx.request.body, compatibility: true } },
+          ctx.targetUrl,
+        ),
+        upstreamPath: ctx.request.path,
+      }),
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(408);
+    expect(Date.now() - startedAt).toBeLessThan(60);
+  });
+
   it('treats first-byte timeout as terminal when cross-protocol fallback is disabled', async () => {
     const { executeEndpointFlow } = await import('./endpointFlow.js');
     const attemptedPaths: string[] = [];

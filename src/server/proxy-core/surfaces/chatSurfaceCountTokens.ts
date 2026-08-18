@@ -319,13 +319,16 @@ export async function handleClaudeCountTokensSurfaceRequest(
             request: upstreamRequest,
             response: upstream,
             rawErrText: '',
+            dispatchRecoveryRequest: (
+              recoveryRequest: typeof upstreamRequest,
+              targetUrl?: string,
+            ) => dispatchRequest(recoveryRequest, targetUrl),
           };
           const recovered = await trySurfaceOauthRefreshRecovery({
             ctx: recoverContext,
             selected,
             siteUrl: target.baseUrl,
             buildRequest: () => buildRequest(),
-            dispatchRequest,
             captureFailureBody: false,
           });
           if (recovered?.upstream?.ok) {

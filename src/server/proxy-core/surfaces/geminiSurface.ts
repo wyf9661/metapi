@@ -1296,7 +1296,6 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             endpoint,
             { forceNormalizeClaudeBody },
           ),
-          dispatchRequest,
         });
         const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
         const endpointResult = await executeEndpointFlow({

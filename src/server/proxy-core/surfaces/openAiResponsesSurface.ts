@@ -550,21 +550,21 @@ export async function handleOpenAiResponsesSurfaceRequest(
         const dispatchRequest = (
           endpointRequest: BuiltEndpointRequest,
           targetUrl?: string,
+          signal?: AbortSignal,
         ) => {
           if (!isCodexSite || !endpointRequest.path.startsWith('/responses')) {
-            return baseDispatchRequest(endpointRequest, targetUrl);
+            return baseDispatchRequest(endpointRequest, targetUrl, signal);
           }
           const sessionId = getCodexSessionHeaderValue(endpointRequest.headers);
           return runCodexHttpSessionTask(
             codexSessionStoreKey || sessionId,
-            () => baseDispatchRequest(endpointRequest, targetUrl),
+            () => baseDispatchRequest(endpointRequest, targetUrl, signal),
           );
         };
         const endpointStrategy = openAiResponsesTransformer.compatibility.createEndpointStrategy({
           isStream: isStream || forceResponsesUpstreamStream,
           requiresNativeResponsesFileUrl,
           sitePlatform: selected.site.platform,
-          dispatchRequest,
         });
         const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
           if (oauth && shouldRefreshOauthResponsesRequest({
@@ -578,7 +578,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
               selected,
             siteUrl: siteApiBaseUrl,
               buildRequest: (endpoint) => buildEndpointRequest(endpoint),
-              dispatchRequest,
             });
             if (recovered?.upstream?.ok) {
               return recovered;
@@ -599,7 +598,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 ...ctx.request,
                 body: previousResponseRecovery.body,
               };
-              const recoveredResponse = await dispatchRequest(recoveredRequest, ctx.targetUrl);
+              const recoveredResponse = await ctx.dispatchRecoveryRequest(recoveredRequest, ctx.targetUrl);
               if (recoveredResponse.ok) {
                 return {
                   upstream: recoveredResponse,
@@ -652,7 +651,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               headers: recoveredHeaders,
               body: recoveredBody,
             };
-            const recoveredResponse = await dispatchRequest(recoveredRequest);
+            const recoveredResponse = await ctx.dispatchRecoveryRequest(recoveredRequest);
             if (recoveredResponse.ok) {
               return {
                 upstream: recoveredResponse,

@@ -18,6 +18,10 @@ type EndpointAttemptContext = {
   targetUrl: string;
   response: UndiciResponse;
   rawErrText: string;
+  dispatchRecoveryRequest: (
+    request: CompatibilityRequest,
+    targetUrl?: string,
+  ) => Promise<UndiciResponse>;
 };
 
 type EndpointRecoverResult = {
@@ -34,8 +38,6 @@ type CompatibilityRequest = {
   body: Record<string, unknown>;
 };
 
-type UpstreamResponse = Exclude<EndpointRecoverResult, null>['upstream'];
-
 type CreateChatEndpointStrategyInput = {
   downstreamFormat: DownstreamFormat;
   endpointCandidates: CompatibilityEndpoint[];
@@ -47,10 +49,6 @@ type CreateChatEndpointStrategyInput = {
     endpoint: CompatibilityEndpoint;
     forceNormalizeClaudeBody?: boolean;
   }) => CompatibilityRequest;
-  dispatchRequest: (
-    request: CompatibilityRequest,
-    targetUrl?: string,
-  ) => Promise<UpstreamResponse>;
 };
 
 export function createChatEndpointStrategy(input: CreateChatEndpointStrategyInput) {
@@ -66,7 +64,7 @@ export function createChatEndpointStrategy(input: CreateChatEndpointStrategyInpu
           endpoint: ctx.request.endpoint,
           forceNormalizeClaudeBody: true,
         });
-        const normalizedResponse = await input.dispatchRequest(normalizedClaudeRequest);
+        const normalizedResponse = await ctx.dispatchRecoveryRequest(normalizedClaudeRequest);
 
         if (normalizedResponse.ok) {
           return {
@@ -101,7 +99,7 @@ export function createChatEndpointStrategy(input: CreateChatEndpointStrategyInpu
         ...ctx.request,
         headers: minimalHeaders,
       };
-      const minimalResponse = await input.dispatchRequest(minimalRequest, ctx.targetUrl);
+      const minimalResponse = await ctx.dispatchRecoveryRequest(minimalRequest, ctx.targetUrl);
 
       if (minimalResponse.ok) {
         return {
