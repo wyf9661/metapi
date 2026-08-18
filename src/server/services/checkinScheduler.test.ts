@@ -6,6 +6,8 @@ const scheduleMock = vi.fn(() => ({
 }));
 const validateMock = vi.fn(() => true);
 const allMock = vi.fn();
+const refreshAllBalancesMock = vi.fn();
+const refreshModelsAndRebuildRoutesMock = vi.fn();
 
 vi.mock('node-cron', () => ({
   default: {
@@ -39,6 +41,14 @@ vi.mock('./checkinService.js', () => ({
   checkinAll: (...args: unknown[]) => allMock(...args),
 }));
 
+vi.mock('./balanceService.js', () => ({
+  refreshAllBalances: (...args: unknown[]) => refreshAllBalancesMock(...args),
+}));
+
+vi.mock('./routeRefreshWorkflow.js', () => ({
+  refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
+}));
+
 describe('checkinScheduler', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -46,6 +56,8 @@ describe('checkinScheduler', () => {
     scheduleMock.mockClear();
     validateMock.mockClear();
     allMock.mockReset();
+    refreshAllBalancesMock.mockReset();
+    refreshModelsAndRebuildRoutesMock.mockReset();
   });
 
   afterEach(async () => {
@@ -91,5 +103,30 @@ describe('checkinScheduler', () => {
       { id: 2, lastCheckinAt: '2026-03-20T05:59:59.000Z' },
       { id: 3, lastCheckinAt: '2026-03-20T06:30:00.000Z' },
     ], 6, now)).toEqual([1, 2]);
+  });
+
+  it('deduplicates overlapping balance cron passes and clears the lock after completion', async () => {
+    let releaseRefresh!: () => void;
+    refreshAllBalancesMock.mockImplementation(() => new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    }));
+    refreshModelsAndRebuildRoutesMock.mockResolvedValue(undefined);
+    const scheduler = await import('./checkinScheduler.js');
+    await scheduler.startScheduler();
+    const balanceCall = (scheduleMock.mock.calls as unknown as Array<[string, () => Promise<void>]>)
+      .find((call) => call[0] === '0 * * * *');
+    expect(balanceCall).toBeDefined();
+    const balanceCallback = balanceCall![1];
+
+    const first = balanceCallback();
+    const second = balanceCallback();
+    expect(refreshAllBalancesMock).toHaveBeenCalledTimes(1);
+    releaseRefresh();
+    await Promise.all([first, second]);
+    expect(refreshModelsAndRebuildRoutesMock).toHaveBeenCalledTimes(1);
+
+    refreshAllBalancesMock.mockResolvedValue(undefined);
+    await balanceCallback();
+    expect(refreshAllBalancesMock).toHaveBeenCalledTimes(2);
   });
 });

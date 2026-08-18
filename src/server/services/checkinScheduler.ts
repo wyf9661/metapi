@@ -21,6 +21,7 @@ let dailySummaryTask: ScheduledTask | null = null;
 let logCleanupTask: ScheduledTask | null = null;
 const intervalAttemptByAccount = new Map<number, number>();
 let checkinPassInFlight: Promise<void> | null = null;
+let balancePassInFlight: Promise<void> | null = null;
 
 const DAILY_SUMMARY_DEFAULT_CRON = '58 23 * * *';
 const LOG_CLEANUP_DEFAULT_CRON = '0 6 * * *';
@@ -250,15 +251,26 @@ function startCheckinSchedule() {
 }
 
 function createBalanceTask(cronExpr: string) {
-  return cron.schedule(cronExpr, async () => {
-    console.log(`[Scheduler] Refreshing balances at ${new Date().toISOString()}`);
-    try {
-      await refreshAllBalances();
-      await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
-      console.log('[Scheduler] Balance refresh complete');
-    } catch (err) {
-      console.error('[Scheduler] Balance refresh error:', err);
+  return cron.schedule(cronExpr, () => {
+    if (balancePassInFlight) {
+      console.log('[Scheduler] Balance refresh skipped: previous pass is still running');
+      return balancePassInFlight;
     }
+    const pass = (async () => {
+      console.log(`[Scheduler] Refreshing balances at ${new Date().toISOString()}`);
+      try {
+        await refreshAllBalances();
+        await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+        console.log('[Scheduler] Balance refresh complete');
+      } catch (err) {
+        console.error('[Scheduler] Balance refresh error:', err);
+      }
+    })();
+    const trackedPass = pass.finally(() => {
+      if (balancePassInFlight === trackedPass) balancePassInFlight = null;
+    });
+    balancePassInFlight = trackedPass;
+    return trackedPass;
   });
 }
 
@@ -423,4 +435,6 @@ export function __resetCheckinSchedulerForTests() {
   dailySummaryTask = null;
   logCleanupTask = null;
   intervalAttemptByAccount.clear();
+  checkinPassInFlight = null;
+  balancePassInFlight = null;
 }
