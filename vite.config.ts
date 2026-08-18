@@ -32,14 +32,7 @@ export default defineConfig(({ mode }) => {
       outDir: '../../dist/web',
       emptyOutDir: true,
       rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('@visactor/react-vchart') || id.includes('/@visactor/')) {
-              return 'vchart-vendor';
-            }
-            return undefined;
-          },
-        },
+        output: {},
       },
     },
     server: {

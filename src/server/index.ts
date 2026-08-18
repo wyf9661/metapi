@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
 import fastifyStatic from '@fastify/static';
 import {
   assertProductionSecurity,
@@ -250,6 +251,10 @@ assertProductionSecurity(config);
 const app = Fastify(buildFastifyOptions(config));
 
 await app.register(cors);
+
+// Compress responses (brotli/gzip) for static assets and API JSON.
+// Critical for tunnel access where bandwidth is limited.
+await app.register(compress, { global: true });
 
 // Tunnel access policy + Auth middleware for /api routes
 app.addHook('onRequest', async (request, reply) => {
