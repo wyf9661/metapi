@@ -24,6 +24,8 @@ import {
 } from './sub2apiManagedAuth.js';
 import { refreshSub2ApiManagedSessionSingleflight } from './sub2apiRefreshSingleflight.js';
 
+const BALANCE_REFRESH_CONCURRENCY = 4;
+
 function isSiteDisabled(status?: string | null): boolean {
   return (status || 'active') === 'disabled';
 }
@@ -467,18 +469,24 @@ export async function refreshAllBalances() {
     ))
     .all();
 
-  const results: Array<{ accountId: number; balance: number | null }> = [];
+  const results = new Array<{ accountId: number; balance: number | null }>(rows.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(BALANCE_REFRESH_CONCURRENCY, rows.length);
 
-  await Promise.all(
-    rows.map(async (account: any) => {
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= rows.length) return;
+      const account = rows[index] as typeof schema.accounts.$inferSelect;
       try {
         const info = await refreshBalance(account.id);
-        results.push({ accountId: account.id, balance: info?.balance ?? null });
+        results[index] = { accountId: account.id, balance: info?.balance ?? null };
       } catch {
-        results.push({ accountId: account.id, balance: null });
+        results[index] = { accountId: account.id, balance: null };
       }
-    }),
-  );
+    }
+  }));
 
   return results;
 }

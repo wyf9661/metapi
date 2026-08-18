@@ -553,6 +553,56 @@ describe('balanceService auto relogin', () => {
     expect(insertValuesMock).not.toHaveBeenCalled();
   });
 
+  it('limits refreshAllBalances concurrency and preserves input order', async () => {
+    const accounts = Array.from({ length: 8 }, (_, index) => ({
+      id: 100 + index,
+      username: `account-${index}`,
+      accessToken: `token-${index}`,
+      status: 'active',
+      extraConfig: null,
+      balance: 0,
+      balanceUsed: 0,
+      quota: 0,
+    }));
+    const rows = accounts.map((account) => ({
+      accounts: account,
+      sites: {
+        id: account.id,
+        name: `site-${account.id}`,
+        url: `https://site-${account.id}.example.com`,
+        platform: 'new-api',
+      },
+    }));
+    selectAllMock
+      .mockReturnValueOnce(accounts)
+      .mockImplementation(() => [rows.shift()]);
+
+    let active = 0;
+    let maxActive = 0;
+    const releases: Array<() => void> = [];
+    adapterMock.getBalance.mockImplementation(async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      active -= 1;
+      return { balance: 1, used: 0, quota: 1 };
+    });
+
+    const { refreshAllBalances } = await import('./balanceService.js');
+    const pending = refreshAllBalances();
+    await vi.waitFor(() => expect(releases).toHaveLength(4));
+    expect(maxActive).toBe(4);
+    for (let completed = 0; completed < accounts.length; completed += 1) {
+      await vi.waitFor(() => expect(releases.length).toBeGreaterThan(0));
+      releases.shift()?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const results = await pending;
+
+    expect(maxActive).toBe(4);
+    expect(results.map((item) => item.accountId)).toEqual(accounts.map((item) => item.id));
+  });
+
   it('refreshAllBalances re-verifies expired accounts so they auto-recover', async () => {
     const expiredAccount = {
       id: 30,
