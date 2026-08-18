@@ -17,6 +17,7 @@ export type SendNotificationOptions = {
   bypassThrottle?: boolean;
   requireChannel?: boolean;
   throwOnFailure?: boolean;
+  timeoutMs?: number;
 };
 
 export type NotificationDispatchResult = {
@@ -30,6 +31,39 @@ export type NotificationDispatchResult = {
 let cachedSmtpFingerprint = '';
 let cachedTransporter: Transporter | null = null;
 const notificationThrottleState = new Map<string, NotificationThrottleState>();
+const DEFAULT_NOTIFICATION_TIMEOUT_MS = 15_000;
+
+function normalizeNotificationTimeoutMs(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_NOTIFICATION_TIMEOUT_MS;
+  return Math.max(1, Math.trunc(parsed));
+}
+
+function withNotificationTimeout<T>(
+  channel: NotificationChannel,
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    controller.abort(new Error(`${channel} notification timeout (${timeoutMs}ms)`));
+  }, timeoutMs);
+  return Promise.race([
+    run(controller.signal),
+    new Promise<never>((_, reject) => {
+      controller.signal.addEventListener('abort', () => {
+        reject(controller.signal.reason instanceof Error
+          ? controller.signal.reason
+          : new Error(`${channel} notification timeout (${timeoutMs}ms)`));
+      }, { once: true });
+    }),
+  ]).finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  });
+}
 
 function getSmtpFingerprint() {
   return [
@@ -196,6 +230,7 @@ export async function sendNotification(
   const now = new Date();
   const timeFootnote = buildTimeFootnote(now);
   const { bypassThrottle = false, requireChannel = false, throwOnFailure = false } = options;
+  const timeoutMs = normalizeNotificationTimeoutMs(options.timeoutMs);
   const cooldownMs = Math.max(0, Math.trunc(config.notifyCooldownSec)) * 1000;
   let resolvedMessage = message;
   if (!bypassThrottle && cooldownMs > 0) {
@@ -217,13 +252,13 @@ export async function sendNotification(
     }
   }
 
-  const tasks: Array<{ channel: NotificationChannel; run: () => Promise<unknown> }> = [];
+  const tasks: Array<{ channel: NotificationChannel; run: (signal: AbortSignal) => Promise<unknown> }> = [];
 
   if (config.webhookEnabled && config.webhookUrl) {
     tasks.push(
       {
         channel: 'webhook',
-        run: async () => {
+        run: async (signal) => {
           const isWeComWebhook = isWeComBotWebhook(config.webhookUrl);
           const isFeishuWebhook = isFeishuBotWebhook(config.webhookUrl);
           const isDingTalkWebhook = isDingTalkBotWebhook(config.webhookUrl);
@@ -272,6 +307,7 @@ export async function sendNotification(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body,
+            signal,
           });
           if (!response.ok) {
             throw new Error(`Webhook 响应状态 ${response.status}`);
@@ -319,8 +355,8 @@ export async function sendNotification(
     const url = `${barkBase}/${encodeURIComponent(title)}/${encodeURIComponent(resolvedMessage)}?group=AllApiHub&level=${encodeURIComponent(level)}`;
     tasks.push({
       channel: 'bark',
-      run: async () => {
-        const response = await fetch(url, { method: 'GET' });
+      run: async (signal) => {
+        const response = await fetch(url, { method: 'GET', signal });
         if (!response.ok) {
           throw new Error(`Bark 响应状态 ${response.status}`);
         }
@@ -336,11 +372,12 @@ export async function sendNotification(
     tasks.push(
       {
         channel: 'serverchan',
-        run: async () => {
+        run: async (signal) => {
           const response = await fetch(`https://sctapi.ftqq.com/${config.serverChanKey}.send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: form.toString(),
+            signal,
           });
           if (!response.ok) {
             throw new Error(`Server酱响应状态 ${response.status}`);
@@ -357,7 +394,7 @@ export async function sendNotification(
     const telegramMessageThreadId = Number.parseInt(String(config.telegramMessageThreadId || '').trim(), 10);
     tasks.push({
       channel: 'telegram',
-      run: async () => {
+      run: async (signal) => {
         const telegramRequestInit = withExplicitProxyRequestInit(
           null,
           {
@@ -371,6 +408,7 @@ export async function sendNotification(
               text,
               disable_web_page_preview: true,
             }),
+            signal,
           },
         );
         const response = await fetch(telegramApiUrl, telegramRequestInit);
@@ -424,7 +462,7 @@ export async function sendNotification(
 
   const results = await Promise.all(tasks.map(async (task) => {
     try {
-      await task.run();
+      await withNotificationTimeout(task.channel, timeoutMs, task.run);
       return { channel: task.channel, ok: true as const, error: '' };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

@@ -127,6 +127,54 @@ describe('notifyService', () => {
     ).rejects.toThrow(/webhook|bark|Webhook 响应状态|Bark 响应状态/i);
   });
 
+  it('times out a stalled channel without blocking successful channels', async () => {
+    vi.useFakeTimers();
+    try {
+      const { config } = await import('../config.js');
+      config.webhookEnabled = true;
+      config.webhookUrl = 'https://webhook.example.com/notify';
+      config.smtpEnabled = true;
+      fetchMock.mockImplementation((_url: string, init?: { signal?: AbortSignal }) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+      }));
+      sendMailMock.mockResolvedValue({ accepted: ['receiver@example.com'] });
+
+      const { sendNotification } = await import('./notifyService.js');
+      const pending = sendNotification('测试通知', 'message', 'info', {
+        bypassThrottle: true,
+        timeoutMs: 50,
+      });
+      await vi.advanceTimersByTimeAsync(50);
+
+      await expect(pending).resolves.toMatchObject({
+        attempted: 2,
+        succeeded: 1,
+        failed: 1,
+        failedChannels: ['webhook'],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out stalled smtp delivery and reports strict failure', async () => {
+    vi.useFakeTimers();
+    try {
+      sendMailMock.mockImplementation(() => new Promise(() => {}));
+      const { sendNotification } = await import('./notifyService.js');
+      const pending = sendNotification('测试通知', 'message', 'info', {
+        bypassThrottle: true,
+        throwOnFailure: true,
+        timeoutMs: 50,
+      });
+      const rejection = expect(pending).rejects.toThrow(/timeout|超时|通知发送失败/i);
+      await vi.advanceTimersByTimeAsync(50);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('sends enterprise wechat webhook payload as structured text message', async () => {
     const { config } = await import('../config.js');
     config.webhookEnabled = true;
