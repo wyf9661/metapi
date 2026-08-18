@@ -592,8 +592,29 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
     };
   }
 
-  // Generic client errors: do not burn multi-channel or multi-endpoint budget.
-  if (status === 400 || status === 404 || status === 422) {
+  // Generic 400: most upstream 400s are worth a channel switch (geo
+  // restriction, format mismatch, different proxy handling the body
+  // differently). Protocol-policy errors are the exception: retry with
+  // the same body on a different channel will produce the same 400.
+  if (status === 400) {
+    if (isProtocolPolicyFailure(ctx)) {
+      return {
+        class: 'protocol_policy',
+        retryChannel: false,
+        cascadeEndpoint: false,
+        cooldownWeight: 0.2,
+        cooldownScope: 'none',
+      };
+    }
+    return {
+      class: 'request_validation',
+      retryChannel: true,
+      cascadeEndpoint: false,
+      cooldownWeight: 0.1,
+      cooldownScope: 'none',
+    };
+  }
+  if (status === 404 || status === 422) {
     return {
       class: 'request_validation',
       retryChannel: false,
@@ -659,7 +680,8 @@ export function buildProxyFailureDisposition(
   const incrementFailure = decision.cooldownScope !== 'none'
     || (status === 0 && retryAction === 'failover_channel');
   const clearSticky = incrementFailure && retryAction !== 'cascade_endpoint';
-  const clearLastSuccess = decision.class === 'credential_invalid';
+  const clearLastSuccess = decision.class === 'credential_invalid'
+    || (retryAction === 'failover_channel' && incrementFailure);
   return {
     ...decision,
     retryAction,

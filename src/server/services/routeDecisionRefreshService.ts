@@ -14,6 +14,15 @@ function isExactModelPattern(modelPattern: string): boolean {
   return !/[\*\?]/.test(normalized);
 }
 
+// Shared in-flight guard so the periodic scheduler and a manual refresh never
+// iterate the (potentially large) route set concurrently on the same SQLite DB.
+// Without this, two simultaneous refreshes contend on the same token_routes
+// write lock and each gets dragged out far beyond its natural duration.
+let refreshInFlight: Promise<{
+  exactModelCount: number;
+  wildcardRouteCount: number;
+}> | null = null;
+
 function normalizeModels(models: string[]): string[] {
   return Array.from(new Set(
     models
@@ -35,69 +44,90 @@ type RefreshOptions = {
   onProgress?: (message: string) => void;
 };
 
+// Serialize concurrent refreshes: the periodic scheduler and a manual refresh
+// share this lock so they never iterate the full route set on the same SQLite
+// DB at once. A later caller waits for the in-flight run to finish, then runs
+// its own refresh so option differences (pricing catalog) are never dropped.
 export async function refreshAllRouteDecisionSnapshots(options: RefreshOptions = {}): Promise<{
   exactModelCount: number;
   wildcardRouteCount: number;
 }> {
-  const routes = await db.select({
-    id: schema.tokenRoutes.id,
-    modelPattern: schema.tokenRoutes.modelPattern,
-  }).from(schema.tokenRoutes)
-    .where(eq(schema.tokenRoutes.enabled, true))
-    .all();
+  const previous = refreshInFlight;
+  if (previous) {
+    try {
+      await previous;
+    } catch {
+      // swallow: the earlier run failed for its own reasons; we still refresh.
+    }
+  }
 
-  const exactModels = normalizeModels(
-    routes
-      .filter((route: any) => isExactModelPattern(route.modelPattern))
-      .map((route: any) => route.modelPattern),
-  );
-  const wildcardRouteIds = normalizeRouteIds(
-    routes
-      .filter((route: any) => !isExactModelPattern(route.modelPattern))
-      .map((route: any) => route.id),
-  );
-  const refreshedKeys = options.refreshPricingCatalog ? new Set<string>() : undefined;
+  let run: Promise<{ exactModelCount: number; wildcardRouteCount: number }>;
+  run = (async () => {
+    const routes = await db.select({
+      id: schema.tokenRoutes.id,
+      modelPattern: schema.tokenRoutes.modelPattern,
+    }).from(schema.tokenRoutes)
+      .where(eq(schema.tokenRoutes.enabled, true))
+      .all();
 
-  options.onProgress?.(`开始刷新路由概率：精确模型 ${exactModels.length}，通配符路由 ${wildcardRouteIds.length}`);
+    const exactModels = normalizeModels(
+      routes
+        .filter((route: any) => isExactModelPattern(route.modelPattern))
+        .map((route: any) => route.modelPattern),
+    );
+    const wildcardRouteIds = normalizeRouteIds(
+      routes
+        .filter((route: any) => !isExactModelPattern(route.modelPattern))
+        .map((route: any) => route.id),
+    );
+    const refreshedKeys = options.refreshPricingCatalog ? new Set<string>() : undefined;
 
-  for (const [index, model] of exactModels.entries()) {
-    options.onProgress?.(`刷新精确模型概率 ${index + 1}/${exactModels.length}：${model}`);
-    const matchingRoutes = routes.filter((route: any) => (
-      isExactModelPattern(route.modelPattern) && matchesModelPattern(model, route.modelPattern)
-    ));
-    const snapshotWrites: Array<{ routeId: number; snapshot: unknown }> = [];
-    for (const route of matchingRoutes) {
-      if (options.refreshPricingCatalog) {
-        await tokenRouter.refreshPricingReferenceCostsForRoute(route.id, model, { refreshedKeys });
+    options.onProgress?.(`开始刷新路由概率：精确模型 ${exactModels.length}，通配符路由 ${wildcardRouteIds.length}`);
+
+    for (const [index, model] of exactModels.entries()) {
+      options.onProgress?.(`刷新精确模型概率 ${index + 1}/${exactModels.length}：${model}`);
+      const matchingRoutes = routes.filter((route: any) => (
+        isExactModelPattern(route.modelPattern) && matchesModelPattern(model, route.modelPattern)
+      ));
+      const snapshotWrites: Array<{ routeId: number; snapshot: unknown }> = [];
+      for (const route of matchingRoutes) {
+        if (options.refreshPricingCatalog) {
+          await tokenRouter.refreshPricingReferenceCostsForRoute(route.id, model, { refreshedKeys });
+        }
+        const decision = await tokenRouter.explainSelectionForRoute(route.id, model);
+        snapshotWrites.push({
+          routeId: route.id,
+          snapshot: decision,
+        });
       }
-      const decision = await tokenRouter.explainSelectionForRoute(route.id, model);
-      snapshotWrites.push({
-        routeId: route.id,
-        snapshot: decision,
-      });
-    }
-    if (snapshotWrites.length > 0) {
-      await saveRouteDecisionSnapshots(snapshotWrites);
-    }
-  }
-
-  for (const [index, routeId] of wildcardRouteIds.entries()) {
-    options.onProgress?.(`刷新通配符路由概率 ${index + 1}/${wildcardRouteIds.length}：#${routeId}`);
-    if (options.refreshPricingCatalog) {
-      await tokenRouter.refreshRouteWidePricingReferenceCosts(routeId, { refreshedKeys });
+      if (snapshotWrites.length > 0) {
+        await saveRouteDecisionSnapshots(snapshotWrites);
+      }
     }
 
-    const decision = await tokenRouter.explainSelectionRouteWide(routeId);
-    await saveRouteDecisionSnapshots([
-      {
-        routeId,
-        snapshot: decision,
-      },
-    ]);
-  }
+    for (const [index, routeId] of wildcardRouteIds.entries()) {
+      options.onProgress?.(`刷新通配符路由概率 ${index + 1}/${wildcardRouteIds.length}：#${routeId}`);
+      if (options.refreshPricingCatalog) {
+        await tokenRouter.refreshRouteWidePricingReferenceCosts(routeId, { refreshedKeys });
+      }
 
-  return {
-    exactModelCount: exactModels.length,
-    wildcardRouteCount: wildcardRouteIds.length,
-  };
+      const decision = await tokenRouter.explainSelectionRouteWide(routeId);
+      await saveRouteDecisionSnapshots([
+        {
+          routeId,
+          snapshot: decision,
+        },
+      ]);
+    }
+
+    return {
+      exactModelCount: exactModels.length,
+      wildcardRouteCount: wildcardRouteIds.length,
+    };
+  })().finally(() => {
+    if (refreshInFlight === run) refreshInFlight = null;
+  });
+
+  refreshInFlight = run;
+  return run;
 }

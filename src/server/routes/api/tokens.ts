@@ -986,8 +986,12 @@ export async function tokensRoutes(app: FastifyInstance) {
       },
       async () => {
         await Promise.resolve();
+        // Manual "refresh probabilities" must stay light: recompute the
+        // weighted-selection snapshots locally without re-fetching each model's
+        // external pricing catalog (that would fan out HTTP requests for every
+        // candidate site across all models and stall on a large route set).
         return await refreshAllRouteDecisionSnapshots({
-          refreshPricingCatalog: true,
+          refreshPricingCatalog: false,
           onProgress: (message) => {
             appendBackgroundTaskLog(taskId, message);
           },
