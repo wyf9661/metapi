@@ -23,6 +23,8 @@ import { isExactRouteModelPattern } from './tokenRouterModelPatterns.js';
 const SITE_RUNTIME_HEALTH_SETTING_KEY = 'token_router_site_runtime_health_v1';
 const SITE_RUNTIME_HEALTH_PERSIST_DEBOUNCE_MS = 500;
 const SITE_RECENT_MODEL_WEIGHT = 0.65;
+const MAX_RUNTIME_HEALTH_SITES = 512;
+const MAX_RUNTIME_HEALTH_MODELS_PER_SITE = 256;
 
 // --- Sliding window failure rate breaker ---
 // Backstop: regardless of failure classification, if a site's recent failure
@@ -51,6 +53,13 @@ function slideSlidingWindow(siteId: number, success: boolean, nowMs: number): vo
   entry.timestamps.push(success ? nowMs : -nowMs);
   const cutoff = nowMs - SLIDING_WINDOW_SIZE_MS;
   entry.timestamps = entry.timestamps.filter((t) => Math.abs(t) >= cutoff);
+  slidingWindowStore.delete(siteId);
+  if (entry.timestamps.length > 0) slidingWindowStore.set(siteId, entry);
+  while (slidingWindowStore.size > MAX_RUNTIME_HEALTH_SITES) {
+    const oldestSiteId = slidingWindowStore.keys().next().value;
+    if (oldestSiteId === undefined) break;
+    slidingWindowStore.delete(oldestSiteId);
+  }
 }
 
 function getSlidingWindowFailureInfo(siteId: number): { failureRate: number; totalRequests: number } | null {
@@ -126,8 +135,28 @@ function getOrCreateRuntimeHealthState<K>(states: Map<K, SiteRuntimeHealthState>
   return existing;
 }
 
+function trimOldestMapEntries<K, V>(states: Map<K, V>, maxEntries: number): void {
+  while (states.size > maxEntries) {
+    const oldestKey = states.keys().next().value;
+    if (oldestKey === undefined) break;
+    states.delete(oldestKey);
+  }
+}
+
+function touchSiteRuntimeState(siteId: number, nowMs: number): SiteRuntimeHealthState {
+  const state = getOrCreateRuntimeHealthState(siteRuntimeHealthStates, siteId, nowMs);
+  siteRuntimeHealthStates.delete(siteId);
+  siteRuntimeHealthStates.set(siteId, state);
+  trimOldestMapEntries(siteRuntimeHealthStates, MAX_RUNTIME_HEALTH_SITES);
+  trimOldestMapEntries(slidingWindowStore, MAX_RUNTIME_HEALTH_SITES);
+  for (const existingSiteId of siteModelRuntimeHealthStates.keys()) {
+    if (!siteRuntimeHealthStates.has(existingSiteId)) siteModelRuntimeHealthStates.delete(existingSiteId);
+  }
+  return state;
+}
+
 function getOrCreateSiteRuntimeHealthState(siteId: number, nowMs = Date.now()): SiteRuntimeHealthState {
-  return getOrCreateRuntimeHealthState(siteRuntimeHealthStates, siteId, nowMs);
+  return touchSiteRuntimeState(siteId, nowMs);
 }
 
 function getSiteModelRuntimeHealthState(siteId: number, modelName?: string | null): SiteRuntimeHealthState | null {
@@ -148,7 +177,11 @@ function getOrCreateSiteModelRuntimeHealthState(
     modelStates = new Map<string, SiteRuntimeHealthState>();
     siteModelRuntimeHealthStates.set(siteId, modelStates);
   }
-  return getOrCreateRuntimeHealthState(modelStates, modelKey, nowMs);
+  const state = getOrCreateRuntimeHealthState(modelStates, modelKey, nowMs);
+  modelStates.delete(modelKey);
+  modelStates.set(modelKey, state);
+  trimOldestMapEntries(modelStates, MAX_RUNTIME_HEALTH_MODELS_PER_SITE);
+  return state;
 }
 
 export function getSiteRuntimeHealthDetails(siteId: number, modelName?: string | null, nowMs = Date.now()): SiteRuntimeHealthDetails {
@@ -339,6 +372,21 @@ export function resetSiteRuntimeHealthState(): void {
   }
   siteRuntimeHealthPersistInFlight = null;
   onResetExtra?.();
+}
+
+export const tokenRouterRuntimeHealthLimits = {
+  maxSites: MAX_RUNTIME_HEALTH_SITES,
+  maxModelsPerSite: MAX_RUNTIME_HEALTH_MODELS_PER_SITE,
+};
+
+export function __getTokenRouterRuntimeHealthStatsForTests() {
+  return {
+    siteStates: siteRuntimeHealthStates.size,
+    slidingWindows: slidingWindowStore.size,
+    modelStatesBySite: new Map(
+      [...siteModelRuntimeHealthStates.entries()].map(([siteId, states]) => [siteId, states.size]),
+    ),
+  };
 }
 
 export async function flushSiteRuntimeHealthPersistence(): Promise<void> {
