@@ -221,6 +221,7 @@ export default function TokenRoutes() {
   const [savingPriorityByRoute, setSavingPriorityByRoute] = useState<Record<number, boolean>>({});
   const [updatingRoutingStrategyByRoute, setUpdatingRoutingStrategyByRoute] = useState<Record<number, boolean>>({});
   const [clearingCooldownByRoute, setClearingCooldownByRoute] = useState<Record<number, boolean>>({});
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [decisionByRoute, setDecisionByRoute] = useState<Record<number, RouteDecision | null>>({});
   const [loadingDecision, setLoadingDecision] = useState(false);
@@ -438,6 +439,7 @@ export default function TokenRoutes() {
       } catch {
         toast.error('加载路由配置失败');
       }
+      setInitialLoading(false);
       // Preload candidates in background after first paint
       const scheduleIdle = typeof requestIdleCallback === 'function' ? requestIdleCallback : (cb: () => void) => setTimeout(cb, 0);
       scheduleIdle(() => loadCandidates());
@@ -1569,6 +1571,26 @@ export default function TokenRoutes() {
 
   return (
     <div className="animate-fade-in" style={{ minHeight: 400 }}>
+      {initialLoading && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--color-bg)',
+        }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            border: '4px solid var(--color-border)',
+            borderTopColor: 'var(--color-primary)',
+            borderRadius: '50%',
+            animation: 'spin 0.6s linear infinite',
+          }} />
+        </div>
+      )}
       {/* Toolbar: search + sort + actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <div className="toolbar-search" style={{ minWidth: 220, flex: 1, maxWidth: 360 }}>
@@ -1615,7 +1637,7 @@ export default function TokenRoutes() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid var(--color-border)', paddingLeft: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid var(--color-border)', paddingLeft: 8, flexWrap: 'wrap' }}>
           <button
             onClick={handleRefreshRouteDecisions}
             disabled={loadingDecision}
@@ -1646,15 +1668,15 @@ export default function TokenRoutes() {
           </button>
 
         {snapshotRefreshedAtHint && (
-          <span style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 4 }}>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', width: '100%' }}>
             {tr('概率快照')}: {snapshotRefreshedAtHint}
             <span style={{ marginLeft: 6 }}>{tr('（服务端每 5 分钟自动刷新）')}</span>
-          </span>
+          </div>
         )}
         {decisionAutoSkipped && (
-          <span style={{ fontSize: 12, color: 'var(--color-warning)', marginLeft: 4 }}>
+          <div style={{ fontSize: 12, color: 'var(--color-warning)', width: '100%' }}>
             {tr('部分路由尚无快照，可手动刷新或等待后台任务')}
-          </span>
+          </div>
         )}
           <button
             onClick={handleRebuild}
