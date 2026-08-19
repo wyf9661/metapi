@@ -47,7 +47,7 @@ Metapi 当前有三类主要配置入口：
 | Codex 上游传输与会话并发 | WebSocket 开关、并发与队列参数 | 保存后即时生效 |
 | 批量测活 | 后台模型可用性探测开关 | 保存后即时生效 |
 | 下游访问令牌 | `PROXY_TOKEN` | 保存后即时生效 |
-| 路由策略 | 成本/余额/使用率权重、默认单价、首字超时、协议回退、失败冷却上限 | 保存后即时生效 |
+| 路由策略 | 成本/余额/使用率权重、默认单价、首字超时、路由探测率、协议回退、失败冷却上限 | 保存后即时生效 |
 | 全局品牌屏蔽 | 全局品牌屏蔽 | 保存后即时生效，并触发路由重建 |
 | 全局模型白名单 | 全局模型白名单 | 保存后即时生效，并触发路由重建 |
 | 数据库迁移 / 运行数据库 | `DB_TYPE`、`DB_URL`、`DB_SSL` | 保存后下次后端重启生效 |
@@ -223,14 +223,15 @@ Metapi 当前有三类主要配置入口：
 | `PROXY_MAX_CHANNEL_ATTEMPTS` | 候选通道数统计失败时的兜底尝试次数 | `5` |
 | `PROXY_STICKY_SESSION_ENABLED` | 是否启用会话粘性（同一会话尽量复用同一通道） | `true` |
 | `PROXY_STICKY_MAX_HITS` | 会话级粘性连续命中次数上限，超过后丢弃会话级粘性、重新进入均衡选择（防止单会话独占单站）。**只作用于会话粘性，不影响 last_success 保底** | `5` |
+| `PROXY_ROUTE_PROBE_RATE` | 首跳请求跳过会话粘性与 last_success 保底、直接进入 balanced-v2 加权选路的概率（0 到 1）；用于让短会话流量仍按权重收敛 | `0.15` |
 | `PROXY_LAST_SUCCESS_EXPLORATION_INTERVAL` | last_success（最近成功通道保底）连续使用次数上限，达到后让出 1 次给 balanced-v2 探索其他健康候选。探索成功会自动更新保底指向新站点；探索失败保留原保底。设为 `1` 表示每次都探索（等效关闭保底优先），调大表示更黏好站点 | `10` |
 | `PROXY_SESSION_CHANNEL_CONCURRENCY_LIMIT` | 会话级通道并发上限（0 = 不限制） | `3` |
 | `PROXY_SESSION_CHANNEL_QUEUE_WAIT_MS` | 并发超限时的排队等待时间（毫秒） | `1500` |
 | `PROXY_SESSION_CHANNEL_LEASE_TTL_MS` | 会话级通道租约 TTL（毫秒） | `90000` |
 | `PROXY_SESSION_CHANNEL_LEASE_KEEPALIVE_MS` | 会话级通道租约保活间隔（毫秒） | `15000` |
-| `TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC` | 通道失败冷却上限（秒），冷却期内该通道优先避开 | `3600` |
+| `TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC` | 通道失败冷却上限（秒）；实际避让窗口按失败类型与连续失败次数退避计算，冷却期内该通道优先避开 | `3600` |
 | `DISABLE_CROSS_PROTOCOL_FALLBACK` | 关闭跨协议回退（如 chat → responses），默认允许 | `false` |
-| `RESPONSES_COMPACT_FALLBACK_TO_RESPONSES_ENABLED` | Responses 压缩模式回退开关 | `false` |
+| `RESPONSES_COMPACT_FALLBACK_TO_RESPONSES_ENABLED` | `/v1/responses/compact` 上游明确不支持 compact 时，允许回退为普通 `/v1/responses` 请求 | `false` |
 | `CODEX_UPSTREAM_WEBSOCKET_ENABLED` | 启用 Codex 上游 WebSocket 传输 | `false` |
 | `CODEX_RESPONSES_WEBSOCKET_BETA` | Codex responses WebSocket beta 版本头 | `responses_websockets=2026-02-06` |
 | `CODEX_HEADER_DEFAULTS_USER_AGENT` | 覆盖 Codex 默认 User-Agent 头 | 空 |

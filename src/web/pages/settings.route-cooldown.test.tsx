@@ -126,6 +126,7 @@ describe('Settings route cooldown cap', () => {
         },
         routingFallbackUnitCost: 1,
         proxyFirstByteTimeoutSec: 0,
+        proxyRouteProbeRate: 0.15,
         tokenRouterFailureCooldownMaxSec: 10,
         disableCrossProtocolFallback: false,
       });
@@ -226,6 +227,7 @@ describe('Settings route cooldown cap', () => {
         },
         routingFallbackUnitCost: 1,
         proxyFirstByteTimeoutSec: 7,
+        proxyRouteProbeRate: 0.15,
         tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
         disableCrossProtocolFallback: false,
       });

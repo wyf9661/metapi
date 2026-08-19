@@ -16,6 +16,7 @@ import {
   recordUpstreamEndpointSuccess,
 } from '../../services/upstreamEndpointRuntimeMemory.js';
 import { ensureModelAllowedForDownstreamKey, getDownstreamRoutingPolicy, recordDownstreamCostUsage } from '../../services/downstreamPolicyRequest.js';
+import { buildUpstreamUrl } from '../orchestration/upstreamRequest.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
 import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
@@ -651,12 +652,14 @@ export async function handleOpenAiResponsesSurfaceRequest(
               headers: recoveredHeaders,
               body: recoveredBody,
             };
-            const recoveredResponse = await ctx.dispatchRecoveryRequest(recoveredRequest);
+            const recoveredTargetUrl = buildUpstreamUrl(siteApiBaseUrl, recoveredRequest.path);
+            const recoveredResponse = await ctx.dispatchRecoveryRequest(recoveredRequest, recoveredTargetUrl);
             if (recoveredResponse.ok) {
               return {
                 upstream: recoveredResponse,
                 upstreamPath: recoveredRequest.path,
                 request: recoveredRequest,
+                targetUrl: recoveredTargetUrl,
               };
             }
             ctx.request = recoveredRequest;

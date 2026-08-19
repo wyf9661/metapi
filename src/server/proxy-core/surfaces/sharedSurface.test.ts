@@ -34,6 +34,7 @@ const acquireChannelLeaseMock = vi.fn();
 const buildStickySessionKeyMock = vi.fn();
 const consoleWarnMock = vi.spyOn(console, 'warn').mockImplementation(() => {});
 const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
+const mathRandomMock = vi.spyOn(Math, 'random');
 
 vi.mock('../../services/tokenRouter.js', () => ({
   tokenRouter: {
@@ -123,6 +124,7 @@ describe('selectSurfaceChannelForAttempt', () => {
   afterAll(() => {
     consoleWarnMock.mockRestore();
     consoleErrorMock.mockRestore();
+    mathRandomMock.mockRestore();
   });
 
   beforeEach(() => {
@@ -158,6 +160,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     buildStickySessionKeyMock.mockReset();
     consoleWarnMock.mockClear();
     consoleErrorMock.mockClear();
+    mathRandomMock.mockReturnValue(0.99);
     getLastSuccessChannelIdMock.mockReturnValue(null);
   });
 
@@ -846,12 +849,14 @@ describe('selectSurfaceChannelForAttempt', () => {
         text: vi.fn(),
       } as any,
       rawErrText: 'expired token',
+      dispatchRecoveryRequest: vi.fn(),
     };
     refreshOauthAccessTokenSingleflightMock.mockResolvedValue({
       accessToken: 'new-access-token',
       extraConfig: '{"oauth":{"refreshToken":"refresh-next"}}',
     });
-    const dispatchRequest = vi.fn().mockResolvedValue(refreshedResponse);
+    const dispatchRecoveryRequest = vi.fn().mockResolvedValue(refreshedResponse);
+    ctx.dispatchRecoveryRequest = dispatchRecoveryRequest;
 
     const { trySurfaceOauthRefreshRecovery } = await import('./sharedSurface.js');
     const result = await trySurfaceOauthRefreshRecovery({
@@ -864,14 +869,13 @@ describe('selectSurfaceChannelForAttempt', () => {
         headers: { authorization: `Bearer ${selected.tokenValue}` },
         body: { model: 'gpt-5.2' },
       }),
-      dispatchRequest,
     });
 
     expect(refreshOauthAccessTokenSingleflightMock).toHaveBeenCalledWith(33);
     expect(selected.tokenValue).toBe('new-access-token');
     expect(selected.account.accessToken).toBe('new-access-token');
     expect(selected.account.extraConfig).toBe('{"oauth":{"refreshToken":"refresh-next"}}');
-    expect(dispatchRequest).toHaveBeenCalledWith(expect.objectContaining({
+    expect(dispatchRecoveryRequest).toHaveBeenCalledWith(expect.objectContaining({
       headers: { authorization: 'Bearer new-access-token' },
     }), 'https://upstream.example.com/v1/responses');
     expect(result).toEqual({
@@ -906,6 +910,7 @@ describe('selectSurfaceChannelForAttempt', () => {
         text: vi.fn(),
       } as unknown as UndiciResponse,
       rawErrText: 'expired token',
+      dispatchRecoveryRequest: vi.fn().mockResolvedValue(refreshedResponse),
     };
     const selected = {
       account: {
@@ -931,7 +936,6 @@ describe('selectSurfaceChannelForAttempt', () => {
         headers: { authorization: `Bearer ${selected.tokenValue}` },
         body: { model: 'gpt-5.2' },
       }),
-      dispatchRequest: vi.fn().mockResolvedValue(refreshedResponse),
     });
 
     expect(result).toBeNull();

@@ -164,7 +164,7 @@ The AI ecosystem is seeing a growing number of aggregation relay stations based 
 - Auto-discovers all available models from upstream sites — **zero-config** route table generation
 - Four-tier cost signal: **measured cost -> account-configured cost -> catalog reference price -> default fallback**
 - Multi-channel probabilistic distribution weighted by cost (40%), balance (30%), and usage (30%)
-- Failed channels auto-cool down (default 10-minute cooldown)
+- Failed channels use failure-aware, escalating backoff and avoidance (default cap: 1 hour)
 - Auto-retry on failure with automatic channel switching
 - Routing decisions are visually explainable — every choice is transparent and auditable
 

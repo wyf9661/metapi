@@ -150,6 +150,8 @@ export const SITE_MODEL_FAILURE_PATTERNS: RegExp[] = [
 
 export const SITE_VALIDATION_FAILURE_PATTERNS: RegExp[] = [
   /invalid\s+request\s+body/i,
+  /invalid\s+timeout\s+(?:parameter|value)/i,
+  /timeout\s+must\s+be\s*(?:<=|less\s+than|greater\s+than|between)/i,
   /validation/i,
   /missing\s+required/i,
   /required\s+parameter/i,
@@ -341,6 +343,7 @@ export function isTransientSiteRuntimeFailure(context: SiteRuntimeFailureContext
 function isTimeoutFailure(context: SiteRuntimeFailureContext = {}): boolean {
   const status = typeof context.status === 'number' ? context.status : 0;
   if (status === 408) return true;
+  if (status >= 400 && status < 500 && isValidationRuntimeFailure(context)) return false;
   return matchesAnyPattern(RETRYABLE_TIMEOUT_PATTERNS, context.errorText);
 }
 
