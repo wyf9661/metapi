@@ -694,7 +694,7 @@ export default function Settings() {
         ),
         disableCrossProtocolFallback: runtime.disableCrossProtocolFallback,
       });
-      toast.success('Routing weights saved');
+      toast.success('路由策略已保存');
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存失败');
@@ -731,7 +731,7 @@ export default function Settings() {
           ? res.currentAdminIp
           : prev.currentAdminIp,
       }));
-      toast.success('Security settings saved');
+      toast.success('安全设置已保存');
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存失败');
