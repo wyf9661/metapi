@@ -519,10 +519,16 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
 
   // NewAPI path-local "no available channel" may still succeed on another protocol.
   if (isProtocolLocalCapacityFailure(ctx)) {
+    const modelScoped = /for\s+this\s+model/i.test(errorText);
     return {
       class: 'transient_upstream',
       retryChannel: true,
-      cascadeEndpoint: true,
+      // Model-scoped "no available channels for this model" is a capacity
+      // statement about the model itself — switching protocol (chat → messages
+      // → responses) on the same site will not conjure channels. Only
+      // path-local availability (no protocol qualifier) may benefit from a
+      // same-site protocol cascade.
+      cascadeEndpoint: !modelScoped,
       cooldownWeight: 1.0,
       cooldownScope: 'endpoint',
     };
@@ -582,6 +588,24 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       cooldownScope: 'endpoint',
     };
   }
+  if (status === 410 && matchesAnyPattern([
+    /end\s+of\s+life/i,
+    /no\s+longer\s+available/i,
+    /has\s+been\s+(?:retired|deprecated|removed|deleted)/i,
+    /model.*(?:gone|unavailable)/i,
+  ], errorText)) {
+    // Upstream model retired / end-of-life (e.g. OpenAI 410 gone). Another
+    // channel may still serve the model (or a mapped alias), so fail over
+    // instead of terminating the request after a single attempt.
+    return {
+      class: 'model_unsupported',
+      retryChannel: true,
+      cascadeEndpoint: false,
+      cooldownWeight: 1.6,
+      cooldownScope: 'channel_model',
+    };
+  }
+
   if (status === 404 && /^\s*not found\s*$/i.test(errorText)) {
     return {
       class: 'unknown',
@@ -603,6 +627,26 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
         retryChannel: false,
         cascadeEndpoint: false,
         cooldownWeight: 0.2,
+        cooldownScope: 'none',
+      };
+    }
+    // Context overflow is a deterministic request-shape error: the prompt +
+    // tool + output budget exceeds the upstream window, so every channel
+    // serving the model rejects the same body. Fail fast instead of burning
+    // the multi-channel failover budget — the client must trim/compress.
+    if (matchesAnyPattern([
+      /maximum\s+context\s+length/i,
+      /reduce\s+the\s+length/i,
+      /context\s+length\s+exceeded/i,
+      /too\s+many\s+tokens/i,
+      /token\s+limit\s+(?:exceeded|reached)/i,
+      /上下文.*(?:超长|过长|超出)/i,
+    ], errorText)) {
+      return {
+        class: 'request_validation',
+        retryChannel: false,
+        cascadeEndpoint: false,
+        cooldownWeight: 0.1,
         cooldownScope: 'none',
       };
     }

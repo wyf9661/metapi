@@ -8,6 +8,7 @@ import {
 import {refreshModelPricingCatalog} from './modelPricingService.js';
 import { proxyChannelCoordinator, type ProxyChannelLoadSnapshot } from './proxyChannelCoordinator.js';
 import {classifyProxyFailure, isUsageLimitRateLimitFailure, type SiteRuntimeFailureContext} from './siteFailureClassification.js';
+import {SITE_API_ENDPOINT_COOLDOWN_MS} from './siteApiEndpointService.js';
 import {clampFailureCooldownMs as clampFailureCooldownMsMath, clampNumber, isContributionCloseToBest, resolveEffectiveFailureCooldownMs as resolveEffectiveFailureCooldownMsMath, resolveFailureBackoffSec, resolveRoundRobinCooldownSec, ROUND_ROBIN_COOLDOWN_LEVELS_SEC} from './tokenRouterMath.js';
 import {
   getStableFirstLastSelectedSiteByKey,
@@ -2016,7 +2017,13 @@ export class TokenRouter {
             consecutiveFailCount = 0;
           }
         } else {
-          cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
+          const failureDecision = classifyProxyFailure(normalizedContext);
+          if (failureDecision.class === 'endpoint_pool_down') {
+            // Align with the endpoint pool cooldown (see the non-oauth branch).
+            cooldownUntil = new Date(nowMs + SITE_API_ENDPOINT_COOLDOWN_MS).toISOString();
+          } else {
+            cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
+          }
           consecutiveFailCount = 0;
           cooldownLevel = 0;
         }
@@ -2064,7 +2071,18 @@ export class TokenRouter {
         consecutiveFailCount = 0;
       }
     } else {
-      cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
+      const failureDecision = classifyProxyFailure(normalizedContext);
+      if (failureDecision.class === 'endpoint_pool_down') {
+        // Every API endpoint for this site is in cooldown. The channel-level
+        // backoff must align with the endpoint pool cooldown (5 min) instead
+        // of the short fibonacci backoff, otherwise the router keeps picking
+        // the site after 15s while its endpoints are still cooling down and
+        // every pick fails in ~1ms (endpoint_all_down). Reusing the endpoint
+        // cooldown constant keeps both systems in sync without extra state.
+        cooldownUntil = new Date(nowMs + SITE_API_ENDPOINT_COOLDOWN_MS).toISOString();
+      } else {
+        cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
+      }
       consecutiveFailCount = 0;
       cooldownLevel = 0;
     }

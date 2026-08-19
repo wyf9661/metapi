@@ -99,6 +99,49 @@ describe('siteFailureClassification', () => {
     expect(decision.retryChannel).toBe(true);
   });
 
+  it('classifies 410 end-of-life as model_unsupported and failover-eligible', () => {
+    const decision = classifyProxyFailure({
+      status: 410,
+      errorText: "The model 'deepseek-ai/deepseek-v4-flash' has reached its end of life on 2026-08-07T09:00:00Z and is no longer available.",
+    });
+    expect(decision.class).toBe('model_unsupported');
+    expect(decision.cooldownScope).toBe('channel_model');
+    expect(decision.retryChannel).toBe(true);
+
+    const bare410 = classifyProxyFailure({ status: 410, errorText: 'gone' });
+    expect(bare410.class).not.toBe('model_unsupported');
+  });
+
+  it('classifies context overflow 400 as terminal request_validation', () => {
+    const decision = classifyProxyFailure({
+      status: 400,
+      errorText: "This endpoint's maximum context length is 256000 tokens. However, you requested about 256433 tokens.",
+    });
+    expect(decision.class).toBe('request_validation');
+    expect(decision.retryChannel).toBe(false);
+
+    const chinese = classifyProxyFailure({
+      status: 400,
+      errorText: '上下文长度超出限制',
+    });
+    expect(chinese.retryChannel).toBe(false);
+  });
+
+  it('keeps model-scoped no-channel 503 from cascading protocols', () => {
+    const modelScoped = classifyProxyFailure({
+      status: 503,
+      errorText: 'No available channels for this model',
+    });
+    expect(modelScoped.retryChannel).toBe(true);
+    expect(modelScoped.cascadeEndpoint).toBe(false);
+
+    const pathLocal = classifyProxyFailure({
+      status: 503,
+      errorText: 'no available channel',
+    });
+    expect(pathLocal.cascadeEndpoint).toBe(true);
+  });
+
   it('resolveSiteRuntimeFailurePenalty ranks transient 5xx highest', () => {
     const transient = resolveSiteRuntimeFailurePenalty({ status: 503, errorText: 'service unavailable' });
     const model = resolveSiteRuntimeFailurePenalty({ status: 400, errorText: 'unsupported model' });
