@@ -1593,7 +1593,7 @@ export default function TokenRoutes() {
       )}
       {/* Toolbar: search + sort + actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <div className="toolbar-search" style={{ minWidth: 220, flex: 1, maxWidth: 360 }}>
+        <div className="toolbar-search" style={{ minWidth: 140, flex: 1, maxWidth: 360 }}>
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
@@ -1713,7 +1713,7 @@ export default function TokenRoutes() {
           </button>
         </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0 }}>
           {(() => {
             const coolingRoutes = routeSummaries.filter((r) => (r.cooldownChannelCount || 0) > 0);
             if (coolingRoutes.length === 0) return null;
