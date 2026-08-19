@@ -1666,20 +1666,6 @@ export default function TokenRoutes() {
               tr(showRecentSelections ? '收起最近选路' : '最近选路')
             )}
           </button>
-
-        </div>
-        {snapshotRefreshedAtHint && (
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-            {tr('概率快照')}: {snapshotRefreshedAtHint}
-            <span style={{ marginLeft: 6 }}>{tr('（服务端每 5 分钟自动刷新）')}</span>
-          </div>
-        )}
-        {decisionAutoSkipped && (
-          <div style={{ fontSize: 12, color: 'var(--color-warning)', marginTop: 4 }}>
-            {tr('部分路由尚无快照，可手动刷新或等待后台任务')}
-          </div>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button
             onClick={handleRebuild}
             disabled={rebuilding}
@@ -1752,6 +1738,17 @@ export default function TokenRoutes() {
               </button>
             );
           })()}
+          {snapshotRefreshedAtHint && (
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              {tr('概率快照')}: {snapshotRefreshedAtHint}
+              <span style={{ marginLeft: 6 }}>{tr('（服务端每 5 分钟自动刷新）')}</span>
+            </span>
+          )}
+          {decisionAutoSkipped && (
+            <span style={{ fontSize: 12, color: 'var(--color-warning)', marginLeft: 4 }}>
+              {tr('部分路由尚无快照，可手动刷新或等待后台任务')}
+            </span>
+          )}
           <span className="badge badge-info" style={{ fontSize: 12, fontWeight: 500 }}>
             {tr('共')} {filteredRoutes.length} {tr('条路由')}
           </span>
