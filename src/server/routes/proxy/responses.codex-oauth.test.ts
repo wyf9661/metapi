@@ -36,6 +36,7 @@ const dbInsertMock = vi.fn((_arg?: any) => ({
     };
   },
 }));
+const mathRandomMock = vi.spyOn(Math, 'random');
 
 const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
 
@@ -205,6 +206,7 @@ describe('responses proxy codex oauth refresh', () => {
     selectChannelMock.mockReset();
     selectNextChannelMock.mockReset();
     selectPreferredChannelMock.mockReset();
+    mathRandomMock.mockReturnValue(0.99);
     recordSuccessMock.mockReset();
     recordFailureMock.mockReset();
     refreshModelsAndRebuildRoutesMock.mockReset();
@@ -252,6 +254,7 @@ describe('responses proxy codex oauth refresh', () => {
     config.proxyStickySessionEnabled = originalProxyStickySessionEnabled;
     config.proxySessionChannelConcurrencyLimit = originalProxySessionChannelConcurrencyLimit;
     config.proxySessionChannelQueueWaitMs = originalProxySessionChannelQueueWaitMs;
+    mathRandomMock.mockRestore();
     if (app) {
       await app.close();
     }
