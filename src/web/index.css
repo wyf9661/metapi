@@ -5314,9 +5314,13 @@ textarea {
   border-right: 1px solid var(--color-border-light);
   padding: 0 16px 16px 0;
   overflow-y: auto;
-  max-height: calc(100vh - var(--topbar-height) - 120px);
+  /* Desktop locks body scroll; .main-content is the scroll container and its
+     top edge already sits below the topbar. Sticky offsets are relative to
+     that container, so top:0 pins the panel to the pane top and max-height
+     leaves a 24px breathing gap at the bottom of the pane. */
+  max-height: calc(100vh - var(--topbar-height) - 24px);
   position: sticky;
-  top: calc(var(--topbar-height) + 24px);
+  top: 0;
 }
 
 .filter-panel.filter-collapsible {
