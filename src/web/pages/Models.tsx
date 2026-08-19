@@ -10,6 +10,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import { FILTER_PANEL_BREAKPOINT } from '../components/mobileLayout.js';
 import PageJumpInput from '../components/PageJumpInput.js';
 import { mergeMarketplaceMetadata, shouldHydrateMarketplaceMetadata } from './helpers/modelsMarketplaceMetadata.js';
 import { tr } from '../i18n.js';
@@ -289,7 +290,12 @@ export default function Models() {
   const [showFilters, setShowFilters] = useState(false);
   const [metadataHydrating, setMetadataHydrating] = useState(false);
   const isMobile = useIsMobile();
-  const filterPanelPresence = useAnimatedVisibility(!isMobile && !filterCollapsed, 220);
+  // CSS hides the desktop .filter-panel at max-width:900px (index.css
+  // Responsive Adjustments). At 769-900px the page is not "mobile" by the 768px
+  // JS breakpoint, but the panel is invisible anyway; use the mobile filter
+  // sheet there so the 筛选 button keeps working instead of vanishing.
+  const isNarrow = useIsMobile(FILTER_PANEL_BREAKPOINT);
+  const filterPanelPresence = useAnimatedVisibility(!isNarrow && !filterCollapsed, 220);
   const latestPrimaryRequestRef = useRef(0);
   const latestMetadataRequestRef = useRef(0);
   const location = useLocation();
@@ -972,7 +978,7 @@ export default function Models() {
   if (loading) {
     return (
       <div className="animate-fade-in" style={{ display: 'flex', gap: 24, minHeight: 400 }}>
-        {!isMobile && (
+        {!isNarrow && (
           <div style={{ width: 240 }}>
             {[...Array(6)].map((_, i) => <div key={i} className="skeleton" style={{ height: 28, marginBottom: 8, borderRadius: 8 }} />)}
           </div>
@@ -984,7 +990,7 @@ export default function Models() {
               <div className="skeleton" style={{ width: 160, height: 16 }} />
             </div>
             <div className="page-actions">
-              {isMobile && (
+              {isNarrow && (
                 <button
                   className="btn btn-ghost"
                   style={{ border: '1px solid var(--color-border)', padding: '6px 12px' }}
@@ -997,7 +1003,7 @@ export default function Models() {
             </div>
           </div>
           <ResponsiveFilterPanel
-            isMobile={isMobile}
+            isMobile={isNarrow}
             mobileOpen={showFilters}
             onMobileClose={() => setShowFilters(false)}
             mobileTitle={tr('筛选模型')}
@@ -1011,7 +1017,7 @@ export default function Models() {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', gap: 24, minHeight: 400 }}>
-      {!isMobile && filterPanelPresence.shouldRender && (
+      {!isNarrow && filterPanelPresence.shouldRender && (
         <div className={`filter-panel filter-collapsible ${filterPanelPresence.isVisible ? '' : 'is-closing'}`.trim()}>
           {filterControls}
           <button
@@ -1042,12 +1048,12 @@ export default function Models() {
             )}
           </div>
           <div className="page-actions">
-            {(isMobile || filterCollapsed) && (
+            {(isNarrow || filterCollapsed) && (
               <button
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)', padding: '6px 12px' }}
                 onClick={() => {
-                  if (isMobile) {
+                  if (isNarrow) {
                     setShowFilters(true);
                     return;
                   }
@@ -1080,7 +1086,7 @@ export default function Models() {
         </div>
 
         <ResponsiveFilterPanel
-          isMobile={isMobile}
+          isMobile={isNarrow}
           mobileOpen={showFilters}
           onMobileClose={() => setShowFilters(false)}
           mobileTitle={tr('筛选模型')}

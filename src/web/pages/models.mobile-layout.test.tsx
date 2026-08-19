@@ -34,6 +34,30 @@ describe('Models mobile layout', () => {
   const originalWindow = globalThis.window;
   const originalMatchMedia = globalThis.matchMedia;
 
+  function stubWindowWidth(width: number, matchMediaMatches?: (query: string) => boolean) {
+    const nextWindow = (originalWindow ? { ...originalWindow } : {}) as Window & typeof globalThis;
+    nextWindow.innerWidth = width;
+    nextWindow.addEventListener = nextWindow.addEventListener || (() => {});
+    nextWindow.removeEventListener = nextWindow.removeEventListener || (() => {});
+    nextWindow.requestAnimationFrame = nextWindow.requestAnimationFrame || ((callback) => {
+      callback(0);
+      return 1;
+    });
+    nextWindow.cancelAnimationFrame = nextWindow.cancelAnimationFrame || (() => {});
+    nextWindow.matchMedia = ((query: string) => ({
+      matches: matchMediaMatches ? matchMediaMatches(query) : true,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    globalThis.window = nextWindow;
+    globalThis.matchMedia = nextWindow.matchMedia;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     globalThis.document = {
@@ -160,6 +184,61 @@ describe('Models mobile layout', () => {
       expect(collectText(root!.root)).toContain('站点 A');
       expect(collectText(root!.root)).toContain('alice');
       expect(root!.root.findAll((node) => node.type === 'table')).toHaveLength(0);
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('keeps the 筛选 button working in the 769-900px band where CSS hides the desktop panel', async () => {
+    // At 800px the CSS media query (max-width: 900px) hides .filter-panel, but
+    // useIsMobile() still reports desktop (768px breakpoint). The page must
+    // fall back to the mobile filter sheet so the button neither dead-ends nor
+    // vanishes after one click.
+    stubWindowWidth(800, (query) => query.includes('900'));
+    // The sheet mounts a drawer whose effects touch the real document; the
+    // shared partial document mock used by the other tests is not enough here.
+    globalThis.document = originalDocument;
+
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/models']}>
+            <ToastProvider>
+              <Models />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      // Desktop filter panel must not render in this band.
+      const desktopPanel = root!.root.findAll((node) => (
+        typeof node.props.className === 'string'
+        && node.props.className.includes('filter-collapsible')
+      ));
+      expect(desktopPanel).toHaveLength(0);
+
+      // The 筛选 entry is present and survives the first click.
+      const filterButtons = root!.root.findAll((node) => (
+        node.type === 'button'
+        && collectText(node).includes('筛选')
+      ));
+      expect(filterButtons.length).toBeGreaterThan(0);
+
+      const firstButton = filterButtons[0]!;
+      await act(async () => {
+        firstButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      // Still there after the click (regression: it used to vanish).
+      const afterClick = root!.root.findAll((node) => (
+        node.type === 'button'
+        && collectText(node).includes('筛选')
+      ));
+      expect(afterClick.length).toBeGreaterThan(0);
     } finally {
       root?.unmount();
     }
