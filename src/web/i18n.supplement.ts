@@ -1666,4 +1666,9 @@ export const zhToEnSupplemental: Record<string, string> = {
   '语音输入': 'audio input',
   '图像生成': 'image generation',
   '上下文': 'context',
+  // 路由设置：首字超时与探测率
+  '首字超时（无首包 / 首 token）': 'First-token timeout (no first packet / first token)',
+  '默认 15 秒；`0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换渠道，已经开始输出的请求不会被这项超时打断。': 'Default 15s; `0` disables. Only switches channels when no first packet / first token arrives within the window; requests that already started streaming are not interrupted by this timeout.',
+  '路由探测率（跳过亲和性，直接走加权随机）': 'Probe rate (skip affinity, go straight to weighted random)',
+  '默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。': 'Default 0.15 (15%). Each first hop has a chance to skip session stickiness and last-success affinity and go straight to weighted balancing. Set to 0 to disable probing, 1 to probe every time.',
 };
