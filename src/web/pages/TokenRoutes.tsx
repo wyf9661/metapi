@@ -1637,7 +1637,7 @@ export default function TokenRoutes() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid var(--color-border)', paddingLeft: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid var(--color-border)', paddingLeft: 8, flexWrap: 'wrap', flex: 1 }}>
           <button
             onClick={handleRefreshRouteDecisions}
             disabled={loadingDecision}
@@ -1707,7 +1707,7 @@ export default function TokenRoutes() {
               setShowZeroChannelRoutes((prev) => !prev);
             }}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px', marginLeft: 'auto' }}
           >
             {showZeroChannelRoutes ? tr('隐藏 0 通道路由') : tr('显示 0 通道路由')}
           </button>
