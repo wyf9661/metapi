@@ -77,8 +77,8 @@ export default function EditAccountModal({
         account?.unitCost === null || account?.unitCost === undefined
           ? ''
           : String(account.unitCost),
-      accessToken: account?.accessToken || '',
-      apiToken: account?.apiToken || '',
+      accessToken: '',
+      apiToken: '',
       isPinned: !!account?.isPinned,
       refreshToken: managedAuth.refreshToken,
       tokenExpiresAt: managedAuth.tokenExpiresAt,
@@ -108,8 +108,8 @@ export default function EditAccountModal({
         unitCost: editForm.unitCost.trim()
           ? Number(editForm.unitCost.trim())
           : null,
-        accessToken: editForm.accessToken.trim(),
-        apiToken: editForm.apiToken.trim() || null,
+        accessToken: editForm.accessToken.trim() || undefined,
+        apiToken: editForm.apiToken.trim() || undefined,
         isPinned: editForm.isPinned,
         refreshToken: editForm.refreshToken.trim() || null,
         tokenExpiresAt: editForm.tokenExpiresAt.trim()
@@ -227,7 +227,7 @@ export default function EditAccountModal({
             启用签到
           </label>
           <input
-            placeholder="Access Token"
+            placeholder="Access Token（留空保持不变）"
             value={editForm.accessToken}
             onChange={(e) =>
               setEditForm((prev) => ({
@@ -251,7 +251,7 @@ export default function EditAccountModal({
             />
           )}
           <input
-            placeholder="API Token（可选）"
+            placeholder="API Token（可选，留空保持不变）"
             value={editForm.apiToken}
             onChange={(e) =>
               setEditForm((prev) => ({
