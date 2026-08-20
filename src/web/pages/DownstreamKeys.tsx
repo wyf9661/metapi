@@ -338,13 +338,13 @@ function buildEditorForm(
 }
 
 function summarizeModelLimit(models: string[]): string {
-  if (!Array.isArray(models) || models.length === 0) return '未授权模型';
+  if (!Array.isArray(models) || models.length === 0) return '全部模型';
   if (models.length === 1) return models[0];
   return `${models[0]} +${models.length - 1}`;
 }
 
 function summarizeRouteLimit(routeIds: number[], routeMap: Map<number, RouteSelectorItem>): string {
-  if (!Array.isArray(routeIds) || routeIds.length === 0) return '未授权群组';
+  if (!Array.isArray(routeIds) || routeIds.length === 0) return '全部群组';
   const names = routeIds
     .map((id) => routeMap.get(id))
     .filter(Boolean)

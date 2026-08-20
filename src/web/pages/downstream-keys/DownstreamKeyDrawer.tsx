@@ -111,22 +111,16 @@ export default function DownstreamKeyDrawer({
     <div
       className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()}
       onClick={onClose}
-      style={{ justifyContent: 'flex-end', alignItems: 'stretch', padding: 0 }}
     >
       <div
         className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 'min(92vw, 560px)',
-          maxWidth: 560,
-          height: '100vh',
-          maxHeight: '100vh',
-          borderRadius: 0,
-          animation: presence.isVisible ? 'drawer-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both' : 'drawer-slide-out 0.22s cubic-bezier(0.4, 0, 1, 1) both',
-        }}
+        role="dialog"
+        aria-modal="true"
+        style={{ width: 'min(90vw, 860px)', maxWidth: 860 }}
       >
-        <div className="modal-header" style={{ paddingTop: 18, paddingBottom: 12, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span>{item?.name || '--'}</span>
               <StatusBadge enabled={!!item?.enabled} />
@@ -141,8 +135,13 @@ export default function DownstreamKeyDrawer({
               <TagChips tags={item?.tags || []} accent maxVisible={4} />
             </div>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ border: '1px solid var(--color-border)' }}>
-            关闭
+          <button
+            type="button"
+            className="modal-close-button"
+            onClick={onClose}
+            aria-label="关闭弹框"
+          >
+            ×
           </button>
         </div>
 

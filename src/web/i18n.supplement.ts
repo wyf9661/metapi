@@ -1197,8 +1197,6 @@ export const zhToEnSupplemental: Record<string, string> = {
   '未发现版本': 'No version found',
   '未同步': 'Not synced',
   '未启用': 'Not enabled',
-  '未授权模型': 'Unauthorized models',
-  '未授权群组': 'Unauthorized groups',
   '未检测': 'Not detected',
   '未记录镜像信息': 'No image info recorded',
   '未设置代理': 'No proxy set',
