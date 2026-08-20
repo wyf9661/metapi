@@ -19,6 +19,11 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('deepseek-v4-flash:free')).toBe('deepseek-v4-flash');
     expect(canonicalizeModelName('DeepSeek-V4-Flash-fast')).toBe('deepseek-v4-flash-fast');
     expect(canonicalizeModelName('DeepSeek-V4-Flash-think')).toBe('deepseek-v4-flash-think');
+
+    expect(canonicalizeModelName('DeepSeek-V4-Pro')).toBe('deepseek-v4-pro');
+    expect(canonicalizeModelName('deepseek-ai/deepseek-v4-pro')).toBe('deepseek-v4-pro');
+    expect(canonicalizeModelName('deepseek-v4-pro-fast')).toBe('deepseek-v4-pro-fast');
+    expect(canonicalizeModelName('deepseek-v4-pro-think')).toBe('deepseek-v4-pro-think');
   });
 
   it('strips date suffixes so snapshots share the base model key', () => {
@@ -26,6 +31,8 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('deepseek-v4-flash-20260731')).toBe('deepseek-v4-flash');
     expect(canonicalizeModelName('deepseek-v4-flash-260731')).toBe('deepseek-v4-flash');
     expect(canonicalizeModelName('deepseek-ai/deepseek-v4-flash-0731')).toBe('deepseek-v4-flash');
+    expect(canonicalizeModelName('deepseek-v4-pro-0813')).toBe('deepseek-v4-pro');
+    expect(canonicalizeModelName('deepseek-v4-pro-20260731')).toBe('deepseek-v4-pro');
     expect(canonicalizeModelName('glm-5.2-0715')).toBe('glm-5.2');
   });
 
