@@ -34,6 +34,19 @@ function extractManagedSub2ApiAuth(account: any) {
   };
 }
 
+function extractPlatformUserId(account: any): string {
+  const parsed = parseAccountExtraConfig(account);
+  const raw = parsed?.platformUserId;
+  const value = Number.parseInt(String(raw ?? ''), 10);
+  if (Number.isFinite(value) && value > 0) return String(value);
+  // Fallback: guess from a numeric suffix in the username.
+  const guessed = Number.parseInt(
+    String(account?.username || '').match(/(\d{3,8})$/)?.[1] || '',
+    10,
+  );
+  return Number.isFinite(guessed) && guessed > 0 ? String(guessed) : '';
+}
+
 type EditAccountModalProps = {
   open: boolean;
   account: any | null;
@@ -82,7 +95,7 @@ export default function EditAccountModal({
       isPinned: !!account?.isPinned,
       refreshToken: managedAuth.refreshToken,
       tokenExpiresAt: managedAuth.tokenExpiresAt,
-      platformUserId: account?.platformUserId ? String(account.platformUserId) : '',
+      platformUserId: extractPlatformUserId(account),
     };
     if (JSON.stringify(nextForm) !== JSON.stringify(editForm)) {
       setEditForm(nextForm);
@@ -101,25 +114,44 @@ export default function EditAccountModal({
     if (!account) return;
     setSavingEdit(true);
     try {
-      await api.updateAccount(account.id, {
-        username: editForm.username.trim() || undefined,
-        status: editForm.status,
-        checkinEnabled: editForm.checkinEnabled,
-        unitCost: editForm.unitCost.trim()
-          ? Number(editForm.unitCost.trim())
-          : null,
-        accessToken: editForm.accessToken.trim() || undefined,
-        apiToken: editForm.apiToken.trim() || undefined,
-        isPinned: editForm.isPinned,
-        refreshToken: editForm.refreshToken.trim() || null,
-        tokenExpiresAt: editForm.tokenExpiresAt.trim()
-          ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
-          : null,
-        platformUserId: editForm.platformUserId.trim()
-          ? Number.parseInt(editForm.platformUserId.trim(), 10)
-          : null,
-      });
-      toast.success('账号已更新');
+      const nextAccessToken = editForm.accessToken.trim();
+      const isApiKeyAccount =
+        (account?.credentialMode || '').toLowerCase() === 'apikey';
+      // 填了新 Session Token（非 apikey 账号）→ 走 rebind-session（服务端验证
+      // + 置 active + 刷新余额/模型/路由），否则只做元数据更新（PUT）。
+      if (nextAccessToken && !isApiKeyAccount) {
+        await api.rebindAccountSession(account.id, {
+          accessToken: nextAccessToken,
+          platformUserId: editForm.platformUserId.trim()
+            ? Number.parseInt(editForm.platformUserId.trim(), 10)
+            : undefined,
+          refreshToken: editForm.refreshToken.trim() || undefined,
+          tokenExpiresAt: editForm.tokenExpiresAt.trim()
+            ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
+            : undefined,
+        });
+        toast.success('账号已重新绑定');
+      } else {
+        await api.updateAccount(account.id, {
+          username: editForm.username.trim() || undefined,
+          status: editForm.status,
+          checkinEnabled: editForm.checkinEnabled,
+          unitCost: editForm.unitCost.trim()
+            ? Number(editForm.unitCost.trim())
+            : null,
+          accessToken: undefined,
+          apiToken: editForm.apiToken.trim() || undefined,
+          isPinned: editForm.isPinned,
+          refreshToken: editForm.refreshToken.trim() || null,
+          tokenExpiresAt: editForm.tokenExpiresAt.trim()
+            ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
+            : null,
+          platformUserId: editForm.platformUserId.trim()
+            ? Number.parseInt(editForm.platformUserId.trim(), 10)
+            : null,
+        });
+        toast.success('账号已更新');
+      }
       handleClose();
       onSaved();
     } catch (e) {

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const adapterMock = {
+const adapterMock: {
+  getBalance: ReturnType<typeof vi.fn>;
+  login: ReturnType<typeof vi.fn>;
+  issueManagementToken?: ReturnType<typeof vi.fn>;
+} = {
   getBalance: vi.fn(),
   login: vi.fn(),
 };
@@ -94,6 +98,7 @@ describe('balanceService auto relogin', () => {
   beforeEach(() => {
     adapterMock.getBalance.mockReset();
     adapterMock.login.mockReset();
+    adapterMock.issueManagementToken = undefined;
     selectAllMock.mockReset();
     updateSetMock.mockReset();
     insertValuesMock.mockReset();
@@ -149,6 +154,47 @@ describe('balanceService auto relogin', () => {
     expect(adapterMock.getBalance.mock.calls[0][1]).toBe('stale-token');
     expect(adapterMock.getBalance.mock.calls[1][1]).toBe('fresh-token');
     expect(updateSetMock.mock.calls.some((call) => call[0]?.accessToken === 'fresh-token')).toBe(true);
+    expect(reportTokenExpiredMock).not.toHaveBeenCalled();
+  });
+
+  it('re-issues stale NewAPI management token from session access token', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 21,
+          username: 'wyf9661',
+          accessToken: 'session-token',
+          status: 'active',
+          extraConfig: JSON.stringify({
+            platformUserId: 16094,
+            newApiManagedAuth: {
+              managementToken: 'stale-mgt-token',
+              issuedAt: '2026-07-18T17:00:00.484Z',
+            },
+          }),
+        },
+        sites: {
+          id: 21,
+          name: 'abrdns',
+          url: 'https://new-api.abrdns.com',
+          platform: 'new-api',
+        },
+      },
+    ]);
+
+    adapterMock.getBalance
+      .mockRejectedValueOnce(new Error('Unauthorized, invalid access token'))
+      .mockResolvedValueOnce({ balance: 0.7, used: 112, quota: 113 });
+    adapterMock.issueManagementToken = vi.fn().mockResolvedValue('fresh-mgt-token');
+
+    const { refreshBalance } = await import('./balanceService.js');
+    const result = await refreshBalance(21);
+
+    expect(result).toEqual({ balance: 0.7, used: 112, quota: 113 });
+    expect(adapterMock.issueManagementToken).toHaveBeenCalledTimes(1);
+    expect(adapterMock.getBalance).toHaveBeenCalledTimes(2);
+    expect(adapterMock.getBalance.mock.calls[0][1]).toBe('stale-mgt-token');
+    expect(adapterMock.getBalance.mock.calls[1][1]).toBe('fresh-mgt-token');
     expect(reportTokenExpiredMock).not.toHaveBeenCalled();
   });
 

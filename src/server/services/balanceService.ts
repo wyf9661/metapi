@@ -370,6 +370,45 @@ export async function refreshBalance(accountId: number) {
       } catch (retryErr: any) {
         await handleBalanceError(retryErr);
       }
+    } else if (
+      // Stored NewAPI management token (issued from an older session) is stale:
+      // re-issue it from the current session access token before giving up.
+      storedManagementToken
+      && account.accessToken
+      && typeof adapter.issueManagementToken === 'function'
+      && shouldAttemptAutoRelogin(message)
+    ) {
+      try {
+        const issuedToken = await withAccountProxyOverride(
+          accountProxyUrl,
+          () => adapter.issueManagementToken!(
+            site.url,
+            account.accessToken,
+            platformUserId,
+          ),
+        );
+        if (issuedToken) {
+          activeExtraConfig = mergeAccountExtraConfig(activeExtraConfig, {
+            newApiManagedAuth: {
+              managementToken: issuedToken,
+              issuedAt: new Date().toISOString(),
+            },
+          });
+          await db.update(schema.accounts)
+            .set({
+              extraConfig: activeExtraConfig,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(schema.accounts.id, account.id))
+            .run();
+          activeAccessToken = issuedToken;
+          balanceInfo = await readBalance(activeAccessToken);
+        } else {
+          await handleBalanceError(err);
+        }
+      } catch (retryErr: any) {
+        await handleBalanceError(retryErr);
+      }
     } else if (shouldAttemptAutoRelogin(message)) {
       const refreshedAccessToken = await tryAutoRelogin(account, site);
       if (refreshedAccessToken) {

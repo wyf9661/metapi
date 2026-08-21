@@ -1226,6 +1226,11 @@ export async function accountsRoutes(app: FastifyInstance) {
             : { refreshToken: nextRefreshToken };
         }
       }
+      // Rebind with a fresh session token invalidates the previously issued
+      // NewAPI management token (it was derived from the old session). Clear it
+      // so the next balance refresh re-issues one from the new session token
+      // instead of failing with "invalid access token" and re-degrading.
+      extraConfigPatch.newApiManagedAuth = undefined;
       updates.extraConfig = mergeAccountExtraConfig(
         account.extraConfig,
         extraConfigPatch,
