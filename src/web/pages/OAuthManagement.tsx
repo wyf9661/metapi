@@ -8,6 +8,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import OAuthModelsModal, { type OAuthModelItem } from './oauth/OAuthModelsModal.js';
+import AutoRefreshCountdown from './oauth/AutoRefreshCountdown.js';
 import {QuotaWindowRow, SideDrawer, compactAccountKey, hasOauthProxySelection, renderCodeBlock, renderGuideCard, resolveConnectionEmailLabel, resolveConnectionPrimaryTitle, resolveConnectionRouteParticipation, resolveConnectionStatusLabel, resolveModelSyncDetail, resolveModelSyncStatusText, resolveProxyDisplayText, resolveProxyProjectSummary, resolveQuotaSourceLabel, resolveQuotaStatusLabel, resolveQuotaSyncDetail, resolveQuotaSyncStatusText, resolveRouteParticipationSummary, resolveRouteUnitStrategyLabel} from './oauth/connectionPresentation.js';
 import {api, type OAuthConnectionInfo, type OAuthProviderInfo, type OAuthRouteUnitStrategy, type OAuthStartInstructions} from '../api.js';
 const POLL_INTERVAL_MS = 1500;
@@ -332,7 +333,6 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
   });
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [autoRefreshSeconds, setAutoRefreshSeconds] = useState<number>(0);
-  const [autoRefreshCountdown, setAutoRefreshCountdown] = useState<number>(0);
   const [importOpen, setImportOpen] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const [importJsonText, setImportJsonText] = useState('');
@@ -469,27 +469,11 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (autoRefreshSeconds <= 0) {
-      setAutoRefreshCountdown(0);
-      return undefined;
-    }
-
-    setAutoRefreshCountdown(autoRefreshSeconds);
-    const timer = setInterval(() => {
-      setAutoRefreshCountdown((current) => {
-        if (current <= 1) {
-          void loadConnections().catch((error: any) => {
-            setSessionError(error?.message || 'OAuth 连接列表刷新失败');
-          });
-          return autoRefreshSeconds;
-        }
-        return current - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [autoRefreshSeconds, loadConnections]);
+  const handleAutoRefreshTick = useCallback(() => {
+    void loadConnections().catch((error: any) => {
+      setSessionError(error?.message || 'OAuth 连接列表刷新失败');
+    });
+  }, [loadConnections]);
 
   useEffect(() => {
     if (!loaded || providers.length === 0 || createIntentHandledRef.current) return;
@@ -1292,9 +1276,10 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
                 placeholder="自动刷新"
               />
             </div>
-            {autoRefreshSeconds > 0 ? (
-              <div className="oauth-toolbar-meta">下次刷新 {autoRefreshCountdown}s</div>
-            ) : null}
+            <AutoRefreshCountdown
+              intervalSeconds={autoRefreshSeconds}
+              onRefresh={handleAutoRefreshTick}
+            />
             <div className="oauth-column-menu-anchor">
               <button
                 type="button"
