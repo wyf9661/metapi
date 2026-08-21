@@ -21,6 +21,14 @@ export default defineConfig({
     // vitest's 5s default on slow CI runners. Double the budget so cold-start
     // and load spikes do not turn into flaky failures.
     testTimeout: 10_000,
+    // Suite hooks do heavier one-time work than individual tests: several
+    // server-route suites run the real DB bootstrap (migrations + legacy
+    // compat shims) inside `beforeAll` before registering Fastify. Under a
+    // full parallel run that cold start can exceed vitest's 10s hook default,
+    // which surfaces as a confusing `Cannot read properties of undefined
+    // (reading 'close')` in `afterAll` (the hook timed out before `app` was
+    // assigned). Give hooks a larger budget than tests.
+    hookTimeout: 60_000,
     // Persist the transform/deps cache under node_modules so CI can cache it
     // across runs (deps + vite transform results only change with the
     // lockfile or config, matching the setup-node cache key).
