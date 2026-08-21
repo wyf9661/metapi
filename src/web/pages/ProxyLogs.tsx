@@ -17,11 +17,12 @@ import SiteBadgeLink from '../components/SiteBadgeLink.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import { useVisiblePolling } from '../components/useVisiblePolling.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import PageJumpInput from '../components/PageJumpInput.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
-import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, PAGE_SIZES, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
+import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, PAGE_SIZES, PROXY_LOGS_REFRESH_INTERVAL_MS, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
 import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
 import {
   renderStoredDebugDetails,
@@ -159,6 +160,12 @@ export default function ProxyLogs() {
     {},
   );
   const debugDetailInFlightRef = useRef<Set<number>>(new Set());
+  // Abort controllers for the polled list/meta/debug-trace fetches. A new load
+  // cancels the previous in-flight request instead of letting it download a
+  // payload that will be discarded by the seq guard.
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const metaAbortRef = useRef<AbortController | null>(null);
+  const debugListAbortRef = useRef<AbortController | null>(null);
   const fromApiBoundary = toApiTimeBoundary(fromInput);
   const toApiBoundaryValue = toApiTimeBoundary(toInput);
   const hasInvalidTimeRange = Boolean(
@@ -336,6 +343,9 @@ export default function ProxyLogs() {
         return;
       }
       if (!silent) setLoading(true);
+      loadAbortRef.current?.abort();
+      const controller = new AbortController();
+      loadAbortRef.current = controller;
       try {
         const params = {
           limit: pageSize,
@@ -348,15 +358,17 @@ export default function ProxyLogs() {
           ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
           ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
         };
-        const data = await api.getProxyLogsQuery(params);
+        const data = await api.getProxyLogsQuery(params, controller.signal);
         if (seq !== loadSeq.current) return;
         setLogs(aggregateProxyLogRetries(Array.isArray(data.items) ? data.items : []));
         setTotal(Number(data.total || 0));
       } catch (e) {
+        if (controller.signal.aborted) return;
         const eMessage = e instanceof Error ? e.message : String(e);
         if (seq !== loadSeq.current) return;
         if (!silent) toast.error(eMessage || '加载日志失败');
       } finally {
+        if (loadAbortRef.current === controller) loadAbortRef.current = null;
         if (seq === loadSeq.current) setLoading(false);
       }
     },
@@ -384,6 +396,9 @@ export default function ProxyLogs() {
         return;
       }
 
+      metaAbortRef.current?.abort();
+      const controller = new AbortController();
+      metaAbortRef.current = controller;
       try {
         const data = await api.getProxyLogsMeta({
           status: statusFilter,
@@ -394,7 +409,7 @@ export default function ProxyLogs() {
           ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
           ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
           ...(forceRefresh ? { refresh: 1 } : {}),
-        });
+        }, controller.signal);
         if (seq !== metaLoadSeq.current) return;
         setSummary(data.summary || EMPTY_SUMMARY);
         setDownstreamKeyOptions(
@@ -416,8 +431,11 @@ export default function ProxyLogs() {
         setSites(normalized);
         setModelOptions(Array.isArray(data.models) ? data.models : []);
       } catch (error) {
+        if (controller.signal.aborted) return;
         if (seq !== metaLoadSeq.current) return;
         console.error('Failed to load proxy log meta:', error);
+      } finally {
+        if (metaAbortRef.current === controller) metaAbortRef.current = null;
       }
     },
     [
@@ -439,13 +457,14 @@ export default function ProxyLogs() {
     void loadMeta();
   }, [loadMeta]);
 
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const timer = setInterval(() => {
-      void load(true);
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [autoRefresh, load]);
+  // Auto-refresh: reentrancy-guarded and paused while the tab is hidden, so a
+  // backgrounded log page stops polling the (relatively expensive) proxy-logs
+  // query and slow responses never stack overlapping requests.
+  useVisiblePolling(
+    () => load(true),
+    PROXY_LOGS_REFRESH_INTERVAL_MS,
+    autoRefresh,
+  );
 
   useEffect(() => {
     if (page <= totalPages) return;
@@ -592,10 +611,13 @@ export default function ProxyLogs() {
       suppressToast?: boolean;
     }) => {
       if (!options?.silent) setDebugPanelLoading(true);
+      debugListAbortRef.current?.abort();
+      const controller = new AbortController();
+      debugListAbortRef.current = controller;
       try {
         const traceResponse = await api.getProxyDebugTraces({
           limit: TRACE_TABLE_LIMIT,
-        });
+        }, controller.signal);
         const items = Array.isArray(traceResponse?.items)
           ? traceResponse.items
           : [];
@@ -603,11 +625,15 @@ export default function ProxyLogs() {
           refreshSelectedDetail: options?.refreshSelectedDetail,
         });
       } catch (error) {
+        if (controller.signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (!options?.suppressToast) {
           toast.error(errorMessage || '加载代理调试追踪失败');
         }
       } finally {
+        if (debugListAbortRef.current === controller) {
+          debugListAbortRef.current = null;
+        }
         if (!options?.silent) setDebugPanelLoading(false);
       }
     },
@@ -648,17 +674,19 @@ export default function ProxyLogs() {
     void loadDebugTraceDetail(selectedDebugTraceId);
   }, [loadDebugTraceDetail, selectedDebugTraceId, showDebugTraceDetailModal]);
 
-  useEffect(() => {
-    if (!debugSettings.proxyDebugTraceEnabled) return;
-    const timer = setInterval(() => {
-      void loadDebugTraceList({
+  // Debug-trace list poll: same reentrancy + visibility guarantees as the main
+  // log poll, so an idle/hidden page with tracing enabled stops issuing 2s
+  // request pairs.
+  useVisiblePolling(
+    () =>
+      loadDebugTraceList({
         silent: true,
         refreshSelectedDetail: true,
         suppressToast: true,
-      });
-    }, DEBUG_REFRESH_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [debugSettings.proxyDebugTraceEnabled, loadDebugTraceList]);
+      }),
+    DEBUG_REFRESH_INTERVAL_MS,
+    debugSettings.proxyDebugTraceEnabled,
+  );
 
   useEffect(() => {
     persistDebugTracePanelExpanded(debugTracePanelExpanded);

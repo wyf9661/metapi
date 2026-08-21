@@ -40,6 +40,7 @@ export const DEBUG_TRACE_PAGE_SIZE = 5;
 export const PROXY_LOGS_DEBUG_TRACE_PANEL_STORAGE_KEY =
   'metapi.proxyLogs.debugTracePanelExpanded';
 export const DEBUG_REFRESH_INTERVAL_MS = 2000;
+export const PROXY_LOGS_REFRESH_INTERVAL_MS = 2000;
 
 export const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
   codex: 'Codex',

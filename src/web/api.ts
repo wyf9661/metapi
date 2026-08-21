@@ -999,12 +999,13 @@ export const api = {
     request(
       `/api/stats/proxy-logs${buildQueryString(params)}`,
     ) as Promise<ProxyLogsResponse>,
-  getProxyLogsQuery: (params?: ProxyLogsQuery) =>
+  getProxyLogsQuery: (params?: ProxyLogsQuery, signal?: AbortSignal) =>
     request(
       `/api/stats/proxy-logs${buildQueryString({
         ...params,
         view: 'query',
       })}`,
+      { signal },
     ) as Promise<{
       items: ProxyLogsResponse['items'];
       total: number;
@@ -1015,6 +1016,7 @@ export const api = {
     params?: Omit<ProxyLogsQuery, 'limit' | 'offset'> & {
       refresh?: number | boolean;
     },
+    signal?: AbortSignal,
   ) => {
     const refresh =
       params?.refresh === true
@@ -1030,6 +1032,7 @@ export const api = {
     if (refresh === undefined) delete queryParams.refresh;
     return request(
       `/api/stats/proxy-logs${buildQueryString(queryParams)}`,
+      { signal },
     ) as Promise<{
       clientOptions: ProxyLogsResponse['clientOptions'];
       downstreamKeys: Array<{ id: number; name: string; groupName?: string | null }>;
@@ -1069,9 +1072,10 @@ export const api = {
       host: string;
       desktop: boolean;
     }>,
-  getProxyDebugTraces: (params?: { limit?: number }) =>
+  getProxyDebugTraces: (params?: { limit?: number }, signal?: AbortSignal) =>
     request(
       `/api/stats/proxy-debug/traces${buildQueryString(params)}`,
+      { signal },
     ) as Promise<ProxyDebugTracesResponse>,
   getProxyDebugTraceDetail: (id: number) =>
     request(
