@@ -1,5 +1,5 @@
 import { config } from '../config.js';
-import { checkpointSqliteWal } from '../db/index.js';
+import { checkpointSqliteWal, optimizeSqliteRuntime } from '../db/index.js';
 import { cleanupUsageLogs, getLogCleanupCutoffUtc } from './logCleanupService.js';
 
 let retentionTimer: ReturnType<typeof setInterval> | null = null;
@@ -8,6 +8,9 @@ function maybeCheckpointAfterCleanup(deleted: number): void {
   if (deleted <= 0) return;
   // Prefer non-blocking WAL checkpoint over full VACUUM on the live request path.
   checkpointSqliteWal('PASSIVE');
+  // After a bulk delete the planner's stats describe a much larger table;
+  // PRAGMA optimize only does work when they are actually stale.
+  optimizeSqliteRuntime();
 }
 
 export function getProxyLogRetentionCutoffUtc(nowMs = Date.now()): string | null {

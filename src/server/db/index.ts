@@ -13,6 +13,7 @@ import { ensureSiteSchemaCompatibility, type SiteSchemaInspector } from './siteS
 import { ensureRouteGroupingSchemaCompatibility } from './routeGroupingSchemaCompatibility.js';
 import { ensureProxyFileSchemaCompatibility } from './proxyFileSchemaCompatibility.js';
 import { executeLegacyCompat, executeLegacyCompatSync } from './legacySchemaCompat.js';
+import { applySqliteRuntimePragmas, optimizeSqlite } from './sqlitePragmas.js';
 import { config } from '../config.js';
 import { ensureRuntimeDatabaseReady } from '../runtimeDatabaseBootstrap.js';
 import { mkdirSync } from 'fs';
@@ -1575,9 +1576,7 @@ function initSqliteDb() {
 
   const sqlite = new Database(sqlitePath);
   sqliteConnection = sqlite;
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('foreign_keys = ON');
-  sqlite.pragma('busy_timeout = 5000');
+  applySqliteRuntimePragmas(sqlite);
 
   ensureTokenManagementSchema();
   ensureSiteStatusSchema();
@@ -1693,6 +1692,18 @@ export function checkpointSqliteWal(mode: 'PASSIVE' | 'FULL' | 'RESTART' = 'PASS
   } catch (error) {
     console.warn('[db] WAL checkpoint failed', error);
   }
+}
+
+/**
+ * Refresh SQLite query-planner statistics.
+ *
+ * No-op on non-SQLite dialects. Worth calling after bulk deletes (log
+ * retention) so the planner does not keep index estimates from a much larger
+ * table.
+ */
+export function optimizeSqliteRuntime(): void {
+  if (!sqliteConnection) return;
+  optimizeSqlite(sqliteConnection);
 }
 
 /**
