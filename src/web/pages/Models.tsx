@@ -527,6 +527,26 @@ export default function Models() {
   const safePageVal = Math.min(page, totalPages);
   const paged = detailModels.slice((safePageVal - 1) * pageSize, safePageVal * pageSize);
 
+  // Precomputed unique site list per model. Deriving this inside the card JSX
+  // meant an O(n^2) indexOf dedupe re-ran for every card on every render
+  // (search typing, probe progress, copy feedback), not just when the model
+  // data changed.
+  const uniqueSitesByModel = useMemo(() => {
+    const index = new Map<string, string[]>();
+    for (const model of detailModels) {
+      const seen = new Set<string>();
+      const sites: string[] = [];
+      for (const account of model.accounts) {
+        const site = account.site;
+        if (!site || seen.has(site)) continue;
+        seen.add(site);
+        sites.push(site);
+      }
+      index.set(model.name, sites);
+    }
+    return index;
+  }, [detailModels]);
+
   useEffect(() => { setPage(1); }, [search, activeSite, activeBrand, pageSize]);
 
   useEffect(() => {
@@ -1227,7 +1247,7 @@ export default function Models() {
                   {getBrand(m.name) && (
                     <span className="model-tag model-tag-purple">{getBrand(m.name)!.name}</span>
                   )}
-                  {m.accounts.map(a => a.site).filter((v, i, arr) => arr.indexOf(v) === i).map(site => (
+                  {(uniqueSitesByModel.get(m.name) ?? []).map(site => (
                     <span key={site} className="model-tag model-tag-blue">{site}</span>
                   ))}
                   {m.successRate != null && m.successRate >= 90 && (
