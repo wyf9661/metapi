@@ -1247,7 +1247,7 @@ async function fetchBackupWebdav(url: string, init: RequestInit): Promise<Respon
   }
 }
 
-function stopBackupWebdavScheduler() {
+export function stopBackupWebdavScheduler() {
   backupWebdavTask?.stop();
   backupWebdavTask = null;
 }

@@ -9,7 +9,7 @@ import * as routeRefreshWorkflow from './routeRefreshWorkflow.js';
 import { sendNotification } from './notifyService.js';
 import { buildDailySummaryNotification, collectDailySummaryMetrics } from './dailySummaryService.js';
 import { cleanupConfiguredLogs } from './logCleanupService.js';
-import { startModelsDevPriceSync } from './modelPriceCatalogService.js';
+import { startModelsDevPriceSync, stopModelsDevPriceSync } from './modelPriceCatalogService.js';
 import { normalizeLogCleanupRetentionDays } from '../shared/logCleanupRetentionDays.js';
 
 export type CheckinScheduleMode = 'cron' | 'interval';
@@ -424,6 +424,23 @@ export function updateLogCleanupSettings(input: {
 
   logCleanupTask?.stop();
   logCleanupTask = createLogCleanupTask(cronExpr);
+}
+
+/**
+ * Tear down every timer this module owns: check-in (cron or interval), balance
+ * refresh, daily summary, log cleanup, and the models.dev price sync task
+ * started alongside them. Wired into the Fastify `onClose` hook so a hot
+ * reload/desktop restart does not leak scheduled work.
+ */
+export function stopScheduler() {
+  stopCheckinSchedule();
+  balanceTask?.stop();
+  dailySummaryTask?.stop();
+  logCleanupTask?.stop();
+  balanceTask = null;
+  dailySummaryTask = null;
+  logCleanupTask = null;
+  stopModelsDevPriceSync();
 }
 
 export function __resetCheckinSchedulerForTests() {

@@ -8,6 +8,8 @@ const validateMock = vi.fn(() => true);
 const allMock = vi.fn();
 const refreshAllBalancesMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
+const startModelsDevPriceSyncMock = vi.fn();
+const stopModelsDevPriceSyncMock = vi.fn();
 
 vi.mock('node-cron', () => ({
   default: {
@@ -49,6 +51,11 @@ vi.mock('./routeRefreshWorkflow.js', () => ({
   refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
 }));
 
+vi.mock('./modelPriceCatalogService.js', () => ({
+  startModelsDevPriceSync: (...args: unknown[]) => startModelsDevPriceSyncMock(...args),
+  stopModelsDevPriceSync: (...args: unknown[]) => stopModelsDevPriceSyncMock(...args),
+}));
+
 describe('checkinScheduler', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -58,6 +65,8 @@ describe('checkinScheduler', () => {
     allMock.mockReset();
     refreshAllBalancesMock.mockReset();
     refreshModelsAndRebuildRoutesMock.mockReset();
+    startModelsDevPriceSyncMock.mockReset();
+    stopModelsDevPriceSyncMock.mockReset();
   });
 
   afterEach(async () => {
@@ -128,5 +137,33 @@ describe('checkinScheduler', () => {
     refreshAllBalancesMock.mockResolvedValue(undefined);
     await balanceCallback();
     expect(refreshAllBalancesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('stopScheduler tears down every timer this module owns', async () => {
+    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+    refreshAllBalancesMock.mockResolvedValue(undefined);
+    refreshModelsAndRebuildRoutesMock.mockResolvedValue(undefined);
+    const scheduler = await import('./checkinScheduler.js');
+
+    await scheduler.startScheduler();
+    // startScheduler registers the check-in, balance, daily-summary and
+    // log-cleanup cron tasks plus the models.dev price sync.
+    const scheduledCount = scheduleMock.mock.calls.length;
+    expect(scheduledCount).toBeGreaterThanOrEqual(4);
+    expect(startModelsDevPriceSyncMock).toHaveBeenCalledTimes(1);
+
+    cronStopMock.mockClear();
+    clearIntervalSpy.mockClear();
+    scheduler.stopScheduler();
+
+    // Every cron task created by startScheduler is stopped.
+    expect(cronStopMock).toHaveBeenCalledTimes(scheduledCount);
+    expect(stopModelsDevPriceSyncMock).toHaveBeenCalledTimes(1);
+
+    // Interval mode is torn down through the same entry point.
+    scheduler.updateCheckinSchedule({ mode: 'interval', intervalHours: 6 });
+    clearIntervalSpy.mockClear();
+    scheduler.stopScheduler();
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
   });
 });

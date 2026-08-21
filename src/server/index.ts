@@ -27,7 +27,7 @@ import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { updateCenterRoutes } from './routes/api/updateCenter.js';
 import { registerProbeLogsRoutes } from './routes/api/probeLogs.js';
 import { proxyRoutes } from './routes/proxy/router.js';
-import { startScheduler } from './services/checkinScheduler.js';
+import { startScheduler, stopScheduler } from './services/checkinScheduler.js';
 import * as routeRefreshWorkflow from './services/routeRefreshWorkflow.js';
 import { startProxyFileRetentionService, stopProxyFileRetentionService } from './services/proxyFileRetentionService.js';
 import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService } from './services/proxyLogRetentionService.js';
@@ -84,7 +84,7 @@ import {
   startUsageAggregationProjectorScheduler,
   stopUsageAggregationProjectorScheduler,
 } from './services/usageAggregationService.js';
-import { reloadBackupWebdavScheduler } from './services/backupService.js';
+import { reloadBackupWebdavScheduler, stopBackupWebdavScheduler } from './services/backupService.js';
 import {
   startRouteDecisionRefreshScheduler,
   stopRouteDecisionRefreshScheduler,
@@ -376,6 +376,8 @@ try {
 setLegacyProxyLogRetentionFallbackEnabled(!config.logCleanupConfigured || config.proxyLogRetentionDays > 0);
 startProxyFileRetentionService();
 app.addHook('onClose', async () => {
+  stopScheduler();
+  stopBackupWebdavScheduler();
   stopSiteAnnouncementPolling();
   stopUpdateCenterPolling();
   stopProxyFileRetentionService();

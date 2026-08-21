@@ -298,3 +298,10 @@ export function startModelsDevPriceSync(): void {
     void syncModelsDevPrices();
   });
 }
+
+/** Tear down the daily refresh task and any pending retry timer. */
+export function stopModelsDevPriceSync(): void {
+  syncTask?.stop();
+  syncTask = null;
+  clearRetryTimer();
+}
