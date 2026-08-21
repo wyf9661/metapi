@@ -18,9 +18,11 @@ export default defineConfig({
     },
     // Some tests (live schema parity on fresh MySQL/Postgres containers,
     // dashboard perf cards under heavy parallel load) occasionally exceed
-    // vitest's 5s default on slow CI runners. Double the budget so cold-start
-    // and load spikes do not turn into flaky failures.
-    testTimeout: 10_000,
+    // vitest's 5s default on slow CI runners. 10s still was not enough: the
+    // dashboard observability suite renders VChart canvases and takes ~1.8s
+    // standalone but >10s during a saturated full run. Budget for the loaded
+    // case so load spikes do not turn into flaky failures.
+    testTimeout: 30_000,
     // Suite hooks do heavier one-time work than individual tests: several
     // server-route suites run the real DB bootstrap (migrations + legacy
     // compat shims) inside `beforeAll` before registering Fastify. Under a
