@@ -74,3 +74,32 @@ export function buildCustomReorderUpdates<T extends SortableBase>(
 
   return updates;
 }
+
+/**
+ * When unpinning an item, place it at the front of the unpinned group
+ * (sortOrder=0) and shift all existing unpinned items down by one so the
+ * item stays at the top position instead of jumping back to its original
+ * position.
+ */
+export function buildUnpinMoveToFrontUpdates<T extends SortableBase>(
+  items: T[],
+  targetId: number,
+): Array<{ id: number; sortOrder: number }> {
+  const sorted = sortItemsForDisplay(items, 'custom', () => 0);
+  const target = sorted.find((item) => item.id === targetId);
+  if (!target || !target.isPinned) return [];
+
+  const unpinned = sorted.filter((item) => !item.isPinned);
+  if (unpinned.length === 0) return [];
+
+  const updates: Array<{ id: number; sortOrder: number }> = [];
+  unpinned.forEach((item, idx) => {
+    const newOrder = idx + 1; // Shift down by 1 (index 0 is taken by the target)
+    const prev = Number.isFinite(item.sortOrder as number) ? Number(item.sortOrder) : Number.MAX_SAFE_INTEGER;
+    if (prev !== newOrder) {
+      updates.push({ id: item.id, sortOrder: newOrder });
+    }
+  });
+  return updates;
+}
+

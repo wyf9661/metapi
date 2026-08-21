@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from './listSorting.js';
+import { buildCustomReorderUpdates, buildUnpinMoveToFrontUpdates, sortItemsForDisplay, type SortMode } from './listSorting.js';
 
 type Item = {
   id: number;
@@ -57,5 +57,59 @@ describe('buildCustomReorderUpdates', () => {
       { id: 21, sortOrder: 0 },
       { id: 20, sortOrder: 1 },
     ]);
+  });
+});
+
+describe('buildUnpinMoveToFrontUpdates', () => {
+  const list: Item[] = [
+    { id: 1, isPinned: true, sortOrder: 0 },
+    { id: 2, isPinned: true, sortOrder: 1 },
+    { id: 10, isPinned: false, sortOrder: 0 },
+    { id: 11, isPinned: false, sortOrder: 1 },
+    { id: 12, isPinned: false, sortOrder: 2 },
+  ];
+
+  it('shifts existing unpinned items down by one when unpinning a pinned item', () => {
+    const updates = buildUnpinMoveToFrontUpdates(list, 1);
+    // Id 1 (pinned) is being unpinned → takes sortOrder 0, existing unpinned
+    // items shift down: 10→1, 11→2, 12→3
+    expect(updates).toEqual([
+      { id: 10, sortOrder: 1 },
+      { id: 11, sortOrder: 2 },
+      { id: 12, sortOrder: 3 },
+    ]);
+  });
+
+  it('returns empty when target is already unpinned', () => {
+    const updates = buildUnpinMoveToFrontUpdates(list, 10);
+    expect(updates).toEqual([]);
+  });
+
+  it('returns empty when target does not exist', () => {
+    const updates = buildUnpinMoveToFrontUpdates(list, 999);
+    expect(updates).toEqual([]);
+  });
+
+  it('returns empty when there are no unpinned items', () => {
+    const allPinned: Item[] = [
+      { id: 1, isPinned: true, sortOrder: 0 },
+      { id: 2, isPinned: true, sortOrder: 1 },
+    ];
+    const updates = buildUnpinMoveToFrontUpdates(allPinned, 1);
+    expect(updates).toEqual([]);
+  });
+
+  it('skips updates for items whose sortOrder already matches the new order', () => {
+    // If unpinned items already have sortOrder 1,2,3 (instead of 0,1,2),
+    // shifting them to 1,2,3 is a no-op for the first two.
+    const offsetList: Item[] = [
+      { id: 1, isPinned: true, sortOrder: 0 },
+      { id: 10, isPinned: false, sortOrder: 1 },
+      { id: 11, isPinned: false, sortOrder: 2 },
+      { id: 12, isPinned: false, sortOrder: 3 },
+    ];
+    const updates = buildUnpinMoveToFrontUpdates(offsetList, 1);
+    // 10→1 (already 1, skip), 11→2 (already 2, skip), 12→3 (already 3, skip)
+    expect(updates).toEqual([]);
   });
 });

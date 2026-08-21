@@ -24,7 +24,7 @@ import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { clearFocusParams, readFocusSiteId } from './helpers/navigationFocus.js';
 import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, buildSiteApiEndpointSummary, buildSiteConnectionSearchParams, getConfiguredSiteApiEndpoints, hasConfiguredCustomHeaders, platformColors, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
 import { tr } from '../i18n.js';
-import { buildCustomReorderUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
+import { buildCustomReorderUpdates, buildUnpinMoveToFrontUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
 import {
   applyCodexCompatibilityMode,
@@ -936,7 +936,17 @@ export default function Sites() {
     const nextPinned = !site.isPinned;
     setPinningSiteId(site.id);
     try {
-      await api.updateSite(site.id, { isPinned: nextPinned });
+      if (nextPinned) {
+        // 置顶：只改 isPinned，sortOrder 保留（排在最前）
+        await api.updateSite(site.id, { isPinned: true });
+      } else {
+        // 取消置顶：放在非置顶组最前（sortOrder=0），其他非置顶下移
+        const unpinUpdates = buildUnpinMoveToFrontUpdates(sites, site.id);
+        await Promise.all([
+          api.updateSite(site.id, { isPinned: false, sortOrder: 0 }),
+          ...unpinUpdates.map((update) => api.updateSite(update.id, { sortOrder: update.sortOrder })),
+        ]);
+      }
       toast.success(nextPinned ? `站点 "${site.name}" 已置顶` : `站点 "${site.name}" 已取消置顶`);
       await load();
     } catch (e) {
