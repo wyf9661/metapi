@@ -43,6 +43,7 @@ import { insertProxyLog } from '../../services/proxyLogStore.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
 import { fetchWithObservedFirstByte, getObservedResponseMeta } from '../firstByteTimeout.js';
+import { wireStreamCancelOnClientDisconnect } from './sharedSurface.js';
 import {
   getProxyMaxChannelRetries,
   resolveProxyChannelFirstByteTimeoutMs,
@@ -927,6 +928,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             const decoder = new TextDecoder();
             let rest = '';
             let rawStreamText = '';
+            // Propagate a downstream client disconnect to the upstream reader so
+            // long Gemini streams stop burning upstream quota when nobody is
+            // listening (parity with chat/responses surfaces).
+            const unwireStreamCancel = wireStreamCancelOnClientDisconnect(
+              reply,
+              () => (reader ? () => reader.cancel('client disconnected') : null),
+            );
             try {
               while (true) {
                 const { done, value } = await reader.read();
@@ -1061,6 +1069,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               });
               return;
             } finally {
+              unwireStreamCancel();
               reader.releaseLock();
               reply.raw.end();
             }
