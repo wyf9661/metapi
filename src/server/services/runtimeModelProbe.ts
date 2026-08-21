@@ -96,13 +96,16 @@ export function classifyProbeFailureReason(status: number, rawErrorText: string)
   return text || `probe failed with status ${status || 0}`;
 }
 
-const MAX_COMPLETION_TOKENS_MODEL_PATTERN =
-  /(^|[-_/])(o1|o3|o4|gpt-5\.1|gpt-5\.5|gpt-chat-latest)($|[-_/])/i;
-const PROBE_COMPLETION_BUDGET = 256;
-
-export function usesMaxCompletionTokens(modelName: string): boolean {
-  return MAX_COMPLETION_TOKENS_MODEL_PATTERN.test(String(modelName || '').trim());
-}
+/**
+ * Some upstream relays (one-api/new-api) classify requests whose total prompt
+ * length falls below ~500 tokens as health-check probes and answer with a
+ * stub or fixed-price billing. Inject a short background passage as the system
+ * message so the probe prompt reliably clears the threshold and is handled as
+ * a normal conversation.
+ */
+const PROBE_CONTEXT_PADDING = `
+Large language models are trained to predict the next token in a sequence from massive corpora of text, and they have become capable of answering questions, writing code, summarizing documents, and following detailed instructions. The Transformer architecture that underpins these models relies on self-attention, which lets every token in the input attend to every other token, so the model can build rich contextual representations regardless of distance. Pre-training on web text, books, and code gives the model broad world knowledge, while instruction tuning and preference optimization align its behavior with what users expect: clear, helpful, and well-structured answers. Inference servers expose this capability through OpenAI-compatible APIs, where a client sends a list of messages with roles such as system, user, and assistant, and the model generates a completion in response. System messages set the overall behavior and constraints for the conversation, user messages carry the actual request, and assistant messages hold prior model output. The generation process is autoregressive: the model produces one token at a time, feeding its own output back as input, until it reaches a stop condition or the configured token budget. Sampling parameters such as temperature and top-p control the randomness of the output, and max_tokens bounds the length of the completion. Streaming delivers partial tokens as they are generated using server-sent events, which improves perceived latency for long answers. For evaluation, a probe request sends a modest question and checks that the response is coherent and that token usage is reported, which confirms the endpoint is genuinely serving the model rather than returning an error or a stub. In practice, the same request format is used by thousands of applications, from simple chat widgets to complex agent pipelines that chain multiple model calls together, and the API contract stays stable regardless of the payload size or the model being invoked. Please answer the user message below clearly and completely, in the same language as the question, and include any reasoning steps that are relevant to the answer.
+`;
 
 export function buildRuntimeProbeChatBody(
   modelName: string,
@@ -110,14 +113,15 @@ export function buildRuntimeProbeChatBody(
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: modelName,
-    messages: [{ role: 'user', content: questionText }],
+    messages: [
+      {
+        role: 'system',
+        content: PROBE_CONTEXT_PADDING,
+      },
+      { role: 'user', content: questionText },
+    ],
     stream: false,
   };
-  if (usesMaxCompletionTokens(modelName)) {
-    body.max_completion_tokens = PROBE_COMPLETION_BUDGET;
-  } else {
-    body.max_tokens = PROBE_COMPLETION_BUDGET;
-  }
   return body;
 }
 

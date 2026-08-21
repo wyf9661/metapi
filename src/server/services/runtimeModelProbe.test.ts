@@ -176,14 +176,20 @@ describe('probeRuntimeModel', () => {
     expect(reason).toContain('本站其他模型可能仍正常');
   });
 
-  it('uses max_completion_tokens for o1/gpt-5.1 style models and max_tokens otherwise', async () => {
-    const { buildRuntimeProbeChatBody, usesMaxCompletionTokens } = await import('./runtimeModelProbe.js');
-    expect(usesMaxCompletionTokens('o1')).toBe(true);
-    expect(usesMaxCompletionTokens('gpt-5.1-2025-11-13')).toBe(true);
-    expect(usesMaxCompletionTokens('gpt-4o')).toBe(false);
-    expect(buildRuntimeProbeChatBody('o1', 'ping')).toMatchObject({ max_completion_tokens: 256 });
-    expect(buildRuntimeProbeChatBody('gpt-4o', 'ping')).toMatchObject({ max_tokens: 256 });
+  it('does not send max_tokens/max_completion_tokens so probes look like normal client traffic', async () => {
+    const { buildRuntimeProbeChatBody } = await import('./runtimeModelProbe.js');
+    // A small max_tokens is a classic probe signature for relays (one-api/
+    // new-api). Leaving it unset uses the upstream default, which matches a
+    // normal conversation request.
+    expect(buildRuntimeProbeChatBody('o1', 'ping')).not.toHaveProperty('max_completion_tokens');
+    expect(buildRuntimeProbeChatBody('gpt-4o', 'ping')).not.toHaveProperty('max_tokens');
     expect(buildRuntimeProbeChatBody('gpt-4o', 'ping')).not.toHaveProperty('max_completion_tokens');
+    // The probe body still carries a system message so the total prompt
+    // length clears anti-probe thresholds.
+    const messages = buildRuntimeProbeChatBody('gpt-4o', 'ping').messages as Array<{ role: string; content: string }>;
+    expect(messages[0]?.role).toBe('system');
+    expect((messages[0]?.content || '').length).toBeGreaterThan(1500);
+    expect(messages[1]?.role).toBe('user');
   });
 
 });
