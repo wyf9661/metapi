@@ -123,6 +123,26 @@ Metapi 当前有三类主要配置入口：
 
 ## 环境变量配置
 
+### 0. 桌面版（Windows exe / macOS）用户配置文件
+
+桌面版无需设置系统环境变量，也无需改动安装目录。它会在**首次启动时**于用户数据目录生成一份带注释的 `Metapi\.env.example` 模板：
+
+| 平台 | 目录 |
+|------|------|
+| Windows | `%APPDATA%\Metapi\.env.example` |
+| macOS | `~/Library/Application Support/Metapi/.env.example` |
+
+用法：
+
+1. 把 `.env.example` **复制一份改名为 `.env`**（默认模板不会生成 `.env`）
+2. 在 `.env` 中按需填写要覆盖的变量（`KEY=VALUE`，`#` 开头是注释，可保留）
+3. 保存后**重启应用**生效；删除 `.env` 即恢复默认
+
+`Metapi` 目录还存放数据与日志，把它当作用户配置的固定位置即可。下面的变量名同样适用，唯一区别是**不需要配 `HOST`、`PORT`、`DATA_DIR`**（桌面版自动管理）。
+
+> [!IMPORTANT]
+> 系统环境变量中的值会被 `Metapi\.env` 覆盖，因此显式写在 `.env` 里的配置优先级最高。
+
 ### 1. 启动与部署级
 
 这类配置要么属于进程启动参数，要么属于当前确实没有 UI 的部署项：

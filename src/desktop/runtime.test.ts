@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   buildDesktopServerEnv,
   createDesktopServerUrl,
   isFatalServerExit,
+  parseDotEnvFile,
   resolveDesktopServerPort,
   resolveDesktopServerPortAsync,
   resolveDesktopServerWorkingDir,
@@ -90,6 +94,62 @@ describe('desktop runtime helpers', () => {
     expect(resolved).toBeGreaterThan(0);
     // Must not silently pick a port the user explicitly asked for elsewhere.
     expect(resolved).not.toBeNaN();
+  });
+
+  it('parses dotenv-style lines with comments, quotes and blank lines', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'metapi-env-'));
+    const file = join(dir, '.env');
+    writeFileSync(file, [
+      '# comment line',
+      '',
+      'MODEL_AVAILABILITY_PROBE_TIMEOUT_MS=45000',
+      'PROBE_HEARTBEAT_TIMEOUT_MS="60000"',
+      'TZ=Asia/Shanghai',
+      'AUTH_TOKEN="quoted-token"',
+      'INVALID LINE NO EQUALS',
+      '=no-key',
+      'DATA_DIR=',
+    ].join('\n'), 'utf8');
+
+    const parsed = parseDotEnvFile(file);
+    expect(parsed.get('MODEL_AVAILABILITY_PROBE_TIMEOUT_MS')).toBe('45000');
+    expect(parsed.get('PROBE_HEARTBEAT_TIMEOUT_MS')).toBe('60000');
+    expect(parsed.get('TZ')).toBe('Asia/Shanghai');
+    expect(parsed.get('AUTH_TOKEN')).toBe('quoted-token');
+    expect(parsed.has('INVALID LINE NO EQUALS')).toBe(false);
+    expect(parsed.has('=no-key')).toBe(false);
+    expect(parsed.get('DATA_DIR')).toBe('');
+  });
+
+  it('returns an empty map for a missing .env file', () => {
+    expect(parseDotEnvFile(join(tmpdir(), 'metapi-env-missing-' + Date.now(), '.env')).size).toBe(0);
+  });
+
+  it('loads user .env over inherited env and keeps forced desktop overrides', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'metapi-env-'));
+    writeFileSync(join(dir, '.env'), [
+      'MODEL_AVAILABILITY_PROBE_TIMEOUT_MS=45000',
+      'PORT=9999',
+      'AUTH_TOKEN=from-user-env',
+    ].join('\n'), 'utf8');
+
+    const env = buildDesktopServerEnv({
+      inheritedEnv: {
+        MODEL_AVAILABILITY_PROBE_TIMEOUT_MS: '30000',
+        AUTH_TOKEN: 'change-me-admin-token',
+      },
+      userDataDir: dir,
+      logsDir: join(dir, 'logs'),
+      port: 4312,
+    });
+
+    // User .env wins over inherited OS env.
+    expect(env.MODEL_AVAILABILITY_PROBE_TIMEOUT_MS).toBe('45000');
+    // Forced desktop overrides stay authoritative.
+    expect(env.PORT).toBe('4312');
+    expect(env.HOST).toBe('0.0.0.0');
+    // AUTH_TOKEN from .env is a non-default value -> kept as-is.
+    expect(env.AUTH_TOKEN).toBe('from-user-env');
   });
 
   it('uses the app directory (with package.json) as backend cwd for packaged desktop builds', () => {

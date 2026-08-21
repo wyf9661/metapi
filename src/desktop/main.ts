@@ -10,8 +10,9 @@ import {
 import log from 'electron-log';
 import electronUpdater from 'electron-updater';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DESKTOP_ENV_TEMPLATE } from './envTemplate.js';
 import {
   buildDesktopServerEnv,
   createDesktopHealthUrl,
@@ -46,6 +47,19 @@ function getLogsDir() {
 function ensureDesktopDirs() {
   mkdirSync(getUserDataDir(), { recursive: true });
   mkdirSync(getLogsDir(), { recursive: true });
+  // First launch: seed a commented .env.example next to the data dir so the
+  // user has a discoverable, editable reference. Never overwrite an existing
+  // .env (user config) or .env.example (user may have edited it).
+  const userDataDir = getUserDataDir();
+  const envPath = join(userDataDir, '.env');
+  const envExamplePath = join(userDataDir, '.env.example');
+  if (!existsSync(envPath) && !existsSync(envExamplePath)) {
+    try {
+      writeFileSync(envExamplePath, DESKTOP_ENV_TEMPLATE, 'utf8');
+    } catch (error) {
+      log.warn('failed to seed .env.example', error);
+    }
+  }
 }
 
 function getServerEntryPath() {

@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import getPort from 'get-port';
 
 type DesktopServerEnvInput = {
@@ -49,11 +51,58 @@ function generateRandomSecret(bytes = 24): string {
   return randomBytes(bytes).toString('base64url');
 }
 
+/**
+ * Parse a simple dotenv-style file (KEY=VALUE lines, '#' comments, optional
+ * quotes). Returns an empty map when the file is missing or unreadable.
+ * Values are NOT expanded (no $VAR interpolation) on purpose — the desktop
+ * config file should be a plain key/value list for predictable behavior.
+ */
+export function parseDotEnvFile(filePath: string): Map<string, string> {
+  const result = new Map<string, string>();
+  if (!filePath || !existsSync(filePath)) return result;
+
+  let raw: string;
+  try {
+    raw = readFileSync(filePath, 'utf8');
+  } catch {
+    return result;
+  }
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIndex = trimmed.indexOf('=');
+    if (eqIndex <= 0) continue;
+    const key = trimmed.slice(0, eqIndex).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    let value = trimmed.slice(eqIndex + 1).trim();
+    if (value.length >= 2) {
+      const first = value[0];
+      const last = value[value.length - 1];
+      if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+        value = value.slice(1, -1);
+      }
+    }
+    result.set(key, value);
+  }
+  return result;
+}
+
+/**
+ * Desktop server env. The user-facing config file lives next to the data
+ * directory (<userData>/.env on Windows, i.e. %APPDATA%\Metapi\.env), which
+ * is writable without admin rights and survives app updates. Values from that
+ * file take precedence over inherited OS env so a user's explicit config is
+ * never shadowed by unrelated system variables.
+ */
 export function buildDesktopServerEnv(input: DesktopServerEnvInput): NodeJS.ProcessEnv {
   const host = (input.inheritedEnv?.HOST || '0.0.0.0').trim() || '0.0.0.0';
 
+  const userConfig = parseDotEnvFile(join(input.userDataDir, '.env'));
+
   const env: NodeJS.ProcessEnv = {
     ...(input.inheritedEnv || {}),
+    ...Object.fromEntries(userConfig),
     HOST: host,
     PORT: String(input.port),
     DATA_DIR: input.userDataDir,
