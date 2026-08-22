@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import type { FastifyServerOptions } from 'fastify';
 import { normalizePayloadRulesConfig } from './services/payloadRules.js';
+import { normalizeRouteRoutingStrategy } from './services/routeRoutingStrategy.js';
 
 const DEFAULT_REQUEST_BODY_LIMIT = 20 * 1024 * 1024;
 const DEFAULT_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
@@ -242,6 +243,7 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
       balanceWeight: parseClampedWeight(env.BALANCE_WEIGHT, 0.3),
       usageWeight: parseClampedWeight(env.USAGE_WEIGHT, 0.3),
     },
+    defaultRoutingStrategy: normalizeRouteRoutingStrategy(env.ROUTING_STRATEGY),
   };
 }
 

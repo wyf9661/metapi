@@ -360,6 +360,7 @@ export type RuntimeSettingsPayload = {
   proxyRouteProbeRate?: number;
   tokenRouterFailureCooldownMaxSec?: number;
   routingWeights?: RuntimeRoutingWeightsPayload;
+  defaultRoutingStrategy?: string;
   proxyErrorKeywords?: string[] | string;
   proxyEmptyContentFailEnabled?: boolean;
 };

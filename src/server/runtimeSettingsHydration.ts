@@ -3,6 +3,7 @@ import {
   normalizeTokenRouterFailureCooldownMaxSec,
 } from './config.js';
 import { normalizePayloadRulesConfig } from './services/payloadRules.js';
+import { normalizeRouteRoutingStrategy } from './services/routeRoutingStrategy.js';
 import { normalizeLogCleanupRetentionDays } from './shared/logCleanupRetentionDays.js';
 
 export function parseSettingFromMap<T>(settingsMap: Map<string, string>, key: string): T | undefined {
@@ -200,6 +201,11 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const routingFallbackUnitCost = parseSettingFromMap<number>(settingsMap, 'routing_fallback_unit_cost');
   if (typeof routingFallbackUnitCost === 'number' && Number.isFinite(routingFallbackUnitCost) && routingFallbackUnitCost > 0) {
     config.routingFallbackUnitCost = Math.max(1e-6, routingFallbackUnitCost);
+  }
+
+  const defaultRoutingStrategy = parseSettingFromMap<string>(settingsMap, 'default_routing_strategy');
+  if (typeof defaultRoutingStrategy === 'string') {
+    config.defaultRoutingStrategy = normalizeRouteRoutingStrategy(defaultRoutingStrategy);
   }
 
   const proxyFirstByteTimeoutSec = parseSettingFromMap<number>(settingsMap, 'proxy_first_byte_timeout_sec');

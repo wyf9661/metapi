@@ -35,6 +35,12 @@ function applyMigrationSql(sqlite: Database.Database, sqlText: string) {
         && String((error as Error)?.message || error).includes('no such column')) {
         continue;
       }
+      // Same pattern for the retired per-route routing_strategy column removed
+      // by migration 0039.
+      if (statement.includes('DROP COLUMN `routing_strategy`')
+        && String((error as Error)?.message || error).includes('no such column')) {
+        continue;
+      }
       throw error;
     }
   }

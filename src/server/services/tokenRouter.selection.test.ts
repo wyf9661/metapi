@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
+import type { RouteRoutingStrategy } from './routeRoutingStrategy.js';
 
 type DbModule = typeof import('../db/index.js');
 type TokenRouterModule = typeof import('./tokenRouter.js');
@@ -36,6 +37,7 @@ describe('TokenRouter selection scoring', () => {
   let dataDir = '';
   let idSeed = 0;
   let originalRoutingWeights: typeof config.routingWeights;
+  let originalDefaultRoutingStrategy: RouteRoutingStrategy;
   let originalRoutingFallbackUnitCost: number;
   let originalProxySessionChannelConcurrencyLimit: number;
   let originalProxySessionChannelQueueWaitMs: number;
@@ -66,6 +68,7 @@ describe('TokenRouter selection scoring', () => {
     proxyChannelCoordinator = coordinatorModule.proxyChannelCoordinator;
     resetProxyChannelCoordinatorState = coordinatorModule.resetProxyChannelCoordinatorState;
     originalRoutingWeights = { ...config.routingWeights };
+    originalDefaultRoutingStrategy = config.defaultRoutingStrategy;
     originalRoutingFallbackUnitCost = config.routingFallbackUnitCost;
     originalProxySessionChannelConcurrencyLimit = config.proxySessionChannelConcurrencyLimit;
     originalProxySessionChannelQueueWaitMs = config.proxySessionChannelQueueWaitMs;
@@ -77,6 +80,7 @@ describe('TokenRouter selection scoring', () => {
     mockedCatalogRoutingCost.mockReturnValue(null);
     config.proxySessionChannelConcurrencyLimit = originalProxySessionChannelConcurrencyLimit;
     config.proxySessionChannelQueueWaitMs = originalProxySessionChannelQueueWaitMs;
+    config.defaultRoutingStrategy = originalDefaultRoutingStrategy;
     await db.delete(schema.routeChannels).run();
     await db.delete(schema.tokenRoutes).run();
     await db.delete(schema.settings).run();
@@ -93,6 +97,7 @@ describe('TokenRouter selection scoring', () => {
     config.routingFallbackUnitCost = originalRoutingFallbackUnitCost;
     config.proxySessionChannelConcurrencyLimit = originalProxySessionChannelConcurrencyLimit;
     config.proxySessionChannelQueueWaitMs = originalProxySessionChannelQueueWaitMs;
+    config.defaultRoutingStrategy = originalDefaultRoutingStrategy;
     invalidateTokenRouterCache();
     resetSiteRuntimeHealthState();
     resetProxyChannelCoordinatorState();
@@ -139,9 +144,9 @@ describe('TokenRouter selection scoring', () => {
   }
 
   it('round_robin stays within the highest healthy priority layer', async () => {
+    config.defaultRoutingStrategy = 'round_robin';
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'priority-round-robin',
-      routingStrategy: 'round_robin',
       enabled: true,
     }).returning().get();
     const highSiteA = await createSite('rr-high-a');
@@ -175,6 +180,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('reuses a preferred channel only while it remains healthy', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -185,7 +191,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.2',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
     const site = await createSite('sticky-site');
@@ -227,6 +232,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('clearFailureCooldown lets a recently-failed preferred channel be re-selected (recovery pass path)', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -237,7 +243,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.2',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
     const site = await createSite('sticky-site');
@@ -1244,6 +1249,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('stable_first ranks recent and fallback success rate ahead of balance-heavy weak sites', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 0,
       valueScoreFactor: 1,
@@ -1254,7 +1260,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
 
@@ -1370,6 +1375,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('keeps a recovered stable_first site behind healthier peers until recent success rebuilds', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -1380,7 +1386,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.3',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
 
@@ -1605,6 +1610,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('stable_first deterministically chooses the healthiest candidate', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -1615,7 +1621,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.1',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
 
@@ -1665,6 +1670,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('stable_first rotates across sites that remain inside the stable pool', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -1675,7 +1681,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
 
@@ -1716,6 +1721,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('stable_first rotates across healthy sites in configured priority order instead of stopping at the first layer', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -1726,7 +1732,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4.1',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
 
@@ -1781,6 +1786,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('stable_first gives observation-pool sites occasional real traffic without background probing', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -1791,7 +1797,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4-probe-free',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
 
@@ -1864,6 +1869,7 @@ describe('TokenRouter selection scoring', () => {
   });
 
   it('penalizes saturated session-scoped channels using runtime load snapshots', async () => {
+    config.defaultRoutingStrategy = 'stable_first';
     config.routingWeights = {
       baseWeightFactor: 1,
       valueScoreFactor: 0,
@@ -1876,7 +1882,6 @@ describe('TokenRouter selection scoring', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.2',
-      routingStrategy: 'stable_first',
       enabled: true,
     }).returning().get();
     const sessionExtraConfig = JSON.stringify({ credentialMode: 'session' });

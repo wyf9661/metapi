@@ -33,7 +33,6 @@ const tokenRouteCreatePayloadSchema = z.object({
   displayName: z.union([z.string(), z.null()]).optional(),
   displayIcon: z.union([z.string(), z.null()]).optional(),
   modelMapping: z.union([z.string(), z.null()]).optional(),
-  routingStrategy: z.string().optional(),
   enabled: z.boolean().optional(),
   sourceRouteIds: z.array(z.number().int().positive()).optional(),
 }).passthrough();
@@ -44,7 +43,6 @@ const tokenRouteUpdatePayloadSchema = z.object({
   displayName: z.union([z.string(), z.null()]).optional(),
   displayIcon: z.union([z.string(), z.null()]).optional(),
   modelMapping: z.union([z.string(), z.null()]).optional(),
-  routingStrategy: z.string().optional(),
   enabled: z.boolean().optional(),
   sourceRouteIds: z.array(z.number().int().positive()).optional(),
 }).passthrough();
@@ -91,9 +89,6 @@ function formatTokenRoutePayloadError(error: z.ZodError): string {
   }
   if (firstPath === 'modelMapping') {
     return 'Invalid modelMapping. Expected string or null.';
-  }
-  if (firstPath === 'routingStrategy') {
-    return 'Invalid routingStrategy. Expected string.';
   }
   if (firstPath === 'enabled') {
     return 'Invalid enabled. Expected boolean.';

@@ -72,7 +72,6 @@ export type RouteRow = {
   routeMode?: RouteMode | null;
   sourceRouteIds?: number[];
   modelMapping?: string | null;
-  routingStrategy?: RouteRoutingStrategy | null;
   decisionSnapshot?: RouteDecision | null;
   decisionRefreshedAt?: string | null;
   enabled: boolean;
@@ -87,7 +86,6 @@ export type RouteSummaryRow = {
   routeMode?: RouteMode | null;
   sourceRouteIds?: number[];
   modelMapping: string | null;
-  routingStrategy?: RouteRoutingStrategy | null;
   enabled: boolean;
   channelCount: number;
   enabledChannelCount: number;

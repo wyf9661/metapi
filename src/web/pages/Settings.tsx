@@ -77,6 +77,7 @@ type RuntimeSettings = {
   routeFailureCooldownMaxValue: number;
   routeFailureCooldownMaxUnit: RouteCooldownUnit;
   routingWeights: RoutingWeights;
+  defaultRoutingStrategy?: string;
   proxyErrorKeywords: string[];
   proxyEmptyContentFailEnabled: boolean;
   adminIpAllowlist?: string[];
@@ -147,6 +148,7 @@ export default function Settings() {
     routeFailureCooldownMaxValue: 30,
     routeFailureCooldownMaxUnit: 'day',
     routingWeights: defaultWeights,
+    defaultRoutingStrategy: 'weighted',
     proxyErrorKeywords: [],
     proxyEmptyContentFailEnabled: false,
   });
@@ -443,6 +445,7 @@ export default function Settings() {
           ...defaultWeights,
           ...(runtimeInfo.routingWeights || {}),
         },
+        defaultRoutingStrategy: runtimeInfo.defaultRoutingStrategy || 'weighted',
         proxyErrorKeywords: Array.isArray(runtimeInfo.proxyErrorKeywords)
           ? runtimeInfo.proxyErrorKeywords.filter((item: unknown) => typeof item === 'string')
           : [],
@@ -681,6 +684,7 @@ export default function Settings() {
     try {
       await api.updateRuntimeSettings({
         routingWeights: runtime.routingWeights,
+        defaultRoutingStrategy: runtime.defaultRoutingStrategy || 'weighted',
         routingFallbackUnitCost: runtime.routingFallbackUnitCost,
         proxyFirstByteTimeoutSec: Number.isFinite(runtime.proxyFirstByteTimeoutSec)
           ? Math.max(0, Math.trunc(runtime.proxyFirstByteTimeoutSec))
@@ -1505,6 +1509,30 @@ export default function Settings() {
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>路由策略</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             先选择预设策略，只有需要精调时再展开高级参数。
+          </div>
+          <div style={{ marginBottom: 12, maxWidth: 420 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+              全局路由策略（所有路由统一生效）
+            </div>
+            <ModernSelect
+              size="sm"
+              value={runtime.defaultRoutingStrategy || 'weighted'}
+              onChange={(nextValue) => {
+                setRuntime((prev) => ({
+                  ...prev,
+                  defaultRoutingStrategy: nextValue,
+                }));
+              }}
+              options={[
+                { value: 'weighted', label: '权重随机' },
+                { value: 'round_robin', label: '轮询' },
+                { value: 'stable_first', label: '稳定优先' },
+              ]}
+              placeholder="选择路由策略"
+            />
+            <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 6 }}>
+              轮询：公平轮转，最久未选中的通道优先；稳定优先：按近期成功率加权，低成功率站点每 24 次请求灰度试探一次。
+            </div>
           </div>
           <div style={{ marginBottom: 12, maxWidth: 280 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>

@@ -24,7 +24,6 @@ vi.mock('@dnd-kit/sortable', async () => {
 
 import RouteCard from './RouteCard.js';
 import type { RouteChannel, RouteSummaryRow } from './types.js';
-import { getRouteRoutingStrategyDescription } from './routingStrategy.js';
 import { translateOnlyRectSortingStrategy } from './sortingStrategies.js';
 
 function collectText(node: ReactTestInstance): string {
@@ -47,8 +46,7 @@ function buildRoute(overrides: Partial<RouteSummaryRow> = {}): RouteSummaryRow {
     displayName: 'm.',
     displayIcon: null,
     modelMapping: null,
-    routingStrategy: 'weighted',
-    enabled: true,
+enabled: true,
     channelCount: 4,
     enabledChannelCount: 4,
     siteNames: ['site-a'],
@@ -95,8 +93,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({
             account: { username: 'route-unit-anchor' },
@@ -157,8 +153,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={undefined}
         loadingChannels={false}
         routeDecision={null}
@@ -215,8 +209,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={undefined}
         loadingChannels={false}
         routeDecision={null}
@@ -273,8 +265,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={onClearCooldown}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[]}
         loadingChannels={false}
         routeDecision={null}
@@ -322,8 +312,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={undefined}
         loadingChannels={false}
         routeDecision={null}
@@ -374,8 +362,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({
             id: 11,
@@ -450,8 +436,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({
             id: 11,
@@ -514,8 +498,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({ id: 11, priority: 0 }),
           buildChannel({ id: 12, accountId: 102, tokenId: 1002, priority: 1 }),
@@ -560,8 +542,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({ id: 11, priority: 0 }),
           buildChannel({ id: 12, accountId: 102, tokenId: 1002, priority: 0 }),
@@ -634,8 +614,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({ id: 11, priority: 0 }),
           buildChannel({ id: 12, accountId: 102, tokenId: 1002, priority: 0 }),
@@ -693,8 +671,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({ id: 11, priority: 0 }),
           buildChannel({ id: 12, accountId: 102, tokenId: 1002, priority: 0 }),
@@ -751,8 +727,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[buildChannel()]}
         loadingChannels={false}
         routeDecision={null}
@@ -778,7 +752,7 @@ describe('RouteCard', () => {
 
     const detailText = collectText(root.root);
     expect(detailText).not.toContain('通配符路由按请求实时决策');
-    expect(detailText).not.toContain(getRouteRoutingStrategyDescription('weighted'));
+
   });
 
   it('places compact route strategy and add channel controls on the same row', () => {
@@ -795,8 +769,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[buildChannel()]}
         loadingChannels={false}
         routeDecision={null}
@@ -824,10 +796,6 @@ describe('RouteCard', () => {
       node.type === 'div'
       && node.props['data-testid'] === 'compact-route-action-row'
     ));
-    const strategySelectWrap = compactActionRow.find((node) => (
-      node.type === 'div'
-      && node.props['data-testid'] === 'compact-route-strategy-select'
-    ));
     const addChannelButton = compactActionRow.find((node) => (
       node.type === 'button'
       && collectText(node).includes('添加通道')
@@ -835,9 +803,7 @@ describe('RouteCard', () => {
 
     expect(compactActionRow.props.style.flexDirection).toBe('row');
     expect(compactActionRow.props.style.justifyContent).toBe('flex-start');
-    expect(collectText(compactActionRow)).toContain('路由策略');
     expect(collectText(compactActionRow)).toContain('添加通道');
-    expect(strategySelectWrap.props.style.flex).toBe('0 0 168px');
     expect(addChannelButton.props.style.marginLeft).toBe('auto');
   });
 
@@ -858,8 +824,6 @@ describe('RouteCard', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[buildChannel()]}
         loadingChannels={false}
         routeDecision={null}
@@ -911,7 +875,6 @@ describe('RouteCard', () => {
       onDelete: vi.fn(),
       onToggleEnabled: vi.fn(),
       onClearCooldown: vi.fn(),
-      onRoutingStrategyChange: vi.fn(),
       onTokenDraftChange: vi.fn(),
       onSaveToken: vi.fn(),
       onDeleteChannel: vi.fn(),
@@ -935,8 +898,6 @@ describe('RouteCard', () => {
         onToggleEnabled={callbacks.onToggleEnabled}
         onClearCooldown={callbacks.onClearCooldown}
         clearingCooldown={false}
-        onRoutingStrategyChange={callbacks.onRoutingStrategyChange}
-        updatingRoutingStrategy={false}
         channels={undefined}
         loadingChannels={false}
         routeDecision={null}
@@ -991,7 +952,6 @@ describe('RouteCard', () => {
       onDelete: vi.fn(),
       onToggleEnabled: vi.fn(),
       onClearCooldown: vi.fn(),
-      onRoutingStrategyChange: vi.fn(),
       onTokenDraftChange: vi.fn(),
       onSaveToken: vi.fn(),
       onDeleteChannel: vi.fn(),
@@ -1007,7 +967,6 @@ describe('RouteCard', () => {
       onEdit: vi.fn(),
       onDelete: vi.fn(),
       onClearCooldown: vi.fn(),
-      onRoutingStrategyChange: vi.fn(),
       onTokenDraftChange: vi.fn(),
       onSaveToken: vi.fn(),
       onDeleteChannel: vi.fn(),
@@ -1031,8 +990,6 @@ describe('RouteCard', () => {
         onToggleEnabled={callbacks.onToggleEnabled}
         onClearCooldown={callbacks.onClearCooldown}
         clearingCooldown={false}
-        onRoutingStrategyChange={callbacks.onRoutingStrategyChange}
-        updatingRoutingStrategy={false}
         channels={undefined}
         loadingChannels={false}
         routeDecision={null}

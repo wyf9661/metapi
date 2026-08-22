@@ -2378,12 +2378,6 @@
           "defaultValue": null,
           "primaryKey": false
         },
-        "routing_strategy": {
-          "logicalType": "text",
-          "notNull": false,
-          "defaultValue": "'weighted'",
-          "primaryKey": false
-        },
         "route_mode": {
           "logicalType": "text",
           "notNull": false,

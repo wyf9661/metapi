@@ -23,17 +23,12 @@ import {
 } from './helpers/routeMissingTokenHints.js';
 import { buildVisibleRouteList } from './helpers/routeListVisibility.js';
 import { buildZeroChannelPlaceholderRoutes } from './helpers/zeroChannelRoutes.js';
-import {
-  getRouteRoutingStrategyLabel,
-  normalizeRouteRoutingStrategyValue,
-} from './token-routes/routingStrategy.js';
 
 import type {
   RouteSortBy,
   RouteSortDir,
   GroupFilter,
   RouteSummaryRow,
-  RouteRoutingStrategy,
   RouteMode,
   RouteDecision,
   RouteIconOption,
@@ -96,12 +91,6 @@ const DESKTOP_DETAIL_COLLAPSE_MS = 200;
 function prefersReducedMotion(): boolean {
   return typeof globalThis.matchMedia === 'function'
     && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): string {
-  if (value === 'round_robin') return '已切换为轮询策略';
-  if (value === 'stable_first') return '已切换为稳定优先策略';
-  return '已切换为权重随机策略';
 }
 
 export function DesktopDetailPanelPresence({
@@ -219,7 +208,6 @@ export default function TokenRoutes() {
   const [channelTokenDraft, setChannelTokenDraft] = useState<Record<number, number>>({});
   const [updatingChannel, setUpdatingChannel] = useState<Record<number, boolean>>({});
   const [savingPriorityByRoute, setSavingPriorityByRoute] = useState<Record<number, boolean>>({});
-  const [updatingRoutingStrategyByRoute, setUpdatingRoutingStrategyByRoute] = useState<Record<number, boolean>>({});
   const [clearingCooldownByRoute, setClearingCooldownByRoute] = useState<Record<number, boolean>>({});
   const [initialLoading, setInitialLoading] = useState(true);
 
@@ -658,40 +646,6 @@ export default function TokenRoutes() {
         prev.map((item) => (item.id === route.id ? { ...item, enabled: route.enabled } : item)),
       );
       toast.error(eMessage || '切换路由状态失败');
-    }
-  };
-
-  const handleRoutingStrategyChange = async (route: RouteSummaryRow, routingStrategy: RouteRoutingStrategy) => {
-    const currentStrategy = normalizeRouteRoutingStrategyValue(route.routingStrategy);
-    if (routingStrategy === currentStrategy) return;
-
-    setUpdatingRoutingStrategyByRoute((prev) => ({ ...prev, [route.id]: true }));
-    setRouteSummaries((prev) => prev.map((item) => (
-      item.id === route.id
-        ? { ...item, routingStrategy }
-        : item
-    )));
-    try {
-      await api.updateRoute(route.id, { routingStrategy });
-      toast.success(getRouteRoutingStrategySuccessMessage(routingStrategy));
-    } catch (e) {
-      const eMessage = e instanceof Error ? e.message : String(e);
-      setRouteSummaries((prev) => prev.map((item) => (
-        item.id === route.id
-          ? { ...item, routingStrategy: currentStrategy }
-          : item
-      )));
-      toast.error(eMessage || '更新路由策略失败');
-      return;
-    } finally {
-      setUpdatingRoutingStrategyByRoute((prev) => ({ ...prev, [route.id]: false }));
-    }
-
-    try {
-      await load();
-    } catch (e) {
-      const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '路由策略已保存，但刷新列表失败');
     }
   };
 
@@ -1496,12 +1450,6 @@ export default function TokenRoutes() {
   const handleToggleEnabledRef = useRef(handleToggleRouteEnabled);
   handleToggleEnabledRef.current = handleToggleRouteEnabled;
   const stableToggleEnabled = useCallback((route: RouteSummaryRow) => { handleToggleEnabledRef.current(route); }, []);
-  const handleRoutingStrategyChangeRef = useRef(handleRoutingStrategyChange);
-  handleRoutingStrategyChangeRef.current = handleRoutingStrategyChange;
-  const stableRoutingStrategyChange = useCallback(
-    (route: RouteSummaryRow, strategy: RouteRoutingStrategy) => handleRoutingStrategyChangeRef.current(route, strategy),
-    [],
-  );
   const stableTokenDraftChange = useCallback(
     (channelId: number, tokenId: number) => setChannelTokenDraft((prev) => ({ ...prev, [channelId]: tokenId })),
     [],
@@ -2009,7 +1957,6 @@ export default function TokenRoutes() {
                 >
                   <MobileField label="模型" value={route.modelPattern} stacked />
                   <MobileField label="通道" value={route.channelCount} />
-                  <MobileField label="策略" value={isReadOnlyRoute ? tr('未生成') : getRouteRoutingStrategyLabel(route.routingStrategy)} />
                   <MobileField label="状态" value={isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))} />
                   {explicitGroupRoute && (
                     <MobileField label="模式" value={tr('群组聚合')} />
@@ -2030,8 +1977,6 @@ export default function TokenRoutes() {
                     onToggleEnabled={stableToggleEnabled}
                     onClearCooldown={stableClearRouteCooldown}
                     clearingCooldown={!!clearingCooldownByRoute[route.id]}
-                    onRoutingStrategyChange={stableRoutingStrategyChange}
-                    updatingRoutingStrategy={!!updatingRoutingStrategyByRoute[route.id]}
                     channels={channelsByRouteId[route.id]}
                     loadingChannels={!!loadingChannelsByRouteId[route.id]}
                     routeDecision={decisionByRoute[route.id] || null}
@@ -2070,8 +2015,6 @@ export default function TokenRoutes() {
               onToggleEnabled={stableToggleEnabled}
               onClearCooldown={stableClearRouteCooldown}
               clearingCooldown={!!clearingCooldownByRoute[route.id]}
-              onRoutingStrategyChange={stableRoutingStrategyChange}
-              updatingRoutingStrategy={!!updatingRoutingStrategyByRoute[route.id]}
               channels={channelsByRouteId[route.id]}
               loadingChannels={!!loadingChannelsByRouteId[route.id]}
               routeDecision={decisionByRoute[route.id] || null}
@@ -2109,8 +2052,6 @@ export default function TokenRoutes() {
                   onToggleEnabled={stableToggleEnabled}
                   onClearCooldown={stableClearRouteCooldown}
                   clearingCooldown={!!clearingCooldownByRoute[route.id]}
-                  onRoutingStrategyChange={stableRoutingStrategyChange}
-                  updatingRoutingStrategy={!!updatingRoutingStrategyByRoute[route.id]}
                   channels={channelsByRouteId[route.id]}
                   loadingChannels={!!loadingChannelsByRouteId[route.id]}
                   routeDecision={decisionByRoute[route.id] || null}

@@ -45,7 +45,6 @@ export function buildZeroChannelPlaceholderRoutes(
         displayName: null,
         displayIcon: null,
         modelMapping: null,
-        routingStrategy: null,
         enabled: false,
         channelCount: 0,
         enabledChannelCount: 0,

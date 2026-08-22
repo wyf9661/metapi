@@ -375,6 +375,11 @@ function isMissingUseSystemProxyColumnError(error: unknown): boolean {
   return lowered.includes('no such column') && lowered.includes('use_system_proxy');
 }
 
+function isMissingRouteRoutingStrategyColumnError(error: unknown): boolean {
+  const lowered = normalizeSchemaErrorMessage(error).toLowerCase();
+  return lowered.includes('no such column') && lowered.includes('routing_strategy');
+}
+
 function replayMigrationStatements(sqlite: Database.Database, statements: string[]): void {
   for (const statement of statements) {
     try {
@@ -384,6 +389,9 @@ function replayMigrationStatements(sqlite: Database.Database, statements: string
       // created after the global system-proxy feature was removed. Treat that
       // exact legacy state as applied; unrelated missing-column errors remain fatal.
       if (isMissingUseSystemProxyColumnError(error) && statement.includes('DROP COLUMN `use_system_proxy`')) {
+        continue;
+      }
+      if (isMissingRouteRoutingStrategyColumnError(error) && statement.includes('DROP COLUMN `routing_strategy`')) {
         continue;
       }
       if (isRecoverableSchemaConflictError(error)) {

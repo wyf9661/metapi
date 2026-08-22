@@ -201,7 +201,6 @@ describe('TokenRoutes desktop detail panel', () => {
       expect(detailPanels).toHaveLength(1);
       const detailPanelText = collectText(detailPanels[0]!);
       expect(detailPanelText).toContain('gpt-4o-mini');
-      expect(detailPanelText).toContain('路由策略');
     } finally {
       root?.unmount();
     }

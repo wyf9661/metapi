@@ -48,6 +48,7 @@ describe('TokenRouter runtime cache', () => {
     await db.delete(schema.sites).run();
     config.tokenRouterCacheTtlMs = 60_000;
     config.tokenRouterFailureCooldownMaxSec = originalFailureCooldownMaxSec;
+    config.defaultRoutingStrategy = 'weighted';
     invalidateTokenRouterCache();
     resetSiteRuntimeHealthState();
   });
@@ -138,7 +139,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -210,7 +210,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -274,7 +273,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -333,7 +331,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -408,7 +405,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -457,7 +453,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -509,7 +504,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -567,13 +561,11 @@ describe('TokenRouter runtime cache', () => {
 
     const primaryRoute = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
     const siblingRoute = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -641,13 +633,11 @@ describe('TokenRouter runtime cache', () => {
 
     const primaryRoute = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
     const siblingRoute = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 
@@ -702,6 +692,7 @@ describe('TokenRouter runtime cache', () => {
   });
 
   it('round robins only within the highest healthy priority layer', async () => {
+    config.defaultRoutingStrategy = 'round_robin';
     const site = await db.insert(schema.sites).values({
       name: 'round-robin-site',
       url: 'https://round-robin-site.example.com',
@@ -727,7 +718,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'round_robin',
       enabled: true,
     }).returning().get();
 
@@ -751,6 +741,7 @@ describe('TokenRouter runtime cache', () => {
   });
 
   it('applies staged cooldowns for round robin after every three consecutive failures', async () => {
+    config.defaultRoutingStrategy = 'round_robin';
     config.tokenRouterFailureCooldownMaxSec = 24 * 60 * 60;
 
     const site = await db.insert(schema.sites).values({
@@ -778,7 +769,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
-      routingStrategy: 'round_robin',
       enabled: true,
     }).returning().get();
 
@@ -883,7 +873,6 @@ describe('TokenRouter runtime cache', () => {
 
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5.4',
-      routingStrategy: 'weighted',
       enabled: true,
     }).returning().get();
 

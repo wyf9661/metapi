@@ -36,10 +36,7 @@ describe('schema contract generation', () => {
       logicalType: 'boolean',
       defaultValue: 'false',
     });
-    expect(contract.tables.token_routes.columns.routing_strategy).toMatchObject({
-      logicalType: 'text',
-      defaultValue: "'weighted'",
-    });
+    expect(contract.tables.token_routes.columns.routing_strategy).toBeUndefined();
     expect(contract.indexes).toContainEqual(
       expect.objectContaining({ name: 'sites_status_idx', table: 'sites', unique: false }),
     );

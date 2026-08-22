@@ -19,7 +19,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/BrandIcon.js';
-import ModernSelect from '../../components/ModernSelect.js';
 import { tr } from '../../i18n.js';
 import { formatDateTimeMinuteLocal } from '../helpers/checkinLogTime.js';
 import type {
@@ -30,16 +29,9 @@ import type {
   RouteDecisionCandidate,
   MissingTokenRouteSiteActionItem,
   MissingTokenGroupRouteSiteActionItem,
-  RouteRoutingStrategy,
 } from './types.js';
 import type { RouteCandidateView } from '../helpers/routeModelCandidatesIndex.js';
 import { SortableChannelRow } from './SortableChannelRow.js';
-import {
-  getRouteRoutingStrategyLabel,
-  getRouteRoutingStrategyDescription,
-  getRouteRoutingStrategyHint,
-  normalizeRouteRoutingStrategyValue,
-} from './routingStrategy.js';
 import {
   isRouteExactModel,
   isExplicitGroupRoute,
@@ -69,8 +61,6 @@ type RouteCardProps = {
   onToggleEnabled: (route: RouteSummaryRow) => void;
   onClearCooldown: (routeId: number) => void;
   clearingCooldown: boolean;
-  onRoutingStrategyChange: (route: RouteSummaryRow, strategy: RouteRoutingStrategy) => void;
-  updatingRoutingStrategy: boolean;
   // Channel data (loaded on demand)
   channels: RouteChannel[] | undefined;
   loadingChannels: boolean;
@@ -541,8 +531,6 @@ function RouteCardInner({
   onToggleEnabled,
   onClearCooldown,
   clearingCooldown,
-  onRoutingStrategyChange,
-  updatingRoutingStrategy,
   channels,
   loadingChannels,
   routeDecision,
@@ -569,9 +557,6 @@ function RouteCardInner({
   const readOnlyRoute = route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true;
   const channelManagementDisabled = explicitGroupRoute;
   const title = resolveRouteTitle(route);
-  const routingStrategy = normalizeRouteRoutingStrategyValue(route.routingStrategy);
-  const routingStrategyDescription = getRouteRoutingStrategyDescription(routingStrategy);
-  const routingStrategyHint = getRouteRoutingStrategyHint(routingStrategy);
   const hasCachedDecisionSnapshot = !!route.decisionSnapshot;
   const cachedDecisionTooltip = route.decisionRefreshedAt
     ? `${tr('最近刷新')}: ${formatDateTimeMinuteLocal(route.decisionRefreshedAt)}`
@@ -579,23 +564,6 @@ function RouteCardInner({
   const showAddChannelButton = !readOnlyRoute && !channelManagementDisabled;
   const showMissingTokenHints = !channelManagementDisabled && (missingTokenSiteItems.length > 0 || missingTokenGroupItems.length > 0);
   const routeUnits = collectRouteUnits(channels);
-  const routingStrategyOptions = [
-    {
-      value: 'weighted',
-      label: tr('权重随机'),
-      description: getRouteRoutingStrategyDescription('weighted'),
-    },
-    {
-      value: 'round_robin',
-      label: tr('轮询'),
-      description: getRouteRoutingStrategyDescription('round_robin'),
-    },
-    {
-      value: 'stable_first',
-      label: tr('稳定优先'),
-      description: getRouteRoutingStrategyDescription('stable_first'),
-    },
-  ] as const;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -838,15 +806,7 @@ function RouteCardInner({
             <span className="badge badge-warning" style={{ fontSize: 10, flexShrink: 0 }}>
               {tr('0 通道')}
             </span>
-          ) : (
-            <span
-              className="badge badge-muted"
-              style={{ fontSize: 10, flexShrink: 0 }}
-              data-tooltip={`${getRouteRoutingStrategyLabel(routingStrategy)}：${routingStrategyDescription}`}
-            >
-              {getRouteRoutingStrategyLabel(routingStrategy)}
-            </span>
-          )}
+          ) : null}
 
           <svg
             width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"
@@ -1132,73 +1092,7 @@ function RouteCardInner({
             flexWrap: 'wrap',
           }}
         >
-          {compact ? (
-            <>
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}
-                data-tooltip={`${routingStrategyDescription} ${routingStrategyHint}`}
-              >
-                <div
-                  style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', flexShrink: 0 }}
-                >
-                  {tr('路由策略')}
-                </div>
-                <div
-                  data-testid="compact-route-strategy-select"
-                  style={{
-                    flex: '0 0 168px',
-                    minWidth: 168,
-                    maxWidth: 168,
-                  }}
-                >
-                  <ModernSelect
-                    size="sm"
-                    value={routingStrategy}
-                    disabled={updatingRoutingStrategy}
-                    onChange={(nextValue) => onRoutingStrategyChange(route, nextValue as RouteRoutingStrategy)}
-                    options={routingStrategyOptions.map((option) => ({ value: option.value, label: option.label }))}
-                    placeholder={tr('选择路由策略')}
-                    emptyLabel={tr('暂无可选策略')}
-                  />
-                </div>
-              </div>
-              {showAddChannelButton ? renderAddChannelButton({ alignRight: true }) : null}
-            </>
-          ) : (
-            <>
-              <div
-                style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', minWidth: undefined }}
-                data-tooltip={undefined}
-              >
-                {tr('路由策略')}
-              </div>
-              <div
-                style={{
-                  minWidth: 220,
-                  maxWidth: 320,
-                  flex: '1 1 220px',
-                }}
-              >
-                <ModernSelect
-                  size="sm"
-                  value={routingStrategy}
-                  disabled={updatingRoutingStrategy}
-                  onChange={(nextValue) => onRoutingStrategyChange(route, nextValue as RouteRoutingStrategy)}
-                  options={routingStrategyOptions.map((option) => ({ ...option }))}
-                  placeholder={tr('选择路由策略')}
-                  emptyLabel={tr('暂无可选策略')}
-                />
-                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--color-text-secondary)' }}>
-                    {routingStrategyDescription}
-                  </div>
-                  <div style={{ fontSize: 10.5, lineHeight: 1.4, color: 'var(--color-text-muted)' }}>
-                    {routingStrategyHint}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+          {compact && showAddChannelButton ? renderAddChannelButton({ alignRight: true }) : null}
         </div>
       )}
 
@@ -1386,7 +1280,6 @@ function areRouteCardPropsEqual(prev: RouteCardProps, next: RouteCardProps): boo
     prev.onEdit !== next.onEdit
     || prev.onDelete !== next.onDelete
     || prev.onClearCooldown !== next.onClearCooldown
-    || prev.onRoutingStrategyChange !== next.onRoutingStrategyChange
     || prev.onTokenDraftChange !== next.onTokenDraftChange
     || prev.onSaveToken !== next.onSaveToken
     || prev.onDeleteChannel !== next.onDeleteChannel
@@ -1397,7 +1290,6 @@ function areRouteCardPropsEqual(prev: RouteCardProps, next: RouteCardProps): boo
     || prev.onSiteBlockModel !== next.onSiteBlockModel
     || prev.onToggleSourceGroup !== next.onToggleSourceGroup
     || prev.clearingCooldown !== next.clearingCooldown
-    || prev.updatingRoutingStrategy !== next.updatingRoutingStrategy
     || prev.savingPriority !== next.savingPriority
     || prev.loadingChannels !== next.loadingChannels
     || prev.loadingDecision !== next.loadingDecision

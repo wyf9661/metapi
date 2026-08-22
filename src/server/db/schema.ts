@@ -158,7 +158,6 @@ export const tokenRoutes = sqliteTable('token_routes', {
   modelMapping: text('model_mapping'), // JSON
   decisionSnapshot: text('decision_snapshot'), // JSON
   decisionRefreshedAt: text('decision_refreshed_at'),
-  routingStrategy: text('routing_strategy').default('weighted'),
   enabled: integer('enabled', { mode: 'boolean' }).default(true),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),

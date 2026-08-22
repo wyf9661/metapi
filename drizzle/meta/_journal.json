@@ -267,6 +267,13 @@
       "when": 1786947566552,
       "tag": "0038_route_channel_request_override_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1787383932995,
+      "tag": "0039_drop_route_routing_strategy",
+      "breakpoints": true
     }
   ]
 }

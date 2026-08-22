@@ -1628,7 +1628,6 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         routeMode: row.routeMode ?? 'pattern',
         decisionSnapshot: row.decisionSnapshot ?? null,
         decisionRefreshedAt: row.decisionRefreshedAt ?? null,
-        routingStrategy: row.routingStrategy ?? 'weighted',
         enabled: row.enabled,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,

@@ -533,7 +533,7 @@ function buildStatements(
   for (const row of snapshot.accounts.tokenRoutes) {
     statements.push({
       table: 'token_routes',
-      columns: ['id', 'model_pattern', 'display_name', 'display_icon', 'model_mapping', 'route_mode', 'decision_snapshot', 'decision_refreshed_at', 'routing_strategy', 'enabled', 'created_at', 'updated_at'],
+      columns: ['id', 'model_pattern', 'display_name', 'display_icon', 'model_mapping', 'route_mode', 'decision_snapshot', 'decision_refreshed_at', 'enabled', 'created_at', 'updated_at'],
       values: [
         asNumber(row.id, 0),
         asNullableString(row.modelPattern),
@@ -543,7 +543,6 @@ function buildStatements(
         asNullableString(row.routeMode) ?? 'pattern',
         serializeColumnValue('token_routes', 'decision_snapshot', row.decisionSnapshot, contract),
         asNullableString(row.decisionRefreshedAt),
-        asNullableString(row.routingStrategy),
         asBoolean(row.enabled, true),
         asNullableString(row.createdAt),
         asNullableString(row.updatedAt),

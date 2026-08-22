@@ -39,7 +39,6 @@ import {
   markBoundedGapStateDirty,
 } from './boundedGapPersistence.js';
 import {
-  normalizeRouteRoutingStrategy,
   type RouteRoutingStrategy,
 } from './routeRoutingStrategy.js';
 import { resolveDownstreamPolicyModel } from './downstreamPolicyTypes.js';
@@ -549,8 +548,8 @@ type CandidateEligibilityOptions = {
 };
 
 
-function resolveRouteStrategy(route: RouteRow): RouteRoutingStrategy {
-  return normalizeRouteRoutingStrategy(route.routingStrategy);
+function resolveRouteStrategy(_route: RouteRow): RouteRoutingStrategy {
+  return config.defaultRoutingStrategy;
 }
 
 function parseIsoTimeMs(value?: string | null): number | null {

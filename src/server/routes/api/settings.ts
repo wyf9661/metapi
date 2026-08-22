@@ -4,6 +4,7 @@ import { config, normalizeTokenRouterFailureCooldownMaxSec } from '../../config.
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { upsertSetting } from '../../db/upsertSetting.js';
 import { isLikelyTunnelRequest } from '../../services/cloudflareTunnelService.js';
+import { normalizeRouteRoutingStrategy } from '../../services/routeRoutingStrategy.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { updateBalanceRefreshCron, updateCheckinSchedule, updateLogCleanupSettings } from '../../services/checkinScheduler.js';
 import { sendNotification } from '../../services/notifyService.js';
@@ -105,6 +106,7 @@ interface RuntimeSettingsBody {
   proxyRouteProbeRate?: number;
   tokenRouterFailureCooldownMaxSec?: number;
   routingWeights?: Partial<RoutingWeights>;
+  defaultRoutingStrategy?: string;
   proxyErrorKeywords?: string[] | string;
   proxyEmptyContentFailEnabled?: boolean;
 }
@@ -524,6 +526,10 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       };
       return;
     }
+    case 'default_routing_strategy': {
+      config.defaultRoutingStrategy = normalizeRouteRoutingStrategy(value);
+      return;
+    }
     case 'routing_fallback_unit_cost': {
       const n = Number(value);
       if (!Number.isFinite(n) || n <= 0) return;
@@ -592,6 +598,7 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     proxyRouteProbeRate: config.proxyRouteProbeRate,
     tokenRouterFailureCooldownMaxSec: config.tokenRouterFailureCooldownMaxSec,
     routingWeights: config.routingWeights,
+    defaultRoutingStrategy: config.defaultRoutingStrategy,
     webhookUrl: config.webhookUrl,
     webhookSecret: config.webhookSecret || '',
     barkUrl: config.barkUrl,
@@ -1462,6 +1469,15 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.routingWeights = nextWeights;
       upsertSetting('routing_weights', nextWeights);
+    }
+
+    if (body.defaultRoutingStrategy !== undefined) {
+      const nextStrategy = normalizeRouteRoutingStrategy(body.defaultRoutingStrategy);
+      if (nextStrategy !== config.defaultRoutingStrategy) {
+        changedLabels.push(`全局路由策略（${config.defaultRoutingStrategy} -> ${nextStrategy}）`);
+      }
+      config.defaultRoutingStrategy = nextStrategy;
+      upsertSetting('default_routing_strategy', nextStrategy);
     }
 
     if (body.routingFallbackUnitCost !== undefined) {

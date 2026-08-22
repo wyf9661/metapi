@@ -295,7 +295,6 @@ describe('backupService', () => {
     expect(restoredRoute?.routeMode).toBe('explicit_group');
     expect(restoredRoute?.decisionSnapshot).toBe('{"channelIds":[1,2]}');
     expect(restoredRoute?.decisionRefreshedAt).toBe(now);
-    expect(restoredRoute?.routingStrategy).toBe('round_robin');
     const restoredGroupSource = await db.select().from(schema.routeGroupSources).where(eq(schema.routeGroupSources.groupRouteId, route.id)).get();
     expect(restoredGroupSource?.sourceRouteId).toBe(sourceRoute.id);
 
