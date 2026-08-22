@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { RefObject } from 'react';
 import {
   CLIENT_PAGE_SIZE,
   resolveClientPagination,
@@ -50,6 +51,53 @@ export function useViewportPageSize(
   }, [base, min, max]);
 
   return viewport;
+}
+
+/**
+ * Measure the exact number of table rows that fit between the table container
+ * and the bottom of the viewport, so the last row lands flush without a
+ * scrollbar and without overflowing.
+ *
+ * `tableRef` should point at the table (or its wrapping container). The row
+ * height is taken from the first rendered row (`rowSelector`), defaulting to
+ * the `.data-table tbody tr` height.
+ */
+export function useExactPageSize<T extends HTMLElement>(
+  tableRef: RefObject<T | null>,
+  opts: { min?: number; max?: number; rowSelector?: string; bottomReserve?: number } = {},
+): number {
+  const min = opts.min ?? 4;
+  const max = opts.max ?? 30;
+  const rowSelector = opts.rowSelector ?? 'tbody tr';
+  const bottomReserve = opts.bottomReserve ?? 56; // pagination bar + breathing room
+  const [pageSize, setPageSize] = useState(CLIENT_PAGE_SIZE);
+
+  useEffect(() => {
+    const recompute = () => {
+      const table = tableRef.current;
+      if (!table || typeof window === 'undefined') return;
+      const rows = table.querySelectorAll<HTMLElement>(rowSelector);
+      const firstRow = rows[0];
+      if (!firstRow) return;
+      const rowHeight = firstRow.getBoundingClientRect().height;
+      if (!Number.isFinite(rowHeight) || rowHeight <= 0) return;
+
+      const tableTop = table.getBoundingClientRect().top;
+      const available = window.innerHeight - tableTop - bottomReserve;
+      if (available <= rowHeight * min) {
+        setPageSize(min);
+        return;
+      }
+      const rowsThatFit = Math.floor(available / rowHeight);
+      setPageSize(Math.min(max, Math.max(min, rowsThatFit)));
+    };
+
+    recompute();
+    window.addEventListener('resize', recompute);
+    return () => window.removeEventListener('resize', recompute);
+  }, [tableRef, rowSelector, min, max, bottomReserve]);
+
+  return pageSize;
 }
 
 /**

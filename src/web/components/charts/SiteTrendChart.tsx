@@ -24,15 +24,20 @@ const METRIC_OPTIONS: { key: Metric; label: string }[] = [
   { key: 'calls', label: '调用趋势' },
 ];
 
+/** Short x-axis label: "08-22" for daily buckets, "13:00" for hourly ones. */
+function formatTrendBucketLabel(date: string): string {
+  if (!date) return '';
+  const match = /^\d{4}-\d{2}-\d{2} (\d{2}):00/.exec(date);
+  if (match) return match[1]!;
+  const day = /^\d{4}-(\d{2}-\d{2})/.exec(date);
+  return day ? day[1]! : date;
+}
+
 const COLOR_PALETTE = [
-  '#0d9488',
-  '#06b6d4',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
+  '#0d9488', '#06b6d4', '#10b981', '#f59e0b',
+  '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6',
+  '#f97316', '#3b82f6', '#a855f7', '#22c55e',
+  '#eab308', '#6366f1', '#d946ef', '#84cc16',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -146,7 +151,7 @@ export default function SiteTrendChart() {
     },
     tooltip: {
       mark: {
-        title: { value: (datum: Record<string, unknown>) => datum?.date ?? '' },
+        title: { value: (datum: Record<string, unknown>) => formatTrendBucketLabel(String(datum?.date ?? '')) },
         content: [
           {
             key: (datum: Record<string, unknown>) => datum?.site ?? '',
@@ -158,7 +163,7 @@ export default function SiteTrendChart() {
         ],
       },
       dimension: {
-        title: { value: (datum: Record<string, unknown>) => datum?.date ?? '' },
+        title: { value: (datum: Record<string, unknown>) => formatTrendBucketLabel(String(datum?.date ?? '')) },
         content: [
           {
             key: (datum: Record<string, unknown>) => datum?.site ?? '',
@@ -182,7 +187,10 @@ export default function SiteTrendChart() {
     axes: [
       {
         orient: 'bottom',
-        label: { style: { fontSize: 11, fill: labelColor } },
+        label: {
+          style: { fontSize: 11, fill: labelColor },
+          formatMethod: (value: string | number) => formatTrendBucketLabel(String(value)),
+        },
         domainLine: { style: { stroke: 'var(--color-border-light)' } },
         tick: { style: { stroke: 'var(--color-border-light)' } },
       },
@@ -249,7 +257,7 @@ export default function SiteTrendChart() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <MetricToggle metric={metric} onChange={setMetric} />
           <div style={toggleGroupStyle}>
-            {[7, 30, 90].map((d) => (
+            {[1, 3, 7].map((d) => (
               <button
                 key={d}
                 type="button"

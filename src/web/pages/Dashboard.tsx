@@ -1148,7 +1148,7 @@ export default function Dashboard({
             </div>
             <div className="site-observability-subtitle">
               {observabilityTab === 'sites'
-                ? '站点分布与消耗趋势 · 最近 24 小时可用性'
+                ? '站点分布与单日消耗 · 最近 24 小时可用性'
                 : '模型消耗与调用分布 · 最近 24 小时可用性'}
             </div>
           </div>
@@ -1193,7 +1193,7 @@ export default function Dashboard({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 {siteChartTab === 'distribution'
-                  ? '站点分布与消耗趋势'
+                  ? '站点排行榜与单日消耗'
                   : '站点趋势'}
               </div>
               <div className="pill-tabs">

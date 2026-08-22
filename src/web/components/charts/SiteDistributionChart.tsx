@@ -8,6 +8,7 @@ interface SiteDistributionData {
   platform: string;
   totalBalance: number;
   totalSpend: number;
+  avgDailySpend?: number;
   accountCount: number;
 }
 
@@ -93,25 +94,30 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   const AXIS_RESERVE = 44; // x 轴标签预留
 
   const chartData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-    return data
-      .map((item) => ({
+    const rows = (data ?? [])
+      .map((item: any) => ({
         siteName: String(item.siteName || '-'),
         platform: String(item.platform || ''),
-        value: safeNumber(viewMode === 'balance' ? item.totalBalance : item.totalSpend),
+        value: safeNumber(viewMode === 'balance' ? item.totalBalance : item.avgDailySpend ?? item.totalSpend),
         accountCount: safeNumber(item.accountCount),
       }))
       .filter((d) => d.value > 0)
       .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
+      .slice(0, Math.min(10, Array.isArray(data) ? data.length : 10));
+    return rows;
   }, [data, viewMode]);
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
 
-  // Top10 固定 10 行，无需滚动
-  const chartHeight = 10 * ROW_HEIGHT + AXIS_RESERVE;
+  // Rows = min(10, data length), no scrolling needed for small lists.
+  const chartHeight = chartData.length * ROW_HEIGHT + AXIS_RESERVE;
 
-  const BAR_COLORS = ['#0d9488', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+  const BAR_COLORS = [
+    '#0d9488', '#06b6d4', '#10b981', '#f59e0b',
+    '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6',
+    '#f97316', '#3b82f6', '#a855f7', '#22c55e',
+    '#eab308', '#6366f1', '#d946ef', '#84cc16',
+  ];
 
   const formatValue = (value: number): string => `$${value.toFixed(2)}`;
 
@@ -255,7 +261,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
             />
           </svg>
-          站点分布 Top10
+          站点 TOP 排行榜
         </div>
 
         {/* Toggle buttons */}
@@ -313,7 +319,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
             </svg>
-            消耗分布
+            单日消耗
           </button>
         </div>
       </div>

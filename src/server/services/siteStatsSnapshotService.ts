@@ -1,6 +1,9 @@
 import { eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
-import { getLocalRangeStartDayKey } from './localTimeService.js';
+import {
+  getLocalHourRangeStartUtc,
+  getLocalRangeStartDayKey,
+} from './localTimeService.js';
 import {
   readSnapshotCache,
   type SnapshotEnvelope,
@@ -20,12 +23,14 @@ export type SiteStatsSnapshotPayload = {
     platform: string | null;
     totalBalance: number;
     totalSpend: number;
+    avgDailySpend: number;
     accountCount: number;
   }>;
   trend: Array<{
     date: string;
     sites: Record<string, { spend: number; calls: number }>;
   }>;
+  granularity: 'hour' | 'day';
   sites: Array<typeof schema.sites.$inferSelect>;
 };
 
@@ -34,7 +39,11 @@ const SITE_STATS_TTL_MS = 15_000;
 async function loadSiteStatsSnapshotPayload(
   days: number,
 ): Promise<SiteStatsSnapshotPayload> {
+  // Short windows (1-3 days) switch to hourly buckets so the trend line has
+  // enough samples; longer windows stay daily.
+  const useHourly = days <= 3;
   const sinceDay = getLocalRangeStartDayKey(days);
+  const sinceHourUtc = getLocalHourRangeStartUtc(days * 24);
   await runUsageAggregationProjectionPass();
 
   const [spendRows, trendRows, sites, accountDistributionRows] =
@@ -47,11 +56,17 @@ async function loadSiteStatsSnapshotPayload(
       .from(schema.siteDayUsage)
       .groupBy(schema.siteDayUsage.siteId)
       .all(),
-    db
-      .select()
-      .from(schema.siteDayUsage)
-      .where(sql`${schema.siteDayUsage.localDay} >= ${sinceDay}`)
-      .all(),
+    useHourly
+      ? db
+          .select()
+          .from(schema.siteHourUsage)
+          .where(sql`${schema.siteHourUsage.bucketStartUtc} >= ${sinceHourUtc}`)
+          .all()
+      : db
+          .select()
+          .from(schema.siteDayUsage)
+          .where(sql`${schema.siteDayUsage.localDay} >= ${sinceDay}`)
+          .all(),
     db
       .select()
       .from(schema.sites)
@@ -78,16 +93,20 @@ async function loadSiteStatsSnapshotPayload(
     spendBySiteId.set(row.siteId, Number(row.totalSpend || 0));
   }
 
-  const distribution = accountDistributionRows.map((row: any) => ({
-    siteId: row.siteId,
-    siteName: row.siteName,
-    platform: row.platform,
-    totalBalance: toRoundedMicroNumber(Number(row.totalBalance || 0)),
-    totalSpend: toRoundedMicroNumber(spendBySiteId.get(row.siteId) || 0),
-    accountCount: Number(row.accountCount || 0),
-  }));
+  const distribution = accountDistributionRows.map((row: any) => {
+    const totalSpend = spendBySiteId.get(row.siteId) || 0;
+    return {
+      siteId: row.siteId,
+      siteName: row.siteName,
+      platform: row.platform,
+      totalBalance: toRoundedMicroNumber(Number(row.totalBalance || 0)),
+      totalSpend: toRoundedMicroNumber(totalSpend),
+      avgDailySpend: toRoundedMicroNumber(totalSpend / Math.max(1, days)),
+      accountCount: Number(row.accountCount || 0),
+    };
+  });
 
-  const dayMap: Record<
+  const siteFrame: Record<
     string,
     Record<string, { spend: number; calls: number }>
   > = {};
@@ -98,17 +117,19 @@ async function loadSiteStatsSnapshotPayload(
     const site = activeSiteById.get(row.siteId);
     if (!site) continue;
     const siteName = site.name || 'unknown';
-    const date = row.localDay;
+    // Hourly buckets key on the local hour start; daily rows key on local day.
+    const bucket = useHourly ? row.bucketStartUtc : row.localDay;
+    if (!bucket) continue;
 
-    if (!dayMap[date]) dayMap[date] = {};
-    if (!dayMap[date][siteName])
-      dayMap[date][siteName] = { spend: 0, calls: 0 };
+    if (!siteFrame[bucket]) siteFrame[bucket] = {};
+    if (!siteFrame[bucket][siteName])
+      siteFrame[bucket][siteName] = { spend: 0, calls: 0 };
 
-    dayMap[date][siteName].spend += Number(row.totalSiteSpend || 0);
-    dayMap[date][siteName].calls += Number(row.totalCalls || 0);
+    siteFrame[bucket][siteName].spend += Number(row.totalSiteSpend || 0);
+    siteFrame[bucket][siteName].calls += Number(row.totalCalls || 0);
   }
 
-  const trend = Object.entries(dayMap)
+  const trend = Object.entries(siteFrame)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([date, value]) => ({
       date,
@@ -126,6 +147,7 @@ async function loadSiteStatsSnapshotPayload(
   return {
     distribution,
     trend,
+    granularity: useHourly ? 'hour' as const : 'day' as const,
     sites,
   };
 }
