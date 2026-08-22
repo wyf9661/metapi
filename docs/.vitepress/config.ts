@@ -50,6 +50,7 @@ export default withMermaid(
     // name so asset/link URLs resolve under /metapi/ instead of the root.
     base: '/metapi/',
     head: [
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: '/metapi/logos/logo.svg' }],
       ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/metapi/favicon.png' }],
       ['link', { rel: 'icon', type: 'image/png', sizes: '64x64', href: '/metapi/favicon-64.png' }],
       ['link', { rel: 'shortcut icon', href: '/metapi/favicon.ico' }],

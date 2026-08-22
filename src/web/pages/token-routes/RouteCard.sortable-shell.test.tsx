@@ -34,7 +34,6 @@ function buildRoute(overrides: Partial<RouteSummaryRow> = {}): RouteSummaryRow {
     displayName: 'gpt-5.4',
     displayIcon: null,
     modelMapping: null,
-    routingStrategy: 'weighted',
     enabled: true,
     channelCount: 3,
     enabledChannelCount: 3,
@@ -77,8 +76,6 @@ describe('RouteCard sortable shell', () => {
         onToggleEnabled={vi.fn()}
         onClearCooldown={vi.fn()}
         clearingCooldown={false}
-        onRoutingStrategyChange={vi.fn()}
-        updatingRoutingStrategy={false}
         channels={[
           buildChannel({ id: 11, priority: 0 }),
           buildChannel({ id: 12, accountId: 102, tokenId: 1002, priority: 1 }),

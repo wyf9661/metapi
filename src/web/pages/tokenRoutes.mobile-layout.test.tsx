@@ -82,7 +82,6 @@ describe('TokenRoutes mobile layout', () => {
         displayName: 'gpt-4o-mini',
         displayIcon: null,
         modelMapping: null,
-        routingStrategy: 'weighted',
         enabled: true,
         channelCount: 1,
         enabledChannelCount: 1,

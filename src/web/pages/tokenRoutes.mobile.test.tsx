@@ -88,7 +88,6 @@ describe('TokenRoutes mobile actions', () => {
         displayIcon: null,
         modelMapping: null,
         routeMode: 'pattern',
-        routingStrategy: 'weighted',
         enabled: true,
         channelCount: 1,
         enabledChannelCount: 1,
