@@ -49,13 +49,16 @@ export default function SiteTrendChart() {
   const labelColor = useThemeLabelColor();
   const isMobile = useIsMobile();
   const [focusedSite, setFocusedSite] = useState<string | null>(null);
-  const [trendDays, setTrendDays] = useState(7);
+  const [trendDays, setTrendDays] = useState(1);
   const [data, setData] = useState<SiteTrendData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Keep the previous chart on screen while the new window loads; only show
+    // a light overlay instead of blanking the whole card.
+    if (data.length > 0) setSwitching(true);
     api.getSiteTrend(trendDays)
       .then((res) => {
         if (cancelled) return;
@@ -66,7 +69,9 @@ export default function SiteTrendChart() {
         if (!cancelled) console.error('Failed to load site trend:', err);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        setLoading(false);
+        setSwitching(false);
       });
     return () => {
       cancelled = true;
@@ -286,7 +291,7 @@ export default function SiteTrendChart() {
           )}
         </div>
       </div>
-      <div style={{ width: '100%', height: 344, flex: 1, minHeight: 344 }}>
+      <div style={{ position: 'relative', width: '100%', height: 344, flex: 1, minHeight: 344 }}>
         <VChart
           spec={spec as any}
           style={{ width: '100%', height: '100%' }}
@@ -297,6 +302,32 @@ export default function SiteTrendChart() {
             }
           }}
         />
+        {switching && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 'var(--radius-sm)',
+              background: 'color-mix(in srgb, var(--color-bg-card) 55%, transparent)',
+              zIndex: 5,
+              pointerEvents: 'none',
+            }}
+          >
+            <span
+              className="chart-loading-spinner"
+              style={{
+                width: 22,
+                height: 22,
+                border: '2px solid color-mix(in srgb, var(--color-primary) 25%, transparent)',
+                borderTopColor: 'var(--color-primary)',
+                borderRadius: '50%',
+              }}
+            />
+          </div>
+        )}
       </div>
       {/* Site list / selector (replaces chart built-in legend) */}
       {allSites.length > 0 && (

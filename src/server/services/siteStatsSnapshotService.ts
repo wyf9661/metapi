@@ -23,7 +23,7 @@ export type SiteStatsSnapshotPayload = {
     platform: string | null;
     totalBalance: number;
     totalSpend: number;
-    avgDailySpend: number;
+    todaySpend: number;
     accountCount: number;
   }>;
   trend: Array<{
@@ -46,7 +46,7 @@ async function loadSiteStatsSnapshotPayload(
   const sinceHourUtc = getLocalHourRangeStartUtc(days * 24);
   await runUsageAggregationProjectionPass();
 
-  const [spendRows, trendRows, sites, accountDistributionRows] =
+  const [spendRows, trendRows, todaySpendRows, sites, accountDistributionRows] =
     await Promise.all([
     db
       .select({
@@ -67,6 +67,16 @@ async function loadSiteStatsSnapshotPayload(
           .from(schema.siteDayUsage)
           .where(sql`${schema.siteDayUsage.localDay} >= ${sinceDay}`)
           .all(),
+    // Today's spend = usage for the current local day only.
+    db
+      .select({
+        siteId: schema.siteDayUsage.siteId,
+        todaySpend: sql<number>`coalesce(sum(${schema.siteDayUsage.totalSiteSpend}), 0)`,
+      })
+      .from(schema.siteDayUsage)
+      .where(eq(schema.siteDayUsage.localDay, getLocalRangeStartDayKey(1)))
+      .groupBy(schema.siteDayUsage.siteId)
+      .all(),
     db
       .select()
       .from(schema.sites)
@@ -93,6 +103,12 @@ async function loadSiteStatsSnapshotPayload(
     spendBySiteId.set(row.siteId, Number(row.totalSpend || 0));
   }
 
+  const todaySpendBySiteId = new Map<number, number>();
+  for (const row of todaySpendRows) {
+    if (row.siteId == null) continue;
+    todaySpendBySiteId.set(row.siteId, Number(row.todaySpend || 0));
+  }
+
   const distribution = accountDistributionRows.map((row: any) => {
     const totalSpend = spendBySiteId.get(row.siteId) || 0;
     return {
@@ -101,7 +117,7 @@ async function loadSiteStatsSnapshotPayload(
       platform: row.platform,
       totalBalance: toRoundedMicroNumber(Number(row.totalBalance || 0)),
       totalSpend: toRoundedMicroNumber(totalSpend),
-      avgDailySpend: toRoundedMicroNumber(totalSpend / Math.max(1, days)),
+      todaySpend: toRoundedMicroNumber(todaySpendBySiteId.get(row.siteId) || 0),
       accountCount: Number(row.accountCount || 0),
     };
   });

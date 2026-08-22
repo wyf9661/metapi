@@ -583,7 +583,7 @@ export const zhToEnSupplemental: Record<string, string> = {
   '系统设置': 'System settings',
   '显示调试': 'show debugging',
   '项目链接': 'Project link',
-  '消耗分布': 'Consumption distribution',
+  '今日消耗': 'Today spend',
   '消耗趋势': 'consumption trend',
   '校验': 'check',
   '新 Token 至少 8 个字符': 'New Token must be at least 8 characters long',

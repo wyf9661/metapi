@@ -8,7 +8,7 @@ interface SiteDistributionData {
   platform: string;
   totalBalance: number;
   totalSpend: number;
-  avgDailySpend?: number;
+  todaySpend?: number;
   accountCount: number;
 }
 
@@ -98,7 +98,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       .map((item: any) => ({
         siteName: String(item.siteName || '-'),
         platform: String(item.platform || ''),
-        value: safeNumber(viewMode === 'balance' ? item.totalBalance : item.avgDailySpend ?? item.totalSpend),
+        value: safeNumber(viewMode === 'balance' ? item.totalBalance : item.todaySpend ?? item.totalSpend),
         accountCount: safeNumber(item.accountCount),
       }))
       .filter((d) => d.value > 0)
@@ -319,7 +319,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
             </svg>
-            单日消耗
+            今日消耗
           </button>
         </div>
       </div>

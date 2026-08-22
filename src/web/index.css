@@ -3050,6 +3050,17 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   color: var(--color-text-primary) !important;
 }
 
+/* Chart window-switch overlay spinner (keeps previous chart visible). */
+.chart-loading-spinner {
+  animation: chart-spin 0.7s linear infinite;
+}
+
+@keyframes chart-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 [data-theme="dark"] .route-enable-toggle.is-enabled {
   background: #0a1f14;
   color: #4ade80;
