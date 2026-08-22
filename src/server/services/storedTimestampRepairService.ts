@@ -4,7 +4,7 @@ import { upsertSetting } from '../db/upsertSetting.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
 
 const STORED_TIMESTAMP_REPAIR_SETTING_KEY = 'stored_timestamp_repair_version';
-const STORED_TIMESTAMP_REPAIR_VERSION = 1;
+const STORED_TIMESTAMP_REPAIR_VERSION = 2;
 
 function normalizedCreatedAtSql(column: any) {
   return sql<string>`replace(substr(${column}, 1, 19), 'T', ' ')`;

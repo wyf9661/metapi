@@ -43,25 +43,7 @@ type ThemeMode = 'system' | 'light' | 'dark';
 
 type UserProfile = {
   name: string;
-  avatarSeed: string;
-  avatarStyle: string;
 };
-const DICEBEAR_STYLES = [
-  'pixel-art',
-  'pixel-art-neutral',
-  'bottts',
-  'bottts-neutral',
-  'identicon',
-  'initials',
-  'avataaars',
-  'avataaars-neutral',
-  'personas',
-  'lorelei',
-  'lorelei-neutral',
-  'fun-emoji',
-] as const;
-
-type DicebearStyle = typeof DICEBEAR_STYLES[number];
 
 function resolveStoredThemeMode(): ThemeMode {
   const saved = localStorage.getItem(THEME_MODE_STORAGE_KEY);
@@ -71,12 +53,10 @@ function resolveStoredThemeMode(): ThemeMode {
   return 'system';
 }
 
-function createRandomAvatarSeed(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `seed-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
+const AVATAR_PALETTE = [
+  '#0d9488', '#2563eb', '#7c3aed', '#db2777', '#ea580c',
+  '#059669', '#4f46e5', '#c026d3', '#dc2626', '#0891b2',
+];
 
 function hashString(input: string): number {
   let hash = 0;
@@ -87,45 +67,26 @@ function hashString(input: string): number {
   return Math.abs(hash);
 }
 
-function pickDicebearStyle(seed: string): DicebearStyle {
-  const index = hashString(seed || 'default') % DICEBEAR_STYLES.length;
-  return DICEBEAR_STYLES[index];
+function avatarColorFor(seed: string): string {
+  const palette = AVATAR_PALETTE;
+  return palette[hashString(seed || 'default') % palette.length];
 }
 
-function buildDicebearAvatarUrl(style: string, seed: string): string {
-  const safeStyle = DICEBEAR_STYLES.includes(style as DicebearStyle)
-    ? style
-    : pickDicebearStyle(seed);
-  const safeSeed = (seed || 'default').trim() || 'default';
-  return `https://api.dicebear.com/9.x/${safeStyle}/svg?seed=${encodeURIComponent(safeSeed)}`;
+function avatarInitialFor(name: string): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return '管';
+  return Array.from(trimmed)[0].toUpperCase();
 }
 
 function resolveStoredProfile(): UserProfile {
   try {
     const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-    if (!raw) {
-      const avatarSeed = createRandomAvatarSeed();
-      return { name: '管理员', avatarSeed, avatarStyle: pickDicebearStyle(avatarSeed) };
-    }
+    if (!raw) return { name: '管理员' };
     const parsed = JSON.parse(raw) as Partial<UserProfile> & { avatar?: string };
     const name = typeof parsed?.name === 'string' ? parsed.name.trim() : '';
-    const avatarSeed = typeof parsed?.avatarSeed === 'string'
-      ? parsed.avatarSeed.trim()
-      : (typeof parsed?.avatar === 'string' ? parsed.avatar.trim() : '');
-    const resolvedSeed = avatarSeed || createRandomAvatarSeed();
-    const avatarStyle = typeof parsed?.avatarStyle === 'string'
-      ? parsed.avatarStyle.trim()
-      : '';
-    return {
-      name: name || '管理员',
-      avatarSeed: resolvedSeed,
-      avatarStyle: DICEBEAR_STYLES.includes(avatarStyle as DicebearStyle)
-        ? avatarStyle
-        : pickDicebearStyle(resolvedSeed),
-    };
+    return { name: name || '管理员' };
   } catch {
-    const avatarSeed = createRandomAvatarSeed();
-    return { name: '管理员', avatarSeed, avatarStyle: pickDicebearStyle(avatarSeed) };
+    return { name: '管理员' };
   }
 }
 
@@ -340,19 +301,13 @@ function UserProfileModal({
   t: (text: string) => string;
 }) {
   const [name, setName] = useState(profile.name);
-  const [avatarSeed, setAvatarSeed] = useState(profile.avatarSeed);
-  const [avatarStyle, setAvatarStyle] = useState(profile.avatarStyle);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setName(profile.name);
-    setAvatarSeed(profile.avatarSeed);
-    setAvatarStyle(profile.avatarStyle);
     setError('');
   }, [open, profile]);
-
-  const avatarUrl = buildDicebearAvatarUrl(avatarStyle, avatarSeed);
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -365,12 +320,6 @@ function UserProfileModal({
     color: 'var(--color-text-primary)',
   };
 
-  const handleRandomAvatar = () => {
-    const nextSeed = createRandomAvatarSeed();
-    setAvatarSeed(nextSeed);
-    setAvatarStyle(pickDicebearStyle(nextSeed));
-  };
-
   const handleSubmit = () => {
     const normalizedName = name.trim();
     if (!normalizedName) {
@@ -381,13 +330,7 @@ function UserProfileModal({
       setError(t('用户名最多 24 个字符'));
       return;
     }
-    onSave({
-      name: normalizedName,
-      avatarSeed: avatarSeed.trim() || createRandomAvatarSeed(),
-      avatarStyle: DICEBEAR_STYLES.includes(avatarStyle as DicebearStyle)
-        ? avatarStyle
-        : pickDicebearStyle(avatarSeed),
-    });
+    onSave({ name: normalizedName });
   };
 
   return (
@@ -407,12 +350,19 @@ function UserProfileModal({
       )}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-        <div className="topbar-avatar" style={{ width: 40, height: 40, fontSize: 14 }}>
-          <img
-            src={avatarUrl}
-            alt={name.trim() || 'avatar'}
-            style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-          />
+        <div
+          className="topbar-avatar"
+          style={{
+            width: 40,
+            height: 40,
+            fontSize: 16,
+            fontWeight: 600,
+            color: '#fff',
+            background: avatarColorFor(name.trim() || '管理员'),
+            border: 'none',
+          }}
+        >
+          {avatarInitialFor(name)}
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('右上角头像实时预览')}</div>
       </div>
@@ -428,15 +378,6 @@ function UserProfileModal({
           placeholder={t('例如：小王')}
           style={inputStyle}
         />
-      </div>
-
-      <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-          {t('头像（Dicebear 随机） · 风格：')}{avatarStyle}
-        </div>
-        <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={handleRandomAvatar}>
-          {t('换一个随机头像')}
-        </button>
       </div>
 
       {error && (
@@ -538,7 +479,8 @@ function AppShell() {
   const rawDisplayName = (userProfile.name || '').trim();
   const displayName = rawDisplayName ? (rawDisplayName === '管理员' ? t('管理员') : rawDisplayName) : t('管理员');
   const resolvedThemeLabel = resolvedTheme === 'dark' ? t('深色') : t('浅色');
-  const avatarUrl = buildDicebearAvatarUrl(userProfile.avatarStyle, userProfile.avatarSeed);
+  const avatarColor = avatarColorFor(userProfile.name);
+  const avatarInitial = avatarInitialFor(userProfile.name);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -680,13 +622,8 @@ function AppShell() {
   };
 
   const handleSaveProfile = (nextProfile: UserProfile) => {
-    const normalizedSeed = nextProfile.avatarSeed.trim() || createRandomAvatarSeed();
     const normalized = {
       name: nextProfile.name.trim() || t('管理员'),
-      avatarSeed: normalizedSeed,
-      avatarStyle: DICEBEAR_STYLES.includes(nextProfile.avatarStyle as DicebearStyle)
-        ? nextProfile.avatarStyle
-        : pickDicebearStyle(normalizedSeed),
     };
     setUserProfile(normalized);
     localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(normalized));
@@ -801,6 +738,7 @@ function AppShell() {
             <button
               type="button"
               className="topbar-avatar"
+              style={{ background: avatarColor }}
               aria-label={displayName}
               aria-haspopup="menu"
               aria-expanded={showUserMenu}
@@ -809,11 +747,20 @@ function AppShell() {
                 setShowThemeMenu(false);
               }}
             >
-              <img
-                src={avatarUrl}
-                alt={displayName}
-                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-              />
+              <span
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 600,
+                  color: '#fff',
+                }}
+              >
+                {avatarInitial}
+              </span>
             </button>
             {userMenuPresence.shouldRender && (
               <div className={`user-dropdown ${userMenuPresence.isVisible ? '' : 'is-closing'}`.trim()}>

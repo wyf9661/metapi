@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { db, schema } from '../db/index.js';
 import { sendNotification } from './notifyService.js';
+import { formatUtcSqlDateTime } from './localTimeService.js';
 
 export type BackgroundTaskStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
@@ -161,7 +162,7 @@ async function appendTaskEvent(level: 'info' | 'warning' | 'error', title: strin
       message,
       level,
       relatedType: 'task',
-      createdAt: nowIso(),
+      createdAt: formatUtcSqlDateTime(new Date()),
     }).run();
   } catch {}
   void taskId;

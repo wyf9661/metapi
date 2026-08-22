@@ -1985,6 +1985,7 @@ html[data-layout="desktop"] .main-content {
 .program-logs-table {
   table-layout: auto;
   width: 100%;
+  min-width: 1160px;
 }
 
 .program-logs-table .program-logs-title-cell {

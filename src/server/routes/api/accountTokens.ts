@@ -17,6 +17,7 @@ import {
 } from '../../services/accountTokenService.js';
 import { getAdapter } from '../../services/platforms/index.js';
 import { getCredentialModeFromExtraConfig, getProxyUrlFromExtraConfig, resolvePlatformUserId } from '../../services/accountExtraConfig.js';
+import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
 import { withAccountProxyOverride } from '../../services/siteProxy.js';
 import { type ModelRefreshResult } from '../../services/modelService.js';
@@ -390,7 +391,7 @@ async function appendTokenSyncEvent(result: SyncExecutionResult) {
       level,
       relatedId: result.accountId,
       relatedType: 'account',
-      createdAt: new Date().toISOString(),
+      createdAt: formatUtcSqlDateTime(new Date()),
     }).run();
   } catch {}
 }

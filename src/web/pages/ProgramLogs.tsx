@@ -342,13 +342,13 @@ export default function ProgramLogs() {
         ) : visibleRows.length > 0 ? (
           <table className="data-table program-logs-table">
             <colgroup>
-              <col style={{ width: 170 }} />
-              <col style={{ width: 90 }} />
-              <col style={{ width: 90 }} />
-              <col style={{ width: 260 }} />
-              <col />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 140 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 88 }} />
+              <col style={{ width: 88 }} />
+              <col style={{ width: 240 }} />
+              <col style={{ minWidth: 400 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 130 }} />
             </colgroup>
             <thead>
               <tr>
