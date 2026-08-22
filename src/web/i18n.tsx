@@ -82,6 +82,7 @@ const zhToEn: Record<string, string> = {
   '首次使用建议先阅读快速上手：': 'For first-time setup, start with Quick Start: ',
   '首次使用建议先阅读快速开始：': 'For first-time setup, start with Quick Start: ',
   '个人信息已保存': 'Profile saved',
+  '个人信息保存失败': 'Failed to save profile',
   '搜索': 'Search',
   '搜索 (Ctrl+K)': 'Search (Ctrl+K)',
   '通知': 'Notifications',

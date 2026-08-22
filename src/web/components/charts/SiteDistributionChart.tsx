@@ -210,7 +210,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   return (
     <div
       className="chart-container animate-fade-in"
-      style={{ padding: 20, height: '100%', display: 'flex', flexDirection: 'column' }}
+      style={{ padding: 0, height: '100%', display: 'flex', flexDirection: 'column', border: 'none', boxShadow: 'none', background: 'transparent' }}
     >
       {/* Header */}
       <div
@@ -320,7 +320,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               {spec && <VChart spec={spec} style={{ width: '100%', height: '100%' }} />}
             </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px', flexShrink: 0, maxHeight: 68, overflowY: 'auto' }}>
             {chartData.map((d, idx) => (
               <span key={d.siteName} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: BAR_COLORS[idx % BAR_COLORS.length], flexShrink: 0 }} />

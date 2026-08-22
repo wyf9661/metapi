@@ -1255,6 +1255,12 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  getProfile: () => request('/api/settings/profile'),
+  updateProfile: (data: { name: string }) =>
+    request('/api/settings/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
   getUpdateCenterStatus: () => request('/api/update-center/status'),
   checkUpdateCenter: () =>
     request('/api/update-center/check', {

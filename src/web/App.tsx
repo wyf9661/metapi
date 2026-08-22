@@ -506,6 +506,21 @@ function AppShell() {
     }
   }, [resolvedTheme, themeMode]);
 
+  // Load server-persisted display name on mount and sync into local state.
+  useEffect(() => {
+    if (!authed) return;
+    (async () => {
+      try {
+        const res = await api.getProfile();
+        const serverName = typeof (res as any)?.name === 'string' ? (res as any).name.trim() : '';
+        if (serverName) {
+          setUserProfile({ name: serverName });
+          try { localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify({ name: serverName })); } catch { /* ignore */ }
+        }
+      } catch { /* fall back to localStorage profile */ }
+    })();
+  }, [authed]);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-layout', isMobile ? 'mobile' : 'desktop');
   }, [isMobile]);
@@ -621,14 +636,19 @@ function AppShell() {
     setShowThemeMenu(false);
   };
 
-  const handleSaveProfile = (nextProfile: UserProfile) => {
+  const handleSaveProfile = async (nextProfile: UserProfile) => {
     const normalized = {
       name: nextProfile.name.trim() || t('管理员'),
     };
     setUserProfile(normalized);
-    localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(normalized));
-    setShowProfileModal(false);
-    toast.success(t('个人信息已保存'));
+    try { localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(normalized)); } catch { /* ignore */ }
+    try {
+      await api.updateProfile({ name: normalized.name });
+      setShowProfileModal(false);
+      toast.success(t('个人信息已保存'));
+    } catch {
+      toast.error(t('个人信息保存失败'));
+    }
   };
 
   if (!authed) {

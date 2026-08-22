@@ -1661,7 +1661,7 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
   );
 
   return (
-    <div className={filterSiteId ? '' : 'page-container animate-fade-in'}>
+    <div className={filterSiteId ? '' : 'page-container animate-fade-in'} style={{ paddingBottom: (selectedConnectionIds.length > 0 && isMobile) ? 92 : undefined }}>
       {!filterSiteId && (
       <div className="page-header">
         <div>

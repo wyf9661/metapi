@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
-import { useIsMobile } from '../components/useIsMobile.js';
 import { copyText } from '../clipboard.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 
@@ -106,10 +105,10 @@ function getAvailabilityColor(value: number | null | undefined): string {
     return 'transparent';
   }
   const clamped = Math.max(0, Math.min(100, value));
-  // Brighter and more saturated palette for tiny 24h bars
-  const low = { r: 255, g: 59, b: 48 };   // vivid red
-  const mid = { r: 255, g: 204, b: 0 };   // vivid yellow
-  const high = { r: 52, g: 199, b: 89 };  // vivid green
+  // Deeper, less neon palette tuned to the app's teal/slate design language.
+  const low = { r: 190, g: 39, b: 52 };    // deep red
+  const mid = { r: 194, g: 132, b: 20 };   // amber
+  const high = { r: 13, g: 138, b: 116 };  // teal-green (matches --color-primary family)
 
   const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
 
@@ -299,8 +298,8 @@ export default function Dashboard({
   const [siteDistribution, setSiteDistribution] = useState<any[]>([]);
   const [siteLoading, setSiteLoading] = useState(true);
   const [sites, setSites] = useState<any[]>([]);
-  const isMobile = useIsMobile();
   const [observabilityTab, setObservabilityTab] = useState<'sites' | 'models'>('sites');
+  const [siteChartTab, setSiteChartTab] = useState<'distribution' | 'trend'>('distribution');
   const toast = useToast();
   const normalizedAdminName = (adminName || '').trim() || '\u7ba1\u7406\u5458';
 
@@ -1176,24 +1175,54 @@ export default function Dashboard({
         {observabilityTab === 'sites' ? (
           <>
           <div
+            className="chart-container"
             style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: 16,
+              padding: 16,
               marginBottom: 20,
             }}
           >
-            <div className="chart-panel-enter animate-slide-up stagger-6" style={{ height: '100%' }}>
-              <Suspense fallback={<ChartFallback height={344} />}>
-                <SiteDistributionChart
-                  data={siteDistribution}
-                  loading={siteLoading}
-                />
-              </Suspense>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                marginBottom: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                {siteChartTab === 'distribution'
+                  ? '站点分布与消耗趋势'
+                  : '站点趋势'}
+              </div>
+              <div className="pill-tabs">
+                <button
+                  type="button"
+                  className={`pill-tab ${siteChartTab === 'distribution' ? 'active' : ''}`}
+                  onClick={() => setSiteChartTab('distribution')}
+                >
+                  站点分布
+                </button>
+                <button
+                  type="button"
+                  className={`pill-tab ${siteChartTab === 'trend' ? 'active' : ''}`}
+                  onClick={() => setSiteChartTab('trend')}
+                >
+                  站点趋势
+                </button>
+              </div>
             </div>
-            <div className="chart-panel-enter animate-slide-up stagger-7" style={{ height: '100%' }}>
+            <div className="chart-panel-enter animate-slide-up stagger-6">
               <Suspense fallback={<ChartFallback height={344} />}>
-                <SiteTrendChart />
+                {siteChartTab === 'distribution' ? (
+                  <SiteDistributionChart
+                    data={siteDistribution}
+                    loading={siteLoading}
+                  />
+                ) : (
+                  <SiteTrendChart />
+                )}
               </Suspense>
             </div>
           </div>

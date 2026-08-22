@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import cron from 'node-cron';
 import { config, normalizeTokenRouterFailureCooldownMaxSec } from '../../config.js';
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
+import { eq } from 'drizzle-orm';
 import { upsertSetting } from '../../db/upsertSetting.js';
 import { isLikelyTunnelRequest } from '../../services/cloudflareTunnelService.js';
 import { normalizeRouteRoutingStrategy } from '../../services/routeRoutingStrategy.js';
@@ -703,6 +704,35 @@ export async function settingsRoutes(app: FastifyInstance) {
   await app.get('/api/settings/runtime', async (request) => {
     const currentAdminIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
     return getRuntimeSettingsResponse(currentAdminIp);
+  });
+
+  // User profile (display name) persisted in the settings table.
+  app.get('/api/settings/profile', async () => {
+    const row = await db.select({ value: schema.settings.value })
+      .from(schema.settings)
+      .where(eq(schema.settings.key, 'user_profile'))
+      .get();
+    let name = '管理员';
+    try {
+      const parsed = JSON.parse(String(row?.value || '{}'));
+      if (typeof parsed?.name === 'string' && parsed.name.trim()) {
+        name = parsed.name.trim();
+      }
+    } catch { /* fall back to default */ }
+    return { name };
+  });
+
+  app.put<{ Body: unknown }>('/api/settings/profile', async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const rawName = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (!rawName) {
+      return reply.code(400).send({ success: false, message: '用户名不能为空' });
+    }
+    if (Array.from(rawName).length > 24) {
+      return reply.code(400).send({ success: false, message: '用户名最多 24 个字符' });
+    }
+    await upsertSetting('user_profile', JSON.stringify({ name: rawName }));
+    return { success: true, name: rawName };
   });
 
   app.put<{ Body: unknown }>('/api/settings/runtime', async (request, reply) => {

@@ -324,11 +324,8 @@ function MetricToggle({
 /* ------------------------------------------------------------------ */
 
 const containerStyle: React.CSSProperties = {
-  background: 'var(--color-bg-card)',
-  borderRadius: 'var(--radius-md)',
-  border: '1px solid var(--color-border-light)',
-  boxShadow: 'var(--shadow-card)',
-  padding: 20,
+  background: 'transparent',
+  padding: 0,
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
@@ -399,6 +396,9 @@ const legendFallbackStyle: React.CSSProperties = {
   gap: '6px 14px',
   marginTop: 10,
   padding: '0 4px',
+  maxHeight: 68,
+  overflowY: 'auto',
+  flexShrink: 0,
 };
 
 const legendChipStyle: React.CSSProperties = {

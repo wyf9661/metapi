@@ -1017,7 +1017,7 @@ export default function DownstreamKeys() {
   const empty = !loading && !loadError && visibleItems.length === 0;
 
   return (
-    <div className="animate-fade-in" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="animate-fade-in" style={{ padding: 16, paddingBottom: (selectedIds.length > 0 && isMobile) ? 92 : 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div>
           <h2 className="page-title">下游密钥</h2>
