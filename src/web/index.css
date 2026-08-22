@@ -3034,6 +3034,22 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   border-top-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 
+/* VChart tooltip bubbles: theme-aware panel so the chart tooltip follows
+   light/dark instead of staying white. */
+.chart-tooltip {
+  color: color-mix(in srgb, var(--color-text-primary) 90%, #1c1917) !important;
+  background: color-mix(in srgb, var(--color-bg-card) 96%, var(--color-primary) 4%) !important;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent) !important;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(28, 25, 23, 0.14);
+}
+
+.chart-tooltip .vchart-tooltip-title,
+.chart-tooltip .vchart-tooltip-key,
+.chart-tooltip .vchart-tooltip-value {
+  color: var(--color-text-primary) !important;
+}
+
 [data-theme="dark"] .route-enable-toggle.is-enabled {
   background: #0a1f14;
   color: #4ade80;

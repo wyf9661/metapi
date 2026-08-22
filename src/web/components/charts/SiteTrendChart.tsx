@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { api } from '../../api.js';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
+import { useIsMobile } from '../useIsMobile.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -41,6 +42,7 @@ const COLOR_PALETTE = [
 export default function SiteTrendChart() {
   const [metric, setMetric] = useState<Metric>('spend');
   const labelColor = useThemeLabelColor();
+  const isMobile = useIsMobile();
   const [focusedSite, setFocusedSite] = useState<string | null>(null);
   const [trendDays, setTrendDays] = useState(7);
   const [data, setData] = useState<SiteTrendData[]>([]);
@@ -167,6 +169,10 @@ export default function SiteTrendChart() {
           },
         ],
       },
+      className: 'chart-tooltip',
+      trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
+      triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none',
+      lockAfterClick: isMobile,
     },
     animation: true,
     animationAppear: {
@@ -208,35 +214,69 @@ export default function SiteTrendChart() {
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
-        <MetricToggle metric={metric} onChange={setMetric} />
-        <div style={toggleGroupStyle}>
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setTrendDays(d)}
-              style={{
-                ...toggleBtnBase,
-                ...(trendDays === d ? toggleBtnActive : toggleBtnInactive),
-              }}
-            >
-              {d}天
-            </button>
-          ))}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 3v18h18"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M7 14l4-4 3 3 5-6"
+            />
+          </svg>
+          站点趋势
         </div>
-        {focusedSite && (
-          <div style={focusChipStyle}>
-            <span>当前查看：</span>
-            <strong style={{ color: 'var(--color-text-primary)' }}>{focusedSite}</strong>
-            <button
-              type="button"
-              onClick={() => setFocusedSite(null)}
-              style={focusClearBtnStyle}
-            >
-              显示全部
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <MetricToggle metric={metric} onChange={setMetric} />
+          <div style={toggleGroupStyle}>
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setTrendDays(d)}
+                style={{
+                  ...toggleBtnBase,
+                  ...(trendDays === d ? toggleBtnActive : toggleBtnInactive),
+                }}
+              >
+                {d}天
+              </button>
+            ))}
           </div>
-        )}
+          {focusedSite && (
+            <div style={focusChipStyle}>
+              <span>当前查看：</span>
+              <strong style={{ color: 'var(--color-text-primary)' }}>{focusedSite}</strong>
+              <button
+                type="button"
+                onClick={() => setFocusedSite(null)}
+                style={focusClearBtnStyle}
+              >
+                显示全部
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <div style={{ width: '100%', height: 344, flex: 1, minHeight: 344 }}>
         <VChart
@@ -310,8 +350,20 @@ function MetricToggle({
           style={{
             ...toggleBtnBase,
             ...(metric === opt.key ? toggleBtnActive : toggleBtnInactive),
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
           }}
         >
+          {opt.key === 'spend' ? (
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
           {opt.label}
         </button>
       ))}

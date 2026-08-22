@@ -3,6 +3,7 @@ import { VChart } from '@visactor/react-vchart';
 import { InlineBrandIcon } from './BrandIcon.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { useThemeLabelColor } from './useThemeLabelColor.js';
+import { useIsMobile } from './useIsMobile.js';
 
 type TabKey = 'spend' | 'trend' | 'calls' | 'rank';
 
@@ -60,6 +61,7 @@ function EmptyBlock() {
 export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('spend');
   const labelColor = useThemeLabelColor();
+  const isMobile = useIsMobile();
 
   const totals = {
     spend: toSafeNumber(data?.totals?.spend),
@@ -86,8 +88,9 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#4f46e5' }, { offset: 1, color: '#818cf8' }] } } },
     label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCurrency(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
     axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
+    tooltip: { className: 'chart-tooltip', trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover', triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none', lockAfterClick: isMobile },
     animation: true, background: 'transparent',
-  }), [spendDistribution, labelColor]);
+  }), [spendDistribution, labelColor, isMobile]);
 
   const tokenDistribution = useMemo(() => {
     // With 1-day window, trend is meaningless — show per-model tokens instead
@@ -113,9 +116,10 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#06b6d4' }, { offset: 1, color: '#22d3ee' }] } } },
       label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCompactTokenMetric(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
       axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
+      tooltip: { className: 'chart-tooltip', trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover', triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none', lockAfterClick: isMobile },
       animation: true, background: 'transparent',
     };
-  }, [tokenDistribution, labelColor]);
+  }, [tokenDistribution, labelColor, isMobile]);
 
   const callsBarSpec = useMemo(() => ({
     type: 'bar' as const,
@@ -124,8 +128,9 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#10b981' }, { offset: 1, color: '#34d399' }] } } },
     label: { visible: true, position: 'right', formatMethod: (text: string | number) => Number(text).toLocaleString(), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
     axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
+    tooltip: { className: 'chart-tooltip', trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover', triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none', lockAfterClick: isMobile },
     animation: true, background: 'transparent',
-  }), [callsDistribution, labelColor]);
+  }), [callsDistribution, labelColor, isMobile]);
 
   if (!hasData) return <EmptyBlock />;
 

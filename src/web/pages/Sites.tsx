@@ -15,9 +15,9 @@ import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import { useIsMobile } from '../components/useIsMobile.js';
-import { pageForItemIndex } from '../components/clientPagination.js';
+import { pageForItemIndex, CLIENT_PAGE_SIZE } from '../components/clientPagination.js';
 import PaginationControls from '../components/PaginationControls.js';
-import { useClientPagination } from '../components/useClientPagination.js';
+import { useClientPagination, useViewportPageSize } from '../components/useClientPagination.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
@@ -274,6 +274,8 @@ export default function Sites() {
     () => sortItemsForDisplay(sites, sortMode, (site) => site.totalBalance || 0),
     [sites, sortMode],
   );
+  const { pageSize: viewportPageSize } = useViewportPageSize();
+  const effectivePageSize = isMobile ? CLIENT_PAGE_SIZE : viewportPageSize;
   const {
     page: safePage,
     setPage,
@@ -281,7 +283,7 @@ export default function Sites() {
     pageSize,
     pagedItems: pagedSites,
     showControls: showSitePagination,
-  } = useClientPagination(sortedSites, `${sortMode}:${sites.length}`);
+  } = useClientPagination(sortedSites, `${sortMode}:${sites.length}`, effectivePageSize);
 
   // 页码持久化到 URL（?page=N），跳详情页返回后仍停留在原页。
   useEffect(() => {

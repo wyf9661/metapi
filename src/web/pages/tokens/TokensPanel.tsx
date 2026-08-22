@@ -16,9 +16,9 @@ import ModernSelect from '../../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../../components/MobileCard.js';
 import { useIsMobile } from '../../components/useIsMobile.js';
 import { emitTokenCoverageChanged } from '../../dataEvents.js';
-import { pageForItemIndex } from '../../components/clientPagination.js';
+import { pageForItemIndex, CLIENT_PAGE_SIZE } from '../../components/clientPagination.js';
 import PaginationControls from '../../components/PaginationControls.js';
-import { useClientPagination } from '../../components/useClientPagination.js';
+import { useClientPagination, useViewportPageSize } from '../../components/useClientPagination.js';
 import DeleteConfirmModal from '../../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from '../helpers/navigationFocus.js';
 import { tr } from '../../i18n.js';
@@ -334,6 +334,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       return Number(left?.id || 0) - Number(right?.id || 0);
     });
   }, [tokens]);
+  const { pageSize: viewportPageSize } = useViewportPageSize();
   const {
     page: safePage,
     setPage,
@@ -341,7 +342,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     pageSize,
     pagedItems: pagedTokens,
     showControls: showTokenPagination,
-  } = useClientPagination(accountClusteredTokens, tokens.length);
+  } = useClientPagination(accountClusteredTokens, tokens.length, isMobile ? CLIENT_PAGE_SIZE : viewportPageSize);
 
   const activeAccounts = useMemo(() => accounts.filter(isAccountSyncable), [accounts]);
   const activeAccountSelectOptions = useMemo(() => (

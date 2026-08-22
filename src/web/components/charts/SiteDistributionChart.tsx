@@ -199,6 +199,10 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
             },
           ] as any,
         },
+        className: 'chart-tooltip',
+        trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
+        triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none',
+        lockAfterClick: isMobile,
       },
       legends: { visible: false },
       animation: true,
@@ -278,8 +282,14 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               background: viewMode === 'balance' ? 'var(--color-primary)' : 'transparent',
               color: viewMode === 'balance' ? '#ffffff' : 'var(--color-text-secondary)',
               boxShadow: viewMode === 'balance' ? 'var(--shadow-sm)' : 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
             }}
           >
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             余额分布
           </button>
           <button
@@ -295,8 +305,14 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               background: viewMode === 'spend' ? 'var(--color-primary)' : 'transparent',
               color: viewMode === 'spend' ? '#ffffff' : 'var(--color-text-secondary)',
               boxShadow: viewMode === 'spend' ? 'var(--shadow-sm)' : 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
             }}
           >
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+            </svg>
             消耗分布
           </button>
         </div>
