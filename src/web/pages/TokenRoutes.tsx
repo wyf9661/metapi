@@ -1958,7 +1958,7 @@ export default function TokenRoutes() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleRouteSelection(route.id)}
-                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #4f46e5)' }}
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #0d9488)' }}
                           />
                           <span>{tr('选择')}</span>
                         </label>
@@ -2146,7 +2146,7 @@ export default function TokenRoutes() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       width: 36, minHeight: '100%', cursor: 'pointer',
                       borderRadius: '8px 0 0 8px',
-                      background: isSelected ? 'var(--color-primary, #4f46e5)' : 'var(--color-bg-card, #fff)',
+                      background: isSelected ? 'var(--color-primary, #0d9488)' : 'var(--color-bg-card, #fff)',
                       border: '1px solid var(--color-border)',
                       borderRight: 'none',
                       transition: 'background 0.15s',
@@ -2159,7 +2159,7 @@ export default function TokenRoutes() {
                       checked={isSelected}
                       onChange={() => toggleRouteSelection(route.id)}
                       onClick={(e) => e.stopPropagation()}
-                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #4f46e5)' }}
+                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #0d9488)' }}
                     />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>

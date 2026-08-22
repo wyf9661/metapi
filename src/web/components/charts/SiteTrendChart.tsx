@@ -24,7 +24,7 @@ const METRIC_OPTIONS: { key: Metric; label: string }[] = [
 ];
 
 const COLOR_PALETTE = [
-  '#4f46e5',
+  '#0d9488',
   '#06b6d4',
   '#10b981',
   '#f59e0b',

@@ -524,7 +524,7 @@ export default function Sites() {
       if (!res.ok || !res.body) {
         let errMsg = `连接失败 (HTTP ${res.status})`;
         try { const j = await res.json() as any; errMsg = j?.error || j?.message || errMsg; } catch { /* ignore */ }
-        addLog(errMsg, 'var(--color-error, #ef4444)');
+        addLog(errMsg, 'var(--color-error, #dc2626)');
         toast.error(errMsg);
         return;
       }
@@ -545,9 +545,9 @@ export default function Sites() {
               : d.status === 'skipped' ? '— 已跳过'
               : '✗ 不可用';
             const lat = d.latencyMs != null && d.status !== 'skipped' ? ` (${d.latencyMs}ms)` : '';
-            const c = d.status === 'supported' ? 'var(--color-success, #22c55e)'
+            const c = d.status === 'supported' ? 'var(--color-success, #16a34a)'
               : d.status === 'skipped' ? 'var(--color-text-muted)'
-              : 'var(--color-error, #ef4444)';
+              : 'var(--color-error, #dc2626)';
             const reasonText = (() => {
               if (!d.reason || d.status === 'supported' || d.status === 'skipped') return '';
               const r = d.reason;
@@ -567,10 +567,10 @@ export default function Sites() {
             if (d.action === 'disabled') addLog(`  ↳ 已加入站点禁用列表: ${d.modelName}`, 'var(--color-text-muted)');
           } else if (type === 'complete') {
             if (d.unsupported > 0) {
-              addLog(`完成：${d.probed} 个模型已探测，${d.unsupported} 个不可用已自动加入禁用列表`, 'var(--color-error, #ef4444)');
+              addLog(`完成：${d.probed} 个模型已探测，${d.unsupported} 个不可用已自动加入禁用列表`, 'var(--color-error, #dc2626)');
               toast.error(`${d.unsupported} 个模型不可用，已自动加入站点禁用列表`);
             } else {
-              addLog(`完成：${d.probed} 个模型均可用`, 'var(--color-success, #22c55e)');
+              addLog(`完成：${d.probed} 个模型均可用`, 'var(--color-success, #16a34a)');
               toast.success(`探测完成：${d.probed} 个模型均可用`);
             }
             setTimeout(() => probeLogEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
@@ -584,7 +584,7 @@ export default function Sites() {
               }),
             ]).catch(() => {}).finally(() => setProbeCompleted(true));
           } else if (type === 'error') {
-            addLog(d.message || '探测失败', 'var(--color-error, #ef4444)');
+            addLog(d.message || '探测失败', 'var(--color-error, #dc2626)');
             toast.error(d.message || '探测失败');
             // Refresh model state even on error
             Promise.all([
@@ -621,7 +621,7 @@ export default function Sites() {
         setProbeLog((prev) => [...prev, { time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text: '已手动停止', color: 'var(--color-text-muted)' }]);
         return;
       }
-      addLog(eMessage || '探测失败', 'var(--color-error, #ef4444)');
+      addLog(eMessage || '探测失败', 'var(--color-error, #dc2626)');
       toast.error(eMessage || '探测失败');
     } finally {
       setProbing(false);
@@ -1772,7 +1772,7 @@ export default function Sites() {
                   <button
                     onClick={() => { probeAbortRef.current?.abort(); }}
                     className="btn btn-ghost"
-                    style={{ fontSize: 12, padding: '6px 16px', border: '1px solid var(--color-error, #ef4444)', color: 'var(--color-error, #ef4444)' }}
+                    style={{ fontSize: 12, padding: '6px 16px', border: '1px solid var(--color-error, #dc2626)', color: 'var(--color-error, #dc2626)' }}
                   >
                     停止
                   </button>
@@ -1822,10 +1822,10 @@ export default function Sites() {
                                   fontSize: 11, padding: '2px 7px', borderRadius: 10,
                                   fontFamily: 'var(--font-mono)',
                                   background: isDisabled
-                                    ? 'color-mix(in srgb, var(--color-error, #ef4444) 12%, transparent)'
-                                    : 'color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent)',
-                                  color: isDisabled ? 'var(--color-error, #ef4444)' : 'var(--color-success, #22c55e)',
-                                  border: `1px solid ${isDisabled ? 'color-mix(in srgb, var(--color-error, #ef4444) 30%, transparent)' : 'color-mix(in srgb, var(--color-success, #22c55e) 30%, transparent)'}`,
+                                    ? 'color-mix(in srgb, var(--color-error, #dc2626) 12%, transparent)'
+                                    : 'color-mix(in srgb, var(--color-success, #16a34a) 12%, transparent)',
+                                  color: isDisabled ? 'var(--color-error, #dc2626)' : 'var(--color-success, #16a34a)',
+                                  border: `1px solid ${isDisabled ? 'color-mix(in srgb, var(--color-error, #dc2626) 30%, transparent)' : 'color-mix(in srgb, var(--color-success, #16a34a) 30%, transparent)'}`,
                                 }}
                               >
                                 {model}

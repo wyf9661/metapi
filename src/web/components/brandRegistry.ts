@@ -39,7 +39,7 @@ function normalizeInput(value: string): string {
 }
 
 const FALLBACK_COLORS = [
-  'linear-gradient(135deg, #4f46e5, #818cf8)',
+  'linear-gradient(135deg, #0f766e, #14b8a6)',
   'linear-gradient(135deg, #059669, #34d399)',
   'linear-gradient(135deg, #2563eb, #60a5fa)',
   'linear-gradient(135deg, #d946ef, #f0abfc)',

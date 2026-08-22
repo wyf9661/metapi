@@ -111,7 +111,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   // Top10 固定 10 行，无需滚动
   const chartHeight = 10 * ROW_HEIGHT + AXIS_RESERVE;
 
-  const BAR_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+  const BAR_COLORS = ['#0d9488', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
   const formatValue = (value: number): string => `$${value.toFixed(2)}`;
 
