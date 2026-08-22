@@ -65,15 +65,6 @@ export const ROUTE_GROUPING_COLUMN_COMPATIBILITY_SPECS: RouteGroupingColumnCompa
     },
   },
   {
-    table: 'token_routes',
-    column: 'routing_strategy',
-    addSql: {
-      sqlite: 'ALTER TABLE token_routes ADD COLUMN routing_strategy text DEFAULT \'weighted\';',
-      mysql: 'ALTER TABLE `token_routes` ADD COLUMN `routing_strategy` VARCHAR(32) NULL DEFAULT \'weighted\'',
-      postgres: 'ALTER TABLE "token_routes" ADD COLUMN "routing_strategy" TEXT DEFAULT \'weighted\'',
-    },
-  },
-  {
     table: 'route_channels',
     column: 'source_model',
     addSql: {

@@ -557,10 +557,6 @@ function ensureRouteGroupingSchema() {
     execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN decision_refreshed_at text;');
   }
 
-  if (!tableColumnExists('token_routes', 'routing_strategy')) {
-    execSqliteLegacyCompat('ALTER TABLE token_routes ADD COLUMN routing_strategy text DEFAULT \'weighted\';');
-  }
-
   if (!tableColumnExists('route_channels', 'source_model')) {
     execSqliteLegacyCompat('ALTER TABLE route_channels ADD COLUMN source_model text;');
   }

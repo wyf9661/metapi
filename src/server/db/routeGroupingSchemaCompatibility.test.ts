@@ -50,7 +50,6 @@ describe('ensureRouteGroupingSchemaCompatibility', () => {
         'ALTER TABLE token_routes ADD COLUMN route_mode text DEFAULT \'pattern\';',
         'ALTER TABLE token_routes ADD COLUMN decision_snapshot text;',
         'ALTER TABLE token_routes ADD COLUMN decision_refreshed_at text;',
-        'ALTER TABLE token_routes ADD COLUMN routing_strategy text DEFAULT \'weighted\';',
         'ALTER TABLE route_channels ADD COLUMN source_model text;',
         'ALTER TABLE route_channels ADD COLUMN last_selected_at text;',
         'ALTER TABLE route_channels ADD COLUMN consecutive_fail_count integer NOT NULL DEFAULT 0;',
@@ -68,7 +67,6 @@ describe('ensureRouteGroupingSchemaCompatibility', () => {
         'ALTER TABLE "token_routes" ADD COLUMN "route_mode" TEXT DEFAULT \'pattern\'',
         'ALTER TABLE "token_routes" ADD COLUMN "decision_snapshot" TEXT',
         'ALTER TABLE "token_routes" ADD COLUMN "decision_refreshed_at" TEXT',
-        'ALTER TABLE "token_routes" ADD COLUMN "routing_strategy" TEXT DEFAULT \'weighted\'',
         'ALTER TABLE "route_channels" ADD COLUMN "source_model" TEXT',
         'ALTER TABLE "route_channels" ADD COLUMN "last_selected_at" TEXT',
         'ALTER TABLE "route_channels" ADD COLUMN "consecutive_fail_count" INTEGER NOT NULL DEFAULT 0',
@@ -86,7 +84,6 @@ describe('ensureRouteGroupingSchemaCompatibility', () => {
         'ALTER TABLE `token_routes` ADD COLUMN `route_mode` VARCHAR(32) NULL DEFAULT \'pattern\'',
         'ALTER TABLE `token_routes` ADD COLUMN `decision_snapshot` TEXT NULL',
         'ALTER TABLE `token_routes` ADD COLUMN `decision_refreshed_at` TEXT NULL',
-        'ALTER TABLE `token_routes` ADD COLUMN `routing_strategy` VARCHAR(32) NULL DEFAULT \'weighted\'',
         'ALTER TABLE `route_channels` ADD COLUMN `source_model` TEXT NULL',
         'ALTER TABLE `route_channels` ADD COLUMN `last_selected_at` TEXT NULL',
         'ALTER TABLE `route_channels` ADD COLUMN `consecutive_fail_count` INT NOT NULL DEFAULT 0',
@@ -104,7 +101,7 @@ describe('ensureRouteGroupingSchemaCompatibility', () => {
   it('skips existing columns', async () => {
     const { inspector, executedSql } = createInspector('postgres', {
       existingColumnsByTable: {
-        token_routes: ['display_name', 'display_icon', 'route_mode', 'decision_snapshot', 'decision_refreshed_at', 'routing_strategy'],
+        token_routes: ['display_name', 'display_icon', 'route_mode', 'decision_snapshot', 'decision_refreshed_at'],
         route_channels: ['source_model', 'last_selected_at', 'consecutive_fail_count', 'cooldown_level'],
       },
       existingTables: ['token_routes', 'route_channels', 'route_group_sources'],
