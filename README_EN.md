@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logos/logo-full.png" alt="Metapi" width="280">
+<img src="docs/public/logos/logo.svg" alt="Metapi" width="280">
 
 **A relay for relays — aggregate scattered AI relay stations into one unified gateway**
 
