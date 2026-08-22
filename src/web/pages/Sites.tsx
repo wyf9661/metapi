@@ -22,7 +22,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { clearFocusParams, readFocusSiteId } from './helpers/navigationFocus.js';
-import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, buildSiteApiEndpointSummary, buildSiteConnectionSearchParams, getConfiguredSiteApiEndpoints, hasConfiguredCustomHeaders, platformColors, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
+import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, buildSiteConnectionSearchParams, getConfiguredSiteApiEndpoints, platformColors, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
 import { tr } from '../i18n.js';
 import { buildCustomReorderUpdates, buildUnpinMoveToFrontUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
@@ -2028,33 +2028,30 @@ export default function Sites() {
                             </a>
                           ) : '-'}
                         />
-                        <MobileField
-                          label="API 请求地址"
-                          stacked
-                          value={(
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <span>{buildSiteApiEndpointSummary(site)}</span>
-                              {getConfiguredSiteApiEndpoints(site).map((endpoint, endpointIndex) => (
-                                <span
-                                  key={`mobile-site-endpoint-${site.id}-${endpoint.id ?? endpointIndex}`}
-                                  style={{
-                                    fontSize: 11,
-                                    fontFamily: 'var(--font-mono)',
-                                    color: endpoint.enabled === false ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
-                                    wordBreak: 'break-all',
-                                  }}
-                                >
-                                  {endpoint.url}
-                                  {endpoint.enabled === false ? '（已禁用）' : ''}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        />
-                        <MobileField
-                          label="自定义头"
-                          value={hasConfiguredCustomHeaders(site.customHeaders) ? '已配置' : '-'}
-                        />
+                        {getConfiguredSiteApiEndpoints(site).length > 0 ? (
+                          <MobileField
+                            label="API 请求地址"
+                            stacked
+                            value={(
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {getConfiguredSiteApiEndpoints(site).map((endpoint, endpointIndex) => (
+                                  <span
+                                    key={`mobile-site-endpoint-${site.id}-${endpoint.id ?? endpointIndex}`}
+                                    style={{
+                                      fontSize: 11,
+                                      fontFamily: 'var(--font-mono)',
+                                      color: endpoint.enabled === false ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+                                      wordBreak: 'break-all',
+                                    }}
+                                  >
+                                    {endpoint.url}
+                                    {endpoint.enabled === false ? '（已禁用）' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          />
+                        ) : null}
                         <MobileField
                           label="创建时间"
                           value={formatDateTimeLocal(site.createdAt)}

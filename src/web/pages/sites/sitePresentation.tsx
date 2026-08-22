@@ -24,21 +24,10 @@ export type SiteRowLike = {
   }> | null;
 };
 
-export function hasConfiguredCustomHeaders(customHeaders?: string | null): boolean {
-  return typeof customHeaders === 'string' && customHeaders.trim().length > 0;
-}
-
 export function getConfiguredSiteApiEndpoints(site?: Pick<SiteRowLike, 'apiEndpoints'> | null) {
   return Array.isArray(site?.apiEndpoints)
     ? site.apiEndpoints.filter((item) => typeof item?.url === 'string' && item.url.trim())
     : [];
-}
-
-export function buildSiteApiEndpointSummary(site?: Pick<SiteRowLike, 'apiEndpoints'> | null): string {
-  const endpoints = getConfiguredSiteApiEndpoints(site);
-  if (endpoints.length <= 0) return '跟随主站点 URL';
-  const enabledCount = endpoints.filter((item) => item.enabled !== false).length;
-  return `${enabledCount}/${endpoints.length} 条启用`;
 }
 
 export function formatUsd(value?: number | null): string {
