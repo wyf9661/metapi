@@ -67,7 +67,7 @@ export default withMermaid(
     },
     themeConfig: {
       siteTitle: 'Metapi Docs',
-      logo: '/logos/logo-icon-512.png',
+      logo: '/logos/logo.svg',
       nav: [
         { text: '首页', link: '/' },
         { text: '快速上手', link: '/getting-started' },

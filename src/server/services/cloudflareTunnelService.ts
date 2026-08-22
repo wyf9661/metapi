@@ -672,9 +672,9 @@ export function isTunnelDashboardPath(urlPath: string): boolean {
   if (path.startsWith('/assets/')) return true;
   if (path === '/index.html') return true;
   // Frontend shell static files at web root (logo/favicon/etc).
-  // Previously only extension-less SPA routes were allowed, so /logo.png 403'd on public tunnel.
+  // Previously only extension-less SPA routes were allowed, so static files 403'd on public tunnel.
   if (
-    path === '/logo.png'
+    path === '/logo.svg'
     || path === '/favicon.png'
     || path === '/favicon.ico'
     || path === '/robots.txt'

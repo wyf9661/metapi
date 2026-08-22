@@ -5,22 +5,27 @@
       <stop offset="1" stop-color="#06b6d4"/>
     </linearGradient>
     <linearGradient id="metapi-flow" x1="0" y1="56" x2="64" y2="18" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0d9488" stop-opacity="0.45"/>
+      <stop offset="0" stop-color="#0d9488" stop-opacity="0.4"/>
       <stop offset="1" stop-color="#14b8a6" stop-opacity="0.85"/>
     </linearGradient>
   </defs>
 
-  <!-- Three source nodes (the scattered API sites being aggregated) -->
-  <circle cx="10" cy="50" r="3.6" fill="#0d9488"/>
-  <circle cx="32" cy="55" r="3.6" fill="#06b6d4"/>
-  <circle cx="54" cy="50" r="3.6" fill="#0d9488"/>
+  <!-- Three source nodes: the scattered upstream API sites -->
+  <circle cx="10" cy="50" r="3.4" fill="#0d9488"/>
+  <circle cx="32" cy="55" r="3.4" fill="#0d9488"/>
+  <circle cx="54" cy="50" r="3.4" fill="#0d9488"/>
 
-  <!-- Inward flows converging on the gateway -->
-  <path d="M13 46 C 21 33, 27 25, 30.5 19.5" stroke="url(#metapi-flow)" stroke-width="5" stroke-linecap="round"/>
-  <path d="M51 46 C 43 33, 37 25, 33.5 19.5" stroke="url(#metapi-flow)" stroke-width="5" stroke-linecap="round"/>
-  <path d="M32 51 C 32 40, 32 31, 32 23" stroke="url(#metapi-flow)" stroke-width="5" stroke-linecap="round"/>
+  <!-- Flows converging inward on the gateway -->
+  <path d="M13 46 C 21 34, 27 26, 30 21" stroke="url(#metapi-flow)" stroke-width="4.6" stroke-linecap="round"/>
+  <path d="M51 46 C 43 34, 37 26, 34 21" stroke="url(#metapi-flow)" stroke-width="4.6" stroke-linecap="round"/>
+  <path d="M32 51 C 32 41, 32 32, 32 24" stroke="url(#metapi-flow)" stroke-width="4.6" stroke-linecap="round"/>
+
+  <!-- Convergence arrows: direction of aggregation is upward, into the core -->
+  <path d="M18.5 38.5 L21.5 33.5 L24.5 36" stroke="#14b8a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M45.5 38.5 L42.5 33.5 L39.5 36" stroke="#14b8a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28.8 38 L32 33.6 L35.2 38" stroke="#14b8a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- The unified gateway core -->
-  <circle cx="32" cy="14" r="8.5" fill="url(#metapi-core)"/>
-  <circle cx="32" cy="14" r="3.2" fill="#ffffff" fill-opacity="0.92"/>
+  <circle cx="32" cy="14" r="9" fill="url(#metapi-core)"/>
+  <circle cx="32" cy="14" r="3.4" fill="#ffffff" fill-opacity="0.94"/>
 </svg>

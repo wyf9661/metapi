@@ -2289,7 +2289,7 @@ html[data-layout="desktop"] .main-content {
 .sites-table td.site-balance-cell {
   text-align: left;
   white-space: nowrap;
-  width: 15%;
+  width: 20%;
 }
 
 .sites-table th:nth-child(4),
@@ -2323,7 +2323,7 @@ html[data-layout="desktop"] .main-content {
 .sites-actions-cell {
   text-align: center;
   white-space: nowrap;
-  width: 23%;
+  width: 18%;
 }
 
 .sites-actions-cell {
@@ -2441,8 +2441,7 @@ html[data-layout="desktop"] .main-content {
 /* Balance: compact, single-line, no multi-line wrap bloating the column. */
 .site-balance-cell {
   white-space: nowrap !important;
-  max-width: 7.5rem;
-  overflow: hidden;
+  min-width: 11rem;
 }
 
 .site-balance-inline {
@@ -2453,7 +2452,6 @@ html[data-layout="desktop"] .main-content {
   gap: 4px;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
 }
 
 .site-balance-inline.align-end {
@@ -2464,10 +2462,7 @@ html[data-layout="desktop"] .main-content {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
 }
 
 .site-balance-divider {
@@ -2480,10 +2475,7 @@ html[data-layout="desktop"] .main-content {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
   text-decoration: none;
 }
 
