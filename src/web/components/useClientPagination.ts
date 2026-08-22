@@ -69,20 +69,21 @@ export function useExactPageSize<T extends HTMLElement>(
   const min = opts.min ?? 4;
   const max = opts.max ?? 30;
   const rowSelector = opts.rowSelector ?? 'tbody tr';
-  const bottomReserve = opts.bottomReserve ?? 56; // pagination bar + breathing room
+  const bottomReserve = opts.bottomReserve ?? 56;
   const [pageSize, setPageSize] = useState(CLIENT_PAGE_SIZE);
 
   useEffect(() => {
-    const recompute = () => {
-      const table = tableRef.current;
-      if (!table || typeof window === 'undefined') return;
-      const rows = table.querySelectorAll<HTMLElement>(rowSelector);
+    const el = tableRef.current;
+    if (!el || typeof window === 'undefined') return;
+
+    const measure = () => {
+      const rows = el.querySelectorAll<HTMLElement>(rowSelector);
       const firstRow = rows[0];
       if (!firstRow) return;
       const rowHeight = firstRow.getBoundingClientRect().height;
       if (!Number.isFinite(rowHeight) || rowHeight <= 0) return;
 
-      const tableTop = table.getBoundingClientRect().top;
+      const tableTop = el.getBoundingClientRect().top;
       const available = window.innerHeight - tableTop - bottomReserve;
       if (available <= rowHeight * min) {
         setPageSize(min);
@@ -92,10 +93,82 @@ export function useExactPageSize<T extends HTMLElement>(
       setPageSize(Math.min(max, Math.max(min, rowsThatFit)));
     };
 
-    recompute();
-    window.addEventListener('resize', recompute);
-    return () => window.removeEventListener('resize', recompute);
+    // Re-measure whenever the container's content size changes (e.g. after
+    // data loads and rows appear, not just on window resize).
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => measure());
+      ro.observe(el);
+    }
+
+    measure();
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, [tableRef, rowSelector, min, max, bottomReserve]);
+
+  return pageSize;
+}
+
+/**
+ * Like useExactPageSize but resolves the active container from a list of
+ * candidate refs, so desktop (table) and mobile (card list) layouts can share
+ * one measurement. The first ref whose current element is populated wins.
+ */
+export function useExactPageSizeMulti<T extends HTMLElement>(
+  refs: Array<RefObject<T | null>>,
+  opts: { min?: number; max?: number; rowSelector?: string; bottomReserve?: number } = {},
+): number {
+  const min = opts.min ?? 4;
+  const max = opts.max ?? 30;
+  const rowSelector = opts.rowSelector ?? 'tbody tr';
+  const bottomReserve = opts.bottomReserve ?? 56; // pagination bar + breathing room
+  const [pageSize, setPageSize] = useState(CLIENT_PAGE_SIZE);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const measure = () => {
+      const el = refs.map((r) => r.current).find(
+        (c): c is T => !!c && typeof (c as HTMLElement).querySelectorAll === 'function',
+      );
+      if (!el) return;
+      const rows = el.querySelectorAll<HTMLElement>(rowSelector);
+      const firstRow = rows[0];
+      if (!firstRow) return;
+      const rowHeight = firstRow.getBoundingClientRect().height;
+      if (!Number.isFinite(rowHeight) || rowHeight <= 0) return;
+
+      const tableTop = el.getBoundingClientRect().top;
+      const available = window.innerHeight - tableTop - bottomReserve;
+      if (available <= rowHeight * min) {
+        setPageSize(min);
+        return;
+      }
+      const rowsThatFit = Math.floor(available / rowHeight);
+      setPageSize(Math.min(max, Math.max(min, rowsThatFit)));
+    };
+
+    const observers: ResizeObserver[] = [];
+    if (typeof ResizeObserver !== 'undefined') {
+      for (const r of refs) {
+        const el = r.current;
+        if (!el) continue;
+        const ro = new ResizeObserver(() => measure());
+        ro.observe(el);
+        observers.push(ro);
+      }
+    }
+
+    measure();
+    window.addEventListener('resize', measure);
+    return () => {
+      for (const ro of observers) ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [refs, rowSelector, min, max, bottomReserve]);
 
   return pageSize;
 }

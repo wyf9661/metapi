@@ -15,9 +15,9 @@ import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import { useIsMobile } from '../components/useIsMobile.js';
-import { pageForItemIndex, CLIENT_PAGE_SIZE } from '../components/clientPagination.js';
+import { pageForItemIndex } from '../components/clientPagination.js';
 import PaginationControls from '../components/PaginationControls.js';
-import { useClientPagination, useExactPageSize } from '../components/useClientPagination.js';
+import { useClientPagination, useExactPageSizeMulti } from '../components/useClientPagination.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
@@ -157,6 +157,7 @@ export default function Sites() {
   const loadingModelsSiteIdRef = useRef<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
   const sitesTableWrapRef = useRef<HTMLDivElement | null>(null);
+  const mobileListRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
   const toast = useToast();
   const [disabledModels, setDisabledModels] = useState<string[]>([]);
@@ -275,12 +276,15 @@ export default function Sites() {
     () => sortItemsForDisplay(sites, sortMode, (site) => site.totalBalance || 0),
     [sites, sortMode],
   );
-  const exactPageSize = useExactPageSize(sitesTableWrapRef, {
-    min: 4,
-    max: 30,
-    rowSelector: 'tbody tr',
-  });
-  const effectivePageSize = isMobile ? CLIENT_PAGE_SIZE : exactPageSize;
+  const exactPageSize = useExactPageSizeMulti(
+    [sitesTableWrapRef, mobileListRef],
+    {
+      min: 4,
+      max: 30,
+      rowSelector: isMobile ? '.mobile-card-list > .mobile-card' : 'tbody tr',
+    },
+  );
+  const effectivePageSize = exactPageSize;
   const {
     page: safePage,
     setPage,

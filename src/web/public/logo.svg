@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="metapi-core" x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d9488"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="metapi-flow" x1="0" y1="56" x2="64" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d9488" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#14b8a6" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Three source nodes (the scattered API sites being aggregated) -->
+  <circle cx="10" cy="50" r="3.6" fill="#0d9488"/>
+  <circle cx="32" cy="55" r="3.6" fill="#06b6d4"/>
+  <circle cx="54" cy="50" r="3.6" fill="#0d9488"/>
+
+  <!-- Inward flows converging on the gateway -->
+  <path d="M13 46 C 21 33, 27 25, 30.5 19.5" stroke="url(#metapi-flow)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M51 46 C 43 33, 37 25, 33.5 19.5" stroke="url(#metapi-flow)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M32 51 C 32 40, 32 31, 32 23" stroke="url(#metapi-flow)" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- The unified gateway core -->
+  <circle cx="32" cy="14" r="8.5" fill="url(#metapi-core)"/>
+  <circle cx="32" cy="14" r="3.2" fill="#ffffff" fill-opacity="0.92"/>
+</svg>

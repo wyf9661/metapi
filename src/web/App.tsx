@@ -169,7 +169,7 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
           <div className="login-brand-header">
             <div className="brand-mark-frame brand-mark-frame-hero">
               <div className="brand-mark-canvas">
-                <img src="/logo.png" alt="Metapi" className="login-brand-logo" />
+                <img src="/logo.svg" alt="Metapi" className="login-brand-logo" />
               </div>
             </div>
             <div className="login-brand-summary">
@@ -674,7 +674,7 @@ function AppShell() {
           </button>
         )}
         <div className="topbar-logo">
-          <img src="/logo.png" alt="Metapi" style={{ width: 28, height: 28, borderRadius: 6 }} />
+          <img src="/logo.svg" alt="Metapi" style={{ width: 28, height: 28, borderRadius: 6 }} />
           <span className="topbar-logo-text">Metapi</span>
         </div>
         <nav className="topbar-nav">
@@ -816,7 +816,7 @@ function AppShell() {
             closeLabel={t('关闭导航')}
           >
             <div className="mobile-drawer-header">
-              <img src="/logo.png" alt="Metapi" />
+              <img src="/logo.svg" alt="Metapi" />
               <span>Metapi</span>
             </div>
             <nav className="mobile-nav">

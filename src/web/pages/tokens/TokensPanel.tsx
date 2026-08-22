@@ -16,9 +16,9 @@ import ModernSelect from '../../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../../components/MobileCard.js';
 import { useIsMobile } from '../../components/useIsMobile.js';
 import { emitTokenCoverageChanged } from '../../dataEvents.js';
-import { pageForItemIndex, CLIENT_PAGE_SIZE } from '../../components/clientPagination.js';
+import { pageForItemIndex } from '../../components/clientPagination.js';
 import PaginationControls from '../../components/PaginationControls.js';
-import { useClientPagination, useViewportPageSize } from '../../components/useClientPagination.js';
+import { useClientPagination, useExactPageSizeMulti } from '../../components/useClientPagination.js';
 import DeleteConfirmModal from '../../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from '../helpers/navigationFocus.js';
 import { tr } from '../../i18n.js';
@@ -181,6 +181,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
   const [editGroupOptions, setEditGroupOptions] = useState<string[]>(['default']);
   const [editGroupLoading, setEditGroupLoading] = useState(false);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+  const tokensTableRef = useRef<HTMLTableElement | null>(null);
+  const tokensMobileListRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editingTokenIdRef = useRef<number | null>(null);
   const toast = useToast();
@@ -334,7 +336,14 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       return Number(left?.id || 0) - Number(right?.id || 0);
     });
   }, [tokens]);
-  const { pageSize: viewportPageSize } = useViewportPageSize();
+  const exactPageSize = useExactPageSizeMulti(
+    [tokensTableRef, tokensMobileListRef],
+    {
+      min: 4,
+      max: 30,
+      rowSelector: isMobile ? '.mobile-card-list > .mobile-card' : 'tbody tr',
+    },
+  );
   const {
     page: safePage,
     setPage,
@@ -342,7 +351,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     pageSize,
     pagedItems: pagedTokens,
     showControls: showTokenPagination,
-  } = useClientPagination(accountClusteredTokens, tokens.length, isMobile ? CLIENT_PAGE_SIZE : viewportPageSize);
+  } = useClientPagination(accountClusteredTokens, tokens.length, exactPageSize);
 
   const activeAccounts = useMemo(() => accounts.filter(isAccountSyncable), [accounts]);
   const activeAccountSelectOptions = useMemo(() => (
@@ -1218,7 +1227,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
           </div>
         ) : tokens.length > 0 ? (
           isMobile ? (
-            <div className="mobile-card-list">
+            <div className="mobile-card-list" ref={tokensMobileListRef}>
               {pagedTokens.map((token: any) => {
                 const loadingPrefix = `token-${token.id}`;
                 const isPending = isMaskedPendingToken(token);
@@ -1338,7 +1347,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               })}
             </div>
           ) : (
-            <table className="data-table token-table">
+            <table className="data-table token-table" ref={tokensTableRef}>
             <thead>
               <tr>
                 <th>令牌名称</th>

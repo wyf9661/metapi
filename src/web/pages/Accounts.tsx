@@ -7,9 +7,9 @@ import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import { useIsMobile } from '../components/useIsMobile.js';
-import { pageForItemIndex, CLIENT_PAGE_SIZE } from '../components/clientPagination.js';
+import { pageForItemIndex } from '../components/clientPagination.js';
 import PaginationControls from '../components/PaginationControls.js';
-import { useClientPagination, useViewportPageSize } from '../components/useClientPagination.js';
+import { useClientPagination, useExactPageSizeMulti } from '../components/useClientPagination.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteBadgeLink from '../components/SiteBadgeLink.js';
 import AccountModelsModal from './accounts/AccountModelsModal.js';
@@ -180,6 +180,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     addingManualModels: false,
   });
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+  const accountsTableWrapRef = useRef<HTMLDivElement | null>(null);
+  const accountsMobileListRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRebindTargetRef = useRef<any | null>(null);
   const modelModalRequestSeqRef = useRef(0);
@@ -301,7 +303,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       return resolveAccountCredentialMode(account) === activeSegment;
     });
   }, [activeSegment, sortedAccounts, filterSiteId]);
-  const { pageSize: viewportPageSize } = useViewportPageSize();
+  const exactPageSize = useExactPageSizeMulti(
+    [accountsTableWrapRef, accountsMobileListRef],
+    {
+      min: 4,
+      max: 30,
+      rowSelector: isMobile ? '.mobile-card-list > .mobile-card' : 'tbody tr',
+    },
+  );
   const {
     page: safePage,
     setPage,
@@ -312,7 +321,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   } = useClientPagination(
     visibleAccounts,
     `${activeSegment}:${sortMode}:${accounts.length}:${filterSiteId || 0}`,
-    isMobile ? CLIENT_PAGE_SIZE : viewportPageSize,
+    exactPageSize,
   );
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
@@ -2421,7 +2430,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           <div className="card" style={{ paddingBottom: 12 }}>
             {visibleAccounts.length > 0 ? (
               isMobile ? (
-                <div className="mobile-card-list">
+                <div className="mobile-card-list" ref={accountsMobileListRef}>
                   {pagedAccounts.map((a: any) => {
                     const capabilities = resolveAccountCapabilities(a);
                     const connectionMode = resolveAccountCredentialMode(a);
@@ -2725,7 +2734,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   })}
                 </div>
                 ) : (
-                  <div className="accounts-desktop-table-wrap">
+                  <div className="accounts-desktop-table-wrap" ref={accountsTableWrapRef}>
                 <table className="data-table accounts-table">
                   <thead>
                     <tr>

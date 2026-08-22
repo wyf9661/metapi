@@ -82,7 +82,7 @@ export default function About() {
       <div className="card animate-slide-up stagger-1" style={{ padding: 22, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
           <img
-            src="/logo.png"
+            src="/logo.svg"
             alt="Metapi"
             style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0 }}
           />
