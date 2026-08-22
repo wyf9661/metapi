@@ -2139,15 +2139,19 @@ export default function Sites() {
                           >
                             {site.name}
                           </a>
-                          {hasConfiguredCustomHeaders(site.customHeaders) ? (
-                            <span className="badge badge-info sites-name-tag" style={{ fontSize: 11 }}>
-                              自定义头
-                            </span>
-                          ) : null}
                         </div>
-                        <span className={`badge ${getConfiguredSiteApiEndpoints(site).length > 0 ? 'badge-warning' : 'badge-muted'}`} style={{ fontSize: 11 }}>
-                          API 地址: {buildSiteApiEndpointSummary(site)}
-                        </span>
+                        {(() => {
+                          const endpoints = getConfiguredSiteApiEndpoints(site);
+                          const enabledCount = endpoints.filter((item) => item.enabled !== false).length;
+                          // 默认态（无独立地址 / 单地址全启用）无需徽章；仅在有多地址或存在禁用时提示
+                          if (endpoints.length === 0 || (endpoints.length === 1 && enabledCount === 1)) return null;
+                          const allEnabled = enabledCount === endpoints.length;
+                          return (
+                            <span className={`badge ${allEnabled ? 'badge-info' : 'badge-warning'}`} style={{ fontSize: 11 }}>
+                              API 地址 {enabledCount}/{endpoints.length} 条启用
+                            </span>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
