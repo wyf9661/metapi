@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { formatDateTimeMinuteLocal } from '../../pages/helpers/checkinLogTime.js';
+import { useIsMobile } from '../useIsMobile.js';
 
 type Metric = 'tokens' | 'requests' | 'cost';
 
@@ -43,6 +44,7 @@ export default function DownstreamKeyTrendChart({
   height?: number;
 }) {
   const [metric, setMetric] = useState<Metric>('tokens');
+  const isMobile = useIsMobile();
 
   const flatData = useMemo(() => {
     if (!Array.isArray(buckets) || buckets.length === 0) return [];
@@ -137,6 +139,10 @@ export default function DownstreamKeyTrendChart({
           },
         ],
       },
+      className: 'chart-tooltip',
+      trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
+      triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none',
+      lockAfterClick: isMobile,
     },
     color: ['var(--color-primary)'],
     background: 'transparent',
