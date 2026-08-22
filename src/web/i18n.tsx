@@ -40,6 +40,7 @@ const zhToEn: Record<string, string> = {
   '清空': 'Clear',
   '全部已读': 'Mark All Read',
   '控制台': 'Console',
+  '路由与日志': 'Routing & Logs',
   '仪表盘': 'Dashboard',
   '站点': 'Sites',
   '账号': 'Accounts',
