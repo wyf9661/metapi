@@ -714,9 +714,13 @@ export async function settingsRoutes(app: FastifyInstance) {
       .get();
     let name = '管理员';
     try {
-      const parsed = JSON.parse(String(row?.value || '{}'));
-      if (typeof parsed?.name === 'string' && parsed.name.trim()) {
-        name = parsed.name.trim();
+      // upsertSetting JSON-encodes the value, so a single parse yields the
+      // object. Legacy rows may be double-encoded, so unwrap a string result.
+      let parsed: unknown = JSON.parse(String(row?.value ?? '{}'));
+      if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+      const candidate = (parsed as { name?: unknown } | null)?.name;
+      if (typeof candidate === 'string' && candidate.trim()) {
+        name = candidate.trim();
       }
     } catch { /* fall back to default */ }
     return { name };
@@ -731,7 +735,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (Array.from(rawName).length > 24) {
       return reply.code(400).send({ success: false, message: '用户名最多 24 个字符' });
     }
-    await upsertSetting('user_profile', JSON.stringify({ name: rawName }));
+    await upsertSetting('user_profile', { name: rawName });
     return { success: true, name: rawName };
   });
 
