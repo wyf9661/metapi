@@ -8,6 +8,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '+ 添加站点': '+ add site',
   '+ 添加账号': '+ add account',
   '+ 新增令牌': '+ Add new token',
+  '不需要认证时可留空': 'Leave blank when authentication is not required',
+  '粘贴 API Key（无需认证时可留空）': 'Paste API Key (leave blank when authentication is not required)',
   '早上好': 'Good morning',
   '晚上好': 'Good evening',
   '夜深了': 'It’s late at night',

@@ -42,17 +42,20 @@ describe('ProgramLogs status label', () => {
   });
 
   it('treats summary with failed=0 as success', async () => {
-    apiMock.getEvents.mockResolvedValue([
-      {
-        id: 1,
-        type: 'status',
-        title: '同步全部账号令牌已完成（成功31/跳过0/失败0）',
-        message: '全部账号令牌同步完成：成功 31，跳过 0，失败 0',
-        level: 'info',
-        read: false,
-        createdAt: '2026-03-04T06:43:03.000Z',
-      },
-    ]);
+    apiMock.getEvents.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          type: 'status',
+          title: '同步全部账号令牌已完成（成功31/跳过0/失败0）',
+          message: '全部账号令牌同步完成：成功 31，跳过 0，失败 0',
+          level: 'info',
+          read: false,
+          createdAt: '2026-03-04T06:43:03.000Z',
+        },
+      ],
+      total: 1,
+    });
 
     let root!: WebTestRenderer;
     await act(async () => {
@@ -78,17 +81,20 @@ describe('ProgramLogs status label', () => {
   });
 
   it('treats parenthesized counts with failed=0 as success', async () => {
-    apiMock.getEvents.mockResolvedValue([
-      {
-        id: 2,
-        type: 'status',
-        title: '同步全部账号令牌已完成',
-        message: '成功(15): a, b\n跳过(1): c\n失败(0): -',
-        level: 'info',
-        read: false,
-        createdAt: '2026-03-04T06:43:03.000Z',
-      },
-    ]);
+    apiMock.getEvents.mockResolvedValue({
+      items: [
+        {
+          id: 2,
+          type: 'status',
+          title: '同步全部账号令牌已完成',
+          message: '成功(15): a, b\n跳过(1): c\n失败(0): -',
+          level: 'info',
+          read: false,
+          createdAt: '2026-03-04T06:43:03.000Z',
+        },
+      ],
+      total: 1,
+    });
 
     let root!: WebTestRenderer;
     await act(async () => {

@@ -4,6 +4,7 @@ import type {
   AccountCreatePayload,
   AccountUpdatePayload,
 } from '../server/contracts/accountsRoutePayloads.js';
+import type { EventsListResponse } from './eventsTypes.js';
 import type {
   AccountTokenBatchPayload,
   AccountTokenCreatePayload,
@@ -1201,7 +1202,7 @@ export const api = {
 
   // Events
   getEvents: (params?: string) =>
-    request(`/api/events${params ? '?' + params : ''}`),
+    request<EventsListResponse>(`/api/events${params ? '?' + params : ''}`),
   getEventCount: () => request('/api/events/count'),
   markEventRead: (id: number) =>
     request(`/api/events/${id}/read`, { method: 'POST' }),

@@ -265,6 +265,9 @@ export async function createManualAccount({
     body.platformUserId || guessPlatformUserIdFromUsername(username) || undefined;
   const resolvedCredentialMode: AccountCredentialMode = tokenType === 'apikey' ? 'apikey' : 'session';
   const extraConfigPatch: Record<string, unknown> = { credentialMode: resolvedCredentialMode };
+  if (resolvedCredentialMode === 'apikey' && !rawAccessToken.trim()) {
+    extraConfigPatch.authenticationMode = 'none';
+  }
   if (managementToken) {
     extraConfigPatch.newApiManagedAuth = {
       managementToken,

@@ -191,7 +191,10 @@ function resolveRequestedCreateTokens(
 
   const batchTokens = parseBatchApiKeys(body.accessTokens);
   if (batchTokens.length > 0) return batchTokens;
-  return parseBatchApiKeys(body.accessToken || body.apiToken);
+  const tokens = parseBatchApiKeys(body.accessToken || body.apiToken);
+  // Some platforms (e.g. opencode) need no API key at all — let the request
+  // through with an empty token so the caller can skip model fetch.
+  return tokens.length > 0 ? tokens : [''];
 }
 
 function normalizeSortOrder(input: unknown): number | null {
@@ -685,10 +688,6 @@ export async function accountsRoutes(app: FastifyInstance) {
         .where(eq(schema.sites.id, siteId))
         .get();
       if (!site) return { success: false, message: 'site not found' };
-
-      if (!accessToken) {
-        return { success: false, message: 'Token 不能为空' };
-      }
 
       const adapter = getAdapter(site.platform);
       if (!adapter)

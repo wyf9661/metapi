@@ -183,20 +183,21 @@ export function buildRemoteAuthHeaders(
   protocol: RemoteUpstreamProtocol,
 ): Record<string, string> {
   const key = (apiKey || '').trim();
-  if (!key) {
-    throw new Error('apiKey is required');
-  }
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  };
+  if (!key) return headers;
 
   if (protocol === 'anthropic') {
     return {
-      'content-type': 'application/json',
+      ...headers,
       'x-api-key': key,
       'anthropic-version': ANTHROPIC_VERSION,
     };
   }
 
   return {
-    'content-type': 'application/json',
+    ...headers,
     authorization: `Bearer ${key}`,
   };
 }
@@ -468,7 +469,6 @@ export async function listRemoteUpstreamModels(
   input: RemoteUpstreamListModelsInput,
 ): Promise<RemoteUpstreamHttpResult> {
   const apiKey = (input.apiKey || '').trim();
-  if (!apiKey) throw new Error('apiKey is required');
 
   const requestUrl = await resolveRemoteModelsUrl(input.baseUrl);
   const requestHeaders = buildRemoteAuthHeaders(apiKey, 'completion');
@@ -502,7 +502,6 @@ export async function testRemoteUpstreamProtocol(
   input: RemoteUpstreamTestInput,
 ): Promise<RemoteUpstreamHttpResult> {
   const apiKey = (input.apiKey || '').trim();
-  if (!apiKey) throw new Error('apiKey is required');
   const model = (input.model || '').trim();
   if (!model) throw new Error('model is required');
 

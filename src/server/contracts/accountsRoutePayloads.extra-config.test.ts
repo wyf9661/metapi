@@ -20,6 +20,7 @@ describe('normalizeExtraConfigInput', () => {
   it('keeps all legitimate keys', () => {
     const out = normalizeExtraConfigInput({
       credentialMode: 'apikey',
+      authenticationMode: 'none',
       platformUserId: 7,
       proxyUrl: 'socks5://127.0.0.1:1080',
       autoRelogin: { username: 'u' },
@@ -32,6 +33,7 @@ describe('normalizeExtraConfigInput', () => {
     });
     expect(out).toEqual({
       credentialMode: 'apikey',
+      authenticationMode: 'none',
       platformUserId: 7,
       proxyUrl: 'socks5://127.0.0.1:1080',
       autoRelogin: { username: 'u' },

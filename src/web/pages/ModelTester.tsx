@@ -114,12 +114,12 @@ export default function ModelTester() {
     [models],
   );
 
-  const canList = baseUrl.trim().length > 0 && apiKey.trim().length > 0 && !listing;
+  const canList = baseUrl.trim().length > 0 && !listing;
   const canProbe = canList && models.length > 0 && model.trim().length > 0 && models.includes(model) && !probing;
 
   const listModels = useCallback(async () => {
-    if (!baseUrl.trim() || !apiKey.trim()) {
-      setListError('请填写 Base URL 和 API Key');
+    if (!baseUrl.trim()) {
+      setListError('请填写 Base URL');
       return;
     }
 
@@ -163,7 +163,7 @@ export default function ModelTester() {
   }, [apiKey, baseUrl]);
 
   const probeModel = useCallback(async () => {
-    if (!baseUrl.trim() || !apiKey.trim() || !model.trim() || !models.includes(model)) {
+    if (!baseUrl.trim() || !model.trim() || !models.includes(model)) {
       setProbeError('请先拉取模型列表并选择模型');
       return;
     }
@@ -234,12 +234,12 @@ export default function ModelTester() {
 
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-              API Key
+              API Key（可选）
             </div>
             <input
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder="sk-..."
+              placeholder="不需要认证时可留空"
               style={inputBaseStyle}
               autoComplete="off"
               spellCheck={false}

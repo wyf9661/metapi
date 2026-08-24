@@ -2880,6 +2880,28 @@ export class TokenRouter {
     }
   }
 
+  private isKeylessApiConnection(candidate: {
+    channel: typeof schema.routeChannels.$inferSelect;
+    account: typeof schema.accounts.$inferSelect;
+    token: typeof schema.accountTokens.$inferSelect | null;
+  }): boolean {
+    if (candidate.channel.tokenId || candidate.token) return false;
+    if (getOauthInfoFromAccount(candidate.account)) return false;
+    let authenticationMode = '';
+    try {
+      const parsed = JSON.parse(candidate.account.extraConfig || '{}') as Record<string, unknown>;
+      authenticationMode = typeof parsed.authenticationMode === 'string'
+        ? parsed.authenticationMode.trim().toLowerCase()
+        : '';
+    } catch {
+      return false;
+    }
+    return getCredentialModeFromExtraConfig(candidate.account.extraConfig) === 'apikey'
+      && authenticationMode === 'none'
+      && !candidate.account.apiToken?.trim()
+      && !candidate.account.accessToken?.trim();
+  }
+
   private resolveChannelTokenValue(candidate: {
     channel: typeof schema.routeChannels.$inferSelect;
     account: typeof schema.accounts.$inferSelect;
@@ -3017,7 +3039,9 @@ export class TokenRouter {
     }
 
     const tokenValue = this.resolveChannelTokenValue(candidate);
-    if (!tokenValue) addReason('token_unavailable', '令牌不可用');
+    if (!tokenValue && !this.isKeylessApiConnection(candidate)) {
+      addReason('token_unavailable', '令牌不可用');
+    }
 
     if (candidate.channel.cooldownUntil && candidate.channel.cooldownUntil > nowIso) {
       addReason('channel_cooldown', '冷却中', { cooldownUntil: candidate.channel.cooldownUntil });
@@ -3124,7 +3148,8 @@ export class TokenRouter {
     }
 
     const tokenValue = resolvedRouteUnitMemberTokenValue ?? this.resolveChannelTokenValue(dispatchCandidate);
-    if (!tokenValue) return null;
+    if (!tokenValue && !this.isKeylessApiConnection(dispatchCandidate)) return null;
+    const dispatchTokenValue = tokenValue || '';
 
     if (recordSelection) {
       if (stableFirstRotationKey && stableFirstObservationKey) {
@@ -3152,7 +3177,7 @@ export class TokenRouter {
     return {
       ...dispatchCandidate,
       channel: selected.channel,
-      tokenValue,
+      tokenValue: dispatchTokenValue,
       tokenName: dispatchCandidate.token?.name || 'default',
       actualModel,
     };

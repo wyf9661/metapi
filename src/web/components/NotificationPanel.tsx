@@ -45,10 +45,11 @@ export default function NotificationPanel({
     try {
       const params = filter ? `type=${filter}` : '';
       const data = await api.getEvents(params);
-      setEvents(data);
+      const rows = Array.isArray(data?.items) ? data.items : [];
+      setEvents(rows);
 
       // Auto mark all as read on open
-      const hasUnread = Array.isArray(data) && data.some((e: any) => !e.read);
+      const hasUnread = rows.some((e: any) => !e.read);
       if (hasUnread) {
         api.markAllEventsRead().catch(() => {});
         onUnreadCountChange?.(0);

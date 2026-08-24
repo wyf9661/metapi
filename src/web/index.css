@@ -130,6 +130,7 @@ html[data-layout="desktop"] .main-content {
   overflow-x: hidden;
   padding-bottom: 0;
   overflow-anchor: none;
+  scrollbar-gutter: stable; /* prevent width jitter from vertical scrollbar appearing/disappearing */
 }
 
 /* Proxy Logs page only: the pagination bar sticks to the bottom of the
@@ -139,9 +140,8 @@ html[data-layout="desktop"] .main-content {
   position: sticky;
   bottom: 0;
   background: var(--color-bg);
-  margin-top: 12px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  margin-top: 6px !important;
+  padding: 6px 0;
   border-top: 1px solid var(--color-border);
 }
 
@@ -1805,6 +1805,12 @@ html[data-layout="desktop"] .main-content {
   text-align: left;
 }
 
+/* Usage log rows need a little more breathing room without changing every table. */
+.proxy-logs-table td {
+  padding-top: 15px;
+  padding-bottom: 15px;
+}
+
 .data-table tbody tr {
   transition: background-color 0.15s ease;
 }
@@ -1988,6 +1994,11 @@ html[data-layout="desktop"] .main-content {
   min-width: 1160px;
 }
 
+.program-logs-table td {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
 .program-logs-table .program-logs-title-cell {
   font-weight: 600;
   white-space: normal;
@@ -2090,6 +2101,7 @@ html[data-layout="desktop"] .main-content {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  min-width: 100%; /* prevent width jitter when rows change height and scrollbar appears/disappears */
 }
 
 .inventory-name-title {
@@ -2231,7 +2243,7 @@ html[data-layout="desktop"] .main-content {
 }
 
 .sites-table td {
-  padding: 12px 12px;
+  padding: 18px 12px;
   text-align: center;
   border-bottom: 1px solid var(--color-border-light);
 }
@@ -2289,7 +2301,7 @@ html[data-layout="desktop"] .main-content {
 .sites-table td.site-balance-cell {
   text-align: left;
   white-space: nowrap;
-  width: 20%;
+  width: 18%;
 }
 
 .sites-table th:nth-child(4),
@@ -2312,7 +2324,17 @@ html[data-layout="desktop"] .main-content {
 .sites-table td:nth-child(7) {
   text-align: center;
   white-space: nowrap;
-  width: 14%;
+  width: 16%;
+}
+
+.sites-connection-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  white-space: nowrap;
+  min-height: 24px;
 }
 
 .sites-table th.sites-actions-col {
@@ -4875,6 +4897,23 @@ textarea {
   display: block;
 }
 
+/* Drop-up variant: panel opens above the trigger. Used where the select sits
+   near the bottom of the viewport (e.g. the pagination page-size picker), so
+   opening it does not push the page taller. */
+.modern-select.drop-up .modern-select-panel {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translateY(6px) scale(0.98);
+}
+
+.modern-select.drop-up.is-open .modern-select-panel {
+  transform: translateY(0) scale(1);
+}
+
+.modern-select.drop-up.is-open .modern-select-chevron {
+  transform: rotate(180deg);
+}
+
 .modern-select-search-shell {
   position: sticky;
   top: -6px;
@@ -5654,7 +5693,7 @@ textarea {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 @media (min-width: 1024px) {
@@ -5669,6 +5708,28 @@ textarea {
   box-shadow: var(--shadow-card);
   padding: 12px 14px;
   min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .probe-stat-card {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .probe-stat-card .probe-stat-label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  .probe-stat-card .probe-stat-value {
+    font-size: 18px;
+    white-space: nowrap;
+  }
 }
 
 .probe-stat-label {
@@ -5725,7 +5786,7 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-width: 210px;
+  min-width: 197px;
   font-size: 12px;
   color: var(--color-text-muted);
   white-space: nowrap;
@@ -5736,13 +5797,27 @@ textarea {
 }
 
 .probe-filter-select > .modern-select {
-  width: 150px;
-  min-width: 150px;
+  width: 137px;
+  min-width: 137px;
+}
+
+/* Probe log desktop filters only need a few pixels to keep Reset on one row. */
+.probe-filter-toolbar {
+  gap: 6px;
 }
 
 .probe-filter-total {
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+.probe-logs-table td {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+.probe-logs-pagination {
+  padding: 4px 0;
 }
 
 .probe-logs-table .probe-question-cell {
@@ -5891,7 +5966,7 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 12px 0 4px;
+  padding: 8px 0;
   flex-wrap: wrap;
 }
 
@@ -5926,6 +6001,14 @@ textarea {
 .pagination-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.pagination-range {
+  margin-right: auto;
+  margin-left: 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .pagination-info {

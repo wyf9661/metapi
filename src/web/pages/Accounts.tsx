@@ -9,7 +9,8 @@ import { MobileCard, MobileField } from '../components/MobileCard.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { pageForItemIndex } from '../components/clientPagination.js';
 import PaginationControls from '../components/PaginationControls.js';
-import { useClientPagination, useExactPageSizeMulti } from '../components/useClientPagination.js';
+import { useClientPagination } from '../components/useClientPagination.js';
+import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteBadgeLink from '../components/SiteBadgeLink.js';
 import AccountModelsModal from './accounts/AccountModelsModal.js';
@@ -303,14 +304,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       return resolveAccountCredentialMode(account) === activeSegment;
     });
   }, [activeSegment, sortedAccounts, filterSiteId]);
-  const exactPageSize = useExactPageSizeMulti(
-    [accountsTableWrapRef, accountsMobileListRef],
-    {
-      min: 4,
-      max: 30,
-      rowSelector: isMobile ? '.mobile-card-list > .mobile-card' : 'tbody tr',
-    },
-  );
+  const [exactPageSize, setExactPageSize] = usePersistedPageSize('accounts');
   const {
     page: safePage,
     setPage,
@@ -429,7 +423,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   };
 
   const handleVerifyToken = async () => {
-    if (!tokenForm.siteId || !tokenForm.accessToken) return;
+    if (!tokenForm.siteId) return;
+    if (activeSegment !== 'apikey' && !tokenForm.accessToken) return;
     if (isBatchApiKeyInput) {
       toast.info(
         `检测到 ${parsedApiKeys.length} 个 API Key，批量模式会在添加时逐条校验`,
@@ -474,7 +469,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   };
 
   const handleTokenAdd = async () => {
-    if (!tokenForm.siteId || !tokenForm.accessToken) return;
+    if (!tokenForm.siteId) return;
+    if (activeSegment !== 'apikey' && !tokenForm.accessToken) return;
     if (
       !isBatchApiKeyInput &&
       !verifyResult?.success &&
@@ -2024,7 +2020,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   style={inputStyle}
                 />
                 <textarea
-                  placeholder="粘贴 API Key"
+                  placeholder="粘贴 API Key（无需认证时可留空）"
                   value={tokenForm.accessToken}
                   onChange={(e) => {
                     setTokenForm((f) => ({
@@ -2162,7 +2158,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     disabled={
                       verifying ||
                       !tokenForm.siteId ||
-                      !tokenForm.accessToken ||
                       isBatchApiKeyInput
                     }
                     className="btn btn-ghost"
@@ -2187,7 +2182,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     disabled={
                       saving ||
                       !tokenForm.siteId ||
-                      !tokenForm.accessToken ||
                       !canSubmitApiKeyConnection
                     }
                     className="btn btn-success"
@@ -3019,6 +3013,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   totalPages={totalPages}
                   onPageChange={setPage}
                   visible={showAccountPagination}
+                  pageSize={exactPageSize}
+                  onPageSizeChange={setExactPageSize}
                 />
                   </div>
               )
@@ -3059,6 +3055,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 totalPages={totalPages}
                 onPageChange={setPage}
                 visible={showAccountPagination}
+                pageSize={exactPageSize}
+                onPageSizeChange={setExactPageSize}
               />
             ) : null}
           </div>

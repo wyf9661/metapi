@@ -16,21 +16,14 @@ export async function eventsRoutes(app: FastifyInstance) {
     if (readQuery === 'true') filters.push(eq(schema.events.read, true));
     if (readQuery === 'false') filters.push(eq(schema.events.read, false));
 
-    const base = db.select().from(schema.events);
-    if (filters.length > 0) {
-      return await base
-        .where(and(...filters))
-        .orderBy(desc(schema.events.createdAt))
-        .limit(limit)
-        .offset(offset)
-        .all();
-    }
-
-    return await base
-      .orderBy(desc(schema.events.createdAt))
-      .limit(limit)
-      .offset(offset)
-      .all();
+    const where = filters.length > 0 ? and(...filters) : undefined;
+    const rowsQuery = db.select().from(schema.events).orderBy(desc(schema.events.createdAt)).limit(limit).offset(offset);
+    const countQuery = db.select({ count: sql<number>`count(*)` }).from(schema.events);
+    const [rows, count] = await Promise.all([
+      where ? rowsQuery.where(where).all() : rowsQuery.all(),
+      where ? countQuery.where(where).get() : countQuery.get(),
+    ]);
+    return { items: rows, total: Number(count?.count || 0) };
   });
 
   // Unread count

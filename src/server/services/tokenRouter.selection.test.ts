@@ -2038,6 +2038,37 @@ describe('selectPreferredChannel low-balance yield', () => {
     void route;
   });
 
+  it('selects an explicitly keyless API connection and dispatches without a token', async () => {
+    const route = await createRoute('keyless-model');
+    const site = await createSite('keyless');
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'keyless-opencode',
+      accessToken: '',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({
+        credentialMode: 'apikey',
+        authenticationMode: 'none',
+      }),
+    }).returning().get();
+    const channel = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: account.id,
+      sourceModel: 'keyless-model',
+      priority: 0,
+      weight: 10,
+      enabled: true,
+    }).returning().get();
+
+    const router = new TokenRouter();
+    const selected = await router.selectChannel('keyless-model');
+
+    expect(selected?.channel.id).toBe(channel.id);
+    expect(selected?.account.id).toBe(account.id);
+    expect(selected?.tokenValue).toBe('');
+  });
+
   it('never yields for direct API-key accounts (unknown balance)', async () => {
     const route = await createYieldRoute('yield-apikey-model');
     const site = await createYieldSite('yield-apikey');

@@ -18,7 +18,8 @@ import { useIsMobile } from '../../components/useIsMobile.js';
 import { emitTokenCoverageChanged } from '../../dataEvents.js';
 import { pageForItemIndex } from '../../components/clientPagination.js';
 import PaginationControls from '../../components/PaginationControls.js';
-import { useClientPagination, useExactPageSizeMulti } from '../../components/useClientPagination.js';
+import { useClientPagination } from '../../components/useClientPagination.js';
+import { usePersistedPageSize } from '../../components/usePersistedPageSize.js';
 import DeleteConfirmModal from '../../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from '../helpers/navigationFocus.js';
 import { tr } from '../../i18n.js';
@@ -336,14 +337,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       return Number(left?.id || 0) - Number(right?.id || 0);
     });
   }, [tokens]);
-  const exactPageSize = useExactPageSizeMulti(
-    [tokensTableRef, tokensMobileListRef],
-    {
-      min: 4,
-      max: 30,
-      rowSelector: isMobile ? '.mobile-card-list > .mobile-card' : 'tbody tr',
-    },
-  );
+  const [exactPageSize, setExactPageSize] = usePersistedPageSize('tokens');
   const {
     page: safePage,
     setPage,
@@ -1486,6 +1480,8 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             totalPages={totalPages}
             onPageChange={setPage}
             visible={showTokenPagination}
+            pageSize={exactPageSize}
+            onPageSizeChange={setExactPageSize}
           />
         ) : null}
       </div>

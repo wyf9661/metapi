@@ -23,6 +23,8 @@ type ModernSelectProps = {
   size?: 'md' | 'sm';
   searchable?: boolean;
   searchPlaceholder?: string;
+  /** Which direction the dropdown panel opens. Default: 'down'. */
+  dropDirection?: 'up' | 'down';
 };
 
 export default function ModernSelect({
@@ -38,6 +40,7 @@ export default function ModernSelect({
   size = 'md',
   searchable = false,
   searchPlaceholder = 'Search...',
+  dropDirection = 'down',
 }: ModernSelectProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -145,7 +148,7 @@ export default function ModernSelect({
     <div
       ref={rootRef}
       data-testid={dataTestId}
-      className={`modern-select ${open ? 'is-open' : ''} ${disabled ? 'is-disabled' : ''} ${size === 'sm' ? 'is-sm' : ''} ${className}`.trim()}
+      className={`modern-select ${open ? 'is-open' : ''} ${disabled ? 'is-disabled' : ''} ${size === 'sm' ? 'is-sm' : ''} ${dropDirection === 'up' ? 'drop-up' : ''} ${className}`.trim()}
     >
       <button
         type="button"

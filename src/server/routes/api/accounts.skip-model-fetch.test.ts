@@ -91,6 +91,70 @@ describe('accounts skipModelFetch behavior', () => {
     expect(models).toHaveLength(0);
   });
 
+  it('creates a keyless API connection when model fetch is skipped', async () => {
+    getModelsMock.mockRejectedValueOnce(new Error('Should not be called'));
+
+    const site = await db.insert(schema.sites).values({
+      name: 'Keyless OpenCode Site',
+      url: 'http://127.0.0.1:4096',
+      platform: 'openai',
+    }).returning().get();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: {
+        siteId: site.id,
+        accessToken: '',
+        credentialMode: 'apikey',
+        skipModelFetch: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(getModelsMock).not.toHaveBeenCalled();
+
+    const accounts = await db.select().from(schema.accounts).all();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]?.accessToken).toBe('');
+    expect(accounts[0]?.apiToken).toBeNull();
+    expect(accounts[0]?.extraConfig).toContain('"credentialMode":"apikey"');
+    expect(accounts[0]?.extraConfig).toContain('"authenticationMode":"none"');
+  });
+
+  it('validates a keyless API connection by calling getModels with an empty key', async () => {
+    getModelsMock.mockResolvedValueOnce(['opencode/local-model']);
+
+    const site = await db.insert(schema.sites).values({
+      name: 'Keyless OpenCode Site',
+      url: 'http://127.0.0.1:4096',
+      platform: 'openai',
+    }).returning().get();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/accounts/verify-token',
+      payload: {
+        siteId: site.id,
+        accessToken: '',
+        credentialMode: 'apikey',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      tokenType: 'apikey',
+      modelCount: 1,
+      models: ['opencode/local-model'],
+    });
+    expect(getModelsMock).toHaveBeenCalledWith(
+      site.url,
+      '',
+      undefined,
+    );
+  });
+
   it('still calls getModels when skipModelFetch is false', async () => {
     getModelsMock.mockResolvedValue(['gpt-4']);
 

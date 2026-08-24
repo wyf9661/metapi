@@ -78,6 +78,13 @@ export async function resolveProxyLogBilling(
   let estimatedCost = await estimateProxyCost(billingInput);
   const billingDetails = await buildProxyBillingDetails(billingInput);
 
+  // Keep the list-level amount and detail breakdown on one source of truth.
+  // Some upstream pricing catalogs can produce a zero standalone estimate
+  // while the detailed calculation for the same usage is valid and non-zero.
+  if (estimatedCost <= 0 && (billingDetails?.breakdown.totalCost ?? 0) > 0) {
+    estimatedCost = billingDetails!.breakdown.totalCost;
+  }
+
   if (
     input.resolvedUsage.estimatedCostFromQuota > 0
     && (input.resolvedUsage.recoveredFromSelfLog || estimatedCost <= 0)

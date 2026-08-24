@@ -576,7 +576,7 @@ export function buildUpstreamEndpointRequest(input: {
     'Content-Type': 'application/json',
     ...(input.providerHeaders || {}),
   };
-  if (!isClaudeUpstream) {
+  if (!isClaudeUpstream && input.tokenValue.trim()) {
     commonHeaders.Authorization = `Bearer ${input.tokenValue}`;
   }
 

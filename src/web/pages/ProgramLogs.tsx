@@ -6,21 +6,10 @@ import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
+import PaginationControls from '../components/PaginationControls.js';
+import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 import { tr } from '../i18n.js';
-
-type ProgramEvent = {
-  id: number;
-  type: string;
-  title: string;
-  message?: string | null;
-  level: 'info' | 'warning' | 'error';
-  read: boolean;
-  relatedId?: number | null;
-  relatedType?: string | null;
-  createdAt?: string | null;
-};
-
-const PAGE_SIZE = 50;
+import type { ProgramEvent } from '../eventsTypes.js';
 
 const TYPE_OPTIONS = [
   { value: '', label: '全部类型' },
@@ -88,50 +77,45 @@ function eventStatusLabel(row: ProgramEvent) {
 export default function ProgramLogs() {
   const [events, setEvents] = useState<ProgramEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [onlyUnread, setOnlyUnread] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [rowLoading, setRowLoading] = useState<Record<number, boolean>>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [pageSize, setPageSize] = usePersistedPageSize('programLogs');
   const isMobile = useIsMobile();
   const toast = useToast();
 
-  const load = async (silent = false, append = false) => {
-    if (append) setLoadingMore(true);
-    else if (silent) setRefreshing(true);
+  const load = async (silent = false) => {
+    if (silent) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const nextOffset = append ? offset : 0;
       const params = new URLSearchParams();
-      params.set('limit', String(PAGE_SIZE));
-      params.set('offset', String(nextOffset));
+      params.set('limit', String(pageSize));
+      params.set('offset', String((page - 1) * pageSize));
       if (filterType) params.set('type', filterType);
       if (onlyUnread) params.set('read', 'false');
-      const rows = await api.getEvents(params.toString());
-      const safeRows = Array.isArray(rows) ? rows : [];
-      setEvents((prev) => (append ? [...prev, ...safeRows] : safeRows));
-      const loaded = append ? nextOffset + safeRows.length : safeRows.length;
-      setOffset(loaded);
-      setHasMore(safeRows.length >= PAGE_SIZE);
+      const result = await api.getEvents(params.toString());
+      const safeRows = Array.isArray(result?.items) ? result.items : [];
+      setEvents(safeRows as ProgramEvent[]);
+      setTotal(Number(result?.total || 0));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       toast.error(eMessage || '加载程序日志失败');
     } finally {
       setLoading(false);
-      setLoadingMore(false);
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
     load();
-  }, [filterType, onlyUnread]);
+  }, [filterType, onlyUnread, pageSize, page]);
 
   const visibleRows = useMemo(() => events, [events]);
 
@@ -148,7 +132,10 @@ export default function ProgramLogs() {
     await withRowLoading(id, async () => {
       await api.markEventRead(id);
       setEvents((prev) => {
-        if (onlyUnread) return prev.filter((item) => item.id !== id);
+        if (onlyUnread) {
+          setTotal((t) => Math.max(0, t - 1));
+          return prev.filter((item) => item.id !== id);
+        }
         return prev.map((item) => (item.id === id ? { ...item, read: true } : item));
       });
     });
@@ -158,8 +145,12 @@ export default function ProgramLogs() {
     setMarkingAll(true);
     try {
       await api.markAllEventsRead();
-      if (onlyUnread) setEvents([]);
-      else setEvents((prev) => prev.map((item) => ({ ...item, read: true })));
+      if (onlyUnread) {
+        setEvents([]);
+        setTotal(0);
+      } else {
+        setEvents((prev) => prev.map((item) => ({ ...item, read: true })));
+      }
       toast.success('已标记全部为已读');
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -174,8 +165,8 @@ export default function ProgramLogs() {
     try {
       await api.clearEvents();
       setEvents([]);
-      setOffset(0);
-      setHasMore(false);
+      setPage(1);
+      setTotal(0);
       toast.success('日志已清空');
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -227,7 +218,10 @@ export default function ProgramLogs() {
             <ModernSelect
               size="sm"
               value={filterType}
-              onChange={(nextValue) => setFilterType(nextValue)}
+              onChange={(nextValue) => {
+                setPage(1);
+                setFilterType(nextValue);
+              }}
               options={TYPE_OPTIONS.map((item) => ({
                 value: item.value,
                 label: item.label,
@@ -239,15 +233,14 @@ export default function ProgramLogs() {
                 type="checkbox"
                 checked={onlyUnread}
                 onChange={(e) => {
-                  setOffset(0);
-                  setHasMore(true);
+                  setPage(1);
                   setOnlyUnread(e.target.checked);
                 }}
               />
               仅看未读
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              共 {visibleRows.length} 条
+              共 {total} 条
             </div>
           </div>
         )}
@@ -257,7 +250,10 @@ export default function ProgramLogs() {
               <ModernSelect
                 size="sm"
                 value={filterType}
-                onChange={(nextValue) => setFilterType(nextValue)}
+                onChange={(nextValue) => {
+                  setPage(1);
+                  setFilterType(nextValue);
+                }}
                 options={TYPE_OPTIONS.map((item) => ({
                   value: item.value,
                   label: item.label,
@@ -271,8 +267,7 @@ export default function ProgramLogs() {
                 type="checkbox"
                 checked={onlyUnread}
                 onChange={(e) => {
-                  setOffset(0);
-                  setHasMore(true);
+                  setPage(1);
                   setOnlyUnread(e.target.checked);
                 }}
               />
@@ -280,7 +275,7 @@ export default function ProgramLogs() {
             </label>
 
             <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
-              共 {visibleRows.length} 条
+              共 {total} 条
             </div>
           </div>
         )}
@@ -425,18 +420,19 @@ export default function ProgramLogs() {
         )}
       </div>
 
-      {!loading && visibleRows.length > 0 && hasMore && (
-        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => load(false, true)}
-            disabled={loadingMore}
-            style={{ border: '1px solid var(--color-border)', padding: '8px 16px' }}
-          >
-            {loadingMore ? <><span className="spinner spinner-sm" /> 加载中...</> : '加载更多'}
-          </button>
-        </div>
-      )}
+      <PaginationControls
+        page={page}
+        totalPages={Math.max(1, Math.ceil(total / pageSize))}
+        onPageChange={(next) => setPage((current) => typeof next === 'function' ? next(current) : next)}
+        visible
+        rangeLabel={`显示第 ${total === 0 ? 0 : (page - 1) * pageSize + 1} - ${Math.min(page * pageSize, total)} 条，共 ${total} 条`}
+        pageSize={pageSize}
+        onPageSizeChange={(next) => {
+          setPageSize(next);
+          setPage(1);
+        }}
+      />
+
     </div>
   );
 }

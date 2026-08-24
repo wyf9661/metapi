@@ -1,176 +1,82 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RefObject } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import {
   CLIENT_PAGE_SIZE,
+  DEFAULT_PAGE_SIZE,
+  PAGE_SIZE_OPTIONS,
   resolveClientPagination,
+  snapToPageSizeOptions,
 } from './clientPagination.js';
 
 /**
- * Estimate a client-side page size from the viewport height so tall screens
- * show more rows per page instead of forcing an 8-row page by default.
+ * Estimate a reasonable page size from the viewport height. Used ONLY to pick
+ * the initial value once on first render — there is no dynamic re-measuring,
+ * so the layout stays stable (no row-count jump, no scrollbar flip jitter).
  *
- * Falls back to CLIENT_PAGE_SIZE when dimensions are unavailable (SSR/tests).
+ * Falls back to DEFAULT_PAGE_SIZE when dimensions are unavailable (SSR/tests).
+ * The result is always snapped to a legal PAGE_SIZE_OPTIONS entry.
  */
 export function estimateClientPageSize(
   current: number = CLIENT_PAGE_SIZE,
-  min: number = 6,
-  max: number = 24,
+  min: number = 4,
+  max: number = 30,
   rowHeight: number = 52,
 ): number {
-  if (typeof window === 'undefined') return current;
+  if (typeof window === 'undefined') return snapToPageSizeOptions(current);
   const viewportH = window.innerHeight;
-  if (!Number.isFinite(viewportH) || viewportH <= 0) return current;
+  if (!Number.isFinite(viewportH) || viewportH <= 0) return snapToPageSizeOptions(current);
   const topbarH = 64;
   const chromeH = 180; // page header, filters, pagination bar, breathing room
   const usable = viewportH - topbarH - chromeH;
-  if (usable <= rowHeight * min) return min;
+  if (usable <= rowHeight * min) return snapToPageSizeOptions(min);
   const rows = Math.floor(usable / rowHeight);
-  return Math.min(max, Math.max(min, rows));
-}
-
-export function useViewportPageSize(
-  base: number = CLIENT_PAGE_SIZE,
-  min?: number,
-  max?: number,
-): { pageSize: number; rowHeight: number } {
-  const [viewport, setViewport] = useState(() => ({
-    pageSize: estimateClientPageSize(base, min, max),
-    rowHeight: 52,
-  }));
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const recompute = () =>
-      setViewport({
-        pageSize: estimateClientPageSize(base, min, max),
-        rowHeight: 52,
-      });
-    recompute();
-    window.addEventListener('resize', recompute);
-    return () => window.removeEventListener('resize', recompute);
-  }, [base, min, max]);
-
-  return viewport;
+  return snapToPageSizeOptions(Math.min(max, Math.max(min, rows)));
 }
 
 /**
- * Measure the exact number of table rows that fit between the table container
- * and the bottom of the viewport, so the last row lands flush without a
- * scrollbar and without overflowing.
+ * A stable, user-controllable page size. The initial value is estimated once
+ * from the viewport on first render, then the user can switch between 5/10/20/50
+ * via `setPageSize`. No ResizeObserver, no resize listeners, no re-measuring —
+ * the paged layout never changes under the user except when they ask for it.
  *
- * `tableRef` should point at the table (or its wrapping container). The row
- * height is taken from the first rendered row (`rowSelector`), defaulting to
- * the `.data-table tbody tr` height.
+ * Returns `[pageSize, setPageSize]`; `setPageSize` accepts any number and snaps
+ * it to the nearest legal option.
  */
-export function useExactPageSize<T extends HTMLElement>(
-  tableRef: RefObject<T | null>,
-  opts: { min?: number; max?: number; rowSelector?: string; bottomReserve?: number } = {},
-): number {
-  const min = opts.min ?? 4;
-  const max = opts.max ?? 30;
-  const rowSelector = opts.rowSelector ?? 'tbody tr';
-  const bottomReserve = opts.bottomReserve ?? 56;
-  const [pageSize, setPageSize] = useState(CLIENT_PAGE_SIZE);
+export function useSelectablePageSize(
+  initialSize: number = DEFAULT_PAGE_SIZE,
+): [number, Dispatch<SetStateAction<number>>] {
+  const [pageSize, setPageSize] = useState<number>(() =>
+    snapToPageSizeOptions(estimateClientPageSize(initialSize)),
+  );
 
-  useEffect(() => {
-    const el = tableRef.current;
-    if (!el || typeof window === 'undefined') return;
+  const snapSetter: Dispatch<SetStateAction<number>> = (value) => {
+    setPageSize((prev) =>
+      snapToPageSizeOptions(typeof value === 'function' ? value(prev) : value),
+    );
+  };
 
-    const measure = () => {
-      const rows = el.querySelectorAll<HTMLElement>(rowSelector);
-      const firstRow = rows[0];
-      if (!firstRow) return;
-      const rowHeight = firstRow.getBoundingClientRect().height;
-      if (!Number.isFinite(rowHeight) || rowHeight <= 0) return;
-
-      const tableTop = el.getBoundingClientRect().top;
-      const available = window.innerHeight - tableTop - bottomReserve;
-      if (available <= rowHeight * min) {
-        setPageSize(min);
-        return;
-      }
-      const rowsThatFit = Math.floor(available / rowHeight);
-      setPageSize(Math.min(max, Math.max(min, rowsThatFit)));
-    };
-
-    // Re-measure whenever the container's content size changes (e.g. after
-    // data loads and rows appear, not just on window resize).
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => measure());
-      ro.observe(el);
-    }
-
-    measure();
-    window.addEventListener('resize', measure);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [tableRef, rowSelector, min, max, bottomReserve]);
-
-  return pageSize;
+  return [pageSize, snapSetter];
 }
 
 /**
- * Like useExactPageSize but resolves the active container from a list of
- * candidate refs, so desktop (table) and mobile (card list) layouts can share
- * one measurement. The first ref whose current element is populated wins.
+ * @deprecated Replaced by {@link useSelectablePageSize}. Kept as a thin alias
+ * so callers migrate incrementally. Returns `[pageSize, setPageSize]`, but WITHOUT
+ * any measurement/observer logic — sizing is purely user-selectable.
  */
-export function useExactPageSizeMulti<T extends HTMLElement>(
-  refs: Array<RefObject<T | null>>,
-  opts: { min?: number; max?: number; rowSelector?: string; bottomReserve?: number } = {},
-): number {
-  const min = opts.min ?? 4;
-  const max = opts.max ?? 30;
-  const rowSelector = opts.rowSelector ?? 'tbody tr';
-  const bottomReserve = opts.bottomReserve ?? 56; // pagination bar + breathing room
-  const [pageSize, setPageSize] = useState(CLIENT_PAGE_SIZE);
+export function useExactPageSize(): [number, Dispatch<SetStateAction<number>>] {
+  return useSelectablePageSize(DEFAULT_PAGE_SIZE);
+}
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const measure = () => {
-      const el = refs.map((r) => r.current).find(
-        (c): c is T => !!c && typeof (c as HTMLElement).querySelectorAll === 'function',
-      );
-      if (!el) return;
-      const rows = el.querySelectorAll<HTMLElement>(rowSelector);
-      const firstRow = rows[0];
-      if (!firstRow) return;
-      const rowHeight = firstRow.getBoundingClientRect().height;
-      if (!Number.isFinite(rowHeight) || rowHeight <= 0) return;
-
-      const tableTop = el.getBoundingClientRect().top;
-      const available = window.innerHeight - tableTop - bottomReserve;
-      if (available <= rowHeight * min) {
-        setPageSize(min);
-        return;
-      }
-      const rowsThatFit = Math.floor(available / rowHeight);
-      setPageSize(Math.min(max, Math.max(min, rowsThatFit)));
-    };
-
-    const observers: ResizeObserver[] = [];
-    if (typeof ResizeObserver !== 'undefined') {
-      for (const r of refs) {
-        const el = r.current;
-        if (!el) continue;
-        const ro = new ResizeObserver(() => measure());
-        ro.observe(el);
-        observers.push(ro);
-      }
-    }
-
-    measure();
-    window.addEventListener('resize', measure);
-    return () => {
-      for (const ro of observers) ro.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [refs, rowSelector, min, max, bottomReserve]);
-
-  return pageSize;
+/**
+ * @deprecated Replaced by {@link useSelectablePageSize}. Same as
+ * useExactPageSize but accepts refs for signature compatibility. The
+ * refs are ignored — sizing is now purely user-selectable, never DOM-measured.
+ */
+export function useExactPageSizeMulti(
+  _refs?: unknown[],
+  _opts?: { min?: number; max?: number; rowSelector?: string; bottomReserve?: number },
+): [number, Dispatch<SetStateAction<number>>] {
+  return useSelectablePageSize(DEFAULT_PAGE_SIZE);
 }
 
 /**
@@ -209,3 +115,5 @@ export function useClientPagination<T>(
     showControls: items.length > slice.pageSize,
   };
 }
+
+export { PAGE_SIZE_OPTIONS };

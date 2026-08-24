@@ -14,6 +14,7 @@ import MobileDrawer from '../components/MobileDrawer.js';
 import { tr, useI18n } from '../i18n.js';
 import DateTimeInput from '../components/DateTimeInput.js';
 import ModernSelect from '../components/ModernSelect.js';
+import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 
 type ProbeLog = {
   id: number;
@@ -156,7 +157,7 @@ export default function ProbeLogs() {
   const [endTime, setEndTime] = useState(searchParams.get('endTime') || '');
 
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1'));
-  const pageSize = 50;
+  const [pageSize, setPageSize] = usePersistedPageSize('probeLogs');
 
   // 筛选选项数据
   const [filterOptions, setFilterOptions] = useState<{
@@ -227,7 +228,7 @@ export default function ProbeLogs() {
   useEffect(() => {
     fetchLogs();
     fetchStats();
-  }, [siteId, accountId, modelName, status, startTime, endTime, page]);
+  }, [siteId, accountId, modelName, status, startTime, endTime, page, pageSize]);
 
   // 初始化加载筛选选项
   useEffect(() => {
@@ -533,7 +534,7 @@ export default function ProbeLogs() {
           </div>
         )}
         desktopContent={(
-          <div className="toolbar" style={{ marginBottom: 12 }}>
+          <div className="toolbar probe-filter-toolbar" style={{ marginBottom: 12 }}>
             <div className="pill-tabs">
               {[
                 { key: '', label: '全部' },
@@ -714,19 +715,29 @@ export default function ProbeLogs() {
               </table>
             )}
 
-            <PaginationControls
-              page={page}
-              totalPages={totalPages}
-              onPageChange={(next) => {
-                setPage((current) => {
-                  const resolved = typeof next === 'function' ? next(current) : next;
-                  const safe = Math.max(1, Math.min(totalPages, resolved));
-                  updateSearchParams('page', String(safe));
-                  return safe;
-                });
-              }}
-              visible={totalPages > 1}
-            />
+            {total > 0 && (
+              <PaginationControls
+                className="pagination probe-logs-pagination"
+                page={page}
+                totalPages={totalPages}
+                onPageChange={(next) => {
+                  setPage((current) => {
+                    const resolved = typeof next === 'function' ? next(current) : next;
+                    const safe = Math.max(1, Math.min(totalPages, resolved));
+                    updateSearchParams('page', String(safe));
+                    return safe;
+                  });
+                }}
+                visible
+                rangeLabel={`显示第 ${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, total)} 条，共 ${total} 条`}
+                pageSize={pageSize}
+                onPageSizeChange={(next) => {
+                  setPageSize(next);
+                  setPage(1);
+                  updateSearchParams('page', '1');
+                }}
+              />
+            )}
           </>
         )}
       </div>

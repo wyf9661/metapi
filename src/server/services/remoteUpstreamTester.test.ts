@@ -50,6 +50,12 @@ describe('remoteUpstreamTester helpers', () => {
       'x-api-key': 'sk-test',
       'anthropic-version': '2023-06-01',
     });
+    expect(buildRemoteAuthHeaders('', 'completion')).toEqual({
+      'content-type': 'application/json',
+    });
+    expect(buildRemoteAuthHeaders('   ', 'anthropic')).toEqual({
+      'content-type': 'application/json',
+    });
 
     expect(buildRemoteProtocolBody('completion', 'gpt-4o-mini', 'hi', 8)).toEqual({
       model: 'gpt-4o-mini',

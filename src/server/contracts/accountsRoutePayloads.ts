@@ -10,6 +10,7 @@ export type AccountStatusValue = (typeof ACCOUNT_STATUS_VALUES)[number];
 // autoRelogin.passwordCipher managed by the server, oauth identity keys).
 const EXTRA_CONFIG_ALLOWED_KEYS = new Set([
   'credentialMode',
+  'authenticationMode',
   'platformUserId',
   'proxyUrl',
   'autoRelogin',

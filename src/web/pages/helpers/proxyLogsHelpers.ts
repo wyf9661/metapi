@@ -33,7 +33,7 @@ export type StoredDebugPreviewPayload = {
   storedBytes?: number;
 };
 
-export const PAGE_SIZES = [20, 50, 100];
+export const PAGE_SIZES = [5, 10, 20, 50, 100];
 export const DEFAULT_PAGE_SIZE = 50;
 export const TRACE_TABLE_LIMIT = 20;
 export const DEBUG_TRACE_PAGE_SIZE = 5;
@@ -221,9 +221,13 @@ export function normalizeRoutePage(raw: string | null): number {
   return parsed;
 }
 
-export function normalizeRoutePageSize(raw: string | null): number {
+export function normalizeRoutePageSize(
+  raw: string | null,
+  fallback: number = DEFAULT_PAGE_SIZE,
+): number {
   const parsed = Number.parseInt(raw || '', 10);
-  return PAGE_SIZES.includes(parsed) ? parsed : DEFAULT_PAGE_SIZE;
+  if (PAGE_SIZES.includes(parsed)) return parsed;
+  return PAGE_SIZES.includes(fallback) ? fallback : DEFAULT_PAGE_SIZE;
 }
 
 export function normalizeRouteStatus(raw: string | null): ProxyLogStatusFilter {
@@ -260,11 +264,14 @@ function normalizeRouteModel(raw: string | null): string {
   return raw.trim();
 }
 
-export function readProxyLogsRouteState(search: string) {
+export function readProxyLogsRouteState(
+  search: string,
+  pageSizeFallback?: number,
+) {
   const params = new URLSearchParams(search);
   return {
     page: normalizeRoutePage(params.get('page')),
-    pageSize: normalizeRoutePageSize(params.get('pageSize')),
+    pageSize: normalizeRoutePageSize(params.get('pageSize'), pageSizeFallback),
     status: normalizeRouteStatus(params.get('status')),
     search: normalizeRouteSearch(params.get('q')),
     downstreamKeyId: normalizeRouteSiteId(params.get('downstreamKeyId')),
@@ -285,10 +292,13 @@ export function buildProxyLogsRouteSearch(input: {
   model: string;
   from: string;
   to: string;
+  /** Page size that is implied by the user's stored preference and therefore
+   * omitted from the URL. Defaults to DEFAULT_PAGE_SIZE. */
+  pageSizeDefault?: number;
 }) {
   const params = new URLSearchParams();
   if (input.page > 1) params.set('page', String(input.page));
-  if (input.pageSize !== DEFAULT_PAGE_SIZE)
+  if (input.pageSize !== (input.pageSizeDefault ?? DEFAULT_PAGE_SIZE))
     params.set('pageSize', String(input.pageSize));
   if (input.status !== 'all') params.set('status', input.status);
   if (input.search.trim()) params.set('q', input.search.trim());

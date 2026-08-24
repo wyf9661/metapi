@@ -237,10 +237,12 @@ export function buildClaudeRuntimeHeaders(input: {
     Accept: input.stream ? 'text/event-stream' : 'application/json',
     'Accept-Encoding': 'gzip, deflate, br, zstd',
   };
-  if (input.isClaudeOauthUpstream) {
-    headers.Authorization = `Bearer ${input.tokenValue}`;
-  } else {
-    headers['x-api-key'] = input.tokenValue;
+  if (input.tokenValue.trim()) {
+    if (input.isClaudeOauthUpstream) {
+      headers.Authorization = `Bearer ${input.tokenValue}`;
+    } else {
+      headers['x-api-key'] = input.tokenValue;
+    }
   }
   return headers;
 }

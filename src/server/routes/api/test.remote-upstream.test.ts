@@ -61,6 +61,40 @@ describe('/api/test/remote routes', () => {
     });
   });
 
+  it('passes an empty API key through for keyless upstreams', async () => {
+    listRemoteUpstreamModelsMock.mockResolvedValue({
+      ok: true,
+      statusCode: 200,
+      latencyMs: 3,
+      requestUrl: 'http://127.0.0.1:4096/v1/models',
+      requestHeaders: { 'content-type': 'application/json' },
+      responseHeaders: {},
+      responseBody: { data: [{ id: 'opencode/local-model' }] },
+      responseText: '{"data":[{"id":"opencode/local-model"}]}',
+      models: ['opencode/local-model'],
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/test/remote/models',
+      payload: {
+        baseUrl: 'http://127.0.0.1:4096',
+        apiKey: '',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      models: ['opencode/local-model'],
+    });
+    expect(listRemoteUpstreamModelsMock).toHaveBeenCalledWith({
+      baseUrl: 'http://127.0.0.1:4096',
+      apiKey: '',
+      timeoutMs: undefined,
+    });
+  });
+
   it('probes a remote protocol and still returns HTTP 200 when ok=false', async () => {
     testRemoteUpstreamProtocolMock.mockResolvedValue({
       ok: false,

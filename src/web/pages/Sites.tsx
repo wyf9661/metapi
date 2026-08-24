@@ -17,7 +17,8 @@ import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { pageForItemIndex } from '../components/clientPagination.js';
 import PaginationControls from '../components/PaginationControls.js';
-import { useClientPagination, useExactPageSizeMulti } from '../components/useClientPagination.js';
+import { useClientPagination } from '../components/useClientPagination.js';
+import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
@@ -157,7 +158,6 @@ export default function Sites() {
   const loadingModelsSiteIdRef = useRef<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
   const sitesTableWrapRef = useRef<HTMLDivElement | null>(null);
-  const mobileListRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
   const toast = useToast();
   const [disabledModels, setDisabledModels] = useState<string[]>([]);
@@ -276,14 +276,7 @@ export default function Sites() {
     () => sortItemsForDisplay(sites, sortMode, (site) => site.totalBalance || 0),
     [sites, sortMode],
   );
-  const exactPageSize = useExactPageSizeMulti(
-    [sitesTableWrapRef, mobileListRef],
-    {
-      min: 4,
-      max: 30,
-      rowSelector: isMobile ? '.mobile-card-list > .mobile-card' : 'tbody tr',
-    },
-  );
+  const [exactPageSize, setExactPageSize] = usePersistedPageSize('sites');
   const effectivePageSize = exactPageSize;
   const {
     page: safePage,
@@ -2223,7 +2216,10 @@ export default function Sites() {
                       </a>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--color-text-secondary)', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <div
+                        className="sites-connection-summary"
+                        style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}
+                      >
                         {site.connectionStats && site.connectionStats.sessions > 0 && (
                           <span title="Session 账号">👤{site.connectionStats.sessions}</span>
                         )}
@@ -2334,6 +2330,9 @@ export default function Sites() {
             navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
           }}
           visible={showSitePagination}
+          rangeLabel={`显示第 ${(safePage - 1) * pageSize + 1} - ${Math.min(safePage * pageSize, sortedSites.length)} 条，共 ${sortedSites.length} 条`}
+          pageSize={exactPageSize}
+          onPageSizeChange={setExactPageSize}
         />
       </div>
     </div>

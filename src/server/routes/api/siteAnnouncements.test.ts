@@ -295,7 +295,8 @@ describe('site announcements routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as Array<{ type: string }>;
-    expect(body).toEqual([expect.objectContaining({ type: 'site_notice' })]);
+    const body = response.json() as { items: Array<{ type: string }>; total: number };
+    expect(body.items).toEqual([expect.objectContaining({ type: 'site_notice' })]);
+    expect(body.total).toBe(1);
   });
 });

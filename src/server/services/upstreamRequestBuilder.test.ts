@@ -6,6 +6,27 @@ import {
 } from './upstreamRequestBuilder.js';
 
 describe('upstreamRequestBuilder', () => {
+  it('omits authorization for explicitly keyless upstreams', () => {
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'chat',
+      modelName: 'opencode/local-model',
+      stream: false,
+      tokenValue: '',
+      sitePlatform: 'openai',
+      siteUrl: 'http://127.0.0.1:4096',
+      openaiBody: {
+        model: 'opencode/local-model',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      downstreamFormat: 'openai',
+    });
+
+    expect(request.headers.Authorization).toBeUndefined();
+    expect(request.headers.authorization).toBeUndefined();
+    expect(request.headers['x-api-key']).toBeUndefined();
+    expect(request.headers['Content-Type']).toBe('application/json');
+  });
+
   it('routes Gemini official chat tool history through native generateContent with signed functionCall parts', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'chat',

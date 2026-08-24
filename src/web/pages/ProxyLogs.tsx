@@ -21,8 +21,9 @@ import { useVisiblePolling } from '../components/useVisiblePolling.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import PageJumpInput from '../components/PageJumpInput.js';
+import PaginationControls from '../components/PaginationControls.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
-import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, PAGE_SIZES, PROXY_LOGS_REFRESH_INTERVAL_MS, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
+import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, PROXY_LOGS_REFRESH_INTERVAL_MS, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
 import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
 import {
   renderStoredDebugDetails,
@@ -30,6 +31,7 @@ import {
 } from './helpers/proxyLogTraceDetail.js';
 import { tr } from '../i18n.js';
 import DateTimeInput from '../components/DateTimeInput.js';
+import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 
 type ProxyLogDetailState = {
   loading: boolean;
@@ -95,9 +97,11 @@ function aggregateProxyLogRetries(
 export default function ProxyLogs() {
   const location = useLocation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile(768);
+  const [storedPageSize, setStoredPageSize] = usePersistedPageSize('proxyLogs');
   const initialRouteState = useMemo(
-    () => readProxyLogsRouteState(location.search),
-    [location.search],
+    () => readProxyLogsRouteState(location.search, storedPageSize),
+    [location.search, storedPageSize],
   );
   const [logs, setLogs] = useState<ProxyLogListItem[]>([]);
   const [summary, setSummary] = useState<ProxyLogsSummary>(EMPTY_SUMMARY);
@@ -151,7 +155,6 @@ export default function ProxyLogs() {
   const [debugDetailById, setDebugDetailById] = useState<
     Record<number, ProxyDebugTraceDetailState>
   >({});
-  const isMobile = useIsMobile(768);
   const toast = useToast();
   const loadSeq = useRef(0);
   const metaLoadSeq = useRef(0);
@@ -176,7 +179,7 @@ export default function ProxyLogs() {
   );
 
   useEffect(() => {
-    const next = readProxyLogsRouteState(location.search);
+    const next = readProxyLogsRouteState(location.search, storedPageSize);
     setStatusFilter((current) =>
       current === next.status ? current : next.status,
     );
@@ -198,7 +201,8 @@ export default function ProxyLogs() {
     setPageSize((current) =>
       current === next.pageSize ? current : next.pageSize,
     );
-  }, [location.search]);
+    setStoredPageSize(next.pageSize);
+  }, [location.search, storedPageSize]);
 
   useEffect(() => {
     const nextSearch = buildProxyLogsRouteSearch({
@@ -211,6 +215,7 @@ export default function ProxyLogs() {
       model: modelFilter,
       from: fromInput,
       to: toInput,
+      pageSizeDefault: storedPageSize,
     });
     if (nextSearch === location.search) return;
     navigate(
@@ -220,6 +225,7 @@ export default function ProxyLogs() {
   }, [
     page,
     pageSize,
+    storedPageSize,
     statusFilter,
     searchInput,
     downstreamKeyFilter,
@@ -257,17 +263,6 @@ export default function ProxyLogs() {
           debugTraceOffset + visibleDebugTraces.length,
           debugTraces.length,
         );
-
-  const pageNumbers = useMemo(
-    () =>
-      Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-        if (totalPages <= 7) return i + 1;
-        if (safePage <= 4) return i + 1;
-        if (safePage >= totalPages - 3) return totalPages - 6 + i;
-        return safePage - 3 + i;
-      }),
-    [safePage, totalPages],
-  );
 
   const siteOptions = useMemo(() => {
     const options = sites.map((site) => ({
@@ -2184,7 +2179,7 @@ export default function ProxyLogs() {
             })}
           </div>
         ) : (
-          <table className="data-table" style={{ width: '100%' }}>
+          <table className="data-table proxy-logs-table" style={{ width: '100%' }}>
             <thead>
               <tr>
                 <th style={{ width: 28 }} />
@@ -2858,86 +2853,19 @@ export default function ProxyLogs() {
       </div>
 
       {total > 0 && (
-        <div className="pagination">
-          <div
-            style={{
-              fontSize: 12,
-              color: 'var(--color-text-muted)',
-              marginRight: 'auto',
-              marginLeft: 12,
-            }}
-          >
-            显示第 {displayedStart} - {displayedEnd} 条，共 {total} 条
-          </div>
-          <button
-            className="pagination-btn"
-            disabled={safePage <= 1}
-            onClick={() => setPage((current) => current - 1)}
-          >
-            <svg
-              width="14"
-              height="14"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
-          {pageNumbers.map((num) => (
-            <button
-              key={num}
-              className={`pagination-btn ${safePage === num ? 'active' : ''}`}
-              onClick={() => setPage(num)}
-            >
-              {num}
-            </button>
-          ))}
-          <button
-            className="pagination-btn"
-            disabled={safePage >= totalPages}
-            onClick={() => setPage((current) => current + 1)}
-          >
-            <svg
-              width="14"
-              height="14"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
-          <PageJumpInput totalPages={totalPages} onJump={setPage} />
-          <div className="pagination-size">
-            每页条数:
-            <div style={{ minWidth: 86 }}>
-              <ModernSelect
-                size="sm"
-                value={String(pageSize)}
-                onChange={(nextValue) => {
-                  setPageSize(Number(nextValue));
-                  setPage(1);
-                }}
-                options={PAGE_SIZES.map((s) => ({
-                  value: String(s),
-                  label: String(s),
-                }))}
-                placeholder={String(pageSize)}
-              />
-            </div>
-          </div>
-        </div>
+        <PaginationControls
+          page={safePage}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          visible
+          rangeLabel={`显示第 ${displayedStart} - ${displayedEnd} 条，共 ${total} 条`}
+          pageSize={pageSize}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setStoredPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       )}
     </div>
   );
