@@ -523,25 +523,25 @@ export default function ImportExport() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(380px,1fr))', gap: 20 }}>
         {/* ====== 导出区 ====== */}
-        <div className="card animate-slide-up stagger-1" style={{ padding: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
+        <div className="card animate-slide-up stagger-1" style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>导出数据</span>
+            <span style={{ fontSize: 16, fontWeight: 700 }}>导出数据</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
             将连接、路由策略与设置导出为 JSON 文件进行备份
           </div>
 
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
             <button
               onClick={() => handleExport('all')}
               disabled={!!exportingType}
               className="btn btn-primary"
-              style={{ justifyContent: 'space-between' }}
+              style={{ justifyContent: 'space-between', padding: '28px 16px' }}
             >
               <span>导出全部（连接 + 路由 + 策略 + 设置）</span>
               {exportingType === 'all' ? <span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> : null}
@@ -550,7 +550,7 @@ export default function ImportExport() {
               onClick={() => handleExport('accounts')}
               disabled={!!exportingType}
               className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)', justifyContent: 'space-between' }}
+              style={{ border: '1px solid var(--color-border)', justifyContent: 'space-between', padding: '28px 16px' }}
             >
               <span>仅导出连接与路由策略</span>
               {exportingType === 'accounts' ? <span className="spinner spinner-sm" /> : null}
@@ -559,7 +559,7 @@ export default function ImportExport() {
               onClick={() => handleExport('preferences')}
               disabled={!!exportingType}
               className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)', justifyContent: 'space-between' }}
+              style={{ border: '1px solid var(--color-border)', justifyContent: 'space-between', padding: '28px 16px' }}
             >
               <span>仅导出系统设置</span>
               {exportingType === 'preferences' ? <span className="spinner spinner-sm" /> : null}
@@ -568,12 +568,12 @@ export default function ImportExport() {
         </div>
 
         {/* ====== 导入区 ====== */}
-        <div className="card animate-slide-up stagger-2" style={{ padding: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
+        <div className="card animate-slide-up stagger-2" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>导入数据</span>
+            <span style={{ fontSize: 16, fontWeight: 700 }}>导入数据</span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
             从备份文件恢复数据
@@ -718,18 +718,22 @@ export default function ImportExport() {
         </div>
       </div>
 
-      <div className="card animate-slide-up stagger-3" style={{ marginTop: 14, padding: 18 }}>
+      <div className="card animate-slide-up stagger-3" style={{ marginTop: 20, padding: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999A5.002 5.002 0 006 9a4 4 0 00-3 6z" />
           </svg>
           <span style={{ fontSize: 15, fontWeight: 700 }}>WebDAV 同步</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, fontSize: 12, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未同步'}</span>
+            <span>最近错误：{webdavState.lastError || '无'}</span>
+          </div>
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
           支持手动推送、手动拉取，以及定时自动导出到 WebDAV。
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px 20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '16px 20px' }}>
           <div style={{ gridColumn: '1 / -1' }}>
             <div style={formFieldLabelStyle}>文件 URL</div>
             <input
@@ -834,11 +838,12 @@ export default function ImportExport() {
           </label>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button
             onClick={handleSaveWebdavConfig}
             disabled={webdavSaving}
             className="btn btn-primary"
+            style={{ flex: 1, justifyContent: 'center' }}
           >
             {webdavSaving ? '保存中...' : '保存 WebDAV 配置'}
           </button>
@@ -846,7 +851,7 @@ export default function ImportExport() {
             onClick={handleExportToWebdav}
             disabled={webdavAction !== '' || webdavSaving || webdavConfigDirty}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
+            style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
           >
             {webdavAction === 'export' ? '导出中...' : '立即导出到 WebDAV'}
           </button>
@@ -854,7 +859,7 @@ export default function ImportExport() {
             onClick={handleImportFromWebdav}
             disabled={webdavAction !== '' || webdavSaving || webdavConfigDirty}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
+            style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
           >
             {webdavAction === 'import' ? '拉取中...' : '从 WebDAV 拉取'}
           </button>
