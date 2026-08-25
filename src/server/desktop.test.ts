@@ -11,6 +11,17 @@ describe('desktop server routes', () => {
     expect(isPublicApiRoute('/api/stats/dashboard')).toBe(false);
   });
 
+  it('treats query strings as part of the same route', () => {
+    expect(
+      isPublicApiRoute('/api/site-favicon?url=https%3A%2F%2Fexample.com'),
+    ).toBe(true);
+    expect(isPublicApiRoute('/api/site-favicon')).toBe(true);
+    expect(
+      isPublicApiRoute('/api/oauth/callback/new-api?code=abc&state=xyz'),
+    ).toBe(true);
+    expect(isPublicApiRoute('/api/site-favicon-other')).toBe(false);
+  });
+
   it('registers public liveness and readiness probes', async () => {
     const app = Fastify();
     await registerDesktopRoutes(app, { checkReady: async () => true });

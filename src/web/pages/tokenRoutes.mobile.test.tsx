@@ -40,7 +40,7 @@ vi.mock('../components/BrandIcon.js', () => ({
   ),
   InlineBrandIcon: ({ model }: { model: string }) => model ? <span>{model}</span> : null,
   getBrand: (...args: unknown[]) => getBrandMock(...args),
-  hashColor: () => 'linear-gradient(135deg,#4f46e5,#818cf8)',
+  hashColor: () => ({ bg: '#eef2ff', text: '#4338ca' }),
   normalizeBrandIconKey: (icon: string) => icon,
 }));
 

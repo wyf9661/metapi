@@ -39,14 +39,13 @@ function normalizeInput(value: string): string {
 }
 
 const FALLBACK_COLORS = [
-  'linear-gradient(135deg, #0f766e, #14b8a6)',
-  'linear-gradient(135deg, #059669, #34d399)',
-  'linear-gradient(135deg, #2563eb, #60a5fa)',
-  'linear-gradient(135deg, #d946ef, #f0abfc)',
-  'linear-gradient(135deg, #ea580c, #fb923c)',
-  'linear-gradient(135deg, #0891b2, #22d3ee)',
-  'linear-gradient(135deg, #7c3aed, #a78bfa)',
-  'linear-gradient(135deg, #dc2626, #f87171)',
+  '#e0e7ff', '#dbeafe', '#fce7f3', '#fef3c7',
+  '#d1fae5', '#e0f2fe', '#edf2ff', '#f5f3ff',
+];
+
+const FALLBACK_FOREGROUNDS = [
+  '#4338ca', '#1d4ed8', '#be185d', '#b45309',
+  '#047857', '#0369a1', '#2563eb', '#6d28d9',
 ];
 
 /** Absolute icon URLs for brands missing from the shared icon CDN. */
@@ -74,13 +73,90 @@ export function getBrandIconUrl(icon: string | null | undefined, cdn: string): s
   if (isAbsoluteHttpUrl(normalized)) return normalized;
   const custom = CUSTOM_BRAND_ICON_URLS[normalized];
   if (custom) return custom;
-  return `${cdn}/${normalized}.png`;
+  // `cdn` carries the resolved theme ('dark' | 'light'); brand icons are proxied
+  // through our own origin so one server-side cache serves every client.
+  const theme = cdn === 'dark' ? 'dark' : 'light';
+  return `/api/brand-icon?icon=${encodeURIComponent(normalized)}&theme=${theme}`;
 }
 
-export function hashColor(name: string): string {
+export function hashColor(name: string): { bg: string; text: string } {
   let h = 0;
   for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return FALLBACK_COLORS[Math.abs(h) % FALLBACK_COLORS.length]!;
+  const idx = Math.abs(h) % FALLBACK_COLORS.length;
+  return { bg: FALLBACK_COLORS[idx]!, text: FALLBACK_FOREGROUNDS[idx]! };
+}
+
+/** Deterministic per-name hash in [0, 1), salted so hue/luma channels differ. */
+function nameHash(name: string, salt: string): number {
+  const input = `${salt}:${name}`;
+  let h = 0;
+  for (let i = 0; i < input.length; i += 1) h = (h * 31 + input.charCodeAt(i)) | 0;
+  return (Math.abs(h) % 10000) / 10000;
+}
+
+function rgbToHsl({ r, g, b }: { r: number; g: number; b: number }): [number, number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+  else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+  else h = ((rn - gn) / d + 4) / 6;
+  return [h * 360, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hn = ((h % 360) + 360) % 360 / 360;
+  if (s === 0) {
+    const v = clampChannel(l * 255);
+    return toHex({ r: v, g: v, b: v });
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = (t: number): number => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  return toHex({
+    r: channel(hn + 1 / 3) * 255,
+    g: channel(hn) * 255,
+    b: channel(hn - 1 / 3) * 255,
+  });
+}
+
+/**
+ * Nudge a base colour with a per-name hash so sites/models that share the same
+ * icon or brand colour still get distinguishable badges. Hue moves within ±20°
+ * (same colour family), luminance ±5%. Grayscale colours (black logos) get a
+ * luminance-only nudge so every same-icon site still differs while staying
+ * black-family. The result is then theme-clamped for readability.
+ */
+export function perturbBadgeColor(hex: string, name: string, theme: 'dark' | 'light'): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb || !name) return clampBadgeColor(hex, theme);
+  const isGray = rgb.r === rgb.g && rgb.g === rgb.b;
+  let shifted: string;
+  if (isGray) {
+    const scale = 1 + (nameHash(name, 'luma') - 0.5) * 0.22;
+    shifted = toHex({ r: rgb.r * scale, g: rgb.g * scale, b: rgb.b * scale });
+  } else {
+    const [h, s, l] = rgbToHsl(rgb);
+    const dh = (nameHash(name, 'hue') - 0.5) * 40;
+    const dl = (nameHash(name, 'luma') - 0.5) * 0.1;
+    shifted = hslToHex(h + dh, s, Math.max(0, Math.min(1, l * (1 + dl))));
+  }
+  return clampBadgeColor(shifted, theme);
 }
 
 export type BrandBadgeColors = {
@@ -131,35 +207,72 @@ function toHex({ r, g, b }: { r: number; g: number; b: number }): string {
 }
 
 /**
+ * Clamp a colour's perceived luminance for use as badge text:
+ * - light theme: keep it dark-ish ([0.15, 0.40]) so text reads on pale tints
+ * - dark theme: keep it bright-ish ([0.45, 0.8]) so text reads on dark cards
+ * Black logos (e.g. DeepSeek's #000 SVG) therefore stay black-family in light
+ * mode and lift to a readable grey in dark mode.
+ */
+export function clampBadgeColor(hex: string, theme: 'dark' | 'light'): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  let { r, g, b } = rgb;
+  const lum = relativeLuminance(rgb);
+  if (theme === 'dark') {
+    if (lum < 0.45) {
+      const scale = (1 - 0.45) / (1 - lum);
+      r = Math.round(255 - (255 - r) * scale);
+      g = Math.round(255 - (255 - g) * scale);
+      b = Math.round(255 - (255 - b) * scale);
+    } else if (lum > 0.8) {
+      const scale = 0.8 / lum;
+      r = Math.round(r * scale); g = Math.round(g * scale); b = Math.round(b * scale);
+    }
+  } else {
+    if (lum > 0.40) {
+      const scale = 0.40 / lum;
+      r = Math.round(r * scale); g = Math.round(g * scale); b = Math.round(b * scale);
+    } else if (lum < 0.15) {
+      const scale = (1 - 0.15) / (1 - lum);
+      r = Math.round(255 - (255 - r) * scale);
+      g = Math.round(255 - (255 - g) * scale);
+      b = Math.round(255 - (255 - b) * scale);
+    }
+  }
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+/**
  * Derive badge fill/border/text colors from a brand's own color so every brand
  * stays visually consistent with its icon instead of falling back to one shared
- * theme tint. Very light brand colors get darkened for readable label text.
+ * theme tint. Text is tuned for the current theme so the label stays readable
+ * against the card background either way.
  */
-export function brandBadgeColors(color: string | null | undefined): BrandBadgeColors {
+export function brandBadgeColors(
+  color: string | null | undefined,
+  theme?: 'dark' | 'light',
+  name?: string,
+): BrandBadgeColors {
   const rgb = hexToRgb(color ?? '');
   if (!rgb) return DEFAULT_BADGE_COLORS;
 
-  const luminance = relativeLuminance(rgb);
-  // Keep label text readable on the translucent tint: darken bright brand
-  // colors (e.g. NVIDIA green, Anthropic sand) toward a legible shade.
-  const darkenFactor = luminance > 0.72 ? 0.5 : luminance > 0.55 ? 0.68 : 1;
-  const text = darkenFactor === 1
-    ? toHex(rgb)
-    : toHex({
-      r: rgb.r * darkenFactor,
-      g: rgb.g * darkenFactor,
-      b: rgb.b * darkenFactor,
-    });
+  const hex = toHex(rgb);
+  const text = name ? perturbBadgeColor(hex, name, theme ?? 'light') : clampBadgeColor(hex, theme ?? 'light');
+  // Base fill/border on the same (possibly perturbed) hue so every name gets
+  // its own tint, not just its own label colour.
+  const fillRgb = hexToRgb(text) ?? rgb;
 
   return {
-    bg: `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)`,
-    border: `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`,
+    bg: `rgba(${fillRgb.r},${fillRgb.g},${fillRgb.b},0.12)`,
+    border: `rgba(${fillRgb.r},${fillRgb.g},${fillRgb.b},0.25)`,
     text,
   };
 }
 
 export function avatarLetters(name: string): string {
-  const parts = name.replace(/[-_/.]/g, ' ').trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0]![0] + parts[1]![0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return '?';
+  // Single character only: two-letter blocks read as noise next to real logos.
+  const firstMeaningful = trimmed.replace(/[-_/.\s]/g, '').charAt(0);
+  return (firstMeaningful || trimmed.charAt(0)).toUpperCase();
 }

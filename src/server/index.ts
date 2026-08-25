@@ -286,7 +286,8 @@ app.addHook('onSend', async (request, reply, payload) => {
   reply.header('X-Frame-Options', 'DENY');
   reply.header('Referrer-Policy', 'no-referrer');
   reply.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:");
-  if (urlPath.startsWith('/api/')) {
+  const isIconProxyPath = urlPath === '/api/site-favicon' || urlPath === '/api/brand-icon';
+  if (urlPath.startsWith('/api/') && !isIconProxyPath) {
     reply.header('Cache-Control', 'no-store, no-cache, must-revalidate');
     reply.header('Pragma', 'no-cache');
   }

@@ -817,9 +817,9 @@ export default function ManualRoutePanel({
                         <span
                           style={{
                             fontSize: 8,
-                            background: hashColor(siteName),
-                            color: 'white',
-                            borderRadius: 3,
+                            background: hashColor(siteName).bg,
+                            color: hashColor(siteName).text,
+                            borderRadius: 6,
                             padding: '1px 2px',
                             lineHeight: 1,
                           }}

@@ -12,15 +12,16 @@ import {
 export type { BrandInfo } from './brandRegistry.js';
 export {
   brandBadgeColors,
+  clampBadgeColor,
   getBrand,
   getBrandIconUrl,
   hashColor,
   normalizeBrandIconKey,
+  perturbBadgeColor,
 } from './brandRegistry.js';
 
-const BRAND_ICON_VERSION = '1.83.0';
-const ICON_CDN = `https://registry.npmmirror.com/@lobehub/icons-static-png/${BRAND_ICON_VERSION}/files/dark`;
-const ICON_CDN_LIGHT = `https://registry.npmmirror.com/@lobehub/icons-static-png/${BRAND_ICON_VERSION}/files/light`;
+const BRAND_ICON_THEME_DARK = 'dark';
+const BRAND_ICON_THEME_LIGHT = 'light';
 
 export function useIconCdn() {
   const [isDark, setIsDark] = useState(() => {
@@ -35,7 +36,7 @@ export function useIconCdn() {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => observer.disconnect();
   }, []);
-  return isDark ? ICON_CDN : ICON_CDN_LIGHT;
+  return isDark ? BRAND_ICON_THEME_DARK : BRAND_ICON_THEME_LIGHT;
 }
 
 type BrandGlyphProps = {
@@ -53,9 +54,11 @@ export function BrandGlyph({ brand, model, icon, alt, size = 16, fallbackText, s
   const resolvedBrand = brand || (model ? getBrand(model) : null);
   const resolvedIcon = normalizeBrandIconKey(icon || resolvedBrand?.icon || null);
   const [imgError, setImgError] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   useEffect(() => {
     setImgError(false);
+    setImgLoaded(false);
   }, [resolvedIcon]);
 
   if (resolvedIcon && !imgError) {
@@ -65,16 +68,23 @@ export function BrandGlyph({ brand, model, icon, alt, size = 16, fallbackText, s
         <img
           src={src}
           alt={alt || resolvedBrand?.name || model || 'brand'}
+          // Use a callback ref so cached images (which may fire `onLoad` before
+          // React attaches the synthetic handler) still get their opacity set.
+          ref={(el) => { if (el?.complete) setImgLoaded(true); }}
+          onLoad={() => setImgLoaded(true)}
+          onError={() => setImgError(true)}
           style={{
             width: size,
             height: size,
             objectFit: 'contain',
             flexShrink: 0,
             verticalAlign: 'middle',
+            // Fade in once loaded: prevents the browser's blank/white image
+            // placeholder flashing on a dark theme before the icon arrives.
+            opacity: imgLoaded ? 1 : 0,
+            transition: 'opacity 0.15s ease',
             ...style,
           }}
-          onError={() => setImgError(true)}
-          loading="lazy"
         />
       );
     }
@@ -83,15 +93,16 @@ export function BrandGlyph({ brand, model, icon, alt, size = 16, fallbackText, s
   const fallback = (fallbackText ?? resolvedBrand?.name ?? model ?? '').trim();
   if (!fallback) return null;
 
+  const { bg: fbBg, text: fbText } = hashColor(fallback);
   return (
     <span
       aria-hidden="true"
       style={{
         width: size,
         height: size,
-        borderRadius: Math.max(4, Math.round(size * 0.33)),
-        background: hashColor(fallback),
-        color: 'white',
+        borderRadius: size <= 14 ? 4 : size <= 20 ? 6 : 8,
+        background: fbBg,
+        color: fbText,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -99,11 +110,10 @@ export function BrandGlyph({ brand, model, icon, alt, size = 16, fallbackText, s
         fontWeight: 700,
         lineHeight: 1,
         flexShrink: 0,
-        overflow: 'hidden',
         ...style,
       }}
     >
-      {avatarLetters(fallback)}
+      {fallback}
     </span>
   );
 }
@@ -130,7 +140,7 @@ export function BrandIcon({ model, size = 44 }: { model: string; size?: number }
   }
 
   return (
-    <div className="model-card-avatar" style={{ width: size, height: size, background: hashColor(model), fontSize: size > 32 ? 16 : 10 }}>
+    <div className="model-card-avatar" style={{ width: size, height: size, background: hashColor(model).bg, fontSize: size > 32 ? 16 : 10 }}>
       {avatarLetters(model)}
     </div>
   );
@@ -144,12 +154,10 @@ export function InlineBrandIcon({ model, size = 16 }: { model: string; size?: nu
 
 export function ModelBadge({ model, style }: { model: string; style?: CSSProperties }) {
   const brand = getBrand(model);
-
-  // Badge colors come from the brand's own color so the tint always matches the
-  // icon. Previously only a handful of brands had hand-written badge colors and
-  // every other brand (GLM, Qwen, and ~60 more) fell back to one theme tint that
-  // clashed with its icon.
-  const colors = brandBadgeColors(brand?.color);
+  const cdn = useIconCdn();
+  // Pass the model name as the perturbation seed so models sharing a brand
+  // colour (e.g. multiple DeepSeek/GPT models) still get distinct badges.
+  const colors = brandBadgeColors(brand?.color, cdn as 'dark' | 'light', model);
 
   return (
     <span style={{

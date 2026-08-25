@@ -27,6 +27,11 @@ import { probeSiteModels, rebuildTokenRoutesFromAvailability } from '../../servi
 import { clearModelsMarketplaceCache } from './stats.js';
 import { rebuildRoutesBestEffort } from '../../services/routeRefreshWorkflow.js';
 import { invalidateAccountsSnapshot } from '../../services/accountsOverviewService.js';
+import {
+  lookupBrandIcon,
+  lookupSiteFavicon,
+  normalizeBrandIconRequest,
+} from '../../services/iconProxyService.js';
 
 function sseWrite(raw: import('http').ServerResponse, event: string, data: unknown) {
   try { raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* ignore */ }
@@ -1314,4 +1319,76 @@ export async function sitesRoutes(app: FastifyInstance) {
     const result = await detectSite(parsedBody.data.url);
     return result || { error: 'Could not detect platform' };
   });
+
+  // Proxy site favicons and brand icons through the server: keeps the browser
+  // on our own origin, works for Cloudflare-protected / internal upstreams, and
+  // gives every client one shared server-side cache.
+  app.get<{ Querystring: { url?: string } }>(
+    '/api/site-favicon',
+    async (request, reply) => {
+      const raw = String(request.query.url || '').trim();
+      if (!raw) return reply.code(400).send({ error: 'url is required' });
+
+      let parsed: URL;
+      try {
+        parsed = new URL(raw);
+      } catch {
+        return reply.code(400).send({ error: 'invalid url' });
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return reply.code(400).send({ error: 'only http/https urls allowed' });
+      }
+
+      const origin = parsed.origin;
+      // Hosts the admin already configured as sites are trusted: an internal
+      // NewAPI deployment is a legitimate target. Everything else keeps the
+      // strict private-IP guard so this cannot be abused as an SSRF proxy.
+      const configuredSite = await db
+        .select({ id: schema.sites.id })
+        .from(schema.sites)
+        .where(eq(schema.sites.url, origin))
+        .limit(1)
+        .all();
+
+      const result = await lookupSiteFavicon(origin, {
+        trustPrivateHost: configuredSite.length > 0,
+      });
+      if (result.status === 'forbidden') {
+        return reply.code(403).send({ error: 'private hosts are not allowed' });
+      }
+      if (result.status === 'not-found') {
+        return reply.code(404).send({ error: 'favicon not found' });
+      }
+
+      reply
+        .header('Content-Type', result.payload.contentType)
+        .header('Cache-Control', 'public, max-age=86400')
+        .header('X-Favicon-Source', result.payload.source)
+        .header('X-Favicon-Cache', result.cache);
+      return reply.send(result.payload.buffer);
+    },
+  );
+
+  app.get<{ Querystring: { icon?: string; theme?: string } }>(
+    '/api/brand-icon',
+    async (request, reply) => {
+      const normalized = normalizeBrandIconRequest(
+        String(request.query.icon || ''),
+        request.query.theme,
+      );
+      if (!normalized) return reply.code(400).send({ error: 'invalid icon key' });
+
+      const result = await lookupBrandIcon(normalized.key, normalized.theme);
+      if (result.status === 'not-found') {
+        return reply.code(404).send({ error: 'brand icon not found' });
+      }
+
+      reply
+        .header('Content-Type', result.payload.contentType)
+        .header('Cache-Control', 'public, max-age=86400')
+        .header('X-Icon-Source', result.payload.source)
+        .header('X-Icon-Cache', result.cache);
+      return reply.send(result.payload.buffer);
+    },
+  );
 }

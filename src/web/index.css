@@ -2164,11 +2164,19 @@ html[data-layout="desktop"] .main-content {
 }
 
 .accounts-site-cell .badge {
-  display: block;
+  /* Keep the badge a flex row so the icon/label gap from `.badge` applies.
+     `display: block` used to kill the flex gap, sticking the favicon to the
+     site name. */
+  display: inline-flex;
+  gap: 5px;
   max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.accounts-site-cell .badge > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .accounts-table th:nth-child(3),

@@ -3,8 +3,8 @@ import { copyText } from '../clipboard.js';
 import { useLocation } from 'react-router-dom';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { api } from '../api.js';
-import { BrandGlyph, getBrand, hashColor, BrandIcon, type BrandInfo } from '../components/BrandIcon.js';
-import SiteBadgeLink from '../components/SiteBadgeLink.js';
+import { BrandGlyph, getBrand, BrandIcon, type BrandInfo } from '../components/BrandIcon.js';
+import SiteBadgeLink, { SiteIcon } from '../components/SiteBadgeLink.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
@@ -37,6 +37,7 @@ interface ModelGroupPricing {
 interface ModelPricingSource {
   siteId: number;
   siteName: string;
+  siteUrl: string;
   accountId: number;
   username: string | null;
   ownerBy: string | null;
@@ -48,6 +49,7 @@ interface ModelAccountInfo {
   id: number;
   site: string;
   siteId?: number | null;
+  siteUrl?: string | null;
   username: string | null;
   latency: number | null;
   connectivity?: boolean | null;
@@ -464,13 +466,21 @@ export default function Models() {
 
   /* ---- derived: site list ---- */
   const siteMap = useMemo(() => {
-    const m = new Map<string, number>();
+    const m = new Map<string, { count: number; siteUrl: string | null }>();
     for (const model of data.models) {
       for (const a of model.accounts) {
-        m.set(a.site, (m.get(a.site) || 0) + 1);
+        const existing = m.get(a.site);
+        if (existing) {
+          existing.count++;
+          if (!existing.siteUrl && a.siteUrl) existing.siteUrl = a.siteUrl;
+        } else {
+          m.set(a.site, { count: 1, siteUrl: a.siteUrl || null });
+        }
       }
     }
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    return [...m.entries()]
+      .map(([site, { count, siteUrl }]) => ({ site, count, siteUrl }))
+      .sort((a, b) => b.count - a.count);
   }, [data.models]);
 
   /* ---- filtered ---- */
@@ -944,14 +954,14 @@ export default function Models() {
           {tr('供应商')}
           {activeSite && <button onClick={() => setActiveSite(null)}>{tr('重置')}</button>}
         </div>
-        {siteMap.map(([site, count]) => (
+        {siteMap.map(({ site, count, siteUrl }) => (
           <div
             key={site}
             className={`filter-item ${activeSite === site ? 'active' : ''}`}
             onClick={() => setActiveSite(activeSite === site ? null : site)}
           >
-            <span className="filter-item-icon" style={{ background: hashColor(site), color: 'white', fontSize: 9, borderRadius: 4 }}>
-              {site.slice(0, 2).toUpperCase()}
+            <span className="filter-item-icon" style={{ background: 'var(--color-bg)', borderRadius: 6, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <SiteIcon name={site} size={14} url={siteUrl} />
             </span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site}</span>
             <span className="filter-item-count">{count}</span>
@@ -1300,10 +1310,10 @@ export default function Models() {
                             {m.pricingSources.map((source) => (
                               <div
                                 key={`${source.siteId}-${source.accountId}`}
-                                style={{ border: '1px solid var(--color-border-light)', borderRadius: 8, padding: 8 }}
+                                style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)', padding: 8 }}
                               >
                                 <div style={{ fontSize: 12, marginBottom: 6 }}>
-                                  <SiteBadgeLink siteId={source.siteId} siteName={source.siteName} badgeStyle={{ fontSize: 11 }} /> · {source.username || `ID:${source.accountId}`}
+                                  <SiteBadgeLink siteId={source.siteId} siteName={source.siteName} siteUrl={source.siteUrl} badgeStyle={{ fontSize: 11 }} /> · {source.username || `ID:${source.accountId}`}
                                 </div>
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                   {Object.entries(source.groupPricing).map(([group, pricing]) => (
@@ -1331,7 +1341,7 @@ export default function Models() {
                             style={{ padding: 10, display: 'grid', gap: 8 }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                              <SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} />
+                              <SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} />
                               <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{a.username || `ID:${a.id}`}</span>
                             </div>
                             <div style={{ display: 'grid', gap: 6 }}>
@@ -1381,7 +1391,7 @@ export default function Models() {
                         <tbody>
                           {m.accounts.map(a => (
                             <tr key={a.id}>
-                              <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
+                              <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
                               <td style={{ fontSize: 12 }}>{a.username || `ID:${a.id}`}</td>
                               <td style={{ fontSize: 11 }}><code style={{ wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                               <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -1570,10 +1580,10 @@ export default function Models() {
                                     {m.pricingSources.map((source) => (
                                       <div
                                         key={`${source.siteId}-${source.accountId}`}
-                                        style={{ border: '1px solid var(--color-border-light)', borderRadius: 8, padding: 8 }}
+                                        style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)', padding: 8 }}
                                       >
                                         <div style={{ fontSize: 12, marginBottom: 6 }}>
-                                          <SiteBadgeLink siteId={source.siteId} siteName={source.siteName} badgeStyle={{ fontSize: 11 }} /> · {source.username || `ID:${source.accountId}`}
+                                          <SiteBadgeLink siteId={source.siteId} siteName={source.siteName} siteUrl={source.siteUrl} badgeStyle={{ fontSize: 11 }} /> · {source.username || `ID:${source.accountId}`}
                                         </div>
                                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                           {Object.entries(source.groupPricing).map(([group, pricing]) => (
@@ -1604,7 +1614,7 @@ export default function Models() {
                               <tbody>
                                 {m.accounts.map(a => (
                                   <tr key={a.id} style={{ borderTop: '1px solid var(--color-border-light)' }}>
-                                    <td style={{ padding: 8 }}><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
+                                    <td style={{ padding: 8 }}><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
                                     <td style={{ padding: 8 }}>{a.username || `ID:${a.id}`}</td>
                                     <td style={{ padding: 8 }}><code style={{ fontSize: 11, wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                                     <td style={{ padding: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>

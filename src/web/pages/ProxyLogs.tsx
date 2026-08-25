@@ -2045,7 +2045,9 @@ export default function ProxyLogs() {
                         String(log.siteName || '').trim(),
                       )}
                       siteName={log.siteName}
-                      badgeStyle={{ fontSize: 11 }}
+                      siteUrl={log.siteUrl}
+                      tone="primary"
+                      badgeStyle={{ fontSize: 12 }}
                     />
                     <StreamModeIcon isStream={detailLog.isStream} />
                   </div>
@@ -2101,7 +2103,9 @@ export default function ProxyLogs() {
                               String(log.siteName || '').trim(),
                             )}
                             siteName={log.siteName}
-                            badgeStyle={{ fontSize: 11 }}
+                            siteUrl={log.siteUrl}
+                            tone="primary"
+                            badgeStyle={{ fontSize: 12 }}
                           />
                         }
                       />
@@ -2294,7 +2298,9 @@ export default function ProxyLogs() {
                             String(log.siteName || '').trim(),
                           )}
                           siteName={log.siteName}
-                          badgeStyle={{ fontSize: 11 }}
+                          siteUrl={log.siteUrl}
+                          tone="primary"
+                          badgeStyle={{ fontSize: 12 }}
                         />
                       </td>
                       <td style={{ width: 48, minWidth: 48 }}>

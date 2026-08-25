@@ -13,14 +13,19 @@ const AUTH_INFO_ROUTE = '/api/settings/auth/info';
 // is taken). Used by the settings page so desktop/server users can copy their
 // base URL for Cursor / Codex / OpenAI SDK configuration.
 const DESKTOP_INFO_ROUTE = '/api/desktop/info';
+const FAVICON_PROXY_ROUTE = '/api/site-favicon';
+const BRAND_ICON_PROXY_ROUTE = '/api/brand-icon';
 
 export function isPublicApiRoute(url: string): boolean {
-  return url === DESKTOP_HEALTH_ROUTE
-    || url === LIVE_HEALTH_ROUTE
-    || url === READY_HEALTH_ROUTE
-    || url === AUTH_INFO_ROUTE
-    || url === DESKTOP_INFO_ROUTE
-    || url.startsWith('/api/oauth/callback/');
+  const path = (url || '').split('?')[0] || '';
+  return path === DESKTOP_HEALTH_ROUTE
+    || path === LIVE_HEALTH_ROUTE
+    || path === READY_HEALTH_ROUTE
+    || path === AUTH_INFO_ROUTE
+    || path === DESKTOP_INFO_ROUTE
+    || path === FAVICON_PROXY_ROUTE
+    || path === BRAND_ICON_PROXY_ROUTE
+    || path.startsWith('/api/oauth/callback/');
 }
 
 export async function registerDesktopRoutes(

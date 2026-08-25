@@ -1182,6 +1182,7 @@ export async function statsRoutes(app: FastifyInstance) {
         pricingSources: Array<{
           siteId: number;
           siteName: string;
+          siteUrl: string;
           accountId: number;
           username: string | null;
           ownerBy: string | null;
@@ -1268,6 +1269,7 @@ export async function statsRoutes(app: FastifyInstance) {
             aggregate.pricingSources.push({
               siteId: result.site.id,
               siteName: result.site.name,
+              siteUrl: result.site.url,
               accountId: result.account.id,
               username: result.account.username,
               ownerBy: model.ownerBy,
@@ -1288,6 +1290,7 @@ export async function statsRoutes(app: FastifyInstance) {
               id: number;
               site: string;
               siteId: number;
+              siteUrl: string;
               username: string | null;
               latency: number | null;
               connectivity: boolean | null;
@@ -1331,6 +1334,7 @@ export async function statsRoutes(app: FastifyInstance) {
             id: a.id,
             site: s.name,
             siteId: s.id,
+            siteUrl: s.url,
             username: a.username,
             latency: m.latencyMs,
             connectivity: (m as any).connectivity == null ? null : !!(m as any).connectivity,
@@ -1393,6 +1397,7 @@ export async function statsRoutes(app: FastifyInstance) {
             id: a.id,
             site: s.name,
             siteId: s.id,
+            siteUrl: s.url,
             username: a.username,
             latency: m.latencyMs,
             connectivity: (m as any).connectivity == null ? null : !!(m as any).connectivity,
