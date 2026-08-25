@@ -203,7 +203,7 @@ describe('/api/models/token-candidates', () => {
     expect(body.modelsMissingTokenGroups['gpt-5.2-codex']).toBeUndefined();
   });
 
-  it('returns modelsMissingTokenGroups when account has partial group token coverage', async () => {
+  it('does not report missing groups when the account already has one usable group', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'site-b',
       url: 'https://site-b.example.com',
@@ -272,17 +272,9 @@ describe('/api/models/token-candidates', () => {
     };
 
     expect(body.modelsWithoutToken['claude-opus-4-6']).toBeUndefined();
-    expect(body.modelsMissingTokenGroups['claude-opus-4-6']).toEqual([
-      {
-        accountId: account.id,
-        username: 'bob',
-        siteId: site.id,
-        siteName: 'site-b',
-        missingGroups: ['opus'],
-        requiredGroups: ['default', 'opus'],
-        availableGroups: ['default'],
-      },
-    ]);
+    // The account already has a working token in the `default` group, so the
+    // model is usable and we must not push the user to create an `opus` key.
+    expect(body.modelsMissingTokenGroups['claude-opus-4-6']).toBeUndefined();
   });
 
   it('infers default group from token name when token_group is empty', async () => {
@@ -330,7 +322,7 @@ describe('/api/models/token-candidates', () => {
           tags: [],
           supportedEndpointTypes: [],
           ownerBy: null,
-          enableGroups: ['default', 'vip'],
+          enableGroups: ['vip'],
           groupPricing: {},
         },
       ],
@@ -353,6 +345,8 @@ describe('/api/models/token-candidates', () => {
       }>>;
     };
 
+    // `default` is inferred from the token name, and since the model only
+    // serves `vip` the account still has no usable group for it.
     expect(body.modelsMissingTokenGroups['claude-sonnet-4-5-20250929']).toEqual([
       {
         accountId: account.id,
@@ -360,7 +354,7 @@ describe('/api/models/token-candidates', () => {
         siteId: site.id,
         siteName: 'site-c',
         missingGroups: ['vip'],
-        requiredGroups: ['default', 'vip'],
+        requiredGroups: ['vip'],
         availableGroups: ['default'],
       },
     ]);

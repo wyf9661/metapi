@@ -235,4 +235,98 @@ describe('modelPricingService', () => {
       expect(cost).toBe(fallbackTokenCost(2_000_000, 'openai'));
     });
   });
+
+  describe('tiered_expr billing (NewAPI billing_mode=tiered_expr)', () => {
+    // luna upstream bill: 77,995 prompt + 130 completion → $0.3151
+    // expr: len <= 272000 ? tier("<=272K", p*1 + c*6 + cr*0.1) : tier(">272K", p*2 + c*9 + cr*0.2)
+    const luna: PricingModel = {
+      modelName: 'gpt-5.6-luna',
+      quotaType: 0,
+      modelRatio: 37.5,
+      completionRatio: 6,
+      cacheRatio: 0.1,
+      cacheCreationRatio: 1.25,
+      modelPrice: null,
+      enableGroups: ['codex', 'default'],
+      billingMode: 'tiered_expr',
+      billingExpr:
+        'len <= 272000 ? tier("<=272K", p * 1 + c * 6 + cr * 0.1) : tier(">272K", p * 2 + c * 9 + cr * 0.2)',
+    };
+
+    it('settles the upstream luna bill exactly (default group ratio 4)', () => {
+      const cost = calculateModelUsageCost(
+        luna,
+        {
+          promptTokens: 77995,
+          completionTokens: 130,
+          totalTokens: 78125,
+        },
+        { default: 4 },
+      );
+      // (77995*1 + 130*6) * 4 / 1e6 = 78775 * 4 / 1e6 = 0.3151
+      expect(cost).toBeCloseTo(0.3151, 4);
+    });
+
+    it('handles the >272K tier (p*2 + c*9)', () => {
+      const cost = calculateModelUsageCost(
+        luna,
+        {
+          promptTokens: 300_000,
+          completionTokens: 10_000,
+          totalTokens: 310_000,
+        },
+        { default: 4 },
+      );
+      // (300000*2 + 10000*9) * 4 / 1e6 = 690000 * 4 / 1e6 = 2.76
+      expect(cost).toBeCloseTo(2.76, 4);
+    });
+
+    it('exposes breakdown totalCost matching the settlement amount', () => {
+      const details = calculateModelUsageBreakdown(
+        luna,
+        {
+          promptTokens: 77995,
+          completionTokens: 130,
+          totalTokens: 78125,
+        },
+        { default: 4 },
+      );
+      expect(details).not.toBeNull();
+      expect(details!.breakdown.totalCost).toBeCloseTo(0.3151, 4);
+    });
+
+    it('respects the group multiplier (default=1 vs default=4)', () => {
+      const costOne = calculateModelUsageCost(
+        luna,
+        { promptTokens: 1000, completionTokens: 0, totalTokens: 1000 },
+        { default: 1 },
+      );
+      const costFour = calculateModelUsageCost(
+        luna,
+        { promptTokens: 1000, completionTokens: 0, totalTokens: 1000 },
+        { default: 4 },
+      );
+      expect(costFour).toBeCloseTo(costOne * 4, 6);
+    });
+
+    it('supports caroline fixed-probe tier (200000 quota = $0.2/req)', () => {
+      const probeModel: PricingModel = {
+        modelName: 'gpt-5.6-sol',
+        quotaType: 0,
+        modelRatio: 0.75,
+        completionRatio: 6,
+        modelPrice: null,
+        enableGroups: ['default'],
+        billingMode: 'tiered_expr',
+        billingExpr: 'len > 0 && len < 2500 ? tier("probe", 200000) : tier("normal", p * 1 + c * 6 + cr * 0.5)',
+      };
+      const cost = calculateModelUsageCost(
+        probeModel,
+        { promptTokens: 100, completionTokens: 10, totalTokens: 110 },
+        { default: 1 },
+      );
+      // 200000 * 1 / 1e6 = 0.2
+      expect(cost).toBeCloseTo(0.2, 4);
+    });
+  });
 });

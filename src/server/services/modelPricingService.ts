@@ -34,6 +34,9 @@ export interface PricingModel {
   tags?: string[];
   supportedEndpointTypes?: string[];
   ownerBy?: string | null;
+  // NewAPI tiered_expr billing fields
+  billingMode?: string | null;
+  billingExpr?: string | null;
 }
 
 interface PricingData {
@@ -247,6 +250,10 @@ function normalizePricingModels(rawModels: unknown[]): Map<string, PricingModel>
     const ownerByRaw = (raw as any).owner_by;
     const ownerBy = typeof ownerByRaw === 'string' ? (ownerByRaw.trim() || null) : null;
 
+    // NewAPI tiered_expr billing (billing_mode, billing_expr)
+    const billingMode = (raw as any).billing_mode ?? null;
+    const billingExpr = billingMode === 'tiered_expr' ? ((raw as any).billing_expr ?? null) : null;
+
     models.set(modelName, {
       modelName,
       quotaType,
@@ -260,6 +267,8 @@ function normalizePricingModels(rawModels: unknown[]): Map<string, PricingModel>
       tags,
       supportedEndpointTypes,
       ownerBy,
+      billingMode,
+      billingExpr,
     });
   }
 
@@ -279,7 +288,9 @@ function normalizeCommonPricingPayload(payload: unknown): PricingData | null {
   const models = normalizePricingModels(maybeData);
   if (models.size === 0) return null;
 
-  const groupRatio = normalizeGroupRatio((payload as any)?.group_ratio);
+  const groupRatio = normalizeGroupRatio(
+    (payload as any)?.group_ratio ?? (payload as any)?.base_group_ratio,
+  );
   return { models, groupRatio };
 }
 
@@ -491,7 +502,7 @@ function resolveGroupMultiplier(model: PricingModel, groupRatio: Record<string, 
     if (groupRatio[group]) return groupRatio[group];
   }
 
-  const first = Object.values(groupRatio).find((ratio) => ratio > 0);
+  const first = groupRatio[DEFAULT_GROUP];
   return first || 1;
 }
 
@@ -603,6 +614,41 @@ export function calculateModelUsageBreakdown(
 
   const multiplier = resolveGroupMultiplier(model, groupRatio);
   const normalizedUsage = normalizeUsageBreakdownInput(usage);
+
+  // NewAPI tiered_expr billing: evaluate the expression. The breakdown's
+  // per-million fields derive from the matched tier's effective cost per
+  // million tokens (expr output ÷ 1e6 × groupRatio), and totalCost is the
+  // exact settlement amount, mirroring NewAPI ComputeTieredQuota.
+  if (model.billingMode === 'tiered_expr' && model.billingExpr) {
+    const params = buildTieredParams(usage);
+    const { cost } = evaluateTieredExpr(model.billingExpr, params);
+    const perMillionFactor = multiplier / 1_000_000;
+    const totalTokens = Math.max(1, normalizedUsage.promptTokens + normalizedUsage.completionTokens);
+    const averagePerMillion = roundCost((cost * perMillionFactor) / (totalTokens / 1_000_000));
+    return {
+      quotaType: model.quotaType,
+      usage: normalizedUsage,
+      pricing: {
+        modelRatio: model.modelRatio,
+        completionRatio: model.completionRatio,
+        cacheRatio: model.cacheRatio ?? 1,
+        cacheCreationRatio: model.cacheCreationRatio ?? 1,
+        groupRatio: multiplier,
+      },
+      breakdown: {
+        inputPerMillion: averagePerMillion,
+        outputPerMillion: averagePerMillion,
+        cacheReadPerMillion: averagePerMillion,
+        cacheCreationPerMillion: averagePerMillion,
+        inputCost: roundCost((normalizedUsage.billablePromptTokens / 1_000_000) * averagePerMillion),
+        outputCost: roundCost((normalizedUsage.completionTokens / 1_000_000) * averagePerMillion),
+        cacheReadCost: 0,
+        cacheCreationCost: 0,
+        totalCost: roundCost((cost * multiplier) / 1_000_000),
+      },
+    };
+  }
+
   const cacheRatio = model.cacheRatio ?? 1;
   const cacheCreationRatio = model.cacheCreationRatio ?? 1;
   const inputPerMillion = roundCost(model.modelRatio * 2 * multiplier);
@@ -639,6 +685,53 @@ export function calculateModelUsageBreakdown(
   };
 }
 
+// ---- Tiered expression billing (NewAPI billing_mode=tiered_expr) ----
+// formula (v1): $ = exprOutput × GroupRatio / 1_000_000
+// where exprOutput is evaluated from expressions like
+//   len <= 272000 ? tier("<=272K", p * 1 + c * 6 + cr * 0.1) : tier(">272K", p * 2 + c * 9 + cr * 0.2)
+// QuotaPerUnit = 500000 ($0.002/1K tokens), 1_000_000 = QuotaPerUnit × 2
+
+interface TieredBillingParams {
+  p: number;   // prompt tokens (text-only)
+  c: number;   // completion tokens (text-only)
+  len: number;  // total input length for tier condition
+  cr: number;   // cache read tokens
+  cc: number;   // cache creation tokens
+}
+
+interface TieredBillingResult {
+  cost: number; // raw expression output (before group multiplier)
+  tier: string; // matched tier name
+}
+
+function evaluateTieredExpr(expr: string, params: TieredBillingParams): TieredBillingResult {
+  let matchedTier = '';
+  const tier = (name: string, value: number) => {
+    matchedTier = name;
+    return value;
+  };
+  // safe: expressions come from trusted upstream /api/pricing, not user input
+  const fn = new Function('p', 'c', 'len', 'cr', 'cc', 'tier', `return (${expr});`);
+  const cost = Number(fn(params.p, params.c, params.len, params.cr, params.cc, tier)) || 0;
+  return { cost, tier: matchedTier };
+}
+
+function buildTieredParams(usage: {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+}): TieredBillingParams {
+  return {
+    p: usage.promptTokens,
+    c: usage.completionTokens,
+    len: usage.promptTokens + (usage.completionTokens ?? 0),
+    cr: usage.cacheReadTokens ?? 0,
+    cc: usage.cacheCreationTokens ?? 0,
+  };
+}
+
 export function calculateModelUsageCost(
   model: PricingModel,
   usage: {
@@ -651,6 +744,16 @@ export function calculateModelUsageCost(
   },
   groupRatio: Record<string, number>,
 ): number {
+  // NewAPI tiered_expr billing: evaluate the expression instead of using modelRatio × multiplier
+  if (model.billingMode === 'tiered_expr' && model.billingExpr) {
+    const params = buildTieredParams(usage);
+    const { cost } = evaluateTieredExpr(model.billingExpr, params);
+    const multiplier = resolveGroupMultiplier(model, groupRatio);
+    // formula: $ = cost × GroupRatio / 1_000_000
+    // (QuotaPerUnit=500000, 1e6 = QuotaPerUnit × 2, same as NewAPI)
+    return roundCost((cost * multiplier) / 1_000_000);
+  }
+
   const multiplier = resolveGroupMultiplier(model, groupRatio);
 
   if (model.quotaType === 1) {

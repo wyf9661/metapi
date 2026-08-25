@@ -1793,6 +1793,14 @@ export async function statsRoutes(app: FastifyInstance) {
         const availableGroups =
           coveredGroupsByAccountModel.get(accountModelKey) ||
           new Map<string, string>();
+        // The model is usable as long as the account has a token in any one
+        // of the groups the model supports. Only report a missing-group hint
+        // when the account has no covered group at all that can serve this
+        // model — there is no need to create keys for every other group.
+        const hasAnyUsableGroup = Array.from(requiredGroups.keys()).some(
+          (groupKey) => availableGroups.has(groupKey),
+        );
+        if (hasAnyUsableGroup) continue;
         const missingGroups = Array.from(requiredGroups.entries())
           .filter(([groupKey]) => !availableGroups.has(groupKey))
           .map(([, label]) => label);
