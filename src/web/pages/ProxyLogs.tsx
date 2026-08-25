@@ -1832,7 +1832,7 @@ export default function ProxyLogs() {
               </table>
             )}
             {debugTraces.length > 0 ? (
-              <div className="pagination" style={{ marginTop: 12 }}>
+              <div className="pagination">
                 <div
                   style={{
                     fontSize: 12,

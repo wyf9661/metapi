@@ -47,7 +47,7 @@ export default function PaginationControls({
   const showPageNavigation = totalPages > 1;
 
   return (
-    <div className={className} style={{ marginTop: 12, ...style }}>
+    <div className={className} style={style}>
       {rangeLabel && <div className="pagination-range">{rangeLabel}</div>}
       {showPageNavigation && (
         <>

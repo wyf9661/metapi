@@ -133,17 +133,7 @@ html[data-layout="desktop"] .main-content {
   scrollbar-gutter: stable; /* prevent width jitter from vertical scrollbar appearing/disappearing */
 }
 
-/* Proxy Logs page only: the pagination bar sticks to the bottom of the
-   scroll pane. The page root itself stays a plain block so the debug
-   trace panel and every other child keep their original layout. */
-.proxy-logs-page > .pagination {
-  position: sticky;
-  bottom: 0;
-  background: var(--color-bg);
-  margin-top: 6px !important;
-  padding: 6px 0;
-  border-top: 1px solid var(--color-border);
-}
+
 
 .oauth-site-config-card {
   display: flex;
@@ -5824,9 +5814,7 @@ textarea {
   padding-bottom: 11px;
 }
 
-.probe-logs-pagination {
-  padding: 4px 0;
-}
+
 
 .probe-logs-table .probe-question-cell {
   max-width: 350px;

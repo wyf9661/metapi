@@ -865,11 +865,6 @@ export default function ImportExport() {
             当前 WebDAV 配置有未保存改动，请先保存后再执行导入或导出。
           </div>
         ) : null}
-
-        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.7 }}>
-          <div>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未同步'}</div>
-          <div>最近错误：{webdavState.lastError || '无'}</div>
-        </div>
       </div>
 
       <div className="card animate-slide-up stagger-4" style={{ marginTop: 14, padding: 16 }}>

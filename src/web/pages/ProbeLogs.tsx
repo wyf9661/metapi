@@ -616,7 +616,7 @@ export default function ProbeLogs() {
       />
 
       {/* 日志列表 */}
-      <div className="card" style={{ overflowX: 'auto', paddingBottom: 12 }}>
+      <div className="card" style={{ overflowX: 'auto' }}>
         {loading ? (
           <div style={{ padding: 20 }}>
             <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
@@ -714,33 +714,32 @@ export default function ProbeLogs() {
                 </tbody>
               </table>
             )}
-
-            {total > 0 && (
-              <PaginationControls
-                className="pagination probe-logs-pagination"
-                page={page}
-                totalPages={totalPages}
-                onPageChange={(next) => {
-                  setPage((current) => {
-                    const resolved = typeof next === 'function' ? next(current) : next;
-                    const safe = Math.max(1, Math.min(totalPages, resolved));
-                    updateSearchParams('page', String(safe));
-                    return safe;
-                  });
-                }}
-                visible
-                rangeLabel={`显示第 ${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, total)} 条，共 ${total} 条`}
-                pageSize={pageSize}
-                onPageSizeChange={(next) => {
-                  setPageSize(next);
-                  setPage(1);
-                  updateSearchParams('page', '1');
-                }}
-              />
-            )}
           </>
         )}
       </div>
+
+      {total > 0 && (
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          onPageChange={(next) => {
+            setPage((current) => {
+              const resolved = typeof next === 'function' ? next(current) : next;
+              const safe = Math.max(1, Math.min(totalPages, resolved));
+              updateSearchParams('page', String(safe));
+              return safe;
+            });
+          }}
+          visible
+          rangeLabel={`显示第 ${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, total)} 条，共 ${total} 条`}
+          pageSize={pageSize}
+          onPageSizeChange={(next) => {
+            setPageSize(next);
+            setPage(1);
+            updateSearchParams('page', '1');
+          }}
+        />
+      )}
 
       {/* 详情弹窗：桌面端 portal 居中弹框，移动端右滑抽屉，避免被页面横向滚动影响 */}
       {selectedLog && (
