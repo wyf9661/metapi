@@ -815,7 +815,7 @@ describe('stats proxy logs routes', () => {
     );
   });
 
-  it('aggregates retry attempts with the same requestTraceId into one row with retryCount', async () => {
+  it('folds retry attempts sharing a requestTraceId into one request-level row with retryCount', async () => {
     const site = await db
       .insert(schema.sites)
       .values({
@@ -927,11 +927,12 @@ describe('stats proxy logs routes', () => {
       total: number;
     };
 
-    // 3 attempts appear as separate rows; total reflects the raw row count.
-    // The frontend (aggregateProxyLogRetries) collapses them client-side.
-    expect(body.total).toBe(3);
-    expect(body.items).toHaveLength(3);
-    // Newest row first (createdAt desc)
+    // The 3 attempts of r_agg_trace_1 now collapse to ONE request-level row
+    // server-side; total counts requests, not raw attempt rows.
+    expect(body.total).toBe(1);
+    expect(body.items).toHaveLength(1);
+    // Representative row is the newest attempt (createdAt desc); retryCount is
+    // derived from the group size (3 attempts -> 2 retries).
     expect(body.items[0]?.modelRequested).toBe('deepseek-v4-flash');
     expect(body.items[0]?.status).toBe('success');
     expect(body.items[0]?.retryCount).toBe(2);
@@ -950,8 +951,9 @@ describe('stats proxy logs routes', () => {
       }>;
       total: number;
     };
-    expect(allBody.total).toBe(4);
-    expect(allBody.items).toHaveLength(4);
+    // Two logical requests: the folded deepseek trace + the standalone glm row.
+    expect(allBody.total).toBe(2);
+    expect(allBody.items).toHaveLength(2);
     const standalone = allBody.items.find(
       (item) => item.modelRequested === 'glm-5.2',
     );
