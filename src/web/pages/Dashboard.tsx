@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { copyText } from '../clipboard.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
+import { availabilityColor } from '../components/charts/chartShared.js';
 
 const ModelAnalysisPanel = lazy(
   () => import('../components/ModelAnalysisPanel.js'),
@@ -96,49 +97,13 @@ function formatAvailabilityPercent(value: number | null | undefined): string {
   return `${Math.round(value)}%`;
 }
 
-function getAvailabilityColor(value: number | null | undefined): string {
-  if (
-    typeof value !== 'number' ||
-    Number.isNaN(value) ||
-    !Number.isFinite(value)
-  ) {
-    return 'transparent';
-  }
-  const clamped = Math.max(0, Math.min(100, value));
-  // Deeper, less neon palette tuned to the app's teal/slate design language.
-  const low = { r: 190, g: 39, b: 52 };    // deep red
-  const mid = { r: 194, g: 132, b: 20 };   // amber
-  const high = { r: 13, g: 138, b: 116 };  // teal-green (matches --color-primary family)
-
-  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
-
-  let r: number;
-  let g: number;
-  let b: number;
-
-  if (clamped <= 50) {
-    const t = clamped / 50;
-    r = lerp(low.r, mid.r, t);
-    g = lerp(low.g, mid.g, t);
-    b = lerp(low.b, mid.b, t);
-  } else {
-    const t = (clamped - 50) / 50;
-    r = lerp(mid.r, high.r, t);
-    g = lerp(mid.g, high.g, t);
-    b = lerp(mid.b, high.b, t);
-  }
-
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-
 function AvailabilityLegend() {
   return (
     <div className="site-observability-legend">
       <span className="site-observability-legend-text">低</span>
-      <span className="site-observability-legend-chip" style={{ background: getAvailabilityColor(0) }} />
-      <span className="site-observability-legend-chip" style={{ background: getAvailabilityColor(50) }} />
-      <span className="site-observability-legend-chip" style={{ background: getAvailabilityColor(100) }} />
+      <span className="site-observability-legend-chip" style={{ background: availabilityColor(0) }} />
+      <span className="site-observability-legend-chip" style={{ background: availabilityColor(50) }} />
+      <span className="site-observability-legend-chip" style={{ background: availabilityColor(100) }} />
       <span className="site-observability-legend-text">高</span>
     </div>
   );
@@ -908,7 +873,7 @@ export default function Dashboard({
           <div className="stat-card-row">
             <div className="stat-icon stat-icon-orange">
               <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h4l3 8 4-16 3 8h4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
               </svg>
             </div>
             <div className="dashboard-stat-content">
@@ -1136,7 +1101,7 @@ export default function Dashboard({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M3 12h4l3 8 4-16 3 8h4"
+                  d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z"
                 />
               </svg>
               站点与模型分析
@@ -1328,7 +1293,7 @@ export default function Dashboard({
                   <span
                     className="site-observability-metric-main"
                     style={{
-                      color: getAvailabilityColor(site.availabilityPercent),
+                      color: availabilityColor(site.availabilityPercent),
                     }}
                   >
                     {formatAvailabilityPercent(site.availabilityPercent)}
@@ -1356,7 +1321,7 @@ export default function Dashboard({
                         to={buildAvailabilityBucketLogsRoute(site.siteId, bucket)}
                         className="site-availability-cell site-availability-cell-link site-availability-cell-pill"
                         style={{
-                          background: getAvailabilityColor(bucket.availabilityPercent),
+                          background: availabilityColor(bucket.availabilityPercent),
                         }}
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,
@@ -1512,7 +1477,7 @@ export default function Dashboard({
                   <span
                     className="site-observability-metric-main"
                     style={{
-                      color: getAvailabilityColor(modelRow.availabilityPercent),
+                      color: availabilityColor(modelRow.availabilityPercent),
                     }}
                   >
                     {formatAvailabilityPercent(modelRow.availabilityPercent)}
@@ -1540,7 +1505,7 @@ export default function Dashboard({
                         to={buildModelAvailabilityBucketLogsRoute(modelRow.model, bucket)}
                         className="site-availability-cell site-availability-cell-link site-availability-cell-pill"
                         style={{
-                          background: getAvailabilityColor(bucket.availabilityPercent),
+                          background: availabilityColor(bucket.availabilityPercent),
                         }}
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,

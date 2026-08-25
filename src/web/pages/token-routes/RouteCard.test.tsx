@@ -792,19 +792,17 @@ describe('RouteCard', () => {
       />,
     );
 
-    const compactActionRow = root.root.find((node) => (
-      node.type === 'div'
-      && node.props['data-testid'] === 'compact-route-action-row'
-    ));
-    const addChannelButton = compactActionRow.find((node) => (
+    // Add Channel now lives in the compact header, directly left of Clear Cooldown.
+    const buttons = root.root.findAll((node) => (
       node.type === 'button'
-      && collectText(node).includes('添加通道')
+      && (collectText(node).includes('添加通道') || collectText(node).includes('清除冷却'))
     ));
+    const addChannelIndex = buttons.findIndex((node) => collectText(node).includes('添加通道'));
+    const clearCooldownIndex = buttons.findIndex((node) => collectText(node).includes('清除冷却'));
 
-    expect(compactActionRow.props.style.flexDirection).toBe('row');
-    expect(compactActionRow.props.style.justifyContent).toBe('flex-start');
-    expect(collectText(compactActionRow)).toContain('添加通道');
-    expect(addChannelButton.props.style.marginLeft).toBe('auto');
+    expect(addChannelIndex).toBeGreaterThanOrEqual(0);
+    expect(clearCooldownIndex).toBeGreaterThanOrEqual(0);
+    expect(addChannelIndex).toBeLessThan(clearCooldownIndex);
   });
 
   it('keeps compact status badges inline with the route name', () => {

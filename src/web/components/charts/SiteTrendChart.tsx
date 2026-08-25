@@ -181,7 +181,9 @@ export default function SiteTrendChart() {
       },
       className: 'chart-tooltip',
       trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
-      triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none',
+      // Desktop must hide on hover-out ('none' left it stuck after the pointer
+      // left the point); mobile keeps click-to-toggle.
+      triggerOff: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
       lockAfterClick: isMobile,
     },
     animation: true,

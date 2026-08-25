@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
 import { useIsMobile } from '../useIsMobile.js';
+import { barHeadroom } from './chartShared.js';
 
 interface SiteDistributionData {
   siteName: string;
@@ -128,7 +129,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
 
     // Reserve more horizontal headroom on narrow screens so right-positioned
     // value labels ($xxx.xx) are not clipped by the plot edge.
-    const axisHeadroom = isMobile ? 1.55 : 1.18;
+    const axisHeadroom = barHeadroom(isMobile);
     const maxValue = chartData.reduce((s, d) => Math.max(s, d.value), 0);
     const yAxisMaxWidth = isMobile ? 76 : 140;
 
@@ -207,7 +208,9 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
         },
         className: 'chart-tooltip',
         trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
-        triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none',
+        // Desktop must hide on hover-out; 'none' left the tooltip stuck on
+        // screen after the pointer left the bar. Mobile keeps click-to-toggle.
+        triggerOff: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
         lockAfterClick: isMobile,
       },
       legends: { visible: false },

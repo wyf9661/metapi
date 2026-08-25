@@ -141,7 +141,8 @@ export default function DownstreamKeyTrendChart({
       },
       className: 'chart-tooltip',
       trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
-      triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none',
+      // Desktop hides on hover-out; mobile keeps click-to-toggle.
+      triggerOff: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
       lockAfterClick: isMobile,
     },
     color: ['var(--color-primary)'],

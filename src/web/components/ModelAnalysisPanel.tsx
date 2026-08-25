@@ -4,6 +4,7 @@ import { InlineBrandIcon } from './BrandIcon.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { useThemeLabelColor } from './useThemeLabelColor.js';
 import { useIsMobile } from './useIsMobile.js';
+import { availabilityRgb, buildHorizontalBarSpec } from './charts/chartShared.js';
 
 type TabKey = 'spend' | 'trend' | 'calls' | 'rank';
 
@@ -81,15 +82,11 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     || spendDistribution.length > 0
     || spendTrend.some((item) => toSafeNumber(item.spend) > 0);
 
-  const spendBarSpec = useMemo(() => ({
-    type: 'bar' as const,
-    data: [{ id: 'data', values: spendDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.spend) })).reverse() }],
-    xField: 'value', yField: 'model', direction: 'horizontal' as const,
-    bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#4f46e5' }, { offset: 1, color: '#818cf8' }] } } },
-    label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCurrency(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
-    axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
-    tooltip: { className: 'chart-tooltip', trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover', triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none', lockAfterClick: isMobile },
-    animation: true, background: 'transparent',
+  const spendBarSpec = useMemo(() => buildHorizontalBarSpec({
+    values: spendDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.spend) })).reverse(),
+    gradientFrom: '#0f766e', gradientTo: '#0d9488',
+    formatLabel: (v) => formatCurrency(v),
+    labelColor, isMobile,
   }), [spendDistribution, labelColor, isMobile]);
 
   const tokenDistribution = useMemo(() => {
@@ -104,32 +101,21 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       .slice(0, 10);
   }, [data?.callRanking, data?.spendDistribution]);
 
-  const trendSpec = useMemo(() => {
-    const tokenData = tokenDistribution.map((d) => ({
+  const trendSpec = useMemo(() => buildHorizontalBarSpec({
+    values: tokenDistribution.map((d) => ({
       model: String(d.model || '-'),
       value: d.tokens,
-    })).reverse();
-    return {
-      type: 'bar' as const,
-      data: [{ id: 'data', values: tokenData }],
-      xField: 'value', yField: 'model', direction: 'horizontal' as const,
-      bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#06b6d4' }, { offset: 1, color: '#22d3ee' }] } } },
-      label: { visible: true, position: 'right', formatMethod: (text: string | number) => formatCompactTokenMetric(Number(text)), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
-      axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
-      tooltip: { className: 'chart-tooltip', trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover', triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none', lockAfterClick: isMobile },
-      animation: true, background: 'transparent',
-    };
-  }, [tokenDistribution, labelColor, isMobile]);
+    })).reverse(),
+    gradientFrom: '#0e7490', gradientTo: '#0891b2',
+    formatLabel: (v) => formatCompactTokenMetric(v),
+    labelColor, isMobile,
+  }), [tokenDistribution, labelColor, isMobile]);
 
-  const callsBarSpec = useMemo(() => ({
-    type: 'bar' as const,
-    data: [{ id: 'data', values: callsDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.calls) })).reverse() }],
-    xField: 'value', yField: 'model', direction: 'horizontal' as const,
-    bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#10b981' }, { offset: 1, color: '#34d399' }] } } },
-    label: { visible: true, position: 'right', formatMethod: (text: string | number) => Number(text).toLocaleString(), style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
-    axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor, maxWidth: 160, overflow: 'truncate' } } }, { orient: 'bottom', visible: false }],
-    tooltip: { className: 'chart-tooltip', trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover', triggerOff: (isMobile ? 'click' : 'none') as 'click' | 'none', lockAfterClick: isMobile },
-    animation: true, background: 'transparent',
+  const callsBarSpec = useMemo(() => buildHorizontalBarSpec({
+    values: callsDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.calls) })).reverse(),
+    gradientFrom: '#047857', gradientTo: '#059669',
+    formatLabel: (v) => v.toLocaleString(),
+    labelColor, isMobile,
   }), [callsDistribution, labelColor, isMobile]);
 
   if (!hasData) return <EmptyBlock />;
@@ -221,32 +207,22 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
               {callRanking.map((item, index) => {
                 const latMs = item.avgLatencyMs;
                 const latSec = latMs / 1000;
-                // ≤15s green, 15-60s gradient green→yellow→red, >60s or failed → red
-                let latColor: string;
-                let latBg: string;
-                if (latSec <= 15) {
-                  // green gradient: 0s=#22c55e → 15s=blend towards yellow
-                  const t = Math.min(latSec / 15, 1);
-                  const r = Math.round(34 + t * (245 - 34));
-                  const g = Math.round(197 + t * (158 - 197));
-                  const b = Math.round(94 + t * (11 - 94));
-                  latColor = `rgb(${r},${g},${b})`;
-                  latBg = `rgba(${r},${g},${b},0.08)`;
-                } else if (latSec <= 60) {
-                  // yellow→red gradient: 15s=#f59e0b → 60s=#ef4444
-                  const t = Math.min((latSec - 15) / 45, 1);
-                  const r = Math.round(245 + t * (239 - 245));
-                  const g = Math.round(158 + t * (68 - 158));
-                  const b = Math.round(11 + t * (68 - 11));
-                  latColor = `rgb(${r},${g},${b})`;
-                  latBg = `rgba(${r},${g},${b},0.08)`;
-                } else {
-                  latColor = '#ef4444';
-                  latBg = 'rgba(239,68,68,0.08)';
-                }
+                // Latency chip shares the availability palette (red→amber→teal).
+                // Map latency to a 0..100 "goodness" score, lower latency = higher
+                // score = greener: <=1s ~ excellent, >=30s ~ worst.
+                const latGoodness = latSec <= 1
+                  ? 100
+                  : latSec >= 30
+                    ? 0
+                    : Math.max(0, 100 - ((latSec - 1) / 29) * 100);
+                const lat = availabilityRgb(latGoodness);
+                const latColor = `rgb(${lat.r},${lat.g},${lat.b})`;
+                const latBg = `rgba(${lat.r},${lat.g},${lat.b},0.1)`;
                 const latText = latMs >= 1000 ? `${(latMs / 1000).toFixed(latSec >= 60 ? 0 : 1)}s` : `${latMs}ms`;
-                const rateColor = item.successRate >= 90 ? '#16a34a' : item.successRate >= 60 ? '#d97706' : '#dc2626';
-                const rateBg = item.successRate >= 90 ? 'rgba(34,197,94,0.1)' : item.successRate >= 60 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
+                // Success rate chip: same palette, rate itself is the 0..100 score.
+                const rate = availabilityRgb(item.successRate);
+                const rateColor = `rgb(${rate.r},${rate.g},${rate.b})`;
+                const rateBg = `rgba(${rate.r},${rate.g},${rate.b},0.1)`;
 
                 return (
                   <tr key={item.model}>

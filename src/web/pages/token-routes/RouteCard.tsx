@@ -1024,6 +1024,7 @@ function RouteCardInner({
             </div>
             {!readOnlyRoute && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {showAddChannelButton ? renderAddChannelButton() : null}
                 {renderClearCooldownButton()}
                 {(explicitGroupRoute || !exactRoute) && (
                   <button onClick={() => onEdit(route)} className="btn btn-link">{tr('编辑群组')}</button>
@@ -1080,24 +1081,7 @@ function RouteCardInner({
         </div>
       ) : null}
 
-      {!readOnlyRoute && (
-        <div
-          data-testid={compact ? 'compact-route-action-row' : undefined}
-          style={{
-            display: 'flex',
-            alignItems: compact ? 'center' : 'center',
-            flexDirection: compact ? 'row' : 'row',
-            justifyContent: compact ? 'flex-start' : 'space-between',
-            gap: compact ? 6 : 8,
-            marginBottom: 8,
-            flexWrap: 'wrap',
-          }}
-        >
-          {compact && showAddChannelButton ? renderAddChannelButton({ alignRight: true }) : null}
-        </div>
-      )}
-
-      {/* Missing token hints + Add channel button */}
+      {/* Missing token hints */}
       <div style={{ display: 'flex', alignItems: compact ? 'stretch' : 'flex-start', flexDirection: compact ? 'column' : 'row', justifyContent: 'space-between', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
         {showMissingTokenHints ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
