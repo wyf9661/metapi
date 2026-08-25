@@ -2339,7 +2339,7 @@ export default function ProxyLogs() {
                                 detailLog.firstByteLatencyMs,
                               ),
                               padding: '2px 8px',
-                              borderRadius: 4,
+                              borderRadius: 6,
                             }}
                           >
                             {formatLatency(detailLog.firstByteLatencyMs)}
@@ -2357,7 +2357,7 @@ export default function ProxyLogs() {
                             color: latencyColor(log.latencyMs),
                             background: latencyBgColor(log.latencyMs),
                             padding: '2px 8px',
-                            borderRadius: 4,
+                            borderRadius: 6,
                           }}
                         >
                           {formatLatency(log.latencyMs)}
@@ -2742,7 +2742,7 @@ export default function ProxyLogs() {
                                         fontSize: 12,
                                         background: 'var(--color-bg-card)',
                                         padding: '1px 8px',
-                                        borderRadius: 4,
+                                        borderRadius: 6,
                                         border:
                                           '1px solid var(--color-border-light)',
                                       }}
@@ -2783,7 +2783,7 @@ export default function ProxyLogs() {
                                         fontSize: 12,
                                         background: 'var(--color-bg-card)',
                                         padding: '1px 8px',
-                                        borderRadius: 4,
+                                        borderRadius: 6,
                                         border:
                                           '1px solid var(--color-border-light)',
                                       }}

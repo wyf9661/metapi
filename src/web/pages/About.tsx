@@ -84,7 +84,7 @@ export default function About() {
           <img
             src="/logo.svg"
             alt="Metapi"
-            style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0 }}
+            style={{ width: 48, height: 48, borderRadius: 'var(--radius-xl)', flexShrink: 0 }}
           />
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Metapi</div>
@@ -147,7 +147,7 @@ export default function About() {
           {TECH_STACK.map((t) => (
             <div key={t.name} style={{
               padding: '10px 14px',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-md)',
               border: '1px solid var(--color-border-light)',
               background: 'var(--color-bg-secondary)',
             }}>
@@ -172,7 +172,7 @@ export default function About() {
               rel="noopener noreferrer"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '8px 16px', borderRadius: 8,
+                padding: '8px 16px', borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--color-border-light)',
                 background: 'var(--color-bg-secondary)',
                 color: 'var(--color-text-primary)',

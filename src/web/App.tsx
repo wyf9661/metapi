@@ -436,7 +436,7 @@ function RouteLoadingFallback() {
   return (
     <div className="animate-fade-in" style={{ padding: 16 }}>
       <div className="skeleton" style={{ width: 220, height: 24, marginBottom: 16 }} />
-      <div className="skeleton" style={{ width: '100%', height: 120, borderRadius: 12 }} />
+      <div className="skeleton" style={{ width: '100%', height: 120, borderRadius: 'var(--radius-xl)' }} />
     </div>
   );
 }
@@ -674,7 +674,7 @@ function AppShell() {
           </button>
         )}
         <div className="topbar-logo">
-          <img src="/logo.svg" alt="Metapi" style={{ width: 28, height: 28, borderRadius: 6 }} />
+          <img src="/logo.svg" alt="Metapi" style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)' }} />
           <span className="topbar-logo-text">Metapi</span>
         </div>
         <nav className="topbar-nav">

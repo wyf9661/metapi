@@ -1823,7 +1823,7 @@ export default function Sites() {
                               <span
                                 key={model}
                                 style={{
-                                  fontSize: 11, padding: '2px 7px', borderRadius: 10,
+                                  fontSize: 11, padding: '2px 7px', borderRadius: 'var(--radius-md)',
                                   fontFamily: 'var(--font-mono)',
                                   background: isDisabled
                                     ? 'color-mix(in srgb, var(--color-error, #dc2626) 12%, transparent)'

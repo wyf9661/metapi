@@ -43,8 +43,8 @@ function SkeletonBars() {
     >
       {[...Array(6)].map((_, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div className="skeleton" style={{ width: 80, height: 12, borderRadius: 3, flexShrink: 0 }} />
-          <div className="skeleton" style={{ width: 140 + i * 18, height: 16, borderRadius: 3 }} />
+          <div className="skeleton" style={{ width: 80, height: 12, borderRadius: 6, flexShrink: 0 }} />
+          <div className="skeleton" style={{ width: 140 + i * 18, height: 16, borderRadius: 6 }} />
         </div>
       ))}
     </div>
@@ -345,7 +345,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px', flexShrink: 0, maxHeight: 68, overflowY: 'auto' }}>
             {chartData.map((d, idx) => (
               <span key={d.siteName} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: BAR_COLORS[idx % BAR_COLORS.length], flexShrink: 0 }} />
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: BAR_COLORS[idx % BAR_COLORS.length], flexShrink: 0 }} />
                 <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.siteName}</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                   {formatValue(d.value)}

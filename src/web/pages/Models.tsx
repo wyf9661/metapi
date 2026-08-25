@@ -930,7 +930,7 @@ export default function Models() {
             className={`filter-item ${activeBrand === brandName ? 'active' : ''}`}
             onClick={() => setActiveBrand(activeBrand === brandName ? null : brandName)}
           >
-            <span className="filter-item-icon" style={{ background: 'var(--color-bg)', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="filter-item-icon" style={{ background: 'var(--color-bg)', borderRadius: 6, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <BrandGlyph brand={brand} size={14} fallbackText={brandName} />
             </span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{brandName}</span>
@@ -942,7 +942,7 @@ export default function Models() {
             className={`filter-item ${activeBrand === '__other__' ? 'active' : ''}`}
             onClick={() => setActiveBrand(activeBrand === '__other__' ? null : '__other__')}
           >
-            <span className="filter-item-icon" style={{ background: 'var(--color-bg)', color: 'var(--color-text-muted)', fontSize: 10, borderRadius: 4 }}>?</span>
+            <span className="filter-item-icon" style={{ background: 'var(--color-bg)', color: 'var(--color-text-muted)', fontSize: 10, borderRadius: 6 }}>?</span>
             {tr('其他')}
             <span className="filter-item-count">{brandList.otherCount}</span>
           </div>
@@ -1010,7 +1010,7 @@ export default function Models() {
       <div className="animate-fade-in" style={{ display: 'flex', gap: 24, minHeight: 400 }}>
         {!isNarrow && (
           <div style={{ width: 240 }}>
-            {[...Array(6)].map((_, i) => <div key={i} className="skeleton" style={{ height: 28, marginBottom: 8, borderRadius: 8 }} />)}
+            {[...Array(6)].map((_, i) => <div key={i} className="skeleton" style={{ height: 28, marginBottom: 8, borderRadius: 'var(--radius-md)' }} />)}
           </div>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1039,7 +1039,7 @@ export default function Models() {
             mobileTitle={tr('筛选模型')}
             mobileContent={filterControls}
           />
-          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 100, marginBottom: 12, borderRadius: 12 }} />)}
+          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 100, marginBottom: 12, borderRadius: 'var(--radius-xl)' }} />)}
         </div>
       </div>
     );
@@ -1473,7 +1473,7 @@ export default function Models() {
                         <BrandIcon model={m.name} size={28} />
                       </td>
                       <td>
-                        <code style={{ fontSize: 12, padding: '3px 8px', background: 'var(--color-bg)', borderRadius: 4, border: '1px solid var(--color-border-light)' }}>
+                        <code style={{ fontSize: 12, padding: '3px 8px', background: 'var(--color-bg)', borderRadius: 6, border: '1px solid var(--color-border-light)' }}>
                           {m.name}
                         </code>
                       </td>

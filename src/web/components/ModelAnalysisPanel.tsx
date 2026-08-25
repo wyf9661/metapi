@@ -194,7 +194,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px' }}>
             {callsDistribution.map((d) => (
               <span key={d.model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981', flexShrink: 0 }} />
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
                 <InlineBrandIcon model={d.model} size={13} />
                 <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.model}</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>{Math.round(d.calls).toLocaleString()}</span>
@@ -253,7 +253,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                     <td style={{ textAlign: 'center', padding: '8px 4px' }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: 22, height: 22, borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        width: 22, height: 22, borderRadius: 'var(--radius-sm)', fontSize: 11, fontWeight: 700,
                         background: index < 3
                           ? ['linear-gradient(135deg,#fbbf24,#f59e0b)', 'linear-gradient(135deg,#94a3b8,#cbd5e1)', 'linear-gradient(135deg,#d97706,#fbbf24)'][index]
                           : 'var(--color-bg)',
@@ -273,7 +273,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span style={{
-                        padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                         background: rateBg, color: rateColor,
                       }}>
                         {formatPercent(item.successRate)}
@@ -283,7 +283,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                       <span style={{
                         fontVariantNumeric: 'tabular-nums', fontSize: 12, fontWeight: 600,
                         color: latColor, background: latBg,
-                        padding: '2px 8px', borderRadius: 4,
+                        padding: '2px 8px', borderRadius: 6,
                       }}>
                         {latText}
                       </span>

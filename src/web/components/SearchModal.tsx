@@ -152,7 +152,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
             style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, background: 'transparent', color: 'var(--color-text-primary)' }}
           />
           {loading && <span className="spinner spinner-sm" />}
-          <kbd style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 4, color: 'var(--color-text-muted)' }}>ESC</kbd>
+          <kbd style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-muted)' }}>ESC</kbd>
         </div>
 
         <div style={{ maxHeight: 400, overflow: 'auto', padding: '8px 0' }}>
@@ -296,9 +296,9 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
         </div>
 
         <div style={{ padding: '8px 16px', borderTop: '1px solid var(--color-border-light)', fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', gap: 12 }}>
-          <span><kbd style={{ padding: '1px 4px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 3 }}>↑↓</kbd> {t('导航')}</span>
-          <span><kbd style={{ padding: '1px 4px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 3 }}>Enter</kbd> {t('打开')}</span>
-          <span><kbd style={{ padding: '1px 4px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 3 }}>Esc</kbd> {t('关闭')}</span>
+          <span><kbd style={{ padding: '1px 4px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>↑↓</kbd> {t('导航')}</span>
+          <span><kbd style={{ padding: '1px 4px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>Enter</kbd> {t('打开')}</span>
+          <span><kbd style={{ padding: '1px 4px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>Esc</kbd> {t('关闭')}</span>
         </div>
       </div>
     </div>

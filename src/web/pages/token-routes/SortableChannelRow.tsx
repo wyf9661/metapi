@@ -58,7 +58,7 @@ export function SortableChannelRow({
     height: 22,
     padding: 0,
     border: `1px solid ${dragging ? 'var(--color-info)' : 'var(--color-border)'}`,
-    borderRadius: 10,
+    borderRadius: 'var(--radius-sm)',
     backgroundColor: dragging ? 'var(--color-info-soft)' : 'var(--color-bg-card)',
     boxShadow: 'none',
     color: dragging ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
@@ -76,7 +76,7 @@ export function SortableChannelRow({
     gap: mobile ? 8 : 6,
     padding: mobile ? '8px 9px' : '5px 8px',
     border: `1px solid ${dragging ? 'var(--color-info)' : 'var(--color-border)'}`,
-    borderRadius: 12,
+    borderRadius: 'var(--radius-md)',
     backgroundColor: dragging
       ? 'var(--color-info-soft)'
       : (channel.enabled === false ? 'var(--color-bg)' : 'var(--color-bg-card)'),

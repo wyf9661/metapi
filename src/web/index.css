@@ -531,7 +531,7 @@ html[data-layout="desktop"] .main-content {
   width: 32px;
   height: 32px;
   background: linear-gradient(135deg, oklch(0.470 0.092 187), oklch(0.700 0.098 187));
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -615,7 +615,7 @@ html[data-layout="desktop"] .main-content {
 .topbar-search-trigger {
   height: 36px;
   min-width: 170px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-bg-card);
   display: inline-flex;
@@ -652,7 +652,7 @@ html[data-layout="desktop"] .main-content {
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 5px 8px;
 }
 
@@ -667,7 +667,7 @@ html[data-layout="desktop"] .main-content {
   color: white;
   font-size: 11px;
   font-weight: 600;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1208,7 +1208,7 @@ html[data-layout="desktop"] .main-content {
   gap: 3px;
   min-width: 0;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border-light);
   background: color-mix(in srgb, var(--color-bg-card) 78%, var(--color-bg-subtle) 22%);
 }
@@ -1395,7 +1395,7 @@ html[data-layout="desktop"] .main-content {
 .mobile-drawer-header img {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .mobile-drawer-header span {
@@ -1908,14 +1908,14 @@ html[data-layout="desktop"] .main-content {
   padding: 10px 12px;
   border-left: 3px solid var(--color-primary);
   background: var(--color-surface-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .announcement-rich-content code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
   padding: 1px 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface-subtle);
   color: var(--color-text-primary);
 }
@@ -1923,7 +1923,7 @@ html[data-layout="desktop"] .main-content {
 .announcement-rich-content pre {
   overflow-x: auto;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-subtle);
   border: 1px solid var(--color-border);
 }
@@ -1943,7 +1943,7 @@ html[data-layout="desktop"] .main-content {
 .announcement-rich-content img {
   max-width: 100%;
   height: auto;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
 }
 
@@ -2027,7 +2027,7 @@ html[data-layout="desktop"] .main-content {
 .checkin-toggle-badge {
   min-width: 70px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 700;
@@ -2509,7 +2509,7 @@ html[data-layout="desktop"] .main-content {
   background: #d8f1df;
   color: #15803d;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -2520,7 +2520,7 @@ html[data-layout="desktop"] .main-content {
   background: #f5dede;
   color: #b91c1c;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -2789,7 +2789,7 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   min-width: 220px;
   max-width: min(520px, calc(100vw - 40px));
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 11px;
   font-weight: 500;
   line-height: 1.45;
@@ -3010,7 +3010,7 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   min-width: 220px;
   max-width: min(520px, calc(100vw - 40px));
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 11px;
   font-weight: 500;
   line-height: 1.45;
@@ -3077,7 +3077,7 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   color: color-mix(in srgb, var(--color-text-primary) 90%, #1c1917) !important;
   background: color-mix(in srgb, var(--color-bg-card) 96%, var(--color-primary) 4%) !important;
   border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent) !important;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: 0 12px 30px rgba(28, 25, 23, 0.14);
 }
 
@@ -3668,7 +3668,7 @@ textarea {
 .oauth-window-pill {
   min-width: 34px;
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   text-align: center;
   font-size: 10px;
   font-weight: 700;
@@ -4439,7 +4439,7 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 10px 15px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.76);
   color: var(--color-primary);
   border: 1px solid rgba(13,148,136, 0.16);
@@ -4998,7 +4998,7 @@ textarea {
   width: 16px;
   height: 16px;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -5089,7 +5089,7 @@ textarea {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.12);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -5195,7 +5195,7 @@ textarea {
   align-items: center;
   gap: 4px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -5431,7 +5431,7 @@ textarea {
   border: none;
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: background 0.15s;
 }
 
@@ -5470,7 +5470,7 @@ textarea {
 .filter-item-icon {
   width: 20px;
   height: 20px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5485,7 +5485,7 @@ textarea {
   color: var(--color-text-muted);
   background: rgba(0, 0, 0, 0.05);
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   min-width: 20px;
   text-align: center;
 }
@@ -5527,7 +5527,7 @@ textarea {
 .model-card-avatar {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5575,7 +5575,7 @@ textarea {
 .model-card-action-btn {
   width: 30px;
   height: 30px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-text-muted);
@@ -5603,7 +5603,7 @@ textarea {
   font-size: 11px;
   font-weight: 500;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid;
   transition: all 0.15s;
 }
@@ -5922,7 +5922,7 @@ textarea {
 .katex-fallback {
   background: color-mix(in srgb, var(--color-danger) 8%, var(--color-bg-card));
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-size: 0.9em;
   color: var(--color-danger);
 }
@@ -5988,13 +5988,14 @@ textarea {
   justify-content: center;
   gap: 4px;
   padding: 8px 0;
+  border-top: 1px solid var(--color-border-light);
   flex-wrap: wrap;
 }
 
 .pagination-btn {
   min-width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-bg-card);
   color: var(--color-text-secondary);
@@ -6056,7 +6057,7 @@ textarea {
 .pagination-size select {
   padding: 4px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   background: var(--color-bg-card);
   color: var(--color-text-primary);
@@ -6067,7 +6068,7 @@ textarea {
   display: inline-flex;
   gap: 2px;
   background: rgba(0, 0, 0, 0.04);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 3px;
   max-width: 100%;
   overflow-x: auto;
@@ -6080,7 +6081,7 @@ textarea {
   height: 6px;
 }
 .pill-tabs::-webkit-scrollbar-thumb {
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: rgba(128, 128, 128, 0.4);
 }
 .pill-tabs::-webkit-scrollbar-track {
@@ -6096,7 +6097,7 @@ textarea {
   font-size: 13px;
   font-weight: 500;
   color: var(--color-text-muted);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
@@ -6275,7 +6276,7 @@ textarea {
   margin-bottom: 8px;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 94%, white 6%), color-mix(in srgb, var(--color-bg-card) 98%, white 2%));
   box-shadow: 0 10px 20px rgba(28,25,23, 0.04);
@@ -6495,7 +6496,7 @@ textarea {
   .topbar-logo img {
     width: 24px;
     height: 24px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
   }
 
   .topbar-logo-text {
@@ -6513,7 +6514,7 @@ textarea {
   .topbar-icon-btn {
     width: 34px;
     height: 34px;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
   }
 
   .topbar-search-trigger {
@@ -6521,7 +6522,7 @@ textarea {
     width: 34px;
     height: 34px;
     padding: 0;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     justify-content: center;
   }
 
@@ -6591,7 +6592,7 @@ textarea {
     min-height: 32px;
     min-width: 32px;
     padding: 4px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
 
   .mobile-card-body {
@@ -6732,7 +6733,7 @@ textarea {
   display: inline-flex;
   align-items: center;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent));
   color: var(--color-primary);
   font-size: 11px;
@@ -6760,7 +6761,7 @@ textarea {
 .site-observability-legend-chip {
   width: 14px;
   height: 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--color-border) 62%, transparent),
     0 1px 2px rgba(0, 0, 0, 0.08);
@@ -6771,7 +6772,7 @@ textarea {
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-text-secondary);
@@ -6932,7 +6933,7 @@ textarea {
   min-width: 0;
   width: 100%;
   height: 22px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .site-availability-cell-pill {
@@ -6996,7 +6997,7 @@ textarea {
 
 .site-observability-platform-badge {
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-info-soft) 72%, white);
   color: var(--color-info);
   font-size: 11px;
@@ -7028,7 +7029,7 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-bg-card);
   color: var(--color-text-primary);
@@ -7054,7 +7055,7 @@ textarea {
 .site-availability-cell {
   width: 100%;
   height: 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 78%, transparent);
 }
 
@@ -7204,7 +7205,7 @@ textarea {
 
   .site-availability-cell {
     height: 10px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
   }
 
   .site-availability-strip-compact {
@@ -7214,7 +7215,7 @@ textarea {
   .site-availability-strip-compact .site-availability-cell {
     height: 18px;
     width: 9px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
   }
 
   .site-availability-strip-compact {
@@ -7250,7 +7251,7 @@ textarea {
 .route-filter-bar {
   margin-bottom: 8px;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-card);
   box-shadow: 0 4px 12px rgba(28,25,23, 0.04);
   overflow: hidden;
@@ -7313,7 +7314,7 @@ textarea {
   align-items: center;
   gap: 5px;
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
   background: color-mix(in srgb, var(--color-bg-card) 90%, white 10%);
   cursor: pointer;
@@ -7361,7 +7362,7 @@ textarea {
   justify-content: center;
   min-width: 44px;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-bg-card) 88%, white 12%);
   color: var(--color-text-muted);
   font-size: 11px;
@@ -7409,7 +7410,7 @@ textarea {
 /* Collapsed route card */
 .route-card-collapsed {
   padding: 8px 10px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border-color: var(--color-border);
   background: var(--color-bg-card);
   box-shadow: 0 4px 12px rgba(28,25,23, 0.05);
@@ -7432,7 +7433,7 @@ textarea {
 /* Expanded route card spans full width */
 .route-card-expanded {
   grid-column: 1 / -1;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   border-color: var(--color-border);
   background: var(--color-bg-card);
   box-shadow: 0 8px 18px rgba(28,25,23, 0.06);
@@ -7518,7 +7519,7 @@ textarea {
 
 @media (max-width: 768px) {
   .route-batch-bar {
-    border-radius: 16px;
+    border-radius: var(--radius-md);
     padding: 9px 10px;
   }
 
@@ -7552,7 +7553,7 @@ textarea {
   padding: 14px 12px;
   font-size: 14px;
   font-weight: 700;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   display: inline-flex;
   align-items: center;
@@ -7600,7 +7601,7 @@ textarea {
 .model-tester-markdown pre {
   overflow-x: auto;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-bg) 82%, var(--color-text-primary));
 }
 .model-tester-markdown code {

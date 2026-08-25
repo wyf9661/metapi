@@ -1337,7 +1337,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             data-tooltip-align={segment.tooltipAlign}
             style={{
               padding: '8px 12px',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-md)',
               border: 'none',
               cursor: 'pointer',
               fontSize: 13,
@@ -1428,7 +1428,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     style={{
                       flex: 1,
                       padding: '8px 0',
-                      borderRadius: 6,
+                      borderRadius: 'var(--radius-sm)',
                       fontSize: 13,
                       fontWeight: 500,
                       border: 'none',
@@ -1457,7 +1457,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       style={{
                         flex: 1,
                         padding: '8px 0',
-                        borderRadius: 6,
+                        borderRadius: 'var(--radius-sm)',
                         fontSize: 13,
                         fontWeight: 500,
                         border: 'none',
@@ -1515,7 +1515,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               padding: '1px 5px',
                               background: 'var(--color-bg-card)',
                               border: '1px solid var(--color-border)',
-                              borderRadius: 3,
+                              borderRadius: 6,
                               fontSize: 11,
                             }}
                           >

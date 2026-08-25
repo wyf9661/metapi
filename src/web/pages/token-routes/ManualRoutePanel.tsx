@@ -718,7 +718,7 @@ export default function ManualRoutePanel({
                           style={{
                             fontSize: 11,
                             padding: '2px 6px',
-                            borderRadius: 6,
+                            borderRadius: 'var(--radius-sm)',
                             border: '1px solid var(--color-border)',
                             background: 'var(--color-bg-card)',
                           }}

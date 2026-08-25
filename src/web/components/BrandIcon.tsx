@@ -126,7 +126,7 @@ export function BrandIcon({ model, size = 44 }: { model: string; size?: number }
       <div style={{
         width: size,
         height: size,
-        borderRadius: 10,
+        borderRadius: 'var(--radius-md)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -165,7 +165,7 @@ export function ModelBadge({ model, style }: { model: string; style?: CSSPropert
       alignItems: 'center',
       gap: 5,
       padding: '2px 10px 2px 6px',
-      borderRadius: 6,
+      borderRadius: 'var(--radius-sm)',
       fontSize: 12,
       fontWeight: 500,
       background: colors.bg,

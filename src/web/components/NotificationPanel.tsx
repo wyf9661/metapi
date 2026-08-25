@@ -102,7 +102,7 @@ export default function NotificationPanel({
         {['', 'checkin', 'balance', 'token', 'proxy', 'status', 'site_notice'].map((filterType) => (
           <button key={filterType} onClick={() => setFilter(filterType)}
             style={{
-              fontSize: 11, padding: '3px 8px', borderRadius: 12,
+              fontSize: 11, padding: '3px 8px', borderRadius: 'var(--radius-xl)',
               border: filter === filterType ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
               background: filter === filterType ? 'var(--color-primary-light)' : 'transparent',
               color: filter === filterType ? 'var(--color-primary)' : 'var(--color-text-muted)',
@@ -156,7 +156,7 @@ export default function NotificationPanel({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <span style={{ fontWeight: 500, fontSize: 13 }}>{tr(ev.title)}</span>
-                  <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: 'var(--color-bg)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-light)' }}>
+                  <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-light)' }}>
                     {tr(typeLabels[ev.type] || ev.type)}
                   </span>
                 </div>

@@ -112,7 +112,7 @@ export default function RouteSelectorModal({
                           gap: 10,
                           cursor: 'pointer',
                           border: `1px solid ${checked ? 'color-mix(in srgb, var(--color-primary) 45%, transparent)' : 'var(--color-border-light)'}`,
-                          borderRadius: 10,
+                          borderRadius: 'var(--radius-md)',
                           padding: '8px 10px',
                           background: checked
                             ? 'color-mix(in srgb, var(--color-primary) 9%, var(--color-bg-card))'
@@ -133,7 +133,7 @@ export default function RouteSelectorModal({
                               fontSize: 12,
                               background: 'var(--color-bg)',
                               padding: '4px 10px',
-                              borderRadius: 8,
+                              borderRadius: 'var(--radius-md)',
                               color: 'var(--color-text-primary)',
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -148,7 +148,7 @@ export default function RouteSelectorModal({
                                 style={{
                                   width: 18,
                                   height: 18,
-                                  borderRadius: 6,
+                                  borderRadius: 'var(--radius-sm)',
                                   background: 'var(--color-bg-card)',
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -208,7 +208,7 @@ export default function RouteSelectorModal({
                           gap: 10,
                           cursor: 'pointer',
                           border: `1px solid ${checked ? 'color-mix(in srgb, var(--color-primary) 45%, transparent)' : 'var(--color-border-light)'}`,
-                          borderRadius: 10,
+                          borderRadius: 'var(--radius-md)',
                           padding: '8px 10px',
                           background: checked
                             ? 'color-mix(in srgb, var(--color-primary) 9%, var(--color-bg-card))'
@@ -229,7 +229,7 @@ export default function RouteSelectorModal({
                               fontSize: 12,
                               background: 'var(--color-bg)',
                               padding: '4px 10px',
-                              borderRadius: 8,
+                              borderRadius: 'var(--radius-md)',
                               color: 'var(--color-text-primary)',
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -244,7 +244,7 @@ export default function RouteSelectorModal({
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                borderRadius: 6,
+                                borderRadius: 'var(--radius-sm)',
                                 background: 'var(--color-bg-card)',
                                 flexShrink: 0,
                                 overflow: 'hidden',

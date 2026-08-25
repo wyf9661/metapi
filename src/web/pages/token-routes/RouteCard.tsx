@@ -269,7 +269,7 @@ function PriorityDragPreview({
         gap: 10,
         alignItems: 'center',
         padding: '10px 12px',
-        borderRadius: 16,
+        borderRadius: 'var(--radius-md)',
         border: '1px solid var(--color-info)',
         background: 'var(--color-bg-card)',
         boxShadow: '0 10px 24px rgba(15, 23, 42, 0.12)',
@@ -639,7 +639,7 @@ function RouteCardInner({
         color: 'var(--color-text-primary)',
         background: 'var(--color-bg-card)',
         border: '1px dashed var(--color-border)',
-        borderRadius: 12,
+        borderRadius: 'var(--radius-md)',
         fontWeight: 600,
         whiteSpace: fullWidth ? 'normal' : 'nowrap',
         width: fullWidth ? '100%' : 'auto',
@@ -834,11 +834,11 @@ function RouteCardInner({
       {!compact ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <code style={{ fontWeight: 600, fontSize: 13, background: 'var(--color-bg)', padding: '4px 10px', borderRadius: 6, color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <code style={{ fontWeight: 600, fontSize: 13, background: 'var(--color-bg)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               {routeIcon.kind === 'brand' ? (
                 <BrandGlyph icon={routeIcon.value} alt={title} size={20} fallbackText={title} />
               ) : routeIcon.kind === 'text' ? (
-                <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--color-bg-card)', fontSize: 14, lineHeight: 1 }}>
+                <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-card)', fontSize: 14, lineHeight: 1 }}>
                   {routeIcon.value}
                 </span>
               ) : routeIcon.kind === 'auto' && brand ? (
@@ -963,7 +963,7 @@ function RouteCardInner({
                   fontSize: 12.5,
                   background: 'var(--color-bg)',
                   padding: '3px 8px',
-                  borderRadius: 6,
+                  borderRadius: 'var(--radius-sm)',
                   color: 'var(--color-text-primary)',
                   display: 'inline-flex',
                   alignItems: 'center',

@@ -46,7 +46,7 @@ function ChartFallback({ height = 280 }: { height?: number }) {
         style={{
           width: '100%',
           height: Math.max(120, height - 46),
-          borderRadius: 10,
+          borderRadius: 'var(--radius-md)',
         }}
       />
     </div>
@@ -1020,7 +1020,7 @@ export default function Dashboard({
               justifyContent: 'space-between',
               gap: 12,
               padding: '10px 12px',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-md)',
               border: '1px solid var(--color-border)',
               background: 'var(--color-bg)',
               cursor: isTunnelClientView ? 'not-allowed' : 'pointer',
@@ -1053,7 +1053,7 @@ export default function Dashboard({
                   padding: '12px 14px',
                   background: 'var(--color-bg)',
                   border: '1px solid var(--color-border)',
-                  borderRadius: 8,
+                  borderRadius: 'var(--radius-md)',
                   fontSize: 13,
                   fontWeight: 600,
                   color: 'var(--color-text-primary)',
@@ -1280,7 +1280,7 @@ export default function Dashboard({
                 />
                 <div
                   className="skeleton"
-                  style={{ width: '100%', height: 18, borderRadius: 8 }}
+                  style={{ width: '100%', height: 18, borderRadius: 'var(--radius-md)' }}
                 />
               </div>
             ))}
@@ -1469,7 +1469,7 @@ export default function Dashboard({
                 />
                 <div
                   className="skeleton"
-                  style={{ width: '100%', height: 18, borderRadius: 8 }}
+                  style={{ width: '100%', height: 18, borderRadius: 'var(--radius-md)' }}
                 />
               </div>
             ))}
