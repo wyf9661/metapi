@@ -929,6 +929,7 @@ function RouteCardInner({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {showAddChannelButton ? renderAddChannelButton() : null}
             {renderClearCooldownButton()}
             {!readOnlyRoute && (explicitGroupRoute || !exactRoute) && (
               <button onClick={() => onEdit(route)} className="btn btn-link">{tr('编辑群组')}</button>
@@ -1135,9 +1136,8 @@ function RouteCardInner({
               </div>
             )}
           </div>
-        ) : (!compact && showAddChannelButton ? <div /> : null)}
-        {!compact && showAddChannelButton ? renderAddChannelButton() : null}
-      </div>
+        ) : null}
+      </div>{/* Add channel button (non-compact) now lives in the header, to the left of Clear Cooldown */}
 
       {/* Channel list */}
       {loadingChannels ? (
