@@ -180,7 +180,10 @@ function normalizeGroupRatio(raw: unknown): Record<string, number> {
   if (raw && typeof raw === 'object') {
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
       const ratio = toNumber(value, 1);
-      if (ratio > 0) result[key] = ratio;
+      // Keep 0-rated groups too (free tiers). A 0x ratio is a legitimate
+      // pricing tier, not "missing" — dropping it here would cascade up and
+      // those free models would be billed at the wrong multiplier downstream.
+      if (ratio >= 0) result[key] = ratio;
     }
   }
 
@@ -494,16 +497,19 @@ function resolveModel(modelName: string, data: PricingData): PricingModel | null
 }
 
 function resolveGroupMultiplier(model: PricingModel, groupRatio: Record<string, number>): number {
-  if (model.enableGroups.includes(DEFAULT_GROUP) && groupRatio[DEFAULT_GROUP]) {
+  // NOTE: group ratios may legitimately be 0 (e.g. free groups). Never test
+  // truthiness here — check key presence explicitly, or a 0× ratio silently
+  // falls back to the default multiplier (1) and bills free traffic.
+  if (model.enableGroups.includes(DEFAULT_GROUP) && groupRatio[DEFAULT_GROUP] !== undefined) {
     return groupRatio[DEFAULT_GROUP];
   }
 
   for (const group of model.enableGroups) {
-    if (groupRatio[group]) return groupRatio[group];
+    if (groupRatio[group] !== undefined) return groupRatio[group];
   }
 
   const first = groupRatio[DEFAULT_GROUP];
-  return first || 1;
+  return first !== undefined ? first : 1;
 }
 
 function calculatePerCallCost(
@@ -765,7 +771,9 @@ export function calculateModelUsageCost(
 
 function buildModelPricingCatalogFromData(pricingData: PricingData): ModelPricingCatalog {
   const groups = Array.from(new Set([DEFAULT_GROUP, ...Object.keys(pricingData.groupRatio)]));
-  const defaultMultiplier = pricingData.groupRatio[DEFAULT_GROUP] || 1;
+  const defaultMultiplier = pricingData.groupRatio[DEFAULT_GROUP] !== undefined
+    ? pricingData.groupRatio[DEFAULT_GROUP]
+    : 1;
 
   const models: ModelPricingCatalogEntry[] = Array.from(pricingData.models.values())
     .map((model) => {
@@ -774,7 +782,9 @@ function buildModelPricingCatalogFromData(pricingData: PricingData): ModelPricin
       const effectiveGroups = modelGroups.length > 0 ? modelGroups : [DEFAULT_GROUP];
 
       const groupPricing = effectiveGroups.reduce<Record<string, ModelGroupPricing>>((acc, group) => {
-        const multiplier = pricingData.groupRatio[group] || defaultMultiplier;
+        const multiplier = pricingData.groupRatio[group] !== undefined
+          ? pricingData.groupRatio[group]
+          : defaultMultiplier;
         if (model.quotaType === 1) {
           const perCall = calculatePerCallPricing(model.modelPrice, multiplier);
           acc[group] = {
