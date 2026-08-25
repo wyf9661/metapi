@@ -560,11 +560,22 @@ function filterCustomHeadersForRequestUrl(requestUrl: string, customHeaders: unk
 }
 
 function resolveSiteCustomHeadersMergePriority(
-  _site: Pick<SiteProxyConfigLike, 'customHeadersOverrideRequestHeaders'> | null | undefined,
+  site: Pick<SiteProxyConfigLike, 'customHeadersOverrideRequestHeaders'> | null | undefined,
 ): SiteCustomHeadersMergePriority {
-  // Fixed to 'request': site custom headers never override outbound request
-  // headers (e.g. User-Agent, Authorization). The codex fingerprint is
-  // injected at the upstreamRequestBuilder layer and must not be overwritten.
+  // When a site explicitly enables "custom headers override request headers",
+  // its custom headers win over the outbound request headers — this is how an
+  // operator forces a browser User-Agent to clear a Cloudflare/WAF 403 in front
+  // of the upstream. Default stays 'request' so normal sites are unaffected.
+  //
+  // Codex fingerprint safety: for codex-gated sites the caller strips
+  // UA/originator/x-codex-* from the site custom headers *before* this merge
+  // (stripCodexClientFingerprintHeaders), and the runtime rebuilds the complete
+  // Codex signature later at the upstreamRequestBuilder layer. So even with
+  // 'site' priority the Codex fingerprint cannot be polluted by stale custom
+  // headers.
+  if (site?.customHeadersOverrideRequestHeaders) {
+    return 'site';
+  }
   return 'request';
 }
 

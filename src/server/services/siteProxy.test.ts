@@ -84,7 +84,7 @@ describe('siteProxy', () => {
     expect(headers.get('x-trace-id')).toBe('trace-1');
   });
 
-  it('lets site custom headers add but not override explicit headers', async () => {
+  it('lets site custom headers override request headers when the override flag is enabled', async () => {
     await db.insert(schema.sites).values({
       name: 'headers-override-site',
       url: 'https://headers-override-site.example.com',
@@ -107,7 +107,39 @@ describe('siteProxy', () => {
     });
     const headers = new Headers(requestInit.headers);
 
-    // Site custom headers do NOT override explicitly set request headers.
+    // With customHeadersOverrideRequestHeaders enabled, site custom headers win
+    // over the outbound request headers (this is how an operator forces a
+    // browser User-Agent to clear a Cloudflare/WAF 403). Non-conflicting
+    // request headers are still preserved.
+    expect(headers.get('authorization')).toBe('Bearer site-token');
+    expect(headers.get('user-agent')).toBe('site-agent');
+    expect(headers.get('x-trace-id')).toBe('trace-1');
+  });
+
+  it('keeps request headers authoritative when the override flag is disabled', async () => {
+    await db.insert(schema.sites).values({
+      name: 'headers-no-override-site',
+      url: 'https://headers-no-override-site.example.com',
+      platform: 'new-api',
+      customHeaders: JSON.stringify({
+        Authorization: 'Bearer site-token',
+        'User-Agent': 'site-agent',
+      }),
+      customHeadersOverrideRequestHeaders: false,
+    }).run();
+
+    const { withSiteProxyRequestInit } = await import('./siteProxy.js');
+    const requestInit = await withSiteProxyRequestInit('https://headers-no-override-site.example.com/v1/models', {
+      method: 'GET',
+      headers: {
+        authorization: 'Bearer request-token',
+        'user-agent': 'request-agent',
+        'X-Trace-Id': 'trace-1',
+      },
+    });
+    const headers = new Headers(requestInit.headers);
+
+    // Default behavior: request headers win over site custom headers.
     expect(headers.get('authorization')).toBe('Bearer request-token');
     expect(headers.get('user-agent')).toBe('request-agent');
     expect(headers.get('x-trace-id')).toBe('trace-1');
@@ -123,7 +155,6 @@ describe('siteProxy', () => {
         originator: 'codex_cli_rs',
         'X-Site-Token': 'keep-me',
       }),
-      customHeadersOverrideRequestHeaders: true,
     }).run();
 
     const { withSiteProxyRequestInit } = await import('./siteProxy.js');
@@ -153,6 +184,42 @@ describe('siteProxy', () => {
     expect(modelHeaders.get('x-site-token')).toBe('keep-me');
   });
 
+  it('strips codex fingerprint from site custom headers even when the override flag is enabled', async () => {
+    // Codex safety: a codex-gated site (requireCodexClient) must never let a
+    // stale site User-Agent/originator override the runtime-injected Codex
+    // fingerprint, even with customHeadersOverrideRequestHeaders enabled. The
+    // strip happens before the merge, so the site UA is dropped and only the
+    // request UA survives here (the full Codex signature is rebuilt later at
+    // the upstreamRequestBuilder layer).
+    await db.insert(schema.sites).values({
+      name: 'codex-override-safety-site',
+      url: 'https://codex-override-safety.example.com',
+      platform: 'new-api',
+      protocolProfile: JSON.stringify({ requireCodexClient: true }),
+      customHeaders: JSON.stringify({
+        'User-Agent': 'stale-codex-ua/0.1.0',
+        originator: 'stale_codex',
+        'X-Site-Token': 'keep-me',
+      }),
+      customHeadersOverrideRequestHeaders: true,
+    }).run();
+
+    const { withSiteProxyRequestInit } = await import('./siteProxy.js');
+    const requestInit = await withSiteProxyRequestInit('https://codex-override-safety.example.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'user-agent': 'request-agent',
+      },
+    });
+    const headers = new Headers(requestInit.headers);
+
+    // Site UA/originator were stripped before merge, so they cannot override.
+    expect(headers.get('user-agent')).toBe('request-agent');
+    expect(headers.get('originator')).toBeNull();
+    // Non-fingerprint site headers are still applied.
+    expect(headers.get('x-site-token')).toBe('keep-me');
+  });
+
   it('merges site custom headers from site records even without cache lookup', async () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
@@ -173,7 +240,7 @@ describe('siteProxy', () => {
     expect('dispatcher' in requestInit).toBe(true);
   });
 
-  it('site record custom headers cannot override explicit request headers', async () => {
+  it('site record custom headers override request headers when the override flag is enabled', async () => {
     const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
     const requestInit = withSiteRecordProxyRequestInit({
       proxyUrl: null,
@@ -191,7 +258,30 @@ describe('siteProxy', () => {
     });
     const headers = new Headers(requestInit.headers);
 
-    // Site custom headers do NOT override explicitly set request headers.
+    // Override flag enabled: site custom headers win over request headers.
+    expect(headers.get('authorization')).toBe('Bearer site-token');
+    expect(headers.get('user-agent')).toBe('site-agent');
+  });
+
+  it('site record request headers stay authoritative when the override flag is disabled', async () => {
+    const { withSiteRecordProxyRequestInit } = await import('./siteProxy.js');
+    const requestInit = withSiteRecordProxyRequestInit({
+      proxyUrl: null,
+      customHeaders: JSON.stringify({
+        Authorization: 'Bearer site-token',
+        'User-Agent': 'site-agent',
+      }),
+      customHeadersOverrideRequestHeaders: false,
+    }, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer request-token',
+        'user-agent': 'request-agent',
+      },
+    });
+    const headers = new Headers(requestInit.headers);
+
+    // Override flag disabled (default): request headers win.
     expect(headers.get('authorization')).toBe('Bearer request-token');
     expect(headers.get('user-agent')).toBe('request-agent');
   });
