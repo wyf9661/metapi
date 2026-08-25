@@ -54,44 +54,15 @@ type ProxyDebugTraceDetailState = {
 type ProxyDebugTraceAttempt = ProxyDebugTraceDetail['attempts'][number];
 
 /**
- * Group retry attempts of the same request (same requestTraceId) into one row:
- * keep the final (most recent) record, fold earlier failed attempts into
- * retryCount (final retries = attempts - 1).
+ * Server-side SQL now paginates by request group and attaches attemptCount
+ * directly. Fallthrough items that the server already grouped will carry
+ * retryCount = attempts - 1 from the API; ungroupable rows (no requestTraceId)
+ * stay as-is. No further client-side folding is needed.
  */
 function aggregateProxyLogRetries(
   items: Array<import('../api.js').ProxyLogListItem>,
 ): Array<import('../api.js').ProxyLogListItem> {
-  const groups = new Map<string, import('../api.js').ProxyLogListItem[]>();
-  const singles: import('../api.js').ProxyLogListItem[] = [];
-  for (const item of items) {
-    if (item.requestTraceId && item.siteId != null) {
-      const groupKey = `${item.requestTraceId}:site:${item.siteId}`;
-      const list = groups.get(groupKey) || [];
-      list.push(item);
-      groups.set(groupKey, list);
-    } else {
-      singles.push(item);
-    }
-  }
-  const out: import('../api.js').ProxyLogListItem[] = [...singles];
-  for (const group of groups.values()) {
-    if (group.length <= 1) {
-      out.push(group[0]);
-      continue;
-    }
-    // 组内按 createdAt 升序，取最后一条为最终结果
-    const sorted = [...group].sort((a, b) =>
-      String(a.createdAt).localeCompare(String(b.createdAt)),
-    );
-    const finalRow = { ...sorted[sorted.length - 1] };
-    const attempts = sorted.length;
-    // 重试次数 = 尝试数 - 1；若最终失败则保留最终失败行但标注重试
-    finalRow.retryCount = attempts - 1;
-    out.push(finalRow);
-  }
-  // 按 createdAt 降序（与 API 默认一致）
-  out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  return out;
+  return items;
 }
 
 export default function ProxyLogs() {

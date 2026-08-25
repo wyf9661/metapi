@@ -137,10 +137,12 @@ function hslToHex(h: number, s: number, l: number): string {
 
 /**
  * Nudge a base colour with a per-name hash so sites/models that share the same
- * icon or brand colour still get distinguishable badges. Hue moves within ±20°
- * (same colour family), luminance ±5%. Grayscale colours (black logos) get a
- * luminance-only nudge so every same-icon site still differs while staying
- * black-family. The result is then theme-clamped for readability.
+ * icon or brand colour still get clearly distinguishable badges. Hue moves
+ * within ±60° and luminance ±15% — enough that two same-brand entries read as
+ * different chips while staying in an adjacent hue family. Grayscale colours
+ * (black logos) get a wider luminance-only (±25%) nudge so every same-icon
+ * site still differs while staying black-family. The result is then
+ * theme-clamped for readability.
  */
 export function perturbBadgeColor(hex: string, name: string, theme: 'dark' | 'light'): string {
   const rgb = hexToRgb(hex);
@@ -148,12 +150,12 @@ export function perturbBadgeColor(hex: string, name: string, theme: 'dark' | 'li
   const isGray = rgb.r === rgb.g && rgb.g === rgb.b;
   let shifted: string;
   if (isGray) {
-    const scale = 1 + (nameHash(name, 'luma') - 0.5) * 0.22;
+    const scale = 1 + (nameHash(name, 'luma') - 0.5) * 0.5;
     shifted = toHex({ r: rgb.r * scale, g: rgb.g * scale, b: rgb.b * scale });
   } else {
     const [h, s, l] = rgbToHsl(rgb);
-    const dh = (nameHash(name, 'hue') - 0.5) * 40;
-    const dl = (nameHash(name, 'luma') - 0.5) * 0.1;
+    const dh = (nameHash(name, 'hue') - 0.5) * 120;
+    const dl = (nameHash(name, 'luma') - 0.5) * 0.24;
     shifted = hslToHex(h + dh, s, Math.max(0, Math.min(1, l * (1 + dl))));
   }
   return clampBadgeColor(shifted, theme);

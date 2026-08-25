@@ -7,7 +7,7 @@ import {
 } from '../../services/marketplaceThroughput.js';
 import { FastifyInstance } from 'fastify';
 import { db, schema } from '../../db/index.js';
-import { and, desc, eq, gte, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import { config } from '../../config.js';
 import { refreshModelsForAccount } from '../../services/modelService.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
@@ -484,9 +484,174 @@ export async function statsRoutes(app: FastifyInstance) {
       toUtc,
     });
 
-    const listRows = (await withProxyLogSelectFields(
-      ({ fields }) => {
-        let query = db
+    // Pagination unit is one logical *request*, not one attempt row. Retries of
+    // the same request (same requestTraceId, folded per site) share one row in
+    // the UI, so paginating raw attempt rows made a page render fewer than
+    // `limit` items whenever it happened to contain a retry — the count would
+    // visibly jitter (10, 9, 8, 6...). We group here so both the page slice and
+    // the total are counted in requests, keeping the two in the same unit.
+    //
+    // Group key mirrors the former client-side fold: (requestTraceId, siteId)
+    // when both are present, otherwise each row is its own group. To stay
+    // portable across sqlite/mysql/postgres we avoid string concat and instead
+    // partition on two derived columns — a non-groupable row gets a NULL trace
+    // and its own proxy_logs.id in the site slot, which is globally unique, so
+    // it forms a singleton partition.
+    const groupablePredicate = sql`(${schema.proxyLogs.requestTraceId} is not null and ${schema.proxyLogs.requestTraceId} <> '' and ${schema.sites.id} is not null)`;
+    const effectiveTraceKey = sql`case when ${groupablePredicate} then ${schema.proxyLogs.requestTraceId} else null end`;
+    const effectiveSiteKey = sql`case when ${groupablePredicate} then ${schema.sites.id} else ${schema.proxyLogs.id} end`;
+
+    const pageGroups = await withProxyLogSelectFields(
+      async ({ includeRequestTraceId }) => {
+        if (!includeRequestTraceId) {
+          // Legacy DB without request_trace_id: no reliable retry key, so fall
+          // back to per-attempt pagination (matches historical behavior).
+          let legacyIdQuery: any = db
+            .select({ id: schema.proxyLogs.id })
+            .from(schema.proxyLogs)
+            .leftJoin(
+              schema.accounts,
+              eq(schema.proxyLogs.accountId, schema.accounts.id),
+            )
+            .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+            .leftJoin(
+              schema.downstreamApiKeys,
+              eq(
+                schema.proxyLogs.downstreamApiKeyId,
+                schema.downstreamApiKeys.id,
+              ),
+            );
+          if (listWhere) legacyIdQuery = legacyIdQuery.where(listWhere);
+          const legacyRows = await legacyIdQuery
+            .orderBy(desc(schema.proxyLogs.createdAt), desc(schema.proxyLogs.id))
+            .limit(limit)
+            .offset(offset)
+            .all();
+
+          let legacyTotalQuery: any = db
+            .select({ total: sql<number>`count(*)` })
+            .from(schema.proxyLogs);
+          if (siteId) {
+            legacyTotalQuery = legacyTotalQuery
+              .leftJoin(
+                schema.accounts,
+                eq(schema.proxyLogs.accountId, schema.accounts.id),
+              )
+              .leftJoin(
+                schema.sites,
+                eq(schema.accounts.siteId, schema.sites.id),
+              );
+          }
+          if (search) {
+            legacyTotalQuery = legacyTotalQuery.leftJoin(
+              schema.downstreamApiKeys,
+              eq(
+                schema.proxyLogs.downstreamApiKeyId,
+                schema.downstreamApiKeys.id,
+              ),
+            );
+          }
+          if (listWhere) legacyTotalQuery = legacyTotalQuery.where(listWhere);
+          const legacyTotalRow = await legacyTotalQuery.get();
+          return {
+            ids: legacyRows.map((r: { id: number }) => Number(r.id)),
+            attemptById: new Map<number, number>(),
+            total: Number(legacyTotalRow?.total || 0),
+          };
+        }
+
+        // Grouped path: rank attempts within each request group and keep the
+        // most recent as the representative row; attach the attempt count so
+        // the caller can expose retryCount = attempts - 1.
+        let rankedBase: any = db
+          .select({
+            id: schema.proxyLogs.id,
+            createdAt: schema.proxyLogs.createdAt,
+            rn: sql<number>`row_number() over (partition by ${effectiveTraceKey}, ${effectiveSiteKey} order by ${schema.proxyLogs.createdAt} desc, ${schema.proxyLogs.id} desc)`.as('rn'),
+            attemptCount: sql<number>`count(*) over (partition by ${effectiveTraceKey}, ${effectiveSiteKey})`.as('attempt_count'),
+          })
+          .from(schema.proxyLogs)
+          .leftJoin(
+            schema.accounts,
+            eq(schema.proxyLogs.accountId, schema.accounts.id),
+          )
+          .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+          .leftJoin(
+            schema.downstreamApiKeys,
+            eq(
+              schema.proxyLogs.downstreamApiKeyId,
+              schema.downstreamApiKeys.id,
+            ),
+          );
+        if (listWhere) rankedBase = rankedBase.where(listWhere);
+        const ranked = rankedBase.as('ranked');
+
+        const groupRows = await db
+          .select({
+            id: ranked.id,
+            createdAt: ranked.createdAt,
+            attemptCount: ranked.attemptCount,
+          })
+          .from(ranked)
+          .where(eq(ranked.rn, 1))
+          .orderBy(desc(ranked.createdAt), desc(ranked.id))
+          .limit(limit)
+          .offset(offset)
+          .all();
+
+        // Total = number of request groups (COUNT over a GROUP BY subquery,
+        // portable everywhere; COUNT(DISTINCT composite) is not).
+        let groupTotalBase: any = db
+          .select({ one: sql<number>`1` })
+          .from(schema.proxyLogs)
+          .leftJoin(
+            schema.accounts,
+            eq(schema.proxyLogs.accountId, schema.accounts.id),
+          )
+          .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+          .leftJoin(
+            schema.downstreamApiKeys,
+            eq(
+              schema.proxyLogs.downstreamApiKeyId,
+              schema.downstreamApiKeys.id,
+            ),
+          );
+        if (listWhere) groupTotalBase = groupTotalBase.where(listWhere);
+        const groupTotalSub = groupTotalBase
+          .groupBy(effectiveTraceKey, effectiveSiteKey)
+          .as('groups');
+        const groupTotalRow = await db
+          .select({ total: sql<number>`count(*)` })
+          .from(groupTotalSub)
+          .get();
+
+        const attemptById = new Map<number, number>();
+        for (const r of groupRows as Array<{ id: number; attemptCount?: number | string | null }>) {
+          attemptById.set(Number(r.id), Number(r.attemptCount || 1));
+        }
+        return {
+          ids: (groupRows as Array<{ id: number }>).map((r) => Number(r.id)),
+          attemptById,
+          total: Number(groupTotalRow?.total || 0),
+        };
+      },
+      { includeRequestTraceId: true, includeClientFields: false },
+    );
+
+    if (pageGroups.ids.length === 0) {
+      return {
+        items: [],
+        total: pageGroups.total,
+        page: Math.floor(offset / limit) + 1,
+        pageSize: limit,
+      };
+    }
+
+    // Hydrate the representative rows for this page (order-agnostic fetch, then
+    // re-order to the group ranking above).
+    const fullRows = (await withProxyLogSelectFields(
+      ({ fields }) =>
+        db
           .select({
             proxy_logs: fields,
             accounts: {
@@ -516,22 +681,16 @@ export async function statsRoutes(app: FastifyInstance) {
               schema.proxyLogs.downstreamApiKeyId,
               schema.downstreamApiKeys.id,
             ),
-          );
-
-        if (listWhere) {
-          query = query.where(listWhere) as typeof query;
-        }
-
-        return query
-          .orderBy(desc(schema.proxyLogs.createdAt))
-          .limit(limit)
-          .offset(offset)
-          .all();
-      },
+          )
+          .where(inArray(schema.proxyLogs.id, pageGroups.ids))
+          .all(),
       { includeBillingDetails: false, includeRequestTraceId: true },
     )) as Array<{
-      proxy_logs: Record<string, unknown> & { billingDetails?: string | null };
-      attemptCount?: number | string | null;
+      proxy_logs: Record<string, unknown> & {
+        id?: number;
+        retryCount?: number | null;
+        billingDetails?: string | null;
+      };
       accounts: { username?: string | null } | null;
       sites: {
         id?: number | null;
@@ -546,36 +705,29 @@ export async function statsRoutes(app: FastifyInstance) {
       } | null;
     }>;
 
-    // Keep count queries on proxy_logs alone unless a filter actually needs a
-    // related table. The previous unconditional joins made every unfiltered
-    // pagination count perform three needless PK lookups per log row.
-    let totalQuery: any = db
-      .select({
-        total: sql<number>`count(*)`,
-      })
-      .from(schema.proxyLogs);
-    if (siteId) {
-      totalQuery = totalQuery
-        .leftJoin(
-          schema.accounts,
-          eq(schema.proxyLogs.accountId, schema.accounts.id),
-        )
-        .leftJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id));
-    }
-    if (search) {
-      totalQuery = totalQuery.leftJoin(
-        schema.downstreamApiKeys,
-        eq(schema.proxyLogs.downstreamApiKeyId, schema.downstreamApiKeys.id),
-      );
-    }
-    if (listWhere) {
-      totalQuery = totalQuery.where(listWhere);
-    }
-    const totalRow = await totalQuery.get();
+    const rowById = new Map<number, (typeof fullRows)[number]>();
+    for (const row of fullRows) rowById.set(Number(row.proxy_logs.id), row);
+
+    type MappedProxyLogItem = ReturnType<typeof mapProxyLogRow> & {
+      retryCount?: number | null;
+    };
+
+    const items: Array<MappedProxyLogItem> = pageGroups.ids.flatMap(
+      (id: number): MappedProxyLogItem[] => {
+        const row = rowById.get(id);
+        if (!row) return [];
+        const mapped: MappedProxyLogItem = mapProxyLogRow(row);
+        const attempts = pageGroups.attemptById.get(id) || 1;
+        // >1 attempt means retries were folded: retryCount = attempts - 1.
+        // Singletons keep whatever retryCount the final attempt stored.
+        if (attempts > 1) mapped.retryCount = attempts - 1;
+        return [mapped];
+      },
+    );
 
     return {
-      items: listRows.map((row) => mapProxyLogRow(row)),
-      total: Number(totalRow?.total || 0),
+      items,
+      total: pageGroups.total,
       page: Math.floor(offset / limit) + 1,
       pageSize: limit,
     };
