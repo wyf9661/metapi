@@ -116,7 +116,7 @@ export default function About() {
         <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>{tr('核心特色')}</h3>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
           gap: 10,
         }}>
           {FEATURES.map((f) => (
@@ -125,7 +125,7 @@ export default function About() {
               borderBottom: '1px solid var(--color-border-light)',
             }}>
               <span style={{ fontSize: 18, lineHeight: '24px', flexShrink: 0 }}>{f.icon}</span>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{tr(f.title)}</div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2, lineHeight: 1.5 }}>
                   {tr(f.desc)}
@@ -141,7 +141,7 @@ export default function About() {
         <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>{tr('技术栈')}</h3>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))',
           gap: 10,
         }}>
           {TECH_STACK.map((t) => (
