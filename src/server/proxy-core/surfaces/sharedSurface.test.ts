@@ -1026,6 +1026,7 @@ describe('selectSurfaceChannelForAttempt', () => {
         selfLogBillingMeta: null,
         usageSource: 'self-log',
       },
+      tokenGroup: null,
     });
     expect(recordSuccessMock).toHaveBeenCalledWith(11, 250, 0.42, 'upstream-model');
     expect(recordDownstreamCost).toHaveBeenCalledWith(0.42);
