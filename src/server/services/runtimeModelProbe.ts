@@ -2,6 +2,7 @@ import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { buildOauthProviderHeaders } from './oauth/service.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from './siteProxy.js';
 import { dispatchRuntimeRequest } from './runtimeDispatch.js';
+import { requireSiteApiBaseUrl } from './siteApiEndpointService.js';
 import {
   buildUpstreamEndpointRequest,
   resolveUpstreamEndpointCandidates,
@@ -280,6 +281,17 @@ export async function probeRuntimeModel(input: {
   const startedAt = Date.now();
   const deadlineAtMs = startedAt + Math.max(1, input.timeoutMs);
   try {
+    // 与线上代理/模型发现一致：测活请求必须走站点配置的 API 入口（apiEndpoints），
+    // 未配置入口时才回退 site.url。此前直接用 site.url 会让配置了 apiEndpoints 的
+    // 站点把探测打到错误地址（例如官方站 404 页面），与真实路由不一致。
+    const endpointBaseUrl = await withTimeout(
+      () => requireSiteApiBaseUrl(input.site),
+      resolveRemainingTimeoutMs(
+        deadlineAtMs,
+        'site api endpoint resolution timeout',
+      ),
+      'site api endpoint resolution timeout',
+    );
     const endpointCandidates = await withTimeout(
       () => resolveUpstreamEndpointCandidates(
         {
@@ -329,7 +341,7 @@ export async function probeRuntimeModel(input: {
         oauthProvider: oauth?.provider,
         oauthProjectId: oauth?.projectId,
         sitePlatform: input.site.platform,
-        siteUrl: input.site.url,
+        siteUrl: endpointBaseUrl,
         openaiBody,
         downstreamFormat: 'openai',
         downstreamHeaders: {},
@@ -348,7 +360,7 @@ export async function probeRuntimeModel(input: {
       targetUrl: string,
     ) => (
       dispatchRuntimeRequest({
-        siteUrl: input.site.url,
+        siteUrl: endpointBaseUrl,
         targetUrl,
         request,
         buildInit: (_requestUrl, requestForFetch) => withSiteRecordProxyRequestInit(
@@ -367,7 +379,7 @@ export async function probeRuntimeModel(input: {
     let result: Awaited<ReturnType<typeof executeEndpointFlow>>;
     try {
       result = await executeEndpointFlow({
-        siteUrl: input.site.url,
+        siteUrl: endpointBaseUrl,
         proxyUrl: channelProxyUrl,
         paramOverride: input.site.paramOverride ?? null,
         endpointCandidates,

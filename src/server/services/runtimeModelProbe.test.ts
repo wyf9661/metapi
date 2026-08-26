@@ -7,6 +7,7 @@ const resolveChannelProxyUrlMock = vi.fn();
 const withSiteRecordProxyRequestInitMock = vi.fn();
 const getOauthInfoFromAccountMock = vi.fn();
 const buildOauthProviderHeadersMock = vi.fn();
+const requireSiteApiBaseUrlMock = vi.fn();
 
 vi.mock('./upstreamEndpointRuntime.js', () => ({
   resolveUpstreamEndpointCandidates: (...args: unknown[]) => resolveUpstreamEndpointCandidatesMock(...args),
@@ -28,6 +29,10 @@ vi.mock('./oauth/oauthAccount.js', () => ({
 
 vi.mock('./oauth/service.js', () => ({
   buildOauthProviderHeaders: (...args: unknown[]) => buildOauthProviderHeadersMock(...args),
+}));
+
+vi.mock('./siteApiEndpointService.js', () => ({
+  requireSiteApiBaseUrl: (...args: unknown[]) => requireSiteApiBaseUrlMock(...args),
 }));
 
 describe('probeRuntimeModel', () => {
@@ -58,9 +63,12 @@ describe('probeRuntimeModel', () => {
     withSiteRecordProxyRequestInitMock.mockReset();
     getOauthInfoFromAccountMock.mockReset();
     buildOauthProviderHeadersMock.mockReset();
+    requireSiteApiBaseUrlMock.mockReset();
 
     getOauthInfoFromAccountMock.mockReturnValue(null);
     buildOauthProviderHeadersMock.mockReturnValue({});
+    // 默认模拟"未配置 apiEndpoints → 回退 site.url"的语义
+    requireSiteApiBaseUrlMock.mockImplementation(async (s: { url: string }) => s.url);
     buildUpstreamEndpointRequestMock.mockReturnValue({
       path: '/v1/chat/completions',
       headers: { 'content-type': 'application/json' },
@@ -160,6 +168,39 @@ describe('probeRuntimeModel', () => {
     expect(buildUpstreamEndpointRequestMock).toHaveBeenCalled();
     const built = buildUpstreamEndpointRequestMock.mock.calls[0][0];
     expect(built.tokenValue).toBe('session-cookie-token');
+  });
+
+  it('probes the configured apiEndpoint base URL instead of site.url', async () => {
+    // 站点配置了 apiEndpoints 时，requireSiteApiBaseUrl 返回入口地址
+    requireSiteApiBaseUrlMock.mockResolvedValue('http://api-endpoint.example.com');
+    resolveUpstreamEndpointCandidatesMock.mockResolvedValue([{
+      id: 'chat',
+      path: '/v1/chat/completions',
+      format: 'openai',
+    }]);
+    dispatchRuntimeRequestMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: 'OK' } }] }),
+      body: { getReader: () => ({ read: async () => ({ done: true }) }) },
+    });
+
+    const { probeRuntimeModel } = await import('./runtimeModelProbe.js');
+    const result = await probeRuntimeModel({
+      site,
+      account,
+      modelName: 'gpt-5.4',
+      timeoutMs: 5000,
+    });
+
+    expect(result.status).toBe('supported');
+    expect(requireSiteApiBaseUrlMock).toHaveBeenCalledWith(site);
+    // 请求必须打到 apiEndpoint 地址，而不是 site.url
+    const built = buildUpstreamEndpointRequestMock.mock.calls[0][0];
+    expect(built.siteUrl).toBe('http://api-endpoint.example.com');
+    const dispatched = dispatchRuntimeRequestMock.mock.calls[0][0];
+    expect(dispatched.siteUrl).toBe('http://api-endpoint.example.com');
+    expect(dispatched.targetUrl.startsWith('http://api-endpoint.example.com')).toBe(true);
   });
 
   it('labels relay model-channel authorization failures separately from account credentials', async () => {
