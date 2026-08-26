@@ -129,6 +129,24 @@ describe('proxyLogStore', () => {
     });
   });
 
+  it('canonicalizes the downstream model name (drops provider prefix) before insert', async () => {
+    hasProxyLogBillingDetailsColumnMock.mockResolvedValue(true);
+    dbInsertRunMock.mockResolvedValue(undefined);
+
+    await insertProxyLog({
+      modelRequested: 'mimo/mimo-v2.5',
+      modelActual: 'mimo/mimo-v2.5',
+    });
+
+    expect(dbInsertValuesMock).toHaveBeenCalledTimes(1);
+    expect(dbInsertValuesMock.mock.calls[0][0]).toMatchObject({
+      // requested collapses to the canonical key…
+      modelRequested: 'mimo-v2.5',
+      // …but actual keeps the raw upstream name used for forwarding.
+      modelActual: 'mimo/mimo-v2.5',
+    });
+  });
+
   it('retries proxy log inserts without billing details when the column is missing', async () => {
     hasProxyLogBillingDetailsColumnMock.mockResolvedValue(true);
     dbInsertRunMock

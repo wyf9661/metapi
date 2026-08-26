@@ -8,6 +8,7 @@ import {
   hasProxyLogStreamTimingColumns,
   hasProxyLogRequestTraceIdColumn,
 } from '../db/index.js';
+import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 
 export type ProxyLogInsertInput = {
   routeId?: number | null;
@@ -366,11 +367,18 @@ async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): 
 }
 
 export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> {
+  // Normalize the downstream-requested model name so provider prefixes
+  // (e.g. "mimo/mimo-v2.5") and free/date aliases are collapsed to the
+  // canonical key before persisting. model_actual keeps its raw upstream
+  // name because that is what the channel forwards to the provider.
+  const modelRequested = input.modelRequested
+    ? (canonicalizeModelName(input.modelRequested) || input.modelRequested)
+    : null;
   const baseValues = {
     routeId: input.routeId ?? null,
     channelId: input.channelId ?? null,
     accountId: input.accountId ?? null,
-    modelRequested: input.modelRequested ?? null,
+    modelRequested,
     modelActual: input.modelActual ?? null,
     status: input.status ?? null,
     httpStatus: input.httpStatus ?? null,
