@@ -184,9 +184,8 @@ function normalizeGroupRatio(raw: unknown): Record<string, number> {
   if (raw && typeof raw === 'object') {
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
       const ratio = toNumber(value, 1);
-      // Keep 0-rated groups too (free tiers). A 0x ratio is a legitimate
-      // pricing tier, not "missing" — dropping it here would cascade up and
-      // those free models would be billed at the wrong multiplier downstream.
+      // Keep 0 — a free group legitimately bills at 0×. Discard only
+      // negatives/NaN, not the legitimate 0.
       if (ratio >= 0) result[key] = ratio;
     }
   }
