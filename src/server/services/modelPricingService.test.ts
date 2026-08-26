@@ -33,6 +33,42 @@ describe('modelPricingService', () => {
     expect(cost).toBe(0.014);
   });
 
+  it('uses the token-bound group over the model enableGroups order', () => {
+    // glm goes to a user whose token is bound to "vercel glm" at 0.1×,
+    // not the default group at 4×. The catalog's enableGroups order
+    // would incorrectly pick default (4×) if we didn't know the binding.
+    const model: PricingModel = {
+      modelName: 'glm-5.2',
+      quotaType: 0,
+      modelRatio: 0.7,
+      completionRatio: 3.142857,
+      cacheRatio: 1,
+      cacheCreationRatio: 1,
+      modelPrice: null,
+      enableGroups: ['default', 'vercel glm'],
+    };
+    const groupRatio = { default: 4, 'vercel glm': 0.1 };
+
+    const withTokenGroup = calculateModelUsageCost(
+      model,
+      { promptTokens: 419, completionTokens: 262, totalTokens: 681 },
+      groupRatio,
+      'vercel glm',
+    );
+    const withoutTokenGroup = calculateModelUsageCost(
+      model,
+      { promptTokens: 419, completionTokens: 262, totalTokens: 681 },
+      groupRatio,
+    );
+
+    // Without tokenGroup: default group (4×) → much higher cost.
+    // (419 × 1.4 + 262 × 4.4) × 4 / 1e6 ≈ 0.006957
+    expect(withoutTokenGroup).toBeCloseTo(0.006957, 4);
+    // With tokenGroup: vercel glm (0.1×) → 40× cheaper, matches upstream.
+    expect(withTokenGroup).toBeCloseTo(0.000174, 6);
+    expect(withTokenGroup).toBeLessThan(withoutTokenGroup);
+  });
+
   it('falls back to total tokens when split token usage is missing', () => {
     const model: PricingModel = {
       modelName: 'claude-sonnet',

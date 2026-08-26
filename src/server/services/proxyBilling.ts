@@ -39,6 +39,7 @@ interface ResolveProxyLogBillingInput {
   modelName: string;
   parsedUsage: ProxyBillingUsageSummary;
   resolvedUsage: ResolvedProxyUsageSummary;
+  tokenGroup?: string | null;
 }
 
 function toPricingOverride(meta: SelfLogBillingMeta | null): ProxyBillingPricingOverride | null {
@@ -73,6 +74,7 @@ export async function resolveProxyLogBilling(
     cacheCreationTokens,
     promptTokensIncludeCache,
     billingPricingOverride,
+    tokenGroup: input.tokenGroup ?? null,
   };
 
   let estimatedCost = await estimateProxyCost(billingInput);

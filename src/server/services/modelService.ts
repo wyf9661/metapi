@@ -1272,6 +1272,13 @@ async function doRefreshModelsForAccount(
     mergeDiscoveredModels(models, latencyMs);
   }
 
+  // Sync token group binding from upstream so billing uses the correct
+  // group ratio (e.g. a key bound to "vercel glm" at 0.1× instead of the
+  // model's first enableGroup "default" at 4×).
+  if (usesManagedTokens && enabledTokens.length > 0) {
+    await syncTokenGroupsFromUpstream(adapter, site, account, enabledTokens, accountProxyUrl);
+  }
+
   // Last resort: managed-token discovery produced nothing (masked keys / network).
   // Fall back to session models so the account is not left empty.
   if (preferManagedTokenDiscovery && accountModels.size === 0) {
@@ -1336,6 +1343,63 @@ async function doRefreshModelsForAccount(
     discoveredApiToken: !!discoveredApiToken,
     postProbeResult: standardPostProbeResult,
   });
+}
+
+/**
+ * Pulls each API key's bound group from the upstream NewAPI `/api/token/`
+ * endpoint and persists it to `account_tokens.token_group`.
+ *
+ * This group binding determines which `group_ratio` entry applies at billing
+ * time. Without it, the billing code falls back to the model's first
+ * `enableGroups` entry — which may be "default" (4×) when the token is
+ * actually bound to "vercel glm" (0.1×), overcharging by 40×.
+ */
+async function syncTokenGroupsFromUpstream(
+  adapter: any,
+  site: any,
+  account: any,
+  enabledTokens: any[],
+  accountProxyUrl: string | null,
+): Promise<void> {
+  try {
+    const tokenInfos = await withAccountProxyOverride(accountProxyUrl,
+      () => adapter.getApiTokens(site.url, account.accessToken, resolvePlatformUserId(account.extraConfig, account.username)),
+    );
+    if (!Array.isArray(tokenInfos) || tokenInfos.length === 0) return;
+
+    // Build key → group map. Keys from upstream are full; local tokens may be
+    // masked — match on the last 8 chars as a fallback.
+    const groupByKey = new Map<string, string>();
+    for (const info of tokenInfos) {
+      if (info.key && info.tokenGroup) {
+        groupByKey.set(info.key, info.tokenGroup);
+      }
+    }
+    if (groupByKey.size === 0) return;
+
+    const now = new Date().toISOString();
+    for (const token of enabledTokens) {
+      let group = groupByKey.get(token.token);
+      // Fallback: match on key suffix (upstream returns full key, local may be masked).
+      if (!group) {
+        for (const [upstreamKey, g] of groupByKey) {
+          if (upstreamKey.length > 8 && token.token.length > 8
+            && upstreamKey.slice(-8) === token.token.slice(-8)) {
+            group = g;
+            break;
+          }
+        }
+      }
+      if (group && group !== token.tokenGroup) {
+        await db.update(schema.accountTokens)
+          .set({ tokenGroup: group, updatedAt: now })
+          .where(eq(schema.accountTokens.id, token.id))
+          .run();
+      }
+    }
+  } catch {
+    // Non-fatal: group sync is a billing-accuracy enhancement, not a discovery gate.
+  }
 }
 
 async function refreshModelsForAllActiveAccounts(): Promise<ModelRefreshResult[]> {
