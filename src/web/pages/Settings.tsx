@@ -243,6 +243,7 @@ export default function Settings() {
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
+    minHeight: 40,
     padding: '10px 14px',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)',
@@ -1510,12 +1511,13 @@ export default function Settings() {
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             先选择预设策略，只有需要精调时再展开高级参数。
           </div>
-          <div style={{ marginBottom: 12, maxWidth: 420 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
+          <div>
+          <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
               全局路由策略（所有路由统一生效）
             </div>
             <ModernSelect
-              size="sm"
               value={runtime.defaultRoutingStrategy || 'weighted'}
               onChange={(nextValue) => {
                 setRuntime((prev) => ({
@@ -1534,6 +1536,34 @@ export default function Settings() {
               轮询：公平轮转，最久未选中的通道优先；稳定优先：按近期成功率加权，低成功率站点每 24 次请求灰度试探一次。
             </div>
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+              路由探测率（跳过亲和性，直接走加权随机）
+            </div>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              aria-label="路由探测率"
+              value={runtime.proxyRouteProbeRate}
+              onChange={(e) => {
+                const nextValue = Number(e.target.value);
+                setRuntime((prev) => ({
+                  ...prev,
+                  proxyRouteProbeRate: Number.isFinite(nextValue)
+                    ? Math.min(1, Math.max(0, nextValue))
+                    : prev.proxyRouteProbeRate,
+                }));
+              }}
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
+              默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。
+            </div>
+          </div>
+          </div>
+          <div>
           <div style={{ marginBottom: 12, maxWidth: 280 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
                 无实测/配置/目录价时默认单价
@@ -1553,7 +1583,7 @@ export default function Settings() {
               style={inputStyle}
             />
           </div>
-          <div style={{ marginBottom: 12, maxWidth: 420 }}>
+          <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
               普通失败冷却上限
             </div>
@@ -1577,7 +1607,6 @@ export default function Settings() {
               />
               <div style={{ width: 132, minWidth: 132 }}>
                 <ModernSelect
-                  size="sm"
                   value={runtime.routeFailureCooldownMaxUnit}
                   onChange={(nextValue) => {
                     setRuntime((prev) => ({
@@ -1597,7 +1626,97 @@ export default function Settings() {
               支持秒、分钟、小时、天。只封顶普通失败与轮询分级冷却；429 限额类冷却仍优先遵循上游 reset 提示，避免过早重试。
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
+          <div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+              首字超时（无首包 / 首 token）
+            </div>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              aria-label="首字超时秒数"
+              value={runtime.proxyFirstByteTimeoutSec}
+              onChange={(e) => {
+                const nextValue = Number(e.target.value);
+                setRuntime((prev) => ({
+                  ...prev,
+                  proxyFirstByteTimeoutSec: Number.isFinite(nextValue) && nextValue >= 0
+                    ? Math.trunc(nextValue)
+                    : prev.proxyFirstByteTimeoutSec,
+                }));
+              }}
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
+              默认 15 秒；`0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换渠道，已经开始输出的请求不会被这项超时打断。
+            </div>
+          </div>
+          </div>
+          <div style={{ paddingTop: 2 }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={runtime.disableCrossProtocolFallback}
+              onChange={(e) => setRuntime((prev) => ({
+                ...prev,
+                disableCrossProtocolFallback: e.target.checked,
+              }))}
+              style={{ marginTop: 2 }}
+            />
+            <span>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                失败时不尝试其他协议
+              </span>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+                仅影响 chat / messages / responses 之间的协议切换；不会关闭同协议兼容重试、OAuth 刷新或通道级重试。
+              </span>
+            </span>
+          </label>
+          </div>
+          </div>
+
+
+          <div className={`anim-collapse ${showAdvancedRouting ? 'is-open' : ''}`.trim()}>
+            <div className="anim-collapse-inner" style={{ paddingTop: 2 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
+              {([
+                ['baseWeightFactor', '基础权重因子'],
+                ['valueScoreFactor', '价值分因子'],
+                ['costWeight', '成本权重'],
+                ['balanceWeight', '余额权重'],
+                ['usageWeight', '使用频次权重'],
+              ] as Array<[keyof RoutingWeights, string]>).map(([key, label]) => (
+                <div key={key}>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{label}</div>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={runtime.routingWeights[key]}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setRuntime((prev) => ({
+                        ...prev,
+                        routingWeights: {
+                          ...prev.routingWeights,
+                          [key]: Number.isFinite(v) ? v : 0,
+                        },
+                      }));
+                    }}
+                    style={inputStyle}
+                  />
+                </div>
+              ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '14px 0 12px' }}>
             <button
               onClick={() => applyRoutingPreset('balanced')}
               className="btn btn-ghost"
@@ -1635,113 +1754,6 @@ export default function Settings() {
             >
               {showAdvancedRouting ? '收起高级参数' : '展开高级参数'}
             </button>
-          </div>
-
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={runtime.disableCrossProtocolFallback}
-              onChange={(e) => setRuntime((prev) => ({
-                ...prev,
-                disableCrossProtocolFallback: e.target.checked,
-              }))}
-              style={{ marginTop: 2 }}
-            />
-            <span>
-              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                失败时不尝试其他协议
-              </span>
-              <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                仅影响 chat / messages / responses 之间的协议切换；不会关闭同协议兼容重试、OAuth 刷新或通道级重试。
-              </span>
-            </span>
-          </label>
-
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              首字超时（无首包 / 首 token）
-            </div>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              aria-label="首字超时秒数"
-              value={runtime.proxyFirstByteTimeoutSec}
-              onChange={(e) => {
-                const nextValue = Number(e.target.value);
-                setRuntime((prev) => ({
-                  ...prev,
-                  proxyFirstByteTimeoutSec: Number.isFinite(nextValue) && nextValue >= 0
-                    ? Math.trunc(nextValue)
-                    : prev.proxyFirstByteTimeoutSec,
-                }));
-              }}
-              style={inputStyle}
-            />
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
-              默认 15 秒；`0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换渠道，已经开始输出的请求不会被这项超时打断。
-            </div>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              路由探测率（跳过亲和性，直接走加权随机）
-            </div>
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.01}
-              aria-label="路由探测率"
-              value={runtime.proxyRouteProbeRate}
-              onChange={(e) => {
-                const nextValue = Number(e.target.value);
-                setRuntime((prev) => ({
-                  ...prev,
-                  proxyRouteProbeRate: Number.isFinite(nextValue)
-                    ? Math.min(1, Math.max(0, nextValue))
-                    : prev.proxyRouteProbeRate,
-                }));
-              }}
-              style={inputStyle}
-            />
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
-              默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。
-            </div>
-          </div>
-
-          <div className={`anim-collapse ${showAdvancedRouting ? 'is-open' : ''}`.trim()}>
-            <div className="anim-collapse-inner" style={{ paddingTop: 2 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-              {([
-                ['baseWeightFactor', '基础权重因子'],
-                ['valueScoreFactor', '价值分因子'],
-                ['costWeight', '成本权重'],
-                ['balanceWeight', '余额权重'],
-                ['usageWeight', '使用频次权重'],
-              ] as Array<[keyof RoutingWeights, string]>).map(([key, label]) => (
-                <div key={key}>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{label}</div>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    value={runtime.routingWeights[key]}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setRuntime((prev) => ({
-                        ...prev,
-                        routingWeights: {
-                          ...prev.routingWeights,
-                          [key]: Number.isFinite(v) ? v : 0,
-                        },
-                      }));
-                    }}
-                    style={inputStyle}
-                  />
-                </div>
-              ))}
-              </div>
-            </div>
           </div>
 
           <div style={{ marginTop: 12 }}>
