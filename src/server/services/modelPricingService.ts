@@ -84,6 +84,10 @@ export interface EstimateProxyCostInput {
   cacheCreationTokens?: number;
   promptTokensIncludeCache?: boolean | null;
   billingPricingOverride?: ProxyBillingPricingOverride | null;
+  /** The upstream group the API key is bound to (e.g. "vercel glm").
+   *  When present, billing resolves the group multiplier from this group
+   *  instead of guessing from the model's enableGroups order. */
+  tokenGroup?: string | null;
 }
 
 interface ModelGroupPricing {
@@ -180,9 +184,8 @@ function normalizeGroupRatio(raw: unknown): Record<string, number> {
   if (raw && typeof raw === 'object') {
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
       const ratio = toNumber(value, 1);
-      // Keep 0-rated groups too (free tiers). A 0x ratio is a legitimate
-      // pricing tier, not "missing" — dropping it here would cascade up and
-      // those free models would be billed at the wrong multiplier downstream.
+      // Keep 0 — a free group legitimately bills at 0×. Discard only
+      // negatives/NaN, not the legitimate 0.
       if (ratio >= 0) result[key] = ratio;
     }
   }
@@ -496,7 +499,15 @@ function resolveModel(modelName: string, data: PricingData): PricingModel | null
   return null;
 }
 
-function resolveGroupMultiplier(model: PricingModel, groupRatio: Record<string, number>): number {
+function resolveGroupMultiplier(model: PricingModel, groupRatio: Record<string, number>, tokenGroup?: string | null): number {
+  // When the API key's bound group is known (synced from upstream /api/token/),
+  // use that group's ratio directly — it reflects which channel the request
+  // actually routes through, not just which groups the model is listed in.
+  if (tokenGroup && groupRatio[tokenGroup] !== undefined) {
+    return groupRatio[tokenGroup];
+  }
+
+  // Fallback: pick the first of the model's enableGroups that has a ratio.
   // NOTE: group ratios may legitimately be 0 (e.g. free groups). Never test
   // truthiness here — check key presence explicitly, or a 0× ratio silently
   // falls back to the default multiplier (1) and bills free traffic.
@@ -613,12 +624,13 @@ export function calculateModelUsageBreakdown(
     promptTokensIncludeCache?: boolean | null;
   },
   groupRatio: Record<string, number>,
+  tokenGroup?: string | null,
 ): ProxyBillingDetails | null {
   if (model.quotaType === 1) {
     return null;
   }
 
-  const multiplier = resolveGroupMultiplier(model, groupRatio);
+  const multiplier = resolveGroupMultiplier(model, groupRatio, tokenGroup);
   const normalizedUsage = normalizeUsageBreakdownInput(usage);
 
   // NewAPI tiered_expr billing: evaluate the expression. The breakdown's
@@ -749,24 +761,25 @@ export function calculateModelUsageCost(
     promptTokensIncludeCache?: boolean | null;
   },
   groupRatio: Record<string, number>,
+  tokenGroup?: string | null,
 ): number {
   // NewAPI tiered_expr billing: evaluate the expression instead of using modelRatio × multiplier
   if (model.billingMode === 'tiered_expr' && model.billingExpr) {
     const params = buildTieredParams(usage);
     const { cost } = evaluateTieredExpr(model.billingExpr, params);
-    const multiplier = resolveGroupMultiplier(model, groupRatio);
+    const multiplier = resolveGroupMultiplier(model, groupRatio, tokenGroup);
     // formula: $ = cost × GroupRatio / 1_000_000
     // (QuotaPerUnit=500000, 1e6 = QuotaPerUnit × 2, same as NewAPI)
     return roundCost((cost * multiplier) / 1_000_000);
   }
 
-  const multiplier = resolveGroupMultiplier(model, groupRatio);
+  const multiplier = resolveGroupMultiplier(model, groupRatio, tokenGroup);
 
   if (model.quotaType === 1) {
     return roundCost(calculatePerCallCost(model.modelPrice, multiplier));
   }
 
-  return calculateModelUsageBreakdown(model, usage, groupRatio)?.breakdown.totalCost ?? 0;
+  return calculateModelUsageBreakdown(model, usage, groupRatio, tokenGroup)?.breakdown.totalCost ?? 0;
 }
 
 function buildModelPricingCatalogFromData(pricingData: PricingData): ModelPricingCatalog {
@@ -870,7 +883,7 @@ export async function estimateProxyCost(input: EstimateProxyCostInput): Promise<
       return estimateWithModelsDevOrFallback(input, usage, totalTokens);
     }
 
-    return calculateModelUsageCost(model, usage, pricingData.groupRatio);
+    return calculateModelUsageCost(model, usage, pricingData.groupRatio, input.tokenGroup);
   } catch {
     return fallbackTokenCost(totalTokens, input.site.platform);
   }
@@ -928,7 +941,7 @@ export async function buildProxyBillingDetails(input: EstimateProxyCostInput): P
   try {
     if (input.billingPricingOverride) {
       const pricingOverride = buildPricingOverrideModel(input.modelName, input.billingPricingOverride);
-      return calculateModelUsageBreakdown(pricingOverride.model, usage, pricingOverride.groupRatio);
+      return calculateModelUsageBreakdown(pricingOverride.model, usage, pricingOverride.groupRatio, input.tokenGroup);
     }
 
     const pricingData = await getPricingDataCached(input);
@@ -941,7 +954,7 @@ export async function buildProxyBillingDetails(input: EstimateProxyCostInput): P
       return buildModelsDevBillingDetails(input.modelName, usage);
     }
 
-    return calculateModelUsageBreakdown(model, usage, pricingData.groupRatio);
+    return calculateModelUsageBreakdown(model, usage, pricingData.groupRatio, input.tokenGroup);
   } catch {
     return null;
   }

@@ -43,6 +43,7 @@ type SurfaceSelectedChannel = {
   actualModel?: string | null;
   requestOverrideRules?: unknown;
   routeId?: number | null;
+  tokenGroup?: string | null;
 };
 
 type SurfaceFailureResponse = {
@@ -489,6 +490,10 @@ export async function recordSurfaceSuccess(input: {
       modelName: input.modelName,
       parsedUsage: input.parsedUsage,
       resolvedUsage,
+      // The token row carries the upstream group binding (synced from
+      // /api/token/); prefer it over the model's enableGroups ordering.
+      tokenGroup: (input.selected as { token?: { tokenGroup?: string | null } | null }).token?.tokenGroup
+        ?? input.selected.tokenGroup ?? null,
     });
     estimatedCost = billing.estimatedCost;
     billingDetails = billing.billingDetails;
