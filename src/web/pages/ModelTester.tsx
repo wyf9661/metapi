@@ -206,7 +206,7 @@ export default function ModelTester() {
   const probeOk = probing ? null : (probeResult ? probeResult.ok : null);
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
+    <div className="animate-fade-in" style={{ padding: '0 8%' }}>
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div>
           <h2 className="page-title">{tr('模型检测')}</h2>

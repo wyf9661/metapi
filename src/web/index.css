@@ -16,6 +16,7 @@
   --color-text-muted: oklch(0.580 0.014 80);
   --color-primary: oklch(0.545 0.088 187);
   --color-primary-light: oklch(0.945 0.026 187);
+  --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
   --color-primary-hover: oklch(0.470 0.092 187);
   --color-success: oklch(0.580 0.100 152);
   --color-success-soft: oklch(0.950 0.030 152);
@@ -55,6 +56,7 @@
   --color-text-muted: oklch(0.660 0.014 90);
   --color-primary: oklch(0.700 0.098 187);
   --color-primary-light: oklch(0.300 0.030 187);
+  --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
   --color-primary-hover: oklch(0.770 0.090 187);
   --color-success: oklch(0.720 0.110 152);
   --color-success-soft: oklch(0.290 0.040 152);
@@ -578,7 +580,7 @@ html[data-layout="desktop"] .main-content {
 .topbar-nav a.active,
 .topbar-nav-item.active {
   color: var(--color-primary);
-  background: var(--color-primary-light);
+  background: var(--color-selection-bg);
 }
 
 .topbar-right {
@@ -771,7 +773,7 @@ html[data-layout="desktop"] .main-content {
 
 .sidebar-item.active {
   color: var(--color-primary);
-  background: var(--color-primary-light);
+  background: var(--color-selection-bg);
   font-weight: 600;
 }
 
@@ -7529,56 +7531,113 @@ textarea {
 }
 
 
-/* Dashboard public tunnel card */
-.dashboard-tunnel-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 168px;
-  gap: 14px;
-  align-items: stretch;
+/* Dashboard endpoint card */
+.dashboard-endpoint-card {
+  min-width: 0;
 }
 
-.dashboard-tunnel-actions {
+.dashboard-endpoint-rows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  align-self: stretch;
-  height: 100%;
+  gap: 8px;
 }
 
-.dashboard-tunnel-action-btn {
-  width: 100%;
-  flex: 1 1 0;
-  min-height: 56px;
-  padding: 14px 12px;
-  font-size: 14px;
-  font-weight: 700;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+.dashboard-endpoint-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.dashboard-endpoint-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  line-height: 1.35;
-  box-sizing: border-box;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
 }
 
-.dashboard-tunnel-action-placeholder {
-  visibility: hidden;
-  pointer-events: none;
+.dashboard-endpoint-label.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg));
+  color: var(--color-primary);
 }
 
-.dashboard-tunnel-action-locked {
-  background: var(--color-warning-soft);
-  color: var(--color-warning);
-  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
-  cursor: default;
-  user-select: none;
+.dashboard-endpoint-value {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-endpoint-status {
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-weight: 400;
+}
+
+.dashboard-endpoint-status.is-error {
+  color: var(--color-danger);
+}
+
+.dashboard-endpoint-copy,
+.dashboard-endpoint-action {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.dashboard-endpoint-copy-placeholder,
+.dashboard-endpoint-action-placeholder {
+  display: block;
+  width: 64px;
+  height: 40px;
+}
+
+.dashboard-endpoint-action-placeholder {
+  width: 56px;
+}
+
+.dashboard-endpoint-secondary-url {
+  margin: -2px 0 0 96px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
-  .dashboard-tunnel-card {
-    grid-template-columns: 1fr;
+  .dashboard-endpoint-row {
+    grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  }
+
+  .dashboard-endpoint-label {
+    padding: 0 6px;
+  }
+
+  .dashboard-endpoint-secondary-url {
+    margin-left: 72px;
   }
 }
 

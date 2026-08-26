@@ -90,10 +90,8 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   const labelColor = useThemeLabelColor();
   const isMobile = useIsMobile();
 
-  // 横向柱状图：每站点一行，按值降序
-  const ROW_HEIGHT = 30; // 每行条形高度（含间距）
-  const AXIS_RESERVE = 44; // x 轴标签预留
-
+  // 横向柱状图：每站点一行，按值降序。图区固定 344px 与趋势图对齐，
+  // 柱子粗细由 barMaxWidth 限制，站点少时留白而非撑粗。
   const chartData = useMemo(() => {
     const rows = (data ?? [])
       .map((item: any) => ({
@@ -109,9 +107,6 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
   }, [data, viewMode]);
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
-
-  // Rows = min(10, data length), no scrolling needed for small lists.
-  const chartHeight = chartData.length * ROW_HEIGHT + AXIS_RESERVE;
 
   const BAR_COLORS = [
     '#0d9488', '#06b6d4', '#10b981', '#f59e0b',
@@ -139,6 +134,9 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       xField: 'value',
       yField: 'siteName',
       direction: 'horizontal' as const,
+      // Cap bar thickness so a short site list doesn't stretch bars to fill
+      // the fixed 344px plot height — extra space stays as row gaps.
+      barMaxWidth: 22,
       bar: {
         style: {
           cornerRadius: 3,
@@ -338,10 +336,14 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
             style={{
               width: '100%',
               flexShrink: 1,
-              minHeight: 0,
+              // Keep the plot region at least as tall as the trend chart's
+              // fixed 344px so the card doesn't resize when toggling between
+              // "站点分布" and "站点趋势". The inner bar chart still sizes to
+              // its rows; short lists just leave breathing room below.
+              minHeight: 344,
             }}
           >
-            <div style={{ width: '100%', height: chartHeight }}>
+            <div style={{ width: '100%', height: 344 }}>
               {spec && <VChart spec={spec} style={{ width: '100%', height: '100%' }} />}
             </div>
           </div>

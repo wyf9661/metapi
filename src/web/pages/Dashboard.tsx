@@ -426,28 +426,10 @@ export default function Dashboard({
         // 跟随当前访问地址：服务端 host 可能是 0.0.0.0/127.0.0.1，
         // 用户从局域网 IP 登录时应显示该 IP 而不是 localhost。
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        setLocalAddress({ baseUrl: origin || `http://127.0.0.1:${info.port}`, port: info.port });
+        setLocalAddress({ baseUrl: `${origin || `http://127.0.0.1:${info.port}`}/v1`, port: info.port });
       })
       .catch(() => setLocalAddress(null));
   }, []);
-
-  const handleToggleDashboardAccess = async (next: boolean) => {
-    if (isTunnelClientView) {
-      toast.error('通过公网隧道时不允许修改该选项，请在本机控制台操作');
-      return;
-    }
-    const prev = !!tunnel?.dashboardAccess;
-    setTunnel((current: any) => ({ ...(current || {}), dashboardAccess: next }));
-    try {
-      const res = await api.setTunnelDashboardAccess(next) as any;
-      setTunnel(res?.tunnel || { ...(tunnel || {}), dashboardAccess: next });
-      toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
-    } catch (err) {
-      const errMessage = err instanceof Error ? err.message : String(err);
-      setTunnel((current: any) => ({ ...(current || {}), dashboardAccess: prev }));
-      toast.error(errMessage || '更新失败');
-    }
-  };
 
   const handleToggleTunnel = async () => {
     if (isTunnelClientView) {
@@ -928,161 +910,84 @@ export default function Dashboard({
           </ol>
         </div>
       )}
-      {localAddress ? (
-        <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>本地服务地址</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-            在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用
-          </div>
-          <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-            <code style={{ flex: 1, padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)' }}>
-              {localAddress.baseUrl}
-            </code>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}
-              onClick={() => {
-                copyText(localAddress.baseUrl)
-                  .then(() => { toast.success('地址已复制'); })
-                  .catch(() => { toast.error('复制失败'); });
-              }}
-            >
-              复制
-            </button>
-          </div>
+      <div className="card dashboard-endpoint-card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>
+          服务地址
         </div>
-      ) : null}
-      <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
-        <div className="dashboard-tunnel-card">
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>公网隧道</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-              基于 Cloudflare Quick Tunnel。Quick URL 会变，但会注册固定公网地址（重启后尽量保持不变）。默认仅暴露 API。
-            </div>
-            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-              <span className={`badge ${(tunnel?.running || tunnel?.enabled) ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11, fontWeight: 700 }}>
-                {(tunnel?.running || tunnel?.enabled) ? '运行中' : '未启用'}
-              </span>
-              <span className={`badge ${tunnel?.dashboardAccess ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11, fontWeight: 600 }}>
-                {tunnel?.dashboardAccess ? '控制台+API' : '仅 API'}
-              </span>
-              {tunnel?.shortId ? (
-                <span className="badge badge-muted" style={{ fontSize: 11, fontWeight: 600 }}>
-                  ID {tunnel.shortId}
-                </span>
-              ) : null}
-              {tunnel?.downloading ? (
-                <span className="badge badge-warning" style={{ fontSize: 11 }}>
-                  下载 cloudflared{typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '...'}
-                </span>
-              ) : null}
-            </div>
-            <label style={{
-              marginTop: 12,
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: 12,
-              padding: '10px 12px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-bg)',
-              cursor: isTunnelClientView ? 'not-allowed' : 'pointer',
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                  允许通过隧道访问控制台
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-                  {isTunnelClientView
-                    ? '当前正通过公网隧道访问，无法修改此选项。请在本机/内网控制台切换。'
-                    : '关闭=公网只走 API（/v1/*）；开启=可用隧道 URL 打开控制页（仍需管理员登录）'}
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={!!tunnel?.dashboardAccess}
-                disabled={isTunnelClientView}
-                onChange={(e) => { void handleToggleDashboardAccess(e.target.checked); }}
-                style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
-              />
-            </label>
-            {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>公网地址</div>
-                <code style={{
-                  display: 'block',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: '12px 14px',
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--color-text-primary)',
-                  wordBreak: 'break-all',
-                  lineHeight: 1.5,
-                }}>
-                  {tunnel?.publicUrl || tunnel?.tunnelUrl}
-                </code>
-                {tunnel?.tunnelUrl && tunnel?.publicUrl && tunnel.tunnelUrl !== tunnel.publicUrl ? (
-                  <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-muted)', wordBreak: 'break-all' }}>
-                    直连：{tunnel.tunnelUrl}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {tunnelError || tunnel?.lastError ? (
-              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-danger)' }}>
-                {tunnelError || tunnel?.lastError}
-              </div>
-            ) : null}
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+          在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用
+        </div>
+        <div className="dashboard-endpoint-rows">
+          <div className="dashboard-endpoint-row">
+            <span className="dashboard-endpoint-label">本地</span>
+            {localAddress ? (
+              <code className="dashboard-endpoint-value">{localAddress.baseUrl}</code>
+            ) : (
+              <div className="dashboard-endpoint-value dashboard-endpoint-status">加载中...</div>
+            )}
+            {localAddress ? (
+              <button
+                type="button"
+                className="btn btn-ghost dashboard-endpoint-copy"
+                onClick={() => {
+                  copyText(localAddress.baseUrl)
+                    .then(() => { toast.success('地址已复制'); })
+                    .catch(() => { toast.error('复制失败'); });
+                }}
+              >
+                复制
+              </button>
+            ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
           </div>
-          <div className="dashboard-tunnel-actions">
+
+          <div className="dashboard-endpoint-row">
+            <span className={`dashboard-endpoint-label ${
+              (tunnel?.running || tunnel?.enabled) ? 'is-active' : ''
+            }`}>隧道</span>
+            {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
+              <code className="dashboard-endpoint-value">
+                {`${tunnel.publicUrl || tunnel.tunnelUrl}/v1`}
+              </code>
+            ) : (
+              <div className={`dashboard-endpoint-value dashboard-endpoint-status ${tunnel?.lastError || tunnelError ? 'is-error' : ''}`}>
+                {tunnel?.downloading
+                  ? `下载 cloudflared${typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '...'}`
+                  : tunnel?.lastError || tunnelError || ((tunnel?.running || tunnel?.enabled) ? '正在检查隧道...' : '未启用')}
+              </div>
+            )}
             {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
               <button
                 type="button"
-                className="btn btn-ghost dashboard-tunnel-action-btn"
+                className="btn btn-ghost dashboard-endpoint-copy"
                 onClick={async () => {
-                  const url = String(tunnel?.publicUrl || tunnel?.tunnelUrl || '');
+                  const url = `${tunnel.publicUrl || tunnel.tunnelUrl}/v1`;
                   try {
                     await copyText(url);
-                    toast.success('已复制公网地址');
+                    toast.success('已复制隧道地址');
                   } catch {
                     toast.error('复制失败');
                   }
                 }}
               >
-                复制地址
+                复制
               </button>
-            ) : (
-              <div className="dashboard-tunnel-action-btn dashboard-tunnel-action-placeholder" aria-hidden>
-                复制地址
-              </div>
-            )}
+            ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
             {!isTunnelClientView ? (
               <button
                 type="button"
-                className={`btn dashboard-tunnel-action-btn ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
+                className={`btn dashboard-endpoint-action ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
                 disabled={tunnelBusy}
                 onClick={() => { void handleToggleTunnel(); }}
               >
-                {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭隧道' : '创建隧道')}
+                {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭' : '创建')}
               </button>
             ) : (
-              <div
-                className="btn dashboard-tunnel-action-btn dashboard-tunnel-action-locked"
-                role="status"
-                aria-label="隧道访问中，不可关闭隧道"
-              >
-                隧道访问中
-                <br />
-                不可关闭隧道
-              </div>
+              <span className="dashboard-endpoint-action-placeholder" aria-hidden />
             )}
           </div>
+          {tunnel?.tunnelUrl && tunnel?.publicUrl && tunnel.tunnelUrl !== tunnel.publicUrl ? (
+            <div className="dashboard-endpoint-secondary-url">直连：{tunnel.tunnelUrl}/v1</div>
+          ) : null}
         </div>
       </div>
 

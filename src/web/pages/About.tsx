@@ -72,7 +72,7 @@ export default function About() {
   }, []);
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: 860 }}>
+    <div className="animate-fade-in">
       {/* Header */}
       <div className="page-header" style={{ marginBottom: 14 }}>
         <h2 className="page-title">{tr('关于 Metapi')}</h2>
