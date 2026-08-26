@@ -34,6 +34,7 @@ import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService
 import { buildStartupSummaryLines } from './services/startupInfo.js';
 import { repairStoredCreatedAtValues } from './services/storedTimestampRepairService.js';
 import { migrateSiteApiKeysToAccounts } from './services/siteApiKeyMigrationService.js';
+import { stopDispatcherCacheSweep } from './services/siteProxy.js';
 
 function installProcessCrashHandlers(): void {
   const crashLog = (kind: string, error: unknown) => {
@@ -285,7 +286,7 @@ app.addHook('onSend', async (request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('X-Frame-Options', 'DENY');
   reply.header('Referrer-Policy', 'no-referrer');
-  reply.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self' ws: wss:");
+  reply.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'" + (process.env.NODE_ENV === 'development' ? ' ws: wss:' : ''));
   const isIconProxyPath = urlPath === '/api/site-favicon' || urlPath === '/api/brand-icon';
   if (urlPath.startsWith('/api/') && !isIconProxyPath) {
     reply.header('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -391,6 +392,7 @@ app.addHook('onClose', async () => {
   await stopSub2ApiManagedRefreshScheduler();
   await stopOauthTokenRefreshScheduler();
   await stopOAuthLoopbackCallbackServers();
+  stopDispatcherCacheSweep();
 });
 
 // Start server

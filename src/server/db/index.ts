@@ -1674,9 +1674,9 @@ function initDb(): AppDb {
 
 let activeDb: AppDb = initDb();
 
-export const db: any = new Proxy({}, {
+export const db: AppDb = new Proxy({} as AppDb, {
   get(_target, prop) {
-    return (activeDb as any)?.[prop as keyof typeof activeDb];
+    return activeDb[prop as keyof AppDb];
   },
 });
 export { schema };

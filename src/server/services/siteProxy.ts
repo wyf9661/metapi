@@ -55,6 +55,19 @@ function ensureDispatcherCacheSweep(): void {
   }, DISPATCHER_CACHE_SWEEP_MS);
   dispatcherCacheSweepTimer.unref?.();
 }
+
+/** Stop the dispatcher cache sweep timer and close all cached dispatchers.
+ *  Called during graceful shutdown to release proxy sockets. */
+export function stopDispatcherCacheSweep(): void {
+  if (dispatcherCacheSweepTimer) {
+    clearInterval(dispatcherCacheSweepTimer);
+    dispatcherCacheSweepTimer = null;
+  }
+  for (const [, entry] of dispatcherCache.entries()) {
+    closeDispatcherIfPossible(entry.dispatcher);
+  }
+  dispatcherCache.clear();
+}
 const SUPPORTED_PROXY_PROTOCOLS = new Set([
   'http:',
   'https:',

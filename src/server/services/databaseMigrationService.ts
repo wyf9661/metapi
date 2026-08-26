@@ -234,6 +234,12 @@ export function maskConnectionString(connectionString: string): string {
 }
 
 function quoteIdent(dialect: MigrationDialect, identifier: string): string {
+  // Validate the identifier to prevent SQL injection through table/column
+  // names. All current call sites pass hard-coded literals, but a future
+  // dynamic path could introduce user-controlled input.
+  if (!/^[a-z_][a-z0-9_]*$/i.test(identifier)) {
+    throw new Error(`Invalid SQL identifier: ${identifier}`);
+  }
   return dialect === 'mysql' ? `\`${identifier}\`` : `"${identifier}"`;
 }
 
