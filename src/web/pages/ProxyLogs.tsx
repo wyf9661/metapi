@@ -2237,7 +2237,7 @@ export default function ProxyLogs() {
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth={2.5}
+                            strokeWidth={2}
                             d="M9 5l7 7-7 7"
                           />
                         </svg>
@@ -2385,7 +2385,7 @@ export default function ProxyLogs() {
                     </tr>
                     {expanded === log.id && (
                       <tr style={{ background: 'var(--color-bg)' }}>
-                        <td colSpan={11} style={{ padding: 0 }}>
+                        <td colSpan={12} style={{ padding: 0, background: 'var(--color-bg)' }}>
                           <div className="anim-collapse is-open">
                             <div className="anim-collapse-inner">
                               <div
