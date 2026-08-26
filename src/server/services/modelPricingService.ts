@@ -941,7 +941,7 @@ export async function buildProxyBillingDetails(input: EstimateProxyCostInput): P
   try {
     if (input.billingPricingOverride) {
       const pricingOverride = buildPricingOverrideModel(input.modelName, input.billingPricingOverride);
-      return calculateModelUsageBreakdown(pricingOverride.model, usage, pricingOverride.groupRatio);
+      return calculateModelUsageBreakdown(pricingOverride.model, usage, pricingOverride.groupRatio, input.tokenGroup);
     }
 
     const pricingData = await getPricingDataCached(input);
@@ -954,7 +954,7 @@ export async function buildProxyBillingDetails(input: EstimateProxyCostInput): P
       return buildModelsDevBillingDetails(input.modelName, usage);
     }
 
-    return calculateModelUsageBreakdown(model, usage, pricingData.groupRatio);
+    return calculateModelUsageBreakdown(model, usage, pricingData.groupRatio, input.tokenGroup);
   } catch {
     return null;
   }

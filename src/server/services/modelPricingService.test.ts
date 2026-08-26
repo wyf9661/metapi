@@ -69,6 +69,27 @@ describe('modelPricingService', () => {
     expect(withTokenGroup).toBeLessThan(withoutTokenGroup);
   });
 
+  it('passes tokenGroup through calculateModelUsageBreakdown', () => {
+    // The list view shows breakdown.totalCost — it must honour the token
+    // binding too, not just the standalone estimateProxyCost number.
+    const details = calculateModelUsageBreakdown(
+      {
+        modelName: 'glm-5.2',
+        quotaType: 0,
+        modelRatio: 0.7,
+        completionRatio: 3.142857,
+        cacheRatio: 1,
+        cacheCreationRatio: 1,
+        modelPrice: null,
+        enableGroups: ['default', 'vercel glm'],
+      },
+      { promptTokens: 585, completionTokens: 289, totalTokens: 874 },
+      { default: 4, 'vercel glm': 0.1 },
+      'vercel glm',
+    );
+    expect(details?.pricing.groupRatio).toBe(0.1);
+  });
+
   it('falls back to total tokens when split token usage is missing', () => {
     const model: PricingModel = {
       modelName: 'claude-sonnet',
