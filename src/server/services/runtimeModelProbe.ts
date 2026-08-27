@@ -9,7 +9,7 @@ import {
   type UpstreamEndpoint,
 } from './upstreamEndpointRuntime.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/orchestration/endpointFlow.js';
-import { readRuntimeResponseText } from '../proxy-core/executors/types.js';
+import { readRuntimeResponseText, type RuntimeResponse } from '../proxy-core/executors/types.js';
 import {
   collectResponsesFinalPayloadFromSseText,
   looksLikeResponsesSseText,
@@ -172,6 +172,207 @@ function foldChatSseToMinimalJson(text: string): string | null {
     choices: [{ message: { content: parts.join('') } }],
     ...(usage ? { usage } : {}),
   });
+}
+
+/** 统一折叠测活响应文本:Responses SSE → 最终 payload;chat SSE → 最小 JSON;否则原样。 */
+function foldProbeResponseText(rawText: string, modelName: string): string {
+  if (looksLikeResponsesSseText(rawText)) {
+    try {
+      return JSON.stringify(collectResponsesFinalPayloadFromSseText(rawText, modelName).payload);
+    } catch {
+      return rawText;
+    }
+  }
+  return foldChatSseToMinimalJson(rawText) ?? rawText;
+}
+
+/** 在 SSE buffer 中查找第一个携带实际内容的 data 行(增量扫描,返回相对 startedAt 的延迟 ms)。 */
+function firstContentDeltaLatencyMs(buffer: string, startedAtMs: number): number | null {
+  let searchFrom = 0;
+  while (searchFrom < buffer.length) {
+    const lineEnd = buffer.indexOf('\n', searchFrom);
+    const line = lineEnd === -1 ? buffer.slice(searchFrom) : buffer.slice(searchFrom, lineEnd);
+    const trimmed = line.trim();
+    searchFrom = lineEnd === -1 ? buffer.length : lineEnd + 1;
+    if (!trimmed.startsWith('data:')) continue;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === '[DONE]') continue;
+    try {
+      const obj = JSON.parse(payload) as Record<string, unknown>;
+      if (obj.error) return Date.now() - startedAtMs === 0 ? 1 : Date.now() - startedAtMs;
+      if (obj.type === 'response.output_text.delta' && typeof obj.delta === 'string' && obj.delta) {
+        return Math.max(1, Date.now() - startedAtMs);
+      }
+      const choice = (obj.choices as Array<Record<string, unknown>> | undefined)?.[0];
+      const delta = choice?.delta as Record<string, unknown> | undefined;
+      // 推理模型的 reasoning_content 也是「开始响应」的信号(content 可能长时间为 null)
+      const content = delta?.content ?? delta?.text ?? delta?.reasoning_content;
+      if (typeof content === 'string' && content.trim()) {
+        return Math.max(1, Date.now() - startedAtMs);
+      }
+      if (obj.type === 'content_block_delta') {
+        const blockDelta = obj.delta as Record<string, unknown> | undefined;
+        if (blockDelta && typeof blockDelta.text === 'string' && blockDelta.text) {
+          return Math.max(1, Date.now() - startedAtMs);
+        }
+      }
+    } catch {
+      // 忽略非 JSON 行
+    }
+  }
+  return null;
+}
+
+/** 整体 JSON 响应(上游无视 stream:true,或单块到达的完整响应)的内容检测。 */
+function firstJsonContentLatencyMs(buffer: string, startedAtMs: number): number | null {
+  const trimmed = buffer.trim();
+  if (!trimmed.startsWith('{')) return null;
+  try {
+    const whole = JSON.parse(trimmed) as Record<string, unknown>;
+    if (whole.error) return null;
+    if (typeof whole.output_text === 'string' && whole.output_text.trim()) {
+      return Math.max(1, Date.now() - startedAtMs);
+    }
+    const choices = whole.choices as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(choices)) {
+      const content = (choices[0] as Record<string, unknown> | undefined)?.message as Record<string, unknown> | undefined;
+      if (content && typeof content.content === 'string' && content.content.trim()) {
+        return Math.max(1, Date.now() - startedAtMs);
+      }
+    }
+    if (Array.isArray(whole.output) && whole.output.length > 0) {
+      return Math.max(1, Date.now() - startedAtMs);
+    }
+    if (Array.isArray(whole.content) && whole.content.length > 0) {
+      return Math.max(1, Date.now() - startedAtMs);
+    }
+  } catch {
+    // 不完整 JSON 或非 JSON
+  }
+  return null;
+}
+
+/** 从 buffer 提取流内错误(SSE data 行的 error 对象,或整体 JSON 的 error)。 */
+function extractSseOrJsonError(buffer: string): string | null {
+  for (const line of buffer.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('data:')) {
+      const payload = trimmed.slice(5).trim();
+      if (!payload) continue;
+      try {
+        const obj = JSON.parse(payload) as Record<string, unknown>;
+        if (obj.error) {
+          const err = obj.error as Record<string, unknown> | string;
+          return typeof err === 'string' ? err : String(err.message || JSON.stringify(err));
+        }
+      } catch {
+        // 忽略
+      }
+    }
+  }
+  try {
+    const whole = JSON.parse(buffer.trim()) as Record<string, unknown>;
+    if (whole.error) {
+      const err = whole.error as Record<string, unknown> | string;
+      return typeof err === 'string' ? err : String(err.message || JSON.stringify(err));
+    }
+  } catch {
+    // 非整体 JSON
+  }
+  return null;
+}
+
+const MAX_PROBE_RESPONSE_CHARS = 96 * 1024;
+
+/**
+ * 流式读取上游响应,直到:
+ * - 首个携带内容的 data chunk 到达(判定成功,返回 ttftMs)
+ * - 检测到错误(返回 error)
+ * - 流读完或超时(返回 done/text 由调用方走旧逻辑)
+ * content-encoding 非空或无可读流时退避完整读取(readRuntimeResponseText 处理解压)。
+ */
+async function probeStreamFirstChunk(
+  response: RuntimeResponse,
+  timeoutMs: number,
+): Promise<{
+  reader: ReadableStreamDefaultReader<Uint8Array> | null;
+  text: string;
+  ttftMs: number | null;
+  done: boolean;
+  error: string | null;
+}> {
+  const encoding = typeof response.headers?.get === 'function'
+    ? response.headers.get('content-encoding')
+    : null;
+  if (encoding) {
+    const full = await readRuntimeResponseText(response as unknown as RuntimeResponse).catch(() => '');
+    return { reader: null, text: full, ttftMs: null, done: true, error: null };
+  }
+  const reader = response.body?.getReader?.() as ReadableStreamDefaultReader<Uint8Array> | undefined;
+  if (!reader) {
+    const full = await readRuntimeResponseText(response as unknown as RuntimeResponse).catch(() => '');
+    return { reader: null, text: full, ttftMs: null, done: true, error: null };
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  let text = '';
+  const startedAtMs = Date.now();
+  const deadlineMs = startedAtMs + Math.max(1, timeoutMs);
+  while (Date.now() < deadlineMs) {
+    const { value, done } = await reader.read();
+    if (done) {
+      if (!text) {
+        // 流未提供数据(测试 mock/异常响应):回退 text() 完整读取
+        const full = await readRuntimeResponseText(response).catch(() => '');
+        const jsonTtft = firstJsonContentLatencyMs(full, startedAtMs);
+        if (jsonTtft != null) {
+          return { reader: null, text: full, ttftMs: jsonTtft, done: true, error: null };
+        }
+        return { reader: null, text: full, ttftMs: null, done: true, error: extractSseOrJsonError(full) };
+      }
+      // 流读完:整体 JSON 内容判定(非 SSE 响应)
+      const jsonTtft = firstJsonContentLatencyMs(text, startedAtMs);
+      if (jsonTtft != null) {
+        return { reader, text, ttftMs: jsonTtft, done: true, error: null };
+      }
+      return { reader, text, ttftMs: null, done: true, error: extractSseOrJsonError(text) };
+    }
+    if (!value) continue;
+    const chunk = decoder.decode(value, { stream: true });
+    text += chunk;
+    if (text.length > MAX_PROBE_RESPONSE_CHARS) break;
+    const ttftMs = firstContentDeltaLatencyMs(text, startedAtMs)
+      ?? firstJsonContentLatencyMs(text, startedAtMs);
+    if (ttftMs != null) {
+      return { reader, text, ttftMs, done: false, error: null };
+    }
+    const error = extractSseOrJsonError(text);
+    if (error) {
+      return { reader, text, ttftMs: null, done: false, error };
+    }
+  }
+  return { reader, text, ttftMs: null, done: false, error: extractSseOrJsonError(text) };
+}
+
+/** 后台继续读完整流(用于写测活日志,不阻塞接口返回)。 */
+async function drainProbeStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: string,
+): Promise<string> {
+  const decoder = new TextDecoder('utf-8');
+  let text = prefix;
+  try {
+    while (text.length < MAX_PROBE_RESPONSE_CHARS) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      text += decoder.decode(value, { stream: true });
+    }
+  } catch {
+    // 后台收尾失败不影响测活结果
+  }
+  try { await reader.cancel(); } catch { /* ignore */ }
+  return text;
 }
 
 /**
@@ -450,42 +651,64 @@ export async function probeRuntimeModel(input: {
     const latencyMs = Date.now() - startedAt;
 
     if (result.ok) {
-      const rawResponseText = await readRuntimeResponseText(result.upstream).catch(() => undefined);
-      // 统一流式测活：上游响应是 SSE。Responses SSE 折叠为最终 payload，
-      // OpenAI chat SSE 折叠为最小 JSON，再走 JSON 提取器。
-      let responseText = rawResponseText;
-      if (rawResponseText && looksLikeResponsesSseText(rawResponseText)) {
-        try {
-          const folded = collectResponsesFinalPayloadFromSseText(rawResponseText, input.modelName);
-          responseText = JSON.stringify(folded.payload);
-        } catch {
-          responseText = rawResponseText;
-        }
-      } else if (rawResponseText) {
-        const foldedChat = foldChatSseToMinimalJson(rawResponseText);
-        if (foldedChat) {
-          responseText = foldedChat;
-        }
+      // 流式测活:首字(TTFT)即判定成功;HTTP 200 且流正常结束(无流内错误)
+      // 也判定成功(空响应/测试环境),后台收流写日志,不等数据接收完
+      const stream = await probeStreamFirstChunk(
+        result.upstream,
+        remainingExecutionTimeoutMs,
+      );
+      if (stream.ttftMs != null || (stream.done && !stream.error)) {
+        const probeLatencyMs = stream.ttftMs ?? latencyMs;
+        void (async () => {
+          try {
+            const fullText = stream.reader
+              ? await drainProbeStream(stream.reader, stream.text)
+              : stream.text;
+            const folded = foldProbeResponseText(fullText, input.modelName);
+            const tokensUsed = extractTokensFromResponse(folded);
+            await db.insert(probeLogs).values({
+              siteId: input.site.id,
+              accountId: input.account.id,
+              modelName: input.modelName,
+              questionCategory: probeQuestion.category,
+              questionText: probeQuestion.question,
+              responseText: extractAssistantText(folded) || null,
+              status: 'success',
+              latencyMs: probeLatencyMs,
+              tokensUsed,
+            }).catch((err: unknown) => console.error('[probe-log] Failed to insert probe log:', err));
+          } catch {
+            // 后台日志失败不影响测活结果
+          }
+        })();
+        return {
+          status: 'supported',
+          latencyMs: probeLatencyMs,
+          reason: stream.ttftMs != null ? 'probe succeeded (first token)' : 'probe succeeded',
+        };
       }
-      const tokensUsed = extractTokensFromResponse(responseText);
 
-      // 记录成功的测活日志
+      // 首包阶段未成功:用已读文本走失败判定(HTTP 2xx 但流内错误/无内容)
+      const streamError = stream.error || extractSseOrJsonError(stream.text);
+      const rawErrorText = String(streamError || '').trim();
+      const probeStatus = streamError ? 'unsupported' : 'inconclusive';
       await db.insert(probeLogs).values({
         siteId: input.site.id,
         accountId: input.account.id,
         modelName: input.modelName,
         questionCategory: probeQuestion.category,
         questionText: probeQuestion.question,
-        responseText: extractAssistantText(responseText) || null,
-        status: 'success',
+        responseText: null,
+        status: 'failed',
         latencyMs,
-        tokensUsed,
+        tokensUsed: null,
+        errorMessage: classifyProbeFailureReason(0, rawErrorText),
       }).catch((err: unknown) => console.error('[probe-log] Failed to insert probe log:', err));
 
       return {
-        status: 'supported',
+        status: probeStatus,
         latencyMs,
-        reason: 'probe succeeded',
+        reason: classifyProbeFailureReason(0, rawErrorText),
       };
     }
 
