@@ -219,7 +219,7 @@ export function buildRemoteProtocolBody(
       model: cleanedModel,
       max_tokens: tokens,
       messages: [{ role: 'user', content: cleanedPrompt }],
-      stream: false,
+      stream: true,
     };
   }
 
@@ -228,7 +228,7 @@ export function buildRemoteProtocolBody(
       model: cleanedModel,
       input: cleanedPrompt,
       max_output_tokens: tokens,
-      stream: false,
+      stream: true,
     };
   }
 
@@ -236,7 +236,7 @@ export function buildRemoteProtocolBody(
     model: cleanedModel,
     messages: [{ role: 'user', content: cleanedPrompt }],
     max_tokens: tokens,
-    stream: false,
+    stream: true,
   };
 }
 
@@ -340,6 +340,47 @@ function extractPreviewText(protocol: RemoteUpstreamProtocol, body: unknown): st
   }
 
   return '';
+}
+
+/**
+ * 统一流式后，上游响应是 SSE。从 data: 行提取生成的文本片段：
+ * - completion: choices[0].delta.content / delta.text
+ * - anthropic: content_block_delta.delta.text（含 thinking）
+ * - responses: response.output_text.delta.delta / response.done 前的内容
+ */
+function extractSsePreview(protocol: RemoteUpstreamProtocol, text: string): string {
+  const parts: string[] = [];
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === '[DONE]') continue;
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(payload) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (protocol === 'anthropic') {
+      if (obj.type === 'content_block_delta') {
+        const delta = obj.delta as Record<string, unknown> | undefined;
+        if (delta && typeof delta.text === 'string' && delta.text) parts.push(delta.text);
+      } else if (obj.type === 'message_delta') {
+        const delta = obj.delta as Record<string, unknown> | undefined;
+        if (delta && typeof delta.text === 'string' && delta.text) parts.push(delta.text);
+      }
+    } else if (protocol === 'responses') {
+      if (obj.type === 'response.output_text.delta' && typeof obj.delta === 'string' && obj.delta) {
+        parts.push(obj.delta);
+      }
+    } else {
+      const choice = (obj.choices as Array<Record<string, unknown>> | undefined)?.[0];
+      const delta = choice?.delta as Record<string, unknown> | undefined;
+      if (delta && typeof delta.content === 'string' && delta.content) parts.push(delta.content);
+      else if (delta && typeof delta.text === 'string' && delta.text) parts.push(delta.text);
+    }
+  }
+  return parts.join('').slice(0, 500);
 }
 
 function clampTimeout(timeoutMs: number | undefined): number {
@@ -528,6 +569,11 @@ export async function testRemoteUpstreamProtocol(
     timeoutMs,
   });
 
+  // 统一流式：响应体是 SSE，优先从 data: 行提取生成文本
+  const ssePreview = response.responseText
+    ? extractSsePreview(protocol, response.responseText)
+    : '';
+
   return {
     ok: response.ok,
     statusCode: response.statusCode,
@@ -538,7 +584,7 @@ export async function testRemoteUpstreamProtocol(
     responseHeaders: response.responseHeaders,
     responseBody: response.responseBody,
     responseText: response.responseText,
-    previewText: extractPreviewText(protocol, response.responseBody),
+    previewText: ssePreview || extractPreviewText(protocol, response.responseBody),
     error: response.error,
   };
 }

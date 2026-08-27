@@ -61,19 +61,19 @@ describe('remoteUpstreamTester helpers', () => {
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: 'hi' }],
       max_tokens: 8,
-      stream: false,
+      stream: true,
     });
     expect(buildRemoteProtocolBody('anthropic', 'claude-3-5-sonnet', 'hi', 8)).toEqual({
       model: 'claude-3-5-sonnet',
       max_tokens: 8,
       messages: [{ role: 'user', content: 'hi' }],
-      stream: false,
+      stream: true,
     });
     expect(buildRemoteProtocolBody('responses', 'gpt-5', 'hi', 8)).toEqual({
       model: 'gpt-5',
       input: 'hi',
       max_output_tokens: 8,
-      stream: false,
+      stream: true,
     });
   });
 

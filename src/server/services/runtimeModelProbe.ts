@@ -125,7 +125,7 @@ export function buildRuntimeProbeChatBody(
       },
       { role: 'user', content: questionText },
     ],
-    stream: false,
+    stream: true,
   };
   return body;
 }
@@ -133,6 +133,45 @@ export function buildRuntimeProbeChatBody(
 function buildProbeBody(modelName: string): { body: Record<string, unknown>, question: ProbeQuestion } {
   const question = getRandomProbeQuestion();
   return { body: buildRuntimeProbeChatBody(modelName, question.question), question };
+}
+
+/**
+ * OpenAI 兼容 Chat Completions SSE（data: {...} 行，[DONE] 结尾）折叠为
+ * 最小 JSON 响应（choices[0].message.content + usage），供后续提取器复用。
+ * 返回 null 表示不是有效的 chat SSE。
+ */
+function foldChatSseToMinimalJson(text: string): string | null {
+  const parts: string[] = [];
+  let usage: Record<string, unknown> | undefined;
+  let sawData = false;
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === '[DONE]') {
+      if (payload === '[DONE]') sawData = true;
+      continue;
+    }
+    try {
+      const obj = JSON.parse(payload) as Record<string, unknown>;
+      sawData = true;
+      const choice = (obj.choices as Array<Record<string, unknown>> | undefined)?.[0];
+      const delta = choice?.delta as Record<string, unknown> | undefined;
+      if (delta && typeof delta.content === 'string' && delta.content) {
+        parts.push(delta.content);
+      }
+      if (obj.usage && typeof obj.usage === 'object' && !Array.isArray(obj.usage)) {
+        usage = obj.usage as Record<string, unknown>;
+      }
+    } catch {
+      // 忽略非 JSON 行
+    }
+  }
+  if (!sawData) return null;
+  return JSON.stringify({
+    choices: [{ message: { content: parts.join('') } }],
+    ...(usage ? { usage } : {}),
+  });
 }
 
 /**
@@ -324,10 +363,9 @@ export async function probeRuntimeModel(input: {
       account: input.account,
       downstreamHeaders: {},
     });
-    // Codex upstream (chatgpt.com/backend-api/codex /responses) rejects
-    // non-streaming requests with "Stream must be set to true". Probe with
-    // stream=true on codex platforms and fold the SSE response below.
-    const probeStream = (input.site.platform || '').toLowerCase() === 'codex';
+    // 统一流式测活：所有平台 stream=true，首包即判定可用，且能拿到
+    // 真实生成内容。Codex /responses 与 OpenAI 兼容 SSE 分别折叠。
+    const probeStream = true;
     const { body: baseOpenaiBody, question: probeQuestion } = buildProbeBody(input.modelName);
     const openaiBody = { ...baseOpenaiBody, stream: probeStream };
     const channelProxyUrl = resolveChannelProxyUrl(input.site, input.account.extraConfig);
@@ -417,8 +455,8 @@ export async function probeRuntimeModel(input: {
 
     if (result.ok) {
       const rawResponseText = await readRuntimeResponseText(result.upstream).catch(() => undefined);
-      // Codex probes run with stream=true, so the upstream body is Responses
-      // SSE. Fold it into a final payload before the JSON-based extractors run.
+      // 统一流式测活：上游响应是 SSE。Responses SSE 折叠为最终 payload，
+      // OpenAI chat SSE 折叠为最小 JSON，再走 JSON 提取器。
       let responseText = rawResponseText;
       if (rawResponseText && looksLikeResponsesSseText(rawResponseText)) {
         try {
@@ -426,6 +464,11 @@ export async function probeRuntimeModel(input: {
           responseText = JSON.stringify(folded.payload);
         } catch {
           responseText = rawResponseText;
+        }
+      } else if (rawResponseText) {
+        const foldedChat = foldChatSseToMinimalJson(rawResponseText);
+        if (foldedChat) {
+          responseText = foldedChat;
         }
       }
       const tokensUsed = extractTokensFromResponse(responseText);
