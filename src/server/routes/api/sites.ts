@@ -27,6 +27,29 @@ import { probeSiteModels, rebuildTokenRoutesFromAvailability } from '../../servi
 import { clearModelsMarketplaceCache } from './stats.js';
 import { rebuildRoutesBestEffort } from '../../services/routeRefreshWorkflow.js';
 import { invalidateAccountsSnapshot } from '../../services/accountsOverviewService.js';
+
+/**
+ * 纯 OAuth 平台：站点仅由 OAuth 授权流程自动创建（9router 同款），
+ * 站点管理列表隐藏，由 OAuth 管理页管理。
+ * claude 不在其中——claude 支持手动添加（Anthropic 直连），
+ * 其 OAuth 自动站点靠 protocolProfile.isOauthManaged 标记识别。
+ */
+const OAUTH_ONLY_PLATFORMS = new Set([
+  'codex', 'gemini-cli', 'antigravity', 'grok', 'github', 'kimi',
+  'kilocode', 'qoder', 'cursor', 'gitlab', 'cline', 'clinepass',
+  'xai', 'iflow', 'trae', 'windsurf', 'zed',
+]);
+
+function isOauthManagedSiteRow(platform: string, protocolProfile: string | null): boolean {
+  if (OAUTH_ONLY_PLATFORMS.has(platform)) return true;
+  if (!protocolProfile) return false;
+  try {
+    const parsed = JSON.parse(protocolProfile) as { isOauthManaged?: boolean };
+    return parsed.isOauthManaged === true;
+  } catch {
+    return false;
+  }
+}
 import {
   lookupBrandIcon,
   lookupSiteFavicon,
@@ -514,7 +537,8 @@ export async function sitesRoutes(app: FastifyInstance) {
 
   // List all sites
   app.get('/api/sites', async () => {
-    const siteRows = await db.select().from(schema.sites).all();
+    const siteRows = (await db.select().from(schema.sites).all())
+      .filter((row) => !isOauthManagedSiteRow(row.platform, row.protocolProfile));
     const siteRowsWithApiEndpoints = await attachSiteApiEndpoints(siteRows);
     const accountRows = await db.select({
       id: schema.accounts.id,

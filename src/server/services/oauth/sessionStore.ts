@@ -17,6 +17,10 @@ export type OAuthSessionRecord = {
   rebindAccountId?: number;
   projectId?: string;
   proxyUrl?: string | null;
+  /** 设备码授权（device-code flow）：轮询设备码时使用 */
+  deviceCode?: string;
+  /** 设备码授权的平台附加数据（如 kimi 的 deviceId） */
+  deviceFlowExtra?: Record<string, unknown>;
 };
 
 export interface OAuthSessionStore {
@@ -26,6 +30,8 @@ export interface OAuthSessionStore {
     rebindAccountId?: number;
     projectId?: string;
     proxyUrl?: string | null;
+    deviceCode?: string;
+    deviceFlowExtra?: Record<string, unknown>;
   }): OAuthSessionRecord;
   get(state: string): OAuthSessionRecord | null;
   markSuccess(state: string, patch: { accountId: number; siteId: number }): OAuthSessionRecord | null;
@@ -68,6 +74,8 @@ class MemoryOAuthSessionStore implements OAuthSessionStore {
     rebindAccountId?: number;
     projectId?: string;
     proxyUrl?: string | null;
+    deviceCode?: string;
+    deviceFlowExtra?: Record<string, unknown>;
   }): OAuthSessionRecord {
     this.pruneExpiredSessions();
     const state = toBase64Url(randomBytes(24));
@@ -86,6 +94,8 @@ class MemoryOAuthSessionStore implements OAuthSessionStore {
       rebindAccountId: input.rebindAccountId,
       projectId: input.projectId,
       proxyUrl: input.proxyUrl,
+      ...(input.deviceCode ? { deviceCode: input.deviceCode } : {}),
+      ...(input.deviceFlowExtra ? { deviceFlowExtra: input.deviceFlowExtra } : {}),
     };
     this.sessions.set(state, record);
     return record;
@@ -146,6 +156,8 @@ export function createOauthSession(input: {
   rebindAccountId?: number;
   projectId?: string;
   proxyUrl?: string | null;
+  deviceCode?: string;
+  deviceFlowExtra?: Record<string, unknown>;
 }): OAuthSessionRecord {
   return oauthSessionStore.create(input);
 }

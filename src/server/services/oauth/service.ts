@@ -181,14 +181,24 @@ function decodeJwtPayload(token?: string): Record<string, unknown> | null {
 
 function mapImportedOauthProvider(platform: string): OAuthProviderId | null {
   const normalized = platform.trim().toLowerCase();
-  if (normalized === 'codex') return 'codex';
-  if (normalized === 'claude') return 'claude';
-  if (normalized === 'gemini-cli') return 'gemini-cli';
+  // Browser-auth providers
+  if (normalized === 'codex' || normalized === 'openai') return 'codex';
+  if (normalized === 'claude' || normalized === 'anthropic') return 'claude';
+  if (normalized === 'gemini-cli' || normalized === 'gemini') return 'gemini-cli';
   if (normalized === 'antigravity') return 'antigravity';
-  if (normalized === 'openai') return 'codex';
-  if (normalized === 'anthropic' || normalized === 'claude') return 'claude';
-  if (normalized === 'gemini' || normalized === 'gemini-cli') return 'gemini-cli';
-  if (normalized === 'antigravity') return 'antigravity';
+  // Import-only providers (9router 同款)
+  if (normalized === 'grok' || normalized === 'grok-cli' || normalized === 'xai') return 'grok';
+  if (normalized === 'github' || normalized === 'copilot') return 'github';
+  if (normalized === 'kimi' || normalized === 'moonshot') return 'kimi';
+  if (normalized === 'qoder') return 'qoder';
+  if (normalized === 'cursor') return 'cursor';
+  if (normalized === 'gitlab' || normalized === 'gitlab-duo') return 'gitlab';
+  if (normalized === 'kilocode') return 'kilocode';
+  if (normalized === 'cline' || normalized === 'clinepass') return 'cline';
+  if (normalized === 'iflow') return 'iflow';
+  if (normalized === 'trae') return 'trae';
+  if (normalized === 'windsurf' || normalized === 'codeium') return 'windsurf';
+  if (normalized === 'zed') return 'zed';
   return null;
 }
 
@@ -690,6 +700,37 @@ export async function startOauthProviderFlow(input: {
     throw new Error(`unsupported oauth provider: ${input.provider}`);
   }
   const redirectUri = definition.loopback.redirectUri;
+
+  // 设备码授权（device-code flow，9router 同款，如 KiloCode）：
+  // 服务端先向上游发起设备码，前端展示 verification URI + user code 并轮询 session。
+  if (definition.startDeviceFlow) {
+    const resolvedProxyUrl = input.proxyUrl
+      ? input.proxyUrl
+      : await resolveOauthProviderProxyUrl(input.provider);
+    const deviceFlow = await definition.startDeviceFlow({ proxyUrl: resolvedProxyUrl });
+    const session = createOauthSession({
+      provider: input.provider,
+      redirectUri,
+      rebindAccountId: input.rebindAccountId,
+      projectId: input.projectId,
+      proxyUrl: input.proxyUrl,
+      deviceCode: deviceFlow.deviceCode,
+      ...(deviceFlow.extra ? { deviceFlowExtra: deviceFlow.extra } : {}),
+    });
+    return {
+      provider: input.provider,
+      state: session.state,
+      authorizationUrl: deviceFlow.verificationUri,
+      deviceFlow: {
+        userCode: deviceFlow.userCode,
+        verificationUri: deviceFlow.verificationUri,
+        expiresIn: deviceFlow.expiresIn,
+        interval: deviceFlow.interval,
+      },
+      instructions: buildLoopbackInstructions(definition, input.requestOrigin),
+    };
+  }
+
   const callbackServerState = getOAuthLoopbackCallbackServerState(input.provider);
   if (callbackServerState.attempted && !callbackServerState.ready) {
     throw new Error(`${input.provider} oauth callback listener is unavailable: ${callbackServerState.error || 'unknown error'}`);
@@ -714,18 +755,56 @@ export async function startOauthProviderFlow(input: {
   };
 }
 
-export function getOauthSessionStatus(state: string) {
+export async function getOauthSessionStatus(state: string) {
   const session = getOauthSession(state);
   if (!session) return null;
+
+  // 设备码授权：每次查询时轮询上游状态（202 = pending，approved 后落库）
+  if (session.deviceCode && session.status === 'pending') {
+    const definition = getOAuthProviderDefinition(session.provider);
+    if (definition?.pollDeviceFlow) {
+      try {
+        const resolvedProxyUrl = session.proxyUrl
+          ? session.proxyUrl
+          : await resolveOauthProviderProxyUrl(session.provider);
+        const result = await definition.pollDeviceFlow({
+          deviceCode: session.deviceCode,
+          proxyUrl: resolvedProxyUrl,
+          ...(session.deviceFlowExtra ? { extra: session.deviceFlowExtra } : {}),
+        });
+        if (result.status === 'approved' && result.exchange) {
+          const persisted = await activatePersistedOauthAccount({
+            definition,
+            exchange: result.exchange,
+            rebindAccountId: session.rebindAccountId,
+            proxyUrl: resolvedProxyUrl,
+          });
+          if (persisted.account && persisted.site) {
+            markOauthSessionSuccess(state, {
+              accountId: persisted.account.id,
+              siteId: persisted.site.id,
+            });
+          }
+        } else if (result.status === 'denied' || result.status === 'expired' || result.status === 'error') {
+          markOauthSessionError(state, result.error || `${session.provider} 设备码授权失败`);
+        }
+      } catch (error) {
+        markOauthSessionError(state, error instanceof Error ? error.message : String(error));
+      }
+    }
+  }
+
+  const updated = getOauthSession(state);
+  if (!updated) return null;
   return {
-    provider: session.provider,
-    state: session.state,
-    status: session.status,
-    accountId: session.accountId,
-    siteId: session.siteId,
-    error: session.error,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
+    provider: updated.provider,
+    state: updated.state,
+    status: updated.status,
+    accountId: updated.accountId,
+    siteId: updated.siteId,
+    error: updated.error,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
   };
 }
 

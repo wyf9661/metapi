@@ -49,8 +49,8 @@ type NormalizedCodexQuotaHeaders = {
 };
 
 const CODEX_QUOTA_PROBE_MODEL = 'gpt-5.4';
-const CODEX_QUOTA_PROBE_VERSION = '0.101.0';
-const CODEX_QUOTA_PROBE_USER_AGENT = 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
+const CODEX_QUOTA_PROBE_VERSION = '0.149.1';
+const CODEX_QUOTA_PROBE_USER_AGENT = 'codex_cli_rs/0.149.1 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
 const CODEX_QUOTA_PROBE_BETA = 'responses-2025-03-11';
 const CODEX_QUOTA_PROBE_INSTRUCTIONS = 'You are a helpful assistant.';
 const CODEX_QUOTA_PROBE_TIMEOUT_MS = 10_000;
@@ -556,6 +556,158 @@ function buildCodexQuotaProbeUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/responses`;
 }
 
+// 9router 方案：官方用量端点 GET {origin}/backend-api/wham/usage 返回
+// { plan_type, rate_limit: { primary_window, secondary_window } }，比从
+// /responses 响应头推断更可靠（账号额度用尽时 /responses 可能直接 429，
+// 但 wham/usage 仍返回窗口用量）。
+const CODEX_WHAM_USAGE_PATH = '/backend-api/wham/usage';
+
+function buildCodexWhamUsageUrl(siteUrl: string): string | null {
+  const normalized = String(siteUrl || '').trim();
+  if (!normalized) return null;
+  try {
+    const parsed = new URL(normalized);
+    return `${parsed.origin}${CODEX_WHAM_USAGE_PATH}`;
+  } catch {
+    return null;
+  }
+}
+
+export { buildCodexWhamUsageUrl };
+
+type CodexWhamWindow = {
+  used_percent?: unknown;
+  percent_used?: unknown;
+  reset_at?: unknown;
+  resets_at?: unknown;
+  limit_reached?: unknown;
+};
+
+function parseCodexWhamWindow(window: unknown): OauthQuotaWindowSnapshot | null {
+  if (!window || typeof window !== 'object' || Array.isArray(window)) return null;
+  const raw = window as CodexWhamWindow;
+  const usedPercent = asFiniteNumber(raw.used_percent ?? raw.percent_used);
+  if (usedPercent === undefined) return null;
+  const clamped = Math.max(0, Math.min(100, Math.round(usedPercent)));
+  const resetRaw = asTrimmedString(raw.reset_at ?? raw.resets_at);
+  const resetAt = resetRaw ? asIsoDateTime(resetRaw) : undefined;
+  return {
+    supported: true,
+    used: clamped,
+    limit: 100,
+    remaining: Math.max(0, 100 - clamped),
+    ...(resetAt ? { resetAt } : {}),
+    ...(raw.limit_reached === true ? { message: 'codex usage limit reached' } : {}),
+  };
+}
+
+// 9router codex 用量响应（wham/usage GET）→ MetAPI quota windows
+function buildCodexWhamSnapshot(input: {
+  body: Record<string, unknown>;
+  oauth: Pick<OauthInfo, 'planType' | 'idToken' | 'quota'>;
+  syncedAt: string;
+}): OauthQuotaSnapshot | null {
+  const rateLimitBody = input.body.rate_limit ?? input.body.rate_limits;
+  if (!rateLimitBody || typeof rateLimitBody !== 'object' || Array.isArray(rateLimitBody)) {
+    return null;
+  }
+  const rateLimit = rateLimitBody as Record<string, unknown>;
+  const primaryRaw = rateLimit.primary_window ?? rateLimit.primary ?? input.body.primary_window ?? input.body.primary;
+  const secondaryRaw = rateLimit.secondary_window ?? rateLimit.secondary ?? input.body.secondary_window ?? input.body.secondary;
+  const fiveHour = parseCodexWhamWindow(primaryRaw);
+  const sevenDay = parseCodexWhamWindow(secondaryRaw);
+  if (!fiveHour && !sevenDay) return null;
+
+  const baseSnapshot = buildQuotaSnapshotFromOauthInfo({
+    provider: 'codex',
+    planType: input.oauth.planType,
+    idToken: input.oauth.idToken,
+    quota: input.oauth.quota,
+  });
+  const planType = asTrimmedString(input.body.plan_type ?? (input.body.summary as Record<string, unknown> | undefined)?.plan) || baseSnapshot.subscription?.planType;
+  const subscription = {
+    planType: planType || undefined,
+    activeStart: baseSnapshot.subscription?.activeStart,
+    activeUntil: baseSnapshot.subscription?.activeUntil,
+  };
+
+  return {
+    status: 'supported',
+    source: 'official',
+    lastSyncAt: input.syncedAt,
+    lastError: undefined,
+    providerMessage: 'codex usage windows fetched from official wham/usage endpoint',
+    ...(subscription.planType || subscription.activeStart || subscription.activeUntil ? { subscription } : {}),
+    windows: {
+      fiveHour: fiveHour ?? baseSnapshot.windows.fiveHour,
+      sevenDay: sevenDay ?? baseSnapshot.windows.sevenDay,
+    },
+  };
+}
+
+// 优先 wham/usage（9router 方案），失败回退 /responses 响应头推断。
+async function probeCodexQuotaWithWhamFirst(input: {
+  account: typeof schema.accounts.$inferSelect;
+  oauth: OauthInfo;
+  syncedAt: string;
+  site: typeof schema.sites.$inferSelect;
+  proxyUrl: string | null;
+}): Promise<OauthQuotaSnapshot | null> {
+  const accessToken = (input.account.accessToken || '').trim();
+  if (!accessToken) return null;
+
+  const usageUrl = buildCodexWhamUsageUrl(input.site.url);
+  if (!usageUrl) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CODEX_QUOTA_PROBE_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      usageUrl,
+      withExplicitProxyRequestInit(input.proxyUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+          'OpenAI-Beta': CODEX_QUOTA_PROBE_BETA,
+          Originator: 'codex_cli_rs',
+          'User-Agent': CODEX_QUOTA_PROBE_USER_AGENT,
+          ...(input.oauth.accountId || input.oauth.accountKey
+            ? { 'Chatgpt-Account-Id': input.oauth.accountId || input.oauth.accountKey }
+            : {}),
+        },
+        signal: controller.signal,
+      }),
+    );
+    if (!response) {
+      return null;
+    }
+    if (!response.ok) {
+      if (controller.signal.aborted) {
+        throw new Error(`codex wham/usage probe timeout (${Math.round(CODEX_QUOTA_PROBE_TIMEOUT_MS / 1000)}s)`);
+      }
+      return null;
+    }
+    const text = await response.text().catch(() => '');
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+    const snapshot = buildCodexWhamSnapshot({ body, oauth: input.oauth, syncedAt: input.syncedAt });
+    if (snapshot) {
+      void Promise.resolve((response as { body?: { cancel?: () => Promise<void> | void } }).body?.cancel?.()).catch(() => {});
+      return snapshot;
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function buildCodexQuotaProbeHeaders(input: {
   accessToken: string;
   accountId?: string;
@@ -596,7 +748,7 @@ async function probeCodexQuotaSnapshot(input: {
   return runWithSiteApiEndpointPool(site, async (target) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CODEX_QUOTA_PROBE_TIMEOUT_MS);
-    let response: Awaited<ReturnType<typeof fetch>>;
+    let response: Awaited<ReturnType<typeof fetch>> | undefined;
     try {
       response = await fetch(
         buildCodexQuotaProbeUrl(target.baseUrl),
@@ -617,6 +769,13 @@ async function probeCodexQuotaSnapshot(input: {
       throw error;
     } finally {
       clearTimeout(timeout);
+    }
+    if (!response) {
+      return buildQuotaErrorSnapshot({
+        oauth: input.oauth,
+        message: 'codex quota probe returned no response',
+        syncedAt: input.syncedAt,
+      });
     }
 
     const snapshot = buildCodexQuotaSnapshotFromHeaders(input.oauth, response.headers, input.syncedAt);
@@ -657,11 +816,29 @@ export async function refreshOauthQuotaSnapshot(accountId: number): Promise<Oaut
   if (oauth.provider === 'codex') {
     const syncedAt = new Date().toISOString();
     try {
-      const snapshot = await probeCodexQuotaSnapshot({
-        account,
-        oauth,
-        syncedAt,
-      });
+      const site = await db.select().from(schema.sites).where(eq(schema.sites.id, account.siteId)).get();
+      const proxyUrl = site
+        ? await resolveOauthAccountProxyUrl({
+          siteId: account.siteId,
+          extraConfig: account.extraConfig,
+        })
+        : null;
+      // 9router 方案优先：官方 wham/usage 用量端点（GET，账号额度用尽也能返回窗口用量）
+      const whamSnapshot = site
+        ? await probeCodexQuotaWithWhamFirst({
+          account,
+          oauth,
+          syncedAt,
+          site,
+          proxyUrl,
+        })
+        : null;
+      const snapshot = whamSnapshot
+        ?? await probeCodexQuotaSnapshot({
+          account,
+          oauth,
+          syncedAt,
+        });
       return persistQuotaSnapshot(accountId, snapshot);
     } catch (error) {
       const message = error instanceof Error

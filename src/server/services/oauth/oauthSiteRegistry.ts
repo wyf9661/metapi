@@ -38,6 +38,8 @@ export async function ensureOauthProviderSite(definition: OAuthProviderDefinitio
         isPinned: false,
         globalWeight: 1,
         sortOrder: await getNextSiteSortOrder(),
+        // OAuth 自动创建的站点：站点管理列表隐藏，由 OAuth 管理页管理
+        protocolProfile: JSON.stringify({ isOauthManaged: true }),
       },
       insertErrorMessage: `failed to create oauth provider site: ${definition.site.platform}`,
       loadErrorMessage: `failed to load created oauth provider site: ${definition.site.platform}`,

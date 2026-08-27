@@ -221,7 +221,7 @@ export async function oauthRoutes(app: FastifyInstance) {
     '/api/oauth/sessions/:state',
     { preHandler: [limitOauthSessionRead] },
     async (request, reply) => {
-      const session = getOauthSessionStatus(request.params.state);
+      const session = await getOauthSessionStatus(request.params.state);
       if (!session) {
         return reply.code(404).send({ message: 'oauth session not found' });
       }
