@@ -283,6 +283,38 @@ function extractSseOrJsonError(buffer: string): string | null {
 }
 
 const MAX_PROBE_RESPONSE_CHARS = 96 * 1024;
+/** 单次 reader.read() 超时：防止上游 socket pending 导致循环卡死。 */
+const PROBE_READ_TIMEOUT_MS = 30_000;
+/** 后台 drain 最大收尾时间：首字成功后不无限等流结束。 */
+const PROBE_DRAIN_TIMEOUT_MS = 15_000;
+
+/** 带单次超时的 reader.read()，超时后取消 reader 并返回 done。 */
+type TimedReadResult = {
+  result: ReadableStreamReadResult<Uint8Array>;
+  timedOut: boolean;
+};
+
+async function readChunkWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<TimedReadResult> {
+  if (timeoutMs <= 0) return { result: await reader.read(), timedOut: false };
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<TimedReadResult>((resolve) => {
+    timer = setTimeout(() => {
+      void reader.cancel().catch(() => {});
+      resolve({ result: { done: true, value: undefined }, timedOut: true });
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      reader.read().then((result) => ({ result, timedOut: false })),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /**
  * 流式读取上游响应,直到:
@@ -319,7 +351,12 @@ async function probeStreamFirstChunk(
   const startedAtMs = Date.now();
   const deadlineMs = startedAtMs + Math.max(1, timeoutMs);
   while (Date.now() < deadlineMs) {
-    const { value, done } = await reader.read();
+    const remaining = deadlineMs - Date.now();
+    const { result: chunkResult, timedOut } = await readChunkWithTimeout(reader, Math.min(PROBE_READ_TIMEOUT_MS, remaining));
+    const { value, done } = chunkResult;
+    if (done && timedOut) {
+      return { reader: null, text, ttftMs: null, done: false, error: 'probe stream read timeout' };
+    }
     if (done) {
       if (!text) {
         // 流未提供数据(测试 mock/异常响应):回退 text() 完整读取
@@ -328,14 +365,26 @@ async function probeStreamFirstChunk(
         if (jsonTtft != null) {
           return { reader: null, text: full, ttftMs: jsonTtft, done: true, error: null };
         }
-        return { reader: null, text: full, ttftMs: null, done: true, error: extractSseOrJsonError(full) };
+        return {
+          reader: null,
+          text: full,
+          ttftMs: null,
+          done: true,
+          error: timedOut ? 'probe stream read timeout' : extractSseOrJsonError(full),
+        };
       }
       // 流读完:整体 JSON 内容判定(非 SSE 响应)
       const jsonTtft = firstJsonContentLatencyMs(text, startedAtMs);
       if (jsonTtft != null) {
         return { reader, text, ttftMs: jsonTtft, done: true, error: null };
       }
-      return { reader, text, ttftMs: null, done: true, error: extractSseOrJsonError(text) };
+      return {
+        reader,
+        text,
+        ttftMs: null,
+        done: true,
+        error: timedOut ? 'probe stream read timeout' : extractSseOrJsonError(text),
+      };
     }
     if (!value) continue;
     const chunk = decoder.decode(value, { stream: true });
@@ -354,16 +403,19 @@ async function probeStreamFirstChunk(
   return { reader, text, ttftMs: null, done: false, error: extractSseOrJsonError(text) };
 }
 
-/** 后台继续读完整流(用于写测活日志,不阻塞接口返回)。 */
+/** 后台继续读完整流(用于写测活日志,不阻塞接口返回)。带最大收尾时间。 */
 async function drainProbeStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   prefix: string,
 ): Promise<string> {
   const decoder = new TextDecoder('utf-8');
   let text = prefix;
+  const deadlineMs = Date.now() + PROBE_DRAIN_TIMEOUT_MS;
   try {
-    while (text.length < MAX_PROBE_RESPONSE_CHARS) {
-      const { value, done } = await reader.read();
+    while (text.length < MAX_PROBE_RESPONSE_CHARS && Date.now() < deadlineMs) {
+      const remaining = deadlineMs - Date.now();
+      const { result: chunkResult } = await readChunkWithTimeout(reader, Math.min(PROBE_READ_TIMEOUT_MS, remaining));
+      const { value, done } = chunkResult;
       if (done) break;
       if (!value) continue;
       text += decoder.decode(value, { stream: true });

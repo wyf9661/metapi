@@ -212,7 +212,12 @@ export async function oauthRoutes(app: FastifyInstance) {
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        return reply.code(404).send({ message: errorMessage || 'oauth provider not found' });
+        const lower = errorMessage.toLowerCase();
+        const statusCode = lower.includes('unsupported oauth provider') ? 404
+          : lower.includes('invalid') || lower.includes('required') ? 400
+            : lower.includes('timeout') || lower.includes('timed out') ? 504
+              : 502;
+        return reply.code(statusCode).send({ message: errorMessage || 'oauth provider start failed' });
       }
     },
   );

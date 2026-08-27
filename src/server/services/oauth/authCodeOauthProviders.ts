@@ -456,7 +456,7 @@ export const traeOauthProvider: OAuthProviderDefinition = {
   },
   buildAuthorizationUrl: async ({ state }) => {
     const loginHost = await fetchTraeLoginHost(state);
-    return buildTraeVerificationUrl(loginHost, state, `http://localhost:0/auth/callback/trae`);
+    return buildTraeVerificationUrl(loginHost, state, 'http://localhost:0/auth/callback/trae');
   },
   exchangeAuthorizationCode: async ({ code, redirectUri }) => {
     const body = JSON.stringify({

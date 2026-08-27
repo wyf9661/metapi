@@ -30,11 +30,17 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
     const conditions: any[] = [];
 
     if (siteId) {
-      conditions.push(eq(probeLogs.siteId, parseInt(siteId)));
+      const parsedSiteId = parseInt(siteId, 10);
+      if (Number.isFinite(parsedSiteId) && parsedSiteId > 0) {
+        conditions.push(eq(probeLogs.siteId, parsedSiteId));
+      }
     }
 
     if (accountId) {
-      conditions.push(eq(probeLogs.accountId, parseInt(accountId)));
+      const parsedAccountId = parseInt(accountId, 10);
+      if (Number.isFinite(parsedAccountId) && parsedAccountId > 0) {
+        conditions.push(eq(probeLogs.accountId, parsedAccountId));
+      }
     }
 
     if (modelName) {
@@ -218,7 +224,7 @@ export async function registerProbeLogsRoutes(app: FastifyInstance) {
       .from(probeLogs)
       .leftJoin(sites, eq(probeLogs.siteId, sites.id))
       .leftJoin(accounts, eq(probeLogs.accountId, accounts.id))
-      .where(eq(probeLogs.id, parseInt(id)))
+      .where(eq(probeLogs.id, parseInt(id, 10)))
       .get();
 
     if (!log) {

@@ -3,8 +3,8 @@ import type { OAuthProviderDefinition, OAuthProviderId } from './providers.js';
 /**
  * 仅导入型 OAuth provider 工厂。
  *
- * 9router 的部分平台（grok-cli、github、kimi、qoder、cursor 等）使用
- * device-code flow 或 IDE 本地文件导入，MetAPI 当前不实现浏览器授权流程。
+ * 部分平台使用 device-code flow 或 IDE 本地文件导入；浏览器授权能力
+ * 由各 provider 定义决定，未提供授权实现的平台继续使用导入 JSON。
  * 但这些平台的凭据可以通过「导入 JSON」直接导入——导入只需要 access_token
  * + refresh_token，不需要 buildAuthorizationUrl / exchangeAuthorizationCode。
  *
@@ -15,8 +15,8 @@ import type { OAuthProviderDefinition, OAuthProviderId } from './providers.js';
  * - siteUrl = 能拼出 chat 端点的 base（9router transport.baseUrl 去端点后缀）
  * - modelsUrl = 模型发现端点（9router modelsFetcher.url / transport.modelsUrl）
  * - models = 硬编码模型表（9router models 列表，发现失败时兜底）
- * - proxySupported = false 表示协议非标准（gRPC / 自定义 SSE）或需专用头，
- *   当前代理链路无法直通，不应提供可用入口
+ * - proxySupported 仅作为兼容性元数据，不拦截连接创建、导入或模型发现；
+ *   实际转发能力由对应上游协议和 executor 决定。
  */
 export function createImportOnlyProvider<T extends string>(input: {
   provider: T;
@@ -71,7 +71,7 @@ export function createImportOnlyProvider<T extends string>(input: {
     },
     refreshAccessToken: async () => {
       // 导入型 provider 不支持自动刷新——用户需重新导入
-      throw new Error(`此平台的 access token 已过期，请重新导入 JSON 更新凭据`);
+      throw new Error('此平台的 access token 已过期，请重新导入 JSON 更新凭据');
     },
     ...(input.proxyHeaders && Object.keys(input.proxyHeaders).length > 0
       ? { buildProxyHeaders: () => ({ ...input.proxyHeaders }) }

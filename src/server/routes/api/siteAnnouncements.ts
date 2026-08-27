@@ -4,6 +4,7 @@ import { db, schema } from '../../db/index.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
 import { formatUtcSqlDateTime, getResolvedTimeZone } from '../../services/localTimeService.js';
 import { syncSiteAnnouncements } from '../../services/siteAnnouncementService.js';
+import { normalizePageOffset, normalizePageSize } from './paginationNormalizers.js';
 
 type SiteAnnouncementRow = typeof schema.siteAnnouncements.$inferSelect;
 type SiteAnnouncementsResponseFilters = {
@@ -123,8 +124,8 @@ export async function siteAnnouncementsRoutes(app: FastifyInstance) {
       status?: string;
     };
   }>('/api/site-announcements', async (request) => {
-    const limit = Math.max(1, Math.min(500, Number.parseInt(request.query.limit || '50', 10)));
-    const offset = Math.max(0, Number.parseInt(request.query.offset || '0', 10));
+    const limit = normalizePageSize(request.query.limit, 50, 500);
+    const offset = normalizePageOffset(request.query.offset);
     const filters: any[] = [];
 
     const siteId = Number.parseInt(String(request.query.siteId || ''), 10);

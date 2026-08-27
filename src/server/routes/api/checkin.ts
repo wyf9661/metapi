@@ -151,7 +151,10 @@ export async function checkinRoutes(app: FastifyInstance) {
       .offset(offset);
 
     if (request.query.accountId) {
-      query = query.where(eq(schema.checkinLogs.accountId, parseInt(request.query.accountId, 10))) as any;
+      const accountId = parseInt(request.query.accountId, 10);
+      if (Number.isFinite(accountId) && accountId > 0) {
+        query = query.where(eq(schema.checkinLogs.accountId, accountId)) as any;
+      }
     }
 
     const rows = await query.all();

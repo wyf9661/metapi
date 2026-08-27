@@ -47,6 +47,7 @@ const DEFAULT_MAX_TOKENS = 32;
 const MAX_MAX_TOKENS = 128;
 const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_RESPONSE_BYTES = 1_048_576; // 1 MB
+const REMOTE_READ_SLICE_TIMEOUT_MS = 10_000;
 
 const PRIVATE_IPV4_RANGES: Array<[number, number]> = [
   [0x0a000000, 0x0affffff],        // 10.0.0.0/8
@@ -397,7 +398,34 @@ function clampMaxTokens(maxTokens: number | undefined): number {
   return Math.min(Math.floor(maxTokens), MAX_MAX_TOKENS);
 }
 
-async function readBoundedResponseText(response: any): Promise<string> {
+type RemoteReadResult = {
+  result: ReadableStreamReadResult<Uint8Array>;
+  timedOut: boolean;
+};
+
+async function readRemoteChunkWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<RemoteReadResult> {
+  if (timeoutMs <= 0) return { result: await reader.read(), timedOut: false };
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<RemoteReadResult>((resolve) => {
+    timer = setTimeout(() => {
+      void reader.cancel().catch(() => {});
+      resolve({ result: { done: true, value: undefined }, timedOut: true });
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      reader.read().then((result) => ({ result, timedOut: false })),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function readBoundedResponseText(response: any, timeoutMs: number): Promise<string> {
   const reader = response.body?.getReader?.();
   if (!reader) {
     // No stream — fall back to full text but capped at MAX_RESPONSE_BYTES.
@@ -411,15 +439,22 @@ async function readBoundedResponseText(response: any): Promise<string> {
   let received = 0;
   let output = '';
   let truncated = false;
+  const deadlineMs = Date.now() + Math.max(1, timeoutMs);
 
-  while (received < MAX_RESPONSE_BYTES) {
-    const { value, done } = await reader.read();
+  while (received < MAX_RESPONSE_BYTES && Date.now() < deadlineMs) {
+    const remaining = deadlineMs - Date.now();
+    const { result: chunkResult, timedOut } = await readRemoteChunkWithTimeout(
+      reader,
+      Math.min(REMOTE_READ_SLICE_TIMEOUT_MS, remaining),
+    );
+    const { value, done } = chunkResult;
+    if (done && timedOut) throw new Error('response stream read timeout');
     if (done) break;
     if (!value) continue;
     const chunk = decoder.decode(value, { stream: true });
-    const remaining = MAX_RESPONSE_BYTES - received;
-    if (chunk.length > remaining) {
-      output += chunk.slice(0, remaining);
+    const maxChunkLength = MAX_RESPONSE_BYTES - received;
+    if (chunk.length > maxChunkLength) {
+      output += chunk.slice(0, maxChunkLength);
       received = MAX_RESPONSE_BYTES;
       truncated = true;
       break;
@@ -433,12 +468,95 @@ async function readBoundedResponseText(response: any): Promise<string> {
   return output;
 }
 
+async function readStreamUntilFirstContent(
+  response: any,
+  timeoutMs: number,
+): Promise<string> {
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    return readRuntimeResponseText(response);
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  let output = '';
+  const deadlineMs = Date.now() + Math.max(1, timeoutMs);
+  try {
+    while (output.length < MAX_RESPONSE_BYTES && Date.now() < deadlineMs) {
+      const remaining = deadlineMs - Date.now();
+      const { result: chunkResult, timedOut } = await readRemoteChunkWithTimeout(
+        reader,
+        Math.min(REMOTE_READ_SLICE_TIMEOUT_MS, remaining),
+      );
+      const { value, done } = chunkResult;
+      if (done && timedOut) throw new Error('response stream read timeout');
+      if (done) break;
+      if (!value) continue;
+      output += decoder.decode(value, { stream: true });
+
+      // SSE data frames are delimited by a blank line. Only return once a
+      // complete frame contains a meaningful payload; role/metadata frames
+      // alone are not evidence that the model has started generating.
+      for (const frame of output.split(/\n\s*\n/)) {
+        if (!frame.split('\n').some((line) => {
+          const payload = line.trim().startsWith('data:')
+            ? line.trim().slice(5).trim()
+            : '';
+          if (!payload || payload === '[DONE]') return false;
+          try {
+            const parsed = JSON.parse(payload) as Record<string, unknown>;
+            if (parsed.type === 'response.output_text.delta'
+              && typeof parsed.delta === 'string' && parsed.delta.length > 0) return true;
+            if (parsed.type === 'content_block_delta') {
+              const delta = parsed.delta as Record<string, unknown> | undefined;
+              return typeof delta?.text === 'string' && delta.text.length > 0;
+            }
+            const choice = (parsed.choices as Array<Record<string, unknown>> | undefined)?.[0];
+            const delta = choice?.delta as Record<string, unknown> | undefined;
+            return typeof delta?.content === 'string' && delta.content.length > 0
+              || typeof delta?.text === 'string' && delta.text.length > 0;
+          } catch {
+            return false;
+          }
+        })) continue;
+        await reader.cancel().catch(() => {});
+        return output;
+      }
+
+      // A non-SSE JSON response may ignore stream=true. Once it parses and
+      // contains generated content, return it without waiting for more bytes.
+      const trimmed = output.trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+          const choice = (parsed.choices as Array<Record<string, unknown>> | undefined)?.[0];
+          const message = choice?.message as Record<string, unknown> | undefined;
+          const hasContent = typeof parsed.output_text === 'string' && parsed.output_text.trim()
+            || typeof message?.content === 'string' && message.content.trim()
+            || Array.isArray(parsed.output) && parsed.output.length > 0
+            || Array.isArray(parsed.content) && parsed.content.length > 0;
+          if (hasContent) {
+            await reader.cancel().catch(() => {});
+            return output;
+          }
+        } catch {
+          // The JSON may be incomplete; continue reading.
+        }
+      }
+    }
+  } finally {
+    try { await reader.cancel(); } catch { /* ignore */ }
+  }
+  return output;
+}
+
 async function requestRemote(options: {
   url: string;
   method: 'GET' | 'POST';
   headers: Record<string, string>;
   body?: unknown;
   timeoutMs: number;
+  /** 流式模式：首个有效 SSE 内容 chunk 到达即返回，不等完整流。 */
+  earlyReturnOnContent?: boolean;
 }): Promise<{
   statusCode: number;
   latencyMs: number;
@@ -475,7 +593,9 @@ async function requestRemote(options: {
         error: `redirects are not allowed (HTTP ${response.status})`,
       };
     }
-    const responseText = await readBoundedResponseText(response as any);
+    const responseText = options.earlyReturnOnContent
+      ? await readStreamUntilFirstContent(response as any, options.timeoutMs)
+      : await readBoundedResponseText(response as any, options.timeoutMs);
     const latencyMs = Date.now() - started;
     return {
       statusCode: response.status,
@@ -567,6 +687,7 @@ export async function testRemoteUpstreamProtocol(
     headers: requestHeaders,
     body: requestBody,
     timeoutMs,
+    earlyReturnOnContent: true,
   });
 
   // 统一流式：响应体是 SSE，优先从 data: 行提取生成文本

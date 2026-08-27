@@ -66,6 +66,15 @@ describe('site announcements routes', () => {
     delete process.env.DATA_DIR;
   });
 
+  it('falls back safely for invalid pagination values', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/site-announcements?limit=invalid&offset=invalid',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([]);
+  });
+
   it('lists announcements with site and unread filters', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'Sub Site',
