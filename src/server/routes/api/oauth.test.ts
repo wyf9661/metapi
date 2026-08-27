@@ -1992,6 +1992,13 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         'x-codex-secondary-reset-after-seconds': '7200',
         'x-codex-secondary-window-minutes': '300',
       },
+      // wham/usage JSON：primary=5h 窗口，secondary=7d 窗口
+      text: JSON.stringify({
+        rate_limit: {
+          primary_window: { used_percent: 14, reset_at: '2026-04-01T00:00:00.000Z' },
+          secondary_window: { used_percent: 62, reset_at: '2026-04-08T00:00:00.000Z' },
+        },
+      }),
     }));
 
     const codexRefresh = await app.inject({
@@ -2003,7 +2010,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       success: true,
       quota: expect.objectContaining({
         status: 'supported',
-        providerMessage: 'codex usage windows inferred from rate limit response headers',
+        providerMessage: 'codex usage windows fetched from official wham/usage endpoint',
         subscription: expect.objectContaining({
           planType: 'plus',
           activeStart: '2026-03-01T00:00:00.000Z',
@@ -2026,9 +2033,9 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       }),
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://chatgpt.com/backend-api/codex/responses',
+      'https://chatgpt.com/backend-api/wham/usage',
       expect.objectContaining({
-        method: 'POST',
+        method: 'GET',
         signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           Authorization: 'Bearer oauth-access-token',
@@ -2110,6 +2117,7 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       }),
     }).returning().get();
 
+    // wham/usage 优先：每账号 1 次 GET 探测（primary=5h，secondary=7d）
     fetchMock
       .mockResolvedValueOnce(buildCodexQuotaProbeResponse({
         headers: {
@@ -2120,6 +2128,12 @@ describe('oauth routes', { timeout: 15_000 }, () => {
           'x-codex-secondary-reset-after-seconds': '1800',
           'x-codex-secondary-window-minutes': '300',
         },
+        text: JSON.stringify({
+          rate_limit: {
+            primary_window: { used_percent: 9, reset_at: '2026-04-01T00:00:00.000Z' },
+            secondary_window: { used_percent: 41, reset_at: '2026-04-08T00:00:00.000Z' },
+          },
+        }),
       }))
       .mockResolvedValueOnce(buildCodexQuotaProbeResponse({
         headers: {
@@ -2130,6 +2144,12 @@ describe('oauth routes', { timeout: 15_000 }, () => {
           'x-codex-secondary-reset-after-seconds': '900',
           'x-codex-secondary-window-minutes': '300',
         },
+        text: JSON.stringify({
+          rate_limit: {
+            primary_window: { used_percent: 27, reset_at: '2026-04-01T00:00:00.000Z' },
+            secondary_window: { used_percent: 88, reset_at: '2026-04-08T00:00:00.000Z' },
+          },
+        }),
       }));
 
     const batchRefresh = await app.inject({
@@ -2255,11 +2275,40 @@ describe('oauth routes', { timeout: 15_000 }, () => {
       }),
     }).returning().get();
 
-    const firstProbe = createDeferred<ReturnType<typeof buildCodexQuotaProbeResponse>>();
-    const secondProbe = createDeferred<ReturnType<typeof buildCodexQuotaProbeResponse>>();
+    // wham/usage 优先：每个账号 1 次 GET 探测（primary=5h，secondary=7d）
     fetchMock
-      .mockImplementationOnce(() => firstProbe.promise)
-      .mockImplementationOnce(() => secondProbe.promise);
+      .mockResolvedValueOnce(buildCodexQuotaProbeResponse({
+        headers: {
+          'x-codex-primary-used-percent': '51',
+          'x-codex-primary-reset-after-seconds': '3600',
+          'x-codex-primary-window-minutes': '10080',
+          'x-codex-secondary-used-percent': '11',
+          'x-codex-secondary-reset-after-seconds': '900',
+          'x-codex-secondary-window-minutes': '300',
+        },
+        text: JSON.stringify({
+          rate_limit: {
+            primary_window: { used_percent: 11, reset_at: '2026-04-01T00:00:00.000Z' },
+            secondary_window: { used_percent: 51, reset_at: '2026-04-08T00:00:00.000Z' },
+          },
+        }),
+      }))
+      .mockResolvedValueOnce(buildCodexQuotaProbeResponse({
+        headers: {
+          'x-codex-primary-used-percent': '61',
+          'x-codex-primary-reset-after-seconds': '7200',
+          'x-codex-primary-window-minutes': '10080',
+          'x-codex-secondary-used-percent': '19',
+          'x-codex-secondary-reset-after-seconds': '1200',
+          'x-codex-secondary-window-minutes': '300',
+        },
+        text: JSON.stringify({
+          rate_limit: {
+            primary_window: { used_percent: 19, reset_at: '2026-04-01T00:00:00.000Z' },
+            secondary_window: { used_percent: 61, reset_at: '2026-04-08T00:00:00.000Z' },
+          },
+        }),
+      }));
 
     const batchRefreshPromise = app.inject({
       method: 'POST',
@@ -2268,31 +2317,6 @@ describe('oauth routes', { timeout: 15_000 }, () => {
         accountIds: [firstAccount.id, secondAccount.id],
       },
     });
-
-    await vi.waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-    });
-
-    firstProbe.resolve(buildCodexQuotaProbeResponse({
-      headers: {
-        'x-codex-primary-used-percent': '51',
-        'x-codex-primary-reset-after-seconds': '3600',
-        'x-codex-primary-window-minutes': '10080',
-        'x-codex-secondary-used-percent': '11',
-        'x-codex-secondary-reset-after-seconds': '900',
-        'x-codex-secondary-window-minutes': '300',
-      },
-    }));
-    secondProbe.resolve(buildCodexQuotaProbeResponse({
-      headers: {
-        'x-codex-primary-used-percent': '61',
-        'x-codex-primary-reset-after-seconds': '7200',
-        'x-codex-primary-window-minutes': '10080',
-        'x-codex-secondary-used-percent': '19',
-        'x-codex-secondary-reset-after-seconds': '1200',
-        'x-codex-secondary-window-minutes': '300',
-      },
-    }));
 
     const batchRefresh = await batchRefreshPromise;
     expect(batchRefresh.statusCode).toBe(200);

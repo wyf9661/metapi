@@ -930,10 +930,10 @@ describe('buildUpstreamEndpointRequest', () => {
     expect(request.headers.Authorization).toBe('Bearer oauth-access-token');
     expect(request.headers.Originator).toBe('codex_cli_rs');
     expect(request.headers['Chatgpt-Account-Id']).toBe('chatgpt-account-123');
-    expect(request.headers.Version).toBe('0.101.0');
+    expect(request.headers.Version).toBe('0.149.1');
     expect(request.headers.Session_id).toMatch(/^[0-9a-f-]{36}$/i);
     expect(request.headers.Conversation_id).toBe(request.headers.Session_id);
-    expect(request.headers['User-Agent']).toBe('codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464');
+    expect(request.headers['User-Agent']).toBe('codex_cli_rs/0.149.1 (Mac OS 26.0.1; arm64) Apple_Terminal/464');
     expect(request.headers.Accept).toBe('application/json');
     expect(request.headers.Connection).toBe('Keep-Alive');
     expect(request.body.instructions).toBe(CODEX_DEFAULT_INSTRUCTIONS);

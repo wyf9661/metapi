@@ -11,10 +11,10 @@ describe('App sidebar config', () => {
     expect(source).not.toContain("{ to: '/tokens', label: '令牌管理'");
   });
 
-  it('removes standalone OAuth 管理 navigation entry', () => {
+  it('keeps OAuth 管理 navigation entry under 控制台', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
 
-    expect(source).not.toContain("{ to: '/oauth', label: 'OAuth 管理'");
+    expect(source).toContain("{ to: '/oauth', label: 'OAuth 管理'");
     expect(source).toContain("const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'))");
     expect(source).toContain('<Route path="/oauth" element={<OAuthManagement />} />');
   });

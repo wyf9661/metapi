@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCodexWhamUsageUrl,
   buildQuotaSnapshotFromOauthInfo,
   parseCodexQuotaResetHint,
 } from './quota.js';
@@ -102,5 +103,18 @@ describe('oauth quota snapshot helpers', () => {
       resetAt: '2026-03-18T02:20:00.000Z',
       message: 'codex usage_limit_reached reset hint observed from upstream',
     });
+  });
+
+  it('builds wham/usage url from site url origin', () => {
+    expect(buildCodexWhamUsageUrl('https://chatgpt.com/backend-api/codex'))
+      .toBe('https://chatgpt.com/backend-api/wham/usage');
+    expect(buildCodexWhamUsageUrl('https://chatgpt.com/backend-api/codex/responses'))
+      .toBe('https://chatgpt.com/backend-api/wham/usage');
+    expect(buildCodexWhamUsageUrl('https://chatgpt.com/'))
+      .toBe('https://chatgpt.com/backend-api/wham/usage');
+    expect(buildCodexWhamUsageUrl('')).toBeNull();
+    expect(buildCodexWhamUsageUrl('not a url')).toBeNull();
+    expect(buildCodexWhamUsageUrl('http://127.0.0.1:5000/backend-api/codex'))
+      .toBe('http://127.0.0.1:5000/backend-api/wham/usage');
   });
 });
