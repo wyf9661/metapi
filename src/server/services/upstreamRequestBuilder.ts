@@ -295,7 +295,7 @@ function ensureCodexClientFingerprintHeaders(
     // betray the request as a non-Codex client and trip the upstream
     // "This account only allows Codex official clients" check. Always force the
     // Codex CLI UA over any downstream UA.
-    userAgentOverride: 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464',
+    userAgentOverride: 'codex_cli_rs/0.149.1 (Mac OS 26.0.1; arm64) Apple_Terminal/464',
   });
   const next = { ...headers };
   for (const key of [
@@ -536,9 +536,27 @@ export function buildUpstreamEndpointRequest(input: {
       : '/v1beta/openai/chat/completions';
   };
 
+  // 仅导入型 OAuth 平台（9router 对齐）：chat 端点 = siteUrl + 特判后缀。
+  // 9router transport.baseUrl 语义是完整 chat 端点，MetAPI site.url 记录其 base。
+  const IMPORT_ONLY_ENDPOINT_PATHS: Record<string, Record<UpstreamEndpoint, string>> = {
+    kilocode: { chat: '/chat/completions', messages: '/chat/completions', responses: '/chat/completions' },
+    cline: { chat: '/chat/completions', messages: '/chat/completions', responses: '/chat/completions' },
+    clinepass: { chat: '/chat/completions', messages: '/chat/completions', responses: '/chat/completions' },
+    trae: { chat: '', messages: '', responses: '' },
+    iflow: { chat: '/chat/completions', messages: '/chat/completions', responses: '/chat/completions' },
+    grok: { chat: '/responses', messages: '/responses', responses: '/responses' },
+    github: { chat: '/chat/completions', messages: '/chat/completions', responses: '/responses' },
+    kimi: { chat: '/chat/completions', messages: '/chat/completions', responses: '/chat/completions' },
+    xai: { chat: '/chat/completions', messages: '/chat/completions', responses: '/chat/completions' },
+  };
+
   const resolveEndpointPath = (endpoint: UpstreamEndpoint): string => {
     if (isGeminiUpstream) {
       return resolveGeminiEndpointPath(endpoint);
+    }
+
+    if (IMPORT_ONLY_ENDPOINT_PATHS[sitePlatform]) {
+      return IMPORT_ONLY_ENDPOINT_PATHS[sitePlatform]![endpoint];
     }
 
     if (sitePlatform === 'openai') {

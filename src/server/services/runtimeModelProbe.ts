@@ -10,6 +10,10 @@ import {
 } from './upstreamEndpointRuntime.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../proxy-core/orchestration/endpointFlow.js';
 import { readRuntimeResponseText } from '../proxy-core/executors/types.js';
+import {
+  collectResponsesFinalPayloadFromSseText,
+  looksLikeResponsesSseText,
+} from '../proxy-core/runtime/responsesSseFinal.js';
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
 import { resolveProxyChannelFirstByteTimeoutMs } from './proxyChannelRetry.js';
@@ -320,7 +324,12 @@ export async function probeRuntimeModel(input: {
       account: input.account,
       downstreamHeaders: {},
     });
-    const { body: openaiBody, question: probeQuestion } = buildProbeBody(input.modelName);
+    // Codex upstream (chatgpt.com/backend-api/codex /responses) rejects
+    // non-streaming requests with "Stream must be set to true". Probe with
+    // stream=true on codex platforms and fold the SSE response below.
+    const probeStream = (input.site.platform || '').toLowerCase() === 'codex';
+    const { body: baseOpenaiBody, question: probeQuestion } = buildProbeBody(input.modelName);
+    const openaiBody = { ...baseOpenaiBody, stream: probeStream };
     const channelProxyUrl = resolveChannelProxyUrl(input.site, input.account.extraConfig);
     const abortController = new AbortController();
     const remainingExecutionTimeoutMs = resolveRemainingTimeoutMs(
@@ -336,7 +345,7 @@ export async function probeRuntimeModel(input: {
       const request = buildUpstreamEndpointRequest({
         endpoint,
         modelName: input.modelName,
-        stream: false,
+        stream: probeStream,
         tokenValue,
         oauthProvider: oauth?.provider,
         oauthProjectId: oauth?.projectId,
@@ -407,7 +416,18 @@ export async function probeRuntimeModel(input: {
     const latencyMs = Date.now() - startedAt;
 
     if (result.ok) {
-      const responseText = await readRuntimeResponseText(result.upstream).catch(() => undefined);
+      const rawResponseText = await readRuntimeResponseText(result.upstream).catch(() => undefined);
+      // Codex probes run with stream=true, so the upstream body is Responses
+      // SSE. Fold it into a final payload before the JSON-based extractors run.
+      let responseText = rawResponseText;
+      if (rawResponseText && looksLikeResponsesSseText(rawResponseText)) {
+        try {
+          const folded = collectResponsesFinalPayloadFromSseText(rawResponseText, input.modelName);
+          responseText = JSON.stringify(folded.payload);
+        } catch {
+          responseText = rawResponseText;
+        }
+      }
       const tokensUsed = extractTokensFromResponse(responseText);
 
       // 记录成功的测活日志

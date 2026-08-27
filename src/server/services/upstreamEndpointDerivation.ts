@@ -101,6 +101,11 @@ function preferredEndpointOrder(
     return ['responses'];
   }
 
+  // Grok CLI 上游是 OpenAI Responses API（9router grok-cli.js）
+  if (platform === 'grok') {
+    return ['responses'];
+  }
+
   if (platform === 'gemini' || platform === 'gemini-cli') {
     return ['chat'];
   }

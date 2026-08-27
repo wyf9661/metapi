@@ -3,8 +3,8 @@ import { inferCodexOfficialOriginator } from '../../shared/codexClientFamily.js'
 import { asTrimmedString } from '../../shared/trimString.js';
 
 
-const CODEX_CLIENT_VERSION = '0.101.0';
-const CODEX_DEFAULT_USER_AGENT = 'codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
+const CODEX_CLIENT_VERSION = '0.149.1';
+const CODEX_DEFAULT_USER_AGENT = 'codex_cli_rs/0.149.1 (Mac OS 26.0.1; arm64) Apple_Terminal/464';
 const CLAUDE_DEFAULT_USER_AGENT = 'claude-cli/2.1.63 (external, cli)';
 export const CLAUDE_TOKEN_COUNTING_BETA = 'token-counting-2024-11-01';
 export const CLAUDE_DEFAULT_BETA_HEADER = 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05';

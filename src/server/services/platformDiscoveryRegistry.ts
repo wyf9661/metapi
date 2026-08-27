@@ -3,6 +3,7 @@ import { schema } from '../db/index.js';
 import { withSiteRecordProxyRequestInit } from './siteProxy.js';
 import { runWithSiteApiEndpointPool } from './siteApiEndpointService.js';
 import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
+import { getOAuthProviderDefinition } from './oauth/providers.js';
 import { CLAUDE_DEFAULT_ANTHROPIC_VERSION } from './oauth/claudeProvider.js';
 import {
   ANTIGRAVITY_DAILY_UPSTREAM_BASE_URL,
@@ -268,4 +269,60 @@ export async function discoverAntigravityModelsFromCloud(input: {
 
     throw new Error(lastError || '未获取到可用模型');
   });
+}
+
+/**
+ * 仅导入型 OAuth 平台（9router 同款 device-flow / IDE-import）的模型发现。
+ *
+ * 数据源对齐 9router provider registry：
+ * - discovery.modelsUrl（9router modelsFetcher.url / transport.modelsUrl）优先，
+ *   GET 后解析 id/slug/model 字段（openrouter-free 目录兼容）；
+ * - 失败或无 modelsUrl 时回退硬编码模型表（9router models 列表兜底）。
+ */
+export async function discoverImportOnlyModelsFromCloud(input: {
+  site: PlatformDiscoverySite;
+  account: PlatformDiscoveryAccount;
+  provider: string;
+}): Promise<string[]> {
+  const definition = getOAuthProviderDefinition(input.provider);
+  const discovery = definition?.discovery;
+  if (!definition || !discovery) {
+    throw new Error(`unsupported import-only oauth provider: ${input.provider}`);
+  }
+  const accessToken = (input.account.accessToken || '').trim();
+  if (!accessToken) {
+    throw new Error(`${definition.metadata.label} oauth access token missing`);
+  }
+  const staticModels = Array.isArray(discovery.models)
+    ? discovery.models.filter((modelName) => typeof modelName === 'string' && modelName.trim())
+    : [];
+
+  if (discovery.modelsUrl) {
+    try {
+      const response = await fetch(
+        discovery.modelsUrl,
+        withSiteRecordProxyRequestInit(input.site, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+          },
+        }),
+      );
+      if (response.ok) {
+        const payload = await response.json() as unknown;
+        const fetchedModels = normalizeDiscoveredModels(extractCodexModelIds(payload));
+        if (fetchedModels.length > 0) {
+          return fetchedModels;
+        }
+      }
+    } catch {
+      // modelsUrl 失败回退硬编码表
+    }
+  }
+
+  if (staticModels.length > 0) {
+    return staticModels;
+  }
+  throw new Error('未获取到可用模型');
 }

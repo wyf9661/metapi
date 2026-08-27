@@ -68,6 +68,18 @@ export function detectPlatformByUrlHint(url) {
   if (host === 'api.openai.com') return 'openai';
   if (host === 'chatgpt.com' && path.startsWith('/backend-api/codex')) return 'codex';
   if (host === 'api.anthropic.com' || (host === 'anthropic.com' && path.startsWith('/v1'))) return 'claude';
+  // Grok / xAI OAuth (9router grok-cli transport)
+  if (
+    host === 'cli-chat-proxy.grok.com'
+    || host === 'api.x.ai'
+    || host === 'grok.com'
+  ) {
+    return 'grok';
+  }
+  // Antigravity (Google AI IDE agent, 9router antigravity transport)
+  if (host === 'daily-cloudcode-pa.googleapis.com') {
+    return 'antigravity';
+  }
   if (
     host === 'generativelanguage.googleapis.com'
     || host === 'gemini.google.com'

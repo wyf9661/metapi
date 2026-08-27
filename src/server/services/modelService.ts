@@ -27,6 +27,7 @@ import {
   discoverAntigravityModelsFromCloud,
   discoverClaudeModelsFromCloud,
   discoverCodexModelsFromCloud,
+  discoverImportOnlyModelsFromCloud,
   validateGeminiCliOauthConnection,
 } from './platformDiscoveryRegistry.js';
 import { probeRuntimeModel, type RuntimeModelProbeStatus } from './runtimeModelProbe.js';
@@ -39,6 +40,12 @@ import {
 const API_TOKEN_DISCOVERY_TIMEOUT_MS = 8_000;
 const MODEL_DISCOVERY_TIMEOUT_MS = 12_000;
 const MODEL_REFRESH_BATCH_SIZE = 3;
+// 仅导入型 OAuth 平台（9router 同款）：无平台 adapter，模型发现走 provider registry
+const IMPORT_ONLY_OAUTH_PROVIDERS = new Set([
+  'grok', 'github', 'kimi', 'qoder', 'cursor',
+  'gitlab', 'kilocode', 'cline', 'iflow', 'trae', 'windsurf', 'zed',
+  'xai', 'clinepass',
+]);
 const GEMINI_CLI_STATIC_MODELS = [
   'gemini-2.5-pro',
   'gemini-2.5-flash',
@@ -1088,6 +1095,99 @@ async function doRefreshModelsForAccount(
     }
   }
 
+  // 仅导入型 OAuth 平台（9router 同款）：模型发现走 provider registry 的
+  // modelsUrl + 硬编码表（discoverImportOnlyModelsFromCloud），无平台 adapter。
+  if (oauth?.provider && IMPORT_ONLY_OAUTH_PROVIDERS.has(oauth.provider)) {
+    const checkedAt = new Date().toISOString();
+    const startedAt = Date.now();
+    let discoveryAccount = account;
+    try {
+      const { result: importOnlyModels, account: refreshedAccount } = await retryOauthModelDiscoveryWithRefresh({
+        account,
+        attempt: async (candidateAccount) => withTimeout(
+          () => withAccountProxyOverride(accountProxyUrl,
+            () => discoverImportOnlyModelsFromCloud({
+              site,
+              account: candidateAccount,
+              provider: oauth!.provider,
+            })),
+          MODEL_DISCOVERY_TIMEOUT_MS,
+          `${oauth!.provider} model discovery timeout (${Math.round(MODEL_DISCOVERY_TIMEOUT_MS / 1000)}s)`,
+        ),
+      });
+      discoveryAccount = refreshedAccount;
+      if (importOnlyModels.length === 0) {
+        throw new Error('未获取到可用模型');
+      }
+
+      const newImportOnlyModels = importOnlyModels.filter((m) => !manualModelNames.has(m.toLowerCase()));
+      if (newImportOnlyModels.length > 0) {
+        await db.insert(schema.modelAvailability).values(
+          newImportOnlyModels.map((modelName) => ({
+            accountId,
+            modelName,
+            available: true,
+            latencyMs: Date.now() - startedAt,
+            checkedAt,
+          })),
+        ).onConflictDoNothing().run();
+      }
+      await updateOauthModelDiscoveryState({
+        account: discoveryAccount,
+        checkedAt,
+        status: 'healthy',
+        lastDiscoveredModels: importOnlyModels,
+      });
+      await setAccountRuntimeHealth(accountId, {
+        state: 'healthy',
+        reason: `${oauth!.provider} 模型探测成功`,
+        source: 'model-discovery',
+        checkedAt,
+      });
+      const importOnlyPostProbeResult = await runPostRefreshProbeIfEnabled({
+        account: discoveryAccount,
+        site,
+        discoveredModels: importOnlyModels,
+      });
+      return buildSuccessfulRefreshResult({
+        accountId,
+        modelCount: importOnlyModels.length,
+        modelsPreview: importOnlyModels.slice(0, 10),
+        tokenScanned: 0,
+        discoveredByCredential: true,
+        discoveredApiToken: false,
+        postProbeResult: importOnlyPostProbeResult,
+      });
+    } catch (err) {
+      discoveryAccount = getRefreshedOauthAccountFromError(err) || discoveryAccount;
+      const rawMessage = (err as { message?: string })?.message || `${oauth!.provider} model discovery failed`;
+      const errorCode = classifyModelDiscoveryError(rawMessage);
+      const errorMessage = `${oauth!.provider} 模型获取失败（${rawMessage}）`;
+      await updateOauthModelDiscoveryState({
+        account: discoveryAccount,
+        checkedAt,
+        status: 'abnormal',
+        lastModelSyncError: errorMessage,
+        lastDiscoveredModels: [],
+      });
+      await setAccountRuntimeHealth(account.id, {
+        state: modelDiscoveryFailureHealthState(errorCode),
+        reason: errorMessage,
+        source: 'model-discovery',
+        checkedAt,
+      });
+      await restorePreviousAvailability();
+      return buildFailedRefreshResult({
+        accountId,
+        errorCode,
+        errorMessage,
+        tokenScanned: 0,
+        discoveredByCredential: false,
+        discoveredApiToken: false,
+      });
+    }
+  }
+
   if (!adapter) {
     return buildSkippedRefreshResult(accountId, 'adapter_or_status', '平台不可用或账号未激活');
   }
@@ -1194,9 +1294,9 @@ async function doRefreshModelsForAccount(
     }
   };
 
-  const discoverModelsWithCredential = async (credentialRaw: string | null | undefined) => {
+  const discoverModelsWithCredential = async (credentialRaw: string | null | undefined, options?: { allowEmpty?: boolean }) => {
     const credential = (credentialRaw || '').trim();
-    if (!credential) return;
+    if (!credential && !options?.allowEmpty) return;
     if (isMaskedTokenValue(credential)) return;
     if (attemptedCredentials.has(credential)) return;
     attemptedCredentials.add(credential);
@@ -1283,6 +1383,17 @@ async function doRefreshModelsForAccount(
   // Fall back to session models so the account is not left empty.
   if (preferManagedTokenDiscovery && accountModels.size === 0) {
     await discoverModelsWithCredential(account.accessToken);
+  }
+
+  // 公开站兜底：账号无任何凭据时也尝试一次空凭据发现（free.empero.org 这类
+  // 站点 /v1/models 无需鉴权即可返回目录，否则系统内永远获取不到模型）。
+  // 需要鉴权的站点返回 401 时无副作用（仅记入 failureMessages，模型仍为空）。
+  if (accountModels.size === 0
+    && !discoveredApiToken
+    && !account.apiToken
+    && !account.accessToken
+    && enabledTokens.length === 0) {
+    await discoverModelsWithCredential('', { allowEmpty: true });
   }
 
   if (accountModels.size === 0) {
