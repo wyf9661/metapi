@@ -21,8 +21,11 @@ import {
   normalizeVerifyFailureMessage,
 } from './helpers/accountVerifyFeedback.js';
 import {
+  formatSub2ApiUsageInline,
   isTruthyFlag,
+  parseOauthAccountInfo,
   parsePositiveInt,
+  parseSub2ApiAccountUsage,
   resolveAccountCredentialMode,
 } from './helpers/accountConnection.js';
 import {
@@ -2612,6 +2615,56 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   : a.status || '-'
                               }
                             />
+                            {(() => {
+                              const sub2ApiUsage = parseSub2ApiAccountUsage(a);
+                              const sub2ApiLabel = formatSub2ApiUsageInline(sub2ApiUsage);
+                              if (sub2ApiLabel) {
+                                return (
+                                  <MobileField
+                                    label="订阅用量"
+                                    value={sub2ApiLabel}
+                                  />
+                                );
+                              }
+                              return null;
+                            })()}
+                            {(() => {
+                              const oauthInfo = parseOauthAccountInfo(a);
+                              if (!oauthInfo) return null;
+                              const fiveHour = oauthInfo.quota?.fiveHour;
+                              const sevenDay = oauthInfo.quota?.sevenDay;
+                              return (
+                                <>
+                                  {oauthInfo.email && (
+                                    <MobileField
+                                      label="邮箱"
+                                      value={oauthInfo.email}
+                                    />
+                                  )}
+                                  {oauthInfo.planType && (
+                                    <MobileField
+                                      label="套餐"
+                                      value={oauthInfo.planType}
+                                    />
+                                  )}
+                                  {(fiveHour || sevenDay) && (
+                                    <MobileField
+                                      label="配额窗口"
+                                      value={[
+                                        fiveHour
+                                          ? `5h ${fiveHour.used ?? '-'}%`
+                                          : null,
+                                        sevenDay
+                                          ? `7d ${sevenDay.used ?? '-'}%`
+                                          : null,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' / ')}
+                                    />
+                                  )}
+                                </>
+                              );
+                            })()}
                             <MobileField
                               label="提示"
                               stacked
@@ -2833,9 +2886,52 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 gap: 4,
                               }}
                             >
-                              <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                                ${(a.balance || 0).toFixed(2)}
-                              </span>
+                              {(() => {
+                                // sub2api 账号：显示订阅用量（套餐/已用/总额度/剩余）
+                                const sub2ApiUsage = parseSub2ApiAccountUsage(a);
+                                const sub2ApiLabel = formatSub2ApiUsageInline(sub2ApiUsage);
+                                if (sub2ApiLabel) {
+                                  return (
+                                    <span
+                                      className="site-balance-subscription"
+                                      style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}
+                                      title={`${sub2ApiLabel}${sub2ApiUsage?.activeCount ? ` · 生效订阅 ${sub2ApiUsage.activeCount} 个` : ''}`}
+                                    >
+                                      {sub2ApiLabel}
+                                    </span>
+                                  );
+                                }
+                                const oauthInfo = parseOauthAccountInfo(a);
+                                if (oauthInfo) {
+                                  // OAuth 账号：显示 planType + 配额窗口
+                                  const windowLabel = oauthInfo.quota?.fiveHour
+                                    ? `5h ${oauthInfo.quota.fiveHour.used ?? '-'}%`
+                                    : oauthInfo.quota?.sevenDay
+                                      ? `7d ${oauthInfo.quota.sevenDay.used ?? '-'}%`
+                                      : null;
+                                  return (
+                                    <>
+                                      <span
+                                        className="badge badge-info"
+                                        style={{ fontSize: 10 }}
+                                      >
+                                        {oauthInfo.planType || oauthInfo.provider}
+                                      </span>
+                                      {windowLabel && (
+                                        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                                          {windowLabel}
+                                        </span>
+                                      )}
+                                    </>
+                                  );
+                                }
+                                // 普通账号：显示余额
+                                return (
+                                  <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                    ${(a.balance || 0).toFixed(2)}
+                                  </span>
+                                );
+                              })()}
                               {(a.todayReward || 0) > 0 && (
                                 <span className="site-balance-reward">
                                   +{(a.todayReward || 0).toFixed(2)}

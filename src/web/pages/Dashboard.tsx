@@ -426,7 +426,7 @@ export default function Dashboard({
         // 跟随当前访问地址：服务端 host 可能是 0.0.0.0/127.0.0.1，
         // 用户从局域网 IP 登录时应显示该 IP 而不是 localhost。
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        setLocalAddress({ baseUrl: `${origin || `http://127.0.0.1:${info.port}`}/v1`, port: info.port });
+        setLocalAddress({ baseUrl: `${origin || `http://127.0.0.1:${info.port}`}`, port: info.port });
       })
       .catch(() => setLocalAddress(null));
   }, []);
@@ -946,7 +946,7 @@ export default function Dashboard({
             }`}>隧道</span>
             {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
               <code className="dashboard-endpoint-value">
-                {`${tunnel.publicUrl || tunnel.tunnelUrl}/v1`}
+                {`${tunnel.publicUrl || tunnel.tunnelUrl}`}
               </code>
             ) : (
               <div className={`dashboard-endpoint-value dashboard-endpoint-status ${tunnel?.lastError || tunnelError ? 'is-error' : ''}`}>
@@ -955,12 +955,12 @@ export default function Dashboard({
                   : tunnel?.lastError || tunnelError || ((tunnel?.running || tunnel?.enabled) ? '正在检查隧道...' : '未启用')}
               </div>
             )}
-            {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
+            {isTunnelClientView && (tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
               <button
                 type="button"
                 className="btn btn-ghost dashboard-endpoint-copy"
                 onClick={async () => {
-                  const url = `${tunnel.publicUrl || tunnel.tunnelUrl}/v1`;
+                  const url = `${tunnel.publicUrl || tunnel.tunnelUrl}`;
                   try {
                     await copyText(url);
                     toast.success('已复制隧道地址');
@@ -971,22 +971,19 @@ export default function Dashboard({
               >
                 复制
               </button>
-            ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
-            {!isTunnelClientView ? (
+            ) : !isTunnelClientView ? (
               <button
                 type="button"
-                className={`btn dashboard-endpoint-action ${(tunnel?.running || tunnel?.enabled) ? 'btn-ghost' : 'btn-primary'}`}
+                className={`btn dashboard-endpoint-action ${(tunnel?.running || tunnel?.enabled) ? 'btn-soft-danger' : 'btn-primary'}`}
                 disabled={tunnelBusy}
                 onClick={() => { void handleToggleTunnel(); }}
               >
                 {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭' : '创建')}
               </button>
-            ) : (
-              <span className="dashboard-endpoint-action-placeholder" aria-hidden />
-            )}
+            ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
           </div>
           {tunnel?.tunnelUrl && tunnel?.publicUrl && tunnel.tunnelUrl !== tunnel.publicUrl ? (
-            <div className="dashboard-endpoint-secondary-url">直连：{tunnel.tunnelUrl}/v1</div>
+            <div className="dashboard-endpoint-secondary-url">直连：{tunnel.tunnelUrl}</div>
           ) : null}
         </div>
       </div>

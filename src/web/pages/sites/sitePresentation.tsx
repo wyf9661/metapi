@@ -36,7 +36,7 @@ export function formatUsd(value?: number | null): string {
 
 export function resolveSiteCreatedSessionLabel(platform?: string | null): string {
   const normalized = String(platform || '').trim().toLowerCase();
-  if (normalized === 'codex' || normalized === 'claude' || normalized === 'gemini-cli' || normalized === 'antigravity') return '添加 OAuth 连接';
+  if (normalized === 'codex' || normalized === 'gemini-cli' || normalized === 'antigravity') return '添加 OAuth 连接';
   return '添加账号（用户名密码登录）';
 }
 
@@ -183,7 +183,6 @@ export const SITE_PLATFORM_OPTIONS = [
   { value: 'one-api', label: 'one-api', description: '经典聚合面板，常见于通用 OpenAI 中转' },
   { value: 'sub2api', label: 'sub2api', description: '订阅式中转面板，可同步套餐与余额信息' },
   { value: 'openai', label: 'openai', description: '通用 OpenAI 兼容接口，手填 Base URL 即可' },
-  { value: 'codex', label: 'codex', description: 'Codex OAuth / Session 优先入口' },
-  { value: 'claude', label: 'claude', description: '通用 Claude / Anthropic 兼容接口' },
+  { value: 'claude', label: 'claude', description: 'Claude / Anthropic 接口，手填 Base URL + API Key' },
   { value: 'gemini', label: 'gemini', description: '通用 Gemini / Google AI 兼容接口' },
 ];

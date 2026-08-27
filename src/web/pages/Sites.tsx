@@ -298,33 +298,17 @@ export default function Sites() {
   const normalizedFormPlatform = String(form.platform ?? '').trim();
   const platformOptions = useMemo(() => {
     const current = normalizedFormPlatform;
-    const oauthPlatformIds = new Set(oauthProviders.map((provider) => provider.platform));
-    const genericPlatformOptions = SITE_PLATFORM_OPTIONS
-      .filter((option) => !oauthPlatformIds.has(option.value))
+    const options = SITE_PLATFORM_OPTIONS
       .map((option) => option.value === 'claude'
-        ? { ...option, label: 'claude API', description: '通用 Claude / Anthropic API 接入' }
+        ? { ...option, label: 'claude API', description: 'Claude / Anthropic 接口，手填 Base URL + API Key' }
         : option);
-    const genericOptions = (!current || genericPlatformOptions.some((option) => option.value === current))
-      ? genericPlatformOptions
+    return (!current || options.some((option) => option.value === current))
+      ? options
       : [
-        ...genericPlatformOptions,
+        ...options,
         { value: current, label: `${current}（当前值）` },
       ];
-    const oauthOptions = oauthProviders.map((provider) => ({
-      value: provider.platform,
-      label: `${provider.label} OAuth`,
-      description: provider.requiresProjectId
-        ? 'OAuth 登录，需 Google Cloud Project ID；官方地址自动配置'
-        : 'OAuth 登录；官方地址自动配置',
-    }));
-    return [
-      genericOptions[0]!,
-      { value: '__api_group__', label: 'API / 聚合平台', disabled: true },
-      ...genericOptions.slice(1),
-      { value: '__oauth_group__', label: 'OAuth / CLI 平台', disabled: true },
-      ...oauthOptions,
-    ];
-  }, [normalizedFormPlatform, oauthProviders]);
+  }, [normalizedFormPlatform]);
   const selectedOauthProvider = useMemo(
     () => oauthProviders.find((provider) => provider.platform === normalizedFormPlatform) || null,
     [normalizedFormPlatform, oauthProviders],
@@ -806,9 +790,9 @@ export default function Sites() {
     siteId: number;
     platform?: string | null;
     initializationPresetId?: string | null;
-    choice: 'session' | 'apikey';
+    choice: 'session' | 'apikey' | 'later';
   }) => {
-    const platform = String(input.platform ?? '').toLowerCase().trim();
+    const platform = String(input.platform ?? '').trim().toLowerCase();
     const params = buildSiteConnectionSearchParams({
       siteId: input.siteId,
       initializationPresetId: input.initializationPresetId,
@@ -1134,7 +1118,7 @@ export default function Sites() {
           siteName={createdSiteForChoice.name}
           initialSegment={resolveInitialConnectionSegment(createdSiteForChoice.platform)}
           sessionLabel={resolveSiteCreatedSessionLabel(createdSiteForChoice.platform)}
-          oauthOnly={['codex', 'claude', 'gemini-cli', 'antigravity'].includes(String(createdSiteForChoice.platform || '').trim().toLowerCase())}
+          oauthOnly={false}
           onChoice={handleSiteCreatedChoice}
           onClose={() => {
             setCreatedSiteForChoice(null);
