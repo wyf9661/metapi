@@ -313,13 +313,9 @@ export async function probeRuntimeModel(input: {
       : (input.account.apiToken || input.account.accessToken))
     || '',
   ).trim();
-  if (!tokenValue) {
-    return {
-      status: 'inconclusive',
-      latencyMs: null,
-      reason: 'missing credential for probe',
-    };
-  }
+  // 空凭据不拦截测活：公开站（/v1/chat/completions 无鉴权，如 free.empero.org）
+  // 需要空 token 也能探测；需鉴权站返回 401 只记失败、无副作用。
+  // 与模型发现的空凭据兜底（discoverModelsWithCredential allowEmpty）一致。
 
   const startedAt = Date.now();
   const deadlineAtMs = startedAt + Math.max(1, input.timeoutMs);
