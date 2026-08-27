@@ -11,6 +11,7 @@ import OAuthModelsModal, { type OAuthModelItem } from './oauth/OAuthModelsModal.
 import AutoRefreshCountdown from './oauth/AutoRefreshCountdown.js';
 import {QuotaWindowRow, SideDrawer, compactAccountKey, hasOauthProxySelection, renderCodeBlock, renderGuideCard, resolveConnectionEmailLabel, resolveConnectionPrimaryTitle, resolveConnectionRouteParticipation, resolveConnectionStatusLabel, resolveModelSyncDetail, resolveModelSyncStatusText, resolveProxyDisplayText, resolveProxyProjectSummary, resolveQuotaSourceLabel, resolveQuotaStatusLabel, resolveQuotaSyncDetail, resolveQuotaSyncStatusText, resolveRouteParticipationSummary, resolveRouteUnitStrategyLabel} from './oauth/connectionPresentation.js';
 import {api, type OAuthConnectionInfo, type OAuthProviderInfo, type OAuthRouteUnitStrategy, type OAuthStartInstructions} from '../api.js';
+import {copyText} from '../clipboard.js';
 const POLL_INTERVAL_MS = 1500;
 const CONNECTION_PAGE_LIMIT = 200;
 const AUTO_REFRESH_OPTIONS = [0, 5, 10, 15, 30] as const;
@@ -20,6 +21,12 @@ type ActiveSession = {
   state: string;
   authorizationUrl: string;
   instructions: OAuthStartInstructions;
+  deviceFlow?: {
+    userCode: string;
+    verificationUri: string;
+    expiresIn: number;
+    interval: number;
+  };
 };
 
 type DrawerIntent =
@@ -478,6 +485,17 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
   useEffect(() => {
     if (!loaded || providers.length === 0 || createIntentHandledRef.current) return;
     const params = new URLSearchParams(location.search);
+
+    // 站点管理跳转：自动打开导入弹窗
+    if (params.get('import') === '1') {
+      createIntentHandledRef.current = true;
+      const provider = asTrimmedString(params.get('provider')) || '';
+      if (provider) setSelectedProviderKey(provider);
+      openImportModal();
+      setSessionInfo('从建站流程跳转到 OAuth 管理，请导入 OAuth 凭据 JSON。');
+      return;
+    }
+
     if (params.get('create') !== '1') return;
 
     createIntentHandledRef.current = true;
@@ -487,7 +505,7 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
     setDrawerProjectId('');
     setDrawerOpen(true);
     setSessionInfo('从建站流程跳转到 OAuth 管理，请在这里完成授权。');
-  }, [loaded, location.search, providers]);
+  }, [loaded, location.search, providers, openImportModal]);
 
   useEffect(() => {
     if (!activeSession) return undefined;
@@ -502,7 +520,10 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
 
         if (session.status === 'pending') {
           setSessionInfo('等待授权完成');
-          timer = setTimeout(poll, POLL_INTERVAL_MS);
+          const intervalMs = activeSession.deviceFlow
+            ? Math.max(Number(activeSession.deviceFlow.interval) || 1, 1) * 1000
+            : POLL_INTERVAL_MS;
+          timer = setTimeout(poll, intervalMs);
           return;
         }
 
@@ -801,9 +822,17 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
         state: started.state,
         authorizationUrl: started.authorizationUrl,
         instructions: started.instructions,
+        ...(started.deviceFlow ? { deviceFlow: started.deviceFlow } : {}),
       });
       resetOauthProxySettings();
-      openOAuthPopup(provider.provider, started.authorizationUrl);
+      if (started.deviceFlow) {
+        // 设备码授权（9router 同款）：新标签打开验证页，drawer 内展示 user code + 轮询
+        if (started.deviceFlow.verificationUri) {
+          window.open(started.deviceFlow.verificationUri, '_blank', 'noopener,noreferrer');
+        }
+      } else {
+        openOAuthPopup(provider.provider, started.authorizationUrl);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setSessionError(errorMessage || '无法启动 OAuth 授权');
@@ -1934,6 +1963,70 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
 
           {activeSession ? (
             <div className="card oauth-drawer-panel">
+              {activeSession.deviceFlow ? (
+                <>
+                  <div className="oauth-panel-title">设备码授权</div>
+                  <div className="text-center" style={{ padding: '12px 0' }}>
+                    <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginBottom: 12 }}>
+                      请在浏览器中打开下面的登录地址，并输入授权码完成登录
+                    </p>
+                    <div className="oauth-device-login-box">
+                      <div className="oauth-guide-block-label">登录地址</div>
+                      <div className="oauth-guide-copy" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <code className="oauth-mono" style={{ flex: 1, wordBreak: 'break-all', fontSize: 13 }}>
+                          {activeSession.deviceFlow.verificationUri}
+                        </code>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={async () => {
+                            try {
+                              await copyText(activeSession.deviceFlow!.verificationUri);
+                              toast.success('登录地址已复制');
+                            } catch {
+                              toast.error('复制失败');
+                            }
+                          }}
+                        >
+                          复制
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => window.open(activeSession.deviceFlow!.verificationUri, '_blank', 'noopener,noreferrer')}
+                        >
+                          打开
+                        </button>
+                      </div>
+                    </div>
+                    <div className="oauth-device-code-box">
+                      <div className="oauth-guide-block-label">授权码</div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                        <span className="oauth-device-user-code">{activeSession.deviceFlow.userCode}</span>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={async () => {
+                            try {
+                              await copyText(activeSession.deviceFlow!.userCode);
+                              toast.success('授权码已复制');
+                            } catch {
+                              toast.error('复制失败');
+                            }
+                          }}
+                        >
+                          复制
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--color-text-muted)', fontSize: 13, marginTop: 14 }}>
+                      <span className="oauth-spinner" aria-hidden="true" />
+                      等待授权完成…
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="oauth-panel-title">授权指引</div>
               <div className="oauth-guide-grid">
                 <div className="oauth-guide-highlight">
@@ -2004,6 +2097,8 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
                   ),
                 )}
               </div>
+              </>
+              )}
             </div>
           ) : null}
         </div>

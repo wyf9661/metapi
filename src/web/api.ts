@@ -550,6 +550,8 @@ export type OAuthProviderInfo = {
   supportsDirectAccountRouting: boolean;
   supportsCloudValidation: boolean;
   supportsNativeProxy: boolean;
+  /** 代理链路是否可直通（false = 非标准协议/需专用客户端头） */
+  proxySupported?: boolean;
   siteUrl: string;
 };
 
@@ -591,6 +593,13 @@ export type OAuthStartResponse = {
   state: string;
   authorizationUrl: string;
   instructions: OAuthStartInstructions;
+  /** 设备码授权（device-code flow，如 KiloCode）：展示 verification URI + user code 后轮询 */
+  deviceFlow?: {
+    userCode: string;
+    verificationUri: string;
+    expiresIn: number;
+    interval: number;
+  };
 };
 
 export type OAuthSessionInfo = {

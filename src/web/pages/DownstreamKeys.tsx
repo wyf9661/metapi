@@ -292,8 +292,9 @@ function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined 
         }
       }}
     >
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
       </svg>
     </button>
   );
@@ -1182,7 +1183,7 @@ export default function DownstreamKeys() {
                   <th style={{ width: 42 }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={(e) => toggleSelectAllVisible(e.target.checked)} />
                   </th>
-                  <th>密钥信息</th>
+                  <th style={{ width: '26%' }}>密钥信息</th>
                   <th>授权范围</th>
                   <th>额度</th>
                   <th>用量</th>
@@ -1215,24 +1216,20 @@ export default function DownstreamKeys() {
                         <input type="checkbox" checked={checked} onChange={(e) => toggleSelection(row.id, e.target.checked)} />
                       </td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                           <strong style={{ color: 'var(--color-text-primary)' }}>{row.name}</strong>
                           <StatusBadge enabled={row.enabled} />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-text-muted)' }}>{row.keyMasked}</span>
                           <DownstreamKeyCopyIconButton fullKey={row.key} />
-                        </div>
-                        {row.description ? <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', maxWidth: 320 }}>{row.description}</div> : null}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                           <span className={`badge ${row.groupName ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11 }}>
                             {row.groupName ? `主分组 · ${row.groupName}` : '未分组'}
                           </span>
                           <TagChips tags={row.tags || []} maxVisible={3} />
                         </div>
+                        {row.description ? <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', maxWidth: 320 }}>{row.description}</div> : null}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', alignItems: 'start' }}>
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>模型：<span style={{ color: 'var(--color-text-primary)' }}>{summarizeModelLimit(row.supportedModels || [])}</span></div>
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>群组：<span style={{ color: 'var(--color-text-primary)' }}>{summarizeRouteLimit(row.allowedRouteIds || [], routeMap)}</span></div>
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>标签：<span style={{ color: 'var(--color-text-primary)' }}>{summarizeTags(row.tags || [])}</span></div>

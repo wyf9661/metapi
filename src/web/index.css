@@ -918,6 +918,21 @@ html[data-layout="desktop"] .main-content {
   background: color-mix(in srgb, var(--color-danger) 84%, black);
 }
 
+.btn-soft-danger {
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-bg-card));
+  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 26%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.btn-soft-danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 18%, var(--color-bg-card));
+  border-color: color-mix(in srgb, var(--color-danger) 36%, transparent);
+  color: color-mix(in srgb, var(--color-danger) 84%, black);
+}
+
 .btn-success {
   background: var(--color-success);
   color: white;
@@ -3741,12 +3756,21 @@ textarea {
 }
 
 .oauth-drawer-content {
-  width: min(92vw, 560px);
-  max-width: 560px;
-  height: 100vh;
-  max-height: 100vh;
-  border-radius: 0;
+  width: min(94vw, 64vw);
+  max-width: min(94vw, 64vw);
+  height: auto;
+  max-height: 92vh;
+  border-radius: var(--radius-lg);
   animation: drawer-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (max-width: 768px) {
+  .oauth-drawer-content {
+    width: 92vw;
+    max-width: 92vw;
+    height: auto;
+    max-height: 94vh;
+  }
 }
 
 .oauth-drawer-content.is-closing {
@@ -3834,6 +3858,46 @@ textarea {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.oauth-device-login-box {
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  margin-bottom: 12px;
+}
+
+.oauth-device-code-box {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.oauth-device-user-code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--color-primary);
+  user-select: all;
+}
+
+.oauth-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+  border-top-color: var(--color-primary);
+  animation: oauth-spin 0.9s linear infinite;
+}
+
+@keyframes oauth-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .oauth-guide-grid {
@@ -7537,18 +7601,24 @@ textarea {
 }
 
 .dashboard-endpoint-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.dashboard-endpoint-row {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   min-width: 0;
 }
+
+.dashboard-endpoint-row {
+  display: contents;
+}
+
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(1) > :nth-child(1) { grid-column: 1; grid-row: 1; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(1) > :nth-child(2) { grid-column: 2; grid-row: 1; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(1) > :nth-child(3) { grid-column: 3; grid-row: 1; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(1) { grid-column: 1; grid-row: 2; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(2) { grid-column: 2; grid-row: 2; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(3) { grid-column: 3; grid-row: 2; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(4) { grid-column: 4; grid-row: 2; }
 
 .dashboard-endpoint-label {
   display: inline-flex;
@@ -7618,7 +7688,8 @@ textarea {
 }
 
 .dashboard-endpoint-secondary-url {
-  margin: -2px 0 0 96px;
+  grid-column: 2 / -1;
+  margin: -2px 0 0 0;
   overflow: hidden;
   color: var(--color-text-muted);
   font-size: 11px;
@@ -7628,7 +7699,7 @@ textarea {
 }
 
 @media (max-width: 768px) {
-  .dashboard-endpoint-row {
+  .dashboard-endpoint-rows {
     grid-template-columns: 64px minmax(0, 1fr) auto auto;
   }
 
@@ -7637,7 +7708,8 @@ textarea {
   }
 
   .dashboard-endpoint-secondary-url {
-    margin-left: 72px;
+    grid-column: 2 / -1;
+    margin-left: 0;
   }
 }
 
