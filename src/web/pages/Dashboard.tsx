@@ -663,7 +663,8 @@ export default function Dashboard({
               viewBox="0 0 24 24"
               stroke="currentColor"
               style={{
-                animation: refreshing ? 'spin 1s linear infinite' : 'none',
+                scale: '-1 1',
+                animation: refreshing ? 'spin 1s linear infinite reverse' : 'none',
               }}
             >
               <path
