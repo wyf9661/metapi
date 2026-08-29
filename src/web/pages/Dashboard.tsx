@@ -1080,8 +1080,8 @@ export default function Dashboard({
                 </button>
               </div>
             </div>
-            <div className="chart-panel-enter animate-slide-up stagger-6">
-              <Suspense fallback={<ChartFallback height={344} />}>
+            <div className="chart-panel-enter animate-slide-up stagger-6 site-chart-panel">
+              <Suspense fallback={<ChartFallback />}>
                 {siteChartTab === 'distribution' ? (
                   <SiteDistributionChart
                     data={siteDistribution}

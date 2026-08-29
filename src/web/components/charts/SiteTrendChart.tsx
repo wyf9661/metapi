@@ -293,7 +293,7 @@ export default function SiteTrendChart() {
           )}
         </div>
       </div>
-      <div style={{ position: 'relative', width: '100%', height: 344, flex: 1, minHeight: 344 }}>
+      <div style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0 }}>
         <VChart
           spec={spec as any}
           style={{ width: '100%', height: '100%' }}

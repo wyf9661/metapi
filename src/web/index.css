@@ -6776,6 +6776,25 @@ textarea {
   margin-bottom: 24px;
 }
 
+/* Fixed-height panel for site distribution/trend charts so the card
+   doesn't resize when toggling between the two views. The chart plot
+   area uses flex:1 to fill the remaining space. */
+.site-chart-panel {
+  height: 460px;
+}
+
+@media (max-width: 768px) {
+  .site-chart-panel {
+    height: 420px;
+  }
+}
+
+@media (max-width: 480px) {
+  .site-chart-panel {
+    height: 380px;
+  }
+}
+
 .site-observability-header {
   display: flex;
   align-items: flex-start;

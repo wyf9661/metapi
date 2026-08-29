@@ -336,14 +336,11 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
             style={{
               width: '100%',
               flexShrink: 1,
-              // Keep the plot region at least as tall as the trend chart's
-              // fixed 344px so the card doesn't resize when toggling between
-              // "站点分布" and "站点趋势". The inner bar chart still sizes to
-              // its rows; short lists just leave breathing room below.
-              minHeight: 344,
+              flex: 1,
+              minHeight: 0,
             }}
           >
-            <div style={{ width: '100%', height: 344 }}>
+            <div style={{ width: '100%', height: '100%' }}>
               {spec && <VChart spec={spec} style={{ width: '100%', height: '100%' }} />}
             </div>
           </div>
