@@ -9,6 +9,7 @@ import {
   hasProxyLogRequestTraceIdColumn,
 } from '../db/index.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
+import { emitProxyLogCreated } from './proxyLogEventBus.js';
 
 export type ProxyLogInsertInput = {
   routeId?: number | null;
@@ -445,6 +446,13 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
     try {
       await db.insert(schema.proxyLogs).values(values).run();
       void updateModelConnectivityFromProxyLog(input);
+      emitProxyLogCreated({
+        id: 0,
+        siteId: null,
+        modelRequested: input.modelRequested ?? null,
+        status: input.status ?? null,
+        createdAt: input.createdAt ?? null,
+      });
       return;
     } catch (error) {
       if (allowBillingDetails && isMissingBillingDetailsColumnError(error)) {

@@ -28,6 +28,7 @@ import {
   parseProxyLogBillingDetails,
   withProxyLogSelectFields,
 } from '../../services/proxyLogStore.js';
+import { proxyLogEventBus, type ProxyLogEvent } from '../../services/proxyLogEventBus.js';
 import { calculateProxyRequestLevelMetricsFromAggregates } from '../../services/proxyRequestAggregateMetrics.js';
 import {
   clearAllProxyDebugTraces,
@@ -965,6 +966,50 @@ export async function statsRoutes(app: FastifyInstance) {
       sites: metaPayload.sites,
       models: metaPayload.models,
     };
+  });
+
+  // ── SSE: real-time proxy-log push ────────────────────────────
+  // Must be registered BEFORE /proxy-logs/:id to avoid matching "stream"
+  // as a path param. Browsers connect via EventSource when auto-refresh is
+  // enabled. The server emits a lightweight event on every insertProxyLog;
+  // the client receives it and triggers a silent reload of its current page.
+  app.get('/api/stats/proxy-logs/stream', async (request, reply) => {
+    const raw = reply.raw;
+    const acceptHeader = String(request.headers.accept || '');
+    if (!acceptHeader.includes('text/event-stream') && acceptHeader !== '*/*') {
+      reply.code(406).send({ message: 'This endpoint requires text/event-stream' });
+      return;
+    }
+
+    reply.header('Content-Type', 'text/event-stream; charset=utf-8');
+    reply.header('Cache-Control', 'no-cache, no-transform');
+    reply.header('Connection', 'keep-alive');
+    reply.header('X-Accel-Buffering', 'no');
+    reply.code(200);
+
+    raw.write(': connected\n\n');
+
+    const heartbeat = setInterval(() => {
+      raw.write(': keepalive\n\n');
+    }, 30_000);
+
+    const onLog = (event: ProxyLogEvent) => {
+      try {
+        raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      } catch {
+        // connection likely already closed
+      }
+    };
+
+    proxyLogEventBus.on('proxy-log:created', onLog);
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      proxyLogEventBus.off('proxy-log:created', onLog);
+    };
+
+    raw.on('close', cleanup);
+    raw.on('error', cleanup);
   });
 
   app.get<{ Params: { id: string } }>(

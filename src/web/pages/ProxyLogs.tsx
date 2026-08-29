@@ -18,12 +18,13 @@ import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { useVisiblePolling } from '../components/useVisiblePolling.js';
+import { useProxyLogSSE } from '../components/useProxyLogSSE.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import PageJumpInput from '../components/PageJumpInput.js';
 import PaginationControls from '../components/PaginationControls.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
-import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, PROXY_LOGS_REFRESH_INTERVAL_MS, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
+import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
 import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
 import {
   renderStoredDebugDetails,
@@ -423,12 +424,12 @@ export default function ProxyLogs() {
     void loadMeta();
   }, [loadMeta]);
 
-  // Auto-refresh: reentrancy-guarded and paused while the tab is hidden, so a
-  // backgrounded log page stops polling the (relatively expensive) proxy-logs
-  // query and slow responses never stack overlapping requests.
-  useVisiblePolling(
-    () => load(true),
-    PROXY_LOGS_REFRESH_INTERVAL_MS,
+  // Auto-refresh via SSE: server pushes an event on every insertProxyLog;
+  // the client receives it and triggers a silent reload of the current
+  // page (with active filters). Replaces the old 2-second blind poll.
+  // Also refresh meta (summary/sites/models) since stats may have changed.
+  useProxyLogSSE(
+    () => { void load(true); void loadMeta(true); },
     autoRefresh,
   );
 
@@ -1375,7 +1376,7 @@ export default function ProxyLogs() {
               border: '1px solid var(--color-border)',
               padding: '6px 14px',
             }}
-            title={autoRefresh ? '关闭自动刷新' : '开启自动刷新（每2秒）'}
+            title={autoRefresh ? '关闭实时推送' : '开启实时推送（SSE）'}
           >
             <svg
               width="14"
@@ -1394,7 +1395,7 @@ export default function ProxyLogs() {
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            {autoRefresh ? '自动刷新中' : '自动刷新'}
+            {autoRefresh ? '实时推送中' : '实时推送'}
           </button>
           <button
             onClick={() => {
