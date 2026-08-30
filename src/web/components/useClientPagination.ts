@@ -59,27 +59,6 @@ export function useSelectablePageSize(
 }
 
 /**
- * @deprecated Replaced by {@link useSelectablePageSize}. Kept as a thin alias
- * so callers migrate incrementally. Returns `[pageSize, setPageSize]`, but WITHOUT
- * any measurement/observer logic — sizing is purely user-selectable.
- */
-export function useExactPageSize(): [number, Dispatch<SetStateAction<number>>] {
-  return useSelectablePageSize(DEFAULT_PAGE_SIZE);
-}
-
-/**
- * @deprecated Replaced by {@link useSelectablePageSize}. Same as
- * useExactPageSize but accepts refs for signature compatibility. The
- * refs are ignored — sizing is now purely user-selectable, never DOM-measured.
- */
-export function useExactPageSizeMulti(
-  _refs?: unknown[],
-  _opts?: { min?: number; max?: number; rowSelector?: string; bottomReserve?: number },
-): [number, Dispatch<SetStateAction<number>>] {
-  return useSelectablePageSize(DEFAULT_PAGE_SIZE);
-}
-
-/**
  * Client-side pagination for in-memory lists.
  * `resetKey` should change when the filtered list identity changes
  * (segment, sort, search, length, etc.) so the page snaps back to 1.
