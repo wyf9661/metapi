@@ -151,7 +151,7 @@ describe('stats proxy logs routes', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/api/stats/proxy-logs?limit=1&offset=1&status=failed&search=gpt',
+      url: '/api/stats/proxy-logs?limit=1&offset=1&status=failed&search=gpt&from=2026-03-09',
     });
 
     expect(response.statusCode).toBe(200);
@@ -377,7 +377,7 @@ describe('stats proxy logs routes', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/api/stats/proxy-logs?search=%E9%A1%B9%E7%9B%AE%E7%94%B2',
+      url: '/api/stats/proxy-logs?search=%E9%A1%B9%E7%9B%AE%E7%94%B2&from=2026-03-09',
     });
 
     expect(response.statusCode).toBe(200);
@@ -762,7 +762,7 @@ describe('stats proxy logs routes', () => {
 
     const queryResponse = await app.inject({
       method: 'GET',
-      url: '/api/stats/proxy-logs?view=query&limit=20&offset=0&search=gpt',
+      url: '/api/stats/proxy-logs?view=query&limit=20&offset=0&search=gpt&from=2026-03-09',
     });
 
     expect(queryResponse.statusCode).toBe(200);
@@ -779,7 +779,7 @@ describe('stats proxy logs routes', () => {
 
     const metaResponse = await app.inject({
       method: 'GET',
-      url: '/api/stats/proxy-logs?view=meta&search=gpt',
+      url: '/api/stats/proxy-logs?view=meta&search=gpt&from=2026-03-09',
     });
 
     expect(metaResponse.statusCode).toBe(200);

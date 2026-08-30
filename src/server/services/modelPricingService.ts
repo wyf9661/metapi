@@ -715,6 +715,11 @@ interface TieredBillingParams {
   len: number;  // total input length for tier condition
   cr: number;   // cache read tokens
   cc: number;   // cache creation tokens
+  cc1h: number; // one-hour cache creation tokens
+  img: number;  // image input tokens
+  img_o: number; // image output tokens
+  ai: number;   // audio input tokens
+  ao: number;   // audio output tokens
 }
 
 interface TieredBillingResult {
@@ -728,9 +733,69 @@ function evaluateTieredExpr(expr: string, params: TieredBillingParams): TieredBi
     matchedTier = name;
     return value;
   };
+  const timeInZone = (timezone?: string): Date => {
+    const normalized = String(timezone || '').trim();
+    if (!normalized) return new Date();
+    try {
+      // Validate the IANA name without introducing a runtime dependency.
+      new Intl.DateTimeFormat('en-US', { timeZone: normalized }).format();
+      return new Date();
+    } catch {
+      return new Date();
+    }
+  };
+  const zonedPart = (timezone: string | undefined, part: 'hour' | 'minute' | 'month' | 'day' | 'weekday'): number => {
+    const value = new Intl.DateTimeFormat('en-US', {
+      timeZone: String(timezone || '').trim() || 'UTC',
+      [part === 'weekday' ? 'weekday' : part]: part === 'weekday' ? 'short' : 'numeric',
+    }).formatToParts(timeInZone(timezone)).find((item) => item.type === part)?.value;
+    if (part === 'weekday') {
+      return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(value || 'Sun');
+    }
+    return Number(value || 0);
+  };
+  const hour = (timezone?: string) => zonedPart(timezone, 'hour');
+  const minute = (timezone?: string) => zonedPart(timezone, 'minute');
+  const weekday = (timezone?: string) => zonedPart(timezone, 'weekday');
+  const month = (timezone?: string) => zonedPart(timezone, 'month');
+  const day = (timezone?: string) => zonedPart(timezone, 'day');
+  const max = Math.max;
+  const min = Math.min;
+  const abs = Math.abs;
+  const ceil = Math.ceil;
+  const floor = Math.floor;
   // safe: expressions come from trusted upstream /api/pricing, not user input
-  const fn = new Function('p', 'c', 'len', 'cr', 'cc', 'tier', `return (${expr});`);
-  const cost = Number(fn(params.p, params.c, params.len, params.cr, params.cc, tier)) || 0;
+  const fn = new Function(
+    'p', 'c', 'len', 'cr', 'cc', 'cc1h', 'img', 'img_o', 'ai', 'ao', 'tier',
+    'hour', 'minute', 'weekday', 'month', 'day', 'max', 'min', 'abs', 'ceil', 'floor',
+    `return (${expr});`,
+  );
+  const cost = Number(fn(
+    params.p,
+    params.c,
+    params.len,
+    params.cr,
+    params.cc,
+    params.cc1h,
+    params.img,
+    params.img_o,
+    params.ai,
+    params.ao,
+    tier,
+    hour,
+    minute,
+    weekday,
+    month,
+    day,
+    max,
+    min,
+    abs,
+    ceil,
+    floor,
+  ));
+  if (!Number.isFinite(cost)) {
+    throw new Error('tiered billing expression returned a non-finite value');
+  }
   return { cost, tier: matchedTier };
 }
 
@@ -747,6 +812,11 @@ function buildTieredParams(usage: {
     len: usage.promptTokens + (usage.completionTokens ?? 0),
     cr: usage.cacheReadTokens ?? 0,
     cc: usage.cacheCreationTokens ?? 0,
+    cc1h: 0,
+    img: 0,
+    img_o: 0,
+    ai: 0,
+    ao: 0,
   };
 }
 

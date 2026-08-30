@@ -40,7 +40,7 @@ import {
   parseBackupWebdavExportPayload,
 } from '../../contracts/settingsRoutePayloads.js';
 import { formatUtcSqlDateTime, getResolvedTimeZone } from '../../services/localTimeService.js';
-import { extractClientIp, findInvalidIpAllowlistEntries, isIpAllowed } from '../../middleware/auth.js';
+import { findInvalidIpAllowlistEntries, getTrustedClientIp, isIpAllowed } from '../../middleware/clientIp.js';
 import { performFactoryReset } from '../../services/factoryResetService.js';
 import { normalizeLogCleanupRetentionDays } from '../../shared/logCleanupRetentionDays.js';
 import { stopProxyLogRetentionService } from '../../services/proxyLogRetentionService.js';
@@ -702,7 +702,7 @@ function buildRuntimeDatabaseState(saved: RuntimeDatabaseConfig | null) {
 
 export async function settingsRoutes(app: FastifyInstance) {
   await app.get('/api/settings/runtime', async (request) => {
-    const currentAdminIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
+    const currentAdminIp = getTrustedClientIp(request);
     return getRuntimeSettingsResponse(currentAdminIp);
   });
 
@@ -750,7 +750,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     const body = parsedBody.data as RuntimeSettingsBody;
     const changedLabels: string[] = [];
-    const currentRequestIp = extractClientIp(request.ip, request.headers['x-forwarded-for']);
+    const currentRequestIp = getTrustedClientIp(request);
 
     // Tunnel clients must not change session/security or tunnel access policy.
     if (isLikelyTunnelRequest(request as any)) {
@@ -1835,7 +1835,14 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/settings/maintenance/clear-cache', async (_, reply) => {
+  app.post('/api/settings/maintenance/clear-cache', async (request, reply) => {
+    const body = (request.body || {}) as { confirm?: unknown };
+    if (body.confirm !== true) {
+      return reply.code(400).send({
+        success: false,
+        message: '危险操作需要确认：请携带 confirm:true 后重试',
+      });
+    }
     const { task, reused } = startBackgroundTask(
       {
         type: 'maintenance',
@@ -1961,7 +1968,14 @@ export async function settingsRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/settings/maintenance/factory-reset', async (_, reply) => {
+  app.post('/api/settings/maintenance/factory-reset', async (request, reply) => {
+    const body = (request.body || {}) as { confirm?: unknown };
+    if (body.confirm !== true) {
+      return reply.code(400).send({
+        success: false,
+        message: '危险操作需要确认：请携带 confirm:true 后重试',
+      });
+    }
     try {
       await performFactoryReset();
       return {

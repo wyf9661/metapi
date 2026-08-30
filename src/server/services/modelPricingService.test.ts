@@ -385,5 +385,42 @@ describe('modelPricingService', () => {
       // 200000 * 1 / 1e6 = 0.2
       expect(cost).toBeCloseTo(0.2, 4);
     });
+
+    it('supports NewAPI time helper functions used by production pricing expressions', () => {
+      const model: PricingModel = {
+        modelName: 'time-aware',
+        quotaType: 0,
+        modelRatio: 1,
+        completionRatio: 1,
+        modelPrice: null,
+        enableGroups: ['default'],
+        billingMode: 'tiered_expr',
+        billingExpr: 'hour("UTC") >= 0 ? tier("time", p + c + max(cr, 0)) : tier("fallback", 0)',
+      };
+      const cost = calculateModelUsageCost(
+        model,
+        { promptTokens: 100, completionTokens: 20, totalTokens: 120, cacheReadTokens: 5 },
+        { default: 1 },
+      );
+      expect(cost).toBeCloseTo(0.000125, 8);
+    });
+
+    it('supports cache and multimodal variables from the NewAPI expression contract', () => {
+      const model: PricingModel = {
+        modelName: 'extended-vars',
+        quotaType: 0,
+        modelRatio: 1,
+        completionRatio: 1,
+        modelPrice: null,
+        enableGroups: ['default'],
+        billingMode: 'tiered_expr',
+        billingExpr: 'tier("extended", p + c + cc + cc1h + img + img_o + ai + ao)',
+      };
+      expect(() => calculateModelUsageCost(
+        model,
+        { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        { default: 1 },
+      )).not.toThrow();
+    });
   });
 });

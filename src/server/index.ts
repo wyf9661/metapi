@@ -251,7 +251,11 @@ assertProductionSecurity(config);
 
 const app = Fastify(buildFastifyOptions(config));
 
-await app.register(cors);
+await app.register(cors, {
+  // Explicit allowlist from CORS_ORIGINS when configured; otherwise keep
+  // the permissive default (reflect request Origin) for existing setups.
+  origin: config.corsOrigins.length > 0 ? config.corsOrigins : true,
+});
 
 // Compress responses (brotli/gzip) for static assets and API JSON.
 // Critical for tunnel access where bandwidth is limited.

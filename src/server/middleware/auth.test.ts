@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractClientIp, isIpAllowed } from './auth.js';
+import { extractClientIp, getTrustedClientIp, isIpAllowed } from './auth.js';
 
 describe('auth middleware IP helpers', () => {
   it('extracts first forwarded IP and normalizes ipv4-mapped address', () => {
@@ -25,5 +25,11 @@ describe('auth middleware IP helpers', () => {
   it('ignores malformed CIDR entries instead of matching unexpectedly', () => {
     expect(isIpAllowed('8.8.8.8', ['8.8.8.0/99'])).toBe(false);
     expect(isIpAllowed('8.8.8.8', ['not-an-ip/24'])).toBe(false);
+  });
+
+  it('uses Fastify resolved request.ip as the trusted client address', () => {
+    expect(getTrustedClientIp({ ip: '10.0.0.8', headers: {
+      'x-forwarded-for': '198.51.100.7',
+    } } as never)).toBe('10.0.0.8');
   });
 });

@@ -21,6 +21,7 @@ type Sub2ApiAuthConfig = {
   tokenExpiresAt?: unknown;
   refreshFailCount?: unknown;
   refreshRetryAtMs?: unknown;
+  refreshInvalidConfirmedAt?: unknown;
 };
 
 type Sub2ApiSubscriptionConfig = {
@@ -222,6 +223,7 @@ export type ManagedSub2ApiAuth = {
   tokenExpiresAt?: number;
   refreshFailCount?: number;
   refreshRetryAtMs?: number;
+  refreshInvalidConfirmedAt?: number;
 };
 
 export type StoredSub2ApiSubscriptionSummary = SubscriptionSummary & {
@@ -237,10 +239,12 @@ export function getSub2ApiAuthFromExtraConfig(extraConfig?: ExtraConfigInput): M
   const tokenExpiresAt = normalizeTimestampMs(raw.tokenExpiresAt);
   const refreshFailCount = normalizeNonNegativeNumber(raw.refreshFailCount);
   const refreshRetryAtMs = normalizeTimestampMs(raw.refreshRetryAtMs);
+  const refreshInvalidConfirmedAt = normalizeTimestampMs(raw.refreshInvalidConfirmedAt);
   const result: ManagedSub2ApiAuth = { refreshToken };
   if (tokenExpiresAt) result.tokenExpiresAt = tokenExpiresAt;
   if (refreshFailCount !== undefined) result.refreshFailCount = Math.trunc(refreshFailCount);
   if (refreshRetryAtMs) result.refreshRetryAtMs = refreshRetryAtMs;
+  if (refreshInvalidConfirmedAt) result.refreshInvalidConfirmedAt = refreshInvalidConfirmedAt;
   return result;
 }
 

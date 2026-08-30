@@ -318,7 +318,7 @@ describe('settings and auth events', () => {
     expect(saved).toBeFalsy();
   });
 
-  it('returns current recognized admin IP in runtime settings response', async () => {
+  it('returns the trusted admin IP (connection address when TRUST_PROXY is off)', async () => {
     const response = await app.inject({
       method: 'GET',
       url: '/api/settings/runtime',
@@ -330,7 +330,9 @@ describe('settings and auth events', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json() as { currentAdminIp?: string; serverTimeZone?: string };
-    expect(body.currentAdminIp).toBe('203.0.113.5');
+    // Without TRUST_PROXY the X-Forwarded-For header must NOT be trusted; the
+    // recognized admin IP is the actual connection address.
+    expect(body.currentAdminIp).toBe('10.0.0.8');
     expect(typeof body.serverTimeZone).toBe('string');
     expect((body.serverTimeZone || '').length).toBeGreaterThan(0);
   });

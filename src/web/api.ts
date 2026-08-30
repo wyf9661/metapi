@@ -115,7 +115,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function fetchAuthenticatedResponse(
+export async function fetchAuthenticatedResponse(
   url: string,
   options: RequestOptions = {},
 ): Promise<Response> {
@@ -125,9 +125,11 @@ async function fetchAuthenticatedResponse(
     ...fetchOptions
   } = options;
   const controller = new AbortController();
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = timeoutMs > 0
+    ? setTimeout(() => {
+        controller.abort();
+      }, timeoutMs)
+    : null;
   let cleanupExternalSignal = () => {};
 
   if (externalSignal) {
@@ -1388,14 +1390,20 @@ export const api = {
       timeoutMs: 60_000,
     }),
   clearRuntimeCache: () =>
-    request('/api/settings/maintenance/clear-cache', { method: 'POST' }),
+    request('/api/settings/maintenance/clear-cache', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
   clearUsageData: () =>
     request('/api/settings/maintenance/clear-usage', {
       method: 'POST',
       body: JSON.stringify({ confirm: true }),
     }),
   factoryReset: () =>
-    request('/api/settings/maintenance/factory-reset', { method: 'POST' }),
+    request('/api/settings/maintenance/factory-reset', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
   testNotification: () =>
     request('/api/settings/notify/test', { method: 'POST' }),
 

@@ -369,4 +369,37 @@ describe('sub2apiRefreshScheduler', () => {
     expect(rowAfterSuccess?.extraConfig).not.toContain('refreshRetryAtMs');
     expect(rowAfterSuccess?.extraConfig).toContain('refreshFailCount');
   });
+
+  it('expires an account only after two confirmed invalid refresh tokens within 30 minutes', async () => {
+    const nowMs = Date.parse('2026-04-06T02:00:00.000Z');
+    vi.setSystemTime(nowMs);
+    const site = await db.insert(schema.sites).values({
+      name: 'sub2-invalid-confirm-site',
+      url: 'https://sub2-invalid-confirm.example.com',
+      platform: 'sub2api',
+      status: 'active',
+    }).returning().get();
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'invalid-confirm@example.com',
+      accessToken: 'access-token',
+      status: 'active',
+      extraConfig: buildSub2ApiExtraConfig({
+        refreshToken: 'invalid-refresh-token',
+        tokenExpiresAt: nowMs - 1_000,
+      }),
+    }).returning().get();
+
+    refreshSub2ApiManagedSessionSingleflightMock.mockRejectedValue(
+      new Error('sub2api token refresh failed: HTTP 401: invalid refresh token (REFRESH_TOKEN_INVALID)'),
+    );
+
+    await executeSub2ApiManagedRefreshPass({ nowMs });
+    const afterFirst = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(afterFirst?.status).toBe('active');
+
+    await executeSub2ApiManagedRefreshPass({ nowMs: nowMs + 10 * 60 * 1000 });
+    const afterSecond = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(afterSecond?.status).toBe('expired');
+  });
 });

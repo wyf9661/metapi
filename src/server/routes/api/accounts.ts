@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { db, schema, runtimeDbDialect } from '../../db/index.js';
+import { parsePositiveIntParam } from '../../shared/routeParams.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { refreshBalance } from '../../services/balanceService.js';
@@ -1419,7 +1420,10 @@ export async function accountsRoutes(app: FastifyInstance) {
   app.put<{ Params: { id: string }; Body: unknown }>(
     '/api/accounts/:id',
     async (request, reply) => {
-      const id = parseInt(request.params.id);
+      const id = parsePositiveIntParam(request.params.id);
+      if (id === null) {
+        return reply.code(400).send({ message: 'Invalid account id' });
+      }
       const parsedBody = parseAccountUpdatePayload(request.body);
       if (!parsedBody.success) {
         return reply.code(400).send({ message: parsedBody.error });
@@ -1768,7 +1772,10 @@ export async function accountsRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>(
     '/api/accounts/:id/balance',
     async (request, reply) => {
-      const id = parseInt(request.params.id);
+      const id = parsePositiveIntParam(request.params.id);
+      if (id === null) {
+        return reply.code(400).send({ message: 'Invalid account id' });
+      }
       try {
         const result = await refreshBalance(id);
         if (!result) {

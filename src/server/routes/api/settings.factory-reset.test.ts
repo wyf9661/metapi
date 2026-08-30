@@ -139,6 +139,7 @@ describe('settings factory reset api', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/settings/maintenance/factory-reset',
+      payload: { confirm: true },
     });
 
     expect(response.statusCode).toBe(200);
@@ -171,5 +172,15 @@ describe('settings factory reset api', () => {
     expect(await db.select().from(schema.checkinLogs).all()).toHaveLength(0);
     expect(await db.select().from(schema.downstreamApiKeys).all()).toHaveLength(0);
     expect(await db.select().from(schema.events).all()).toHaveLength(0);
+  });
+
+  it('rejects factory reset without explicit confirmation', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/settings/maintenance/factory-reset',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ success: false });
   });
 });

@@ -4,6 +4,7 @@ import {
   sendReplyIfWritable,
   endRawReplyQuietly,
   canFailoverToNextChannel,
+  isClientDisconnectError,
 } from './replySafety.js';
 
 function makeReply(opts: { sent?: boolean; raw?: Record<string, unknown> } = {}) {
@@ -66,5 +67,16 @@ describe('replySafety', () => {
     expect(canFailoverToNextChannel(makeReply())).toBe(true);
     expect(canFailoverToNextChannel(makeReply({ raw: { headersSent: true } }))).toBe(false);
     expect(canFailoverToNextChannel(makeReply({ sent: true }))).toBe(false);
+  });
+
+  it('classifies client disconnects separately from upstream failures', () => {
+    expect(isClientDisconnectError({ code: 'ERR_STREAM_PREMATURE_CLOSE' })).toBe(true);
+    expect(isClientDisconnectError({ code: 'ABORT_ERR' })).toBe(true);
+    expect(isClientDisconnectError(new Error('premature close'))).toBe(true);
+    expect(isClientDisconnectError(new Error('client disconnected'))).toBe(true);
+    expect(isClientDisconnectError(new Error('connection aborted'))).toBe(true);
+    expect(isClientDisconnectError(new Error('HTTP 502 upstream'))).toBe(false);
+    expect(isClientDisconnectError(null)).toBe(false);
+    expect(isClientDisconnectError(undefined)).toBe(false);
   });
 });

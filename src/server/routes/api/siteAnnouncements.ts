@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { and, desc, eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
+import { parsePositiveIntParam } from '../../shared/routeParams.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
 import { formatUtcSqlDateTime, getResolvedTimeZone } from '../../services/localTimeService.js';
 import { syncSiteAnnouncements } from '../../services/siteAnnouncementService.js';
@@ -150,8 +151,11 @@ export async function siteAnnouncementsRoutes(app: FastifyInstance) {
     return filtered.slice(offset, offset + limit);
   });
 
-  app.post<{ Params: { id: string } }>('/api/site-announcements/:id/read', async (request) => {
-    const id = Number.parseInt(request.params.id, 10);
+  app.post<{ Params: { id: string } }>('/api/site-announcements/:id/read', async (request, reply) => {
+    const id = parsePositiveIntParam(request.params.id);
+    if (id === null) {
+      return reply.code(400).send({ success: false, message: 'Invalid announcement id' });
+    }
     const readAt = formatUtcSqlDateTime(new Date());
     await db.update(schema.siteAnnouncements)
       .set({ readAt })

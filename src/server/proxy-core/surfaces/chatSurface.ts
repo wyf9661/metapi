@@ -89,7 +89,7 @@ import {
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
 import {buildOpenAiFinalFromGeminiNativePayload, buildOpenAiStreamLinesFromGeminiNativeSse, deriveCodexSessionCacheKey, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, isGeminiNativeRuntimePath} from './chatSurfaceHelpers.js';
-import { canFailoverToNextChannel, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, isClientDisconnectError, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 
 export async function handleChatSurfaceRequest(
@@ -1209,6 +1209,13 @@ export async function handleChatSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+      // A downstream client that closed the connection mid-stream is not an
+      // upstream failure: do not alert, do not record a 502 proxy log, and do
+      // not attempt to send a 500 (the response is already committed).
+      if (isClientDisconnectError(err)) {
+        console.warn(`[proxy/chat] client disconnected before completion: ${err?.message || 'client disconnect'}`);
+        return;
+      }
       const endpointFailureStatus = typeof err?.status === 'number' ? err.status : null;
       const isSiteApiEndpointFailure = (
         err instanceof SiteApiEndpointRequestError

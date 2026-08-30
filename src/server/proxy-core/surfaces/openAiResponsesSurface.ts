@@ -101,7 +101,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
-import { canFailoverToNextChannel, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, isClientDisconnectError, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 import {carriesResponsesFileUrlInput, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, getCodexSessionHeaderValue, isRecord, isResponsesWebsocketTransportRequest, rememberCodexSessionResponseId, shouldRefreshOauthResponsesRequest, wantsNativeResponsesReasoning} from './openAiResponsesSurface.pure.js';
 type UsageSummary = ReturnType<typeof parseProxyUsage>;
 
@@ -1450,6 +1450,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             requestedModel,
             downstreamApiKeyId,
           });
+            // A downstream client that closed the connection mid-stream is not
+            // an upstream failure: do not alert or record a 502 proxy log.
+            if (isClientDisconnectError(err)) {
+              console.warn(`[proxy/responses] client disconnected before completion: ${err?.message || 'client disconnect'}`);
+              return;
+            }
             // Failure invalidates last-success affinity for this channel.
             proxyChannelCoordinator.clearLastSuccessChannel({
               requestedModel,

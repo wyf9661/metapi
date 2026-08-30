@@ -4,6 +4,7 @@ import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { db, schema } from '../../db/index.js';
 import { requireInsertedRowId } from '../../db/insertHelpers.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
+import { parsePositiveIntParam } from '../../shared/routeParams.js';
 import {
   ACCOUNT_TOKEN_VALUE_STATUS_READY,
   isUsableAccountToken,
@@ -650,7 +651,10 @@ export async function tokensRoutes(app: FastifyInstance) {
 
   // Get channels for a single route (on-demand loading)
   app.get<{ Params: { id: string } }>('/api/routes/:id/channels', async (request, reply) => {
-    const routeId = parseInt(request.params.id, 10);
+    const routeId = parsePositiveIntParam(request.params.id);
+    if (routeId === null) {
+      return reply.code(400).send({ success: false, message: '路由 ID 无效' });
+    }
     const route = await getRouteWithSources(routeId);
     if (!route) {
       return reply.code(404).send({ success: false, message: '路由不存在' });
@@ -660,7 +664,10 @@ export async function tokensRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { id: string } }>('/api/routes/:id/cooldown/clear', async (request, reply) => {
-    const routeId = parseInt(request.params.id, 10);
+    const routeId = parsePositiveIntParam(request.params.id);
+    if (routeId === null) {
+      return reply.code(400).send({ success: false, message: '路由 ID 无效' });
+    }
     const result = await clearRouteCooldown(routeId);
     if (!result) {
       return reply.code(404).send({ success: false, message: '路由不存在' });
@@ -695,7 +702,10 @@ export async function tokensRoutes(app: FastifyInstance) {
       return reply.code(400).send({ success: false, message: parsedBody.error });
     }
 
-    const routeId = parseInt(request.params.id, 10);
+    const routeId = parsePositiveIntParam(request.params.id);
+    if (routeId === null) {
+      return reply.code(400).send({ success: false, message: '路由 ID 无效' });
+    }
     const body = parsedBody.data;
 
     const route = await getRouteWithSources(routeId);
@@ -1004,7 +1014,10 @@ export async function tokensRoutes(app: FastifyInstance) {
       return reply.code(400).send({ success: false, message: parsedBody.error });
     }
 
-    const id = parseInt(request.params.id, 10);
+    const id = parsePositiveIntParam(request.params.id);
+    if (id === null) {
+      return reply.code(400).send({ success: false, message: '路由 ID 无效' });
+    }
     const body = parsedBody.data;
     const existingRoute = await getRouteWithSources(id);
     if (!existingRoute) {
@@ -1150,7 +1163,10 @@ export async function tokensRoutes(app: FastifyInstance) {
       return reply.code(400).send({ success: false, message: parsedBody.error });
     }
 
-    const routeId = parseInt(request.params.id, 10);
+    const routeId = parsePositiveIntParam(request.params.id);
+    if (routeId === null) {
+      return reply.code(400).send({ success: false, message: '路由 ID 无效' });
+    }
     const body = parsedBody.data;
 
     const route = await getRouteWithSources(routeId);
@@ -1252,7 +1268,10 @@ export async function tokensRoutes(app: FastifyInstance) {
       return reply.code(400).send({ success: false, message: parsedBody.error });
     }
 
-    const channelId = parseInt(request.params.channelId, 10);
+    const channelId = parsePositiveIntParam(request.params.channelId);
+    if (channelId === null) {
+      return reply.code(400).send({ success: false, message: '通道 ID 无效' });
+    }
     const body = parsedBody.data;
 
     const channel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, channelId)).get();
@@ -1351,8 +1370,11 @@ export async function tokensRoutes(app: FastifyInstance) {
   );
 
   // Delete a channel
-  app.delete<{ Params: { channelId: string } }>('/api/channels/:channelId', async (request) => {
-    const channelId = parseInt(request.params.channelId, 10);
+  app.delete<{ Params: { channelId: string } }>('/api/channels/:channelId', async (request, reply) => {
+    const channelId = parsePositiveIntParam(request.params.channelId);
+    if (channelId === null) {
+      return reply.code(400).send({ success: false, message: '通道 ID 无效' });
+    }
     const channel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, channelId)).get();
     await db.delete(schema.routeChannels).where(eq(schema.routeChannels.id, channelId)).run();
     if (channel) {

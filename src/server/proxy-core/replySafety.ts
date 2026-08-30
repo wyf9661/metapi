@@ -55,3 +55,20 @@ export function endRawReplyQuietly(reply: FastifyReply): void {
 export function canFailoverToNextChannel(reply: FastifyReply): boolean {
   return !isFastifyReplyCommitted(reply);
 }
+
+/**
+ * True when the error represents a downstream client disconnect, not an
+ * upstream server failure. These should not be logged as HTTP 500 or
+ * trigger alert noise — the client simply went away (closed tab, network
+ * switch, page navigation).
+ */
+export function isClientDisconnectError(error: unknown): boolean {
+  if (!error) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown })?.code;
+  return (
+    code === 'ERR_STREAM_PREMATURE_CLOSE'
+    || code === 'ABORT_ERR'
+    || /premature close|client disconnected|aborted/i.test(message)
+  );
+}

@@ -474,6 +474,14 @@ export async function statsRoutes(app: FastifyInstance) {
     const model = normalizeProxyLogModelFilter(params.model);
     const fromUtc = normalizeProxyLogTimeBoundary(params.from);
     const toUtc = normalizeProxyLogTimeBoundary(params.to);
+    // A search term forces a full-table scan because `LIKE '%kw%'` cannot
+    // use an index. When the caller searches without an explicit start
+    // time, constrain the scan to the retention window (which is indexed)
+    // instead of scanning the entire proxy_logs table.
+    const effectiveFromUtc = fromUtc
+      || (search
+        ? formatUtcSqlDateTime(new Date(Date.now() - Math.max(1, Math.trunc(config.proxyLogRetentionDays || 30)) * 24 * 60 * 60 * 1000))
+        : null);
     const listWhere = buildProxyLogWhereClause({
       status,
       search,
@@ -481,7 +489,7 @@ export async function statsRoutes(app: FastifyInstance) {
       downstreamKeyId,
       siteId,
       model,
-      fromUtc,
+      fromUtc: effectiveFromUtc,
       toUtc,
     });
 
@@ -970,10 +978,16 @@ export async function statsRoutes(app: FastifyInstance) {
 
   // ── SSE: real-time proxy-log push ────────────────────────────
   // Must be registered BEFORE /proxy-logs/:id to avoid matching "stream"
-  // as a path param. Browsers connect via EventSource when auto-refresh is
-  // enabled. The server emits a lightweight event on every insertProxyLog;
-  // the client receives it and triggers a silent reload of its current page.
-  app.get('/api/stats/proxy-logs/stream', async (request, reply) => {
+  // as a path param. The client connects via an authenticated fetch stream
+  // (POST). POST is used instead of GET because Cloudflare Quick Tunnels
+  // buffer GET SSE responses until connection close (cloudflared#1449),
+  // while POST responses are streamed in real-time.
+  // The server emits a lightweight event on every insertProxyLog; the
+  // client receives it and triggers a silent reload of its current page.
+  app.route({
+    method: ['GET', 'POST'],
+    url: '/api/stats/proxy-logs/stream',
+    handler: async (request, reply) => {
     const raw = reply.raw;
     const acceptHeader = String(request.headers.accept || '');
     if (!acceptHeader.includes('text/event-stream') && acceptHeader !== '*/*') {
@@ -981,24 +995,32 @@ export async function statsRoutes(app: FastifyInstance) {
       return;
     }
 
-    reply.header('Content-Type', 'text/event-stream; charset=utf-8');
-    reply.header('Cache-Control', 'no-cache, no-transform');
-    reply.header('Connection', 'keep-alive');
-    reply.header('X-Accel-Buffering', 'no');
-    reply.code(200);
+    reply.hijack();
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
 
-    raw.write(': connected\n\n');
+    const write = (payload: string): boolean => {
+      if (raw.destroyed || raw.writableEnded) return false;
+      try {
+        raw.write(payload);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    write(': connected\n\n');
 
     const heartbeat = setInterval(() => {
-      raw.write(': keepalive\n\n');
+      if (!write(': keepalive\n\n')) cleanup();
     }, 30_000);
 
     const onLog = (event: ProxyLogEvent) => {
-      try {
-        raw.write(`data: ${JSON.stringify(event)}\n\n`);
-      } catch {
-        // connection likely already closed
-      }
+      if (!write(`data: ${JSON.stringify(event)}\n\n`)) cleanup();
     };
 
     proxyLogEventBus.on('proxy-log:created', onLog);
@@ -1010,6 +1032,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
     raw.on('close', cleanup);
     raw.on('error', cleanup);
+    },
   });
 
   app.get<{ Params: { id: string } }>(

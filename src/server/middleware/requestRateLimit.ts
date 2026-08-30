@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
-import { config } from '../config.js';
+import { getTrustedClientIp } from './clientIp.js';
 
 type RateLimitOptions = {
   bucket: string;
@@ -18,29 +18,6 @@ const activeLimiters = new Set<{
   limiter: RateLimiterMemory;
   seenKeys: Set<string>;
 }>();
-
-function normalizeIp(rawIp: string | null | undefined): string {
-  const ip = (rawIp || '').trim();
-  if (!ip) return 'unknown';
-  if (ip.startsWith('::ffff:')) return ip.slice('::ffff:'.length).trim() || 'unknown';
-  if (ip === '::1') return '127.0.0.1';
-  return ip;
-}
-
-function extractClientIp(request: FastifyRequest): string {
-  // Only trust X-Forwarded-For when a reverse proxy is configured; otherwise
-  // an attacker could forge the header to bypass per-IP rate limits.
-  if (config.trustProxy) {
-    const xff = request.headers['x-forwarded-for'];
-    if (Array.isArray(xff)) {
-      const first = xff.find((item) => item && item.trim().length > 0);
-      if (first) return normalizeIp(first.split(',')[0]);
-    } else if (typeof xff === 'string' && xff.trim().length > 0) {
-      return normalizeIp(xff.split(',')[0]);
-    }
-  }
-  return normalizeIp(request.ip);
-}
 
 export function resetRequestRateLimitStore(): void {
   for (const entry of activeLimiters) {
@@ -62,7 +39,7 @@ export function createRateLimitGuard(options: RateLimitOptions) {
   activeLimiters.add({ limiter, seenKeys });
 
   return async function rateLimitGuard(request: FastifyRequest, reply: FastifyReply) {
-    const key = extractClientIp(request);
+    const key = getTrustedClientIp(request);
     seenKeys.add(key);
     try {
       await limiter.consume(key);

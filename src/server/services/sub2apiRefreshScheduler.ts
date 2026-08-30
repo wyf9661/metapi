@@ -15,6 +15,8 @@ const ACTIVE_STATUS = 'active';
 const SUB2API_PLATFORM = 'sub2api';
 const SUB2API_REFRESH_SCHEDULER_INTERVAL_MS = 60_000;
 export const SUB2API_REFRESH_SCHEDULER_CONCURRENCY = 4;
+const REFRESH_TOKEN_INVALID_PATTERN = /REFRESH_TOKEN_INVALID/i;
+const REFRESH_INVALID_CONFIRM_WINDOW_MS = 30 * 60 * 1000;
 
 let sub2ApiRefreshSchedulerTimer: ReturnType<typeof setInterval> | null = null;
 let sub2ApiRefreshPassInFlight: Promise<void> | null = null;
@@ -61,6 +63,11 @@ function shouldRefreshManagedSub2ApiAccount(input: {
   return isManagedSub2ApiTokenDue(managedAuth.tokenExpiresAt, input.nowMs);
 }
 
+function isRefreshTokenInvalidError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return REFRESH_TOKEN_INVALID_PATTERN.test(message);
+}
+
 function buildBackoffExtraConfigPatch(currentExtraConfig: string | null, nowMs: number): Record<string, unknown> {
   const managedAuth = getSub2ApiAuthFromExtraConfig(currentExtraConfig);
   const { failCount, retryAtMs } = advanceRefreshBackoff(
@@ -73,6 +80,7 @@ function buildBackoffExtraConfigPatch(currentExtraConfig: string | null, nowMs: 
       ...(managedAuth?.tokenExpiresAt != null ? { tokenExpiresAt: managedAuth.tokenExpiresAt } : {}),
       refreshFailCount: failCount,
       refreshRetryAtMs: retryAtMs,
+      ...(managedAuth?.refreshInvalidConfirmedAt != null ? { refreshInvalidConfirmedAt: managedAuth.refreshInvalidConfirmedAt } : {}),
     },
   };
 }
@@ -138,6 +146,39 @@ export async function executeSub2ApiManagedRefreshPass(input: {
         console.warn(
           `[sub2api-refresh] failed to refresh account ${row.accounts.id}: ${(error as Error)?.message || 'unknown error'}`,
         );
+
+        // When the upstream reports REFRESH_TOKEN_INVALID, confirm the
+        // failure twice within 30 minutes before expiring the account.
+        // A single failure might be a transient upstream glitch; two
+        // confirmations mean the refresh token is genuinely revoked.
+        if (isRefreshTokenInvalidError(error)) {
+          const managedAuth = getSub2ApiAuthFromExtraConfig(row.accounts.extraConfig);
+          const firstSeenAt = managedAuth?.refreshInvalidConfirmedAt;
+          if (firstSeenAt && nowMs - firstSeenAt <= REFRESH_INVALID_CONFIRM_WINDOW_MS) {
+            await db.update(schema.accounts).set({
+              status: 'expired',
+              updatedAt: new Date().toISOString(),
+            }).where(eq(schema.accounts.id, row.accounts.id)).run();
+            console.warn(
+              `[sub2api-refresh] account ${row.accounts.id} expired: refresh token invalid confirmed twice`,
+            );
+            return;
+          }
+          // First confirmation: persist it together with the backoff patch
+          // below so a single write keeps both fields consistent.
+          const confirmedAtPatch = {
+            sub2apiAuth: {
+              refreshToken: managedAuth?.refreshToken || '',
+              ...(managedAuth?.tokenExpiresAt != null ? { tokenExpiresAt: managedAuth.tokenExpiresAt } : {}),
+              refreshInvalidConfirmedAt: nowMs,
+            },
+          };
+          await db.update(schema.accounts).set({
+            extraConfig: mergeAccountExtraConfig(row.accounts.extraConfig, confirmedAtPatch),
+            updatedAt: new Date().toISOString(),
+          }).where(eq(schema.accounts.id, row.accounts.id)).run();
+          return;
+        }
         // Persist the failure so the scheduler backs off instead of retrying
         // every 60s against an endpoint that keeps rejecting the request.
         await db.update(schema.accounts).set({
