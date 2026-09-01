@@ -14,6 +14,8 @@ type ProbeCandidate = {
   tokenValue: string;
   account: typeof schema.accounts.$inferSelect;
   site: typeof schema.sites.$inferSelect;
+  /** Consecutive failures of the channel drive the probe backoff interval. */
+  consecutiveFailCount: number;
 };
 
 // 配置常量（从 config 读取，保留兜底值）
@@ -126,11 +128,12 @@ async function loadCoolingProbeCandidates(nowIso: string): Promise<ProbeCandidat
       tokenValue,
       account: row.accounts,
       site: row.sites,
+      consecutiveFailCount: Number(row.route_channels.consecutiveFailCount ?? 0),
     }];
   });
 }
 
-/** 加载活跃通道（正在被路由使用的，有租约） */
+/** Load active channels (those being routed, holding a lease) */
 async function loadActiveProbeCandidates(activeChannelIds: number[]): Promise<ProbeCandidate[]> {
   if (activeChannelIds.length <= 0) return [];
 
@@ -158,16 +161,32 @@ async function loadActiveProbeCandidates(activeChannelIds: number[]): Promise<Pr
       tokenValue,
       account: row.accounts,
       site: row.sites,
+      consecutiveFailCount: Number(row.route_channels.consecutiveFailCount ?? 0),
     }];
   });
+}
+
+/**
+ * Probe interval backoff for a channel, driven by consecutive failures:
+ * 0 failures -> base sweep interval, 1 -> 2.5x, 2+ -> 7.5x (capped).
+ * A channel that keeps failing is probed less and less often, which cuts
+ * the repeated "request reached upstream + client gone" pattern that made
+ * upstream risk control ban accounts.
+ */
+function resolveProbeBackoffMs(candidate: ProbeCandidate): number {
+  const fails = Math.max(0, Math.trunc(candidate.consecutiveFailCount ?? 0));
+  if (fails === 0) return PROBE_SWEEP_INTERVAL_MS;
+  if (fails === 1) return Math.round(PROBE_SWEEP_INTERVAL_MS * 2.5);
+  return Math.round(PROBE_SWEEP_INTERVAL_MS * 7.5);
 }
 
 function shouldProbeCandidate(candidate: ProbeCandidate, nowMs: number): boolean {
   const key = buildProbeKey(candidate.channelId, candidate.modelName);
   if (probeInFlightKeys.has(key)) return false;
   const lastStartedAt = probeLastStartedAtByKey.get(key) ?? 0;
-  // 同一通道最小探测间隔 = sweep 间隔，避免并发冲突
-  return (nowMs - lastStartedAt) >= PROBE_SWEEP_INTERVAL_MS;
+  // Backoff grows with consecutive failures so a struggling channel is not
+  // hammered every sweep (each probe is a real upstream call that bills).
+  return (nowMs - lastStartedAt) >= resolveProbeBackoffMs(candidate);
 }
 
 function compareProbeCandidatePriority(left: ProbeCandidate, right: ProbeCandidate): number {

@@ -274,6 +274,81 @@ describe('channelRecoveryProbeService', () => {
     });
   });
 
+  it('backs off probe frequency for channels with consecutive failures', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'backoff-site',
+      url: 'https://backoff-site.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'backoff-user',
+      accessToken: 'access-backoff',
+      apiToken: 'sk-backoff',
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'session' }),
+    }).returning().get();
+
+    const token = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'default',
+      token: '«redacted:sk-…»',
+      enabled: true,
+      isDefault: true,
+    }).returning().get();
+
+    // Channel A: 0 consecutive failures (base interval)
+    const routeA = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'model-a',
+      enabled: true,
+    }).returning().get();
+    const channelA = await db.insert(schema.routeChannels).values({
+      routeId: routeA.id,
+      accountId: account.id,
+      tokenId: token.id,
+      enabled: true,
+      cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      lastFailAt: new Date().toISOString(),
+      consecutiveFailCount: 0,
+    }).run();
+
+    // Channel B: 2 consecutive failures (7.5x backoff)
+    const routeB = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'model-b',
+      enabled: true,
+    }).returning().get();
+    await db.insert(schema.routeChannels).values({
+      routeId: routeB.id,
+      accountId: account.id,
+      tokenId: token.id,
+      enabled: true,
+      cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      lastFailAt: new Date().toISOString(),
+      consecutiveFailCount: 2,
+    }).run();
+
+    // First sweep: one channel is probed (concurrency = 1).
+    await runChannelProbeSweep();
+    expect(probeRuntimeModelMock).toHaveBeenCalledTimes(1);
+
+    // Advance past the base interval but NOT past the 7.5x backoff (2 fails).
+    // Run multiple sweeps: channel A (0 fails, base interval) should eventually
+    // be probed again, but channel B (2 fails, 7.5x = 15min) should NEVER be probed
+    // within this window. Keep sweeping and collect all probed model names.
+    const baseIntervalMs = 2 * 60 * 1000; // PROBE_SWEEP_INTERVAL_MS default
+    const probedModels: string[] = [];
+    for (let i = 1; i <= 5; i++) {
+      probeRuntimeModelMock.mockClear();
+      await runChannelProbeSweep(Date.now() + baseIntervalMs * i + 1000 * i);
+      probedModels.push(...probeRuntimeModelMock.mock.calls.map((c) => c[0]?.modelName));
+    }
+    // Channel B (2 consecutive failures) must never be probed within 5x base interval
+    // (well under the 7.5x backoff threshold).
+    expect(probedModels).not.toContain('model-b');
+  });
+
   it('prioritizes never-probed active channels before reprobing recently started ones', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'priority-site',

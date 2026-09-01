@@ -283,12 +283,12 @@ function extractSseOrJsonError(buffer: string): string | null {
 }
 
 const MAX_PROBE_RESPONSE_CHARS = 96 * 1024;
-/** 单次 reader.read() 超时：防止上游 socket pending 导致循环卡死。 */
+/** Single reader.read() timeout: prevents an upstream socket from hanging the loop. No reader.cancel() on timeout so the upstream does not see client gone. */
 const PROBE_READ_TIMEOUT_MS = 30_000;
-/** 后台 drain 最大收尾时间：首字成功后不无限等流结束。 */
-const PROBE_DRAIN_TIMEOUT_MS = 15_000;
+/** Background drain cap: stop waiting for the stream end after first-token success (upstream may finish writing meanwhile). */
+const PROBE_DRAIN_TIMEOUT_MS = 60_000;
 
-/** 带单次超时的 reader.read()，超时后取消 reader 并返回 done。 */
+/** Timed reader.read(); on timeout returns done WITHOUT cancelling the reader so the connection is kept for background cleanup. */
 type TimedReadResult = {
   result: ReadableStreamReadResult<Uint8Array>;
   timedOut: boolean;
@@ -302,7 +302,9 @@ async function readChunkWithTimeout(
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<TimedReadResult>((resolve) => {
     timer = setTimeout(() => {
-      void reader.cancel().catch(() => {});
+      // Timeout only marks the read; do NOT cancel the reader. The probe request
+      // already reached the upstream and started billing; aborting the connection
+      // makes the upstream log "client gone" and its risk control may ban the account.
       resolve({ result: { done: true, value: undefined }, timedOut: true });
     }, timeoutMs);
   });
@@ -355,7 +357,9 @@ async function probeStreamFirstChunk(
     const { result: chunkResult, timedOut } = await readChunkWithTimeout(reader, Math.min(PROBE_READ_TIMEOUT_MS, remaining));
     const { value, done } = chunkResult;
     if (done && timedOut) {
-      return { reader: null, text, ttftMs: null, done: false, error: 'probe stream read timeout' };
+      // Keep the reader: the stream is still alive upstream; the caller drains
+      // it in the background so the connection closes naturally (no client gone).
+      return { reader, text, ttftMs: null, done: false, error: 'probe stream read timeout' };
     }
     if (done) {
       if (!text) {
@@ -403,7 +407,11 @@ async function probeStreamFirstChunk(
   return { reader, text, ttftMs: null, done: false, error: extractSseOrJsonError(text) };
 }
 
-/** 后台继续读完整流(用于写测活日志,不阻塞接口返回)。带最大收尾时间。 */
+/** Background read of the full stream (for probe logging; does not block the response).
+ *  Does NOT call reader.cancel() on exit: the probe request already reached the upstream
+ *  and started billing, so cancelling would make the upstream log "client gone" and risk
+ *  a ban. The connection is released by undici when the stream ends naturally.
+ */
 async function drainProbeStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   prefix: string,
@@ -421,10 +429,23 @@ async function drainProbeStream(
       text += decoder.decode(value, { stream: true });
     }
   } catch {
-    // 后台收尾失败不影响测活结果
+    // Background drain failure does not affect the probe result
   }
-  try { await reader.cancel(); } catch { /* ignore */ }
   return text;
+}
+
+/** Drain a probe response that arrived after the probe already gave up waiting
+ *  (deadline hit). Keeps the connection open until the upstream finishes so it
+ *  sees a natural completion instead of "client gone". Never throws.
+ */
+async function drainLateUpstreamResponse(response: RuntimeResponse): Promise<void> {
+  try {
+    const reader = response.body?.getReader?.() as ReadableStreamDefaultReader<Uint8Array> | undefined;
+    if (!reader) return;
+    await drainProbeStream(reader, '');
+  } catch {
+    // Background cleanup failure does not affect the probe result
+  }
 }
 
 /**
@@ -572,6 +593,11 @@ export async function probeRuntimeModel(input: {
 
   const startedAt = Date.now();
   const deadlineAtMs = startedAt + Math.max(1, input.timeoutMs);
+  // Tracks whether the upstream request was actually dispatched. The probe log
+  // question text distinguishes "never sent" from "sent but failed/timed out"
+  // so the misleading "测活请求尚未发出" label stops appearing for requests
+  // that did reach the upstream (and consumed quota there).
+  let requestDispatched = false;
   try {
     // 与线上代理/模型发现一致：测活请求必须走站点配置的 API 入口（apiEndpoints），
     // 未配置入口时才回退 site.url。此前直接用 site.url 会让配置了 apiEndpoints 的
@@ -618,15 +644,8 @@ export async function probeRuntimeModel(input: {
     const { body: baseOpenaiBody, question: probeQuestion } = buildProbeBody(input.modelName);
     const openaiBody = { ...baseOpenaiBody, stream: probeStream };
     const channelProxyUrl = resolveChannelProxyUrl(input.site, input.account.extraConfig);
-    const abortController = new AbortController();
-    const remainingExecutionTimeoutMs = resolveRemainingTimeoutMs(
-      deadlineAtMs,
-      `runtime model probe timeout (${Math.round(input.timeoutMs / 1000)}s)`,
-    );
-    const abortTimer = setTimeout(() => {
-      abortController.abort(new Error(`runtime model probe timeout (${Math.round(input.timeoutMs / 1000)}s)`));
-    }, remainingExecutionTimeoutMs);
-    abortTimer.unref?.();
+    const timeoutLabel = `runtime model probe timeout (${Math.round(input.timeoutMs / 1000)}s)`;
+    const remainingExecutionTimeoutMs = resolveRemainingTimeoutMs(deadlineAtMs, timeoutLabel);
 
     const buildRequest = (endpoint: UpstreamEndpoint): BuiltEndpointRequest => {
       const request = buildUpstreamEndpointRequest({
@@ -654,6 +673,7 @@ export async function probeRuntimeModel(input: {
     const dispatchRequest = async (
       request: BuiltEndpointRequest,
       targetUrl: string,
+      signal?: AbortSignal,
     ) => (
       dispatchRuntimeRequest({
         siteUrl: endpointBaseUrl,
@@ -665,40 +685,60 @@ export async function probeRuntimeModel(input: {
             method: 'POST',
             headers: requestForFetch.headers,
             body: JSON.stringify(requestForFetch.body),
-            signal: abortController.signal,
+            ...(signal ? { signal } : {}),
           },
           channelProxyUrl,
         ),
       })
     );
 
+    // Do NOT abort the in-flight upstream request when the probe deadline hits:
+    // by then the request is already at the upstream and billing (NewAPI logs
+    // "client gone" for aborted connections and its risk control may ban the
+    // account). Instead the probe stops waiting and returns a timeout result,
+    // while the underlying flow keeps running in the background and drains the
+    // response so the upstream sees a natural completion.
     let result: Awaited<ReturnType<typeof executeEndpointFlow>>;
+    requestDispatched = true;
+    const flowPromise = executeEndpointFlow({
+      siteUrl: endpointBaseUrl,
+      proxyUrl: channelProxyUrl,
+      paramOverride: input.site.paramOverride ?? null,
+      endpointCandidates,
+      buildRequest,
+      dispatchRequest,
+      // Same first-byte guard as live proxy surfaces: a relay site that
+      // never returns a byte should fail fast instead of dragging the probe
+      // to its full timeout (which made slow-but-alive sites dominate the
+      // probe log as ambiguous timeouts).
+      firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(0),
+      // Match live proxy surfaces: cascade protocols on endpoint mismatch,
+      // but abort same-site cascade for WAF/5xx/model-missing style failures.
+      shouldAbortRemainingEndpoints: (ctx) => shouldAbortSameSiteEndpointFallback(
+        ctx.response.status,
+        ctx.rawErrText,
+      ),
+      shouldDowngrade: (ctx) => (
+        ctx.response.status >= 500
+        || isEndpointDowngradeError(ctx.response.status, ctx.rawErrText)
+      ),
+    });
     try {
-      result = await executeEndpointFlow({
-        siteUrl: endpointBaseUrl,
-        proxyUrl: channelProxyUrl,
-        paramOverride: input.site.paramOverride ?? null,
-        endpointCandidates,
-        buildRequest,
-        dispatchRequest,
-        // Same first-byte guard as live proxy surfaces: a relay site that
-        // never returns a byte should fail fast instead of dragging the probe
-        // to its full timeout (which made slow-but-alive sites dominate the
-        // probe log as ambiguous timeouts).
-        firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(0),
-        // Match live proxy surfaces: cascade protocols on endpoint mismatch,
-        // but abort same-site cascade for WAF/5xx/model-missing style failures.
-        shouldAbortRemainingEndpoints: (ctx) => shouldAbortSameSiteEndpointFallback(
-          ctx.response.status,
-          ctx.rawErrText,
-        ),
-        shouldDowngrade: (ctx) => (
-          ctx.response.status >= 500
-          || isEndpointDowngradeError(ctx.response.status, ctx.rawErrText)
-        ),
-      });
-    } finally {
-      clearTimeout(abortTimer);
+      result = await withTimeout(
+        () => flowPromise,
+        remainingExecutionTimeoutMs,
+        timeoutLabel,
+      );
+    } catch (error) {
+      // The deadline fired while the flow was still in flight. Keep the flow
+      // running in the background and drain whatever upstream response it
+      // produces so the connection closes naturally (no client gone).
+      if (error instanceof Error && error.message === timeoutLabel) {
+        void flowPromise.then((late) => {
+          if (late.ok) void drainLateUpstreamResponse(late.upstream);
+        }).catch(() => {});
+      }
+      throw error;
     }
     const latencyMs = Date.now() - startedAt;
 
@@ -744,6 +784,11 @@ export async function probeRuntimeModel(input: {
       const streamError = stream.error || extractSseOrJsonError(stream.text);
       const rawErrorText = String(streamError || '').trim();
       const probeStatus = streamError ? 'unsupported' : 'inconclusive';
+      // Keep draining an unfinished stream in the background so the upstream
+      // connection closes naturally instead of being abandoned (client gone).
+      if (stream.reader) {
+        void drainProbeStream(stream.reader, stream.text).catch(() => {});
+      }
       await db.insert(probeLogs).values({
         siteId: input.site.id,
         accountId: input.account.id,
@@ -791,13 +836,20 @@ export async function probeRuntimeModel(input: {
     const errorMessage = error instanceof Error ? error.message : 'probe failed';
     const isTimeout = errorMessage.includes('timeout');
 
-    // 记录异常的测活日志
+    // Log the abnormal probe. questionText distinguishes failure stages:
+    // "request never sent" (endpoint/candidate resolution failed) vs
+    // "request sent but timed out / connection error". The latter already
+    // reached the upstream and consumed quota, so it must not be labelled
+    // as if the request never went out.
+    const questionText = requestDispatched
+      ? (isTimeout ? '测活请求已发出，等待上游响应超时' : '测活请求已发出，连接异常')
+      : '测活请求尚未发出';
     await db.insert(probeLogs).values({
       siteId: input.site.id,
       accountId: input.account.id,
       modelName: input.modelName,
       questionCategory: 'unknown',
-      questionText: '测活请求尚未发出',
+      questionText,
       responseText: null,
       status: isTimeout ? 'timeout' : 'failed',
       latencyMs,

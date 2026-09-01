@@ -35,6 +35,28 @@ vi.mock('./siteApiEndpointService.js', () => ({
   requireSiteApiBaseUrl: (...args: unknown[]) => requireSiteApiBaseUrlMock(...args),
 }));
 
+const probeLogsInsertMock = vi.fn();
+
+vi.mock('../db/index.js', () => ({
+  db: {
+    insert: () => ({
+      values: (values: unknown) => {
+        probeLogsInsertMock(values);
+        const chain = {
+          onConflictDoNothing: () => chain,
+          run: async () => undefined,
+          catch: () => chain,
+        };
+        return chain;
+      },
+    }),
+  },
+}));
+
+vi.mock('../db/schema.js', () => ({
+  probeLogs: {},
+}));
+
 describe('probeRuntimeModel', () => {
   const site = {
     id: 1,
@@ -64,6 +86,7 @@ describe('probeRuntimeModel', () => {
     getOauthInfoFromAccountMock.mockReset();
     buildOauthProviderHeadersMock.mockReset();
     requireSiteApiBaseUrlMock.mockReset();
+    probeLogsInsertMock.mockReset();
 
     getOauthInfoFromAccountMock.mockReturnValue(null);
     buildOauthProviderHeadersMock.mockReturnValue({});
@@ -201,6 +224,83 @@ describe('probeRuntimeModel', () => {
     const dispatched = dispatchRuntimeRequestMock.mock.calls[0][0];
     expect(dispatched.siteUrl).toBe('http://api-endpoint.example.com');
     expect(dispatched.targetUrl.startsWith('http://api-endpoint.example.com')).toBe(true);
+  });
+
+  it('does not abort the upstream connection when the probe deadline hits (avoids client gone)', async () => {
+    resolveUpstreamEndpointCandidatesMock.mockResolvedValue([{
+      id: 'chat',
+      path: '/v1/chat/completions',
+      format: 'openai',
+    }]);
+    let abortFired = false;
+    let dispatchResolved = false;
+    dispatchRuntimeRequestMock.mockImplementation(async (input: {
+      buildInit: (requestUrl: string, request: Record<string, unknown>) => Promise<RequestInit>;
+      targetUrl?: string;
+      request: Record<string, unknown>;
+    }) => {
+      const init = await input.buildInit(input.targetUrl || 'https://probe.example.com/v1/chat/completions', input.request);
+      const signal = init.signal as AbortSignal | undefined;
+      signal?.addEventListener('abort', () => { abortFired = true; }, { once: true });
+      // Slow upstream: completes only after the probe deadline (30ms) has passed.
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      dispatchResolved = true;
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'late-ok' } }] }), { status: 200 });
+    });
+
+    const { probeRuntimeModel } = await import('./runtimeModelProbe.js');
+    const startedAt = Date.now();
+    const result = await probeRuntimeModel({
+      site,
+      account,
+      modelName: 'gpt-5.4',
+      timeoutMs: 30,
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    // The probe stops waiting and reports inconclusive at the deadline.
+    expect(result.status).toBe('inconclusive');
+    expect(result.reason).toContain('timeout');
+    expect(elapsedMs).toBeLessThan(200);
+    // The upstream request must NOT have been aborted: no abort fired and the
+    // background flow was allowed to complete so the upstream sees a natural end.
+    expect(abortFired).toBe(false);
+    // Give the background flow a moment to settle, then confirm it completed.
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(dispatchResolved).toBe(true);
+  });
+
+  it('labels timeout failures as request-sent instead of "测活请求尚未发出"', async () => {
+    resolveUpstreamEndpointCandidatesMock.mockResolvedValue([{
+      id: 'chat',
+      path: '/v1/chat/completions',
+      format: 'openai',
+    }]);
+    dispatchRuntimeRequestMock.mockImplementation(async (input: {
+      buildInit: (requestUrl: string, request: Record<string, unknown>) => Promise<RequestInit>;
+      targetUrl?: string;
+      request: Record<string, unknown>;
+    }) => {
+      await input.buildInit(input.targetUrl || 'https://probe.example.com/v1/chat/completions', input.request);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'late-ok' } }] }), { status: 200 });
+    });
+
+    const { probeRuntimeModel } = await import('./runtimeModelProbe.js');
+    const result = await probeRuntimeModel({
+      site,
+      account,
+      modelName: 'gpt-5.4',
+      timeoutMs: 30,
+    });
+
+    expect(result.status).toBe('inconclusive');
+    expect(result.reason).toContain('timeout');
+    // The catch branch must record the request as already dispatched.
+    expect(probeLogsInsertMock).toHaveBeenCalled();
+    const insertArgs = probeLogsInsertMock.mock.calls[0]?.[0] as any;
+    expect(insertArgs.questionText).toContain('测活请求已发出');
+    expect(insertArgs.questionText).not.toContain('尚未发出');
   });
 
   it('labels relay model-channel authorization failures separately from account credentials', async () => {
