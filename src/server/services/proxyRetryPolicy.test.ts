@@ -71,15 +71,19 @@ describe('proxyRetryPolicy', () => {
     expect(shouldRetryProxyRequest(403, payload)).toBe(false);
   });
 
-  it('does not retry or cascade NewAPI sensitive-word policy rejections reported as 500', () => {
+  it('fails over to another channel on NewAPI sensitive-word rejections reported as 500', () => {
     const payload = JSON.stringify({
       error: {
         code: 'sensitive_words_detected',
         message: 'sensitive words detected',
       },
     });
-    expect(isNonRetryableProtocolPolicyError(payload)).toBe(true);
-    expect(shouldRetryProxyRequest(500, payload)).toBe(false);
+    // Each upstream applies its own keyword rules, so another channel may
+    // accept the same body — this is a channel-local rejection, not a
+    // deterministic client-shape error.
+    expect(isNonRetryableProtocolPolicyError(payload)).toBe(false);
+    expect(shouldRetryProxyRequest(500, payload)).toBe(true);
+    // Same-site cascade stays off: moderation is site-wide, not per-endpoint.
     expect(shouldAbortSameSiteEndpointFallback(500, payload)).toBe(true);
   });
 

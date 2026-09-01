@@ -108,8 +108,11 @@ describe('siteFailureClassification', () => {
     expect(decision.cooldownScope).toBe('channel_model');
     expect(decision.retryChannel).toBe(true);
 
+    // Bare 410 (e.g. LittleSheep "Gone") is also failover-eligible: the
+    // channel is gone but another site may still serve the model.
     const bare410 = classifyProxyFailure({ status: 410, errorText: 'gone' });
-    expect(bare410.class).not.toBe('model_unsupported');
+    expect(bare410.class).toBe('model_unsupported');
+    expect(bare410.retryChannel).toBe(true);
   });
 
   it('classifies context overflow 400 as terminal request_validation', () => {

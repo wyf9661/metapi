@@ -101,7 +101,16 @@ const PROTOCOL_POLICY_PATTERNS: RegExp[] = [
   /codex clients may only use the openai responses protocol/i,
   /only use the openai responses protocol/i,
   /policy_violation/i,
-  /sensitive[_\s-]*words?[_\s-]*detected/i,
+];
+
+/**
+ * Site/relay content-moderation rejections (e.g. NewAPI reports these as
+ * 500 with code:sensitive_words_detected). Different upstreams apply different
+ * keyword rules, so failing over to another channel can legitimately succeed —
+ * this is NOT a client-shape error that reproduces on every site.
+ */
+const SENSITIVE_WORDS_PATTERNS: RegExp[] = [
+  /sensitive[\s-]*words?[\s-]*detected/i,
   /敏感词(?:检测|拦截|命中)/i,
 ];
 
@@ -161,8 +170,6 @@ export const SITE_VALIDATION_FAILURE_PATTERNS: RegExp[] = [
   /invalid\s+json/i,
   /cannot\s+parse/i,
   /unsupported\s+media\s+type/i,
-  /sensitive[_\s-]*words?[_\s-]*detected/i,
-  /敏感词(?:检测|拦截|命中)/i,
 ];
 
 export const SITE_TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
@@ -218,6 +225,16 @@ export function isModelScopedRuntimeFailure(context: SiteRuntimeFailureContext =
 
 export function isProtocolRuntimeFailure(context: SiteRuntimeFailureContext = {}): boolean {
   return matchesAnyPattern(SITE_PROTOCOL_FAILURE_PATTERNS, context.errorText);
+}
+
+/**
+ * Site content-moderation rejection (NewAPI reports as 500
+ * code:sensitive_words_detected). Each upstream applies its own keyword
+ * rules, so another channel may accept the same body — classify as
+ * retryable instead of a deterministic request-shape error.
+ */
+export function isSensitiveWordsFailure(context: SiteRuntimeFailureContext = {}): boolean {
+  return matchesAnyPattern(SENSITIVE_WORDS_PATTERNS, context.errorText);
 }
 
 export function isValidationRuntimeFailure(context: SiteRuntimeFailureContext = {}): boolean {
@@ -433,6 +450,20 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
     };
   }
 
+  // Site content-moderation rejection: each upstream has its own keyword
+  // rules, so another channel may accept the same body. Fail over instead of
+  // terminating (same treatment as model_unsupported — a channel-local
+  // rejection that other channels may not reproduce).
+  if (isSensitiveWordsFailure(ctx)) {
+    return {
+      class: 'model_unsupported',
+      retryChannel: true,
+      cascadeEndpoint: false,
+      cooldownWeight: 1.6,
+      cooldownScope: 'channel_model',
+    };
+  }
+
   if (isEndpointPoolDownFailure(ctx)) {
     return {
       class: 'endpoint_pool_down',
@@ -591,15 +622,11 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       cooldownScope: 'endpoint',
     };
   }
-  if (status === 410 && matchesAnyPattern([
-    /end\s+of\s+life/i,
-    /no\s+longer\s+available/i,
-    /has\s+been\s+(?:retired|deprecated|removed|deleted)/i,
-    /model.*(?:gone|unavailable)/i,
-  ], errorText)) {
-    // Upstream model retired / end-of-life (e.g. OpenAI 410 gone). Another
-    // channel may still serve the model (or a mapped alias), so fail over
-    // instead of terminating the request after a single attempt.
+  if (status === 410) {
+    // Upstream model retired / end-of-life (e.g. OpenAI 410 gone) OR the
+    // channel is simply gone (bare "Gone"). Another channel may still serve
+    // the model (or a mapped alias), so fail over instead of terminating the
+    // request after a single attempt.
     return {
       class: 'model_unsupported',
       retryChannel: true,
