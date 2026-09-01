@@ -30,6 +30,7 @@ function base(partial: Partial<ShadowCandidateInput> & Pick<ShadowCandidateInput
     manualSiteWeight: partial.manualSiteWeight ?? 1,
     connectivity: partial.connectivity ?? null,
     protocolAffinity: partial.protocolAffinity ?? 1,
+    ttftEwmaMs: partial.ttftEwmaMs ?? null,
   };
 }
 
@@ -202,5 +203,66 @@ describe('routeScoringShadow', () => {
     expect(proven.probability).toBeGreaterThan(unknown.probability);
     expect(unknown.factors.connectivity).toBe(1);
     expect(proven.factors.connectivity).toBeGreaterThan(1);
+  });
+
+  it('raises the score of fast first-token sites and lowers slow ones', () => {
+    const result = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, ttftEwmaMs: 500 }),
+      base({ channelId: 2, siteId: 2, accountId: 2, unitCost: 0.01, ttftEwmaMs: 8000 }),
+    ]);
+    const fast = result.candidates.find((c) => c.channelId === 1)!;
+    const slow = result.candidates.find((c) => c.channelId === 2)!;
+    expect(fast.factors.ttft).toBeGreaterThan(slow.factors.ttft);
+    expect(fast.factors.ttft).toBeGreaterThan(1);
+    expect(slow.factors.ttft).toBeLessThan(1);
+    expect(fast.probability).toBeGreaterThan(slow.probability);
+  });
+
+  it('treats missing TTFT samples as neutral', () => {
+    const result = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, ttftEwmaMs: null }),
+      base({ channelId: 2, siteId: 2, accountId: 2, unitCost: 0.01, ttftEwmaMs: 2000 }),
+    ]);
+    const unknown = result.candidates.find((c) => c.channelId === 1)!;
+    const baseline = result.candidates.find((c) => c.channelId === 2)!;
+    expect(unknown.factors.ttft).toBe(1);
+    expect(baseline.factors.ttft).toBeCloseTo(1, 3);
+  });
+
+  it('gives every healthy candidate a minimum probability floor', () => {
+    // One dominant site + many weak-but-healthy sites. Without the floor the
+    // weak sites would get ~0%; the floor keeps each one selectable.
+    const inputs = [
+      base({ channelId: 1, siteId: 1, accountId: 1, credentialKind: 'apikey', unitCost: 0.01, successCount: 500, failCount: 5 }),
+      base({ channelId: 2, siteId: 2, accountId: 2, unitCost: 0.01, successCount: 1, failCount: 0 }),
+      base({ channelId: 3, siteId: 3, accountId: 3, unitCost: 0.01, successCount: 1, failCount: 0 }),
+      base({ channelId: 4, siteId: 4, accountId: 4, unitCost: 0.01, successCount: 1, failCount: 0 }),
+      base({ channelId: 5, siteId: 5, accountId: 5, unitCost: 0.01, successCount: 1, failCount: 0 }),
+    ];
+    const result = rankShadowCandidates(inputs, { probabilityFloor: 0.05 });
+    for (const candidate of result.candidates) {
+      // Every healthy candidate keeps at least the floor (before renormalization
+      // the floor is 0.05; after renormalization it shrinks but stays > 0).
+      expect(candidate.probability).toBeGreaterThan(0.02);
+    }
+    // The dominant site still wins the largest share.
+    const dominant = result.candidates.find((c) => c.channelId === 1)!;
+    const weakest = result.candidates.find((c) => c.channelId === 5)!;
+    expect(dominant.probability).toBeGreaterThan(weakest.probability);
+  });
+
+  it('decays the floor as reliability is proven', () => {
+    const inputs = [
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, successCount: 200, failCount: 2 }),
+      base({ channelId: 2, siteId: 2, accountId: 2, unitCost: 0.01, successCount: 0, failCount: 0 }),
+    ];
+    const result = rankShadowCandidates(inputs, { probabilityFloor: 0.1 });
+    const proven = result.candidates.find((c) => c.channelId === 1)!;
+    const fresh = result.candidates.find((c) => c.channelId === 2)!;
+    // The proven site's high reliability shrinks its floor; the fresh site
+    // keeps the full floor, so it gets a meaningful share.
+    expect(proven.probability).toBeGreaterThanOrEqual(0.5);
+    expect(fresh.probability).toBeGreaterThan(0.05);
+    expect(proven.factors.minShare).toBeGreaterThan(0);
   });
 });

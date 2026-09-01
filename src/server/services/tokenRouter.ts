@@ -8,6 +8,7 @@ import {
 import {refreshModelPricingCatalog} from './modelPricingService.js';
 import { proxyChannelCoordinator, type ProxyChannelLoadSnapshot } from './proxyChannelCoordinator.js';
 import {classifyProxyFailure, isUsageLimitRateLimitFailure, type SiteRuntimeFailureContext} from './siteFailureClassification.js';
+import { refreshBalance } from './balanceService.js';
 import {SITE_API_ENDPOINT_COOLDOWN_MS} from './siteApiEndpointService.js';
 import {clampFailureCooldownMs as clampFailureCooldownMsMath, clampNumber, isContributionCloseToBest, resolveEffectiveFailureCooldownMs as resolveEffectiveFailureCooldownMsMath, resolveFailureBackoffSec, resolveRoundRobinCooldownSec, ROUND_ROBIN_COOLDOWN_LEVELS_SEC} from './tokenRouterMath.js';
 import {
@@ -56,6 +57,7 @@ import {
 import {buildVisibleEnabledRoutes, channelSupportsRequestedModel, getExposedModelNameForRoute, isExplicitGroupRoute, isModelAllowedByDownstreamPolicy, isRouteDisplayNameMatch, normalizeChannelSourceModel, normalizeModelAlias, normalizeRouteDisplayName, normalizeRouteMode, resolveMappedModel, resolveModelResolution, type ModelResolution} from './tokenRouterModelMatching.js';
 import {isExactRouteModelPattern, matchesModelPattern} from './tokenRouterModelPatterns.js';
 import {formatShadowSelectionLog, rankShadowCandidates, type ShadowCandidateInput} from './routeScoringShadow.js';
+import { getPerformanceShadowMetrics } from './performanceShadow.js';
 import {
   loadConnectivityLookup,
   resolveCandidateConnectivity,
@@ -1518,7 +1520,9 @@ export class TokenRouter {
         connectivityLookup,
         requestedModel,
       );
-      const ranked = rankShadowCandidates(shadowInputs);
+      const ranked = rankShadowCandidates(shadowInputs, {
+        probabilityFloor: config.routeProbabilityFloor ?? 0.05,
+      });
       const byChannelId = new Map(ranked.candidates.map((row) => [row.channelId, row]));
       for (const row of filteredLayer) {
         const target = candidateMap.get(row.channel.id);
@@ -2105,6 +2109,28 @@ export class TokenRouter {
     }
 
     recordSiteRuntimeFailure(account.siteId, normalizedContext, nowMs);
+
+    // Quota/credit exhaustion (402 / "insufficient quota" / "用户剩余额度"):
+    // the stored balance snapshot is hourly and stale by the time the upstream
+    // refuses a request, so each call keeps burning into a near-empty account.
+    // Mark the balance as exhausted immediately (session accounts) so scoring
+    // hard-excludes it, then re-verify asynchronously — a successful refresh
+    // restores the real balance and un-excludes; a failing one keeps it out
+    // until the hourly sweep proves otherwise.
+    const failureDecision = classifyProxyFailure(normalizedContext);
+    if (config.routeQuotaExhaustionExclude !== false && failureDecision.class === 'quota_or_credit') {
+      const credentialMode = getCredentialModeFromExtraConfig(account.extraConfig);
+      const looksLikeDirectApiKey = credentialMode === 'apikey'
+        || (!!account.apiToken && !account.accessToken);
+      if (!looksLikeDirectApiKey) {
+        await db.update(schema.accounts).set({
+          balance: 0,
+          updatedAt: new Date(nowMs).toISOString(),
+        }).where(eq(schema.accounts.id, account.id)).run();
+        // Re-verify in the background; never throw into the request path.
+        void refreshBalance(account.id).catch(() => {});
+      }
+    }
   }
 
   /**
@@ -2214,6 +2240,15 @@ export class TokenRouter {
           ],
         })
         : null;
+      // Time-to-first-token from live proxy samples (routeId+siteId+model+stream).
+      // No sample = null = neutral in scoring. Streaming samples are what users
+      // actually feel; non-stream (embeddings etc.) samples are ignored here.
+      const ttftSample = getPerformanceShadowMetrics({
+        routeId: candidate.channel.routeId,
+        siteId: candidate.site.id,
+        modelName: model,
+        isStream: true,
+      }, nowMs);
       return {
         channelId: candidate.channel.id,
         siteId: candidate.site.id,
@@ -2243,6 +2278,7 @@ export class TokenRouter {
           protocolProfile: (candidate.site as { protocolProfile?: unknown }).protocolProfile,
           customHeaders: (candidate.site as { customHeaders?: unknown }).customHeaders,
         }),
+        ttftEwmaMs: ttftSample?.ttftEwmaMs ?? null,
       };
     });
   }
@@ -2271,7 +2307,9 @@ export class TokenRouter {
         connectivityLookup,
         requestedModel,
       );
-      const ranked = rankShadowCandidates(inputs);
+      const ranked = rankShadowCandidates(inputs, {
+        probabilityFloor: config.routeProbabilityFloor ?? 0.05,
+      });
       const active = ranked.candidates.filter((c) => !c.factors.exclusion && c.score > 0 && c.probability > 0);
       let selectedId = ranked.selectedChannelId;
       // Probability-proportional selection with a bounded gap. Normal traffic
@@ -2331,7 +2369,9 @@ export class TokenRouter {
         connectivityLookup,
         requestedModel,
       );
-      const shadow = rankShadowCandidates(inputs);
+      const shadow = rankShadowCandidates(inputs, {
+        probabilityFloor: config.routeProbabilityFloor ?? 0.05,
+      });
       console.info(formatShadowSelectionLog({
         requestedModel,
         liveChannelId,

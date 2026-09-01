@@ -106,6 +106,8 @@ interface RuntimeSettingsBody {
   proxyFirstByteTimeoutSec?: number;
   proxyRouteProbeRate?: number;
   tokenRouterFailureCooldownMaxSec?: number;
+  routeProbabilityFloor?: number;
+  routeQuotaExhaustionExclude?: boolean;
   routingWeights?: Partial<RoutingWeights>;
   defaultRoutingStrategy?: string;
   proxyErrorKeywords?: string[] | string;
@@ -598,6 +600,8 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     proxyFirstByteTimeoutSec: config.proxyFirstByteTimeoutSec,
     proxyRouteProbeRate: config.proxyRouteProbeRate,
     tokenRouterFailureCooldownMaxSec: config.tokenRouterFailureCooldownMaxSec,
+    routeProbabilityFloor: config.routeProbabilityFloor ?? 0.05,
+    routeQuotaExhaustionExclude: config.routeQuotaExhaustionExclude !== false,
     routingWeights: config.routingWeights,
     defaultRoutingStrategy: config.defaultRoutingStrategy,
     webhookUrl: config.webhookUrl,
@@ -1551,6 +1555,28 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.proxyRouteProbeRate = normalized;
       upsertSetting('proxy_route_probe_rate', normalized);
+    }
+
+    if (body.routeProbabilityFloor !== undefined) {
+      const nextFloor = Number(body.routeProbabilityFloor);
+      if (!Number.isFinite(nextFloor) || nextFloor < 0.03 || nextFloor > 0.15) {
+        return reply.code(400).send({ success: false, message: '概率保底下限必须是 0.03 到 0.15 之间的数字' });
+      }
+      const normalized = Math.min(0.15, Math.max(0.03, nextFloor));
+      if (Math.abs(normalized - (config.routeProbabilityFloor ?? 0.05)) > 1e-9) {
+        changedLabels.push(`概率保底下限（${config.routeProbabilityFloor ?? 0.05} -> ${normalized}）`);
+      }
+      config.routeProbabilityFloor = normalized;
+      upsertSetting('route_probability_floor', normalized);
+    }
+
+    if (body.routeQuotaExhaustionExclude !== undefined) {
+      const nextValue = body.routeQuotaExhaustionExclude === true;
+      if (nextValue !== (config.routeQuotaExhaustionExclude !== false)) {
+        changedLabels.push(`quota 超限排除（${config.routeQuotaExhaustionExclude !== false ? '开' : '关'} -> ${nextValue ? '开' : '关'}）`);
+      }
+      config.routeQuotaExhaustionExclude = nextValue;
+      upsertSetting('route_quota_exhaustion_exclude', nextValue);
     }
 
     if (body.tokenRouterFailureCooldownMaxSec !== undefined) {

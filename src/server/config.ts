@@ -145,6 +145,15 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
       : null,
     requestBodyLimit: DEFAULT_REQUEST_BODY_LIMIT,
     routingFallbackUnitCost: Math.max(1e-6, parseNumber(env.ROUTING_FALLBACK_UNIT_COST, 1)),
+    // Minimum probability floor (0.03-0.15) each healthy route candidate keeps
+    // after balanced-v2 scoring, so new/small sites are actually tried instead
+    // of being starved to ~0% by dominant sites. Decays as reliability is proven.
+    routeProbabilityFloor: Math.min(0.15, Math.max(0.03, parseNumber(env.ROUTE_PROBABILITY_FLOOR, 0.05))),
+    // When a session account hits quota/credit exhaustion (402 / insufficient
+    // balance), immediately mark its balance exhausted (hard-exclude from
+    // scoring) and re-verify asynchronously. Direct API-key accounts are never
+    // touched (balance is unknown there, default 0 must not mean exhausted).
+    routeQuotaExhaustionExclude: parseBoolean(env.ROUTE_QUOTA_EXHAUSTION_EXCLUDE, true),
     // Default 30s: cut dead/slow channels before full generation hangs failover.
     // 0 still disables. Streaming requests that already emit the first token continue.
     proxyFirstByteTimeoutSec: Math.max(0, Math.trunc(parseNumber(env.PROXY_FIRST_BYTE_TIMEOUT_SEC, 30))),

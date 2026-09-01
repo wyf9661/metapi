@@ -49,6 +49,12 @@ export type ShadowCandidateInput = {
   connectivity?: ConnectivitySignal;
   /** Soft multiplier from site protocol profile (Codex/responses). */
   protocolAffinity?: number;
+  /**
+   * Time-to-first-token EWMA (ms) from live proxy samples, keyed by
+   * routeId+siteId+model+stream. null = no sample yet (neutral).
+   * Faster first tokens raise the score; slower ones lower it.
+   */
+  ttftEwmaMs?: number | null;
 };
 
 export type ShadowScoreFactors = {
@@ -64,6 +70,10 @@ export type ShadowScoreFactors = {
   connectivity: number;
   /** Soft multiplier from site protocol profile. */
   protocolAffinity: number;
+  /** Time-to-first-token factor (faster = higher, neutral 1 when unknown). */
+  ttft: number;
+  /** Bounded minimum probability floor after normalization. */
+  minShare: number;
   exclusion: string | null;
 };
 
@@ -159,6 +169,33 @@ export function computeCostFactor(unitCost: number, costSource: ShadowCostSource
   return clampNumber(minCost / cost, 0.15, 1.25);
 }
 
+/** TTFT baseline: first tokens faster than this get a boost, slower get a penalty. */
+const TTFT_BASELINE_MS = 2_000;
+/** How far a TTFT difference can push the score (0.6x .. 1.35x). */
+const TTFT_MAX_FACTOR = 1.35;
+const TTFT_MIN_FACTOR = 0.6;
+
+/**
+ * Bounded minimum probability floor for every healthy candidate. With N active
+ * candidates each keeps at least clamp(1/N, MIN..MAX) of the traffic share so
+ * new/small sites are actually tried, decaying as reliability is proven.
+ */
+const MIN_PROBABILITY_FLOOR = 0.03;
+const MAX_PROBABILITY_FLOOR = 0.15;
+/** Default floor when the caller does not pass a configured value. */
+const DEFAULT_PROBABILITY_FLOOR = 0.05;
+
+/**
+ * Time-to-first-token factor. No sample = neutral 1. Faster first tokens
+ * (streaming) raise the score; slow ones lower it. Clamped so a single slow
+ * site cannot be crushed and a fast site cannot dominate purely on latency.
+ */
+export function computeTtftFactor(ttftEwmaMs: number | null | undefined): number {
+  if (ttftEwmaMs == null || !Number.isFinite(ttftEwmaMs) || ttftEwmaMs <= 0) return 1;
+  const ratio = TTFT_BASELINE_MS / ttftEwmaMs;
+  return clampNumber(ratio, TTFT_MIN_FACTOR, TTFT_MAX_FACTOR);
+}
+
 export function scoreShadowCandidate(
   input: ShadowCandidateInput,
   peerUnitCosts: number[],
@@ -200,6 +237,7 @@ export function scoreShadowCandidate(
     0.5,
     1.5,
   );
+  const ttft = computeTtftFactor(input.ttftEwmaMs);
 
   let exclusion = balance.exclusion;
   let score = 0;
@@ -212,7 +250,8 @@ export function scoreShadowCandidate(
       * credential
       * (load ** 0.8)
       * connectivity
-      * protocolAffinity;
+      * protocolAffinity
+      * ttft;
     if (!Number.isFinite(score) || score <= 0) {
       score = 0;
       exclusion = exclusion || '评分无效';
@@ -237,6 +276,8 @@ export function scoreShadowCandidate(
       load,
       connectivity,
       protocolAffinity,
+      ttft,
+      minShare: 0,
       exclusion,
     },
     expectedRequestCost,
@@ -244,7 +285,10 @@ export function scoreShadowCandidate(
   };
 }
 
-export function rankShadowCandidates(inputs: ShadowCandidateInput[]): ShadowSelectionResult {
+export function rankShadowCandidates(
+  inputs: ShadowCandidateInput[],
+  options?: { probabilityFloor?: number },
+): ShadowSelectionResult {
   if (inputs.length === 0) {
     return { selectedChannelId: null, candidates: [], excluded: [] };
   }
@@ -259,12 +303,40 @@ export function rankShadowCandidates(inputs: ShadowCandidateInput[]): ShadowSele
     .filter((c) => c.factors.exclusion)
     .map((c) => ({ channelId: c.channelId, reason: c.factors.exclusion as string }));
 
+  // Bounded floor so every healthy candidate gets a real chance, decaying as
+  // the candidate proves itself. Without it, score/total normalization lets a
+  // dominant site (high credential+reliability) starve new/small sites into a
+  // permanent near-zero probability: fewer calls -> fewer samples -> lower
+  // score -> even fewer calls.
+  const activeCount = active.length;
+  const configuredFloor = Number.isFinite(options?.probabilityFloor)
+    ? clampNumber(Number(options?.probabilityFloor ?? 0), MIN_PROBABILITY_FLOOR, MAX_PROBABILITY_FLOOR)
+    : DEFAULT_PROBABILITY_FLOOR;
+  const minShare = activeCount > 0
+    ? clampNumber(Math.max(1 / activeCount, configuredFloor), MIN_PROBABILITY_FLOOR, MAX_PROBABILITY_FLOOR)
+    : 0;
+
   const total = active.reduce((sum, c) => sum + c.score, 0);
+  const applyFloor = (c: ShadowScoredCandidate): number => {
+    if (c.factors.exclusion || total <= 0) return 0;
+    const raw = c.score / total;
+    if (activeCount <= 1) return 1;
+    // Dynamic decay: a candidate with a proven high success rate does not need
+    // the floor (its score already wins traffic); a new/struggling one keeps it.
+    const successRate = c.factors.reliability;
+    const decayedFloor = minShare * (1 - clampNumber(successRate, 0, 1));
+    return Math.max(raw, decayedFloor);
+  };
   for (const c of scored) {
-    if (c.factors.exclusion || total <= 0) {
-      c.probability = 0;
-    } else {
-      c.probability = c.score / total;
+    c.probability = applyFloor(c);
+    c.factors.minShare = minShare;
+  }
+
+  // Re-normalize so probabilities sum to 1 after the floor lift.
+  const floorTotal = active.reduce((sum, c) => sum + c.probability, 0);
+  if (floorTotal > 0) {
+    for (const c of scored) {
+      c.probability = c.probability / floorTotal;
     }
   }
 

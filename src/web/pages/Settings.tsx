@@ -76,6 +76,8 @@ type RuntimeSettings = {
   proxyRouteProbeRate: number;
   routeFailureCooldownMaxValue: number;
   routeFailureCooldownMaxUnit: RouteCooldownUnit;
+  routeProbabilityFloor: number;
+  routeQuotaExhaustionExclude: boolean;
   routingWeights: RoutingWeights;
   defaultRoutingStrategy?: string;
   proxyErrorKeywords: string[];
@@ -147,6 +149,8 @@ export default function Settings() {
     proxyRouteProbeRate: 0.15,
     routeFailureCooldownMaxValue: 30,
     routeFailureCooldownMaxUnit: 'day',
+    routeProbabilityFloor: 0.05,
+    routeQuotaExhaustionExclude: true,
     routingWeights: defaultWeights,
     defaultRoutingStrategy: 'weighted',
     proxyErrorKeywords: [],
@@ -442,6 +446,10 @@ export default function Settings() {
           : 0.15,
         routeFailureCooldownMaxValue: routeCooldownInput.value,
         routeFailureCooldownMaxUnit: routeCooldownInput.unit,
+        routeProbabilityFloor: Number(runtimeInfo.routeProbabilityFloor) >= 0.03 && Number(runtimeInfo.routeProbabilityFloor) <= 0.15
+          ? Number(runtimeInfo.routeProbabilityFloor)
+          : 0.05,
+        routeQuotaExhaustionExclude: runtimeInfo.routeQuotaExhaustionExclude !== false,
         routingWeights: {
           ...defaultWeights,
           ...(runtimeInfo.routingWeights || {}),
@@ -697,6 +705,10 @@ export default function Settings() {
           runtime.routeFailureCooldownMaxValue,
           runtime.routeFailureCooldownMaxUnit,
         ),
+        routeProbabilityFloor: Number.isFinite(runtime.routeProbabilityFloor)
+          ? Math.min(0.15, Math.max(0.03, runtime.routeProbabilityFloor))
+          : 0.05,
+        routeQuotaExhaustionExclude: runtime.routeQuotaExhaustionExclude !== false,
         disableCrossProtocolFallback: runtime.disableCrossProtocolFallback,
       });
       toast.success('路由策略已保存');
@@ -1712,6 +1724,54 @@ export default function Settings() {
                   />
                 </div>
               ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginTop: 12 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                    概率保底下限（0.03-0.15）
+                  </div>
+                  <input
+                    type="number"
+                    min={0.03}
+                    max={0.15}
+                    step={0.01}
+                    aria-label="概率保底下限"
+                    value={runtime.routeProbabilityFloor ?? 0.05}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setRuntime((prev) => ({
+                        ...prev,
+                        routeProbabilityFloor: Number.isFinite(v)
+                          ? Math.min(0.15, Math.max(0.03, v))
+                          : prev.routeProbabilityFloor,
+                      }));
+                    }}
+                    style={inputStyle}
+                  />
+                  <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                    每个健康候选通道至少保留的流量占比，新站/低分站借此获得真实调用机会；随成功率提升自动衰减。
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                    quota 超限即时排除
+                  </div>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={runtime.routeQuotaExhaustionExclude !== false}
+                      onChange={(e) => setRuntime((prev) => ({
+                        ...prev,
+                        routeQuotaExhaustionExclude: e.target.checked,
+                      }))}
+                      style={{ width: 15, height: 15, accentColor: 'var(--color-primary)' }}
+                    />
+                    会话账号遇 402/余额不足时立即置余额为 0 并核实，恢复前不进路由
+                  </label>
+                  <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                    直连 API Key 不受影响（无法获取余额，默认 0 不视为耗尽）。
+                  </div>
+                </div>
               </div>
             </div>
           </div>

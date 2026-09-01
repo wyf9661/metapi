@@ -59,6 +59,8 @@ describe('Settings route cooldown cap', () => {
       proxyFirstByteTimeoutSec: 0,
       routingWeights: {},
       tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
+      routeProbabilityFloor: 0.05,
+      routeQuotaExhaustionExclude: true,
       adminIpAllowlist: [],
     });
     apiMock.getDownstreamApiKeys.mockResolvedValue({ items: [] });
@@ -129,6 +131,8 @@ describe('Settings route cooldown cap', () => {
         proxyFirstByteTimeoutSec: 0,
         proxyRouteProbeRate: 0.15,
         tokenRouterFailureCooldownMaxSec: 10,
+        routeProbabilityFloor: 0.05,
+        routeQuotaExhaustionExclude: true,
         disableCrossProtocolFallback: false,
       });
     } finally {
@@ -150,6 +154,8 @@ describe('Settings route cooldown cap', () => {
       proxyFirstByteTimeoutSec: 0,
       routingWeights: {},
       tokenRouterFailureCooldownMaxSec: 10,
+      routeProbabilityFloor: 0.05,
+      routeQuotaExhaustionExclude: true,
       adminIpAllowlist: [],
     });
 
@@ -231,6 +237,8 @@ describe('Settings route cooldown cap', () => {
         proxyFirstByteTimeoutSec: 7,
         proxyRouteProbeRate: 0.15,
         tokenRouterFailureCooldownMaxSec: 30 * 24 * 60 * 60,
+        routeProbabilityFloor: 0.05,
+        routeQuotaExhaustionExclude: true,
         disableCrossProtocolFallback: false,
       });
     } finally {

@@ -362,6 +362,8 @@ export type RuntimeSettingsPayload = {
   proxyFirstByteTimeoutSec?: number;
   proxyRouteProbeRate?: number;
   tokenRouterFailureCooldownMaxSec?: number;
+  routeProbabilityFloor?: number;
+  routeQuotaExhaustionExclude?: boolean;
   routingWeights?: RuntimeRoutingWeightsPayload;
   defaultRoutingStrategy?: string;
   proxyErrorKeywords?: string[] | string;

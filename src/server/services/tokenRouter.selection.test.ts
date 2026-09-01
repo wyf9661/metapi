@@ -2101,5 +2101,84 @@ describe('selectPreferredChannel low-balance yield', () => {
     });
     expect(selected?.channel.id).toBe(channel.id);
   });
+
+  it('marks session account balance exhausted on quota_or_credit failure and leaves api keys untouched', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: `quota-site-${localIdSeed += 1}`,
+      url: 'https://quota-site.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const sessionAccount = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: `quota-session-${localIdSeed}`,
+      accessToken: 'session-token-value',
+      apiToken: '',
+      status: 'active',
+      balance: 50,
+      lastBalanceRefresh: new Date().toISOString(),
+      extraConfig: JSON.stringify({ credentialMode: 'session' }),
+    }).returning().get();
+
+    const apiKeyAccount = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: `quota-apikey-${localIdSeed}`,
+      accessToken: '',
+      apiToken: 'sk-quota-apikey',
+      status: 'active',
+      balance: 0,
+      lastBalanceRefresh: new Date().toISOString(),
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+    }).returning().get();
+
+    const sessionToken = await createYieldToken(sessionAccount.id, 'quota-session-token');
+    const apiKeyToken = await createYieldToken(apiKeyAccount.id, 'quota-apikey-token');
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'quota-model',
+      enabled: true,
+    }).returning().get();
+
+    const sessionChannel = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: sessionAccount.id,
+      tokenId: sessionToken.id,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+    }).returning().get();
+
+    const apiKeyChannel = await db.insert(schema.routeChannels).values({
+      routeId: route.id,
+      accountId: apiKeyAccount.id,
+      tokenId: apiKeyToken.id,
+      priority: 0,
+      weight: 10,
+      enabled: true,
+    }).returning().get();
+
+    config.routeQuotaExhaustionExclude = true;
+    const router = new TokenRouter();
+
+    // Session account: quota failure zeroes the balance snapshot (hard-exclude).
+    await router.recordFailure(sessionChannel.id, {
+      status: 402,
+      errorText: 'You exceeded your current quota',
+      modelName: 'quota-model',
+    });
+    const sessionAfter = await db.select().from(schema.accounts)
+      .where(eq(schema.accounts.id, sessionAccount.id)).get();
+    expect(sessionAfter?.balance).toBe(0);
+
+    // API-key account: balance must stay untouched (unknown balance, default 0).
+    await router.recordFailure(apiKeyChannel.id, {
+      status: 402,
+      errorText: 'quota exceeded',
+      modelName: 'quota-model',
+    });
+    const apiKeyAfter = await db.select().from(schema.accounts)
+      .where(eq(schema.accounts.id, apiKeyAccount.id)).get();
+    expect(apiKeyAfter?.balance).toBe(0);
+  });
 });
 });
