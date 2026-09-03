@@ -16,7 +16,6 @@ import {
 } from '../proxy-core/runtime/responsesSseFinal.js';
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
-import { resolveProxyChannelFirstByteTimeoutMs } from './proxyChannelRetry.js';
 import type { schema } from '../db/index.js';
 import { getRandomProbeQuestion, type ProbeQuestion } from './probeQuestionBank.js';
 import { db } from '../db/index.js';
@@ -707,11 +706,13 @@ export async function probeRuntimeModel(input: {
       endpointCandidates,
       buildRequest,
       dispatchRequest,
-      // Same first-byte guard as live proxy surfaces: a relay site that
-      // never returns a byte should fail fast instead of dragging the probe
-      // to its full timeout (which made slow-but-alive sites dominate the
-      // probe log as ambiguous timeouts).
-      firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(0),
+      // Probe does NOT use the abort-based first-byte timeout: the overall
+      // probe timeout is handled by the withTimeout wrapper below, which
+      // stops waiting and drains the stream in the background so the upstream
+      // sees a natural completion instead of "client gone".  The abort-based
+      // first-byte timeout (fetchWithObservedFirstByte → controller.abort())
+      // would kill the TCP connection and make the upstream log client gone.
+      firstByteTimeoutMs: 0,
       // Match live proxy surfaces: cascade protocols on endpoint mismatch,
       // but abort same-site cascade for WAF/5xx/model-missing style failures.
       shouldAbortRemainingEndpoints: (ctx) => shouldAbortSameSiteEndpointFallback(
