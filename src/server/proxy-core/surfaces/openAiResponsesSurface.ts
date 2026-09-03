@@ -101,7 +101,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
-import { canFailoverToNextChannel, isClientDisconnectError, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, isClientDisconnectError, isDownstreamReplyGone, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 import {carriesResponsesFileUrlInput, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, getCodexSessionHeaderValue, isRecord, isResponsesWebsocketTransportRequest, rememberCodexSessionResponseId, shouldRefreshOauthResponsesRequest, wantsNativeResponsesReasoning} from './openAiResponsesSurface.pure.js';
 type UsageSummary = ReturnType<typeof parseProxyUsage>;
 
@@ -993,7 +993,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             parsedUsage = parseProxyUsage(upstreamData);
             upstreamUsagePresent = upstreamUsagePresent || hasProxyUsagePayload(upstreamData);
             const latency = Date.now() - startTime;
-            const failure = detectProxyFailure({ rawText, usage: parsedUsage });
+            const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
 	            if (failure) {
 	              clearSurfaceStickyChannel({
             stickySessionKey,
@@ -1324,7 +1324,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         const latency = Date.now() - startTime;
         const parsedUsage = parseProxyUsage(upstreamData);
         const upstreamUsagePresent = hasProxyUsagePayload(upstreamData);
-        const failure = detectProxyFailure({ rawText, usage: parsedUsage });
+        const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
 	        if (failure) {
 	          clearSurfaceStickyChannel({
             stickySessionKey,

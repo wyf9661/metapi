@@ -57,6 +57,26 @@ export function canFailoverToNextChannel(reply: FastifyReply): boolean {
 }
 
 /**
+ * True when the downstream client connection is already gone (aborted /
+ * closed before a normal response end). An empty / zero-usage upstream
+ * outcome in this state is the client cancel itself, not an upstream
+ * defect: it must not be treated as an upstream empty-content failure
+ * (which would failover and record a channel failure that degrades the
+ * routing health of a perfectly healthy channel).
+ */
+export function isDownstreamReplyGone(reply: FastifyReply): boolean {
+  const raw = (reply?.raw ?? undefined) as
+    | { destroyed?: boolean; aborted?: boolean; writableEnded?: boolean; socket?: { destroyed?: boolean } | null }
+    | undefined;
+  if (!raw) return false;
+  if (raw.destroyed === true || raw.aborted === true) return true;
+  // A client abort tears down the underlying socket before the response
+  // finishes normally (writableEnded stays false).
+  if (raw.writableEnded !== true && raw.socket?.destroyed === true) return true;
+  return false;
+}
+
+/**
  * True when the error represents a downstream client disconnect, not an
  * upstream server failure. These should not be logged as HTTP 500 or
  * trigger alert noise — the client simply went away (closed tab, network

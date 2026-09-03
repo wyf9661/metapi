@@ -5,6 +5,7 @@ import {
   endRawReplyQuietly,
   canFailoverToNextChannel,
   isClientDisconnectError,
+  isDownstreamReplyGone,
 } from './replySafety.js';
 
 function makeReply(opts: { sent?: boolean; raw?: Record<string, unknown> } = {}) {
@@ -78,5 +79,18 @@ describe('replySafety', () => {
     expect(isClientDisconnectError(new Error('HTTP 502 upstream'))).toBe(false);
     expect(isClientDisconnectError(null)).toBe(false);
     expect(isClientDisconnectError(undefined)).toBe(false);
+  });
+
+  it('isDownstreamReplyGone is false for an alive reply', () => {
+    expect(isDownstreamReplyGone(makeReply())).toBe(false);
+    expect(isDownstreamReplyGone(makeReply({ raw: { headersSent: true } }))).toBe(false);
+    expect(isDownstreamReplyGone(makeReply({ raw: { destroyed: false, socket: { destroyed: false } } }))).toBe(false);
+    expect(isDownstreamReplyGone(makeReply({ sent: true, raw: { writableEnded: true } }))).toBe(false);
+  });
+
+  it('isDownstreamReplyGone is true when the client socket was destroyed/aborted', () => {
+    expect(isDownstreamReplyGone(makeReply({ raw: { destroyed: true } }))).toBe(true);
+    expect(isDownstreamReplyGone(makeReply({ raw: { aborted: true } }))).toBe(true);
+    expect(isDownstreamReplyGone(makeReply({ raw: { socket: { destroyed: true }, writableEnded: false } }))).toBe(true);
   });
 });

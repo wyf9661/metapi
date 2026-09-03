@@ -89,7 +89,7 @@ import {
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
 import {buildOpenAiFinalFromGeminiNativePayload, buildOpenAiStreamLinesFromGeminiNativeSse, deriveCodexSessionCacheKey, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, isGeminiNativeRuntimePath} from './chatSurfaceHelpers.js';
-import { canFailoverToNextChannel, isClientDisconnectError, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, isClientDisconnectError, isDownstreamReplyGone, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 
 export async function handleChatSurfaceRequest(
@@ -832,7 +832,7 @@ export async function handleChatSurfaceRequest(
           upstreamUsagePresent = upstreamUsagePresent || hasProxyUsagePayload(fallbackData);
           parsedUsage = mergeProxyUsage(parsedUsage, parseProxyUsage(fallbackData));
           const latency = Date.now() - startTime;
-          const failure = detectProxyFailure({ rawText, usage: parsedUsage });
+          const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
           if (failure) {
             clearSurfaceStickyChannel({
             stickySessionKey,
@@ -1097,7 +1097,7 @@ export async function handleChatSurfaceRequest(
       const latency = Date.now() - startTime;
       const parsedUsage = parseProxyUsage(upstreamData);
       const upstreamUsagePresent = hasProxyUsagePayload(upstreamData);
-      const failure = detectProxyFailure({ rawText, usage: parsedUsage });
+      const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
       if (failure) {
         clearSurfaceStickyChannel({
             stickySessionKey,

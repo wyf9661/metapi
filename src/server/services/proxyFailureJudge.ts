@@ -173,6 +173,10 @@ export function detectProxyFailure(input: {
   // Backward-compatible fields (older call sites)
   completionTokens?: number;
   totalTokens?: number;
+  // True when the downstream client already closed the connection. An empty
+  // response then reflects the client cancel, not an upstream defect, so the
+  // empty-content heuristic must not flag it (no failover, no channel failure).
+  downstreamAborted?: boolean;
 }): FailureResult | null {
   const rawText = typeof input.rawText === 'string' ? input.rawText : '';
   const keywords = normalizeKeywords(config.proxyErrorKeywords || []);
@@ -187,7 +191,7 @@ export function detectProxyFailure(input: {
     }
   }
 
-  if (config.proxyEmptyContentFailEnabled) {
+  if (config.proxyEmptyContentFailEnabled && !input.downstreamAborted) {
     const completionTokens = toNonNegativeInt(input.usage?.completionTokens ?? input.completionTokens);
     const hasOutput = detectHasUpstreamOutput(rawText);
 

@@ -20,6 +20,7 @@ import { detectDownstreamClientContext, type DownstreamClientContext } from '../
 import { insertProxyLog } from '../../services/proxyLogStore.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { fetchWithObservedFirstByte, getObservedResponseMeta } from '../../proxy-core/firstByteTimeout.js';
+import { isDownstreamReplyGone } from '../../proxy-core/replySafety.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
 import {
@@ -238,7 +239,7 @@ export async function completionsProxyRoute(app: FastifyInstance) {
         }
         const latency = Date.now() - startTime;
         const parsedUsage = parseProxyUsage(data);
-        const failure = detectProxyFailure({ rawText, usage: parsedUsage });
+        const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
         if (failure) {
           const errText = failure.reason;
           await recordTokenRouterEventBestEffort('record channel failure', () => tokenRouter.recordFailure(selected.channel.id, {

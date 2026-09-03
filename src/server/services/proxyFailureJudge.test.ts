@@ -136,4 +136,53 @@ describe('detectProxyFailure (empty content)', () => {
 
     expect(failure).toMatchObject({ status: 502 });
   });
+
+  it('does not flag empty content when the downstream client already aborted', () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    const rawText = JSON.stringify({
+      id: 'chatcmpl_empty',
+      object: 'chat.completion',
+      choices: [{
+        index: 0,
+        message: { role: 'assistant', content: '' },
+        finish_reason: 'stop',
+      }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
+
+    // A client Ctrl+C / cancel leaves an empty upstream outcome that is the
+    // cancel itself, not an upstream defect: the empty-content heuristic must
+    // stay silent so the channel is not failed over / health-degraded.
+    const failure = detectProxyFailure({
+      rawText,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      downstreamAborted: true,
+    });
+
+    expect(failure).toBeNull();
+  });
+
+  it('still flags empty content when downstream is alive (upstream swallow)', () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    const rawText = JSON.stringify({
+      id: 'chatcmpl_empty',
+      object: 'chat.completion',
+      choices: [{
+        index: 0,
+        message: { role: 'assistant', content: '' },
+        finish_reason: 'stop',
+      }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
+
+    const failure = detectProxyFailure({
+      rawText,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      downstreamAborted: false,
+    });
+
+    expect(failure).toMatchObject({ status: 502 });
+  });
 });
