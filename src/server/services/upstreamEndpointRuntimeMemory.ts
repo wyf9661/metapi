@@ -236,6 +236,15 @@ function shouldBlockEndpointByError(
   // Site-wide WAF/edge rejections are not endpoint protocol failures — do not
   // block the endpoint (would only cause a useless fallback that is also WAF'd).
   if (isWafBlockText(errorText)) return false;
+  // A 400 from a responses endpoint is a content-level rejection of the
+  // OpenAI-responses representation of this request. The chat/messages forms
+  // of the same request may be accepted by the same upstream, so cool down
+  // responses for this site+model and let the candidate list fall back to the
+  // remaining endpoints. Endpoint-agnostic: applies to any upstream whose
+  // responses implementation is stricter than the OpenAI spec.
+  if (endpoint === 'responses' && status === 400) {
+    return true;
+  }
   if (status === 404 || status === 405 || status === 415 || status === 501) return true;
   if (isUnsupportedMediaTypeError(status, errorText)) return true;
 
