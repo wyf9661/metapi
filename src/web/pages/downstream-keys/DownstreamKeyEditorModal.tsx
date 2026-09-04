@@ -26,6 +26,7 @@ export type DownstreamKeyEditorForm = {
   maxCost: string;
   maxRequests: string;
   maxRpm: string;
+  maxInflight: string;
   maxDailyRequests: string;
   maxDailyCost: string;
   expiresAt: string;
@@ -412,6 +413,10 @@ export default function DownstreamKeyEditorModal({
         <div className="downstream-key-modal-field">
           <div className="downstream-key-modal-label">每分钟请求上限 (RPM)</div>
           <input value={form.maxRpm} onChange={(e) => onChange((prev) => ({ ...prev, maxRpm: e.target.value }))} placeholder="留空表示不限" style={inputStyle} />
+        </div>
+        <div className="downstream-key-modal-field">
+          <div className="downstream-key-modal-label">最大并发请求数 (In-Flight)</div>
+          <input value={form.maxInflight} onChange={(e) => onChange((prev) => ({ ...prev, maxInflight: e.target.value }))} placeholder="留空表示不限" style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
           <div className="downstream-key-modal-label">每日请求额度</div>

@@ -89,6 +89,7 @@ export type DownstreamApiKeyPolicyView = {
   maxRequests: number | null;
   usedRequests: number;
   maxRpm: number | null;
+  maxInflight: number | null;
   maxDailyRequests: number | null;
   maxDailyCost: number | null;
   dailyUsedRequests: number;
@@ -435,6 +436,7 @@ export function toDownstreamApiKeyPolicyView(row: DownstreamApiKeyRow): Downstre
     usedCost: Number(row.usedCost || 0),
     maxRequests: row.maxRequests ?? null,
     maxRpm: row.maxRpm ?? null,
+    maxInflight: row.maxInflight ?? null,
     usedRequests: Number(row.usedRequests || 0),
     maxDailyRequests: row.maxDailyRequests ?? null,
     maxDailyCost: row.maxDailyCost ?? null,
@@ -647,6 +649,43 @@ export function checkManagedKeyRpmLimit(keyId: number, maxRpm: number | null | u
   return { allowed: true, retryAfterSec: 0, current: recent.length };
 }
 
+/**
+ * Per-managed-key in-flight (concurrent) request limit. Like the RPM window,
+ * this is single-process in-memory state: acquire/release are fully
+ * synchronous, so the check-and-increment cycle is atomic within the event
+ * loop. Multi-process deployments must front a shared limiter.
+ *
+ * max_inflight <= 0 / null means unlimited (keeps existing keys unaffected).
+ */
+const managedKeyInflightCounts = new Map<number, number>();
+
+export function __resetManagedKeyInflightForTests(): void {
+  managedKeyInflightCounts.clear();
+}
+
+export function tryAcquireManagedKeyInflight(
+  keyId: number,
+  maxInflight: number | null | undefined,
+): boolean {
+  const limit = typeof maxInflight === 'number' && Number.isFinite(maxInflight)
+    ? Math.trunc(maxInflight)
+    : null;
+  if (limit === null || limit <= 0) return true;
+  const current = managedKeyInflightCounts.get(keyId) ?? 0;
+  if (current >= limit) return false;
+  managedKeyInflightCounts.set(keyId, current + 1);
+  return true;
+}
+
+export function releaseManagedKeyInflight(keyId: number): void {
+  const current = managedKeyInflightCounts.get(keyId) ?? 0;
+  if (current <= 1) {
+    managedKeyInflightCounts.delete(keyId);
+  } else {
+    managedKeyInflightCounts.set(keyId, current - 1);
+  }
+}
+
 export async function consumeManagedKeyRequest(keyId: number): Promise<boolean> {
   const nowIso = new Date().toISOString();
   const today = currentDailyWindowDate();
@@ -703,6 +742,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
   maxCost?: unknown;
   maxRequests?: unknown;
   maxRpm?: unknown;
+  maxInflight?: unknown;
   maxDailyRequests?: unknown;
   maxDailyCost?: unknown;
   sensitiveWordDetection?: unknown;
@@ -737,6 +777,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
   const maxCost = normalizePositiveNumberOrNull(input.maxCost);
   const maxRequests = normalizePositiveIntegerOrNull(input.maxRequests);
   const maxRpm = normalizePositiveIntegerOrNull(input.maxRpm);
+  const maxInflight = normalizePositiveIntegerOrNull(input.maxInflight);
   const maxDailyRequests = normalizePositiveIntegerOrNull(input.maxDailyRequests);
   const maxDailyCost = normalizePositiveNumberOrNull(input.maxDailyCost);
   const sensitiveWordDetection = input.sensitiveWordDetection === undefined
@@ -762,6 +803,7 @@ export function normalizeDownstreamApiKeyPayload(input: {
     maxCost,
     maxRequests,
     maxRpm,
+    maxInflight,
     maxDailyRequests,
     maxDailyCost,
     sensitiveWordDetection,

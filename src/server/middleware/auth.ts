@@ -1,7 +1,7 @@
 import { timingSafeEqual, randomBytes, createHash } from 'node:crypto';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../config.js';
-import { authorizeDownstreamToken, checkManagedKeyRpmLimit, consumeManagedKeyRequest } from '../services/downstreamApiKeyService.js';
+import { authorizeDownstreamToken, checkManagedKeyRpmLimit, consumeManagedKeyRequest, releaseManagedKeyInflight, tryAcquireManagedKeyInflight } from '../services/downstreamApiKeyService.js';
 import { EMPTY_DOWNSTREAM_ROUTING_POLICY, type DownstreamRoutingPolicy } from '../services/downstreamPolicyTypes.js';
 import { getTrustedClientIp, isIpAllowed } from './clientIp.js';
 
@@ -153,6 +153,25 @@ export async function proxyAuthMiddleware(request: FastifyRequest, reply: Fastif
         .send({ error: `API key RPM limit exceeded (${authResult.key.maxRpm}/min)` });
       return;
     }
+    // Concurrent in-flight ceiling (max_inflight). Acquired here so every
+    // /v1 proxy path (chat/responses/embeddings/etc.) is covered; released on
+    // response finish/close regardless of how the request ends.
+    const inflightAllowed = tryAcquireManagedKeyInflight(authResult.key.id, authResult.key.maxInflight);
+    if (!inflightAllowed) {
+      reply
+        .code(429)
+        .header('retry-after', '1')
+        .send({ error: `API key concurrent request limit exceeded (${authResult.key.maxInflight})` });
+      return;
+    }
+    let inflightReleased = false;
+    const releaseInflightOnce = () => {
+      if (inflightReleased) return;
+      inflightReleased = true;
+      releaseManagedKeyInflight(authResult.key!.id);
+    };
+    reply.raw.once('finish', releaseInflightOnce);
+    reply.raw.once('close', releaseInflightOnce);
     const consumed = await consumeManagedKeyRequest(authResult.key.id);
     if (consumed === false) {
       reply.code(403).send({ error: 'API key has exceeded request quota (lifetime or daily)' });

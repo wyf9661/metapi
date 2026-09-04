@@ -84,6 +84,8 @@ vi.mock('../../services/downstreamApiKeyService.js', () => ({
   authorizeDownstreamToken: (...args: unknown[]) => authorizeDownstreamTokenMock(...args),
   consumeManagedKeyRequest: (...args: unknown[]) => consumeManagedKeyRequestMock(...args),
   checkManagedKeyRpmLimit: () => ({ allowed: true, retryAfterSec: 0 }),
+  tryAcquireManagedKeyInflight: () => true,
+  releaseManagedKeyInflight: () => {},
   isModelAllowedByPolicyOrAllowedRoutes: (...args: unknown[]) => isModelAllowedByPolicyOrAllowedRoutesMock(...args),
 }));
 

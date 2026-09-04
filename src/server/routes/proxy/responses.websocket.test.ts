@@ -63,6 +63,9 @@ vi.mock('../../services/alertService.js', () => ({
 vi.mock('../../services/downstreamApiKeyService.js', () => ({
   authorizeDownstreamToken: (...args: unknown[]) => authorizeDownstreamTokenMock(...args),
   consumeManagedKeyRequest: (...args: unknown[]) => consumeManagedKeyRequestMock(...args),
+  checkManagedKeyRpmLimit: () => ({ allowed: true, retryAfterSec: 0 }),
+  tryAcquireManagedKeyInflight: () => true,
+  releaseManagedKeyInflight: () => {},
   isModelAllowedByPolicyOrAllowedRoutes: async (
     model: string,
     policy: { supportedModels?: string[]; allowedRouteIds?: number[]; denyAllWhenEmpty?: boolean },

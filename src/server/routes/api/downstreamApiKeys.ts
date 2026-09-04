@@ -522,6 +522,7 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
           maxRequests: normalized.maxRequests,
           usedRequests: 0,
           maxRpm: normalized.maxRpm,
+          maxInflight: normalized.maxInflight,
           maxDailyRequests: normalized.maxDailyRequests,
           maxDailyCost: normalized.maxDailyCost,
           dailyUsedRequests: 0,
@@ -588,6 +589,7 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         maxCost: hasOwn('maxCost') ? body.maxCost : existing.maxCost,
         maxRequests: hasOwn('maxRequests') ? body.maxRequests : existing.maxRequests,
         maxRpm: hasOwn('maxRpm') ? body.maxRpm : existing.maxRpm,
+        maxInflight: hasOwn('maxInflight') ? body.maxInflight : existing.maxInflight,
         maxDailyRequests: hasOwn('maxDailyRequests') ? body.maxDailyRequests : existing.maxDailyRequests,
         maxDailyCost: hasOwn('maxDailyCost') ? body.maxDailyCost : existing.maxDailyCost,
         sensitiveWordDetection: hasOwn('sensitiveWordDetection')
@@ -636,6 +638,7 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         maxCost: normalized.maxCost,
         maxRequests: normalized.maxRequests,
         maxRpm: normalized.maxRpm,
+        maxInflight: normalized.maxInflight,
         maxDailyRequests: normalized.maxDailyRequests,
         maxDailyCost: normalized.maxDailyCost,
         supportedModels: toPersistenceJson(normalized.supportedModels),

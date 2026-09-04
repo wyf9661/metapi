@@ -532,6 +532,7 @@ export const downstreamApiKeys = sqliteTable('downstream_api_keys', {
   maxRequests: integer('max_requests'),
   usedRequests: integer('used_requests').default(0),
   maxRpm: integer('max_rpm'),
+  maxInflight: integer('max_inflight'),
   maxDailyRequests: integer('max_daily_requests'),
   maxDailyCost: real('max_daily_cost'),
   dailyUsedRequests: integer('daily_used_requests').default(0),

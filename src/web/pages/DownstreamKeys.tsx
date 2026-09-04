@@ -47,6 +47,7 @@ type DownstreamApiKeyItem = {
   usedCost: number;
   maxRequests: number | null;
   maxRpm?: number | null;
+  maxInflight?: number | null;
   maxDailyRequests?: number | null;
   maxDailyCost?: number | null;
   dailyUsedRequests?: number;
@@ -321,6 +322,7 @@ function buildEditorForm(
     maxCost: item?.maxCost === null || item?.maxCost === undefined ? '' : String(item.maxCost),
     maxRequests: item?.maxRequests === null || item?.maxRequests === undefined ? '' : String(item.maxRequests),
     maxRpm: item?.maxRpm === null || item?.maxRpm === undefined ? '' : String(item.maxRpm),
+    maxInflight: item?.maxInflight === null || item?.maxInflight === undefined ? '' : String(item.maxInflight),
     maxDailyRequests: item?.maxDailyRequests === null || item?.maxDailyRequests === undefined ? '' : String(item.maxDailyRequests),
     maxDailyCost: item?.maxDailyCost === null || item?.maxDailyCost === undefined ? '' : String(item.maxDailyCost),
     expiresAt: toDateTimeLocal(item?.expiresAt),
@@ -609,6 +611,7 @@ export default function DownstreamKeys() {
         expiresAt: raw?.expiresAt ?? item.expiresAt,
         maxCost: raw?.maxCost ?? item.maxCost,
         maxRpm: raw?.maxRpm ?? item.maxRpm ?? null,
+        maxInflight: raw?.maxInflight ?? item.maxInflight ?? null,
         usedCost: raw?.usedCost ?? item.usedCost,
         maxRequests: raw?.maxRequests ?? item.maxRequests,
         usedRequests: raw?.usedRequests ?? item.usedRequests,
@@ -811,6 +814,7 @@ export default function DownstreamKeys() {
         maxCost: editorForm.maxCost.trim() ? Number(editorForm.maxCost.trim()) : null,
         maxRequests: editorForm.maxRequests.trim() ? Number(editorForm.maxRequests.trim()) : null,
         maxRpm: editorForm.maxRpm.trim() ? Number(editorForm.maxRpm.trim()) : null,
+        maxInflight: editorForm.maxInflight.trim() ? Number(editorForm.maxInflight.trim()) : null,
         maxDailyRequests: editorForm.maxDailyRequests.trim() ? Number(editorForm.maxDailyRequests.trim()) : null,
         maxDailyCost: editorForm.maxDailyCost.trim() ? Number(editorForm.maxDailyCost.trim()) : null,
         supportedModels: uniqStrings(editorForm.selectedModels),

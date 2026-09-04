@@ -16,6 +16,7 @@ export type SummaryItem = {
   maxRequests: number | null;
   usedRequests: number;
   maxRpm?: number | null;
+  maxInflight?: number | null;
   maxDailyRequests?: number | null;
   maxDailyCost?: number | null;
   dailyUsedRequests?: number;
