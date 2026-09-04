@@ -115,6 +115,19 @@ describe('siteFailureClassification', () => {
     expect(bare410.retryChannel).toBe(true);
   });
 
+  it('classifies 413 payload-too-large as failover-eligible with channel cooldown', () => {
+    // A body-size cap is channel-local configuration; another channel with a
+    // higher limit may accept the same body, so fail over instead of
+    // terminating the request.
+    const decision = classifyProxyFailure({
+      status: 413,
+      errorText: 'Upstream returned HTTP 413: 413 Request Entity Too Large',
+    });
+    expect(decision.retryChannel).toBe(true);
+    expect(decision.class).toBe('transient_upstream');
+    expect(decision.cooldownScope).toBe('channel');
+  });
+
   it('classifies context overflow 400 as terminal request_validation', () => {
     const decision = classifyProxyFailure({
       status: 400,

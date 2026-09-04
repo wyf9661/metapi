@@ -3,7 +3,12 @@ import type { FastifyServerOptions } from 'fastify';
 import { normalizePayloadRulesConfig } from './services/payloadRules.js';
 import { normalizeRouteRoutingStrategy } from './services/routeRoutingStrategy.js';
 
-const DEFAULT_REQUEST_BODY_LIMIT = 20 * 1024 * 1024;
+// Request body size is intentionally not capped at the application layer —
+// like one-api/new-api, raw-byte payload limits belong to the edge proxy and
+// the upstreams. Capping here only breaks legitimate large agent payloads
+// (base64 images, big tool outputs); context overflow is already handled
+// semantically (400 max-context → request_validation).
+const REQUEST_BODY_LIMIT_UNLIMITED = Number.MAX_SAFE_INTEGER;
 const DEFAULT_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 const DEFAULT_CLAUDE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const DEFAULT_GEMINI_CLI_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
@@ -143,7 +148,7 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     trustProxyHops: env.TRUST_PROXY_HOPS !== undefined
       ? Math.max(1, Math.trunc(parseNumber(env.TRUST_PROXY_HOPS, 1)))
       : null,
-    requestBodyLimit: DEFAULT_REQUEST_BODY_LIMIT,
+    requestBodyLimit: REQUEST_BODY_LIMIT_UNLIMITED,
     routingFallbackUnitCost: Math.max(1e-6, parseNumber(env.ROUTING_FALLBACK_UNIT_COST, 1)),
     // Minimum probability floor (0.03-0.15) each healthy route candidate keeps
     // after balanced-v2 scoring, so new/small sites are actually tried instead

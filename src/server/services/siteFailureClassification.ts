@@ -622,6 +622,20 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       cooldownScope: 'endpoint',
     };
   }
+  if (status === 413) {
+    // Upstream payload/body-size cap (nginx client_max_body_size or an app
+    // limit on that channel) is channel-local configuration: another channel
+    // with a higher limit may accept the same body. Fail over instead of
+    // terminating (mirrors the 410 treatment).
+    return {
+      class: 'transient_upstream',
+      retryChannel: true,
+      cascadeEndpoint: false,
+      cooldownWeight: 1.2,
+      cooldownScope: 'channel',
+    };
+  }
+
   if (status === 410) {
     // Upstream model retired / end-of-life (e.g. OpenAI 410 gone) OR the
     // channel is simply gone (bare "Gone"). Another channel may still serve
