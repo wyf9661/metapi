@@ -788,6 +788,88 @@ describe('selectSurfaceChannelForAttempt', () => {
     });
   });
 
+  it('does not advance the failover streak for same-retryCount in-place grace retries', async () => {
+    composeProxyLogMessageMock.mockReturnValue('normalized error');
+    formatUtcSqlDateTimeMock.mockReturnValue('2026-03-21 22:00:00');
+    insertProxyLogMock.mockResolvedValue(undefined);
+    shouldRetryProxyRequestMock.mockReturnValue(true);
+    isTokenExpiredErrorMock.mockReturnValue(false);
+    recordOauthQuotaResetHintMock.mockResolvedValue(null);
+
+    const { createSurfaceFailureToolkit } = await import('./sharedSurface.js');
+    const toolkit = createSurfaceFailureToolkit({
+      warningScope: 'chat',
+      downstreamPath: '/v1/chat/completions',
+      maxRetries: 3,
+      clientContext: null,
+      downstreamApiKeyId: 44,
+    });
+    const selected = {
+      channel: { id: 11, routeId: 22 },
+      account: { id: 33, username: 'oauth-user' },
+      site: { id: 55, name: 'relay' },
+      actualModel: 'gpt-5.2',
+    };
+    const failure = {
+      selected,
+      requestedModel: 'gpt-5.2',
+      modelName: 'gpt-5.2',
+      status: 502,
+      errText: 'Upstream returned HTTP 502',
+      rawErrText: 'Cloudflare 502: Bad gateway',
+      latencyMs: 500,
+    };
+    // Fresh channel attempt (retryCount 0): streak becomes 1, still retryable.
+    const first = await toolkit.handleUpstreamFailure({ ...failure, retryCount: 0 });
+    expect(first.action).toBe('retry');
+    // In-place grace retry of the SAME channel keeps retryCount unchanged: its
+    // failure must NOT push the streak to the stop threshold while healthy
+    // candidates remain untried.
+    const second = await toolkit.handleUpstreamFailure({ ...failure, retryCount: 0 });
+    expect(second.action).toBe('retry');
+    expect(reportProxyAllFailedMock).not.toHaveBeenCalled();
+  });
+
+  it('still stops failover after two distinct fresh channels fail with low-value failures', async () => {
+    composeProxyLogMessageMock.mockReturnValue('normalized error');
+    formatUtcSqlDateTimeMock.mockReturnValue('2026-03-21 22:00:00');
+    insertProxyLogMock.mockResolvedValue(undefined);
+    shouldRetryProxyRequestMock.mockReturnValue(true);
+    isTokenExpiredErrorMock.mockReturnValue(false);
+    recordOauthQuotaResetHintMock.mockResolvedValue(null);
+
+    const { createSurfaceFailureToolkit } = await import('./sharedSurface.js');
+    const toolkit = createSurfaceFailureToolkit({
+      warningScope: 'chat',
+      downstreamPath: '/v1/chat/completions',
+      maxRetries: 3,
+      clientContext: null,
+      downstreamApiKeyId: 44,
+    });
+    const selected = {
+      channel: { id: 11, routeId: 22 },
+      account: { id: 33, username: 'oauth-user' },
+      site: { id: 55, name: 'relay' },
+      actualModel: 'gpt-5.2',
+    };
+    const failure = {
+      selected,
+      requestedModel: 'gpt-5.2',
+      modelName: 'gpt-5.2',
+      status: 502,
+      errText: 'Upstream returned HTTP 502',
+      rawErrText: 'Cloudflare 502: Bad gateway',
+      latencyMs: 500,
+    };
+    const first = await toolkit.handleUpstreamFailure({ ...failure, retryCount: 0 });
+    expect(first.action).toBe('retry');
+    // A later attempt on a DIFFERENT fresh channel advances retryCount: the
+    // streak now reaches the stop threshold and failover must terminate.
+    const second = await toolkit.handleUpstreamFailure({ ...failure, retryCount: 1 });
+    expect(second.action).toBe('respond');
+    expect(reportProxyAllFailedMock).toHaveBeenCalled();
+  });
+
   it('records stream failures with error text even without a runtime status code', async () => {
     composeProxyLogMessageMock.mockReturnValue('normalized error');
     formatUtcSqlDateTimeMock.mockReturnValue('2026-03-21 22:00:00');

@@ -594,6 +594,13 @@ export function createSurfaceFailureToolkit(input: {
   backoffMs?: number;
 }) {
   const failoverStreak = input.failoverStreak ?? createFailoverStreakState();
+  /**
+   * retryCount of the last attempt that burned a FRESH channel candidate.
+   * Same-channel in-place grace retries keep retryCount unchanged, so a
+   * matching value on the next failure means no new candidate was burned —
+   * such failures must not advance the low-value failover streak.
+   */
+  let lastFreshFailRetryCount: number | null = null;
   const log = async (args: {
     selected: SurfaceSelectedChannel;
     modelRequested: string;
@@ -655,7 +662,17 @@ export function createSurfaceFailureToolkit(input: {
       return null;
     }
     if (!disposition.retryChannel) return null;
-    if (noteFailoverFailureAndShouldStop(failoverStreak, status, errorText)) {
+    // Advance the low-value streak only for failures of FRESH channel
+    // attempts. Same-channel in-place grace retries keep retryCount
+    // unchanged; counting their failures toward the streak stops failover
+    // after a single grace retry fails even though no new candidate was
+    // burned and healthy candidates remain untried (2026-09-06: Fengwind 502
+    // -> in-place retry 502 -> streak-2 stop left a healthy PM channel
+    // untried on route 6708).
+    const isFreshChannelAttempt = lastFreshFailRetryCount === null
+      || retryCount !== lastFreshFailRetryCount;
+    lastFreshFailRetryCount = retryCount;
+    if (isFreshChannelAttempt && noteFailoverFailureAndShouldStop(failoverStreak, status, errorText)) {
       return null;
     }
     const excludeSiteId = selected && shouldExcludeSiteForRequestFailure({
