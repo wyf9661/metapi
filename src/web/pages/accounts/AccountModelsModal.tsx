@@ -30,6 +30,8 @@ type AccountModelsModalProps = {
   onSetPendingDisabled: (pendingDisabled: Set<string>) => void;
   onManualInputChange: (value: string) => void;
   onAddManualModels: () => Promise<void> | void;
+  onRemoveManualModel: (modelName: string) => Promise<void> | void;
+  removingManualModelName: string | null;
 };
 
 export default function AccountModelsModal({
@@ -42,6 +44,8 @@ export default function AccountModelsModal({
   onSetPendingDisabled,
   onManualInputChange,
   onAddManualModels,
+  onRemoveManualModel,
+  removingManualModelName,
 }: AccountModelsModalProps) {
   return (
     <CenteredModal
@@ -183,6 +187,27 @@ export default function AccountModelsModal({
                       ) : null}
                       {model.isManual ? (
                         <span className="badge badge-info" style={{ fontSize: 10, flexShrink: 0, padding: '0 4px' }}>手动</span>
+                      ) : null}
+                      {model.isManual ? (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void onRemoveManualModel(model.name);
+                          }}
+                          disabled={removingManualModelName !== null}
+                          title="删除该手动模型"
+                          className="btn btn-soft-danger"
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            padding: '0 4px',
+                            flexShrink: 0,
+                            lineHeight: '16px',
+                          }}
+                        >
+                          {removingManualModelName === model.name ? <span className="spinner spinner-sm" /> : '删除'}
+                        </button>
                       ) : null}
                       {isDisabled ? (
                         <span className="badge badge-error" style={{ fontSize: 10, flexShrink: 0 }}>禁用</span>

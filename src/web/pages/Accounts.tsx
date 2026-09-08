@@ -172,6 +172,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     siteName: string;
     manualModelsInput: string;
     addingManualModels: boolean;
+    removingManualModelName: string | null;
   }>({
     open: false,
     account: null,
@@ -182,6 +183,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     siteName: '',
     manualModelsInput: '',
     addingManualModels: false,
+    removingManualModelName: null,
   });
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
   const accountsTableWrapRef = useRef<HTMLDivElement | null>(null);
@@ -755,6 +757,31 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       toast.error(eMessage || '手动添加模型失败');
     } finally {
       setModelModal((s) => ({ ...s, addingManualModels: false }));
+    }
+  };
+
+  const handleRemoveManualModel = async (modelName: string) => {
+    if (!modelModal.account || modelModal.removingManualModelName !== null) return;
+
+    setModelModal((s) => ({ ...s, removingManualModelName: modelName }));
+    try {
+      const res = await api.removeAccountManualModels(
+        modelModal.account.id,
+        [modelName],
+      );
+      if (res.success) {
+        toast.success(`已删除手动模型 ${modelName}`);
+        await loadModelModalModels(modelModal.account, {
+          refreshUpstream: false,
+        });
+      } else {
+        toast.error(res.message || '删除手动模型失败');
+      }
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '删除手动模型失败');
+    } finally {
+      setModelModal((s) => ({ ...s, removingManualModelName: null }));
     }
   };
 
@@ -3182,6 +3209,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           setModelModal((state) => ({ ...state, manualModelsInput: value }))
         }
         onAddManualModels={handleAddManualModels}
+        onRemoveManualModel={handleRemoveManualModel}
+        removingManualModelName={modelModal.removingManualModelName ?? null}
       />
     </div>
   );

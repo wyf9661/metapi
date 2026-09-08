@@ -131,6 +131,126 @@ describe('accounts manual models endpoint', () => {
     expect(response.statusCode).toBe(404);
   });
 
+  it('deletes manual models but keeps synced models', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'Test Site',
+      url: 'https://test.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      accessToken: 'test-token',
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values([
+      {
+        accountId: account.id,
+        modelName: 'gpt-manual',
+        available: true,
+        isManual: true,
+      },
+      {
+        accountId: account.id,
+        modelName: 'gpt-synced',
+        available: true,
+        isManual: false,
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/accounts/${account.id}/models/manual`,
+      payload: {
+        models: ['gpt-manual'],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+
+    const models = await db.select().from(schema.modelAvailability).where(
+      eq(schema.modelAvailability.accountId, account.id)
+    ).all();
+
+    expect(models).toHaveLength(1);
+    expect(models[0]?.modelName).toBe('gpt-synced');
+    expect(models[0]?.isManual).toBe(false);
+  });
+
+  it('delete does not remove synced model with the same name', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'Test Site',
+      url: 'https://test.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      accessToken: 'test-token',
+    }).returning().get();
+
+    // Synced model that was flipped to manual (same name as a manual entry)
+    await db.insert(schema.modelAvailability).values({
+      accountId: account.id,
+      modelName: 'gpt-shared',
+      available: true,
+      isManual: true,
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/accounts/${account.id}/models/manual`,
+      payload: {
+        models: ['gpt-shared'],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const models = await db.select().from(schema.modelAvailability).where(
+      eq(schema.modelAvailability.accountId, account.id)
+    ).all();
+
+    expect(models).toHaveLength(0);
+  });
+
+  it('delete fails if account does not exist', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/accounts/999/models/manual',
+      payload: {
+        models: ['gpt-4-manual'],
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('delete returns validation error for empty models array', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'Test Site',
+      url: 'https://test.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      accessToken: 'test-token',
+    }).returning().get();
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/accounts/${account.id}/models/manual`,
+      payload: {
+        models: [],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it('returns validation error for empty models array', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'Test Site',

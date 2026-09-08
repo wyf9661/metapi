@@ -1856,6 +1856,71 @@ export async function accountsRoutes(app: FastifyInstance) {
     },
   );
 
+  // Remove manually added models from an account
+  app.delete<{ Params: { id: string }; Body: unknown }>(
+    '/api/accounts/:id/models/manual',
+    async (request, reply) => {
+      const parsedBody = parseAccountManualModelsPayload(request.body);
+      if (!parsedBody.success) {
+        return reply.code(400).send({ message: parsedBody.error });
+      }
+
+      const accountId = parseInt(request.params.id, 10);
+      if (!Number.isFinite(accountId) || accountId <= 0) {
+        return reply.code(400).send({ message: '账号 ID 无效' });
+      }
+
+      const { models } = parsedBody.data;
+      if (!Array.isArray(models) || models.length === 0) {
+        return reply.code(400).send({ message: '模型列表不能为空' });
+      }
+
+      const normalizedModels = Array.from(
+        new Set(
+          models.map((m) => String(m).trim()).filter((m) => m.length > 0),
+        ),
+      );
+      if (normalizedModels.length === 0) {
+        return reply.code(400).send({ message: '模型列表不能为空' });
+      }
+
+      const account = await db
+        .select()
+        .from(schema.accounts)
+        .where(eq(schema.accounts.id, accountId))
+        .get();
+
+      if (!account) {
+        return reply.code(404).send({ message: '账号不存在' });
+      }
+
+      try {
+        await db.transaction(async (tx: any) => {
+          for (const modelName of normalizedModels) {
+            await tx
+              .delete(schema.modelAvailability)
+              .where(
+                and(
+                  eq(schema.modelAvailability.accountId, accountId),
+                  eq(schema.modelAvailability.modelName, modelName),
+                  eq(schema.modelAvailability.isManual, true),
+                ),
+              )
+              .run();
+          }
+        });
+        await rebuildRoutesBestEffort();
+
+        return { success: true };
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        return reply
+          .code(500)
+          .send({ success: false, message: errMessage || '删除失败' });
+      }
+    },
+  );
+
   // Add models manually to an account
   app.post<{ Params: { id: string }; Body: unknown }>(
     '/api/accounts/:id/models/manual',
