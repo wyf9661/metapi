@@ -24,7 +24,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import PageJumpInput from '../components/PageJumpInput.js';
 import PaginationControls from '../components/PaginationControls.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
-import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
+import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, formatTokensPerSecond, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
 import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
 import {
   renderStoredDebugDetails,
@@ -2027,6 +2027,15 @@ export default function ProxyLogs() {
                   </div>
                   <div className="mobile-summary-grid">
                     <div className="mobile-summary-metric">
+                      <div className="mobile-summary-metric-label">吞吐率</div>
+                      <div className="mobile-summary-metric-value">
+                        {formatTokensPerSecond(
+                          detailLog.completionTokens,
+                          detailLog.latencyMs,
+                        ) ?? '-'}
+                      </div>
+                    </div>
+                    <div className="mobile-summary-metric">
                       <div className="mobile-summary-metric-label">首字</div>
                       <div className="mobile-summary-metric-value">
                         {Number.isFinite(detailLog.firstByteLatencyMs)
@@ -2168,6 +2177,7 @@ export default function ProxyLogs() {
                   模式
                 </th>
                 <th>{tr('状态')}</th>
+                <th>吞吐率</th>
                 <th>首字</th>
                 <th>用时</th>
                 <th>输入</th>
@@ -2298,6 +2308,29 @@ export default function ProxyLogs() {
                           />
                           {log.status === 'success' ? '成功' : '失败'}
                         </span>
+                      </td>
+                      <td>
+                        {(() => {
+                          const tpsLabel = formatTokensPerSecond(
+                            detailLog.completionTokens,
+                            detailLog.latencyMs,
+                          );
+                          if (tpsLabel === null) {
+                            return <span style={{ color: 'var(--color-text-muted)' }}>-</span>;
+                          }
+                          return (
+                            <span
+                              style={{
+                                fontVariantNumeric: 'tabular-nums',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: 'var(--color-text-secondary)',
+                              }}
+                            >
+                              {tpsLabel}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td>
                         {Number.isFinite(detailLog.firstByteLatencyMs)

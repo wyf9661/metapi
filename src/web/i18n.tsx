@@ -279,6 +279,7 @@ const zhToEn: Record<string, string> = {
   '标题': 'Title',
   '内容': 'Content',
   '状态': 'Status',
+  '吞吐率': 'Throughput',
   '已读': 'Read',
   '未读': 'Unread',
   '标记已读': 'Mark Read',

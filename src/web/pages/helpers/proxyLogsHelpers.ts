@@ -102,6 +102,18 @@ export function firstByteColor(ms: number) {
   return 'var(--color-primary)';
 }
 
+export function formatTokensPerSecond(tokens: number | null | undefined, latencyMs: number | null | undefined) {
+  if (
+    tokens == null || !Number.isFinite(tokens) || tokens <= 0 ||
+    latencyMs == null || !Number.isFinite(latencyMs) || latencyMs <= 0
+  ) {
+    return null;
+  }
+  const tps = tokens / (latencyMs / 1000);
+  if (tps >= 100) return `${Math.round(tps)} tok/s`;
+  return `${tps.toFixed(1)} tok/s`;
+}
+
 export function firstByteBgColor(ms: number) {
   if (ms >= 3000)
     return 'color-mix(in srgb, var(--color-danger) 12%, transparent)';
