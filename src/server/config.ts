@@ -105,6 +105,11 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
       : 'cron' as const,
     checkinIntervalHours: Math.min(24, Math.max(1, Math.trunc(parseNumber(env.CHECKIN_INTERVAL_HOURS, 6)))),
     balanceRefreshCron: env.BALANCE_REFRESH_CRON || '0 * * * *',
+    // Model discovery/rebuild runs on its own cadence (default every 30 min),
+    // decoupled from the hourly balance pass. When both shared one pass, a
+    // wedged upstream socket stalled the whole pass for hours and every later
+    // model refresh was skipped via the in-flight guard (2026-09-09 CAIC).
+    modelRefreshCron: env.MODEL_REFRESH_CRON || '*/30 * * * *',
     logCleanupCron: env.LOG_CLEANUP_CRON || '0 6 * * *',
     logCleanupConfigured: false,
     logCleanupUsageLogsEnabled: parseBoolean(env.LOG_CLEANUP_USAGE_LOGS_ENABLED, false),

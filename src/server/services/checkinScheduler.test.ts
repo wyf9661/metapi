@@ -132,11 +132,38 @@ describe('checkinScheduler', () => {
     expect(refreshAllBalancesMock).toHaveBeenCalledTimes(1);
     releaseRefresh();
     await Promise.all([first, second]);
-    expect(refreshModelsAndRebuildRoutesMock).toHaveBeenCalledTimes(1);
+    // Model discovery is decoupled from the balance pass (2026-09-09 CAIC:
+    // a wedged balance pass stalled the shared model refresh for hours).
+    expect(refreshModelsAndRebuildRoutesMock).not.toHaveBeenCalled();
 
     refreshAllBalancesMock.mockResolvedValue(undefined);
     await balanceCallback();
     expect(refreshAllBalancesMock).toHaveBeenCalledTimes(2);
+    expect(refreshModelsAndRebuildRoutesMock).not.toHaveBeenCalled();
+  });
+
+  it('runs model refresh on its own cron and deduplicates overlapping passes', async () => {
+    let releaseRefresh!: () => void;
+    refreshModelsAndRebuildRoutesMock.mockImplementation(() => new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    }));
+    refreshAllBalancesMock.mockResolvedValue(undefined);
+    const scheduler = await import('./checkinScheduler.js');
+    await scheduler.startScheduler();
+    const modelCall = (scheduleMock.mock.calls as unknown as Array<[string, () => Promise<void>]>)
+      .find((call) => call[0] === '*/30 * * * *');
+    expect(modelCall).toBeDefined();
+    const modelCallback = modelCall![1];
+
+    const first = modelCallback();
+    const second = modelCallback();
+    expect(refreshModelsAndRebuildRoutesMock).toHaveBeenCalledTimes(1);
+    releaseRefresh();
+    await Promise.all([first, second]);
+
+    refreshModelsAndRebuildRoutesMock.mockResolvedValue(undefined);
+    await modelCallback();
+    expect(refreshModelsAndRebuildRoutesMock).toHaveBeenCalledTimes(2);
   });
 
   it('stopScheduler tears down every timer this module owns', async () => {
@@ -146,10 +173,10 @@ describe('checkinScheduler', () => {
     const scheduler = await import('./checkinScheduler.js');
 
     await scheduler.startScheduler();
-    // startScheduler registers the check-in, balance, daily-summary and
-    // log-cleanup cron tasks plus the models.dev price sync.
+    // startScheduler registers the check-in, balance, model-refresh,
+    // daily-summary and log-cleanup cron tasks plus the models.dev price sync.
     const scheduledCount = scheduleMock.mock.calls.length;
-    expect(scheduledCount).toBeGreaterThanOrEqual(4);
+    expect(scheduledCount).toBeGreaterThanOrEqual(5);
     expect(startModelsDevPriceSyncMock).toHaveBeenCalledTimes(1);
 
     cronStopMock.mockClear();

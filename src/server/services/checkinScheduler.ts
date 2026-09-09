@@ -17,11 +17,13 @@ export type CheckinScheduleMode = 'cron' | 'interval';
 let checkinTask: ScheduledTask | null = null;
 let checkinIntervalTimer: ReturnType<typeof setInterval> | null = null;
 let balanceTask: ScheduledTask | null = null;
+let modelRefreshTask: ScheduledTask | null = null;
 let dailySummaryTask: ScheduledTask | null = null;
 let logCleanupTask: ScheduledTask | null = null;
 const intervalAttemptByAccount = new Map<number, number>();
 let checkinPassInFlight: Promise<void> | null = null;
 let balancePassInFlight: Promise<void> | null = null;
+let modelRefreshPassInFlight: Promise<void> | null = null;
 
 const DAILY_SUMMARY_DEFAULT_CRON = '58 23 * * *';
 const LOG_CLEANUP_DEFAULT_CRON = '0 6 * * *';
@@ -260,7 +262,6 @@ function createBalanceTask(cronExpr: string) {
       console.log(`[Scheduler] Refreshing balances at ${new Date().toISOString()}`);
       try {
         await refreshAllBalances();
-        await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
         console.log('[Scheduler] Balance refresh complete');
       } catch (err) {
         console.error('[Scheduler] Balance refresh error:', err);
@@ -270,6 +271,38 @@ function createBalanceTask(cronExpr: string) {
       if (balancePassInFlight === trackedPass) balancePassInFlight = null;
     });
     balancePassInFlight = trackedPass;
+    return trackedPass;
+  });
+}
+
+function createModelRefreshTask(cronExpr: string) {
+  return cron.schedule(cronExpr, async () => {
+    if (modelRefreshPassInFlight) {
+      console.log('[Scheduler] Model refresh skipped: previous pass is still running');
+      return modelRefreshPassInFlight;
+    }
+    const pass = (async () => {
+      console.log(`[Scheduler] Refreshing models at ${new Date().toISOString()}`);
+      try {
+        const result = await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+        const refresh = Array.isArray(result?.refresh) ? result.refresh : [];
+        const succeeded = refresh.filter((item: any) => item?.status === 'success').length;
+        const failed = refresh.filter((item: any) => item?.status === 'failed').length;
+        const rebuild = result?.rebuild;
+        const summary = [
+          `accounts=${refresh.length} ok=${succeeded} failed=${failed}`,
+          `createdRoutes=${rebuild?.createdRoutes ?? 0} removedRoutes=${rebuild?.removedRoutes ?? 0}`,
+          `createdChannels=${rebuild?.createdChannels ?? 0} removedChannels=${rebuild?.removedChannels ?? 0}`,
+        ].join(' ');
+        console.log(`[Scheduler] Model refresh complete: ${summary}`);
+      } catch (err) {
+        console.error('[Scheduler] Model refresh error:', err);
+      }
+    })();
+    const trackedPass = pass.finally(() => {
+      if (modelRefreshPassInFlight === trackedPass) modelRefreshPassInFlight = null;
+    });
+    modelRefreshPassInFlight = trackedPass;
     return trackedPass;
   });
 }
@@ -326,6 +359,7 @@ export async function startScheduler() {
     config.checkinIntervalHours,
   );
   const activeBalanceCron = await resolveCronSetting('balance_refresh_cron', config.balanceRefreshCron);
+  const activeModelRefreshCron = await resolveCronSetting('model_refresh_cron', config.modelRefreshCron);
   const activeDailySummaryCron = await resolveCronSetting('daily_summary_cron', DAILY_SUMMARY_DEFAULT_CRON);
   const activeLogCleanupCron = await resolveCronSetting('log_cleanup_cron', config.logCleanupCron || LOG_CLEANUP_DEFAULT_CRON);
   const activeLogCleanupUsageLogsEnabled = await resolveBooleanSetting(
@@ -344,6 +378,7 @@ export async function startScheduler() {
   config.checkinScheduleMode = activeCheckinScheduleMode;
   config.checkinIntervalHours = Math.min(24, Math.max(1, activeCheckinIntervalHours));
   config.balanceRefreshCron = activeBalanceCron;
+  config.modelRefreshCron = activeModelRefreshCron;
   config.logCleanupCron = activeLogCleanupCron;
   config.logCleanupUsageLogsEnabled = activeLogCleanupUsageLogsEnabled;
   config.logCleanupProgramLogsEnabled = activeLogCleanupProgramLogsEnabled;
@@ -351,16 +386,19 @@ export async function startScheduler() {
 
   stopCheckinSchedule();
   balanceTask?.stop();
+  modelRefreshTask?.stop();
   dailySummaryTask?.stop();
   logCleanupTask?.stop();
   startCheckinSchedule();
   balanceTask = createBalanceTask(activeBalanceCron);
+  modelRefreshTask = createModelRefreshTask(activeModelRefreshCron);
   dailySummaryTask = createDailySummaryTask(activeDailySummaryCron);
   logCleanupTask = createLogCleanupTask(activeLogCleanupCron);
   startModelsDevPriceSync();
 
   console.log(`[Scheduler] Check-in schedule: ${config.checkinScheduleMode} (${config.checkinScheduleMode === 'cron' ? activeCheckinCron : `${config.checkinIntervalHours}h`})`);
   console.log(`[Scheduler] Balance refresh cron: ${activeBalanceCron}`);
+  console.log(`[Scheduler] Model refresh cron: ${activeModelRefreshCron}`);
   console.log(`[Scheduler] Daily summary cron: ${activeDailySummaryCron}`);
   console.log(
     `[Scheduler] Log cleanup cron: ${activeLogCleanupCron} (configured=${config.logCleanupConfigured}, usage=${activeLogCleanupUsageLogsEnabled}, program=${activeLogCleanupProgramLogsEnabled}, retentionDays=${activeLogCleanupRetentionDays})`,
@@ -435,9 +473,11 @@ export function updateLogCleanupSettings(input: {
 export function stopScheduler() {
   stopCheckinSchedule();
   balanceTask?.stop();
+  modelRefreshTask?.stop();
   dailySummaryTask?.stop();
   logCleanupTask?.stop();
   balanceTask = null;
+  modelRefreshTask = null;
   dailySummaryTask = null;
   logCleanupTask = null;
   stopModelsDevPriceSync();
@@ -446,12 +486,15 @@ export function stopScheduler() {
 export function __resetCheckinSchedulerForTests() {
   stopCheckinSchedule();
   balanceTask?.stop();
+  modelRefreshTask?.stop();
   dailySummaryTask?.stop();
   logCleanupTask?.stop();
   balanceTask = null;
+  modelRefreshTask = null;
   dailySummaryTask = null;
   logCleanupTask = null;
   intervalAttemptByAccount.clear();
   checkinPassInFlight = null;
   balancePassInFlight = null;
+  modelRefreshPassInFlight = null;
 }
