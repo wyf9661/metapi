@@ -656,28 +656,27 @@ async function doRefreshModelsForAccount(
   const adapter = getAdapter(site.platform);
   const accountProxyUrl = resolveProxyUrlFromExtraConfig(account.extraConfig);
 
-  const restoreAvailabilityOnFailure = options?.allowInactive === true;
-  const previousAccountTokens = restoreAvailabilityOnFailure
-    ? await db.select()
-      .from(schema.accountTokens)
-      .where(eq(schema.accountTokens.accountId, accountId))
-      .all()
-    : [];
-  const previousModelAvailability = restoreAvailabilityOnFailure
-    ? await db.select()
-      .from(schema.modelAvailability)
-      .where(and(
-        eq(schema.modelAvailability.accountId, accountId),
-        eq(schema.modelAvailability.isManual, false),
-      ))
-      .all()
-    : [];
-  const previousTokenModelAvailability = restoreAvailabilityOnFailure
-    ? (await Promise.all(previousAccountTokens.map(async (token: any) => db.select()
-      .from(schema.tokenModelAvailability)
-      .where(eq(schema.tokenModelAvailability.tokenId, token.id))
-      .all()))).flat()
-    : [];
+  // Snapshot current availability BEFORE discovery so any failed refresh can
+  // restore the previous list. Clearing first and failing without a rollback
+  // wiped an account's whole model set on one transient upstream timeout
+  // (2026-09-09 CAIC: a single 60s first-byte timeout left the account with
+  // zero routable models until the next full pass hours later). A stale but
+  // working list beats an empty one; the next successful refresh replaces it.
+  const previousAccountTokens = await db.select()
+    .from(schema.accountTokens)
+    .where(eq(schema.accountTokens.accountId, accountId))
+    .all();
+  const previousModelAvailability = await db.select()
+    .from(schema.modelAvailability)
+    .where(and(
+      eq(schema.modelAvailability.accountId, accountId),
+      eq(schema.modelAvailability.isManual, false),
+    ))
+    .all();
+  const previousTokenModelAvailability = (await Promise.all(previousAccountTokens.map(async (token: any) => db.select()
+    .from(schema.tokenModelAvailability)
+    .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+    .all()))).flat();
 
   const clearExistingAvailability = async () => {
     await db.delete(schema.modelAvailability)
@@ -700,7 +699,6 @@ async function doRefreshModelsForAccount(
   };
 
   const restorePreviousAvailability = async () => {
-    if (!restoreAvailabilityOnFailure) return;
     await clearExistingAvailability();
     if (previousModelAvailability.length > 0) {
       await db.insert(schema.modelAvailability).values(

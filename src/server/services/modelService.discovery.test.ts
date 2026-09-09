@@ -679,6 +679,86 @@ describe('refreshModelsForAccount credential discovery', () => {
     });
   });
 
+  it('preserves existing availability when a scheduled (non-allowInactive) refresh fails', async () => {
+    // Regression: a transient upstream timeout during the scheduled full pass
+    // used to wipe the account's whole model set because the snapshot/restore
+    // only ran for allowInactive manual refreshes (2026-09-09 CAIC).
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockRejectedValue(new Error('upstream unavailable'));
+
+    const site = await db.insert(schema.sites).values({
+      name: 'site-scheduled-fail',
+      url: 'https://site-scheduled-fail.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'scheduled-fail-user',
+      accessToken: 'session-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'session' }),
+    }).returning().get();
+
+    const token = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'default',
+      token: 'sk-abc123',
+      source: 'manual',
+      enabled: true,
+      isDefault: true,
+      valueStatus: 'ready' as any,
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values({
+      accountId: account.id,
+      modelName: 'gpt-4.1',
+      available: true,
+      latencyMs: 120,
+      checkedAt: '2026-03-21T11:30:00.000Z',
+    }).run();
+
+    await db.insert(schema.tokenModelAvailability).values({
+      tokenId: token.id,
+      modelName: 'gpt-4.1',
+      available: true,
+      latencyMs: 90,
+      checkedAt: '2026-03-21T11:30:00.000Z',
+    }).run();
+
+    const result = await refreshModelsForAccount(account.id);
+
+    expect(result).toMatchObject({
+      accountId: account.id,
+      refreshed: true,
+      status: 'failed',
+      modelCount: 0,
+      discoveredByCredential: false,
+    });
+
+    const modelRows = await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, account.id))
+      .all();
+    expect(modelRows).toHaveLength(1);
+    expect(modelRows[0]).toMatchObject({
+      accountId: account.id,
+      modelName: 'gpt-4.1',
+      available: true,
+    });
+
+    const tokenRows = await db.select().from(schema.tokenModelAvailability)
+      .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+      .all();
+    expect(tokenRows).toHaveLength(1);
+    expect(tokenRows[0]).toMatchObject({
+      tokenId: token.id,
+      modelName: 'gpt-4.1',
+      available: true,
+    });
+  });
+
   it('does not scan masked_pending placeholders as token credentials', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockImplementation(async (_baseUrl: string, token: string) => (
@@ -1435,10 +1515,17 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(getModelsMock).not.toHaveBeenCalled();
     expect(undiciFetchMock).toHaveBeenCalledTimes(1);
 
+    // A failed refresh now restores the previous availability instead of
+    // leaving the account empty (2026-09-09 CAIC regression fix).
     const rows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(rows).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      accountId: account.id,
+      modelName: 'gpt-5.2-codex',
+      available: true,
+    });
 
     const latest = await db.select().from(schema.accounts)
       .where(eq(schema.accounts.id, account.id))
