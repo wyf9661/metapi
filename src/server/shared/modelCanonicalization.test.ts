@@ -36,6 +36,18 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('glm-5.2-0715')).toBe('glm-5.2');
   });
 
+  it('keeps ollama owner namespaces intact but still merges relay prefixes', () => {
+    // owner/model:tag — the owner is part of the model identity, keep it.
+    expect(canonicalizeModelName('linux6200/bge-reranker-v2-m3:latest')).toBe('linux6200/bge-reranker-v2-m3:latest');
+    expect(canonicalizeModelName('quentinz/bge-large-zh-v1.5:latest')).toBe('quentinz/bge-large-zh-v1.5:latest');
+    expect(canonicalizeModelName('Quentinz/Bge-Large-Zh-V1.5:Latest')).toBe('quentinz/bge-large-zh-v1.5:latest');
+    // A bare relay prefix (no tag) still merges to the base model.
+    expect(canonicalizeModelName('z-ai/glm-5.2')).toBe('glm-5.2');
+    expect(canonicalizeModelName('deepseek-ai/deepseek-v4-flash')).toBe('deepseek-v4-flash');
+    // A relay prefix plus a packaging free label still merges.
+    expect(canonicalizeModelName('z-ai/glm-5.2:free')).toBe('glm-5.2');
+  });
+
   it('keeps non-date numeric suffixes and true variants intact', () => {
     // 1m / 262k are context-window variants, not dates.
     expect(canonicalizeModelName('glm-5.2-1m')).toBe('glm-5.2-1m');

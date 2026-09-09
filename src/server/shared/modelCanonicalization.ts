@@ -2,9 +2,19 @@ function normalizeBaseModelName(modelName: string): string {
   let value = String(modelName || '').trim().toLowerCase();
   if (!value) return '';
 
-  // Provider prefixes vary across relays (e.g. z-ai/glm-5.2 vs glm-5.2).
+  // Provider prefixes vary across relays (e.g. z-ai/glm-5.2 vs glm-5.2), so a
+  // bare prefix is stripped. A trailing ':tag' however marks an ollama-style
+  // namespace (owner/model:tag, e.g. linux6200/bge-reranker-v2-m3:latest)
+  // where the owner is part of the model identity: different owners are
+  // different artifacts and must NOT be merged by dropping the prefix. Free
+  // labels are packaging noise, so they are ignored when deciding whether the
+  // segment carries a real tag (z-ai/glm-5.2:free still merges to glm-5.2).
   const slashParts = value.split('/').map((part) => part.trim()).filter(Boolean);
-  if (slashParts.length > 1) value = slashParts[slashParts.length - 1]!;
+  if (slashParts.length > 1) {
+    const last = slashParts[slashParts.length - 1]!;
+    const tagFreeLast = last.replace(/:free$/i, '').replace(/-free$/i, '');
+    if (!tagFreeLast.includes(':')) value = last;
+  }
 
   // Free suffixes are packaging labels, not model capability differences.
   value = value.replace(/:free$/i, '');
