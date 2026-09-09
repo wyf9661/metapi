@@ -1,5 +1,6 @@
 import { ApiTokenInfo, BasePlatformAdapter, CheckinResult, BalanceInfo, UserInfo, TokenVerifyResult, CreateApiTokenOptions, type SiteAnnouncement } from './base.js';
 import type { RequestInit as UndiciRequestInit } from 'undici';
+import { withManagementRequestTimeout } from './upstreamRequestTimeout.js';
 import { createContext, runInContext } from 'node:vm';
 import { withSiteProxyRequestInit } from '../siteProxy.js';
 import { fetchJsonWithShieldCookieRetry } from './newApiShield.js';
@@ -790,7 +791,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
         body: options?.body ?? undefined,
         headers,
       };
-      const proxiedRequestOptions = await withSiteProxyRequestInit(url, requestOptions);
+      const proxiedRequestOptions = await withSiteProxyRequestInit(url, withManagementRequestTimeout(requestOptions));
       const res = await fetch(url, proxiedRequestOptions);
       const text = await res.text();
       const getSetCookie = (res.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie;

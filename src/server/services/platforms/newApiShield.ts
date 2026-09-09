@@ -1,6 +1,7 @@
 import type { RequestInit as UndiciRequestInit, Headers as UndiciHeaders } from 'undici';
 import { createContext, runInContext } from 'node:vm';
 import { withSiteProxyRequestInit } from '../siteProxy.js';
+import { withManagementRequestTimeout } from './upstreamRequestTimeout.js';
 
 const SHIELD_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
 
@@ -227,7 +228,7 @@ export async function fetchJsonWithShieldCookieRetry<T>(
       body: options?.body ?? undefined,
       headers,
     };
-    const proxiedRequestOptions = await withSiteProxyRequestInit(url, requestOptions);
+    const proxiedRequestOptions = await withSiteProxyRequestInit(url, withManagementRequestTimeout(requestOptions));
     const response = await fetch(url, proxiedRequestOptions);
     const text = await response.text();
 

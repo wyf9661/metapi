@@ -1,6 +1,7 @@
 import type { PlatformAdapter } from './base.js';
 import { NewApiAdapter } from './newApi.js';
 import { OneApiAdapter } from './oneApi.js';
+import { withManagementRequestTimeout } from './upstreamRequestTimeout.js';
 
 import { Sub2ApiAdapter } from './sub2api.js';
 import { OpenAiAdapter } from './openai.js';
@@ -45,7 +46,7 @@ async function looksLikeOpenAiCompatibleGateway(url: string): Promise<boolean> {
   for (const target of candidates) {
     try {
       const { fetch } = await import('undici');
-      const res = await fetch(target, { method: 'GET' });
+      const res = await fetch(target, withManagementRequestTimeout({ method: 'GET' }));
       const text = await res.text();
       const lowered = text.toLowerCase();
       if (

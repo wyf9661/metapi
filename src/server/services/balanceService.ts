@@ -18,6 +18,7 @@ import { extractRuntimeHealth, setAccountRuntimeHealth } from './accountHealthSe
 import { updateTodayIncomeSnapshot } from './todayIncomeRewardService.js';
 import type { BalanceInfo } from './platforms/base.js';
 import { withAccountProxyOverride, withSiteProxyRequestInit } from './siteProxy.js';
+import { withManagementRequestTimeout } from './platforms/upstreamRequestTimeout.js';
 import {
   isManagedSub2ApiTokenDue,
   isSub2ApiPlatform,
@@ -175,10 +176,10 @@ async function fetchTodayIncomeFromLogs(params: {
 
       try {
         const requestUrl = `${baseUrl}/api/log/self?${query.toString()}`;
-        const response = await fetch(requestUrl, await withSiteProxyRequestInit(requestUrl, {
+        const response = await fetch(requestUrl, await withSiteProxyRequestInit(requestUrl, withManagementRequestTimeout({
           method: 'GET',
           headers,
-        }));
+        })));
         if (!response.ok) break;
 
         const payload = await response.json().catch(() => null);

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { RequestInit as UndiciRequestInit } from 'undici';
+import { withManagementRequestTimeout } from './upstreamRequestTimeout.js';
 import { withSiteProxyRequestInit } from '../siteProxy.js';
 
 export interface CheckinResult {
@@ -231,7 +232,7 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
         ...options?.headers,
       },
     };
-    const proxiedRequestOptions = await withSiteProxyRequestInit(url, requestOptions);
+    const proxiedRequestOptions = await withSiteProxyRequestInit(url, withManagementRequestTimeout(requestOptions));
     const res = await fetch(url, proxiedRequestOptions);
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${await res.text()}`);
