@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/BrandIcon.js';
+import { StatusToggle } from '../../components/StatusToggle.js';
 import { tr } from '../../i18n.js';
 import { formatDateTimeMinuteLocal } from '../helpers/checkinLogTime.js';
 import type {
@@ -47,7 +48,7 @@ import {
   createPriorityRailNewLayerId,
 } from './priorityRail.js';
 import { translateOnlyRectSortingStrategy } from './sortingStrategies.js';
-import { StatusText } from '../../components/StatusText.js';
+import { StatusText, StatusPill } from '../../components/StatusText.js';
 
 type RouteCardProps = {
   route: RouteSummaryRow;
@@ -724,14 +725,15 @@ function RouteCardInner({
               {tr('未生成')}
             </span>
           ) : (
-            <button
-              className={`badge route-enable-toggle ${route.enabled ? 'is-enabled' : 'is-disabled'}`}
-              style={{ fontSize: 11, cursor: 'pointer', border: 'none', flexShrink: 0, minWidth: 36, textAlign: 'center' }}
+            <StatusToggle
+              enabled={route.enabled}
+              onLabel={tr('启用')}
+              offLabel={tr('禁用')}
               onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
-              data-tooltip={route.enabled ? '点击禁用此路由' : '点击启用此路由'}
-            >
-              {route.enabled ? tr('启用') : tr('禁用')}
-            </button>
+              tooltipOn="点击禁用此路由"
+              tooltipOff="点击启用此路由"
+              style={{ flexShrink: 0, fontSize: 11 }}
+            />
           )}
 
           {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
@@ -794,13 +796,13 @@ function RouteCardInner({
             </span>
           )}
           {hasCachedDecisionSnapshot ? (
-            <span
-              className="badge badge-success"
+            <StatusPill
+              color="var(--color-info)"
               data-tooltip={cachedDecisionTooltip}
               style={{ fontSize: 10, flexShrink: 0 }}
             >
               {tr('已缓存')}
-            </span>
+            </StatusPill>
           ) : null}
 
           {readOnlyRoute ? (
@@ -857,14 +859,15 @@ function RouteCardInner({
                 {tr('未生成')}
               </span>
             ) : (
-              <button
-                className={`badge route-enable-toggle ${route.enabled ? 'is-enabled' : 'is-disabled'}`}
-                style={{ fontSize: 11, cursor: 'pointer', border: 'none' }}
+              <StatusToggle
+                enabled={route.enabled}
+                onLabel={tr('启用')}
+                offLabel={tr('禁用')}
                 onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
-                data-tooltip={route.enabled ? '点击禁用此路由' : '点击启用此路由'}
-              >
-                {route.enabled ? tr('启用') : tr('禁用')}
-              </button>
+                tooltipOn="点击禁用此路由"
+                tooltipOff="点击启用此路由"
+                style={{ fontSize: 11 }}
+              />
             )}
             {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
               <>
@@ -911,13 +914,13 @@ function RouteCardInner({
               </span>
             )}
             {hasCachedDecisionSnapshot ? (
-              <span
-                className="badge badge-success"
+              <StatusPill
+                color="var(--color-info)"
                 data-tooltip={cachedDecisionTooltip}
                 style={{ fontSize: 10 }}
               >
                 {tr('已缓存')}
-              </span>
+              </StatusPill>
             ) : null}
             {readOnlyRoute && (
               <span className="badge badge-warning" style={{ fontSize: 10 }}>
@@ -1008,13 +1011,13 @@ function RouteCardInner({
                 ) : null}
               </span>
               {hasCachedDecisionSnapshot ? (
-                <span
-                  className="badge badge-success"
+                <StatusPill
+                  color="var(--color-info)"
                   data-tooltip={cachedDecisionTooltip}
                   style={{ fontSize: 10 }}
                 >
                   {tr('已缓存')}
-                </span>
+                </StatusPill>
               ) : null}
               {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
                 <span className="badge badge-muted" style={{ fontSize: 10 }}>

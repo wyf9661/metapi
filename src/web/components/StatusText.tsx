@@ -39,6 +39,7 @@ export function statusToneColor(tone: StatusTone): string {
   return TONE_COLORS[tone];
 }
 
+
 /**
  * Status text for dense tables: colour and weight only, no filled chip.
  *
@@ -55,6 +56,8 @@ export type StatusTextProps = {
   children: React.ReactNode;
   /** Force the 600 weight; danger is bolded automatically. */
   bold?: boolean;
+  /** Override the resolved tone colour (e.g. a brand hue instead of a status). */
+  color?: string;
 } & Omit<React.HTMLAttributes<HTMLSpanElement>, 'className' | 'children'>;
 
 export function StatusText({
@@ -62,6 +65,7 @@ export function StatusText({
   badgeClass,
   children,
   bold,
+  color: colorOverride,
   style,
   ...rest
 }: StatusTextProps) {
@@ -71,7 +75,7 @@ export function StatusText({
     <span
       {...rest}
       style={{
-        color: statusToneColor(resolved),
+        color: colorOverride ?? statusToneColor(resolved),
         fontWeight: emphasized ? 600 : 500,
         fontSize: 12,
         fontVariantNumeric: 'tabular-nums',
@@ -149,11 +153,12 @@ export function StatusPill({
   badgeClass,
   children,
   bold,
+  color: colorOverride,
   style,
   ...rest
 }: StatusTextProps) {
   const resolved = tone ?? statusToneFromBadgeClass(badgeClass);
-  const color = statusToneColor(resolved);
+  const color = colorOverride ?? statusToneColor(resolved);
   const emphasized = bold === true || resolved === 'danger';
   return (
     <span

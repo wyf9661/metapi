@@ -3,8 +3,14 @@ import { create } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import SiteBadgeLink from './SiteBadgeLink.js';
 
+function findBadge(root: ReturnType<typeof create>) {
+  return root.root.find((node) => (
+    node.type === 'span' && String(node.props.className || '') === 'badge'
+  ));
+}
+
 function badgeTexts(root: ReturnType<typeof create>): string[] {
-  const badge = root.root.findByProps({ className: 'badge badge-info' });
+  const badge = findBadge(root);
   const texts: string[] = [];
   const walk = (children: Array<any>) => {
     for (const child of children) {
@@ -28,6 +34,8 @@ describe('SiteBadgeLink', () => {
     expect(String(link.props.href || '')).toContain('/sites?focusSiteId=7');
     expect(String(link.props.className || '')).toContain('badge-link');
     expect(badgeTexts(root)).toContain('Demo Site');
+    // One outlined look for every caller: the site label is never a filled chip.
+    expect(String(findBadge(root).props.style?.background || '')).toBe('transparent');
 
     root.unmount();
   });

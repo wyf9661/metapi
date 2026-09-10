@@ -3,6 +3,7 @@ import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { platformBadgeClass } from './sites/sitePresentation.js';
+import { StatusPill } from '../components/StatusText.js';
 
 const Accounts = lazy(() => import('./Accounts.js'));
 
@@ -79,12 +80,12 @@ export default function SiteDetail() {
               {site.platform}
             </span>
           )}
-          <span
-            className={`badge ${site.status === 'disabled' ? 'badge-muted' : 'badge-success'}`}
+          <StatusPill
+            badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'}
             style={{ fontSize: 11 }}
           >
             {site.status === 'disabled' ? '禁用' : '启用'}
-          </span>
+          </StatusPill>
         </div>
       </div>
 

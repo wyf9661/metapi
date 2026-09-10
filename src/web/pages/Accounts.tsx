@@ -13,6 +13,7 @@ import { useClientPagination } from '../components/useClientPagination.js';
 import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteBadgeLink from '../components/SiteBadgeLink.js';
+import { StatusToggle } from '../components/StatusToggle.js';
 import AccountModelsModal from './accounts/AccountModelsModal.js';
 import EditAccountModal from './accounts/EditAccountModal.js';
 import {
@@ -42,7 +43,7 @@ import {
 import { SITE_DOCS_URL } from '../docsLink.js';
 import { getSiteInitializationPreset } from '../../shared/siteInitializationPresets.js';
 import { parseBatchApiKeys } from '../../shared/apiKeyBatch.js';
-import { StatusText } from '../components/StatusText.js';
+import { StatusPill, StatusText } from '../components/StatusText.js';
 
 type ConnectionsSegment = 'session' | 'apikey' | 'tokens';
 
@@ -2586,39 +2587,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               label="签到"
                               value={
                                 capabilities.canCheckin ? (
-                                  <button
-                                    type="button"
-                                    className={`checkin-toggle-badge ${a.checkinEnabled ? 'is-on' : 'is-off'}`}
+                                  <StatusToggle
+                                    enabled={a.checkinEnabled}
+                                    onLabel="开启"
+                                    offLabel="关闭"
                                     onClick={() => handleToggleCheckin(a)}
-                                    disabled={
-                                      !!actionLoading[`checkin-toggle-${a.id}`]
-                                    }
-                                    data-tooltip={
-                                      a.checkinEnabled
-                                        ? '点击关闭签到，全部签到会忽略此账号'
-                                        : '点击开启签到'
-                                    }
-                                    aria-label={
-                                      a.checkinEnabled
-                                        ? '点击关闭签到，全部签到会忽略此账号'
-                                        : '点击开启签到'
-                                    }
-                                  >
-                                    {actionLoading[`checkin-toggle-${a.id}`] ? (
-                                      <span className="spinner spinner-sm" />
-                                    ) : a.checkinEnabled ? (
-                                      '开启'
-                                    ) : (
-                                      '关闭'
-                                    )}
-                                  </button>
+                                    busy={!!actionLoading[`checkin-toggle-${a.id}`]}
+                                    tooltipOn="点击关闭签到，全部签到会忽略此账号"
+                                    tooltipOff="点击开启签到"
+                                  />
                                 ) : (
-                                  <span
-                                    className="badge badge-muted"
-                                    style={{ fontSize: 11 }}
-                                  >
-                                    不支持
-                                  </span>
+                                  <StatusPill tone="muted" style={{ fontSize: 11 }}>不支持</StatusPill>
                                 )
                               }
                             />
@@ -2948,39 +2927,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           </td>
                           <td>
                             {capabilities.canCheckin ? (
-                              <button
-                                type="button"
-                                className={`checkin-toggle-badge ${a.checkinEnabled ? 'is-on' : 'is-off'}`}
+                              <StatusToggle
+                                enabled={a.checkinEnabled}
+                                onLabel="开启"
+                                offLabel="关闭"
                                 onClick={() => handleToggleCheckin(a)}
-                                disabled={
-                                  !!actionLoading[`checkin-toggle-${a.id}`]
-                                }
-                                data-tooltip={
-                                  a.checkinEnabled
-                                    ? '点击关闭签到，全部签到会忽略此账号'
-                                    : '点击开启签到'
-                                }
-                                aria-label={
-                                  a.checkinEnabled
-                                    ? '点击关闭签到，全部签到会忽略此账号'
-                                    : '点击开启签到'
-                                }
-                              >
-                                {actionLoading[`checkin-toggle-${a.id}`] ? (
-                                  <span className="spinner spinner-sm" />
-                                ) : a.checkinEnabled ? (
-                                  '开启'
-                                ) : (
-                                  '关闭'
-                                )}
-                              </button>
+                                busy={!!actionLoading[`checkin-toggle-${a.id}`]}
+                                tooltipOn="点击关闭签到，全部签到会忽略此账号"
+                                tooltipOff="点击开启签到"
+                              />
                             ) : (
-                              <span
-                                className="badge badge-muted"
-                                style={{ fontSize: 11 }}
-                              >
-                                不支持
-                              </span>
+                              <StatusPill tone="muted" style={{ fontSize: 11 }}>不支持</StatusPill>
                             )}
                           </td>
                           <td className="accounts-actions-cell">

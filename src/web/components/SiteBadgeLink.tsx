@@ -7,7 +7,6 @@ type SiteBadgeLinkProps = {
   siteName?: string | null;
   siteUrl?: string | null;
   className?: string;
-  badgeClassName?: string;
   badgeStyle?: React.CSSProperties;
   tone?: 'primary';
 };
@@ -164,7 +163,7 @@ export function SiteIcon({
 
 export default function SiteBadgeLink({
   siteId, siteName, siteUrl,
-  className = 'badge-link', badgeClassName = 'badge badge-info', badgeStyle, tone,
+  className = 'badge-link', badgeStyle, tone,
 }: SiteBadgeLinkProps) {
   const label = String(siteName || '').trim() || '-';
   const normalizedSiteId = Number(siteId);
@@ -200,15 +199,14 @@ export default function SiteBadgeLink({
     }
   }
 
-  const badgeClass = !siteColors ? badgeClassName : 'badge';
-  const badgeCss: React.CSSProperties = siteColors
-    ? {
-      // Outline only: fill gone, but the brand hue stays in the text + border.
-      background: 'transparent',
-      color: siteColors.text,
-      border: `1px solid ${siteColors.border}`,
-    }
-    : {};
+  // One look for every caller: the site name is a label, not a status, so it is
+  // always an outline — the brand hue (or the neutral border) carries identity.
+  const badgeClass = 'badge';
+  const badgeCss: React.CSSProperties = {
+    background: 'transparent',
+    color: siteColors ? siteColors.text : 'var(--color-text-primary)',
+    border: `1px solid ${siteColors ? siteColors.border : 'var(--color-border)'}`,
+  };
 
   const badge = (
     <>
