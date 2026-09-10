@@ -298,15 +298,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ref="${{ inputs.ref }}"
-          else
-            ref="${{ github.ref_name }}"
-          fi
-          version="$(node -p "require('./package.json').version")"
-          short_sha="$(git rev-parse --short HEAD)"
-          safe_ref="$(printf '%s' "$ref" | tr '/_' '--' | tr -cd 'a-zA-Z0-9.-')"
-          echo "tag=nightly-${safe_ref}-${version}-${short_sha}" >> "$GITHUB_OUTPUT"
+          # Fixed tag "nightly": recreated on each run at the built ref's HEAD,
+          # so exactly one rolling nightly release/tag exists at any time.
+          echo "tag=nightly" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -320,16 +314,18 @@ jobs:
       - name: Show release files
         run: ls -la release-assets
 
-      - name: Delete previous nightly release (same ref)
+      - name: Delete previous nightly release (tag "nightly")
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="${{ steps.tag.outputs.tag }}"
-          # Keep only the newest nightly per ref; older same-ref nightlies go away.
-          gh release list --json tagName --jq '.[].tagName' | grep -E "^nightly-" || true
-          gh release delete "$tag" --cleanup-tag --yes || true
+          # Rolling release: exactly one nightly release/tag exists. Delete the
+          # previous one (legacy nightly-* releases included) before uploading.
+          gh release list --json tagName --jq '.[].tagName' | grep -E '^nightly' || true
+          for old in $(gh release list --json tagName --jq '.[].tagName' | grep -E '^nightly'); do
+            gh release delete "$old" --cleanup-tag --yes
+          done
 
       - name: Upload Nightly Release Assets
         uses: softprops/action-gh-release@v3
