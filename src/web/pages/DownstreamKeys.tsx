@@ -447,6 +447,13 @@ export default function DownstreamKeys() {
   const [groupFilter, setGroupFilter] = useState('__all__');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagMatchMode, setTagMatchMode] = useState<TagMatchMode>('any');
+
+  // Reset button state: nothing filtered -> nothing to reset.
+  const hasActiveDownstreamKeyFilters = searchInput.trim() !== ''
+    || status !== 'all'
+    || groupFilter !== '__all__'
+    || selectedTags.length > 0
+    || tagMatchMode !== 'any';
   const [summaryItems, setSummaryItems] = useState<SummaryItem[]>([]);
   const [rawItems, setRawItems] = useState<DownstreamApiKeyItem[]>([]);
   const [routeOptions, setRouteOptions] = useState<RouteSelectorItem[]>([]);
@@ -978,7 +985,13 @@ export default function DownstreamKeys() {
         <div style={{ minWidth: 170 }}>
           <ModernSelect value={groupFilter} onChange={(value) => setGroupFilter(String(value || '__all__'))} options={groupFilterOptions} />
         </div>
-        <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => { setSearchInput(''); setStatus('all'); setGroupFilter('__all__'); setSelectedTags([]); setTagMatchMode('any'); }}>
+        <button
+          className="btn btn-ghost"
+          style={{ border: '1px solid var(--color-border)' }}
+          onClick={() => { setSearchInput(''); setStatus('all'); setGroupFilter('__all__'); setSelectedTags([]); setTagMatchMode('any'); }}
+          disabled={!hasActiveDownstreamKeyFilters}
+          title={hasActiveDownstreamKeyFilters ? '重置全部筛选条件' : '当前没有筛选条件'}
+        >
           重置筛选
         </button>
       </div>

@@ -24,8 +24,8 @@ import ModernSelect from '../components/ModernSelect.js';
 import PageJumpInput from '../components/PageJumpInput.js';
 import PaginationControls from '../components/PaginationControls.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
-import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, formatTokensPerSecond, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, resolveProxyLogInputTokens, stringifyStoredDebugValue, toApiTimeBoundary, formatProxyLogTokenPair, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
-import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
+import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, formatTokensPerSecond, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, proxyLogKeyChipColors, resolveProxyLogClientDisplay, proxyLogRetryColor, resolveProxyLogInputTokens, stringifyStoredDebugValue, toApiTimeBoundary, formatProxyLogTokenPair, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
+import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, ProxyLogTimingCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
 import {
   renderStoredDebugDetails,
   renderTraceStatusBadge,
@@ -37,7 +37,7 @@ import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 // Column count of the desktop usage-log table. Expanded detail rows must span
 // every column (colSpan); bump this whenever a column is added or merged so the
 // last column never renders without the detail row's background.
-const PROXY_LOG_TABLE_COLUMN_COUNT = 12;
+const PROXY_LOG_TABLE_COLUMN_COUNT = 13;
 
 type ProxyLogDetailState = {
   loading: boolean;
@@ -214,6 +214,16 @@ export default function ProxyLogs() {
     location.pathname,
     navigate,
   ]);
+
+  // Drives the reset button: with nothing filtered there is nothing to clear,
+  // so it stays disabled (greyed out) instead of silently doing nothing.
+  const hasActiveFilters = statusFilter !== 'all'
+    || searchInput.trim() !== ''
+    || downstreamKeyFilter != null
+    || siteFilter != null
+    || modelFilter.trim() !== ''
+    || fromInput !== ''
+    || toInput !== '';
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -1104,6 +1114,8 @@ export default function ProxyLogs() {
           setSearchInput('');
           setPage(1);
         }}
+        disabled={!hasActiveFilters}
+        title={hasActiveFilters ? '清空全部筛选条件' : '当前没有筛选条件'}
       >
         清空筛选
       </button>
@@ -2002,8 +2014,14 @@ export default function ProxyLogs() {
                   compact
                   headerActions={
                     <span
-                      className={`badge ${log.status === 'success' ? 'badge-success' : 'badge-error'}`}
-                      style={{ fontSize: 10 }}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: log.status === 'success' ? 500 : 600,
+                        color:
+                          log.status === 'success'
+                            ? 'var(--color-success)'
+                            : 'var(--color-danger)',
+                      }}
                     >
                       {log.status === 'success' ? '成功' : '失败'}
                     </span>
@@ -2041,19 +2059,14 @@ export default function ProxyLogs() {
                       </div>
                     </div>
                     <div className="mobile-summary-metric">
-                      <div className="mobile-summary-metric-label">首字</div>
+                      <div className="mobile-summary-metric-label">{tr('耗时')}</div>
                       <div className="mobile-summary-metric-value">
-                        {Number.isFinite(detailLog.firstByteLatencyMs)
-                          && typeof detailLog.firstByteLatencyMs === 'number'
-                          && detailLog.firstByteLatencyMs >= 0
-                          ? formatLatency(detailLog.firstByteLatencyMs)
-                          : '-'}
-                      </div>
-                    </div>
-                    <div className="mobile-summary-metric">
-                      <div className="mobile-summary-metric-label">用时</div>
-                      <div className="mobile-summary-metric-value">
-                        {formatLatency(log.latencyMs)}
+                        <ProxyLogTimingCell
+                          firstByteLatencyMs={detailLog.firstByteLatencyMs}
+                          latencyMs={log.latencyMs}
+                          completionTokens={detailLog.completionTokens}
+                          isStream={detailLog.isStream}
+                        />
                       </div>
                     </div>
                     <div className="mobile-summary-metric">
@@ -2112,7 +2125,11 @@ export default function ProxyLogs() {
                       {streamModeLabel ? (
                         <MobileField label="模式" value={streamModeLabel} />
                       ) : null}
-                      {firstByteLabel ? (
+                      <MobileField
+                        label="推理强度"
+                        value={detailLog.reasoningEffort || '-'}
+                      />
+                      {firstByteLabel && detailLog.isStream === true ? (
                         <MobileField
                           label="首字"
                           value={firstByteLabel.replace(/^首字\s*/, '')}
@@ -2151,11 +2168,12 @@ export default function ProxyLogs() {
                           includeGeneric: true,
                         })}
                       />
-                      {downstreamKeySummary && (
-                        <div style={{ color: 'var(--color-text-muted)' }}>
-                          {downstreamKeySummary}
-                        </div>
-                      )}
+                      {downstreamKeySummary ? (
+                        <MobileField
+                          label="密钥"
+                          value={downstreamKeySummary.replace(/^密钥:\s*/, '')}
+                        />
+                      ) : null}
                       {billingProcessLines.length > 0 && (
                         <div
                           style={{
@@ -2188,15 +2206,16 @@ export default function ProxyLogs() {
               <tr>
                 <th style={{ width: 28 }} />
                 <th>时间</th>
+                <th>{tr('密钥')}</th>
                 <th>模型</th>
                 <th>站点</th>
+                <th>{tr('推理强度')}</th>
                 <th style={{ width: 48, minWidth: 48 }} title="流式 / 非流">
                   模式
                 </th>
                 <th>{tr('状态')}</th>
                 <th>吞吐率</th>
-                <th>首字</th>
-                <th>用时</th>
+                <th>{tr('耗时')}</th>
                 <th>{tr('输入/输出')}</th>
                 <th>花费</th>
                 <th>重试</th>
@@ -2218,8 +2237,9 @@ export default function ProxyLogs() {
                 const billingProcessLines = detail
                   ? buildBillingProcessLines(detailLog)
                   : [];
-                const downstreamKeySummary =
-                  renderDownstreamKeySummary(detailLog);
+                const clientDisplay = resolveProxyLogClientDisplay(detailLog, {
+                  includeGeneric: true,
+                });
                 const streamModeLabel = formatStreamModeLabel(
                   detailLog.isStream,
                 );
@@ -2281,6 +2301,74 @@ export default function ProxyLogs() {
                       >
                         {formatDateTimeLocal(log.createdAt)}
                       </td>
+                      <td style={{ maxWidth: 180 }}>
+                        {detailLog.downstreamKeyName ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              minWidth: 0,
+                              flexDirection: 'column',
+                              gap: 3,
+                            }}
+                          >
+                            <span
+                              title={detailLog.downstreamKeyName}
+                              style={{
+                                alignSelf: 'flex-start',
+                                maxWidth: '100%',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '2px 8px',
+                                border: `1px solid ${proxyLogKeyChipColors(detailLog.downstreamKeyName as string).border}`,
+                                background: proxyLogKeyChipColors(detailLog.downstreamKeyName as string).background,
+                                borderRadius: 6,
+                                fontSize: 12,
+                                color: 'var(--color-text-primary)',
+                              }}
+                            >
+                              {/* lucide key-round, inlined (this project draws its own
+                                  icons instead of pulling in an icon package) */}
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                                style={{ flexShrink: 0, color: 'var(--color-text-muted)' }}
+                              >
+                                <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" />
+                                <circle cx="16.5" cy="7.5" r="0.5" fill="currentColor" />
+                              </svg>
+                              <span
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {detailLog.downstreamKeyName}
+                              </span>
+                            </span>
+                            {detailLog.downstreamKeyGroupName ? (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: 'var(--color-text-muted)',
+                                }}
+                              >
+                                {detailLog.downstreamKeyGroupName}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>-</span>
+                        )}
+                      </td>
                       <td>
                         <ModelBadge
                           model={log.modelRequested}
@@ -2303,27 +2391,36 @@ export default function ProxyLogs() {
                           badgeStyle={{ fontSize: 12 }}
                         />
                       </td>
+                      <td
+                        style={{
+                          fontSize: 12,
+                          color: detailLog.reasoningEffort
+                            ? 'var(--color-text-primary)'
+                            : 'var(--color-text-muted)',
+                        }}
+                      >
+                        {detailLog.reasoningEffort || '-'}
+                      </td>
                       <td style={{ width: 48, minWidth: 48 }}>
                         <StreamModeIcon isStream={detailLog.isStream} />
                       </td>
                       <td>
-                        <span
-                          className={`badge ${log.status === 'success' ? 'badge-success' : 'badge-error'}`}
-                          style={{ fontSize: 11, fontWeight: 600 }}
-                        >
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background:
-                                log.status === 'success'
-                                  ? 'var(--color-success)'
-                                  : 'var(--color-danger)',
-                            }}
-                          />
-                          {log.status === 'success' ? '成功' : '失败'}
-                        </span>
+                        {(() => {
+                          const failed = log.status !== 'success';
+                          return (
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: failed ? 600 : 500,
+                                color: failed
+                                  ? 'var(--color-danger)'
+                                  : 'var(--color-success)',
+                              }}
+                            >
+                              {failed ? '失败' : '成功'}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td>
                         {(() => {
@@ -2352,52 +2449,24 @@ export default function ProxyLogs() {
                           );
                         })()}
                       </td>
-                      <td>
-                        {Number.isFinite(detailLog.firstByteLatencyMs)
-                          && typeof detailLog.firstByteLatencyMs === 'number'
-                          && detailLog.firstByteLatencyMs >= 0 ? (
-                          <span
-                            style={{
-                              fontVariantNumeric: 'tabular-nums',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: firstByteColor(detailLog.firstByteLatencyMs),
-                              background: firstByteBgColor(
-                                detailLog.firstByteLatencyMs,
-                              ),
-                              padding: '2px 8px',
-                              borderRadius: 6,
-                            }}
-                          >
-                            {formatLatency(detailLog.firstByteLatencyMs)}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--color-text-muted)' }}>-</span>
-                        )}
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontVariantNumeric: 'tabular-nums',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: latencyColor(log.latencyMs),
-                            background: latencyBgColor(log.latencyMs),
-                            padding: '2px 8px',
-                            borderRadius: 6,
-                          }}
-                        >
-                          {formatLatency(log.latencyMs)}
-                        </span>
+                      <td style={{ paddingTop: 8, paddingBottom: 8 }}>
+                        <ProxyLogTimingCell
+                          firstByteLatencyMs={detailLog.firstByteLatencyMs}
+                          latencyMs={log.latencyMs}
+                          completionTokens={detailLog.completionTokens}
+                          isStream={detailLog.isStream}
+                        />
                       </td>
                       <td
                         style={{
                           fontSize: 12,
                           fontVariantNumeric: 'tabular-nums',
                           color: 'var(--color-text-secondary)',
+                          paddingTop: 8,
+                          paddingBottom: 8,
                         }}
                       >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, lineHeight: 1.25 }}>
                           <span>
                             {formatProxyLogTokenPair(
                               resolveProxyLogInputTokens(detailLog),
@@ -2436,24 +2505,15 @@ export default function ProxyLogs() {
                           ? `$${log.estimatedCost.toFixed(6)}`
                           : '-'}
                       </td>
-                      <td>
-                        {log.retryCount > 0 ? (
-                          <span
-                            className="badge badge-warning"
-                            style={{ fontSize: 11 }}
-                          >
-                            {log.retryCount}
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              color: 'var(--color-text-muted)',
-                              fontSize: 12,
-                            }}
-                          >
-                            0
-                          </span>
-                        )}
+                      <td
+                        style={{
+                          fontSize: 12,
+                          fontVariantNumeric: 'tabular-nums',
+                          color: proxyLogRetryColor(log.retryCount),
+                          fontWeight: log.retryCount > 0 ? 600 : 500,
+                        }}
+                      >
+                        {log.retryCount > 0 ? log.retryCount : 0}
                       </td>
                     </tr>
                     {expanded === log.id && (
@@ -2535,7 +2595,7 @@ export default function ProxyLogs() {
                                           </strong>
                                         </>
                                       )}
-                                      {firstByteLabel && (
+                                      {firstByteLabel && detailLog.isStream === true && (
                                         <>
                                           ，首字:{' '}
                                           <strong
@@ -2612,45 +2672,59 @@ export default function ProxyLogs() {
                                     )}
                                     <div
                                       style={{
-                                        color: 'var(--color-text-muted)',
-                                      }}
-                                    >
-                                      用量来源：
-                                      {formatProxyLogUsageSource(
-                                        detailLog.usageSource ??
-                                          pathMeta.usageSource,
-                                      ) || '未知'}
-                                    </div>
-                                    <div
-                                      style={{
                                         display: 'flex',
-                                        gap: 6,
-                                        alignItems: 'flex-start',
+                                        flexDirection: 'column',
+                                        gap: 2,
                                       }}
                                     >
-                                      <span
-                                        style={{
-                                          color: 'var(--color-text-muted)',
-                                          flexShrink: 0,
-                                        }}
-                                      >
-                                        客户端
-                                      </span>
-                                      <div style={{ minWidth: 0 }}>
-                                        {renderProxyLogClientCell(detailLog, {
-                                          includeGeneric: true,
-                                        })}
+                                      <div>
+                                        客户端：
+                                        <strong
+                                          title={clientDisplay.fullName || undefined}
+                                          style={{ color: 'var(--color-text-primary)' }}
+                                        >
+                                          {clientDisplay.primary}
+                                        </strong>
+                                        {clientDisplay.heuristic ? (
+                                          <span
+                                            style={{
+                                              fontSize: 10,
+                                              color: 'var(--color-text-muted)',
+                                            }}
+                                          >
+                                            {' 推测'}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      <div>
+                                        推理强度：
+                                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                                          {detailLog.reasoningEffort || '未指定'}
+                                        </strong>
+                                      </div>
+                                      <div>
+                                        用量来源：
+                                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                                          {formatProxyLogUsageSource(
+                                            detailLog.usageSource ??
+                                              pathMeta.usageSource,
+                                          ) || '未知'}
+                                        </strong>
+                                      </div>
+                                      <div>
+                                        密钥：
+                                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                                          {detailLog.downstreamKeyName || '未记录'}
+                                        </strong>
+                                        {detailLog.downstreamKeyGroupName
+                                          ? `，主分组: ${detailLog.downstreamKeyGroupName}`
+                                          : null}
+                                        {Array.isArray(detailLog.downstreamKeyTags)
+                                          && detailLog.downstreamKeyTags.length > 0
+                                          ? `，标签: ${detailLog.downstreamKeyTags.join(' / ')}`
+                                          : null}
                                       </div>
                                     </div>
-                                    {downstreamKeySummary && (
-                                      <div
-                                        style={{
-                                          color: 'var(--color-text-muted)',
-                                        }}
-                                      >
-                                        {downstreamKeySummary}
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
 

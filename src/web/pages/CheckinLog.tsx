@@ -133,6 +133,8 @@ export default function CheckinLog() {
     [timeFilteredLogs],
   );
 
+  const hasActiveTimeRange = Boolean(fromInput || toInput);
+
   const clearTimeRange = () => {
     setFromInput('');
     setToInput('');
@@ -222,6 +224,8 @@ export default function CheckinLog() {
         type="button"
         className="btn btn-ghost proxy-logs-filter-reset"
         onClick={clearTimeRange}
+        disabled={!hasActiveTimeRange}
+        title={hasActiveTimeRange ? '清空时间筛选' : '当前没有筛选条件'}
       >
         清空筛选
       </button>

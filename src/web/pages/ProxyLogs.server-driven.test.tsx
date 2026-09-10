@@ -858,8 +858,10 @@ describe('ProxyLogs server-driven page', () => {
       expect(rowText).not.toContain('Codex');
       expect(rowText).not.toContain('下游 Key');
       expect(root!.root.findAllByProps({ 'data-testid': 'proxy-log-nonstream-icon' }).length).toBeGreaterThan(0);
-      // first-byte column shows raw latency, not the old "首字 xx" badge
-      expect(rowText).toMatch(/22ms|0\.0*s|22/);
+      // Non-streaming rows show the duration only: without a stream there is no
+      // first-token moment, so a first-byte value must not leak into the cell.
+      expect(rowText).toContain('120ms');
+      expect(rowText).not.toContain('22ms');
     } finally {
       root?.unmount();
     }
@@ -1009,8 +1011,8 @@ describe('ProxyLogs server-driven page', () => {
         node.type === 'tr' && node.props['data-testid'] === 'proxy-log-row-101'
       ));
       const rowText = collectText(row);
-      expect(rowText).toContain('--');
-      expect(rowText).not.toContain('输入0');
+      expect(rowText).toContain('- / -');
+      expect(rowText).not.toContain('0 / ');
     } finally {
       root?.unmount();
     }

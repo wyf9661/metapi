@@ -371,7 +371,7 @@ export type RuntimeSettingsPayload = {
 };
 
 export type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
-export type ProxyLogClientConfidence = 'exact' | 'heuristic' | 'unknown' | null;
+export type ProxyLogClientConfidence = 'exact' | 'heuristic' | 'user_agent' | 'unknown' | null;
 export type ProxyLogUsageSource = 'upstream' | 'self-log' | 'unknown' | null;
 
 export type ProxyLogBillingDetails = {
@@ -435,6 +435,9 @@ export type ProxyLogListItem = {
   completionTokens?: number | null;
   cacheReadTokens?: number | null;
   cacheCreationTokens?: number | null;
+  /** Effort the client asked for: chat `reasoning_effort` / responses
+   *  `reasoning.effort`. Display-only. */
+  reasoningEffort?: string | null;
   estimatedCost?: number | null;
   requestTraceId?: string | null;
 };

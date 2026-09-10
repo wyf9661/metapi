@@ -15,10 +15,16 @@ export type ProxyDebugTraceListItemLike = {
 
 export function renderTraceStatusBadge(trace: ProxyDebugTraceListItemLike) {
   const failed = trace.finalStatus === 'failed';
+  // Plain coloured text, matching the usage-log status column: no chip, dot or
+  // background — the whole column is one repeated value pair, so a filled badge
+  // only adds noise and breaks the row baseline.
   return (
     <span
-      className={`badge ${failed ? 'badge-error' : 'badge-success'}`}
-      style={{ fontSize: 11 }}
+      style={{
+        fontSize: 12,
+        fontWeight: failed ? 600 : 500,
+        color: failed ? 'var(--color-danger)' : 'var(--color-success)',
+      }}
     >
       {failed ? '失败' : '成功'}
     </span>

@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import PageJumpInput from './PageJumpInput.js';
 import ModernSelect from './ModernSelect.js';
-import { PAGE_SIZE_OPTIONS } from './usePersistedPageSize.js';
+import { MOBILE_PAGE_SIZE_OPTIONS, PAGE_SIZE_OPTIONS } from './usePersistedPageSize.js';
+import { useIsMobile } from './useIsMobile.js';
 
 type PaginationControlsProps = {
   page: number;
@@ -31,6 +32,8 @@ export default function PaginationControls({
   onPageSizeChange,
   rangeLabel,
 }: PaginationControlsProps) {
+  const isMobile = useIsMobile();
+  const pageSizeOptions = isMobile ? MOBILE_PAGE_SIZE_OPTIONS : PAGE_SIZE_OPTIONS;
   const pageNumbers = useMemo(() => {
     if (totalPages <= 1) return [];
     const windowSize = Math.min(totalPages, 7);
@@ -92,7 +95,7 @@ export default function PaginationControls({
               dropDirection="up"
               value={String(pageSize)}
               onChange={(nextValue) => onPageSizeChange(Number(nextValue))}
-              options={PAGE_SIZE_OPTIONS.map((s) => ({
+              options={pageSizeOptions.map((s) => ({
                 value: String(s),
                 label: String(s),
               }))}

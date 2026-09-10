@@ -88,14 +88,6 @@ export function latencyColor(ms: number) {
   return 'var(--color-success)';
 }
 
-export function latencyBgColor(ms: number) {
-  if (ms >= 3000)
-    return 'color-mix(in srgb, var(--color-danger) 12%, transparent)';
-  if (ms >= 1000)
-    return 'color-mix(in srgb, var(--color-warning) 12%, transparent)';
-  return 'color-mix(in srgb, var(--color-success) 12%, transparent)';
-}
-
 export function firstByteColor(ms: number) {
   if (ms >= 3000) return 'var(--color-danger)';
   if (ms >= 1000) return 'var(--color-warning)';
@@ -140,15 +132,116 @@ export function formatProxyLogTokenPair(
   inputTokens: number | null | undefined,
   outputTokens: number | null | undefined,
 ): string {
-  return `${formatProxyLogTokenValue(inputTokens)} / ${formatProxyLogTokenValue(outputTokens)}`;
+  const input = typeof inputTokens === 'number' && Number.isFinite(inputTokens) ? inputTokens : null;
+  const output = typeof outputTokens === 'number' && Number.isFinite(outputTokens) ? outputTokens : null;
+  // A failed call carries no usage at all: show a plain dash pair rather than
+  // `0 / --`, which reads like a real (zero-token) request.
+  if ((input == null || input <= 0) && (output == null || output <= 0)) return '- / -';
+  return `${input == null ? '-' : formatProxyLogTokenValue(input)} / ${output == null ? '-' : formatProxyLogTokenValue(output)}`;
 }
 
-export function firstByteBgColor(ms: number) {
-  if (ms >= 3000)
-    return 'color-mix(in srgb, var(--color-danger) 12%, transparent)';
-  if (ms >= 1000)
-    return 'color-mix(in srgb, var(--color-warning) 12%, transparent)';
-  return 'color-mix(in srgb, var(--color-primary) 12%, transparent)';
+// ---------------------------------------------------------------------------
+// Timing column, ported from NewAPI's TimingMetricsCell / StreamTpsCell so the
+// usage log reads the same in both dashboards:
+//   web/src/features/usage-logs/components/timing-metrics-cell.tsx
+//   web/src/features/usage-logs/lib/format.ts (get*Color thresholds)
+// ---------------------------------------------------------------------------
+
+export type ProxyLogTimingVariant = 'success' | 'warning' | 'danger';
+
+/** NewAPI getTimeColor: duration based thresholds (seconds). */
+export function getProxyLogTimeVariant(seconds: number): ProxyLogTimingVariant {
+  if (seconds < 10) return 'success';
+  if (seconds < 30) return 'warning';
+  return 'danger';
+}
+
+/** NewAPI getFirstResponseTimeColor: first-token thresholds (seconds). */
+export function getProxyLogFirstTokenVariant(seconds: number): ProxyLogTimingVariant {
+  if (seconds < 5) return 'success';
+  if (seconds < 10) return 'warning';
+  return 'danger';
+}
+
+/** NewAPI getThroughputColor: generation speed thresholds. */
+export function getProxyLogThroughputVariant(tokensPerSecond: number): ProxyLogTimingVariant {
+  if (tokensPerSecond >= 30) return 'success';
+  if (tokensPerSecond >= 15) return 'warning';
+  return 'danger';
+}
+
+/**
+ * NewAPI getResponseTimeColor: judge the duration by throughput once there is
+ * enough output to measure, otherwise fall back to the plain duration scale.
+ */
+export function getProxyLogResponseTimeVariant(
+  seconds: number,
+  completionTokens: number,
+): ProxyLogTimingVariant {
+  if (completionTokens < 100 || seconds <= 0) return getProxyLogTimeVariant(seconds);
+  return getProxyLogThroughputVariant(completionTokens / seconds);
+}
+
+/** NewAPI formatUseTime: `0.8s` / `12.3s` under a minute, `1m 5s` past it.
+ *  MetAPI records first-byte latency in milliseconds, so sub-second values keep
+ *  ms precision instead of collapsing to a useless `0.0s`. */
+export function formatProxyLogUseTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '--';
+  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}m ${remainingSeconds.toFixed(0)}s`;
+}
+
+export function proxyLogTimingTextColor(variant: ProxyLogTimingVariant): string {
+  if (variant === 'success') return 'var(--color-success)';
+  if (variant === 'warning') return 'var(--color-warning)';
+  return 'var(--color-danger)';
+}
+
+/** Softened fills for the full-height timing bar (NewAPI barColorMap). */
+export function proxyLogTimingBarColor(variant: ProxyLogTimingVariant): string {
+  if (variant === 'success') return 'color-mix(in srgb, var(--color-success) 90%, transparent)';
+  if (variant === 'warning') return 'color-mix(in srgb, var(--color-warning) 80%, transparent)';
+  return 'color-mix(in srgb, var(--color-danger) 80%, transparent)';
+}
+
+/**
+ * Retry column: a plain number whose colour deepens with the retry count.
+ * No badge/icon — a chip changes the glyph size and baseline, which knocks the
+ * column out of vertical alignment with the rows that have no retries.
+ */
+export function proxyLogRetryColor(retryCount: number | null | undefined): string {
+  const count = typeof retryCount === 'number' && Number.isFinite(retryCount) ? retryCount : 0;
+  if (count <= 0) return 'var(--color-text-secondary)';
+  if (count === 1) return 'var(--color-warning)';
+  if (count === 2) return 'color-mix(in srgb, var(--color-warning) 45%, var(--color-danger))';
+  return 'var(--color-danger)';
+}
+
+/** Muted hues only, so a key chip tints differently without turning the column
+ *  into a colour chart (the user's standing preference: low saturation, slightly
+ *  grey). The hue is a pure function of the key name, so a key keeps its colour
+ *  across reloads and pages. */
+const PROXY_LOG_KEY_HUES = [175, 190, 205, 215, 230, 250, 265, 285, 300, 330, 20, 45];
+
+export function proxyLogKeyHue(key: string): number {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) | 0;
+  }
+  return PROXY_LOG_KEY_HUES[Math.abs(hash) % PROXY_LOG_KEY_HUES.length];
+}
+
+/** Chip colours for the key column: the grey chip base plus a few percent of the
+ *  hashed hue, mixed with the theme variables so both themes stay readable. */
+export function proxyLogKeyChipColors(key: string): { background: string; border: string } {
+  const hue = proxyLogKeyHue(key);
+  return {
+    background: `color-mix(in srgb, hsl(${hue} 60% 50%) 10%, var(--color-bg-subtle))`,
+    border: `color-mix(in srgb, hsl(${hue} 55% 45%) 22%, var(--color-border))`,
+  };
 }
 
 export function formatStreamModeLabel(isStream: boolean | null | undefined) {
@@ -194,7 +287,7 @@ export function formatProxyLogTokenValue(
 
 export function renderDownstreamKeySummary(log: ProxyLogRenderItem) {
   const parts = [
-    log.downstreamKeyName ? `下游 Key: ${log.downstreamKeyName}` : null,
+    log.downstreamKeyName ? `密钥: ${log.downstreamKeyName}` : null,
     log.downstreamKeyGroupName ? `主分组: ${log.downstreamKeyGroupName}` : null,
     Array.isArray(log.downstreamKeyTags) && log.downstreamKeyTags.length > 0
       ? `标签: ${log.downstreamKeyTags.join(' / ')}`
@@ -363,6 +456,17 @@ export function formatProxyLogClientFamilyLabel(
   return PROXY_LOG_CLIENT_FAMILY_LABELS[normalized] || clientFamily || null;
 }
 
+/**
+ * The client is often just the downstream User-Agent (the fallback detection
+ * stores it verbatim), which can run to 80+ characters. Keep the cell readable
+ * and expose the full value as a tooltip.
+ */
+export function truncateProxyLogClientName(value: string, maxLength = 44): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 export function resolveProxyLogClientDisplay(
   log: Pick<
     ProxyLogRenderItem,
@@ -377,15 +481,22 @@ export function resolveProxyLogClientDisplay(
   const appName =
     typeof log.clientAppName === 'string' ? log.clientAppName.trim() : '';
   if (appName) {
+    const normalizedFamily = typeof log.clientFamily === 'string'
+      ? log.clientFamily.trim().toLowerCase()
+      : '';
     return {
-      primary: appName,
-      secondary: familyLabel,
+      primary: truncateProxyLogClientName(appName),
+      // A recognised client app already says more than the "generic" family
+      // bucket, so don't repeat it underneath.
+      secondary: familyLabel && normalizedFamily !== 'generic' ? familyLabel : null,
+      fullName: appName,
       heuristic: log.clientConfidence === 'heuristic',
     };
   }
   return {
     primary: familyLabel,
     secondary: null,
+    fullName: null,
     heuristic: false,
   };
 }

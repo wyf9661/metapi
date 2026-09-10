@@ -10,6 +10,10 @@ export const DESKTOP_DEFAULT_PAGE_SIZE = 10;
 /** Mobile default rows-per-page (smaller viewport, fewer rows). */
 export const MOBILE_DEFAULT_PAGE_SIZE = 5;
 
+/** Page-size choices offered on phones. Anything above 10 makes the list
+ *  scroll forever on a small viewport. */
+export const MOBILE_PAGE_SIZE_OPTIONS = [5, 10];
+
 const STORAGE_PREFIX = 'metapi.pageSize';
 
 function storageKey(scope: string, isMobile: boolean): string {
@@ -21,7 +25,13 @@ function readStored(scope: string, isMobile: boolean): number | null {
   try {
     const raw = window.localStorage.getItem(storageKey(scope, isMobile));
     const parsed = Number.parseInt(raw || '', 10);
-    return PAGE_SIZE_OPTIONS.includes(parsed) ? parsed : null;
+    if (!PAGE_SIZE_OPTIONS.includes(parsed)) return null;
+    // A value stored before this rule (or a desktop-sized pick) must not push a
+    // phone list past MOBILE_PAGE_SIZE_OPTIONS.
+    if (isMobile && parsed > MOBILE_PAGE_SIZE_OPTIONS[MOBILE_PAGE_SIZE_OPTIONS.length - 1]) {
+      return null;
+    }
+    return parsed;
   } catch {
     // localStorage can throw in private mode / when storage is disabled.
     return null;
@@ -63,7 +73,8 @@ export function usePersistedPageSize(
 
   const update = useCallback(
     (next: number) => {
-      const normalized = PAGE_SIZE_OPTIONS.includes(next) ? next : fallback;
+      const allowed = isMobile ? MOBILE_PAGE_SIZE_OPTIONS : PAGE_SIZE_OPTIONS;
+      const normalized = allowed.includes(next) ? next : fallback;
       setPageSize(normalized);
       writeStored(scope, isMobile, normalized);
     },

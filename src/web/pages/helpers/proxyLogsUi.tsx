@@ -1,6 +1,134 @@
 import React, { useState } from 'react';
 import type { ProxyLogRenderItem } from './proxyLogsHelpers.js';
-import { resolveProxyLogClientDisplay } from './proxyLogsHelpers.js';
+import {
+  formatProxyLogUseTime,
+  getProxyLogFirstTokenVariant,
+  getProxyLogResponseTimeVariant,
+  proxyLogTimingBarColor,
+  proxyLogTimingTextColor,
+  resolveProxyLogClientDisplay,
+} from './proxyLogsHelpers.js';
+import { tr } from '../../i18n.js';
+
+/**
+ * Usage-log timing cell: first token + duration in one column, ported from
+ * NewAPI's TimingMetricsCell
+ * (web/src/features/usage-logs/components/timing-metrics-cell.tsx).
+ * A thin status bar sits left of the labels; streaming rows split it into the
+ * first-token and duration colors, non-streaming rows show the duration only.
+ * Colors live in the bar and the numeric text — no background chips.
+ */
+export function ProxyLogTimingCell({
+  firstByteLatencyMs,
+  latencyMs,
+  completionTokens,
+  isStream,
+}: {
+  firstByteLatencyMs?: number | null;
+  latencyMs?: number | null;
+  completionTokens?: number | null;
+  isStream?: boolean | null;
+}) {
+  const showFirstToken = isStream === true;
+  const latencySeconds = typeof latencyMs === 'number' && Number.isFinite(latencyMs) && latencyMs >= 0
+    ? latencyMs / 1000
+    : null;
+  const firstTokenSeconds = typeof firstByteLatencyMs === 'number'
+    && Number.isFinite(firstByteLatencyMs)
+    && firstByteLatencyMs > 0
+    ? firstByteLatencyMs / 1000
+    : null;
+  const firstTokenVariant = firstTokenSeconds == null
+    ? null
+    : getProxyLogFirstTokenVariant(firstTokenSeconds);
+  const totalVariant = latencySeconds == null
+    ? null
+    : getProxyLogResponseTimeVariant(latencySeconds, completionTokens ?? 0);
+
+  return (
+    <div data-testid="proxy-log-timing" style={{ display: 'flex', alignItems: 'stretch', gap: 8 }}>
+      <span
+        aria-hidden="true"
+        style={{
+          display: 'flex',
+          width: 4,
+          flexShrink: 0,
+          flexDirection: 'column',
+          overflow: 'hidden',
+          borderRadius: 9999,
+          background: showFirstToken
+            ? undefined
+            : (totalVariant ? proxyLogTimingBarColor(totalVariant) : 'var(--color-text-muted)'),
+        }}
+      >
+        {showFirstToken ? (
+          <>
+            <span
+              style={{
+                flex: 1,
+                background: firstTokenVariant
+                  ? proxyLogTimingBarColor(firstTokenVariant)
+                  : 'var(--color-text-muted)',
+              }}
+            />
+            <span
+              style={{
+                flex: 1,
+                background: totalVariant
+                  ? proxyLogTimingBarColor(totalVariant)
+                  : 'var(--color-text-muted)',
+              }}
+            />
+          </>
+        ) : null}
+      </span>
+      <div
+        style={{
+          display: 'flex',
+          minWidth: 0,
+          flexDirection: 'column',
+          justifyContent: 'center',
+          gap: 4,
+          fontSize: 12,
+          lineHeight: 1.25,
+        }}
+      >
+        {showFirstToken ? (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>
+              {tr('首字')}
+            </span>
+            <span
+              style={{
+                fontVariantNumeric: 'tabular-nums',
+                color: firstTokenVariant
+                  ? proxyLogTimingTextColor(firstTokenVariant)
+                  : 'var(--color-text-muted)',
+              }}
+            >
+              {firstTokenSeconds == null ? 'N/A' : formatProxyLogUseTime(firstTokenSeconds)}
+            </span>
+          </div>
+        ) : null}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>
+            {tr('耗时')}
+          </span>
+          <span
+            style={{
+              fontVariantNumeric: 'tabular-nums',
+              color: totalVariant
+                ? proxyLogTimingTextColor(totalVariant)
+                : 'var(--color-text-muted)',
+            }}
+          >
+            {latencySeconds == null ? '-' : formatProxyLogUseTime(latencySeconds)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export const formInputStyle: React.CSSProperties = {
   width: '100%',
@@ -169,19 +297,30 @@ export function renderProxyLogClientCell(
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'baseline',
           gap: 6,
-          flexWrap: 'wrap',
+          minWidth: 0,
         }}
       >
-        <span>{display.primary}</span>
+        <span
+          title={display.fullName || undefined}
+          style={{
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {display.primary}
+        </span>
         {display.heuristic ? (
+          // Plain text, not a chip: a padded box sits on a different baseline
+          // than the value next to it and breaks the row alignment.
           <span
-            className="badge"
             style={{
+              flexShrink: 0,
               fontSize: 10,
               color: 'var(--color-text-muted)',
-              borderColor: 'var(--color-border)',
             }}
           >
             推测
@@ -224,7 +363,9 @@ export function StreamModeIcon({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--color-primary)',
+          // Same muted tone as the non-stream glyph: the shape already tells the
+          // two apart, the colour was redundant emphasis.
+          color: 'var(--color-text-muted)',
         }}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
