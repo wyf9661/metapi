@@ -139,7 +139,31 @@ jobs:
             electron-cache-${{ runner.os }}-
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Electron binary
+        shell: bash
+        env:
+          electron_config_cache: ${{ runner.temp }}/.cache/electron
+          ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
+        run: |
+          set -euo pipefail
+          # mac-x64 matrix builds Intel packages; force the matching Electron arch.
+          if [ "${{ matrix.platform }}" = "mac-x64" ]; then
+            export npm_config_arch=x64
+            export ELECTRON_INSTALL_ARCH=x64
+          elif [ "${{ matrix.platform }}" = "mac-arm64" ]; then
+            export npm_config_arch=arm64
+            export ELECTRON_INSTALL_ARCH=arm64
+          fi
+          node node_modules/electron/install.js
+          test -d node_modules/electron/dist
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y rpm
 
       - name: Download built dist
         uses: actions/download-artifact@v8
@@ -253,9 +277,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: docker-${{ matrix.arch }}
-          path: metapi--nightly-*.tar.gz
+          path: metapi-*nightly-*.tar.gz
           if-no-files-found: error
-
   publish-nightly-release:
     name: Publish Nightly Release
     needs: [build-packages, build-docker-tar]
@@ -319,6 +342,6 @@ jobs:
             tar.gz for your architecture and load it locally:
 
             ```
-            docker load -i metapi--nightly-*.tar.gz
+            docker load -i metapi-*nightly-*.tar.gz
             ```
           files: release-assets/*
