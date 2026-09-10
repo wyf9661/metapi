@@ -269,7 +269,9 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.tag.outputs.tag }}"
-          safe_tag="$(printf '%s' "$tag" | tr '/:' '--')"
+          # Suffix the arch so the three per-arch artifacts can't collide when
+          # merge-multiple flattens them into one directory at release time.
+          safe_tag="$(printf '%s' "$tag" | tr '/:' '--')-${{ matrix.arch }}"
           docker save "$tag" | gzip > "${safe_tag}.tar.gz"
           ls -lh "${safe_tag}.tar.gz"
 
