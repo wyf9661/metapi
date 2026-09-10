@@ -1,4 +1,3 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -424,23 +423,3 @@ export function generateDialectArtifacts(
   };
 }
 
-export function writeDialectArtifactFiles(
-  contract: SchemaContract,
-  previousContract?: SchemaContract | null,
-): GeneratedDialectArtifacts {
-  const artifacts = generateDialectArtifacts(contract, previousContract);
-  const artifactEntries = [
-    ['mysql.bootstrap.sql', artifacts.mysqlBootstrap],
-    ['postgres.bootstrap.sql', artifacts.postgresBootstrap],
-    ['mysql.upgrade.sql', artifacts.mysqlUpgrade],
-    ['postgres.upgrade.sql', artifacts.postgresUpgrade],
-  ] as const;
-
-  for (const [filename, content] of artifactEntries) {
-    const outputPath = resolveGeneratedArtifactPath(filename);
-    mkdirSync(dirname(outputPath), { recursive: true });
-    writeFileSync(outputPath, content, 'utf8');
-  }
-
-  return artifacts;
-}

@@ -17,9 +17,6 @@ export const cliProfileRegistry: Record<CliProfileId, CliProfileDefinition> = {
   gemini_cli: geminiCliProfile,
 };
 
-export function getCliProfileDefinition(id: CliProfileId): CliProfileDefinition {
-  return cliProfileRegistry[id];
-}
 
 export function detectCliProfile(input: DetectCliProfileInput): DetectedCliProfile {
   for (const profile of orderedProfiles) {

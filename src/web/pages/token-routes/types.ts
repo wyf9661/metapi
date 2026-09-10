@@ -9,11 +9,6 @@ export type GroupFilter = null | '__all__' | number;
 export type RouteRoutingStrategy = 'weighted' | 'round_robin' | 'stable_first';
 export type OAuthRouteUnitStrategy = 'round_robin' | 'stick_until_unavailable';
 export type RouteRowKind = 'persisted' | 'zero_channel';
-export type RouteChannelDraft = {
-  accountId: number;
-  tokenId: number;
-  sourceModel: string;
-};
 
 export type RouteChannelRouteUnitMember = {
   accountId: number;

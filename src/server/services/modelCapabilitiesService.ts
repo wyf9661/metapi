@@ -153,9 +153,6 @@ export function setModelsDevCapabilities(map: Map<string, ModelsDevCapabilities>
   modelsDevCapabilities = map;
 }
 
-export function getModelsDevCapabilityCount(): number {
-  return modelsDevCapabilities.size;
-}
 
 /** Test-only: replace the in-memory capability table. */
 export function __setModelsDevCapabilitiesForTests(

@@ -758,8 +758,5 @@ export function markProxyChannelAffinityUnloadedForTests(): void {
   affinityLoadPromise = null;
 }
 
-export function isProxyChannelSessionScoped(input?: SessionScopedChannelInput): boolean {
-  return isSessionScopedChannel(input);
-}
 
 export const proxyChannelCoordinator = new ProxyChannelCoordinator();

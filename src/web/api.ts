@@ -289,15 +289,6 @@ async function proxyTestStreamRequest(
   });
 }
 
-export type ProxyTestJobResponse = {
-  jobId: string;
-  status: 'pending' | 'succeeded' | 'failed' | 'cancelled';
-  result?: unknown;
-  error?: unknown;
-  createdAt?: string;
-  updatedAt?: string;
-  expiresAt?: string;
-};
 
 
 export type RuntimeRoutingWeightsPayload = {

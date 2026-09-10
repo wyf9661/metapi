@@ -129,9 +129,6 @@ export function getOAuthLoopbackCallbackServerState(provider: string): OAuthLoop
   return { ...(states.get(provider) || createDefaultState(provider)) };
 }
 
-export function getOAuthLoopbackCallbackServerStates(): OAuthLoopbackCallbackServerState[] {
-  return listOAuthProviderDefinitions().map((provider) => getOAuthLoopbackCallbackServerState(provider.metadata.provider));
-}
 
 export async function startOAuthLoopbackCallbackServer(
   provider: string,
@@ -234,12 +231,4 @@ export async function stopOAuthLoopbackCallbackServers(): Promise<void> {
   }));
 }
 
-export async function startCodexLoopbackCallbackServer(
-  options: StartOAuthLoopbackCallbackServerOptions = {},
-): Promise<OAuthLoopbackCallbackServerState> {
-  return startOAuthLoopbackCallbackServer('codex', options);
-}
 
-export async function stopCodexLoopbackCallbackServer(): Promise<void> {
-  await stopOAuthLoopbackCallbackServers();
-}

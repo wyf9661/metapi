@@ -25,9 +25,6 @@ export function createPriorityBucketSeparatorId(index: number): string {
   return `${PRIORITY_BUCKET_SEPARATOR_PREFIX}${index}`;
 }
 
-export function isPriorityBucketSeparatorId(value: unknown): value is string {
-  return typeof value === 'string' && value.startsWith(PRIORITY_BUCKET_SEPARATOR_PREFIX);
-}
 
 export function buildPriorityBuckets(channels: RouteChannel[]): PriorityBucket[] {
   const grouped = new Map<number, RouteChannel[]>();

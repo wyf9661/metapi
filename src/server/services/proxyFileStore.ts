@@ -106,18 +106,6 @@ export async function saveProxyFile(input: SaveProxyFileInput): Promise<ProxyFil
   return (await getProxyFileByPublicIdForOwner(publicId, input))!;
 }
 
-export async function createProxyFile(input: CreateProxyFileInput): Promise<ProxyFileRecord> {
-  return saveProxyFile({
-    ownerType: input.owner.ownerType,
-    ownerId: input.owner.ownerId,
-    filename: input.filename,
-    mimeType: input.mimeType,
-    purpose: input.purpose,
-    byteSize: input.buffer.byteLength,
-    sha256: createHash('sha256').update(input.buffer).digest('hex'),
-    contentBase64: input.buffer.toString('base64'),
-  });
-}
 
 export async function listProxyFilesByOwner(owner: ProxyResourceOwner): Promise<ProxyFileRecord[]> {
   const rows = await db.select().from(schema.proxyFiles)
@@ -127,15 +115,6 @@ export async function listProxyFilesByOwner(owner: ProxyResourceOwner): Promise<
   return rows.map(rowToRecord);
 }
 
-export async function getProxyFileByPublicId(publicId: string): Promise<ProxyFileRecord | null> {
-  const row = await db.select().from(schema.proxyFiles)
-    .where(and(
-      eq(schema.proxyFiles.publicId, publicId),
-      isNull(schema.proxyFiles.deletedAt),
-    ))
-    .get();
-  return row ? rowToRecord(row) : null;
-}
 
 export async function getProxyFileByPublicIdForOwner(
   publicId: string,
@@ -183,27 +162,7 @@ export async function softDeleteProxyFileByPublicIdForOwner(
   return Number(result?.changes || 0) > 0;
 }
 
-export async function softDeleteProxyFileByPublicId(
-  publicId: string,
-  owner: ProxyResourceOwner,
-): Promise<boolean> {
-  return softDeleteProxyFileByPublicIdForOwner(publicId, owner);
-}
 
-export async function softDeleteProxyFile(publicId: string): Promise<boolean> {
-  const now = formatUtcSqlDateTime(new Date());
-  const result = await db.update(schema.proxyFiles)
-    .set({
-      deletedAt: now,
-      updatedAt: now,
-    })
-    .where(and(
-      eq(schema.proxyFiles.publicId, publicId),
-      or(isNull(schema.proxyFiles.deletedAt), eq(schema.proxyFiles.deletedAt, '')),
-    ))
-    .run();
-  return Number(result?.changes || 0) > 0;
-}
 
 export async function purgeExpiredProxyFiles(cutoffUtc: string): Promise<number> {
   const normalizedCutoff = cutoffUtc.trim();

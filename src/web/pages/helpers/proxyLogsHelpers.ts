@@ -40,14 +40,6 @@ export const DEBUG_TRACE_PAGE_SIZE = 5;
 export const PROXY_LOGS_DEBUG_TRACE_PANEL_STORAGE_KEY =
   'metapi.proxyLogs.debugTracePanelExpanded';
 export const DEBUG_REFRESH_INTERVAL_MS = 2000;
-export const PROXY_LOGS_REFRESH_INTERVAL_MS = 2000;
-
-export const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
-  codex: 'Codex',
-  claude_code: 'Claude Code',
-  gemini_cli: 'Gemini CLI',
-  generic: '通用',
-};
 
 export const EMPTY_SUMMARY = {
   totalCount: 0,
@@ -389,11 +381,6 @@ export function normalizeRouteSearch(raw: string | null): string {
   return (raw || '').trim();
 }
 
-export function normalizeRouteClient(raw: string | null): string {
-  const text = (raw || '').trim();
-  if (!text) return '';
-  return /^((app|family):)/i.test(text) ? text : '';
-}
 
 export function normalizeRouteSiteId(raw: string | null): number | null {
   const parsed = Number.parseInt(raw || '', 10);
@@ -460,6 +447,13 @@ export function buildProxyLogsRouteSearch(input: {
   const next = params.toString();
   return next ? `?${next}` : '';
 }
+
+const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
+  codex: 'Codex',
+  claude_code: 'Claude Code',
+  gemini_cli: 'Gemini CLI',
+  generic: '通用',
+};
 
 export function formatProxyLogClientFamilyLabel(
   clientFamily?: string | null,

@@ -1360,24 +1360,3 @@ export function failResponsesStream(
   ];
 }
 
-export function incompleteResponsesStream(
-  state: OpenAiResponsesAggregateState,
-  streamContext: StreamTransformContext,
-  usage: ResponsesUsageSummary,
-  payload: unknown,
-): string[] {
-  if (state.failed || state.completed || state.incomplete) {
-    return [serializeDone()];
-  }
-  const lines = buildSyntheticTerminalItemDoneEvents(state, 'incomplete');
-  state.incomplete = true;
-  const incompletePayload = cloneRecord(payload);
-  return [
-    ...lines,
-    serializeSse('response.incomplete', {
-      ...incompletePayload,
-      response: materializeResponse(state, streamContext, usage, cloneRecord(incompletePayload?.response), 'incomplete'),
-    }),
-    serializeDone(),
-  ];
-}

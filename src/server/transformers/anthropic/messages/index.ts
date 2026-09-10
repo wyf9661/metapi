@@ -1,6 +1,6 @@
 import type { CanonicalRequestEnvelope } from '../../canonical/types.js';
 import type { ProtocolBuildContext, ProtocolParseContext } from '../../contracts.js';
-import { type NormalizedFinalResponse, type NormalizedStreamEvent, type ParsedDownstreamChatRequest, type StreamTransformContext, type ClaudeDownstreamContext } from '../../shared/normalized.js';
+import { type NormalizedFinalResponse, type NormalizedStreamEvent, type StreamTransformContext, type ClaudeDownstreamContext } from '../../shared/normalized.js';
 import { createChatEndpointStrategy } from '../../shared/chatEndpointStrategy.js';
 import { anthropicMessagesInbound } from './inbound.js';
 import {
@@ -122,6 +122,3 @@ export const anthropicMessagesTransformer = {
     return anthropicMessagesStream.pullSseEvents(buffer);
   },
 };
-
-export type AnthropicMessagesTransformer = typeof anthropicMessagesTransformer;
-export type AnthropicMessagesParsedRequest = ParsedDownstreamChatRequest;

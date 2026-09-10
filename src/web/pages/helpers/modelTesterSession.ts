@@ -155,11 +155,7 @@ export type ModelTesterSessionState = {
   modeState: ModelTesterModeState;
 };
 
-export type TestChatPayload = TesterProxyEnvelope;
-export type ProxyTestEnvelope = TesterProxyEnvelope;
-
 export const MODEL_TESTER_SESSION_VERSION = 5;
-export const MODEL_TESTER_STORAGE_KEY = 'metapi:model-tester:session:v5';
 
 export const DEFAULT_INPUTS: ModelTesterInputs = {
   mode: 'conversation',
@@ -1055,7 +1051,6 @@ export async function resolveConversationReplayFiles(
   }));
 }
 
-export const createLoadingAssistantMessage = (): ChatMessage =>
   createMessage('assistant', '', {
     status: MESSAGE_STATUS.LOADING,
     reasoningContent: '',
@@ -1263,21 +1258,6 @@ export const buildSearchRequestEnvelope = (
   };
 };
 
-export const buildImagesGenerationsRequestEnvelope = (
-  inputs: ModelTesterInputs,
-  modeState: ModelTesterModeState,
-): TesterProxyEnvelope => ({
-  method: 'POST',
-  path: '/v1/images/generations',
-  requestKind: 'json',
-  stream: false,
-  jobMode: false,
-  rawMode: false,
-  jsonBody: {
-    model: inputs.model,
-    prompt: modeState.imagesPrompt,
-  },
-});
 
 export const buildFileUploadRequestEnvelope = (
   file: Omit<PlaygroundMultipartFile, 'field'> & { field?: string },
@@ -1300,51 +1280,8 @@ export const buildFileUploadRequestEnvelope = (
   }],
 });
 
-export const buildImagesEditRequestEnvelope = (
-  inputs: ModelTesterInputs,
-  modeState: ModelTesterModeState,
-  files: PlaygroundMultipartFile[],
-): TesterProxyEnvelope => ({
-  method: 'POST',
-  path: '/v1/images/edits',
-  requestKind: 'multipart',
-  stream: false,
-  jobMode: false,
-  rawMode: false,
-  multipartFields: {
-    model: inputs.model,
-    prompt: modeState.imagesPrompt,
-  },
-  multipartFiles: files,
-});
 
-export const buildVideoCreateRequestEnvelope = (
-  inputs: ModelTesterInputs,
-  modeState: ModelTesterModeState,
-  files: PlaygroundMultipartFile[],
-): TesterProxyEnvelope => ({
-  method: 'POST',
-  path: '/v1/videos',
-  requestKind: files.length > 0 ? 'multipart' : 'json',
-  stream: false,
-  jobMode: false,
-  rawMode: false,
-  jsonBody: files.length > 0 ? undefined : { model: inputs.model, prompt: modeState.videosPrompt },
-  multipartFields: files.length > 0 ? { model: inputs.model, prompt: modeState.videosPrompt } : undefined,
-  multipartFiles: files.length > 0 ? files : undefined,
-});
 
-export const buildVideoInspectRequestEnvelope = (
-  inputs: ModelTesterInputs,
-  modeState: ModelTesterModeState,
-): TesterProxyEnvelope => ({
-  method: inputs.videoInspectAction === 'delete' ? 'DELETE' : 'GET',
-  path: `/v1/videos/${encodeURIComponent(modeState.videosInspectId.trim())}`,
-  requestKind: 'empty',
-  stream: false,
-  jobMode: false,
-  rawMode: false,
-});
 
 export const buildApiPayload = (
   messages: ChatMessage[],
@@ -1431,68 +1368,6 @@ export const syncMessagesToCustomRequestBody = (
   return JSON.stringify({ ...payload, ...conversationBody }, null, 2);
 };
 
-export const syncCustomRequestBodyToMessages = (raw: string): ChatMessage[] | null => {
-  const parsed = parseCustomRequestBody(raw);
-  if (!parsed) return null;
-
-  const restored: Array<{ role: ChatRole; content: string }> = [];
-  const appendMessage = (role: ChatRole, content: string) => {
-    if (!content.trim()) return;
-    restored.push({ role, content });
-  };
-
-  if (typeof parsed.system === 'string') appendMessage('system', parsed.system);
-  if (typeof parsed.instructions === 'string') appendMessage('system', parsed.instructions);
-  if (isRecord(parsed.systemInstruction) && Array.isArray(parsed.systemInstruction.parts)) {
-    const systemText = parsed.systemInstruction.parts
-      .map((part) => (isRecord(part) && typeof part.text === 'string' ? part.text : ''))
-      .join('\n');
-    appendMessage('system', systemText);
-  }
-
-  if (Array.isArray(parsed.messages)) {
-    for (const item of parsed.messages) {
-      if (!isRecord(item) || typeof item.role !== 'string') continue;
-      if (typeof item.content === 'string') {
-        appendMessage(VALID_ROLES.has(item.role) ? item.role as ChatRole : 'user', item.content);
-        continue;
-      }
-      if (Array.isArray(item.content)) {
-        const text = item.content
-          .map((block) => {
-            if (isRecord(block) && typeof block.text === 'string') return block.text;
-            if (isRecord(block) && typeof block.content === 'string') return block.content;
-            return '';
-          })
-          .join('\n');
-        appendMessage(VALID_ROLES.has(item.role) ? item.role as ChatRole : 'user', text);
-      }
-    }
-  } else if (Array.isArray(parsed.input)) {
-    for (const item of parsed.input) {
-      if (!isRecord(item) || typeof item.role !== 'string') continue;
-      appendMessage(item.role === 'assistant' ? 'assistant' : 'user', sanitizeString(item.content));
-    }
-  } else if (typeof parsed.input === 'string') {
-    appendMessage('user', parsed.input);
-  } else if (Array.isArray(parsed.contents)) {
-    for (const item of parsed.contents) {
-      if (!isRecord(item)) continue;
-      const role = item.role === 'model' ? 'assistant' : 'user';
-      const text = Array.isArray(item.parts)
-        ? item.parts
-          .map((part) => (isRecord(part) && typeof part.text === 'string' ? part.text : ''))
-          .join('\n')
-        : '';
-      appendMessage(role, text);
-    }
-  }
-
-  if (restored.length === 0) return null;
-  return restored.map((item, index) => createMessage(item.role, item.content, {
-    id: `custom-${index}-${Date.now()}`,
-  }));
-};
 
 export const buildRawProxyRequestEnvelope = (
   method: ProxyRequestMethod,
@@ -1510,18 +1385,6 @@ export const buildRawProxyRequestEnvelope = (
   rawJsonText,
 });
 
-export const findLastLoadingAssistantIndex = (messages: ChatMessage[]): number => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (
-      message.role === 'assistant' &&
-      (message.status === MESSAGE_STATUS.LOADING || message.status === MESSAGE_STATUS.INCOMPLETE)
-    ) {
-      return index;
-    }
-  }
-  return -1;
-};
 
 export const countConversationTurns = (messages: ChatMessage[]): number =>
   messages.reduce((turns, message) => turns + (message.role === 'user' ? 1 : 0), 0);

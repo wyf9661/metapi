@@ -17,10 +17,6 @@ import {
 import { openAiChatStream } from './streamBridge.js';
 import { openAiChatUsage } from './usage.js';
 import { createOpenAiChatAggregateState, applyOpenAiChatStreamEvent, finalizeOpenAiChatAggregate } from './aggregator.js';
-import type {
-  OpenAiChatParsedRequest as OpenAiChatParsedRequestModel,
-  OpenAiChatRequestEnvelope as OpenAiChatRequestEnvelopeModel,
-} from './model.js';
 
 export const openAiChatTransformer = {
   protocol: 'openai/chat' as const,
@@ -102,7 +98,3 @@ export const openAiChatTransformer = {
     return openAiChatStream.pullSseEvents(buffer);
   },
 };
-
-export type OpenAiChatTransformer = typeof openAiChatTransformer;
-export type OpenAiChatParsedRequest = OpenAiChatParsedRequestModel;
-export type OpenAiChatRequestEnvelope = OpenAiChatRequestEnvelopeModel;

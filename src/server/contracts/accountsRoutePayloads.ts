@@ -3,7 +3,6 @@ import { z } from 'zod';
 const accountCredentialModeSchema = z.enum(['auto', 'session', 'apikey']);
 
 export const ACCOUNT_STATUS_VALUES = ['active', 'disabled', 'expired'] as const;
-export type AccountStatusValue = (typeof ACCOUNT_STATUS_VALUES)[number];
 
 // Whitelist of extraConfig top-level keys the API accepts. Anything else is
 // dropped to prevent mass-assignment of internal/derived fields (e.g.

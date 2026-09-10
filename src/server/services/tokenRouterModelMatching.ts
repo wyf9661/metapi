@@ -38,16 +38,6 @@ export function isRouteDisplayNameMatch(
   return !!alias && alias === model;
 }
 
-export function matchesRouteRequestModel(
-  model: string,
-  route: RouteModelMatchInput,
-): boolean {
-  if (isExplicitGroupRoute(route)) {
-    return isRouteDisplayNameMatch(model, route.displayName);
-  }
-  return matchesModelPattern(model, route.modelPattern)
-    || isRouteDisplayNameMatch(model, route.displayName);
-}
 
 export function getExposedModelNameForRoute(route: RouteModelMatchInput): string {
   return normalizeRouteDisplayName(route.displayName) || route.modelPattern;

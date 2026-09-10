@@ -110,25 +110,6 @@ export function toLocalDayStartUtcFromStoredUtc(raw: StoredUtcDateTimeInput): st
   );
 }
 
-export function getLocalDayKeyRangeUtc(dayKey: string): {
-  startUtc: string;
-  endUtc: string;
-} | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec((dayKey || '').trim());
-  if (!match) return null;
-  const year = Number(match[1]);
-  const monthIndex = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  if (![year, monthIndex, day].every(Number.isInteger)) return null;
-
-  const startLocal = new Date(year, monthIndex, day, 0, 0, 0, 0);
-  if (Number.isNaN(startLocal.getTime())) return null;
-  const endLocal = new Date(startLocal.getTime() + DAY_MS);
-  return {
-    startUtc: formatUtcSqlDateTime(startLocal),
-    endUtc: formatUtcSqlDateTime(endLocal),
-  };
-}
 
 export function getLocalDayRangeUtc(now = new Date()): {
   localDay: string;
@@ -165,14 +146,3 @@ export function getLocalHourRangeStartUtc(hours: number, now = new Date()): stri
   return formatUtcSqlDateTime(start);
 }
 
-export function getUtcHourRangeFromStoredStart(hourStartUtc: string): {
-  startUtc: string;
-  endUtc: string;
-} | null {
-  const parsed = parseStoredUtcDateTime(hourStartUtc);
-  if (!parsed) return null;
-  return {
-    startUtc: formatUtcSqlDateTime(parsed),
-    endUtc: formatUtcSqlDateTime(new Date(parsed.getTime() + HOUR_MS)),
-  };
-}

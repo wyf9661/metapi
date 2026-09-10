@@ -122,9 +122,6 @@ export function normalizeProxyDebugResponseHeaders(value: HeadersLike): Record<s
   return normalizeHeadersValue(value);
 }
 
-export function getProxyDebugCaptureOptions(): ProxyDebugCaptureOptions {
-  return getCaptureOptions();
-}
 
 export function shouldTraceProxyDebugRequest(input: {
   clientKind?: string | null;
@@ -421,24 +418,3 @@ export async function getProxyDebugTraceDetail(traceId: number) {
   };
 }
 
-export async function findLatestProxyDebugTrace(input: {
-  sessionId?: string | null;
-  clientKind?: string | null;
-  requestedModel?: string | null;
-}) {
-  const conditions = [
-    input.sessionId ? eq(schema.proxyDebugTraces.sessionId, input.sessionId) : null,
-    input.clientKind ? eq(schema.proxyDebugTraces.clientKind, input.clientKind) : null,
-    input.requestedModel ? eq(schema.proxyDebugTraces.requestedModel, input.requestedModel) : null,
-  ].filter((condition): condition is NonNullable<typeof condition> => condition !== null);
-
-  let query = db.select().from(schema.proxyDebugTraces);
-  if (conditions.length === 1) {
-    query = query.where(conditions[0]) as typeof query;
-  } else if (conditions.length > 1) {
-    query = query.where(and(...conditions)) as typeof query;
-  }
-  return await query
-    .orderBy(desc(schema.proxyDebugTraces.createdAt), desc(schema.proxyDebugTraces.id))
-    .get();
-}

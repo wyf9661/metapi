@@ -112,10 +112,6 @@ export function getPerformanceShadowMetrics(key: PerformanceShadowKey, nowMs = D
   return value ? { ...value } : null;
 }
 
-export function listPerformanceShadowMetrics(): PerformanceShadowMetrics[] {
-  sweepPerformanceShadowMetrics();
-  return [...metricsByKey.values()].map((value) => ({ ...value }));
-}
 
 export function listPerformanceShadowMetricsByRouteId(routeId: number, nowMs = Date.now()): PerformanceShadowMetrics[] {
   sweepPerformanceShadowMetrics(nowMs);

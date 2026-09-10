@@ -20,7 +20,6 @@ import {
 import { ensureOauthProviderSite } from './oauthSiteRegistry.js';
 import {buildOauthInfo, buildOauthInfoFromAccount, buildStoredOauthState, buildStoredOauthStateFromAccount, getOauthInfoFromAccount} from './oauthAccount.js';
 import {
-  buildCodexOauthInfo,
   type OauthExtraConfigInput,
   type OauthIdentityCarrierLike,
 } from './codexAccount.js';
@@ -1246,17 +1245,6 @@ export function buildOauthProviderHeaders(input: {
   });
 }
 
-export function buildCodexOauthProviderHeaders(input: {
-  extraConfig?: OauthExtraConfigInput;
-  downstreamHeaders?: Record<string, unknown>;
-}) {
-  const oauth = buildCodexOauthInfo(input.extraConfig);
-  const definition = getOAuthProviderDefinition('codex');
-  return definition?.buildProxyHeaders?.({
-    oauth,
-    downstreamHeaders: input.downstreamHeaders,
-  }) || {};
-}
 
 export async function refreshOauthAccessToken(accountId: number) {
   const account = await db.select().from(schema.accounts)
@@ -1327,8 +1315,5 @@ export async function refreshOauthAccessToken(accountId: number) {
   };
 }
 
-export async function refreshCodexOauthAccessToken(accountId: number) {
-  return refreshOauthAccessToken(accountId);
-}
 
 export type { OAuthProviderMetadata };

@@ -9,37 +9,6 @@ import {
   parseTokenRouteRegexPattern,
 } from '../../../shared/tokenRoutePatterns.js';
 
-export const AUTO_ROUTE_DECISION_LIMIT = 80;
-export const ROUTE_RENDER_CHUNK = 40;
-export const ROUTE_BRAND_ICON_PREFIX = 'brand:';
-export const ROUTE_ICON_NONE_VALUE = '__route_icon_none__';
-
-export const ENDPOINT_TYPE_ICON_MODEL_MAP: Record<string, string> = {
-  openai: 'chatgpt',
-  gemini: 'gemini',
-  anthropic: 'claude',
-  anthroic: 'claude',
-  claude: 'claude',
-};
-
-export const PLATFORM_ENDPOINT_FALLBACK_MAP: Record<string, string[]> = {
-  openai: ['openai'],
-  'new-api': ['openai'],
-  'one-api': ['openai'],
-  sub2api: ['openai'],
-  claude: ['anthropic'],
-  gemini: ['gemini'],
-};
-
-export const PLATFORM_ALIASES: Record<string, string> = {
-  anthropic: 'claude',
-  google: 'gemini',
-  'new api': 'new-api',
-  newapi: 'new-api',
-  'one api': 'one-api',
-  oneapi: 'one-api',
-};
-
 export function isRegexModelPattern(modelPattern: string): boolean {
   return isTokenRouteRegexPattern(modelPattern);
 }
@@ -92,13 +61,13 @@ export function resolveRouteBrand(route: Pick<RouteRow | RouteSummaryRow, 'displ
 }
 
 export function toBrandIconValue(icon: string): string {
-  return `${ROUTE_BRAND_ICON_PREFIX}${icon}`;
+  return `brand:${icon}`;
 }
 
 export function parseBrandIconValue(raw: string): string | null {
   const normalized = (raw || '').trim();
-  if (!normalized.startsWith(ROUTE_BRAND_ICON_PREFIX)) return null;
-  const icon = normalized.slice(ROUTE_BRAND_ICON_PREFIX.length).trim();
+  if (!normalized.startsWith('brand:')) return null;
+  const icon = normalized.slice('brand:'.length).trim();
   return normalizeBrandIconKey(icon);
 }
 
@@ -120,23 +89,31 @@ export function resolveEndpointTypeIconModel(endpointType: string): string | nul
   return ENDPOINT_TYPE_ICON_MODEL_MAP[key] || null;
 }
 
+export const ROUTE_ICON_NONE_VALUE = '__route_icon_none__';
+
+const ENDPOINT_TYPE_ICON_MODEL_MAP: Record<string, string> = {
+  openai: 'chatgpt',
+  gemini: 'gemini',
+  anthropic: 'claude',
+  anthroic: 'claude',
+  claude: 'claude',
+};
+
+const PLATFORM_ALIASES: Record<string, string> = {
+  anthropic: 'claude',
+  google: 'gemini',
+  'new api': 'new-api',
+  newapi: 'new-api',
+  'one api': 'one-api',
+  oneapi: 'one-api',
+};
+
 export function normalizePlatformKey(platform: string | null | undefined): string {
   const raw = String(platform || '').trim().toLowerCase();
   if (!raw) return '';
   return PLATFORM_ALIASES[raw] || raw;
 }
 
-export function inferEndpointTypesFromPlatform(platform: string | null | undefined): string[] {
-  const key = normalizePlatformKey(platform);
-  if (!key) return [];
-  const mapped = PLATFORM_ENDPOINT_FALLBACK_MAP[key];
-  if (Array.isArray(mapped) && mapped.length > 0) return mapped;
-
-  if (key.includes('claude') || key.includes('anthropic')) return ['anthropic'];
-  if (key.includes('gemini')) return ['gemini'];
-  if (key.includes('openai') || key.includes('new-api') || key.includes('one-api')) return ['openai'];
-  return [];
-}
 
 export function siteAvatarLetters(siteName: string): string {
   const normalized = String(siteName || '').trim();
@@ -165,17 +142,7 @@ export function normalizeChannels(channels: RouteChannel[]): RouteChannel[] {
   });
 }
 
-export function normalizeRoutes(routeRows: any[]): RouteRow[] {
-  return (routeRows || []).map((route) => ({
-    ...(route as RouteRow),
-    channels: normalizeChannels(route.channels || []),
-  }));
-}
 
-export function buildSourceGroupKey(routeId: number, sourceModel: string): string {
-  const normalizedSourceModel = sourceModel.trim() || '__ungrouped__';
-  return `${routeId}::${normalizedSourceModel}`;
-}
 
 export function getPriorityTagStyle(priority: number): CSSProperties {
   if (priority <= 0) {

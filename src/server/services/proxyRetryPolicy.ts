@@ -2,7 +2,6 @@ import {
   classifyProxyFailure,
   shouldAbortSameSiteEndpointForFailure,
   shouldRetryChannelForFailure,
-  type SiteRuntimeFailureContext,
   RETRYABLE_TIMEOUT_PATTERNS as SHARED_RETRYABLE_TIMEOUT_PATTERNS,
 } from './siteFailureClassification.js';
 
@@ -35,18 +34,6 @@ export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErro
   return shouldAbortSameSiteEndpointForFailure({ status, errorText: upstreamErrorText });
 }
 
-export function classifyProxyRequestFailure(
-  status: number,
-  upstreamErrorText?: string | null,
-  modelName?: string | null,
-): ReturnType<typeof classifyProxyFailure> {
-  const context: SiteRuntimeFailureContext = {
-    status,
-    errorText: upstreamErrorText,
-    modelName,
-  };
-  return classifyProxyFailure(context);
-}
 
 /**
  * Whether this failure belongs to the "recovers within seconds" family that

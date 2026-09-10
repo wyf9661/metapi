@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -256,12 +256,6 @@ export function buildSchemaContractFromSqliteMigrations(migrationsFolder = resol
   }
 }
 
-export function writeSchemaContractFile(outputPath = resolveGeneratedSchemaContractPath()): SchemaContract {
-  const contract = buildSchemaContractFromSqliteMigrations();
-  mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, `${JSON.stringify(contract, null, 2)}\n`, 'utf8');
-  return contract;
-}
 
 export const __schemaContractTestUtils = {
   splitMigrationStatements,

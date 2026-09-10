@@ -100,11 +100,3 @@ export function getRandomProbeQuestion(): ProbeQuestion {
 /**
  * 根据类别随机选择问题
  */
-export function getRandomProbeQuestionByCategory(category: ProbeQuestion['category']): ProbeQuestion {
-  const filtered = PROBE_QUESTIONS.filter(q => q.category === category);
-  if (filtered.length === 0) {
-    return getRandomProbeQuestion();
-  }
-  const index = Math.floor(Math.random() * filtered.length);
-  return filtered[index];
-}

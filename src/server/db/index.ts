@@ -1252,61 +1252,6 @@ export async function hasProxyLogRequestTraceIdColumn(): Promise<boolean> {
   return proxyLogRequestTraceIdColumnAvailable;
 }
 
-export async function ensureProxyLogRequestTraceIdColumn(): Promise<boolean> {
-  if (runtimeDbDialect === 'sqlite') {
-    ensureProxyLogRequestTraceIdSchema();
-    proxyLogRequestTraceIdColumnAvailable = tableExists('proxy_logs')
-      && tableColumnExists('proxy_logs', 'request_trace_id');
-    return proxyLogRequestTraceIdColumnAvailable;
-  }
-
-  if (await hasProxyLogRequestTraceIdColumn()) {
-    return true;
-  }
-
-  try {
-    if (runtimeDbDialect === 'mysql') {
-      if (!mysqlPool) return false;
-      const [rows] = await mysqlPool.query('SHOW COLUMNS FROM `proxy_logs` LIKE ?', ['request_trace_id']);
-      if (!(Array.isArray(rows) && rows.length > 0)) {
-        await executeLegacyCompat(
-          (statement) => mysqlPool!.query(statement).then(() => undefined),
-          'ALTER TABLE `proxy_logs` ADD COLUMN `request_trace_id` VARCHAR(64) NULL',
-        );
-      }
-      await executeLegacyCompat(
-        (statement) => mysqlPool!.query(statement).then(() => undefined),
-        'CREATE INDEX `proxy_logs_request_trace_id_created_at_idx` ON `proxy_logs` (`request_trace_id`, `created_at`(191))',
-      ).catch(() => undefined);
-    } else {
-      if (!pgPool) return false;
-      const result = await pgPool.query(
-        'SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2 LIMIT 1',
-        ['proxy_logs', 'request_trace_id'],
-      );
-      if (Number(result.rowCount || 0) === 0) {
-        await executeLegacyCompat(
-          (statement) => pgPool!.query(statement).then(() => undefined),
-          'ALTER TABLE "proxy_logs" ADD COLUMN "request_trace_id" TEXT',
-        );
-      }
-      await executeLegacyCompat(
-        (statement) => pgPool!.query(statement).then(() => undefined),
-        'CREATE INDEX IF NOT EXISTS "proxy_logs_request_trace_id_created_at_idx" ON "proxy_logs" ("request_trace_id", "created_at")',
-      ).catch(() => undefined);
-    }
-    proxyLogRequestTraceIdColumnAvailable = true;
-    return true;
-  } catch (error) {
-    if (isDuplicateColumnError(error) || isDuplicateIndexError(error)) {
-      proxyLogRequestTraceIdColumnAvailable = await hasProxyLogRequestTraceIdColumn();
-      return proxyLogRequestTraceIdColumnAvailable;
-    }
-    proxyLogRequestTraceIdColumnAvailable = false;
-    console.warn('[db] failed to ensure proxy_logs request_trace_id column', error);
-    return false;
-  }
-}
 
 export async function hasProxyLogStreamTimingColumns(): Promise<boolean> {
   if (proxyLogStreamTimingColumnsAvailable !== null) {

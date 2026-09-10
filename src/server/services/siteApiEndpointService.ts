@@ -226,13 +226,6 @@ export async function selectSiteApiEndpointTarget(
   };
 }
 
-export async function resolveSiteApiBaseUrl(
-  site: SiteRow,
-  now?: string | Date,
-): Promise<string | null> {
-  const target = await selectSiteApiEndpointTarget(site, now);
-  return target?.baseUrl || null;
-}
 
 export async function requireSiteApiBaseUrl(
   site: SiteRow,

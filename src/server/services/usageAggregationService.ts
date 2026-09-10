@@ -87,31 +87,7 @@ export type ProjectionPassResult = {
   recomputed: boolean;
 };
 
-export type SiteHourUsageAggregateRow = {
-  siteId: number;
-  hourStartUtc: string;
-  totalRequests: number;
-  successCount: number;
-  failedCount: number;
-  totalTokens: number;
-  totalSummarySpend: number;
-  totalSiteSpend: number;
-  totalLatencyMs: number;
-  latencyCount: number;
-};
 
-export type ModelDayUsageAggregateRow = {
-  siteId: number;
-  day: string;
-  model: string;
-  totalCalls: number;
-  successCount: number;
-  failedCount: number;
-  totalTokens: number;
-  totalSpend: number;
-  totalLatencyMs: number;
-  latencyCount: number;
-};
 
 let projectionTimer: ReturnType<typeof setInterval> | null = null;
 let projectionInFlight: Promise<ProjectionPassResult> | null = null;

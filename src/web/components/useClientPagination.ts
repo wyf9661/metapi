@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import {
   CLIENT_PAGE_SIZE,
-  DEFAULT_PAGE_SIZE,
   PAGE_SIZE_OPTIONS,
   resolveClientPagination,
   snapToPageSizeOptions,
@@ -42,21 +40,6 @@ export function estimateClientPageSize(
  * Returns `[pageSize, setPageSize]`; `setPageSize` accepts any number and snaps
  * it to the nearest legal option.
  */
-export function useSelectablePageSize(
-  initialSize: number = DEFAULT_PAGE_SIZE,
-): [number, Dispatch<SetStateAction<number>>] {
-  const [pageSize, setPageSize] = useState<number>(() =>
-    snapToPageSizeOptions(estimateClientPageSize(initialSize)),
-  );
-
-  const snapSetter: Dispatch<SetStateAction<number>> = (value) => {
-    setPageSize((prev) =>
-      snapToPageSizeOptions(typeof value === 'function' ? value(prev) : value),
-    );
-  };
-
-  return [pageSize, snapSetter];
-}
 
 /**
  * Client-side pagination for in-memory lists.

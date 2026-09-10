@@ -9,6 +9,3 @@ export function normalizeRouteRoutingStrategy(value: unknown): RouteRoutingStrat
   return DEFAULT_ROUTE_ROUTING_STRATEGY;
 }
 
-export function isRoundRobinRouteRoutingStrategy(value: unknown): boolean {
-  return normalizeRouteRoutingStrategy(value) === 'round_robin';
-}

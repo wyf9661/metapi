@@ -310,6 +310,3 @@ export async function maybeHandleWebSearchOnlySimulation(input: {
   });
 }
 
-export function isResponsesWebSearchOnlyRequest(body: Record<string, unknown>): boolean {
-  return hasResponsesWebSearchOnlyRequest(body);
-}

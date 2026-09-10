@@ -1,9 +1,4 @@
 import type { SubscriptionPlanSummary, SubscriptionSummary } from './platforms/base.js';
-export {
-  REFRESH_BACKOFF_BASE_MS as SUB2API_REFRESH_BACKOFF_BASE_MS,
-  REFRESH_BACKOFF_MAX_MS as SUB2API_REFRESH_BACKOFF_MAX_MS,
-  resolveRefreshBackoffMs as resolveSub2ApiRefreshBackoffMs,
-} from './refreshBackoff.js';
 
 type AutoReloginConfig = {
   username?: unknown;

@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
 import * as routeRefreshWorkflow from '../routeRefreshWorkflow.js';
@@ -464,24 +464,8 @@ export async function loadOauthRouteUnitSummariesByIds(routeUnitIds: number[]): 
   return result;
 }
 
-export async function loadOauthRouteUnitByAccountId(accountId: number): Promise<OAuthRouteUnitAccountParticipation | null> {
-  const result = await listOauthRouteUnitsByAccountIds([accountId]);
-  return result.get(accountId) || null;
-}
 
 export function getOauthRouteUnitStrategyLabel(strategy: OAuthRouteUnitStrategy): string {
   return strategy === 'stick_until_unavailable' ? '单个用到不可用再切' : '轮询';
 }
 
-export async function loadOauthRouteUnitMemberByChannelAndAccount(input: {
-  routeUnitId: number;
-  accountId: number;
-}) {
-  return await db.select()
-    .from(schema.oauthRouteUnitMembers)
-    .where(and(
-      eq(schema.oauthRouteUnitMembers.unitId, input.routeUnitId),
-      eq(schema.oauthRouteUnitMembers.accountId, input.accountId),
-    ))
-    .get();
-}

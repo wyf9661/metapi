@@ -16,7 +16,6 @@ import {
   shouldRetryResponsesCompatibility as shouldRetry,
 } from './compatibility.js';
 import {
-  type OpenAiResponsesAggregateState,
   completeResponsesStream,
   createOpenAiResponsesAggregateState,
   failResponsesStream,
@@ -37,7 +36,6 @@ import { createResponsesEndpointStrategy } from './routeCompatibility.js';
 import { openAiResponsesStream } from './streamBridge.js';
 import { openAiResponsesUsage } from './usage.js';
 import type {
-  OpenAiResponsesParsedRequest as OpenAiResponsesParsedRequestModel,
   OpenAiResponsesRequestEnvelope as OpenAiResponsesRequestEnvelopeModel,
 } from './model.js';
 
@@ -113,9 +111,6 @@ export const openAiResponsesTransformer = {
 };
 
 export type OpenAiResponsesTransformer = typeof openAiResponsesTransformer;
-export type OpenAiResponsesAggregate = OpenAiResponsesAggregateState;
-export type OpenAiResponsesParsedRequest = OpenAiResponsesParsedRequestModel;
-export type OpenAiResponsesRequestEnvelope = OpenAiResponsesRequestEnvelopeModel;
 export {
   convertOpenAiBodyToResponsesBody,
   convertResponsesBodyToOpenAiBody,

@@ -69,7 +69,6 @@ const OFFICIAL_PROVIDER_PRIORITY = [
 ];
 
 let modelsDevPrices = new Map<string, ModelsDevCost>();
-let lastSyncAtMs = 0;
 let syncTask: ScheduledTask | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -226,7 +225,6 @@ export async function syncModelsDevPrices(): Promise<boolean> {
       console.warn(`[models.dev] capability parse failed: ${String(capError)}`);
     }
 
-    lastSyncAtMs = Date.now();
     clearRetryTimer();
     console.info(`[models.dev] synced ${parsed.size} model prices`);
     return true;
@@ -276,18 +274,11 @@ async function handleSyncFailure(reason: string): Promise<void> {
   }
 }
 
-export function getModelsDevLastSyncAtMs(): number {
-  return lastSyncAtMs;
-}
 
-export function getModelsDevPriceCount(): number {
-  return modelsDevPrices.size;
-}
 
 /** Test-only: replace the in-memory price table (mirrors the __reset* pattern). */
 export function __setModelsDevPricesForTests(prices: Map<string, ModelsDevCost>): void {
   modelsDevPrices = prices;
-  lastSyncAtMs = Date.now();
 }
 
 /** Kick off an async boot sync and register the daily refresh task. */

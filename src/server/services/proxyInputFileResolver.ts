@@ -1,10 +1,8 @@
 import type { ProxyResourceOwner } from '../middleware/auth.js';
 import { getProxyFileByPublicIdForOwner, LOCAL_PROXY_FILE_ID_PREFIX } from './proxyFileStore.js';
 import { ensureBase64DataUrl } from '../transformers/shared/inputFile.js';
-import { summarizeConversationFileInputsInOpenAiBody } from '../proxy-core/capabilities/conversationFileCapabilities.js';
 import { asTrimmedString } from '../shared/trimString.js';
 import {
-
   isSupportedConversationFileMimeType,
   resolveConversationFileMimeType,
 } from '../../shared/conversationFileTypes.js';
@@ -317,6 +315,3 @@ export async function resolveResponsesBodyInputFiles(
   return next;
 }
 
-export function hasNonImageFileInputInOpenAiBody(body: Record<string, unknown>): boolean {
-  return summarizeConversationFileInputsInOpenAiBody(body).hasDocument;
-}

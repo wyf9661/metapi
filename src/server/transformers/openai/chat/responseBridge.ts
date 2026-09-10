@@ -221,8 +221,3 @@ export const openAiChatResponseBridge = {
 
 export const openAiChatOutbound = openAiChatResponseBridge;
 
-export {
-  buildNormalizedFinalToOpenAiChatChunks as buildSyntheticOpenAiChatChunksFromNormalized,
-  buildNormalizedFinalToOpenAiChatPayload as serializeOpenAiChatFinalPayload,
-  normalizeOpenAiChatFinalToNormalized as normalizeOpenAiChatFinalPayload,
-};

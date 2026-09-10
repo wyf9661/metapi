@@ -1,5 +1,3 @@
-import { sql } from 'drizzle-orm';
-import { schema } from '../db/index.js';
 import {
   formatLocalDateTime,
   getLocalHourAnchor,
@@ -8,38 +6,12 @@ import {
 } from './localTimeService.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 
-export function proxyCostSqlExpression() {
-  return sql<number>`
-    coalesce(
-      ${schema.proxyLogs.estimatedCost},
-      coalesce(${schema.proxyLogs.totalTokens}, 0) / 500000.0
-    )
-  `;
-}
 
 export function toRoundedMicroNumber(value: number | null | undefined): number {
   return Math.round(Number(value || 0) * 1_000_000) / 1_000_000;
 }
 
-export function buildProxyLogModelAnalysisSelectFields() {
-  return {
-    createdAt: schema.proxyLogs.createdAt,
-    modelActual: schema.proxyLogs.modelActual,
-    modelRequested: schema.proxyLogs.modelRequested,
-    status: schema.proxyLogs.status,
-    latencyMs: schema.proxyLogs.latencyMs,
-    totalTokens: schema.proxyLogs.totalTokens,
-    estimatedCost: schema.proxyLogs.estimatedCost,
-  };
-}
 
-export function buildProxyLogSiteTrendSelectFields() {
-  return {
-    createdAt: schema.proxyLogs.createdAt,
-    estimatedCost: schema.proxyLogs.estimatedCost,
-    totalTokens: schema.proxyLogs.totalTokens,
-  };
-}
 
 const SITE_AVAILABILITY_BUCKET_COUNT = 24;
 const SITE_AVAILABILITY_BUCKET_MS = 60 * 60 * 1000;
@@ -173,55 +145,6 @@ function finalizeSiteAvailabilitySummaries(
   });
 }
 
-export function buildSiteAvailabilitySummaries(
-  sites: SiteAvailabilitySiteRow[],
-  logs: SiteAvailabilityLogRow[],
-  now = new Date(),
-) {
-  const endLocal = getLocalHourAnchor(now);
-  const startLocal = new Date(
-    endLocal.getTime() -
-      (SITE_AVAILABILITY_BUCKET_COUNT - 1) * SITE_AVAILABILITY_BUCKET_MS,
-  );
-  const startMs = startLocal.getTime();
-  const rangeMs = SITE_AVAILABILITY_BUCKET_COUNT * SITE_AVAILABILITY_BUCKET_MS;
-  const siteMap = createSiteAvailabilityAccumulatorMap(sites, startMs);
-
-  for (const log of logs) {
-    if (log.siteId == null) continue;
-    const target = siteMap.get(log.siteId);
-    if (!target) continue;
-
-    const parsed = parseStoredUtcDateTime(log.createdAt);
-    if (!parsed) continue;
-    const diffMs = parsed.getTime() - startMs;
-    if (diffMs < 0 || diffMs >= rangeMs) continue;
-
-    const bucketIndex = Math.floor(diffMs / SITE_AVAILABILITY_BUCKET_MS);
-    const bucket = target.buckets[bucketIndex];
-    const isSuccess = (log.status || '').trim().toLowerCase() === 'success';
-
-    target.totalRequests += 1;
-    bucket.totalRequests += 1;
-    if (isSuccess) {
-      target.successCount += 1;
-      bucket.successCount += 1;
-    } else {
-      target.failedCount += 1;
-      bucket.failedCount += 1;
-    }
-
-    const latencyMs = Number(log.latencyMs);
-    if (Number.isFinite(latencyMs) && latencyMs >= 0) {
-      target.latencyTotalMs += latencyMs;
-      target.latencyCount += 1;
-      bucket.latencyTotalMs += latencyMs;
-      bucket.latencyCount += 1;
-    }
-  }
-
-  return finalizeSiteAvailabilitySummaries(sites, siteMap);
-}
 
 export function buildSiteAvailabilitySummariesFromHourlyAggregates(
   sites: SiteAvailabilitySiteRow[],

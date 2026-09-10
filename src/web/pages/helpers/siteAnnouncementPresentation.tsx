@@ -1,4 +1,3 @@
-import type React from 'react';
 import { marked } from 'marked';
 import { formatDateTimeLocal } from './checkinLogTime.js';
 
@@ -380,23 +379,6 @@ export function renderSiteAnnouncementHtml(content: string): string {
   return renderMarkdownContentHtml(content, { emptyHtml: '<p>-</p>' });
 }
 
-export function MarkdownContent({
-  content,
-  className = 'announcement-rich-content',
-  style,
-}: {
-  content: string;
-  className?: string;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <div
-      className={className}
-      style={style}
-      dangerouslySetInnerHTML={{ __html: renderMarkdownContentHtml(content, { emptyHtml: '' }) }}
-    />
-  );
-}
 
 export function SiteAnnouncementContent({ content }: { content: string }) {
   return (

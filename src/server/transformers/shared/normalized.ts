@@ -63,10 +63,6 @@ export type NormalizedUsage = {
   rejectedPredictionTokens?: number | null;
 };
 
-export type ParsedDownstreamChatRequestResult = {
-  value?: import('./chatFormatsCore.js').ParsedDownstreamChatRequest;
-  error?: { statusCode: number; payload: unknown };
-};
 
 export type TransformerMetadata = {
   include?: unknown;
@@ -87,31 +83,8 @@ export type TransformerMetadata = {
   passthrough?: Record<string, unknown>;
 };
 
-export type NormalizedRequest = {
-  protocol: import('./chatFormatsCore.js').DownstreamFormat | 'responses' | 'gemini' | 'gemini-cli';
-  model: string;
-  stream: boolean;
-  rawBody: unknown;
-  parsed: import('./chatFormatsCore.js').ParsedDownstreamChatRequest | null;
-  contentBlocks?: NormalizedContentBlock[];
-  metadata?: TransformerMetadata;
-};
 
-export type NormalizedResponseEnvelope = {
-  protocol: import('./chatFormatsCore.js').DownstreamFormat | 'responses' | 'gemini' | 'gemini-cli';
-  model: string;
-  final: import('./chatFormatsCore.js').NormalizedFinalResponse;
-  usage?: unknown;
-  contentBlocks?: NormalizedContentBlock[];
-  metadata?: TransformerMetadata;
-};
 
-export type NormalizedStreamEnvelope = {
-  protocol: import('./chatFormatsCore.js').DownstreamFormat | 'responses' | 'gemini' | 'gemini-cli';
-  model: string;
-  event: import('./chatFormatsCore.js').NormalizedStreamEvent;
-  metadata?: TransformerMetadata;
-};
 
 export function createEmptyNormalizedUsage(): NormalizedUsage {
   return {

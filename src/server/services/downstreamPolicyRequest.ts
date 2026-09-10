@@ -16,19 +16,6 @@ export function getDownstreamRoutingPolicy(request: FastifyRequest): DownstreamR
   return authContext.policy;
 }
 
-export function resolveModelForDownstreamKey(
-  request: FastifyRequest,
-  requestedModel: string,
-): { requestedModel: string; effectiveModel: string; mapped: boolean } {
-  const normalizedRequestedModel = requestedModel.trim();
-  const authContext = getProxyAuthContext(request);
-  const effectiveModel = resolveDownstreamPolicyModel(normalizedRequestedModel, authContext?.policy ?? EMPTY_DOWNSTREAM_ROUTING_POLICY);
-  return {
-    requestedModel: normalizedRequestedModel,
-    effectiveModel,
-    mapped: effectiveModel !== normalizedRequestedModel,
-  };
-}
 
 export async function ensureModelAllowedForDownstreamKey(
   request: FastifyRequest,

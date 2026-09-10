@@ -2,7 +2,6 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { minimatch } from 'minimatch';
 import { db, schema } from '../db/index.js';
 import {
-  EMPTY_DOWNSTREAM_ROUTING_POLICY,
   type DownstreamExcludedCredentialRef,
   type DownstreamModelMapping,
   type DownstreamRoutingPolicy,
@@ -495,9 +494,6 @@ export async function getManagedDownstreamApiKeyByToken(token: string): Promise<
   return toDownstreamApiKeyPolicyView(row);
 }
 
-export function getDefaultGlobalPolicy(): DownstreamRoutingPolicy {
-  return EMPTY_DOWNSTREAM_ROUTING_POLICY;
-}
 
 export async function authorizeDownstreamToken(token: string): Promise<DownstreamTokenAuthResult> {
   const normalizedToken = normalizeToken(token);

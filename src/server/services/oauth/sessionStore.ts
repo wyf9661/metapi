@@ -146,9 +146,6 @@ let oauthSessionStore: OAuthSessionStore = new MemoryOAuthSessionStore();
 // If persistence is ever required, rework the interface to async and encrypt
 // the codeVerifier (AES-256-GCM) before storing.
 
-export function setOauthSessionStore(store: OAuthSessionStore) {
-  oauthSessionStore = store;
-}
 
 export function createOauthSession(input: {
   provider: string;

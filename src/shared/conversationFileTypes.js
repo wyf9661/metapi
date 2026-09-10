@@ -1,4 +1,3 @@
-export const CONVERSATION_DOCUMENT_ACCEPT_PARTS = ['.pdf', '.txt', '.md', '.markdown', '.json'];
 const GENERIC_MIME_TYPES = new Set([
   'application/octet-stream',
   'binary/octet-stream',
@@ -87,7 +86,7 @@ export function isSupportedConversationFileMimeType(mimeType) {
 
 export function buildConversationAcceptList(input) {
   const parts = [];
-  if (input.document) parts.push(...CONVERSATION_DOCUMENT_ACCEPT_PARTS);
+  if (input.document) parts.push('.pdf', '.txt', '.md', '.markdown', '.json');
   if (input.image) parts.push('image/*');
   if (input.audio) parts.push('audio/*');
   return parts.join(',');
