@@ -9,6 +9,7 @@ import {
   parseServerUtcDateTime,
 } from './helpers/checkinLogTime.js';
 import { tr } from '../i18n.js';
+import { StatusPill, StatusText } from '../components/StatusText.js';
 
 type LogFilter = 'all' | 'success' | 'failed' | 'skipped';
 
@@ -354,12 +355,12 @@ export default function CheckinLog() {
                   key={logId}
                   title={log.accounts?.username || '未知'}
                   headerActions={
-                    <span
-                      className={`badge ${statusClass(status)}`}
+                    <StatusText
+                      badgeClass={statusClass(status)}
                       style={{ fontSize: 10 }}
                     >
                       {statusLabel(status)}
-                    </span>
+                    </StatusText>
                   }
                   footerActions={
                     <button
@@ -410,14 +411,11 @@ export default function CheckinLog() {
                     label="分类"
                     value={
                       reason ? (
-                        <span
-                          className="badge badge-info"
-                          data-tooltip={reason.detailHint}
-                        >
+                        <StatusPill tone="muted" data-tooltip={reason.detailHint}>
                           {reason.title}
-                        </span>
+                        </StatusPill>
                       ) : (
-                        <span className="badge badge-muted">-</span>
+                        '-'
                       )
                     }
                   />
@@ -501,20 +499,17 @@ export default function CheckinLog() {
                       )}
                     </td>
                     <td>
-                      <span className={`badge ${statusClass(status)}`}>
+                      <StatusText badgeClass={statusClass(status)}>
                         {statusLabel(status)}
-                      </span>
+                      </StatusText>
                     </td>
                     <td>
                       {reason ? (
-                        <span
-                          className="badge badge-info"
-                          data-tooltip={reason.detailHint}
-                        >
+                        <StatusPill tone="muted" data-tooltip={reason.detailHint}>
                           {reason.title}
-                        </span>
+                        </StatusPill>
                       ) : (
-                        <span className="badge badge-muted">-</span>
+                        '-'
                       )}
                     </td>
                     <td style={{ maxWidth: 360 }}>

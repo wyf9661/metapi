@@ -88,13 +88,17 @@ describe('Accounts proxy-only expired state', () => {
       expect(rendered).toContain('连接已过期，请更新 API Key');
       expect(rendered).not.toContain('访问令牌已过期');
 
-      const badgeTexts = root.root.findAll((node) => (
+      // Dense-list status renders as coloured text now, not a filled badge.
+      const statusTexts = root.root.findAll((node) => (
         node.type === 'span'
-        && typeof node.props.className === 'string'
-        && node.props.className.includes('badge')
+        && collectText(node).trim() === '已过期'
+      ));
+      expect(statusTexts.length).toBeGreaterThan(0);
+      expect(statusTexts[0].props.style?.color).toBe('var(--color-danger)');
+      const colouredTexts = root.root.findAll((node) => (
+        node.type === 'span' && typeof node.props.style?.color === 'string'
       )).map((node) => collectText(node).trim());
-      expect(badgeTexts).toContain('已过期');
-      expect(badgeTexts).not.toContain('健康');
+      expect(colouredTexts).not.toContain('健康');
 
       const actionTexts = root.root.findAll((node) => node.type === 'button').map((node) => collectText(node));
       expect(actionTexts).not.toContain('重新绑定');

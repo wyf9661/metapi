@@ -23,7 +23,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { clearFocusParams, readFocusSiteId } from './helpers/navigationFocus.js';
-import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, buildSiteConnectionSearchParams, getConfiguredSiteApiEndpoints, platformColors, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
+import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, buildSiteConnectionSearchParams, getConfiguredSiteApiEndpoints, platformBadgeClass, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
 import { tr } from '../i18n.js';
 import { buildCustomReorderUpdates, buildUnpinMoveToFrontUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
@@ -46,6 +46,7 @@ import {
   getSiteInitializationPreset,
 } from '../../shared/siteInitializationPresets.js';
 import { analyzePrimarySiteUrl } from '../../shared/sitePrimaryUrl.js';
+import { StatusPill } from '../components/StatusText.js';
 
 type SiteSubscriptionSummary = {
   activeCount: number;
@@ -1928,15 +1929,15 @@ export default function Sites() {
                     <MobileField
                       label="状态"
                       value={(
-                        <span className={`badge ${site.status === 'disabled' ? 'badge-muted' : 'badge-success'}`} style={{ fontSize: 11 }}>
+                        <StatusPill badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'} style={{ fontSize: 11 }}>
                           {site.status === 'disabled' ? '禁用' : '启用'}
-                        </span>
+                        </StatusPill>
                       )}
                     />
                     <MobileField
                       label="平台"
                       value={(
-                        <span className={`badge ${platformColors[site.platform || ''] || 'badge-muted'}`} style={{ fontSize: 11 }}>
+                        <span className={`badge ${platformBadgeClass(site.platform)}`} style={{ fontSize: 11 }}>
                           {site.platform || '-'}
                         </span>
                       )}
@@ -1956,14 +1957,14 @@ export default function Sites() {
                     <MobileField
                       label="健康"
                       value={(
-                        <span
-                          className={`badge ${site.healthState?.state === 'healthy'
+                        <StatusPill
+                          badgeClass={site.healthState?.state === 'healthy'
                             ? 'badge-success'
                             : site.healthState?.state === 'unhealthy'
                               ? 'badge-danger'
                               : site.healthState?.state === 'degraded'
                                 ? 'badge-warning'
-                                : 'badge-muted'}`}
+                                : 'badge-muted'}
                           title={site.healthState?.reason || '尚未检测'}
                           style={{ fontSize: 11 }}
                         >
@@ -1976,7 +1977,7 @@ export default function Sites() {
                                 : site.healthState?.state === 'disabled'
                                   ? '禁用'
                                   : '未检测'}
-                        </span>
+                        </StatusPill>
                       )}
                     />
                     <MobileField label="权重" value={(site.globalWeight || 1).toFixed(2)} />
@@ -2158,19 +2159,19 @@ export default function Sites() {
                       />
                     </td>
                     <td>
-                      <span className={`badge ${site.status === 'disabled' ? 'badge-muted' : 'badge-success'}`} style={{ fontSize: 11 }}>
+                      <StatusPill badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'} style={{ fontSize: 11 }}>
                         {site.status === 'disabled' ? '禁用' : '启用'}
-                      </span>
+                      </StatusPill>
                     </td>
                     <td title={site.healthState?.reason || '尚未检测'}>
-                      <span
-                        className={`badge ${site.healthState?.state === 'healthy'
+                      <StatusPill
+                        badgeClass={site.healthState?.state === 'healthy'
                           ? 'badge-success'
                           : site.healthState?.state === 'unhealthy'
                             ? 'badge-danger'
                             : site.healthState?.state === 'degraded'
                               ? 'badge-warning'
-                              : 'badge-muted'}`}
+                              : 'badge-muted'}
                         style={{ fontSize: 11 }}
                       >
                         {site.healthState?.state === 'healthy'
@@ -2182,7 +2183,7 @@ export default function Sites() {
                               : site.healthState?.state === 'disabled'
                                 ? '禁用'
                                 : '未检测'}
-                      </span>
+                      </StatusPill>
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                       {(site.globalWeight || 1).toFixed(2)}
@@ -2194,7 +2195,7 @@ export default function Sites() {
                         rel="noopener noreferrer"
                         style={{ textDecoration: 'none' }}
                       >
-                        <span className={`badge ${platformColors[site.platform || ''] || 'badge-muted'}`}>
+                        <span className={`badge ${platformBadgeClass(site.platform)}`}>
                           {site.platform || '-'}
                         </span>
                       </a>

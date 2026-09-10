@@ -10,6 +10,7 @@ import PaginationControls from '../components/PaginationControls.js';
 import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 import { tr } from '../i18n.js';
 import type { ProgramEvent } from '../eventsTypes.js';
+import { StatusText } from '../components/StatusText.js';
 
 const TYPE_OPTIONS = [
   { value: '', label: '全部类型' },
@@ -298,9 +299,9 @@ export default function ProgramLogs() {
                   key={row.id}
                   title={row.title || '-'}
                   headerActions={(
-                    <span className={`badge ${eventStatus.cls}`} style={{ fontSize: 10 }}>
+                    <StatusText badgeClass={eventStatus.cls} style={{ fontSize: 10 }}>
                       {eventStatus.label}
-                    </span>
+                    </StatusText>
                   )}
                   footerActions={(
                     row.read ? (
@@ -319,8 +320,8 @@ export default function ProgramLogs() {
                 >
                   <MobileField label="时间" value={formatDateTimeLocal(row.createdAt)} />
                   <MobileField label="类型" value={<span className="badge badge-muted" style={{ fontSize: 11 }}>{row.type || '-'}</span>} />
-                  <MobileField label="级别" value={<span className={`badge ${level.cls}`} style={{ fontSize: 11 }}>{level.label}</span>} />
-                  <MobileField label="状态" value={<span className={`badge ${eventStatus.cls}`} style={{ fontSize: 11 }}>{eventStatus.label}</span>} />
+                  <MobileField label="级别" value={<StatusText badgeClass={level.cls} style={{ fontSize: 11 }}>{level.label}</StatusText>} />
+                  <MobileField label="状态" value={<StatusText badgeClass={eventStatus.cls} style={{ fontSize: 11 }}>{eventStatus.label}</StatusText>} />
                   <MobileField label="内容" value={row.message || '-'} stacked />
                 </MobileCard>
               );
@@ -371,9 +372,9 @@ export default function ProgramLogs() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${level.cls}`} style={{ fontSize: 11 }}>
+                      <StatusText badgeClass={level.cls} style={{ fontSize: 11 }}>
                         {level.label}
-                      </span>
+                      </StatusText>
                     </td>
                     <td className="program-logs-title-cell">
                       {row.title || '-'}
@@ -382,16 +383,16 @@ export default function ProgramLogs() {
                       {row.message || '-'}
                     </td>
                     <td>
-                      <span className={`badge ${eventStatus.cls}`} style={{ fontSize: 11 }}>
+                      <StatusText badgeClass={eventStatus.cls} style={{ fontSize: 11 }}>
                         {eventStatus.label}
-                      </span>
+                      </StatusText>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         {row.read ? (
                           <span className="badge badge-muted" style={{ fontSize: 11 }}>已读</span>
                         ) : (
-                          <span className="badge badge-warning" style={{ fontSize: 11 }}>未读</span>
+                          <StatusText tone="warning" style={{ fontSize: 11 }}>未读</StatusText>
                         )}
                         {!row.read && (
                           <button

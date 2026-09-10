@@ -47,6 +47,7 @@ import {
   createPriorityRailNewLayerId,
 } from './priorityRail.js';
 import { translateOnlyRectSortingStrategy } from './sortingStrategies.js';
+import { StatusText } from '../../components/StatusText.js';
 
 type RouteCardProps = {
   route: RouteSummaryRow;
@@ -310,7 +311,7 @@ function PriorityDragPreview({
           当前生效：{effectiveTokenName}
         </span>
         {channel.sourceModel ? (
-          <span className="badge badge-info" style={{ fontSize: 10 }}>
+          <span className="badge badge-muted" style={{ fontSize: 10 }}>
             {channel.sourceModel}
           </span>
         ) : null}
@@ -735,7 +736,7 @@ function RouteCardInner({
 
           {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
             <>
-              <span className="badge badge-info" style={{ fontSize: 10, flexShrink: 0 }}>
+              <span className="badge badge-muted" style={{ fontSize: 10, flexShrink: 0 }}>
                 {explicitGroupSourceCount} {tr('来源模型')}
               </span>
               <span className="badge badge-muted" style={{ fontSize: 10, flexShrink: 0 }}>
@@ -758,7 +759,7 @@ function RouteCardInner({
               </span>
             </>
           ) : (
-            <span className="badge badge-info" style={{ fontSize: 10, flexShrink: 0 }}>
+            <span className="badge badge-muted" style={{ fontSize: 10, flexShrink: 0 }}>
               {route.channelCount} {tr('通道')}
               {route.channelCount === 1 ? (
                 <span
@@ -867,7 +868,7 @@ function RouteCardInner({
             )}
             {explicitGroupRoute && explicitGroupSourceCount > 0 ? (
               <>
-                <span className="badge badge-info" style={{ fontSize: 10 }}>
+                <span className="badge badge-muted" style={{ fontSize: 10 }}>
                   {explicitGroupSourceCount} {tr('来源模型')}
                 </span>
                 <span className="badge badge-muted" style={{ fontSize: 10 }}>
@@ -890,7 +891,7 @@ function RouteCardInner({
                 </span>
               </>
             ) : (
-              <span className="badge badge-info" style={{ fontSize: 10 }}>
+              <span className="badge badge-muted" style={{ fontSize: 10 }}>
                 {route.channelCount} {tr('通道')}
                 {(route.cooldownChannelCount || 0) > 0 ? (
                   <span
@@ -984,11 +985,11 @@ function RouteCardInner({
               {readOnlyRoute ? (
                 <span className="badge badge-muted" style={{ fontSize: 10 }}>{tr('未生成')}</span>
               ) : (
-                <span className={`badge ${route.enabled ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 10 }}>
+                <StatusText badgeClass={route.enabled ? 'badge-success' : 'badge-muted'} style={{ fontSize: 10 }}>
                   {route.enabled ? tr('启用') : tr('禁用')}
-                </span>
+                </StatusText>
               )}
-              <span className="badge badge-info" style={{ fontSize: 10 }}>
+              <span className="badge badge-muted" style={{ fontSize: 10 }}>
                 {route.channelCount} {tr('通道')}
                 {(route.cooldownChannelCount || 0) > 0 ? (
                   <span
@@ -1064,7 +1065,7 @@ function RouteCardInner({
             {routeUnits.map((routeUnit) => (
               <span
                 key={`route-unit-${String(routeUnit.id)}`}
-                className="badge badge-info"
+                className="badge badge-muted"
                 style={{
                   fontSize: 10.5,
                   maxWidth: '100%',
@@ -1093,7 +1094,7 @@ function RouteCardInner({
                     key={`missing-${route.id}-${item.key}`}
                     type="button"
                     onClick={() => onCreateTokenForMissing(item.accountId, route.modelPattern)}
-                    className="badge badge-info missing-token-site-tag"
+                    className="badge badge-muted missing-token-site-tag"
                     data-tooltip={`点击跳转到令牌创建（预选 ${item.siteName}/${item.accountLabel}）`}
                     style={{ fontSize: 10.5, cursor: 'pointer' }}
                   >

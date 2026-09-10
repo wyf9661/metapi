@@ -77,7 +77,8 @@ describe('ProgramLogs status label', () => {
     const statusCell = tds[5];
     expect(collectText(statusCell).trim()).toBe('成功');
     const statusBadge = statusCell.find((node) => node.type === 'span');
-    expect(String(statusBadge.props.className || '')).toContain('badge-success');
+    // Dense-list status renders as coloured text, not a filled chip.
+    expect(statusBadge.props.style?.color).toBe('var(--color-success)');
   });
 
   it('treats parenthesized counts with failed=0 as success', async () => {
@@ -116,6 +117,7 @@ describe('ProgramLogs status label', () => {
     const statusCell = tds[5];
     expect(collectText(statusCell).trim()).toBe('成功');
     const statusBadge = statusCell.find((node) => node.type === 'span');
-    expect(String(statusBadge.props.className || '')).toContain('badge-success');
+    // Dense-list status renders as coloured text, not a filled chip.
+    expect(statusBadge.props.style?.color).toBe('var(--color-success)');
   });
 });

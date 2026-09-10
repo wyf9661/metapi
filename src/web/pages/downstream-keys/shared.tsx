@@ -1,4 +1,5 @@
 import React from 'react';
+import { StatusText } from '../../components/StatusText.js';
 
 export type Range = '24h' | '7d' | 'all';
 
@@ -103,13 +104,13 @@ export function TagChips({
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {visible.map((tag) => (
-        <span
+        <StatusText
           key={tag}
-          className={`badge ${accent ? 'badge-info' : 'badge-muted'}`}
+          badgeClass={accent ? 'badge-info' : 'badge-muted'}
           style={{ fontSize: 11 }}
         >
           {tag}
-        </span>
+        </StatusText>
       ))}
       {hidden > 0 ? <span className="badge badge-muted" style={{ fontSize: 11 }}>{`+${hidden}`}</span> : null}
     </div>
@@ -169,8 +170,8 @@ export function RangeToggle({ range, onChange }: { range: Range; onChange: (r: R
 
 export function StatusBadge({ enabled }: { enabled: boolean }) {
   return (
-    <span className={`badge ${enabled ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>
+    <StatusText badgeClass={enabled ? 'badge-success' : 'badge-muted'} style={{ fontSize: 11 }}>
       {enabled ? '启用' : '禁用'}
-    </span>
+    </StatusText>
   );
 }

@@ -10,6 +10,7 @@ import {
   SiteAnnouncementContent,
 } from './helpers/siteAnnouncementPresentation.js';
 import { tr } from '../i18n.js';
+import { platformBadgeClass } from './sites/sitePresentation.js';
 
 type SiteAnnouncementRow = {
   id: number;
@@ -224,7 +225,7 @@ export default function SiteAnnouncements() {
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{tr(row.title)}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span className="badge badge-muted">{siteNameById.get(row.siteId) || `站点 #${row.siteId}`}</span>
-                  <span className="badge badge-info">{row.platform}</span>
+                  <span className={`badge ${platformBadgeClass(row.platform)}`}>{row.platform}</span>
                   <span className={`badge ${row.readAt ? 'badge-muted' : 'badge-warning'}`}>{row.readAt ? '已读' : '未读'}</span>
                 </div>
               </div>

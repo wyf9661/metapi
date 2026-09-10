@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
+import { platformBadgeClass } from './sites/sitePresentation.js';
 
 const Accounts = lazy(() => import('./Accounts.js'));
 
@@ -74,7 +75,7 @@ export default function SiteDetail() {
             {site.name}
           </h2>
           {site.platform && (
-            <span className="badge badge-info" style={{ fontSize: 11 }}>
+            <span className={`badge ${platformBadgeClass(site.platform)}`} style={{ fontSize: 11 }}>
               {site.platform}
             </span>
           )}

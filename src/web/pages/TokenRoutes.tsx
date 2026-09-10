@@ -56,6 +56,7 @@ import ManualRoutePanel from './token-routes/ManualRoutePanel.js';
 import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
 import TokenRouteConfirmModal, { type TokenRouteConfirmState } from './token-routes/TokenRouteConfirmModal.js';
+import { StatusText } from '../components/StatusText.js';
 
 const EMPTY_ROUTE_CANDIDATE_VIEW: RouteCandidateView = {
   routeCandidates: [],
@@ -1911,9 +1912,9 @@ export default function TokenRoutes() {
                           <span>{tr('选择')}</span>
                         </label>
                       )}
-                      <span className={`badge ${isReadOnlyRoute ? 'badge-muted' : (route.enabled ? 'badge-success' : 'badge-muted')}`} style={{ fontSize: 10 }}>
+                      <StatusText badgeClass={isReadOnlyRoute ? 'badge-muted' : (route.enabled ? 'badge-success' : 'badge-muted')} style={{ fontSize: 10 }}>
                         {isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))}
-                      </span>
+                      </StatusText>
                     </div>
                   )}
                   footerActions={(

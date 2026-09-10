@@ -15,6 +15,7 @@ import { tr, useI18n } from '../i18n.js';
 import DateTimeInput from '../components/DateTimeInput.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
+import { StatusText } from '../components/StatusText.js';
 
 type ProbeLog = {
   id: number;
@@ -82,7 +83,7 @@ function ProbeDetailFields({
     <div className="probe-detail-grid">
       <div className="probe-detail-item">
         <div className="probe-detail-label">状态</div>
-        <span className={STATUS_COLORS[log.status] || 'badge'}>{STATUS_LABELS[log.status] || log.status}</span>
+        <StatusText badgeClass={STATUS_COLORS[log.status] || 'badge'}>{STATUS_LABELS[log.status] || log.status}</StatusText>
       </div>
       <div className="probe-detail-item">
         <div className="probe-detail-label">时间</div>
@@ -639,7 +640,7 @@ export default function ProbeLogs() {
                   <MobileCard
                     key={log.id}
                     title={log.modelName}
-                    headerActions={<span className={`badge ${STATUS_COLORS[log.status]}`} style={{ fontSize: 11 }}>{STATUS_LABELS[log.status]}</span>}
+                    headerActions={<StatusText badgeClass={STATUS_COLORS[log.status]} style={{ fontSize: 11 }}>{STATUS_LABELS[log.status]}</StatusText>}
                     footerActions={
                       <button type="button" className="btn btn-link btn-link-primary" onClick={() => setSelectedLog(log)}>查看详情</button>
                     }
@@ -685,7 +686,7 @@ export default function ProbeLogs() {
                       onClick={() => setSelectedLog(log)}
                     >
                       <td>
-                        <span className={STATUS_COLORS[log.status]} style={{ fontSize: 11 }}>{STATUS_LABELS[log.status]}</span>
+                        <StatusText badgeClass={STATUS_COLORS[log.status]} style={{ fontSize: 11 }}>{STATUS_LABELS[log.status]}</StatusText>
                       </td>
                       <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                         {fmtDateTime(log.createdAt)}

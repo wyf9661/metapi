@@ -12,6 +12,7 @@ import AutoRefreshCountdown from './oauth/AutoRefreshCountdown.js';
 import {QuotaWindowRow, SideDrawer, compactAccountKey, hasOauthProxySelection, renderCodeBlock, renderGuideCard, resolveConnectionEmailLabel, resolveConnectionPrimaryTitle, resolveConnectionRouteParticipation, resolveConnectionStatusLabel, resolveModelSyncDetail, resolveModelSyncStatusText, resolveProxyDisplayText, resolveProxyProjectSummary, resolveQuotaSourceLabel, resolveQuotaStatusLabel, resolveQuotaSyncDetail, resolveQuotaSyncStatusText, resolveRouteParticipationSummary, resolveRouteUnitStrategyLabel} from './oauth/connectionPresentation.js';
 import {api, type OAuthConnectionInfo, type OAuthProviderInfo, type OAuthRouteUnitStrategy, type OAuthStartInstructions} from '../api.js';
 import {copyText} from '../clipboard.js';
+import { StatusText } from '../components/StatusText.js';
 const POLL_INTERVAL_MS = 1500;
 const CONNECTION_PAGE_LIMIT = 200;
 const AUTO_REFRESH_OPTIONS = [0, 5, 10, 15, 30] as const;
@@ -1451,9 +1452,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
                       <span className={`badge oauth-badge ${connection.provider === 'codex' ? 'badge-info' : 'badge-primary'}`}>
                         {connection.provider}
                       </span>
-                      <span className={`badge oauth-badge ${connection.status === 'abnormal' ? 'badge-warning' : 'badge-success'}`}>
+                      <StatusText badgeClass={connection.status === 'abnormal' ? 'badge-warning' : 'badge-success'}>
                         {resolveConnectionStatusLabel(connection.status)}
-                      </span>
+                      </StatusText>
                     </div>
                     {emailLabel && emailLabel !== primaryTitle ? (
                       <div className="oauth-cell-secondary oauth-identity-secondary" title={emailLabel}>{emailLabel}</div>
@@ -1511,9 +1512,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
                   {quota ? (
                     <div className="oauth-quota-stack">
                       <div className="oauth-quota-meta">
-                        <span className={`badge oauth-badge ${quota.status === 'error' ? 'badge-warning' : quota.status === 'unsupported' ? 'badge-muted' : 'badge-info'}`}>
+                        <StatusText badgeClass={quota.status === 'error' ? 'badge-warning' : quota.status === 'unsupported' ? 'badge-muted' : 'badge-info'}>
                           {resolveQuotaStatusLabel(quota.status)}
-                        </span>
+                        </StatusText>
                         <span className="oauth-cell-tertiary">{resolveQuotaSourceLabel(quota.source)}</span>
                       </div>
                       <QuotaWindowRow label="5h" window={quota.windows?.fiveHour} />
@@ -1654,9 +1655,9 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
               {quota ? (
                 <>
                   <div className="oauth-quota-meta">
-                    <span className={`badge oauth-badge ${quota.status === 'error' ? 'badge-warning' : quota.status === 'unsupported' ? 'badge-muted' : 'badge-info'}`}>
+                    <StatusText badgeClass={quota.status === 'error' ? 'badge-warning' : quota.status === 'unsupported' ? 'badge-muted' : 'badge-info'}>
                       {resolveQuotaStatusLabel(quota.status)}
-                    </span>
+                    </StatusText>
                     <span className="oauth-cell-tertiary">{resolveQuotaSourceLabel(quota.source)}</span>
                   </div>
                   <QuotaWindowRow label="5h" window={quota.windows?.fiveHour} />

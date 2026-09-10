@@ -23,6 +23,7 @@ import { usePersistedPageSize } from '../../components/usePersistedPageSize.js';
 import DeleteConfirmModal from '../../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from '../helpers/navigationFocus.js';
 import { tr } from '../../i18n.js';
+import { StatusText } from '../../components/StatusText.js';
 
 type SyncStatus = 'success' | 'skipped' | 'failed';
 type TokensPanelProps = {
@@ -1263,9 +1264,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                     <MobileField
                       label="状态"
                       value={(
-                        <span className={`badge ${isPending ? 'badge-warning' : (token.enabled ? 'badge-success' : 'badge-muted')}`} style={{ fontSize: 11 }}>
+                        <StatusText badgeClass={isPending ? 'badge-warning' : (token.enabled ? 'badge-success' : 'badge-muted')} style={{ fontSize: 11 }}>
                           {isPending ? '待补全' : (token.enabled ? '启用' : '禁用')}
-                        </span>
+                        </StatusText>
                       )}
                     />
                     {isExpanded ? (
@@ -1296,7 +1297,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                         />
                         <MobileField
                           label="默认"
-                          value={token.isDefault ? <span className="badge badge-warning" style={{ fontSize: 11 }}>默认</span> : '-'}
+                          value={token.isDefault ? <StatusText tone="warning" style={{ fontSize: 11 }}>默认</StatusText> : '-'}
                         />
                         <MobileField label="更新时间" value={formatDateTimeLocal(token.updatedAt)} />
                         <div className="mobile-card-actions">
@@ -1401,12 +1402,12 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                       {isPending ? (
                         <span className="badge badge-warning" style={{ fontSize: 11 }}>待补全</span>
                       ) : (
-                        <span className={`badge ${token.enabled ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>
+                        <StatusText badgeClass={token.enabled ? 'badge-success' : 'badge-muted'} style={{ fontSize: 11 }}>
                           {token.enabled ? '启用' : '禁用'}
-                        </span>
+                        </StatusText>
                       )}
                     </td>
-                    <td>{token.isDefault ? <span className="badge badge-warning" style={{ fontSize: 11 }}>默认</span> : '-'}</td>
+                    <td>{token.isDefault ? <StatusText tone="warning" style={{ fontSize: 11 }}>默认</StatusText> : '-'}</td>
                     <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatDateTimeLocal(token.updatedAt)}</td>
                     <td className="token-actions-cell">
                       <div className="token-table-actions">

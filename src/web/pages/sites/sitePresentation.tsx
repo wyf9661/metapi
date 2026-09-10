@@ -166,15 +166,30 @@ export function SiteBalanceDisplay(props: {
   );
 }
 
+/**
+ * Platform is a category, not a health signal. Colouring `one-api` green and
+ * `claude` amber made the sites table look like a status board, so every
+ * platform now uses the neutral chip and the name itself carries the meaning.
+ */
+/**
+ * Platform chip class for every surface that shows a platform (sites table,
+ * site detail header, site announcements). Category, not health — keep it in one
+ * place so the three surfaces cannot drift apart again.
+ */
+export function platformBadgeClass(platform?: string | null): string {
+  const key = String(platform || '').trim();
+  return platformColors[key] || 'badge-muted';
+}
+
 export const platformColors: Record<string, string> = {
-  'new-api': 'badge-info',
-  'one-api': 'badge-success',
+  'new-api': 'badge-muted',
+  'one-api': 'badge-muted',
   sub2api: 'badge-muted',
-  openai: 'badge-success',
-  codex: 'badge-success',
-  claude: 'badge-warning',
-  gemini: 'badge-info',
-  cliproxyapi: 'badge-info',
+  openai: 'badge-muted',
+  codex: 'badge-muted',
+  claude: 'badge-muted',
+  gemini: 'badge-muted',
+  cliproxyapi: 'badge-muted',
 };
 
 export const SITE_PLATFORM_OPTIONS = [
