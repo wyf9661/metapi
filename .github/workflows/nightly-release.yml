@@ -1,0 +1,324 @@
+name: Nightly Release
+
+# Nightly packaging: same build pipeline as release.yml (verify -> desktop
+# packages -> docker build), but the Docker images are saved as tar.gz
+# archives attached to a pre-release instead of pushed to any registry.
+# Grab the tar for your arch from the release page and
+# `docker load -i metapi-docker-<arch>-<tag>.tar.gz`.
+#
+# Runs nightly at 21:30 CST (13:30 UTC) and on manual dispatch. Dispatch
+# accepts an optional `ref` to build any branch/tag instead of main.
+
+on:
+  schedule:
+    - cron: '30 13 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch/tag to build (default: main)'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload built dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: metapi-dist-${{ github.sha }}
+          path: dist
+          if-no-files-found: error
+
+  build-packages:
+    name: Build Desktop Package (${{ matrix.platform }})
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-latest
+            artifactLabel: linux-x64
+          - platform: windows
+            runner: windows-latest
+            artifactLabel: windows-x64
+          - platform: mac-arm64
+            runner: macos-15
+            artifactLabel: mac-arm64
+            packageCommand: npx electron-builder --config electron-builder.yml --publish never --mac --arm64
+            expectedMacArch: arm64
+          - platform: mac-x64
+            runner: macos-15-intel
+            artifactLabel: mac-x64
+            packageCommand: npx electron-builder --config electron-builder.yml --publish never --mac --x64
+            expectedMacArch: x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25
+          cache: npm
+
+      - name: Restore Electron cache (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/.cache/electron
+            ${{ runner.temp }}/.cache/electron-builder
+            ${{ env.LOCALAPPDATA }}\electron\Cache
+            ${{ env.LOCALAPPDATA }}\electron-builder\Cache
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('package-lock.json', 'package.json', 'electron-builder.yml') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
+      - name: Restore Electron cache (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/.cache/electron
+            ${{ runner.temp }}/.cache/electron-builder
+            ${{ runner.temp }}/.cache/appimage-tools
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('package-lock.json', 'package.json', 'electron-builder.yml') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
+      - name: Restore Electron cache (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/.cache/electron
+            ${{ runner.temp }}/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('package-lock.json', 'package.json', 'electron-builder.yml') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download built dist
+        uses: actions/download-artifact@v8
+        with:
+          name: metapi-dist-${{ github.sha }}
+          path: dist
+
+      - name: Package (non-macOS)
+        if: "!startsWith(matrix.platform, 'mac-')"
+        run: npx electron-builder --config electron-builder.yml --publish never
+
+      - name: Package (macOS)
+        if: startsWith(matrix.platform, 'mac-')
+        run: ${{ matrix.packageCommand }}
+        env:
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+          npm_config_electron_builder_binaries_mirror: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+
+      - name: Verify macOS architecture
+        if: startsWith(matrix.platform, 'mac-')
+        run: node scripts/desktop/verifyMacArchitecture.mjs --release-dir release --expected-arch "${{ matrix.expectedMacArch }}"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.artifactLabel }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.pacman
+            release/*.snap
+            release/*.blockmap
+            release/latest*.yml
+            release/latest*.json
+            release/builder-debug.yml
+          if-no-files-found: error
+
+  build-docker-tar:
+    name: Docker tar.gz (${{ matrix.arch }})
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - arch: armv7
+            platform: linux/arm/v7
+            runner: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set up QEMU
+        if: matrix.arch == 'armv7'
+        uses: docker/setup-qemu-action@v4
+
+      - name: Resolve image tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          # nightly-YYYYMMDD-<shortsha or ref>
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ref="${{ inputs.ref }}"
+          else
+            ref="${{ github.ref_name }}"
+          fi
+          short_sha="$(git rev-parse --short HEAD)"
+          safe_ref="$(printf '%s' "$ref" | tr '/_' '--' | tr -cd 'a-zA-Z0-9.-')"
+          echo "tag=metapi:nightly-${safe_ref}-${short_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build ${{ matrix.platform }} image (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: ${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=nightly-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=nightly-${{ matrix.arch }}
+
+      - name: Save image to tar.gz
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.tag.outputs.tag }}"
+          safe_tag="$(printf '%s' "$tag" | tr '/:' '--')"
+          docker save "$tag" | gzip > "${safe_tag}.tar.gz"
+          ls -lh "${safe_tag}.tar.gz"
+
+      - name: Upload docker tar artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-${{ matrix.arch }}
+          path: metapi--nightly-*.tar.gz
+          if-no-files-found: error
+
+  publish-nightly-release:
+    name: Publish Nightly Release
+    needs: [build-packages, build-docker-tar]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Resolve nightly tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ref="${{ inputs.ref }}"
+          else
+            ref="${{ github.ref_name }}"
+          fi
+          version="$(node -p "require('./package.json').version")"
+          short_sha="$(git rev-parse --short HEAD)"
+          safe_ref="$(printf '%s' "$ref" | tr '/_' '--' | tr -cd 'a-zA-Z0-9.-')"
+          echo "tag=nightly-${safe_ref}-${version}-${short_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          # Exclude the big intermediate dist artifact from the release;
+          # match only desktop packages and docker tars by name prefix.
+          pattern: '{desktop-*,docker-*}'
+          merge-multiple: true
+
+      - name: Show release files
+        run: ls -la release-assets
+
+      - name: Delete previous nightly release (same ref)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.tag.outputs.tag }}"
+          # Keep only the newest nightly per ref; older same-ref nightlies go away.
+          gh release list --json tagName --jq '.[].tagName' | grep -E "^nightly-" || true
+          gh release delete "$tag" --cleanup-tag --yes || true
+
+      - name: Upload Nightly Release Assets
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: 'Nightly (${{ steps.tag.outputs.tag }})'
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            Automated nightly build. Same pipeline as the tagged release; the
+            Docker images are **not pushed** to any registry — download the
+            tar.gz for your architecture and load it locally:
+
+            ```
+            docker load -i metapi--nightly-*.tar.gz
+            ```
+          files: release-assets/*
