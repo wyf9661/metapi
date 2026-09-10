@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import {
   avatarLetters,
   brandBadgeColors,
+  clampBadgeColor,
   getBrand,
   getBrandIconUrl,
   hashColor,
@@ -40,7 +41,7 @@ export function useIconCdn() {
 }
 
 type BrandGlyphProps = {
-  brand?: Pick<BrandInfo, 'name' | 'icon'> | null;
+  brand?: (Pick<BrandInfo, 'name' | 'icon'> & { color?: string | null }) | null;
   model?: string | null;
   icon?: string | null;
   alt?: string;
@@ -93,16 +94,16 @@ export function BrandGlyph({ brand, model, icon, alt, size = 16, fallbackText, s
   const fallback = (fallbackText ?? resolvedBrand?.name ?? model ?? '').trim();
   if (!fallback) return null;
 
-  const { bg: fbBg, text: fbText } = hashColor(fallback);
   return (
     <span
       aria-hidden="true"
       style={{
         width: size,
         height: size,
-        borderRadius: size <= 14 ? 4 : size <= 20 ? 6 : 8,
-        background: fbBg,
-        color: fbText,
+        // No fill: icons read as glyphs, not as coloured tiles, but the brand
+        // hue stays in the text (clamped per theme so it stays legible).
+        background: 'transparent',
+        color: resolvedBrand?.color ? clampBadgeColor(resolvedBrand.color, cdn) : 'var(--color-text-primary)',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -120,6 +121,7 @@ export function BrandGlyph({ brand, model, icon, alt, size = 16, fallbackText, s
 
 export function BrandIcon({ model, size = 44 }: { model: string; size?: number }) {
   const brand = getBrand(model);
+  const cdn = useIconCdn();
 
   if (brand) {
     return (
@@ -140,7 +142,7 @@ export function BrandIcon({ model, size = 44 }: { model: string; size?: number }
   }
 
   return (
-    <div className="model-card-avatar" style={{ width: size, height: size, background: hashColor(model).bg, fontSize: size > 32 ? 16 : 10 }}>
+    <div className="model-card-avatar" style={{ width: size, height: size, fontSize: size > 32 ? 16 : 10, color: clampBadgeColor(hashColor(model).text, cdn) }}>
       {avatarLetters(model)}
     </div>
   );
@@ -168,7 +170,7 @@ export function ModelBadge({ model, style }: { model: string; style?: CSSPropert
       borderRadius: 'var(--radius-sm)',
       fontSize: 12,
       fontWeight: 500,
-      background: colors.bg,
+      background: 'transparent',
       color: colors.text,
       border: `1px solid ${colors.border}`,
       whiteSpace: 'nowrap',

@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { BrandGlyph, InlineBrandIcon, hashColor, type BrandInfo } from '../../components/BrandIcon.js';
+import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/BrandIcon.js';
 import { useAnimatedVisibility } from '../../components/useAnimatedVisibility.js';
 import { tr } from '../../i18n.js';
 import type { GroupFilter, GroupRouteItem } from './types.js';
@@ -224,8 +224,8 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
                         <span
                           style={{
                             fontSize: 8,
-                            background: hashColor(siteName).bg,
-                            color: hashColor(siteName).text,
+                            background: 'transparent',
+                            color: 'var(--color-text-primary)',
                             borderRadius: 6,
                             padding: '1px 2px',
                             lineHeight: 1,

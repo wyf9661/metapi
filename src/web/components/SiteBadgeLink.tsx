@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BrandGlyph, brandBadgeColors, getBrand, hashColor, perturbBadgeColor, useIconCdn } from './BrandIcon.js';
+import { BrandGlyph, brandBadgeColors, clampBadgeColor, getBrand, hashColor, perturbBadgeColor, useIconCdn } from './BrandIcon.js';
 
 type SiteBadgeLinkProps = {
   siteId?: number | null;
@@ -76,13 +76,11 @@ export function SiteIcon({
   name,
   size,
   url,
-  tone,
   onDominantColor,
 }: {
   name: string;
   size: number;
   url?: string | null;
-  tone?: 'primary';
   onDominantColor?: (color: string | null) => void;
 }) {
   const faviconUrl = buildFaviconUrl(url);
@@ -146,14 +144,14 @@ export function SiteIcon({
   }
   const fallback = String(name || '').trim();
   const letter = fallback ? fallback.replace(/[-_/.\s]/g, '').charAt(0).toUpperCase() || '?' : '?';
-  const { bg, text } = hashColor(name || 'site');
-  const colors = tone === 'primary' ? { bg: text, text: '#fff' } : { bg, text };
   return (
     <span
       aria-hidden="true"
       style={{
         width: size, height: size, borderRadius: 6,
-        background: colors.bg, color: colors.text,
+        // No fill: the glyph alone identifies the site, in its own hue.
+        background: 'transparent',
+        color: clampBadgeColor(hashColor(name || 'site').text, theme),
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         fontSize: Math.max(9, Math.round(size * 0.58)), fontWeight: 700,
         lineHeight: 1, flexShrink: 0,
@@ -196,7 +194,7 @@ export default function SiteBadgeLink({
       } else {
         const { bg, text } = hashColor(label);
         const rgb = hexToRgb(text);
-        const border = rgb ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)` : 'rgba(13,148,136,0.18)';
+        const border = rgb ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)` : 'color-mix(in srgb, var(--color-primary) 22%, transparent)';
         siteColors = { bg, text, border };
       }
     }
@@ -204,12 +202,17 @@ export default function SiteBadgeLink({
 
   const badgeClass = !siteColors ? badgeClassName : 'badge';
   const badgeCss: React.CSSProperties = siteColors
-    ? { background: siteColors.bg, color: siteColors.text, border: `1px solid ${siteColors.border}` }
+    ? {
+      // Outline only: fill gone, but the brand hue stays in the text + border.
+      background: 'transparent',
+      color: siteColors.text,
+      border: `1px solid ${siteColors.border}`,
+    }
     : {};
 
   const badge = (
     <>
-      {label !== '-' && <SiteIcon name={label} size={14} url={siteUrl} tone={tone} onDominantColor={setFaviconColor} />}
+      {label !== '-' && <SiteIcon name={label} size={14} url={siteUrl} onDominantColor={setFaviconColor} />}
       <span style={{ lineHeight: 1.2 }}>{label}</span>
     </>
   );
