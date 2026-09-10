@@ -2478,14 +2478,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               gap: 6,
                             }}
                           >
-                            <span
-                              className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`}
+                            <StatusPill
+                              tone={connectionMode === 'apikey' ? 'warning' : 'info'}
                               style={{ fontSize: 10 }}
                             >
                               {connectionMode === 'apikey'
                                 ? 'API Key'
                                 : 'Session'}
-                            </span>
+                            </StatusPill>
                           </div>
                         }
                         footerActions={
@@ -2811,14 +2811,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             <div
                               style={{ display: 'flex', gap: 4, marginTop: 4 }}
                             >
-                              <span
-                                className={`badge ${connectionMode === 'apikey' ? 'badge-warning' : 'badge-info'}`}
+                              <StatusPill
+                                tone={connectionMode === 'apikey' ? 'warning' : 'info'}
                                 style={{ fontSize: 10 }}
                               >
                                 {connectionMode === 'apikey'
                                   ? 'API Key'
                                   : 'Session'}
-                              </span>
+                              </StatusPill>
                             </div>
                           </td>
                           <td className="accounts-site-cell">
@@ -2892,12 +2892,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                       : null;
                                   return (
                                     <>
-                                      <span
-                                        className="badge badge-info"
-                                        style={{ fontSize: 10 }}
-                                      >
+                                      <StatusPill tone="info" style={{ fontSize: 10 }}>
                                         {oauthInfo.planType || oauthInfo.provider}
-                                      </span>
+                                      </StatusPill>
                                       {windowLabel && (
                                         <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
                                           {windowLabel}

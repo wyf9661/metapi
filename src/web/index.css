@@ -2902,6 +2902,12 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   box-shadow: 0 4px 10px rgba(13,148,136, 0.16);
 }
 
+/* Clickable hint tags: outline only, so they do not read as filled status chips. */
+.missing-token-site-tag,
+.missing-token-group-tag {
+  background: transparent;
+}
+
 .missing-token-site-tag:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-info) 50%, transparent);
   outline-offset: 2px;

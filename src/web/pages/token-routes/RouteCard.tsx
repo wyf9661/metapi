@@ -317,9 +317,9 @@ function PriorityDragPreview({
           </span>
         ) : null}
         {channel.manualOverride ? (
-          <span className="badge badge-warning" style={{ fontSize: 10 }}>
-            手动配置
-          </span>
+          <StatusPill tone="warning" style={{ fontSize: 10 }}>
+      手动配置
+     </StatusPill>
         ) : null}
       </div>
       <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
@@ -806,9 +806,9 @@ function RouteCardInner({
           ) : null}
 
           {readOnlyRoute ? (
-            <span className="badge badge-warning" style={{ fontSize: 10, flexShrink: 0 }}>
-              {tr('0 通道')}
-            </span>
+            <StatusPill tone="warning" style={{ fontSize: 10, flexShrink: 0 }}>
+       {tr('0 通道')}
+      </StatusPill>
           ) : null}
 
           <svg
@@ -923,12 +923,12 @@ function RouteCardInner({
               </StatusPill>
             ) : null}
             {readOnlyRoute && (
-              <span className="badge badge-warning" style={{ fontSize: 10 }}>
-                {tr('0 通道')}
-              </span>
+              <StatusPill tone="warning" style={{ fontSize: 10 }}>
+        {tr('0 通道')}
+       </StatusPill>
             )}
             {savingPriority && (
-              <span className="badge badge-warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</span>
+              <StatusPill tone="warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</StatusPill>
             )}
           </div>
 
@@ -1024,7 +1024,7 @@ function RouteCardInner({
                   {explicitGroupSourceCount} {tr('来源模型')}
                 </span>
               ) : null}
-              {savingPriority ? <span className="badge badge-warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</span> : null}
+              {savingPriority ? <StatusPill tone="warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</StatusPill> : null}
             </div>
             {!readOnlyRoute && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

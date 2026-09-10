@@ -56,7 +56,7 @@ import ManualRoutePanel from './token-routes/ManualRoutePanel.js';
 import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
 import TokenRouteConfirmModal, { type TokenRouteConfirmState } from './token-routes/TokenRouteConfirmModal.js';
-import { StatusText } from '../components/StatusText.js';
+import { StatusText, StatusPill } from '../components/StatusText.js';
 
 const EMPTY_ROUTE_CANDIDATE_VIEW: RouteCandidateView = {
   routeCandidates: [],
@@ -1698,9 +1698,9 @@ export default function TokenRoutes() {
               {tr('部分路由尚无快照，可手动刷新或等待后台任务')}
             </span>
           )}
-          <span className="badge badge-info" style={{ fontSize: 12, fontWeight: 500 }}>
+          <StatusPill tone="info" style={{ fontSize: 12, fontWeight: 500 }}>
             {tr('共')} {filteredRoutes.length} {tr('条路由')}
-          </span>
+          </StatusPill>
         </div>
       </div>
 
