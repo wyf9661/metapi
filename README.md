@@ -57,81 +57,6 @@
 
 ---
 
-## 🖼️ 界面预览
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/dashboard.png" alt="dashboard" style="width:100%;height:auto;"/>
-      <div><b>仪表盘</b> — 余额分布、消费趋势、系统概览</div>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/model-marketplace.png" alt="model-marketplace" style="width:100%;height:auto;"/>
-      <div><b>模型广场</b> — 跨站模型覆盖、定价对比、实测指标</div>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/routes.png" alt="routes" style="width:100%;height:auto;"/>
-      <div><b>智能路由</b> — 多通道概率分配、成本优先选路</div>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/accounts.png" alt="accounts" style="width:100%;height:auto;"/>
-      <div><b>账号管理</b> — 多站点多账号、健康状态追踪</div>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/sites.png" alt="sites" style="width:100%;height:auto;"/>
-      <div><b>站点管理</b> — 上游站点配置与状态一览</div>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/tokens.png" alt="tokens" style="width:100%;height:auto;"/>
-      <div><b>令牌管理</b> — API Token 生命周期管理</div>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/playground.png" alt="playground" style="width:100%;height:auto;"/>
-      <div><b>模型操练场</b> — 在线交互式模型测试</div>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/checkin.png" alt="checkin" style="width:100%;height:auto;"/>
-      <div><b>签到记录</b> — 自动签到状态与奖励追踪</div>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/proxy-logs.png" alt="proxy-logs" style="width:100%;height:auto;"/>
-      <div><b>使用日志</b> — 代理请求日志与成本明细</div>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/monitor.png" alt="monitor" style="width:100%;height:auto;"/>
-      <div><b>可用性监控</b> — 通道健康度实时监测</div>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/settings.png" alt="settings" style="width:100%;height:auto;"/>
-      <div><b>系统设置</b> — 全局参数与安全配置</div>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/notification-settings.png" alt="notification-settings" style="width:100%;height:auto;"/>
-      <div><b>通知设置</b> — 多渠道告警与推送配置</div>
-    </td>
-  </tr>
-</table>
-
----
-
-## 🏛️ 架构概览
-
-<div align="center">
-  <img src="docs/screenshots/metapi-architecture.png" alt="Metapi: Federated AI Model Aggregation Gateway Architecture" style="max-width: 100%; height: auto;" />
-</div>
-
----
-
 ## ✨ 核心功能
 
 ### 🌐 统一代理网关
@@ -148,11 +73,6 @@
 - 失败通道按失败类型与连续失败次数分级退避、优先避让（默认上限 1 小时）
 - 请求失败自动重试，自动切换其他可用通道
 - 路由决策可视化解释，每次选择透明可审计
-
-<div align="center">
-  <img src="docs/screenshots/routes.png" alt="smart-routing-detail" width="700"/>
-  <p><sub>智能路由配置界面 — 支持精确匹配、通配符、概率分配等多种路由策略</sub></p>
-</div>
 
 ### 📡 多平台聚合管理
 
@@ -183,11 +103,6 @@ OAuth 平台：Codex、Claude、Gemini CLI、Antigravity
 - 延迟、成功率等实测指标展示
 - 上游模型目录缓存与品牌分类（OpenAI、Anthropic、Google、DeepSeek 等）
 - 交互式模型测试器，在线验证模型可用性
-
-<div align="center">
-  <img src="docs/screenshots/model-marketplace.png" alt="model-marketplace-detail" width="700"/>
-  <p><sub>模型广场 — 一站式浏览所有可用模型的覆盖率、定价和性能指标</sub></p>
-</div>
 
 ### ✅ 自动签到
 
@@ -224,21 +139,11 @@ OAuth 平台：Codex、Claude、Gemini CLI、Antigravity
 - 全局搜索（站点、账号、模型）
 - 系统事件日志、代理请求日志（模型、状态、延迟、Token 用量、成本估算）
 
-<div align="center">
-  <img src="docs/screenshots/dashboard.png" alt="dashboard-detail" width="700"/>
-  <p><sub>数据看板 — 余额分布、消费趋势、系统健康状态一目了然</sub></p>
-</div>
-
 ### 🎮 模型操练场
 
 - 交互式聊天测试，即时验证模型可用性与响应质量
 - 选择任意路由模型，对比不同通道输出
 - 流式 / 非流式双模式测试
-
-<div align="center">
-  <img src="docs/screenshots/playground.png" alt="playground-detail" width="700"/>
-  <p><sub>模型操练场 — 在线交互测试，验证模型可用性与响应质量</sub></p>
-</div>
 
 ### 📦 轻量部署
 
