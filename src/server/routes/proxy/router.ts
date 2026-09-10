@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { proxyAuthMiddleware } from '../../middleware/auth.js';
 import { antiProbingMiddleware } from '../../middleware/antiProbing.js';
-import { extractReasoningEffort, setCurrentReasoningEffort } from '../../services/reasoningEffort.js';
+import { resolveRequestReasoningEffort, setCurrentReasoningEffort } from '../../services/reasoningEffort.js';
 import { chatProxyRoute, claudeMessagesProxyRoute } from './chat.js';
 import { modelsProxyRoute } from './models.js';
 import { embeddingsProxyRoute } from './embeddings.js';
@@ -28,7 +28,8 @@ export async function proxyRoutes(app: FastifyInstance) {
   // spread across the route files and get only the values they already thread
   // through, so the store reads this from the async context instead.
   app.addHook('preHandler', async (request) => {
-    setCurrentReasoningEffort(extractReasoningEffort(request.body));
+    const body = request.body as { model?: unknown } | null | undefined;
+    setCurrentReasoningEffort(resolveRequestReasoningEffort(body, body?.model));
   });
 
   await app.register(chatProxyRoute);

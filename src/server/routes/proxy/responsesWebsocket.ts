@@ -21,6 +21,7 @@ import { buildUpstreamEndpointRequest } from './upstreamEndpoint.js';
 import { config } from '../../config.js';
 import { applyOpenAiServiceTierPolicy } from '../../proxy-core/serviceTierPolicy.js';
 import { asTrimmedString } from '../../shared/trimString.js';
+import { resolveWebsocketReasoningEffort, setCurrentReasoningEffort } from '../../services/reasoningEffort.js';
 
 
 const installedApps = new WeakSet<FastifyInstance>();
@@ -591,6 +592,17 @@ async function handleResponsesWebsocketConnection(
             writeResponsesWebsocketError(socket, 400, 'Invalid websocket JSON payload');
             return;
           }
+
+          // The usage log reads the requested reasoning effort from the async
+          // context. A websocket request never passes through the HTTP
+          // preHandler hook that captures it for regular routes, so capture it
+          // here, inheriting the session's earlier value when this message (a
+          // follow-up turn or response.append) does not repeat it.
+          setCurrentReasoningEffort(resolveWebsocketReasoningEffort(
+            parsed,
+            lastRequest,
+            parsed.model ?? lastRequest?.model,
+          ));
 
           const requestModel = asTrimmedString(parsed.model) || asTrimmedString(lastRequest?.model);
           if (requestModel && !await isModelAllowedByPolicyOrAllowedRoutes(requestModel, authContext.policy)) {
