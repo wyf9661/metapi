@@ -14,18 +14,18 @@
   --color-text-primary: oklch(0.270 0.020 80);
   --color-text-secondary: oklch(0.430 0.018 80);
   --color-text-muted: oklch(0.580 0.014 80);
-  --color-primary: oklch(0.575 0.078 205);
-  --color-primary-light: oklch(0.955 0.022 205);
+  --color-primary: oklch(0.575 0.100 216);
+  --color-primary-light: oklch(0.940 0.046 216);
   --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
-  --color-primary-hover: oklch(0.508 0.084 205);
-  --color-success: oklch(0.580 0.100 152);
-  --color-success-soft: oklch(0.950 0.030 152);
-  --color-warning: oklch(0.680 0.120 70);
-  --color-warning-soft: oklch(0.955 0.035 70);
-  --color-danger: oklch(0.560 0.145 25);
-  --color-danger-soft: oklch(0.952 0.030 25);
-  --color-info: oklch(0.540 0.110 255);
-  --color-info-soft: oklch(0.948 0.028 255);
+  --color-primary-hover: oklch(0.505 0.088 216);
+  --color-success: oklch(0.575 0.135 152);
+  --color-success-soft: oklch(0.938 0.060 152);
+  --color-warning: oklch(0.672 0.150 70);
+  --color-warning-soft: oklch(0.942 0.065 70);
+  --color-danger: oklch(0.555 0.180 25);
+  --color-danger-soft: oklch(0.938 0.060 25);
+  --color-info: oklch(0.540 0.148 255);
+  --color-info-soft: oklch(0.935 0.058 255);
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
@@ -54,18 +54,18 @@
   --color-text-primary: oklch(0.930 0.008 90);
   --color-text-secondary: oklch(0.790 0.014 90);
   --color-text-muted: oklch(0.660 0.014 90);
-  --color-primary: oklch(0.735 0.092 205);
-  --color-primary-light: oklch(0.300 0.028 205);
+  --color-primary: oklch(0.735 0.130 216);
+  --color-primary-light: oklch(0.305 0.055 216);
   --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
-  --color-primary-hover: oklch(0.800 0.085 205);
-  --color-success: oklch(0.720 0.110 152);
-  --color-success-soft: oklch(0.290 0.040 152);
-  --color-warning: oklch(0.780 0.120 70);
-  --color-warning-soft: oklch(0.330 0.045 70);
-  --color-danger: oklch(0.660 0.140 25);
-  --color-danger-soft: oklch(0.330 0.050 25);
-  --color-info: oklch(0.700 0.110 255);
-  --color-info-soft: oklch(0.300 0.045 255);
+  --color-primary-hover: oklch(0.800 0.142 216);
+  --color-success: oklch(0.720 0.135 152);
+  --color-success-soft: oklch(0.298 0.055 152);
+  --color-warning: oklch(0.780 0.145 70);
+  --color-warning-soft: oklch(0.338 0.062 70);
+  --color-danger: oklch(0.663 0.170 25);
+  --color-danger-soft: oklch(0.338 0.068 25);
+  --color-info: oklch(0.700 0.138 255);
+  --color-info-soft: oklch(0.308 0.062 255);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.45);
@@ -2552,13 +2552,13 @@ html[data-layout="desktop"] .main-content {
 .badge-success {
   background: var(--color-success-soft);
   color: var(--color-success);
-  border: 1px solid color-mix(in srgb, var(--color-success) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-success) 42%, transparent);
 }
 
 .badge-error {
   background: var(--color-danger-soft);
   color: var(--color-danger);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 42%, transparent);
 }
 
 .badge-danger {
@@ -2570,20 +2570,20 @@ html[data-layout="desktop"] .main-content {
 .badge-warning {
   background: var(--color-warning-soft);
   color: var(--color-warning);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 42%, transparent);
 }
 
 .badge-info {
   background: var(--color-info-soft);
   color: var(--color-info);
-  border: 1px solid color-mix(in srgb, var(--color-info) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-info) 42%, transparent);
   font-weight: 600;
 }
 
 .badge-muted {
-  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  background: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
   color: var(--color-text-secondary);
-  border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 16%, transparent);
 }
 
 .badge-primary {

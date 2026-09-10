@@ -20,9 +20,9 @@ export function barHeadroom(isMobile: boolean): number {
 // Shared with the dashboard "24h availability" strip.
 // ----------------------------------------------------------------
 // Softened to sit next to the muted brand accent instead of shouting over it.
-const LOW = { r: 187, g: 98, b: 97 };
-const MID = { r: 200, g: 156, b: 94 };
-const HIGH = { r: 66, g: 141, b: 149 };
+const LOW = { r: 203, g: 70, b: 68 };
+const MID = { r: 215, g: 150, b: 40 };
+const HIGH = { r: 3, g: 127, b: 150 };
 
 function lerpChannel(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
@@ -63,10 +63,10 @@ export function availabilityColor(value: number | null | undefined): string {
 // One source of truth so a new chart can never ship the old saturated set.
 // ----------------------------------------------------------------
 export const CHART_CATEGORY_PALETTE = [
-  '#4b9aa3', '#559fb0', '#64a184', '#b18a5c',
-  '#bd807a', '#938abe', '#b97e95', '#56a296',
-  '#ba8468', '#7693c2', '#9c87ba', '#70a079',
-  '#a78f59', '#868ec2', '#a982af', '#829c6a',
+  '#03a0bc', '#029ec9', '#44a477', '#b88433',
+  '#cc726b', '#9181cf', '#c57093', '#13a692',
+  '#c7794b', '#658fd5', '#9a7ecb', '#5aa266',
+  '#a58e2f', '#7b89d5', '#b276b6', '#7f9b48',
 ];
 
 // ----------------------------------------------------------------
@@ -74,9 +74,9 @@ export const CHART_CATEGORY_PALETTE = [
 // Logo-aligned hue (185), softened, brightest at the bar tip.
 // ----------------------------------------------------------------
 export const CHART_BAR_GRADIENTS = {
-  spend: { from: '#3f838b', to: '#67bec7' },
-  tokens: { from: '#418291', to: '#6abcd0' },
-  calls: { from: '#3f8484', to: '#67bfbf' },
+  spend: { from: '#037f96', to: '#12c5e7' },
+  tokens: { from: '#067da2', to: '#02c2fa' },
+  calls: { from: '#008287', to: '#14c9d1' },
 };
 
 // ----------------------------------------------------------------
