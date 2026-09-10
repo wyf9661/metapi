@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
 import { tr } from '../i18n.js';
+import { StatusPill } from '../components/StatusText.js';
 
 type BackupType = 'all' | 'accounts' | 'preferences';
 
@@ -518,8 +519,8 @@ export default function ImportExport() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <span className="badge badge-muted" style={{ fontSize: 11 }}>Schema v2.1</span>
-          <span className="badge badge-warning" style={{ fontSize: 11 }}>敏感数据请离线保管</span>
+          <StatusPill tone="muted" style={{ fontSize: 11 }}>Schema v2.1</StatusPill>
+          <StatusPill tone="warning" style={{ fontSize: 11 }}>敏感数据请离线保管</StatusPill>
         </div>
       </div>
 

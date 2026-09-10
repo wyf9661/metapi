@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetSt
 import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/BrandIcon.js';
 import CenteredModal from '../../components/CenteredModal.js';
 import ModernSelect from '../../components/ModernSelect.js';
+import { StatusPill } from '../../components/StatusText.js';
 import { tr } from '../../i18n.js';
 import type { RouteIconOption, RouteMode, RouteSummaryRow } from './types.js';
 import {
@@ -954,9 +955,9 @@ export default function ManualRoutePanel({
                         </div>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          <span className="badge badge-info" style={{ fontSize: 10 }}>
+                          <StatusPill tone="info" style={{ fontSize: 10 }}>
                             {route.channelCount} {tr('通道')}
-                          </span>
+                          </StatusPill>
                           <span className="badge badge-muted" style={{ fontSize: 10 }}>
                             {siteNames.length} {tr('站点')}
                           </span>

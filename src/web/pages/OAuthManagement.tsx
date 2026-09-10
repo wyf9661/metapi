@@ -12,7 +12,7 @@ import AutoRefreshCountdown from './oauth/AutoRefreshCountdown.js';
 import {QuotaWindowRow, SideDrawer, compactAccountKey, hasOauthProxySelection, renderCodeBlock, renderGuideCard, resolveConnectionEmailLabel, resolveConnectionPrimaryTitle, resolveConnectionRouteParticipation, resolveConnectionStatusLabel, resolveModelSyncDetail, resolveModelSyncStatusText, resolveProxyDisplayText, resolveProxyProjectSummary, resolveQuotaSourceLabel, resolveQuotaStatusLabel, resolveQuotaSyncDetail, resolveQuotaSyncStatusText, resolveRouteParticipationSummary, resolveRouteUnitStrategyLabel} from './oauth/connectionPresentation.js';
 import {api, type OAuthConnectionInfo, type OAuthProviderInfo, type OAuthRouteUnitStrategy, type OAuthStartInstructions} from '../api.js';
 import {copyText} from '../clipboard.js';
-import { StatusText } from '../components/StatusText.js';
+import { StatusText, StatusPill } from '../components/StatusText.js';
 const POLL_INTERVAL_MS = 1500;
 const CONNECTION_PAGE_LIMIT = 200;
 const AUTO_REFRESH_OPTIONS = [0, 5, 10, 15, 30] as const;
@@ -1723,7 +1723,7 @@ export default function OAuthManagement({ siteId: filterSiteId }: OAuthManagemen
           </div>
           {sessionFeedback.routeUnit ? (
             <div className="oauth-page-message-meta">
-              <span className="badge badge-info">{sessionFeedback.routeUnit.name}</span>
+              <StatusPill tone="info">{sessionFeedback.routeUnit.name}</StatusPill>
               <span className="badge badge-muted">{sessionFeedback.routeUnit.memberCount} 个成员</span>
               <span className="badge badge-muted">{resolveRouteUnitStrategyLabel(sessionFeedback.routeUnit.strategy)}</span>
               <div className="oauth-page-message-detail">

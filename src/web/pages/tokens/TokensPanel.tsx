@@ -23,7 +23,7 @@ import { usePersistedPageSize } from '../../components/usePersistedPageSize.js';
 import DeleteConfirmModal from '../../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from '../helpers/navigationFocus.js';
 import { tr } from '../../i18n.js';
-import { StatusText } from '../../components/StatusText.js';
+import { StatusText, StatusPill } from '../../components/StatusText.js';
 
 type SyncStatus = 'success' | 'skipped' | 'failed';
 type TokensPanelProps = {
@@ -1400,7 +1400,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                     <td>{token.tokenGroup || 'default'}</td>
                     <td>
                       {isPending ? (
-                        <span className="badge badge-warning" style={{ fontSize: 11 }}>待补全</span>
+                        <StatusPill tone="warning" style={{ fontSize: 11 }}>待补全</StatusPill>
                       ) : (
                         <StatusText badgeClass={token.enabled ? 'badge-success' : 'badge-muted'} style={{ fontSize: 11 }}>
                           {token.enabled ? '启用' : '禁用'}

@@ -1,5 +1,6 @@
 import React from 'react';
 import CenteredModal from '../../components/CenteredModal.js';
+import { StatusPill } from '../../components/StatusText.js';
 
 type AccountModelRow = {
   name: string;
@@ -186,7 +187,7 @@ export default function AccountModelsModal({
                         </span>
                       ) : null}
                       {model.isManual ? (
-                        <span className="badge badge-info" style={{ fontSize: 10, flexShrink: 0, padding: '0 4px' }}>手动</span>
+                        <StatusPill tone="info" style={{ fontSize: 10, flexShrink: 0, padding: '0 4px' }}>手动</StatusPill>
                       ) : null}
                       {model.isManual ? (
                         <button
@@ -210,7 +211,7 @@ export default function AccountModelsModal({
                         </button>
                       ) : null}
                       {isDisabled ? (
-                        <span className="badge badge-error" style={{ fontSize: 10, flexShrink: 0 }}>禁用</span>
+                        <StatusPill tone="danger" style={{ fontSize: 10, flexShrink: 0 }}>禁用</StatusPill>
                       ) : null}
                     </label>
                   );

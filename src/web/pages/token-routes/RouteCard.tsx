@@ -301,7 +301,7 @@ function PriorityDragPreview({
           className="badge"
           style={{
             fontSize: 10,
-            background: 'var(--color-info-soft)',
+            background: 'transparent',
             color: 'var(--color-info)',
             maxWidth: 200,
             overflow: 'hidden',
@@ -749,7 +749,7 @@ function RouteCardInner({
                     style={{
                       marginLeft: 6,
                       fontSize: 10,
-                      background: 'var(--color-warning-soft)',
+                      background: 'transparent',
                       color: 'var(--color-warning)',
                       fontWeight: 600,
                     }}
@@ -769,7 +769,7 @@ function RouteCardInner({
                   style={{
                     marginLeft: 6,
                     fontSize: 10,
-                    background: 'var(--color-warning-soft)',
+                    background: 'transparent',
                     color: 'var(--color-warning)',
                     fontWeight: 600,
                   }}
@@ -784,7 +784,7 @@ function RouteCardInner({
                   style={{
                     marginLeft: 6,
                     fontSize: 10,
-                    background: 'var(--color-warning-soft)',
+                    background: 'transparent',
                     color: 'var(--color-warning)',
                     fontWeight: 600,
                   }}
@@ -882,7 +882,7 @@ function RouteCardInner({
                     style={{
                       marginLeft: 6,
                       fontSize: 10,
-                      background: 'var(--color-warning-soft)',
+                      background: 'transparent',
                       color: 'var(--color-warning)',
                       fontWeight: 600,
                     }}
@@ -902,7 +902,7 @@ function RouteCardInner({
                     style={{
                       marginLeft: 6,
                       fontSize: 10,
-                      background: 'var(--color-warning-soft)',
+                      background: 'transparent',
                       color: 'var(--color-warning)',
                       fontWeight: 600,
                     }}
@@ -1000,7 +1000,7 @@ function RouteCardInner({
                     style={{
                       marginLeft: 6,
                       fontSize: 10,
-                      background: 'var(--color-warning-soft)',
+                      background: 'transparent',
                       color: 'var(--color-warning)',
                       fontWeight: 600,
                     }}

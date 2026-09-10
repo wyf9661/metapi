@@ -8,6 +8,7 @@ import {
   resolveTokenBindingConnectionMode,
 } from './tokenBindingPresentation.js';
 import { getChannelDecisionState, getPriorityTagStyle, getProbabilityColor } from './utils.js';
+import { StatusPill } from '../../components/StatusText.js';
 
 function getRouteUnitStrategyLabel(strategy: string | null | undefined): string {
   return strategy === 'stick_until_unavailable' ? '单个用到不可用再切' : '轮询';
@@ -179,7 +180,7 @@ export function SortableChannelRow({
                 className="badge"
                 style={{
                   fontSize: 10,
-                  background: 'var(--color-info-soft)',
+                  background: 'transparent',
                   color: 'var(--color-info)',
                   maxWidth: 220,
                   overflow: 'hidden',
@@ -196,7 +197,7 @@ export function SortableChannelRow({
                   className="badge"
                   style={{
                     fontSize: 10,
-                    background: 'var(--color-warning-soft)',
+                    background: 'transparent',
                     color: 'var(--color-warning)',
                     fontWeight: 600,
                   }}
@@ -219,13 +220,12 @@ export function SortableChannelRow({
               ) : null}
 
               {channel.manualOverride ? (
-                <span
-                  className="badge badge-warning"
+                <StatusPill tone="warning"
                   style={{ fontSize: 10 }}
                   data-tooltip={suppressTooltips ? undefined : '该通道由用户手动添加，而非系统自动生成'}
                 >
                   手动配置
-                </span>
+                </StatusPill>
               ) : null}
 
               {routeUnit ? (
@@ -438,7 +438,7 @@ export function SortableChannelRow({
           className="badge"
           style={{
             fontSize: 10,
-            background: 'var(--color-info-soft)',
+            background: 'transparent',
             color: 'var(--color-info)',
             maxWidth: 220,
             overflow: 'hidden',
@@ -455,7 +455,7 @@ export function SortableChannelRow({
             className="badge"
             style={{
               fontSize: 10,
-              background: 'var(--color-warning-soft)',
+              background: 'transparent',
               color: 'var(--color-warning)',
               fontWeight: 600,
             }}
@@ -470,13 +470,12 @@ export function SortableChannelRow({
         ) : null}
 
         {channel.manualOverride ? (
-          <span
-            className="badge badge-warning"
+          <StatusPill tone="warning"
             style={{ fontSize: 10 }}
             data-tooltip={suppressTooltips ? undefined : '该通道由用户手动添加，而非系统自动生成'}
           >
             手动配置
-          </span>
+          </StatusPill>
         ) : null}
 
         {channel.enabled === false ? (

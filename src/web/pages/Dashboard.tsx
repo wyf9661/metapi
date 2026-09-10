@@ -526,8 +526,6 @@ export default function Dashboard({
             style={{
               width: 48,
               height: 48,
-              background: 'var(--color-danger-soft)',
-              borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
