@@ -92,17 +92,19 @@ describe('key chip colours', () => {
   it('derives a stable muted hue from the key name', () => {
     const first = proxyLogKeyHue('windows');
     expect(proxyLogKeyHue('windows')).toBe(first);
-    expect([175, 190, 205, 215, 230, 250, 265, 285, 300, 330, 20, 45]).toContain(first);
-    // Different names are allowed to collide, but the palette must not collapse.
-    const hues = new Set(['windows', 'ubuntu', '移动端灰度', 'ci', 'dev'].map(proxyLogKeyHue));
-    expect(hues.size).toBeGreaterThan(1);
+    expect(Array.from({ length: 24 }, (_, i) => i * 15)).toContain(first);
+    // Names used in practice must not collapse onto one tint.
+    const hues = new Set(['codex', 'hermes', 'wsl', 'windows', 'ubuntu'].map(proxyLogKeyHue));
+    expect(hues.size).toBeGreaterThanOrEqual(4);
+    expect(proxyLogKeyHue('codex')).not.toBe(proxyLogKeyHue('hermes'));
   });
 
   it('mixes the hue into the grey chip base', () => {
     const colors = proxyLogKeyChipColors('windows');
     expect(colors.background).toContain('var(--color-bg-subtle)');
     expect(colors.border).toContain('var(--color-border)');
-    expect(colors.background).toContain(`hsl(${proxyLogKeyHue('windows')} 60% 50%)`);
+    expect(colors.background).toMatch(/hsl\(\d+ 62% \d+%\) 20%/);
+    expect(colors.border).toMatch(/hsl\(\d+ 58% \d+%\) 38%/);
   });
 });
 

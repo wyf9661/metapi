@@ -220,27 +220,43 @@ export function proxyLogRetryColor(retryCount: number | null | undefined): strin
   return 'var(--color-danger)';
 }
 
-/** Muted hues only, so a key chip tints differently without turning the column
- *  into a colour chart (the user's standing preference: low saturation, slightly
- *  grey). The hue is a pure function of the key name, so a key keeps its colour
- *  across reloads and pages. */
-const PROXY_LOG_KEY_HUES = [175, 190, 205, 215, 230, 250, 265, 285, 300, 330, 20, 45];
+/**
+ * Key chip tinting. Two keys must be visibly different, so the palette walks the
+ * whole colour wheel in 15° steps and the hash picks both a hue and a lightness
+ * bucket — the previous 12-hue palette put neighbouring names (codex/hermes) 10°
+ * apart, which read as the same colour.
+ *
+ * The tint stays muted: a few percent of the hue over the theme's grey chip base,
+ * and the hash is stable, so a key keeps its colour across reloads and pages.
+ */
+const PROXY_LOG_KEY_HUES = Array.from({ length: 24 }, (_, index) => index * 15);
+const PROXY_LOG_KEY_LIGHTNESSES = [46, 52, 58];
 
-export function proxyLogKeyHue(key: string): number {
-  let hash = 0;
+/** FNV-1a: near-identical names (codex / hermes) land far apart, unlike hash*31. */
+function proxyLogKeyHash(key: string): number {
+  let hash = 0x811c9dc5;
   for (let index = 0; index < key.length; index += 1) {
-    hash = (hash * 31 + key.charCodeAt(index)) | 0;
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return PROXY_LOG_KEY_HUES[Math.abs(hash) % PROXY_LOG_KEY_HUES.length];
+  return hash;
 }
 
-/** Chip colours for the key column: the grey chip base plus a few percent of the
+export function proxyLogKeyHue(key: string): number {
+  return PROXY_LOG_KEY_HUES[proxyLogKeyHash(key) % PROXY_LOG_KEY_HUES.length];
+}
+
+/** Chip colours for the key column: the grey chip base plus a visible share of the
  *  hashed hue, mixed with the theme variables so both themes stay readable. */
 export function proxyLogKeyChipColors(key: string): { background: string; border: string } {
-  const hue = proxyLogKeyHue(key);
+  const hash = proxyLogKeyHash(key);
+  const hue = PROXY_LOG_KEY_HUES[hash % PROXY_LOG_KEY_HUES.length];
+  const lightness = PROXY_LOG_KEY_LIGHTNESSES[
+    Math.floor(hash / PROXY_LOG_KEY_HUES.length) % PROXY_LOG_KEY_LIGHTNESSES.length
+  ];
   return {
-    background: `color-mix(in srgb, hsl(${hue} 60% 50%) 10%, var(--color-bg-subtle))`,
-    border: `color-mix(in srgb, hsl(${hue} 55% 45%) 22%, var(--color-border))`,
+    background: `color-mix(in srgb, hsl(${hue} 62% ${lightness}%) 20%, var(--color-bg-subtle))`,
+    border: `color-mix(in srgb, hsl(${hue} 58% ${lightness}%) 38%, var(--color-border))`,
   };
 }
 
