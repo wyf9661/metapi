@@ -163,18 +163,12 @@ export function SortableChannelRow({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-              <span
-                className="badge"
-                style={{
-                  fontSize: 10,
-                  background: tokenBinding.badgeTone === 'info'
-                    ? 'var(--color-info-soft)'
-                    : 'var(--color-warning-soft)',
-                  color: tokenBinding.badgeTone === 'info' ? 'var(--color-info)' : 'var(--color-warning)',
-                }}
+              <StatusPill
+                tone={tokenBinding.badgeTone === 'info' ? 'info' : 'warning'}
+                style={{ fontSize: 10 }}
               >
                 {tokenBinding.bindingModeLabel}
-              </span>
+              </StatusPill>
 
               <span
                 className="badge"
@@ -421,18 +415,12 @@ export function SortableChannelRow({
           {channel.site?.name || 'unknown'}
         </span>
 
-        <span
-          className="badge"
-          style={{
-            fontSize: 10,
-            background: tokenBinding.badgeTone === 'info'
-              ? 'var(--color-info-soft)'
-              : 'var(--color-warning-soft)',
-            color: tokenBinding.badgeTone === 'info' ? 'var(--color-info)' : 'var(--color-warning)',
-          }}
+        <StatusPill
+          tone={tokenBinding.badgeTone === 'info' ? 'info' : 'warning'}
+          style={{ fontSize: 10 }}
         >
           {tokenBinding.bindingModeLabel}
-        </span>
+        </StatusPill>
 
         <span
           className="badge"
