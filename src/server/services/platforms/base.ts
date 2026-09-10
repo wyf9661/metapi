@@ -136,6 +136,9 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
       }
     } catch {}
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[base] verifyToken: all variants failed');
     return { tokenType: 'unknown' };
   }
 

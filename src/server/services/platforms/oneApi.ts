@@ -173,6 +173,9 @@ export class OneApiAdapter extends BasePlatformAdapter {
       throw new Error(terminalError);
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[oneApi] getUserGroups: all variants failed');
     return ['default'];
   }
 

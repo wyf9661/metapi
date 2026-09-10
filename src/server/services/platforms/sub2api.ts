@@ -218,6 +218,9 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[sub2api] fetchSubscriptionSummary: all variants failed');
     return undefined;
   }
 
@@ -376,6 +379,9 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[sub2api] listGroups: all variants failed');
     return [];
   }
 
@@ -423,6 +429,9 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[sub2api] inferGroupsFromKeys: all variants failed');
     return [];
   }
 
@@ -512,6 +521,9 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[sub2api] listApiKeys: all variants failed');
     return [];
   }
 
@@ -529,6 +541,9 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[sub2api] fetchModelsByToken: all variants failed');
     return [];
   }
 
@@ -850,6 +865,9 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[sub2api] createApiToken: all variants failed');
     return false;
   }
 
@@ -889,6 +907,9 @@ export class Sub2ApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[sub2api] deleteApiToken: all variants failed');
     return false;
   }
 }

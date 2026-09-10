@@ -77,6 +77,9 @@ export class GeminiAdapter extends StandardApiProviderAdapterBase {
       if (openAiModels.length > 0) return normalizeModelList(openAiModels);
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[gemini] getModels: all variants failed');
     return [];
   }
 }

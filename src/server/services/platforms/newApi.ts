@@ -841,6 +841,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
         }
       } catch {}
     }
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] fetchUserSelfByCookie: all variants failed');
     return null;
   }
 
@@ -856,6 +859,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
         } catch {}
       }
     }
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] probeUserIdByCookie: all variants failed');
     return null;
   }
 
@@ -882,6 +888,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
         if (normalized.length > 0) return normalized;
       } catch {}
     }
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] getApiTokensByCookie: all variants failed');
     return [];
   }
 
@@ -898,6 +907,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
         }
       } catch {}
     }
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] getSessionModelsByCookie: all variants failed');
     return [];
   }
 
@@ -919,6 +931,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
         if (models.length > 0) return models;
       } catch {}
     }
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] getOpenAiModelsViaShieldCookie: all variants failed');
     return [];
   }
 
@@ -1002,6 +1017,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       }
     } catch {}
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] getUserInfo: all variants failed');
     return null;
   }
 
@@ -1139,6 +1157,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       }
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] verifyToken: all variants failed');
     return { tokenType: 'unknown' };
   }
 
@@ -1373,6 +1394,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       if (fallbackModels.length > 0) return fallbackModels;
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] getModels: all variants failed');
     return [];
   }
 
@@ -1391,6 +1415,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
         if (res?.success && token) return token;
       } catch {}
     }
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] issueManagementToken: all variants failed');
     return null;
   }
 
@@ -1442,6 +1469,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       } catch {}
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] createApiToken: all variants failed');
     return false;
   }
 
@@ -1500,6 +1530,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       throw new Error(terminalError);
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] getUserGroups: all variants failed');
     return ['default'];
   }
 
@@ -1563,6 +1596,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     // Upstream key already absent means local deletion is safe.
     if (!tokenId) return true;
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] deleteApiToken: all variants failed');
     return false;
   }
 
@@ -1585,6 +1621,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       if (fallbackTokens.length > 0) return fallbackTokens;
     }
 
+    // Every credential/endpoint variant failed: leave a trace instead of a bare
+    // null, otherwise the caller only sees "nothing worked".
+    console.warn('[new-api] getApiTokensWithUser: all variants failed');
     return [];
   }
 }
