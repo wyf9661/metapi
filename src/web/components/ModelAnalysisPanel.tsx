@@ -4,7 +4,7 @@ import { InlineBrandIcon } from './BrandIcon.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { useThemeLabelColor } from './useThemeLabelColor.js';
 import { useIsMobile } from './useIsMobile.js';
-import { availabilityRgb, buildHorizontalBarSpec } from './charts/chartShared.js';
+import { availabilityRgb, buildHorizontalBarSpec, CHART_BAR_GRADIENTS } from './charts/chartShared.js';
 
 type TabKey = 'spend' | 'trend' | 'calls' | 'rank';
 
@@ -84,7 +84,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
 
   const spendBarSpec = useMemo(() => buildHorizontalBarSpec({
     values: spendDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.spend) })).reverse(),
-    gradientFrom: '#0f766e', gradientTo: '#0d9488',
+    gradientFrom: CHART_BAR_GRADIENTS.spend.from, gradientTo: CHART_BAR_GRADIENTS.spend.to,
     formatLabel: (v) => formatCurrency(v),
     labelColor, isMobile,
   }), [spendDistribution, labelColor, isMobile]);
@@ -106,14 +106,14 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
       model: String(d.model || '-'),
       value: d.tokens,
     })).reverse(),
-    gradientFrom: '#0e7490', gradientTo: '#0891b2',
+    gradientFrom: CHART_BAR_GRADIENTS.tokens.from, gradientTo: CHART_BAR_GRADIENTS.tokens.to,
     formatLabel: (v) => formatCompactTokenMetric(v),
     labelColor, isMobile,
   }), [tokenDistribution, labelColor, isMobile]);
 
   const callsBarSpec = useMemo(() => buildHorizontalBarSpec({
     values: callsDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.calls) })).reverse(),
-    gradientFrom: '#047857', gradientTo: '#059669',
+    gradientFrom: CHART_BAR_GRADIENTS.calls.from, gradientTo: CHART_BAR_GRADIENTS.calls.to,
     formatLabel: (v) => v.toLocaleString(),
     labelColor, isMobile,
   }), [callsDistribution, labelColor, isMobile]);
@@ -180,7 +180,6 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px' }}>
             {callsDistribution.map((d) => (
               <span key={d.model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-success)', flexShrink: 0 }} />
                 <InlineBrandIcon model={d.model} size={13} />
                 <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.model}</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>{Math.round(d.calls).toLocaleString()}</span>
@@ -217,12 +216,10 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                     : Math.max(0, 100 - ((latSec - 1) / 29) * 100);
                 const lat = availabilityRgb(latGoodness);
                 const latColor = `rgb(${lat.r},${lat.g},${lat.b})`;
-                const latBg = `rgba(${lat.r},${lat.g},${lat.b},0.1)`;
                 const latText = latMs >= 1000 ? `${(latMs / 1000).toFixed(latSec >= 60 ? 0 : 1)}s` : `${latMs}ms`;
                 // Success rate chip: same palette, rate itself is the 0..100 score.
                 const rate = availabilityRgb(item.successRate);
                 const rateColor = `rgb(${rate.r},${rate.g},${rate.b})`;
-                const rateBg = `rgba(${rate.r},${rate.g},${rate.b},0.1)`;
 
                 return (
                   <tr key={item.model}>
@@ -249,8 +246,8 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span style={{
-                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                        background: rateBg, color: rateColor,
+                        fontSize: 12, fontWeight: 600, color: rateColor,
+                        fontVariantNumeric: 'tabular-nums',
                       }}>
                         {formatPercent(item.successRate)}
                       </span>
@@ -258,8 +255,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                     <td style={{ textAlign: 'center' }}>
                       <span style={{
                         fontVariantNumeric: 'tabular-nums', fontSize: 12, fontWeight: 600,
-                        color: latColor, background: latBg,
-                        padding: '2px 8px', borderRadius: 6,
+                        color: latColor,
                       }}>
                         {latText}
                       </span>

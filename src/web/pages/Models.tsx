@@ -15,6 +15,7 @@ import PageJumpInput from '../components/PageJumpInput.js';
 import { mergeMarketplaceMetadata, shouldHydrateMarketplaceMetadata } from './helpers/modelsMarketplaceMetadata.js';
 import { tr } from '../i18n.js';
 import { TOKEN_COVERAGE_CHANGED_EVENT } from '../dataEvents.js';
+import { MetricIndicator, StatusText } from '../components/StatusText.js';
 
 type SortColumn = 'name' | 'accountCount' | 'tokenCount' | 'avgLatency' | 'avgFirstByteMs' | 'avgThroughputTps' | 'successRate';
 type ViewMode = 'card' | 'table';
@@ -175,7 +176,7 @@ function formatThroughput(tps: number | null | undefined, sampleCount?: number |
 function getThroughputBadgeClass(tps: number | null | undefined): string {
   if (typeof tps !== 'number' || !Number.isFinite(tps) || tps <= 0) return 'badge-muted';
   if (tps >= 40) return 'badge-success';
-  if (tps >= 15) return 'badge-info';
+  if (tps >= 15) return 'badge-muted';
   if (tps >= 5) return 'badge-warning';
   return 'badge-error';
 }
@@ -887,23 +888,23 @@ export default function Models() {
     // Prefer latest probe session result, then persisted availability from DB/live traffic.
     if (live) {
       if (live.status === 'supported' || live.ok) {
-        return <span className="badge badge-success" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('连通')}</span>;
+        return <StatusText tone="success" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('连通')}</StatusText>;
       }
       if (live.status === 'unsupported') {
-        return <span className="badge badge-error" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('不通')}</span>;
+        return <StatusText tone="danger" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('不通')}</StatusText>;
       }
       if (live.status === 'skipped') {
         return <span className="badge badge-muted" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('跳过')}</span>;
       }
       if (live.status === 'inconclusive' || live.status === 'failed') {
-        return <span className="badge badge-warning" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('未知')}</span>;
+        return <StatusText tone="warning" style={{ fontSize: 11 }} title={live.reason || ''}>{tr('未知')}</StatusText>;
       }
     }
     if (account.connectivity === true) {
-      return <span className="badge badge-success" style={{ fontSize: 11 }} title={formatConnectivityCheckedAt(account.checkedAt)}>{tr('连通')}</span>;
+      return <StatusText tone="success" style={{ fontSize: 11 }} title={formatConnectivityCheckedAt(account.checkedAt)}>{tr('连通')}</StatusText>;
     }
     if (account.connectivity === false) {
-      return <span className="badge badge-error" style={{ fontSize: 11 }} title={formatConnectivityCheckedAt(account.checkedAt)}>{tr('不通')}</span>;
+      return <StatusText tone="danger" style={{ fontSize: 11 }} title={formatConnectivityCheckedAt(account.checkedAt)}>{tr('不通')}</StatusText>;
     }
     return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
   };
@@ -1067,7 +1068,7 @@ export default function Models() {
           <div>
             <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {activeBrand || activeSite || tr('模型广场')}
-              <span className="badge badge-info" style={{ fontSize: 12, fontWeight: 500 }}>
+              <span className="badge badge-muted" style={{ fontSize: 12, fontWeight: 500 }}>
                 {tr('共')} {filteredModels.length} {tr('个模型')}
               </span>
             </h2>
@@ -1184,34 +1185,30 @@ export default function Models() {
                         <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
                         {m.tokenCount} {tr('令牌')}
                       </span>
-                      <span
-                        className={`badge ${getLatencyBadgeClass(m.avgLatency)}`}
-                        style={{ fontVariantNumeric: 'tabular-nums' }}
-                        data-tooltip={tr('平均延迟')}
-                      >
-                        {tr('延迟')} {formatLatency(m.avgLatency)}
-                      </span>
-                      <span
-                        className={`badge ${getLatencyBadgeClass(m.avgFirstByteMs)}`}
-                        style={{ fontVariantNumeric: 'tabular-nums' }}
-                        data-tooltip={tr('平均首字延迟（近7天）')}
-                      >
-                        {tr('首字')} {formatLatency(m.avgFirstByteMs)}
-                      </span>
-                      <span
-                        className={`badge ${getThroughputBadgeClass(m.avgThroughputTps)}`}
-                        style={{ fontVariantNumeric: 'tabular-nums' }}
-                        data-tooltip={tr('平均吞吐（近7天，token/s；样本<5 标少样本）')}
-                      >
-                        {tr('吞吐')} {formatThroughput(m.avgThroughputTps, m.throughputSampleCount)}
-                      </span>
-                      <span
-                        className={`badge ${getSuccessBadgeClass(m.successRate)}`}
-                        style={{ fontVariantNumeric: 'tabular-nums' }}
-                        data-tooltip={tr('成功率')}
-                      >
-                        {tr('成功率')} {m.successRate != null ? `${m.successRate}%` : '—'}
-                      </span>
+                      <MetricIndicator
+                        label={tr('延迟')}
+                        value={formatLatency(m.avgLatency)}
+                        badgeClass={getLatencyBadgeClass(m.avgLatency)}
+                        title={tr('平均延迟')}
+                      />
+                      <MetricIndicator
+                        label={tr('首字')}
+                        value={formatLatency(m.avgFirstByteMs)}
+                        badgeClass={getLatencyBadgeClass(m.avgFirstByteMs)}
+                        title={tr('平均首字延迟（近7天）')}
+                      />
+                      <MetricIndicator
+                        label={tr('吞吐')}
+                        value={formatThroughput(m.avgThroughputTps, m.throughputSampleCount)}
+                        badgeClass={getThroughputBadgeClass(m.avgThroughputTps)}
+                        title={tr('平均吞吐（近7天，token/s；样本<5 标少样本）')}
+                      />
+                      <MetricIndicator
+                        label={tr('成功率')}
+                        value={m.successRate != null ? `${m.successRate}%` : '—'}
+                        badgeClass={getSuccessBadgeClass(m.successRate)}
+                        title={tr('成功率')}
+                      />
                     </div>
                   </div>
                   <div className="model-card-actions" onClick={e => e.stopPropagation()}>
@@ -1284,7 +1281,7 @@ export default function Models() {
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
                           {m.tags.length > 0 ? m.tags.map((tag) => (
-                            <span key={tag} className="badge badge-info">{tag}</span>
+                            <span key={tag} className="badge badge-muted">{tag}</span>
                           )) : <span className="badge badge-muted">{metadataHydrating ? tr('加载元数据中...') : tr('暂无标签')}</span>}
                         </div>
                       </div>
@@ -1293,12 +1290,12 @@ export default function Models() {
                         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{tr('接口能力')}</div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           {m.supportedEndpointTypes.length > 0 ? m.supportedEndpointTypes.map((endpoint) => (
-                            <span key={endpoint} className="badge badge-success">{endpoint}</span>
+                            <StatusText key={endpoint} tone="success">{endpoint}</StatusText>
                           )) : <span className="badge badge-muted">{metadataHydrating ? tr('加载元数据中...') : tr('未提供')}</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
                           {renderCapabilityBadges(m.capabilities)?.map((label, idx) => (
-                            <span key={`${label}-${idx}`} className="badge badge-success">{label}</span>
+                            <StatusText key={`${label}-${idx}`} tone="success">{label}</StatusText>
                           )) ?? null}
                         </div>
                       </div>
@@ -1317,7 +1314,7 @@ export default function Models() {
                                 </div>
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                   {Object.entries(source.groupPricing).map(([group, pricing]) => (
-                                    <span key={group} className="badge badge-info">
+                                    <span key={group} className="badge badge-muted">
                                       {group}: {renderGroupPricingValue(pricing)}
                                     </span>
                                   ))}
@@ -1341,7 +1338,7 @@ export default function Models() {
                             style={{ padding: 10, display: 'grid', gap: 8 }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                              <SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} />
+                              <SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-muted" badgeStyle={{ fontSize: 11 }} />
                               <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{a.username || `ID:${a.id}`}</span>
                             </div>
                             <div style={{ display: 'grid', gap: 6 }}>
@@ -1391,7 +1388,7 @@ export default function Models() {
                         <tbody>
                           {m.accounts.map(a => (
                             <tr key={a.id}>
-                              <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
+                              <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-muted" badgeStyle={{ fontSize: 11 }} /></td>
                               <td style={{ fontSize: 12 }}>{a.username || `ID:${a.id}`}</td>
                               <td style={{ fontSize: 11 }}><code style={{ wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                               <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -1477,41 +1474,35 @@ export default function Models() {
                           {m.name}
                         </code>
                       </td>
-                      <td><span className="badge badge-info">{m.accountCount}</span></td>
+                      <td><span className="badge badge-muted">{m.accountCount}</span></td>
                       <td><span className="badge badge-muted">{m.tokenCount}</span></td>
                       <td>
-                        <span
-                          className={`badge ${getLatencyBadgeClass(m.avgLatency)}`}
-                          style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          {formatLatency(m.avgLatency)}
-                        </span>
+                        <MetricIndicator
+                          badgeClass={getLatencyBadgeClass(m.avgLatency)}
+                          value={formatLatency(m.avgLatency)}
+                          title={tr('平均延迟')}
+                        />
                       </td>
                       <td>
-                        <span
-                          className={`badge ${getLatencyBadgeClass(m.avgFirstByteMs)}`}
-                          style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
-                          data-tooltip={tr('平均首字延迟（近7天）')}
-                        >
-                          {formatLatency(m.avgFirstByteMs)}
-                        </span>
+                        <MetricIndicator
+                          badgeClass={getLatencyBadgeClass(m.avgFirstByteMs)}
+                          value={formatLatency(m.avgFirstByteMs)}
+                          title={tr('平均首字延迟（近7天）')}
+                        />
                       </td>
                       <td>
-                        <span
-                          className={`badge ${getThroughputBadgeClass(m.avgThroughputTps)}`}
-                          style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
-                          data-tooltip={tr('平均吞吐（近7天，token/s；样本<5 标少样本）')}
-                        >
-                          {formatThroughput(m.avgThroughputTps, m.throughputSampleCount)}
-                        </span>
+                        <MetricIndicator
+                          badgeClass={getThroughputBadgeClass(m.avgThroughputTps)}
+                          value={formatThroughput(m.avgThroughputTps, m.throughputSampleCount)}
+                          title={tr('平均吞吐（近7天，token/s；样本<5 标少样本）')}
+                        />
                       </td>
                       <td>
-                        <span
-                          className={`badge ${getSuccessBadgeClass(m.successRate)}`}
-                          style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          {m.successRate != null ? `${m.successRate}%` : '—'}
-                        </span>
+                        <MetricIndicator
+                          badgeClass={getSuccessBadgeClass(m.successRate)}
+                          value={m.successRate != null ? `${m.successRate}%` : '—'}
+                          title={tr('成功率')}
+                        />
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1554,7 +1545,7 @@ export default function Models() {
                                 </div>
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
                                   {m.tags.length > 0 ? m.tags.map((tag) => (
-                                    <span key={tag} className="badge badge-info">{tag}</span>
+                                    <span key={tag} className="badge badge-muted">{tag}</span>
                                   )) : <span className="badge badge-muted">{metadataHydrating ? tr('加载元数据中...') : tr('暂无标签')}</span>}
                                 </div>
                               </div>
@@ -1563,12 +1554,12 @@ export default function Models() {
                                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{tr('接口能力')}</div>
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                   {m.supportedEndpointTypes.length > 0 ? m.supportedEndpointTypes.map((endpoint) => (
-                                    <span key={endpoint} className="badge badge-success">{endpoint}</span>
+                                    <StatusText key={endpoint} tone="success">{endpoint}</StatusText>
                                   )) : <span className="badge badge-muted">{metadataHydrating ? tr('加载元数据中...') : tr('未提供')}</span>}
                                 </div>
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
                                   {renderCapabilityBadges(m.capabilities)?.map((label, idx) => (
-                                    <span key={`${label}-${idx}`} className="badge badge-success">{label}</span>
+                                    <StatusText key={`${label}-${idx}`} tone="success">{label}</StatusText>
                                   )) ?? null}
                                 </div>
                               </div>
@@ -1587,7 +1578,7 @@ export default function Models() {
                                         </div>
                                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                           {Object.entries(source.groupPricing).map(([group, pricing]) => (
-                                            <span key={group} className="badge badge-info">
+                                            <span key={group} className="badge badge-muted">
                                               {group}: {renderGroupPricingValue(pricing)}
                                             </span>
                                           ))}
@@ -1614,12 +1605,12 @@ export default function Models() {
                               <tbody>
                                 {m.accounts.map(a => (
                                   <tr key={a.id} style={{ borderTop: '1px solid var(--color-border-light)' }}>
-                                    <td style={{ padding: 8 }}><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-info" badgeStyle={{ fontSize: 11 }} /></td>
+                                    <td style={{ padding: 8 }}><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeClassName="badge badge-muted" badgeStyle={{ fontSize: 11 }} /></td>
                                     <td style={{ padding: 8 }}>{a.username || `ID:${a.id}`}</td>
                                     <td style={{ padding: 8 }}><code style={{ fontSize: 11, wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                                     <td style={{ padding: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                       {a.tokens.length > 0 ? a.tokens.map(t => (
-                                        <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-info'}`}>{t.name}</span>
+                                        <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`}>{t.name}</span>
                                       )) : '—'}
                                     </td>
                                     <td style={{ padding: 8, color: (probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null ? getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) : 'var(--color-text-muted)' }}>

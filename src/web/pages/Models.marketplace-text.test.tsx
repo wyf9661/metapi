@@ -863,7 +863,13 @@ describe('Models marketplace text', () => {
         && node.props['data-tooltip'] === '平均延迟'
       ));
 
-      expect(String(latencyBadge.props.className || '')).toContain('badge-muted');
+      // Metrics render as bar + coloured value now; "no sample" is the muted tone.
+      const metricColors = [
+        latencyBadge.props.style?.color,
+        ...latencyBadge.findAll((node) => node.type === 'span')
+          .map((node) => node.props.style?.color || node.props.style?.background),
+      ].filter(Boolean);
+      expect(metricColors).toContain('var(--color-text-muted)');
       expect(collectText(latencyBadge)).toContain('延迟');
       expect(collectText(latencyBadge)).toContain('—');
       expect(collectText(root!.root)).not.toContain('680ms');
