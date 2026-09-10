@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
 import { useIsMobile } from '../useIsMobile.js';
-import { barHeadroom } from './chartShared.js';
+import { barHeadroom, CHART_CATEGORY_PALETTE } from './chartShared.js';
 
 interface SiteDistributionData {
   siteName: string;
@@ -108,12 +108,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
 
-  const BAR_COLORS = [
-    '#0d9488', '#06b6d4', '#10b981', '#f59e0b',
-    '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6',
-    '#f97316', '#3b82f6', '#a855f7', '#22c55e',
-    '#eab308', '#6366f1', '#d946ef', '#84cc16',
-  ];
+  const BAR_COLORS = CHART_CATEGORY_PALETTE;
 
   const formatValue = (value: number): string => `$${value.toFixed(2)}`;
 

@@ -3,6 +3,7 @@ import { VChart } from '@visactor/react-vchart';
 import { api } from '../../api.js';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
 import { useIsMobile } from '../useIsMobile.js';
+import { CHART_CATEGORY_PALETTE } from './chartShared.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -33,12 +34,6 @@ function formatTrendBucketLabel(date: string): string {
   return day ? day[1]! : date;
 }
 
-const COLOR_PALETTE = [
-  '#0d9488', '#06b6d4', '#10b981', '#f59e0b',
-  '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6',
-  '#f97316', '#3b82f6', '#a855f7', '#22c55e',
-  '#eab308', '#6366f1', '#d946ef', '#84cc16',
-];
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -218,7 +213,7 @@ export default function SiteTrendChart() {
     color: {
       field: 'site',
       domain: allSites,
-      range: COLOR_PALETTE,
+      range: CHART_CATEGORY_PALETTE,
     },
     background: 'transparent',
     padding: { left: 20, right: 16, top: 8, bottom: 8 },
@@ -357,7 +352,7 @@ export default function SiteTrendChart() {
                     width: 8,
                     height: 8,
                     borderRadius: 999,
-                    background: COLOR_PALETTE[idx % COLOR_PALETTE.length],
+                    background: CHART_CATEGORY_PALETTE[idx % CHART_CATEGORY_PALETTE.length],
                     flexShrink: 0,
                   }}
                 />

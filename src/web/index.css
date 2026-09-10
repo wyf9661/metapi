@@ -14,10 +14,10 @@
   --color-text-primary: oklch(0.270 0.020 80);
   --color-text-secondary: oklch(0.430 0.018 80);
   --color-text-muted: oklch(0.580 0.014 80);
-  --color-primary: oklch(0.545 0.088 187);
-  --color-primary-light: oklch(0.945 0.026 187);
+  --color-primary: oklch(0.575 0.078 205);
+  --color-primary-light: oklch(0.955 0.022 205);
   --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
-  --color-primary-hover: oklch(0.470 0.092 187);
+  --color-primary-hover: oklch(0.508 0.084 205);
   --color-success: oklch(0.580 0.100 152);
   --color-success-soft: oklch(0.950 0.030 152);
   --color-warning: oklch(0.680 0.120 70);
@@ -54,10 +54,10 @@
   --color-text-primary: oklch(0.930 0.008 90);
   --color-text-secondary: oklch(0.790 0.014 90);
   --color-text-muted: oklch(0.660 0.014 90);
-  --color-primary: oklch(0.700 0.098 187);
-  --color-primary-light: oklch(0.300 0.030 187);
+  --color-primary: oklch(0.735 0.092 205);
+  --color-primary-light: oklch(0.300 0.028 205);
   --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
-  --color-primary-hover: oklch(0.770 0.090 187);
+  --color-primary-hover: oklch(0.800 0.085 205);
   --color-success: oklch(0.720 0.110 152);
   --color-success-soft: oklch(0.290 0.040 152);
   --color-warning: oklch(0.780 0.120 70);
@@ -665,8 +665,8 @@ html[data-layout="desktop"] .main-content {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background: #ef4444;
-  color: white;
+  background: var(--color-danger);
+  color: #fff;
   font-size: 11px;
   font-weight: 600;
   border-radius: var(--radius-md);
@@ -1823,11 +1823,11 @@ html[data-layout="desktop"] .main-content {
 }
 
 .data-table tbody tr:hover {
-  background: rgba(15,118,110, 0.03);
+  background: color-mix(in srgb, var(--color-primary) 3%, transparent);
 }
 
 [data-theme="dark"] .data-table tbody tr:hover {
-  background: rgba(13,148,136, 0.06);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 .data-table tbody tr.row-selectable {
@@ -2034,55 +2034,43 @@ html[data-layout="desktop"] .main-content {
 }
 
 .row-hover:hover {
-  background-color: rgba(15,118,110, 0.04);
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 [data-theme="dark"] .row-hover:hover {
-  background-color: rgba(13,148,136, 0.08);
+  background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 .checkin-toggle-badge {
-  min-width: 70px;
+  min-width: 64px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
+  border-radius: 6px;
+  padding: 4px 10px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
+/* Outlined, matching the sites status pills: the button shape already says
+   "clickable", so it does not need a saturated fill to stand out. */
 .checkin-toggle-badge.is-on {
-  background: #d8f1df;
-  color: #15803d;
-  border-color: #8fd9ac;
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 45%, transparent);
 }
 
 .checkin-toggle-badge.is-off {
-  background: #f1ece6;
-  color: #6d6660;
-  border-color: #e3ddd5;
+  color: var(--color-text-muted);
+  border-color: color-mix(in srgb, var(--color-text-muted) 35%, transparent);
 }
 
 .checkin-toggle-badge:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.checkin-toggle-badge.is-on:hover:not(:disabled) {
-  background: #b7ecca;
-  color: #166534;
-  border-color: #4ade80;
-}
-
-.checkin-toggle-badge.is-off:hover:not(:disabled) {
-  background: #e3ddd5;
-  color: #3d3833;
-  border-color: #c9c2bb;
+  background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
 .checkin-toggle-badge:disabled {
@@ -2523,10 +2511,9 @@ html[data-layout="desktop"] .main-content {
 }
 
 .site-balance-reward {
-  background: #d8f1df;
-  color: #15803d;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
+  /* Colour only: the +/- sign already says the direction, so the filled chip
+     just made the balance column the busiest cell in the table. */
+  color: var(--color-success);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -2534,10 +2521,7 @@ html[data-layout="desktop"] .main-content {
 }
 
 .site-balance-spend {
-  background: #f5dede;
   color: #b91c1c;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -2566,46 +2550,46 @@ html[data-layout="desktop"] .main-content {
 }
 
 .badge-success {
-  background: #d8f1df;
-  color: #15803d;
-  border: 1px solid rgba(21, 128, 61, 0.16);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--color-success) 28%, transparent);
 }
 
 .badge-error {
-  background: #f5dede;
-  color: #b91c1c;
-  border: 1px solid rgba(185, 28, 28, 0.16);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 28%, transparent);
 }
 
 .badge-danger {
-  background: #f5dede;
-  color: #b91c1c;
-  border: 1px solid rgba(185, 28, 28, 0.16);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 28%, transparent);
 }
 
 .badge-warning {
-  background: #f6edcd;
-  color: #92400e;
-  border: 1px solid rgba(146, 64, 14, 0.16);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
 }
 
 .badge-info {
-  background: #dce9f7;
-  color: #1e40af;
-  border: 1px solid rgba(13,148,136, 0.18);
+  background: var(--color-info-soft);
+  color: var(--color-info);
+  border: 1px solid color-mix(in srgb, var(--color-info) 28%, transparent);
   font-weight: 600;
 }
 
 .badge-muted {
-  background: rgba(28,25,23, 0.08);
+  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
   color: var(--color-text-secondary);
-  border: 1px solid rgba(28,25,23, 0.08);
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
 }
 
 .badge-primary {
   background: var(--color-primary-light);
   color: var(--color-primary);
-  border: 1px solid rgba(13,148,136, 0.18);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 26%, transparent);
 }
 
 .badge-link {
@@ -2617,13 +2601,13 @@ html[data-layout="desktop"] .main-content {
 .badge-link:hover .badge,
 .badge-link:focus-visible .badge {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(13,148,136, 0.18);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .badge-link:hover .badge-muted,
 .badge-link:focus-visible .badge-muted {
-  background: rgba(13,148,136, 0.12);
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
 }
 
 .badge-link:focus-visible {
@@ -2923,14 +2907,14 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 }
 
 .route-enable-toggle.is-enabled {
-  background: #d8f1df;
-  color: #15803d;
-  border-color: color-mix(in srgb, #16a34a 28%, transparent);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 28%, transparent);
 }
 
 .route-enable-toggle.is-enabled:hover {
-  background: color-mix(in srgb, #d8f1df 72%, white);
-  box-shadow: 0 2px 8px color-mix(in srgb, #16a34a 24%, transparent);
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-success) 22%, transparent);
 }
 
 .route-enable-toggle.is-disabled {
@@ -3211,51 +3195,33 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 }
 
 .toast-success {
-  background: rgba(240, 253, 244, 0.95);
-  border: 1px solid #b7ecca;
-  color: #166534;
-}
-
-[data-theme="dark"] .toast-success {
-  background: rgba(5, 46, 22, 0.95);
-  border-color: #12281c;
-  color: #8fd9ac;
+  background: color-mix(in srgb, var(--color-success-soft) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+  color: var(--color-success);
 }
 
 .toast-success .toast-progress {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 .toast-error {
-  background: rgba(254, 242, 242, 0.95);
-  border: 1px solid #ecc8c8;
-  color: #991b1b;
-}
-
-[data-theme="dark"] .toast-error {
-  background: rgba(69, 10, 10, 0.95);
-  border-color: #2b1414;
-  color: #e6b0b0;
+  background: color-mix(in srgb, var(--color-danger-soft) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  color: var(--color-danger);
 }
 
 .toast-error .toast-progress {
-  background: #ef4444;
+  background: var(--color-danger);
 }
 
 .toast-info {
-  background: rgba(239, 246, 255, 0.95);
-  border: 1px solid #c3d9f2;
-  color: #1e40af;
-}
-
-[data-theme="dark"] .toast-info {
-  background: rgba(23, 37, 84, 0.95);
-  border-color: #1d2f42;
-  color: #9db8e8;
+  background: color-mix(in srgb, var(--color-info-soft) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-info) 30%, transparent);
+  color: var(--color-info);
 }
 
 .toast-info .toast-progress {
-  background: #3b82f6;
+  background: var(--color-info);
 }
 
 /* ===== Form Inputs ===== */
@@ -5172,7 +5138,7 @@ textarea {
 
 /* ===== Selection ===== */
 ::selection {
-  background: rgba(15,118,110, 0.25);
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
 /* ===== Page Transition ===== */
@@ -5326,7 +5292,7 @@ textarea {
 }
 
 .user-dropdown-item.danger {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .user-dropdown-item.danger:hover {
@@ -5417,7 +5383,7 @@ textarea {
   }
 
   50% {
-    text-shadow: 0 0 8px rgba(15,118,110, 0.3);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 30%, transparent);
   }
 }
 
@@ -5561,7 +5527,7 @@ textarea {
 }
 
 .filter-item.active .filter-item-count {
-  background: rgba(15,118,110, 0.15);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
   color: var(--color-primary);
 }
 
@@ -5599,7 +5565,8 @@ textarea {
   justify-content: center;
   font-size: 16px;
   font-weight: 700;
-  color: white;
+  /* Letters on the page background, no fill tile. */
+  color: var(--color-text-primary);
   flex-shrink: 0;
   text-transform: uppercase;
 }
@@ -5675,9 +5642,9 @@ textarea {
 }
 
 .model-tag-green {
-  background: #eef8f1;
-  border-color: #b7ecca;
-  color: #16a34a;
+  background: var(--color-success-soft);
+  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+  color: var(--color-success);
 }
 
 .model-tag-blue {
@@ -5867,7 +5834,7 @@ textarea {
 
 .probe-filter-field-inline input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(15,118,110, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 
 /* 测活日志桌面工具栏中的 ModernSelect：保持使用日志的内联标签排版 */
@@ -6272,18 +6239,18 @@ textarea {
 }
 
 .status-dot-success {
-  background: #22c55e;
-  box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+  background: var(--color-success);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--color-success) 40%, transparent);
 }
 
 .status-dot-error {
-  background: #ef4444;
-  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+  background: var(--color-danger);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--color-danger) 40%, transparent);
 }
 
 .status-dot-pending {
-  background: #f59e0b;
-  box-shadow: 0 0 4px rgba(245, 158, 11, 0.4);
+  background: var(--color-warning);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--color-warning) 40%, transparent);
 }
 
 .status-dot-muted {
@@ -6320,7 +6287,7 @@ textarea {
 
 .toolbar-search input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(15,118,110, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 
 .toolbar-search svg {
@@ -6378,7 +6345,7 @@ textarea {
 
 .proxy-logs-time-field input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(15,118,110, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 
 .proxy-logs-filter-reset {
@@ -7802,7 +7769,7 @@ textarea {
 
 .dt-input-box input[type="datetime-local"]:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(15,118,110, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 
 /* 空值时隐藏原生占位文字（yyyy/mm/dd --:--），改用自定义 overlay */

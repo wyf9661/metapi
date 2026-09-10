@@ -19,9 +19,10 @@ export function barHeadroom(isMobile: boolean): number {
 // Availability colour palette  (red → amber → teal-green)
 // Shared with the dashboard "24h availability" strip.
 // ----------------------------------------------------------------
-const LOW = { r: 190, g: 39, b: 52 };
-const MID = { r: 194, g: 132, b: 20 };
-const HIGH = { r: 13, g: 138, b: 116 };
+// Softened to sit next to the muted brand accent instead of shouting over it.
+const LOW = { r: 187, g: 98, b: 97 };
+const MID = { r: 200, g: 156, b: 94 };
+const HIGH = { r: 66, g: 141, b: 149 };
 
 function lerpChannel(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
@@ -55,6 +56,28 @@ export function availabilityColor(value: number | null | undefined): string {
   const c = availabilityRgb(value);
   return `rgb(${c.r}, ${c.g}, ${c.b})`;
 }
+
+// ----------------------------------------------------------------
+// Category palette  (pie / trend series)
+// Same hues as before, uniformly softened: lightness 0.66, chroma 0.078.
+// One source of truth so a new chart can never ship the old saturated set.
+// ----------------------------------------------------------------
+export const CHART_CATEGORY_PALETTE = [
+  '#4b9aa3', '#559fb0', '#64a184', '#b18a5c',
+  '#bd807a', '#938abe', '#b97e95', '#56a296',
+  '#ba8468', '#7693c2', '#9c87ba', '#70a079',
+  '#a78f59', '#868ec2', '#a982af', '#829c6a',
+];
+
+// ----------------------------------------------------------------
+// Horizontal bar gradients  (spend / tokens / calls)
+// Logo-aligned hue (185), softened, brightest at the bar tip.
+// ----------------------------------------------------------------
+export const CHART_BAR_GRADIENTS = {
+  spend: { from: '#3f838b', to: '#67bec7' },
+  tokens: { from: '#418291', to: '#6abcd0' },
+  calls: { from: '#3f8484', to: '#67bfbf' },
+};
 
 // ----------------------------------------------------------------
 // Build a horizontal-bar VChart spec shared by the model analysis

@@ -213,7 +213,7 @@ export function SortableChannelRow({
                 </span>
               ) : null}
               {channel.sourceModel ? (
-                <span className="badge badge-info" style={{ fontSize: 10 }}>
+                <span className="badge badge-muted" style={{ fontSize: 10 }}>
                   {channel.sourceModel}
                 </span>
               ) : null}
@@ -233,7 +233,7 @@ export function SortableChannelRow({
                   <span className="badge badge-muted" style={{ fontSize: 10 }}>
                     OAuth 路由池
                   </span>
-                  <span className="badge badge-info" style={{ fontSize: 10 }}>
+                  <span className="badge badge-muted" style={{ fontSize: 10 }}>
                     {routeUnitName}
                   </span>
                   <span className="badge badge-muted" style={{ fontSize: 10 }}>
@@ -464,7 +464,7 @@ export function SortableChannelRow({
           </span>
         ) : null}
         {channel.sourceModel ? (
-          <span className="badge badge-info" style={{ fontSize: 10 }}>
+          <span className="badge badge-muted" style={{ fontSize: 10 }}>
             {channel.sourceModel}
           </span>
         ) : null}
@@ -488,7 +488,7 @@ export function SortableChannelRow({
             <span className="badge badge-muted" style={{ fontSize: 10 }}>
               OAuth 路由池
             </span>
-            <span className="badge badge-info" style={{ fontSize: 10 }}>
+            <span className="badge badge-muted" style={{ fontSize: 10 }}>
               {routeUnitName}
             </span>
             <span className="badge badge-muted" style={{ fontSize: 10 }}>
