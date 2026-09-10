@@ -22,6 +22,7 @@ import { taskRoutes } from './routes/api/tasks.js';
 import { testRoutes } from './routes/api/test.js';
 
 import { downstreamApiKeysRoutes } from './routes/api/downstreamApiKeys.js';
+import { peerRoutes } from './routes/api/peer.js';
 import { oauthRoutes } from './routes/api/oauth.js';
 import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { updateCenterRoutes } from './routes/api/updateCenter.js';
@@ -331,6 +332,7 @@ await app.register(taskRoutes);
 await app.register(testRoutes);
 
 await app.register(downstreamApiKeysRoutes);
+await app.register(peerRoutes);
 await app.register(oauthRoutes);
 
 // Register probe logs routes

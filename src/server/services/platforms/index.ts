@@ -1,6 +1,7 @@
 import type { PlatformAdapter } from './base.js';
 import { NewApiAdapter } from './newApi.js';
 import { OneApiAdapter } from './oneApi.js';
+import { MetApiAdapter } from './metapi.js';
 import { withManagementRequestTimeout } from './upstreamRequestTimeout.js';
 
 import { Sub2ApiAdapter } from './sub2api.js';
@@ -25,6 +26,7 @@ const adapters: PlatformAdapter[] = [
   new NewApiAdapter(),
   new Sub2ApiAdapter(),
   new OneApiAdapter(),
+  new MetApiAdapter(),
 ];
 
 function normalizePlatform(platform: string): string {

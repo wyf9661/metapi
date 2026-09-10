@@ -3,7 +3,8 @@ import { stripTrailingSlashes } from '../urlNormalization.js';
 export type TitleHintPlatform =
   | 'sub2api'
   | 'new-api'
-  | 'one-api';
+  | 'one-api'
+  | 'metapi';
 
 type TitleRule = {
   platform: TitleHintPlatform;
@@ -19,6 +20,8 @@ const TITLE_RULES: TitleRule[] = [
   { platform: 'new-api', regex: /\bneo[-_ ]?api\b/i },
   { platform: 'new-api', regex: /wong\s*(?:\u516c\u76ca\u7ad9)/i },
   { platform: 'one-api', regex: /\bone[-_ ]?api\b/i },
+  { platform: 'metapi', regex: /\bmet\s*api\b/i },
+  { platform: 'metapi', regex: /\bmetapi\b/i },
 ];
 
 function normalizeBaseUrl(url: string): string {

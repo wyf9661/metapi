@@ -13,6 +13,9 @@ export const PLATFORM_ALIASES = Object.assign(Object.create(null), {
   'one-api': 'one-api',
 
   sub2api: 'sub2api',
+  metapi: 'metapi',
+  'met-api': 'metapi',
+  'met api': 'metapi',
   openai: 'openai',
   codex: 'codex',
   'chatgpt-codex': 'codex',
