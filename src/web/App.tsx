@@ -54,8 +54,8 @@ function resolveStoredThemeMode(): ThemeMode {
 }
 
 const AVATAR_PALETTE = [
-  '#0d9488', '#2563eb', '#7c3aed', '#db2777', '#ea580c',
-  '#059669', '#4f46e5', '#c026d3', '#dc2626', '#0891b2',
+  '#359792', '#3396a0', '#3994a9', '#4790b3', '#6088bc',
+  '#6f86bd', '#887fb8', '#9c7aae', '#3a9aa6', '#2f8f97',
 ];
 
 function hashString(input: string): number {

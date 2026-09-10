@@ -39,13 +39,13 @@ function normalizeInput(value: string): string {
 }
 
 const FALLBACK_COLORS = [
-  '#e0e7ff', '#dbeafe', '#fce7f3', '#fef3c7',
-  '#d1fae5', '#e0f2fe', '#edf2ff', '#f5f3ff',
+  '#c7f2ee', '#c6f2f4', '#c6f1f9', '#c8f0fd',
+  '#cbeeff', '#cfecff', '#d5eaff', '#dbe8ff',
 ];
 
 const FALLBACK_FOREGROUNDS = [
-  '#4338ca', '#1d4ed8', '#be185d', '#b45309',
-  '#047857', '#0369a1', '#2563eb', '#6d28d9',
+  '#006762', '#00656c', '#006475', '#00617d',
+  '#005e85', '#0d5a8b', '#2a568e', '#3c518f',
 ];
 
 /** Absolute icon URLs for brands missing from the shared icon CDN. */

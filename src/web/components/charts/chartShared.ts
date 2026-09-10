@@ -22,7 +22,7 @@ export function barHeadroom(isMobile: boolean): number {
 // Softened to sit next to the muted brand accent instead of shouting over it.
 const LOW = { r: 203, g: 70, b: 68 };
 const MID = { r: 215, g: 150, b: 40 };
-const HIGH = { r: 3, g: 127, b: 150 };
+const HIGH = { r: 38, g: 143, b: 79 };  // healthy = green (explicitly not the brand accent)  // theme success — healthy is green, not the brand accent
 
 function lerpChannel(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
@@ -59,24 +59,27 @@ export function availabilityColor(value: number | null | undefined): string {
 
 // ----------------------------------------------------------------
 // Category palette  (pie / trend series)
-// Same hues as before, uniformly softened: lightness 0.66, chroma 0.078.
+// One harmonised wheel: equal lightness (0.62) and chroma (0.095), 16 hues in
+// 22.5-degree steps starting at the brand accent, so no series shouts louder than
+// the others and the old amber/red cast no longer fights the cyan theme.
 // One source of truth so a new chart can never ship the old saturated set.
 // ----------------------------------------------------------------
 export const CHART_CATEGORY_PALETTE = [
-  '#03a0bc', '#029ec9', '#44a477', '#b88433',
-  '#cc726b', '#9181cf', '#c57093', '#13a692',
-  '#c7794b', '#658fd5', '#9a7ecb', '#5aa266',
-  '#a58e2f', '#7b89d5', '#b276b6', '#7f9b48',
+  '#3194ab', '#4a8eb9', '#6586c0', '#7f7ebe',
+  '#9477b4', '#a671a3', '#b26e8d', '#b86d75',
+  '#b8715e', '#b17749', '#a3803e', '#908940',
+  '#78914f', '#5c9666', '#3f997e', '#2a9896',
 ];
 
 // ----------------------------------------------------------------
 // Horizontal bar gradients  (spend / tokens / calls)
-// Logo-aligned hue (185), softened, brightest at the bar tip.
+// Straight from the logo's three colours: #0d9488 (core + source nodes),
+// #14b8a6 (the converging strokes) and #06b6d4 (core top).
 // ----------------------------------------------------------------
 export const CHART_BAR_GRADIENTS = {
-  spend: { from: '#037f96', to: '#12c5e7' },
-  tokens: { from: '#067da2', to: '#02c2fa' },
-  calls: { from: '#008287', to: '#14c9d1' },
+  spend: { from: '#14b8a6', to: '#06b6d4' },
+  tokens: { from: '#0d9488', to: '#06b6d4' },
+  calls: { from: '#14b8a6', to: '#0d9488' },
 };
 
 // ----------------------------------------------------------------

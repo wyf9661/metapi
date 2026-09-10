@@ -14,13 +14,13 @@
   --color-text-primary: oklch(0.270 0.020 80);
   --color-text-secondary: oklch(0.430 0.018 80);
   --color-text-muted: oklch(0.580 0.014 80);
-  --color-primary: oklch(0.575 0.100 216);
-  --color-primary-light: oklch(0.940 0.046 216);
+  --color-primary: oklch(0.505 0.090 208);
+  --color-primary-light: oklch(0.940 0.048 208);
   --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
-  --color-primary-hover: oklch(0.505 0.088 216);
+  --color-primary-hover: oklch(0.440 0.078 208);
   --color-success: oklch(0.575 0.135 152);
   --color-success-soft: oklch(0.938 0.060 152);
-  --color-warning: oklch(0.672 0.150 70);
+  --color-warning: oklch(0.680 0.125 72);
   --color-warning-soft: oklch(0.942 0.065 70);
   --color-danger: oklch(0.555 0.180 25);
   --color-danger-soft: oklch(0.938 0.060 25);
@@ -54,13 +54,13 @@
   --color-text-primary: oklch(0.930 0.008 90);
   --color-text-secondary: oklch(0.790 0.014 90);
   --color-text-muted: oklch(0.660 0.014 90);
-  --color-primary: oklch(0.735 0.130 216);
-  --color-primary-light: oklch(0.305 0.055 216);
+  --color-primary: oklch(0.720 0.126 208);
+  --color-primary-light: oklch(0.312 0.058 208);
   --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
-  --color-primary-hover: oklch(0.800 0.142 216);
+  --color-primary-hover: oklch(0.775 0.138 208);
   --color-success: oklch(0.720 0.135 152);
   --color-success-soft: oklch(0.298 0.055 152);
-  --color-warning: oklch(0.780 0.145 70);
+  --color-warning: oklch(0.780 0.120 72);
   --color-warning-soft: oklch(0.338 0.062 70);
   --color-danger: oklch(0.663 0.170 25);
   --color-danger-soft: oklch(0.338 0.068 25);
@@ -681,7 +681,7 @@ html[data-layout="desktop"] .main-content {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ccfbf1, #99f6e4);
+  background: linear-gradient(135deg, var(--color-primary-light), color-mix(in srgb, var(--color-primary) 30%, transparent));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -774,7 +774,8 @@ html[data-layout="desktop"] .main-content {
 .sidebar-item.active {
   color: var(--color-primary);
   background: var(--color-selection-bg);
-  font-weight: 600;
+  /* Selection is carried by colour + the left bar, not by weight: bolding the
+     active entry re-flows the (centred) icon in the vertical rail. */
 }
 
 .sidebar-item.active::before {
@@ -2041,44 +2042,12 @@ html[data-layout="desktop"] .main-content {
   background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
-.checkin-toggle-badge {
-  min-width: 64px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: transparent;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
 
 /* Outlined, matching the sites status pills: the button shape already says
    "clickable", so it does not need a saturated fill to stand out. */
-.checkin-toggle-badge.is-on {
-  color: var(--color-success);
-  border-color: color-mix(in srgb, var(--color-success) 45%, transparent);
-}
 
-.checkin-toggle-badge.is-off {
-  color: var(--color-text-muted);
-  border-color: color-mix(in srgb, var(--color-text-muted) 35%, transparent);
-}
 
-.checkin-toggle-badge:hover:not(:disabled) {
-  background: color-mix(in srgb, currentColor 8%, transparent);
-}
 
-.checkin-toggle-badge:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-  transform: none;
-  box-shadow: none;
-}
 
 .token-table-action-btn {
   padding: 4px 6px;
@@ -2152,7 +2121,50 @@ html[data-layout="desktop"] .main-content {
   width: 10%;
 }
 
-.accounts-site-cell .badge-link {
+.accounts-site-cell /* One toggle for route enable and account check-in: outlined, so it reads as a
+   control rather than a filled status chip, and driven by theme tokens. */
+.status-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 52px;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.status-toggle.is-on {
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 45%, transparent);
+}
+
+.status-toggle.is-off {
+  color: var(--color-text-muted);
+  border-color: color-mix(in srgb, var(--color-text-muted) 35%, transparent);
+}
+
+.status-toggle:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.status-toggle:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.status-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.badge-link {
   display: inline-block;
   max-width: 100%;
   vertical-align: middle;
@@ -2757,19 +2769,8 @@ html[data-layout="desktop"] .main-content {
   }
 }
 
-.route-enable-toggle {
-  border: 1px solid transparent;
-  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
 
-.route-enable-toggle:hover {
-  transform: translateY(-1px);
-}
 
-.route-enable-toggle:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
-  outline-offset: 2px;
-}
 
 [data-tooltip] {
   position: relative;
@@ -2799,7 +2800,7 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   pointer-events: none;
   z-index: 20000;
   opacity: 0;
-  color: color-mix(in srgb, var(--color-text-primary) 90%, #1c1917);
+  color: color-mix(in srgb, var(--color-text-primary) 90%, #17191a);
   background: color-mix(in srgb, #ffffff 92%, var(--color-primary) 8%);
   border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
   box-shadow: 0 12px 30px rgba(28,25,23, 0.14);
@@ -2906,29 +2907,9 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   outline-offset: 2px;
 }
 
-.route-enable-toggle.is-enabled {
-  background: var(--color-success-soft);
-  color: var(--color-success);
-  border-color: color-mix(in srgb, var(--color-success) 28%, transparent);
-}
 
-.route-enable-toggle.is-enabled:hover {
-  background: color-mix(in srgb, var(--color-success) 16%, transparent);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-success) 22%, transparent);
-}
 
-.route-enable-toggle.is-disabled {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--color-text-muted);
-  border-color: rgba(0, 0, 0, 0.08);
-}
 
-.route-enable-toggle.is-disabled:hover {
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-card));
-  color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 22%, transparent);
-}
 
 [data-theme="dark"] .badge-success {
   background: #0a1f14;
@@ -2936,18 +2917,9 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   border: 1px solid rgba(74, 222, 128, 0.24);
 }
 
-[data-theme="dark"] .badge-error,
-[data-theme="dark"] .badge-danger {
-  background: #241111;
-  color: #f87171;
-  border: 1px solid rgba(248, 113, 113, 0.24);
-}
 
-[data-theme="dark"] .badge-warning {
-  background: #241708;
-  color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, 0.24);
-}
+
+
 
 [data-theme="dark"] .badge-info {
   background: #1e3a8a;
@@ -2988,13 +2960,13 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 
 [data-theme="dark"] [data-tooltip]::after {
   color: color-mix(in srgb, #e3ddd5 94%, white);
-  background: color-mix(in srgb, #1c1917 88%, var(--color-primary) 12%);
+  background: color-mix(in srgb, #17191a 88%, var(--color-primary) 12%);
   border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
   box-shadow: 0 12px 30px rgba(28,25,23, 0.48);
 }
 
 [data-theme="dark"] [data-tooltip]::before {
-  background: color-mix(in srgb, #1c1917 88%, var(--color-primary) 12%);
+  background: color-mix(in srgb, #17191a 88%, var(--color-primary) 12%);
   border-right-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
   border-bottom-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
@@ -3017,7 +2989,7 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   line-height: 1.45;
   text-align: left;
   white-space: normal;
-  color: color-mix(in srgb, var(--color-text-primary) 90%, #1c1917);
+  color: color-mix(in srgb, var(--color-text-primary) 90%, #17191a);
   background: color-mix(in srgb, #ffffff 92%, var(--color-primary) 8%);
   border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
   box-shadow: 0 12px 30px rgba(28,25,23, 0.14);
@@ -3053,13 +3025,13 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 
 [data-theme="dark"] .tooltip-bubble {
   color: color-mix(in srgb, #e3ddd5 94%, white);
-  background: color-mix(in srgb, #1c1917 88%, var(--color-primary) 12%);
+  background: color-mix(in srgb, #17191a 88%, var(--color-primary) 12%);
   border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
   box-shadow: 0 12px 30px rgba(28,25,23, 0.48);
 }
 
 [data-theme="dark"] .tooltip-bubble-arrow {
-  background: color-mix(in srgb, #1c1917 88%, var(--color-primary) 12%);
+  background: color-mix(in srgb, #17191a 88%, var(--color-primary) 12%);
 }
 
 [data-theme="dark"] .tooltip-bubble-arrow-top {
@@ -3075,7 +3047,7 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 /* VChart tooltip bubbles: theme-aware panel so the chart tooltip follows
    light/dark instead of staying white. */
 .chart-tooltip {
-  color: color-mix(in srgb, var(--color-text-primary) 90%, #1c1917) !important;
+  color: color-mix(in srgb, var(--color-text-primary) 90%, #17191a) !important;
   background: color-mix(in srgb, var(--color-bg-card) 96%, var(--color-primary) 4%) !important;
   border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent) !important;
   border-radius: var(--radius-md);
@@ -3099,27 +3071,9 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   }
 }
 
-[data-theme="dark"] .route-enable-toggle.is-enabled {
-  background: #0a1f14;
-  color: #4ade80;
-  border-color: color-mix(in srgb, #4ade80 35%, transparent);
-}
 
-[data-theme="dark"] .route-enable-toggle.is-enabled:hover {
-  background: color-mix(in srgb, #0a1f14 70%, #1f2937);
-  box-shadow: 0 2px 8px color-mix(in srgb, #4ade80 28%, transparent);
-}
 
-[data-theme="dark"] .route-enable-toggle.is-disabled {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--color-text-muted);
-  border-color: rgba(255, 255, 255, 0.12);
-}
 
-[data-theme="dark"] .route-enable-toggle.is-disabled:hover {
-  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-bg-card));
-  color: #2dd4bf;
-}
 
 /* ===== Tabs ===== */
 .tabs {
@@ -4424,7 +4378,7 @@ textarea {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: #1c1917;
+  color: #17191a;
 }
 
 .login-capability-desc {
@@ -4450,7 +4404,7 @@ textarea {
   border-radius: 999px;
   border: 1px solid rgba(13,148,136, 0.12);
   background: rgba(255, 255, 255, 0.76);
-  color: #1c1917;
+  color: #17191a;
   text-decoration: none;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -4598,7 +4552,7 @@ textarea {
 [data-theme="dark"] .brand-mark-canvas,
 [data-theme="dark"] .login-auth-stage,
 [data-theme="dark"] .login-auth-panel {
-  background: color-mix(in srgb, var(--color-bg-card) 92%, #1c1917);
+  background: color-mix(in srgb, var(--color-bg-card) 92%, #17191a);
 }
 
 [data-theme="dark"] .login-brand-kicker,
@@ -5160,9 +5114,9 @@ textarea {
 }
 
 [data-theme="dark"] .info-tip {
-  background: #241708;
-  border-color: #2c1d0e;
-  color: #fbbf24;
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--color-warning) 34%, transparent);
+  color: var(--color-warning);
 }
 
 .alert {
@@ -5648,21 +5602,23 @@ textarea {
 }
 
 .model-tag-blue {
-  background: #f0f4fa;
-  border-color: #c3d9f2;
-  color: #2563eb;
+  /* Site names are labels, not statuses. */
+  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  color: var(--color-text-secondary);
 }
 
 .model-tag-purple {
-  background: #f2f0fa;
-  border-color: #d5d0f0;
-  color: #7c3aed;
+  background: var(--color-primary-light);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  color: var(--color-primary);
 }
 
 .model-tag-orange {
-  background: #faf3ea;
-  border-color: #f2d3a8;
-  color: #ea580c;
+  /* The "risk" tag is a warning, so it uses the warning token. */
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--color-warning) 34%, transparent);
+  color: var(--color-warning);
 }
 
 .model-tag-gray {
@@ -5671,29 +5627,13 @@ textarea {
   color: var(--color-text-muted);
 }
 
-[data-theme="dark"] .model-tag-green {
-  background: #0a1f14;
-  border-color: #12281c;
-  color: #4ade80;
-}
 
-[data-theme="dark"] .model-tag-blue {
-  background: #16233a;
-  border-color: #1d2f42;
-  color: #60a5fa;
-}
 
-[data-theme="dark"] .model-tag-purple {
-  background: #1d1140;
-  border-color: #241046;
-  color: #a78bfa;
-}
 
-[data-theme="dark"] .model-tag-orange {
-  background: #241608;
-  border-color: #2c1d0e;
-  color: #fb923c;
-}
+
+
+
+
 
 [data-theme="dark"] .model-tag-gray {
   background: rgba(255, 255, 255, 0.05);
@@ -6186,15 +6126,15 @@ textarea {
 }
 
 .stat-summary-blue {
-  background: linear-gradient(135deg, #2563eb, #60a5fa);
+  background: linear-gradient(135deg, oklch(0.520 0.105 216), oklch(0.700 0.100 216));
 }
 
 .stat-summary-green {
-  background: linear-gradient(135deg, #059669, #34d399);
+  background: linear-gradient(135deg, oklch(0.520 0.105 190), oklch(0.710 0.100 190));
 }
 
 .stat-summary-orange {
-  background: linear-gradient(135deg, #ea580c, #fb923c);
+  background: linear-gradient(135deg, oklch(0.560 0.100 250), oklch(0.720 0.095 250));
 }
 
 /* ===== Log Detail Row ===== */
@@ -7550,7 +7490,7 @@ textarea {
 }
 
 [data-theme="dark"] .filter-chip {
-  background: color-mix(in srgb, var(--color-bg-card) 82%, #1c1917 18%);
+  background: color-mix(in srgb, var(--color-bg-card) 82%, #17191a 18%);
   box-shadow: none;
 }
 

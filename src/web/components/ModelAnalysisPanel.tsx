@@ -227,8 +227,11 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         width: 22, height: 22, borderRadius: 'var(--radius-sm)', fontSize: 11, fontWeight: 700,
+                        // Rank is a position, not a medal: three steps of the brand
+                        // hue read as "front of the list" without the gold/silver/
+                        // bronze cast that clashed with a cyan theme.
                         background: index < 3
-                          ? ['linear-gradient(135deg,#fbbf24,#f59e0b)', 'linear-gradient(135deg,#94a3b8,#cbd5e1)', 'linear-gradient(135deg,#d97706,#fbbf24)'][index]
+                          ? ['#006b83', '#288ea4', '#6bb1c3'][index]
                           : 'var(--color-bg)',
                         color: index < 3 ? '#fff' : 'var(--color-text-muted)',
                       }}>

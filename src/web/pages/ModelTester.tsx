@@ -57,9 +57,9 @@ function formatJson(value: unknown): string {
 }
 
 function statusColor(ok: boolean | null, running: boolean): string {
-  if (running) return 'var(--color-warning, #d97706)';
-  if (ok === true) return 'var(--color-success, #16a34a)';
-  if (ok === false) return 'var(--color-danger, #dc2626)';
+  if (running) return 'var(--color-warning)';
+  if (ok === true) return 'var(--color-success)';
+  if (ok === false) return 'var(--color-danger)';
   return 'var(--color-text-muted)';
 }
 
@@ -286,7 +286,7 @@ export default function ModelTester() {
           </div>
 
           {listError ? (
-            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-danger, #dc2626)' }}>
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-danger)' }}>
               {listError}
             </div>
           ) : null}
@@ -373,7 +373,7 @@ export default function ModelTester() {
               </div>
 
               {probeError ? (
-                <div style={{ fontSize: 12, color: 'var(--color-danger, #dc2626)', wordBreak: 'break-word' }}>
+                <div style={{ fontSize: 12, color: 'var(--color-danger)', wordBreak: 'break-word' }}>
                   {probeError}
                 </div>
               ) : null}
