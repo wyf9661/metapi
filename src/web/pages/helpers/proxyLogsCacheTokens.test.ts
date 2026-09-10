@@ -37,9 +37,11 @@ describe('usage log cache-aware token display', () => {
 });
 
 describe('throughput display', () => {
-  it('reports tokens per second with the t/s unit', () => {
+  it('reports completion tokens per second with the t/s unit', () => {
+    // Generation speed only — a 50k cached prefix must not inflate the rate
+    // (it shows up as low latency instead).
     expect(formatTokensPerSecond(2300, 10000)).toBe('230 t/s');
-    expect(formatTokensPerSecond(50716, 19033)).toBe('2665 t/s');
+    expect(formatTokensPerSecond(230, 19033)).toBe('12 t/s');
   });
 
   it('returns null without usable tokens or latency', () => {

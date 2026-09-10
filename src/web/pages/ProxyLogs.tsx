@@ -2035,7 +2035,7 @@ export default function ProxyLogs() {
                       <div className="mobile-summary-metric-label">吞吐率</div>
                       <div className="mobile-summary-metric-value">
                         {formatTokensPerSecond(
-                          resolveProxyLogInputTokens(detailLog) + (detailLog.completionTokens ?? 0),
+                          detailLog.completionTokens,
                           detailLog.latencyMs,
                         ) ?? '-'}
                       </div>
@@ -2327,12 +2327,12 @@ export default function ProxyLogs() {
                       </td>
                       <td>
                         {(() => {
-                          // Total throughput including cached input: the log now
-                          // records the cache split, and upstreams that report
-                          // prompt_tokens without the cached prefix would
-                          // otherwise show a tiny rate (2026-09-09).
+                          // NewAPI-style generation speed: completion tokens
+                          // per second. Cached input is deliberately excluded —
+                          // counting a 50k cached prefix against a ~19s request
+                          // produced absurd rates (2026-09-10).
                           const tpsLabel = formatTokensPerSecond(
-                            resolveProxyLogInputTokens(detailLog) + (detailLog.completionTokens ?? 0),
+                            detailLog.completionTokens,
                             detailLog.latencyMs,
                           );
                           if (tpsLabel === null) {
