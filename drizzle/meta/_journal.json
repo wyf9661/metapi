@@ -281,6 +281,20 @@
       "when": 1788446350209,
       "tag": "0040_downstream_api_key_max_inflight",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1789006048212,
+      "tag": "0041_proxy_log_cache_read_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1789006048213,
+      "tag": "0042_proxy_log_cache_creation_tokens",
+      "breakpoints": true
     }
   ]
 }

@@ -260,6 +260,11 @@ export const proxyLogs = sqliteTable('proxy_logs', {
   promptTokens: integer('prompt_tokens'),
   completionTokens: integer('completion_tokens'),
   totalTokens: integer('total_tokens'),
+  // Cache token split, persisted so the usage log list can show real input
+  // (upstreams may report prompt_tokens WITHOUT the cached prefix, e.g.
+  // prompt_tokens=3 + cache_read=50483 with promptTokensIncludeCache=false).
+  cacheReadTokens: integer('cache_read_tokens'),
+  cacheCreationTokens: integer('cache_creation_tokens'),
   estimatedCost: real('estimated_cost'),
   billingDetails: text('billing_details'),
   clientFamily: text('client_family'),

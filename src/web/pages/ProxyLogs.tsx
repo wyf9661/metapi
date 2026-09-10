@@ -24,7 +24,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import PageJumpInput from '../components/PageJumpInput.js';
 import PaginationControls from '../components/PaginationControls.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
-import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, formatTokensPerSecond, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, stringifyStoredDebugValue, toApiTimeBoundary, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
+import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteBgColor, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, formatTokensPerSecond, latencyBgColor, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, resolveProxyLogInputTokens, stringifyStoredDebugValue, toApiTimeBoundary, formatProxyLogTokenPair, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
 import {CompactSummaryMetric, DetailDisclosureCard, copyTextToClipboard, debugCheckboxRowStyle, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formInputStyle, formSectionLabelStyle, formSectionStyle, renderProxyLogClientCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
 import {
   renderStoredDebugDetails,
@@ -33,6 +33,11 @@ import {
 import { tr } from '../i18n.js';
 import DateTimeInput from '../components/DateTimeInput.js';
 import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
+
+// Column count of the desktop usage-log table. Expanded detail rows must span
+// every column (colSpan); bump this whenever a column is added or merged so the
+// last column never renders without the detail row's background.
+const PROXY_LOG_TABLE_COLUMN_COUNT = 12;
 
 type ProxyLogDetailState = {
   loading: boolean;
@@ -2030,7 +2035,7 @@ export default function ProxyLogs() {
                       <div className="mobile-summary-metric-label">吞吐率</div>
                       <div className="mobile-summary-metric-value">
                         {formatTokensPerSecond(
-                          detailLog.completionTokens,
+                          resolveProxyLogInputTokens(detailLog) + (detailLog.completionTokens ?? 0),
                           detailLog.latencyMs,
                         ) ?? '-'}
                       </div>
@@ -2052,15 +2057,27 @@ export default function ProxyLogs() {
                       </div>
                     </div>
                     <div className="mobile-summary-metric">
-                      <div className="mobile-summary-metric-label">输入</div>
+                      <div className="mobile-summary-metric-label">{tr('输入/输出')}</div>
                       <div className="mobile-summary-metric-value">
-                        {formatProxyLogTokenValue(log.promptTokens)}
-                      </div>
-                    </div>
-                    <div className="mobile-summary-metric">
-                      <div className="mobile-summary-metric-label">输出</div>
-                      <div className="mobile-summary-metric-value">
-                        {formatProxyLogTokenValue(log.completionTokens)}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span>
+                            {formatProxyLogTokenPair(
+                              resolveProxyLogInputTokens(detailLog),
+                              detailLog.completionTokens,
+                            )}
+                          </span>
+                          {(detailLog.cacheReadTokens ?? 0) > 0
+                            || (detailLog.cacheCreationTokens ?? 0) > 0 ? (
+                            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                              {(detailLog.cacheReadTokens ?? 0) > 0
+                                ? `${tr('缓存')}↓ ${formatProxyLogTokenValue(detailLog.cacheReadTokens)}`
+                                : null}
+                              {(detailLog.cacheCreationTokens ?? 0) > 0
+                                ? ` ↑ ${formatProxyLogTokenValue(detailLog.cacheCreationTokens)}`
+                                : null}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                     <div className="mobile-summary-metric">
@@ -2180,8 +2197,7 @@ export default function ProxyLogs() {
                 <th>吞吐率</th>
                 <th>首字</th>
                 <th>用时</th>
-                <th>输入</th>
-                <th>输出</th>
+                <th>{tr('输入/输出')}</th>
                 <th>花费</th>
                 <th>重试</th>
               </tr>
@@ -2311,8 +2327,12 @@ export default function ProxyLogs() {
                       </td>
                       <td>
                         {(() => {
+                          // Total throughput including cached input: the log now
+                          // records the cache split, and upstreams that report
+                          // prompt_tokens without the cached prefix would
+                          // otherwise show a tiny rate (2026-09-09).
                           const tpsLabel = formatTokensPerSecond(
-                            detailLog.completionTokens,
+                            resolveProxyLogInputTokens(detailLog) + (detailLog.completionTokens ?? 0),
                             detailLog.latencyMs,
                           );
                           if (tpsLabel === null) {
@@ -2377,16 +2397,33 @@ export default function ProxyLogs() {
                           color: 'var(--color-text-secondary)',
                         }}
                       >
-                        {formatProxyLogTokenValue(log.promptTokens)}
-                      </td>
-                      <td
-                        style={{
-                          fontSize: 12,
-                          fontVariantNumeric: 'tabular-nums',
-                          color: 'var(--color-text-secondary)',
-                        }}
-                      >
-                        {formatProxyLogTokenValue(log.completionTokens)}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span>
+                            {formatProxyLogTokenPair(
+                              resolveProxyLogInputTokens(detailLog),
+                              detailLog.completionTokens,
+                            )}
+                          </span>
+                          {(detailLog.cacheReadTokens ?? 0) > 0
+                            || (detailLog.cacheCreationTokens ?? 0) > 0 ? (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: 'var(--color-text-muted)',
+                                opacity: 0.85,
+                              }}
+                            >
+                              {(detailLog.cacheReadTokens ?? 0) > 0
+                                ? `${tr('缓存')}↓ ${formatProxyLogTokenValue(detailLog.cacheReadTokens)}`
+                                : null}
+                              {(detailLog.cacheReadTokens ?? 0) > 0
+                                && (detailLog.cacheCreationTokens ?? 0) > 0 ? '  ' : null}
+                              {(detailLog.cacheCreationTokens ?? 0) > 0
+                                ? `↑ ${formatProxyLogTokenValue(detailLog.cacheCreationTokens)}`
+                                : null}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td
                         style={{
@@ -2421,7 +2458,7 @@ export default function ProxyLogs() {
                     </tr>
                     {expanded === log.id && (
                       <tr style={{ background: 'var(--color-bg)' }}>
-                        <td colSpan={12} style={{ padding: 0, background: 'var(--color-bg)' }}>
+                        <td colSpan={PROXY_LOG_TABLE_COLUMN_COUNT} style={{ padding: 0, background: 'var(--color-bg)' }}>
                           <div className="anim-collapse is-open">
                             <div className="anim-collapse-inner">
                               <div

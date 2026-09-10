@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   hasProxyLogBillingDetailsColumnMock,
+  hasProxyLogCacheTokensColumnsMock,
   hasProxyLogClientColumnsMock,
   hasProxyLogDownstreamApiKeyIdColumnMock,
   hasProxyLogStreamTimingColumnsMock,
@@ -12,6 +13,7 @@ const {
   proxyLogsSchema,
 } = vi.hoisted(() => ({
   hasProxyLogBillingDetailsColumnMock: vi.fn(),
+  hasProxyLogCacheTokensColumnsMock: vi.fn(),
   hasProxyLogClientColumnsMock: vi.fn(),
   hasProxyLogDownstreamApiKeyIdColumnMock: vi.fn(),
   hasProxyLogStreamTimingColumnsMock: vi.fn(),
@@ -34,6 +36,8 @@ const {
     promptTokens: 'prompt_tokens',
     completionTokens: 'completion_tokens',
     totalTokens: 'total_tokens',
+    cacheReadTokens: 'cache_read_tokens',
+    cacheCreationTokens: 'cache_creation_tokens',
     estimatedCost: 'estimated_cost',
     billingDetails: 'billing_details',
     clientFamily: 'client_family',
@@ -55,6 +59,7 @@ vi.mock('../db/index.js', () => ({
     proxyLogs: proxyLogsSchema,
   },
   hasProxyLogBillingDetailsColumn: (...args: unknown[]) => hasProxyLogBillingDetailsColumnMock(...args),
+  hasProxyLogCacheTokensColumns: (...args: unknown[]) => hasProxyLogCacheTokensColumnsMock(...args),
   hasProxyLogClientColumns: (...args: unknown[]) => hasProxyLogClientColumnsMock(...args),
   hasProxyLogDownstreamApiKeyIdColumn: (...args: unknown[]) => hasProxyLogDownstreamApiKeyIdColumnMock(...args),
   hasProxyLogStreamTimingColumns: (...args: unknown[]) => hasProxyLogStreamTimingColumnsMock(...args),
@@ -66,6 +71,7 @@ import { insertProxyLog, parseProxyLogBillingDetails, withProxyLogSelectFields }
 describe('proxyLogStore', () => {
   beforeEach(() => {
     hasProxyLogBillingDetailsColumnMock.mockReset();
+    hasProxyLogCacheTokensColumnsMock.mockReset();
     hasProxyLogClientColumnsMock.mockReset();
     hasProxyLogDownstreamApiKeyIdColumnMock.mockReset();
     hasProxyLogStreamTimingColumnsMock.mockReset();
@@ -74,6 +80,7 @@ describe('proxyLogStore', () => {
     dbInsertValuesMock.mockReset();
     dbInsertRunMock.mockReset();
     hasProxyLogBillingDetailsColumnMock.mockResolvedValue(false);
+    hasProxyLogCacheTokensColumnsMock.mockResolvedValue(false);
     hasProxyLogClientColumnsMock.mockResolvedValue(false);
     hasProxyLogDownstreamApiKeyIdColumnMock.mockResolvedValue(false);
     hasProxyLogStreamTimingColumnsMock.mockResolvedValue(false);
@@ -85,6 +92,50 @@ describe('proxyLogStore', () => {
     dbInsertValuesMock.mockReturnValue({
       run: (...args: unknown[]) => dbInsertRunMock(...args),
     });
+  });
+
+  it('persists cache tokens lifted from billing details', async () => {
+    hasProxyLogCacheTokensColumnsMock.mockResolvedValue(true);
+    hasProxyLogBillingDetailsColumnMock.mockResolvedValue(true);
+
+    await insertProxyLog({
+      modelRequested: 'claude-sonnet-4-5',
+      status: 'success',
+      promptTokens: 3,
+      completionTokens: 230,
+      billingDetails: { usage: { cacheReadTokens: 50483, cacheCreationTokens: 181 } },
+    } as unknown as Parameters<typeof insertProxyLog>[0]);
+
+    const values = dbInsertValuesMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(values.cacheReadTokens).toBe(50483);
+    expect(values.cacheCreationTokens).toBe(181);
+  });
+
+  it('prefers explicit cache tokens over the billing details copy', async () => {
+    hasProxyLogCacheTokensColumnsMock.mockResolvedValue(true);
+
+    await insertProxyLog({
+      modelRequested: 'claude-sonnet-4-5',
+      status: 'success',
+      cacheReadTokens: 100,
+      cacheCreationTokens: 5,
+      billingDetails: { usage: { cacheReadTokens: 50483, cacheCreationTokens: 181 } },
+    } as unknown as Parameters<typeof insertProxyLog>[0]);
+
+    const values = dbInsertValuesMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(values.cacheReadTokens).toBe(100);
+    expect(values.cacheCreationTokens).toBe(5);
+  });
+
+  it('exposes the cache token columns in select fields', async () => {
+    hasProxyLogCacheTokensColumnsMock.mockResolvedValue(true);
+    const runner = vi.fn().mockResolvedValue([]);
+
+    await withProxyLogSelectFields(runner);
+
+    expect(runner.mock.calls[0][0].includeCacheTokens).toBe(true);
+    expect(runner.mock.calls[0][0].fields.cacheReadTokens).toBe('cache_read_tokens');
+    expect(runner.mock.calls[0][0].fields.cacheCreationTokens).toBe('cache_creation_tokens');
   });
 
   it('retries proxy log selects without billing details when the column is missing', async () => {

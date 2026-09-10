@@ -52,6 +52,7 @@ let sqliteConnection: Database.Database | null = null;
 let mysqlPool: mysql.Pool | null = null;
 let pgPool: pg.Pool | null = null;
 let proxyLogBillingDetailsColumnAvailable: boolean | null = null;
+let proxyLogCacheTokensColumnsAvailable: boolean | null = null;
 let proxyLogDownstreamApiKeyIdColumnAvailable: boolean | null = null;
 let proxyLogClientColumnsAvailable: boolean | null = null;
 let proxyLogStreamTimingColumnsAvailable: boolean | null = null;
@@ -765,6 +766,85 @@ function isDuplicateIndexError(error: unknown): boolean {
     || lowered.includes('already exists')
     || lowered.includes('relation')
     || lowered.includes('duplicate index');
+}
+
+export async function hasProxyLogCacheTokensColumns(): Promise<boolean> {
+  if (proxyLogCacheTokensColumnsAvailable !== null) {
+    return proxyLogCacheTokensColumnsAvailable;
+  }
+
+  if (runtimeDbDialect === 'sqlite') {
+    proxyLogCacheTokensColumnsAvailable = tableExists('proxy_logs')
+      && tableColumnExists('proxy_logs', 'cache_read_tokens');
+    return proxyLogCacheTokensColumnsAvailable;
+  }
+
+  if (runtimeDbDialect === 'mysql') {
+    if (!mysqlPool) return false;
+    const [rows] = await mysqlPool.query('SHOW COLUMNS FROM `proxy_logs` LIKE ?', ['cache_read_tokens']);
+    proxyLogCacheTokensColumnsAvailable = Array.isArray(rows) && rows.length > 0;
+    return proxyLogCacheTokensColumnsAvailable;
+  }
+
+  if (!pgPool) return false;
+  const result = await pgPool.query(
+    'SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2 LIMIT 1',
+    ['proxy_logs', 'cache_read_tokens'],
+  );
+  proxyLogCacheTokensColumnsAvailable = Number(result.rowCount || 0) > 0;
+  return proxyLogCacheTokensColumnsAvailable;
+}
+
+export async function ensureProxyLogCacheTokensColumns(): Promise<boolean> {
+  if (runtimeDbDialect === 'sqlite') {
+    if (tableExists('proxy_logs')) {
+      if (!tableColumnExists('proxy_logs', 'cache_read_tokens')) {
+        execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN cache_read_tokens integer;');
+      }
+      if (!tableColumnExists('proxy_logs', 'cache_creation_tokens')) {
+        execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN cache_creation_tokens integer;');
+      }
+      proxyLogCacheTokensColumnsAvailable = true;
+    }
+    return proxyLogCacheTokensColumnsAvailable === true;
+  }
+
+  if (await hasProxyLogCacheTokensColumns()) {
+    return true;
+  }
+
+  try {
+    if (runtimeDbDialect === 'mysql') {
+      if (!mysqlPool) return false;
+      await executeLegacyCompat(
+        (statement) => mysqlPool!.query(statement).then(() => undefined),
+        'ALTER TABLE `proxy_logs` ADD COLUMN `cache_read_tokens` INT',
+      );
+      await executeLegacyCompat(
+        (statement) => mysqlPool!.query(statement).then(() => undefined),
+        'ALTER TABLE `proxy_logs` ADD COLUMN `cache_creation_tokens` INT',
+      );
+    } else {
+      if (!pgPool) return false;
+      await executeLegacyCompat(
+        (statement) => pgPool!.query(statement).then(() => undefined),
+        'ALTER TABLE "proxy_logs" ADD COLUMN "cache_read_tokens" integer',
+      );
+      await executeLegacyCompat(
+        (statement) => pgPool!.query(statement).then(() => undefined),
+        'ALTER TABLE "proxy_logs" ADD COLUMN "cache_creation_tokens" integer',
+      );
+    }
+    proxyLogCacheTokensColumnsAvailable = true;
+    return true;
+  } catch (error) {
+    if (isDuplicateColumnError(error)) {
+      proxyLogCacheTokensColumnsAvailable = true;
+      return true;
+    }
+    proxyLogCacheTokensColumnsAvailable = false;
+    return false;
+  }
 }
 
 export async function hasProxyLogBillingDetailsColumn(): Promise<boolean> {

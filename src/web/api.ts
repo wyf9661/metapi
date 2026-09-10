@@ -433,6 +433,8 @@ export type ProxyLogListItem = {
   usageSource?: ProxyLogUsageSource;
   promptTokens?: number | null;
   completionTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheCreationTokens?: number | null;
   estimatedCost?: number | null;
   requestTraceId?: string | null;
 };

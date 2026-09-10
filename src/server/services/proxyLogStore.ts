@@ -3,6 +3,7 @@ import {
   db,
   schema,
   hasProxyLogBillingDetailsColumn,
+  hasProxyLogCacheTokensColumns,
   hasProxyLogClientColumns,
   hasProxyLogDownstreamApiKeyIdColumn,
   hasProxyLogStreamTimingColumns,
@@ -26,6 +27,8 @@ export type ProxyLogInsertInput = {
   promptTokens?: number | null;
   completionTokens?: number | null;
   totalTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheCreationTokens?: number | null;
   estimatedCost?: number | null;
   billingDetails?: unknown;
   clientFamily?: string | null;
@@ -84,12 +87,17 @@ function buildProxyLogRequestTraceSelectFields() {
 
 function buildProxyLogSelectFields(options?: {
   includeBillingDetails?: boolean;
+  includeCacheTokens?: boolean;
   includeClientFields?: boolean;
   includeStreamTimingFields?: boolean;
   includeRequestTraceId?: boolean;
 }) {
   return {
     ...buildProxyLogCoreSelectFields(),
+    ...(options?.includeCacheTokens ? {
+      cacheReadTokens: schema.proxyLogs.cacheReadTokens,
+      cacheCreationTokens: schema.proxyLogs.cacheCreationTokens,
+    } : {}),
     ...(options?.includeStreamTimingFields ? buildProxyLogStreamTimingSelectFields() : {}),
     ...(options?.includeClientFields ? buildProxyLogClientSelectFields() : {}),
     ...(options?.includeBillingDetails ? { billingDetails: schema.proxyLogs.billingDetails } : {}),
@@ -105,6 +113,7 @@ export type ProxyLogSelectFields = ReturnType<typeof buildProxyLogSelectFields>;
 
 export type ResolvedProxyLogSelectFields = {
   includeBillingDetails: boolean;
+  includeCacheTokens: boolean;
   includeClientFields: boolean;
   includeStreamTimingFields: boolean;
   includeRequestTraceId: boolean;
@@ -113,12 +122,15 @@ export type ResolvedProxyLogSelectFields = {
 
 export async function resolveProxyLogSelectFields(options?: {
   includeBillingDetails?: boolean;
+  includeCacheTokens?: boolean;
   includeClientFields?: boolean;
   includeStreamTimingFields?: boolean;
   includeRequestTraceId?: boolean;
 }) {
   const includeBillingDetails = options?.includeBillingDetails === true
     && await hasProxyLogBillingDetailsColumn();
+  const includeCacheTokens = options?.includeCacheTokens !== false
+    && await hasProxyLogCacheTokensColumns();
   const includeClientFields = options?.includeClientFields !== false
     && await hasProxyLogClientColumns();
   const includeStreamTimingFields = options?.includeStreamTimingFields !== false
@@ -128,11 +140,13 @@ export async function resolveProxyLogSelectFields(options?: {
 
   return {
     includeBillingDetails,
+    includeCacheTokens,
     includeClientFields,
     includeStreamTimingFields,
     includeRequestTraceId,
     fields: buildProxyLogSelectFields({
       includeBillingDetails,
+      includeCacheTokens,
       includeClientFields,
       includeStreamTimingFields,
       includeRequestTraceId,
@@ -144,6 +158,7 @@ export async function withProxyLogSelectFields<T>(
   runner: (selection: ResolvedProxyLogSelectFields) => Promise<T>,
   options?: {
     includeBillingDetails?: boolean;
+    includeCacheTokens?: boolean;
     includeClientFields?: boolean;
     includeStreamTimingFields?: boolean;
     includeRequestTraceId?: boolean;
@@ -158,11 +173,31 @@ export async function withProxyLogSelectFields<T>(
       if (selection.includeBillingDetails && isMissingBillingDetailsColumnError(error)) {
         selection = {
           includeBillingDetails: false,
+          includeCacheTokens: selection.includeCacheTokens,
           includeClientFields: selection.includeClientFields,
           includeStreamTimingFields: selection.includeStreamTimingFields,
           includeRequestTraceId: selection.includeRequestTraceId,
           fields: buildProxyLogSelectFields({
             includeBillingDetails: false,
+            includeCacheTokens: selection.includeCacheTokens,
+            includeClientFields: selection.includeClientFields,
+            includeStreamTimingFields: selection.includeStreamTimingFields,
+            includeRequestTraceId: selection.includeRequestTraceId,
+          }),
+        };
+        continue;
+      }
+
+      if (selection.includeCacheTokens && isMissingProxyLogCacheTokensColumnsError(error)) {
+        selection = {
+          includeBillingDetails: selection.includeBillingDetails,
+          includeCacheTokens: false,
+          includeClientFields: selection.includeClientFields,
+          includeStreamTimingFields: selection.includeStreamTimingFields,
+          includeRequestTraceId: selection.includeRequestTraceId,
+          fields: buildProxyLogSelectFields({
+            includeBillingDetails: selection.includeBillingDetails,
+            includeCacheTokens: false,
             includeClientFields: selection.includeClientFields,
             includeStreamTimingFields: selection.includeStreamTimingFields,
             includeRequestTraceId: selection.includeRequestTraceId,
@@ -174,11 +209,13 @@ export async function withProxyLogSelectFields<T>(
       if (selection.includeClientFields && isMissingProxyLogClientColumnsError(error)) {
         selection = {
           includeBillingDetails: selection.includeBillingDetails,
+          includeCacheTokens: selection.includeCacheTokens,
           includeClientFields: false,
           includeStreamTimingFields: selection.includeStreamTimingFields,
           includeRequestTraceId: selection.includeRequestTraceId,
           fields: buildProxyLogSelectFields({
             includeBillingDetails: selection.includeBillingDetails,
+            includeCacheTokens: selection.includeCacheTokens,
             includeClientFields: false,
             includeStreamTimingFields: selection.includeStreamTimingFields,
             includeRequestTraceId: selection.includeRequestTraceId,
@@ -190,11 +227,13 @@ export async function withProxyLogSelectFields<T>(
       if (selection.includeStreamTimingFields && isMissingProxyLogStreamTimingColumnsError(error)) {
         selection = {
           includeBillingDetails: selection.includeBillingDetails,
+          includeCacheTokens: selection.includeCacheTokens,
           includeClientFields: selection.includeClientFields,
           includeStreamTimingFields: false,
           includeRequestTraceId: selection.includeRequestTraceId,
           fields: buildProxyLogSelectFields({
             includeBillingDetails: selection.includeBillingDetails,
+            includeCacheTokens: selection.includeCacheTokens,
             includeClientFields: selection.includeClientFields,
             includeStreamTimingFields: false,
             includeRequestTraceId: selection.includeRequestTraceId,
@@ -206,11 +245,13 @@ export async function withProxyLogSelectFields<T>(
       if (selection.includeRequestTraceId && isMissingProxyLogRequestTraceIdColumnError(error)) {
         selection = {
           includeBillingDetails: selection.includeBillingDetails,
+          includeCacheTokens: selection.includeCacheTokens,
           includeClientFields: selection.includeClientFields,
           includeStreamTimingFields: selection.includeStreamTimingFields,
           includeRequestTraceId: false,
           fields: buildProxyLogSelectFields({
             includeBillingDetails: selection.includeBillingDetails,
+            includeCacheTokens: selection.includeCacheTokens,
             includeClientFields: selection.includeClientFields,
             includeStreamTimingFields: selection.includeStreamTimingFields,
             includeRequestTraceId: false,
@@ -239,6 +280,12 @@ export function parseProxyLogBillingDetails(value: unknown): Record<string, unkn
   }
 }
 
+function toNonNegativeIntOrNull(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.trunc(n);
+}
+
 function normalizeProxyLogStoreErrorMessage(error: unknown): string {
   const message = typeof error === 'object' && error && 'message' in error
     ? String((error as { message?: unknown }).message || '')
@@ -249,6 +296,17 @@ function normalizeProxyLogStoreErrorMessage(error: unknown): string {
 export function isMissingBillingDetailsColumnError(error: unknown): boolean {
   const lowered = normalizeProxyLogStoreErrorMessage(error);
   return lowered.includes('billing_details')
+    && (
+      lowered.includes('does not exist')
+      || lowered.includes('unknown column')
+      || lowered.includes('no such column')
+      || lowered.includes('has no column named')
+    );
+}
+
+export function isMissingProxyLogCacheTokensColumnsError(error: unknown): boolean {
+  const lowered = normalizeProxyLogStoreErrorMessage(error);
+  return lowered.includes('cache_read_tokens')
     && (
       lowered.includes('does not exist')
       || lowered.includes('unknown column')
@@ -397,6 +455,18 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
     : JSON.stringify(input.billingDetails);
   const includeBillingDetails = serializedBillingDetails !== null
     && await hasProxyLogBillingDetailsColumn();
+  // Cache split: prefer an explicit value, otherwise lift it from the billing
+  // details the proxy surfaces already record (usage.cacheReadTokens /
+  // cacheCreationTokens), so the usage log list can show real input without
+  // threading the value through every record call site.
+  const billingUsage = (input.billingDetails as {
+    usage?: { cacheReadTokens?: unknown; cacheCreationTokens?: unknown };
+  } | null | undefined)?.usage;
+  const cacheReadTokens = input.cacheReadTokens ?? toNonNegativeIntOrNull(billingUsage?.cacheReadTokens);
+  const cacheCreationTokens = input.cacheCreationTokens ?? toNonNegativeIntOrNull(billingUsage?.cacheCreationTokens);
+  const requestedCacheTokens = cacheReadTokens != null || cacheCreationTokens != null;
+  const includeCacheTokens = requestedCacheTokens
+    && await hasProxyLogCacheTokensColumns();
   const includeDownstreamApiKeyId = input.downstreamApiKeyId != null
     && await hasProxyLogDownstreamApiKeyIdColumn();
   const requestedClientFields = [
@@ -414,6 +484,7 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
     && await hasProxyLogRequestTraceIdColumn();
 
   let allowBillingDetails = includeBillingDetails;
+  let allowCacheTokens = includeCacheTokens;
   let allowDownstreamApiKeyId = includeDownstreamApiKeyId;
   let allowClientFields = includeClientFields;
   let allowStreamTimingFields = includeStreamTimingFields;
@@ -432,6 +503,12 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
         }
         : {}),
       ...(allowBillingDetails ? { billingDetails: serializedBillingDetails } : {}),
+      ...(allowCacheTokens
+        ? {
+          cacheReadTokens,
+          cacheCreationTokens,
+        }
+        : {}),
       ...(allowDownstreamApiKeyId ? { downstreamApiKeyId: input.downstreamApiKeyId } : {}),
       ...(allowClientFields
         ? {
@@ -457,6 +534,11 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
     } catch (error) {
       if (allowBillingDetails && isMissingBillingDetailsColumnError(error)) {
         allowBillingDetails = false;
+        continue;
+      }
+
+      if (allowCacheTokens && isMissingProxyLogCacheTokensColumnsError(error)) {
+        allowCacheTokens = false;
         continue;
       }
 

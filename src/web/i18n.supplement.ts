@@ -946,6 +946,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '时间': 'Time',
   '分组': 'Group',
   '输入': 'Input',
+  '输入/输出': 'Input/Output',
+  '缓存': 'Cache',
   '输出': 'Output',
   '重试次数': 'Retry Count',
   '最大费用': 'Max Cost',

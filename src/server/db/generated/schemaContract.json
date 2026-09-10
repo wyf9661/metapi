@@ -1513,6 +1513,18 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "cache_read_tokens": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "cache_creation_tokens": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },

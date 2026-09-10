@@ -110,8 +110,37 @@ export function formatTokensPerSecond(tokens: number | null | undefined, latency
     return null;
   }
   const tps = tokens / (latencyMs / 1000);
-  if (tps >= 100) return `${Math.round(tps)} tok/s`;
-  return `${tps.toFixed(1)} tok/s`;
+  return `${Math.round(tps)} t/s`;
+}
+
+/**
+ * Effective input tokens for display. Upstreams differ: OpenAI-style responses
+ * report prompt_tokens INCLUDING the cached prefix, while Anthropic-style ones
+ * report only the non-cached part and carry the rest in cache_read /
+ * cache_creation (observed prompt_tokens=3 with cache_read=50483). Without an
+ * explicit include flag on the list row, a cache total larger than the prompt
+ * is read as the split form and added back, so the usage log never shows a
+ * 3-token input for a 50k-token cached request (2026-09-09).
+ */
+export function resolveProxyLogInputTokens(log: {
+  promptTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheCreationTokens?: number | null;
+}): number {
+  const prompt = typeof log.promptTokens === 'number' && Number.isFinite(log.promptTokens)
+    ? log.promptTokens
+    : 0;
+  const cacheTotal = (typeof log.cacheReadTokens === 'number' && Number.isFinite(log.cacheReadTokens) ? log.cacheReadTokens : 0)
+    + (typeof log.cacheCreationTokens === 'number' && Number.isFinite(log.cacheCreationTokens) ? log.cacheCreationTokens : 0);
+  if (cacheTotal <= 0) return prompt;
+  return cacheTotal > prompt ? prompt + cacheTotal : prompt;
+}
+
+export function formatProxyLogTokenPair(
+  inputTokens: number | null | undefined,
+  outputTokens: number | null | undefined,
+): string {
+  return `${formatProxyLogTokenValue(inputTokens)} / ${formatProxyLogTokenValue(outputTokens)}`;
 }
 
 export function firstByteBgColor(ms: number) {

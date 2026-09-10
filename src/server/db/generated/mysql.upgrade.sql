@@ -1,1 +1,2 @@
-ALTER TABLE `downstream_api_keys` ADD COLUMN `max_inflight` INT;
+ALTER TABLE `proxy_logs` ADD COLUMN `cache_read_tokens` INT;
+ALTER TABLE `proxy_logs` ADD COLUMN `cache_creation_tokens` INT;
