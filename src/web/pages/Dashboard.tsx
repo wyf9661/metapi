@@ -16,6 +16,23 @@ const SiteTrendChart = lazy(
   () => import('../components/charts/SiteTrendChart.js'),
 );
 
+// Warm both site-chart chunks (including the shared ~1.9MB VChart bundle)
+// shortly after the dashboard mounts, so switching 站点分布 ↔ 站点趋势 is
+// instant instead of showing a blank card while the chunk downloads.
+let siteChartChunksWarm = false;
+function warmSiteChartChunks() {
+  if (siteChartChunksWarm) return;
+  siteChartChunksWarm = true;
+  const idle =
+    typeof window !== 'undefined' && 'requestIdleCallback' in window
+      ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 3000 })
+      : (cb: () => void) => window.setTimeout(cb, 1500);
+  idle(() => {
+    void import('../components/charts/SiteDistributionChart.js');
+    void import('../components/charts/SiteTrendChart.js');
+  });
+}
+
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 6) return '夜深了';
@@ -337,6 +354,11 @@ export default function Dashboard({
   useEffect(() => {
     loadSiteStats();
   }, [loadSiteStats]);
+
+  // Preload the other site chart chunk so tab switching never blanks out.
+  useEffect(() => {
+    warmSiteChartChunks();
+  }, []);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
