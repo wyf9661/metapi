@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { BrandGlyph, InlineBrandIcon, hashColor, type BrandInfo } from '../../components/BrandIcon.js';
+import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/BrandIcon.js';
 import CenteredModal from '../../components/CenteredModal.js';
 import ModernSelect from '../../components/ModernSelect.js';
 import { tr } from '../../i18n.js';
@@ -355,7 +355,7 @@ export default function ManualRoutePanel({
         type="button"
         onClick={onSave}
         disabled={!canSave}
-        className="btn btn-success"
+        className="btn btn-primary"
       >
         {saving ? (
           <>
@@ -817,8 +817,8 @@ export default function ManualRoutePanel({
                         <span
                           style={{
                             fontSize: 8,
-                            background: hashColor(siteName).bg,
-                            color: hashColor(siteName).text,
+                            background: 'transparent',
+                            color: 'var(--color-text-primary)',
                             borderRadius: 6,
                             padding: '1px 2px',
                             lineHeight: 1,

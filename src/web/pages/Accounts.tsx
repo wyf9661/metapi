@@ -42,6 +42,7 @@ import {
 import { SITE_DOCS_URL } from '../docsLink.js';
 import { getSiteInitializationPreset } from '../../shared/siteInitializationPresets.js';
 import { parseBatchApiKeys } from '../../shared/apiKeyBatch.js';
+import { StatusText } from '../components/StatusText.js';
 
 type ConnectionsSegment = 'session' | 'apikey' | 'tokens';
 
@@ -1844,7 +1845,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           !tokenForm.accessToken ||
                           !canAddVerifiedConnection
                         }
-                        className="btn btn-success"
+                        className="btn btn-primary"
                       >
                         {saving ? (
                           <>
@@ -1930,7 +1931,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         !loginForm.username ||
                         !loginForm.password
                       }
-                      className="btn btn-success"
+                      className="btn btn-primary"
                       style={{ alignSelf: 'flex-start' }}
                     >
                       {saving ? (
@@ -2214,7 +2215,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       !tokenForm.siteId ||
                       !canSubmitApiKeyConnection
                     }
-                    className="btn btn-success"
+                    className="btn btn-primary"
                   >
                     {saving ? (
                       <>
@@ -2421,7 +2422,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           rebindVerifyResult?.tokenType === 'session'
                         )
                       }
-                      className="btn btn-success"
+                      className="btn btn-primary"
                     >
                       {rebindSaving ? (
                         <>
@@ -2521,22 +2522,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 gap: 4,
                               }}
                             >
-                              <span
-                                className={`badge ${health.cls}`}
-                                style={{
-                                  fontSize: 11,
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  width: 'fit-content',
-                                }}
-                              >
-                                <span
-                                  className={`status-dot ${health.dotClass} ${health.pulse ? 'animate-pulse-dot' : ''}`}
-                                  style={{ marginRight: 0 }}
-                                />
+                              <StatusText badgeClass={health.cls} style={{ fontSize: 11 }}>
                                 {health.label}
-                              </span>
+                              </StatusText>
                               <span
                                 style={{
                                   fontSize: 11,
@@ -2873,22 +2861,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     gap: 4,
                                   }}
                                 >
-                                  <span
-                                    className={`badge ${health.cls}`}
-                                    style={{
-                                      fontSize: 11,
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      width: 'fit-content',
-                                    }}
-                                  >
-                                    <span
-                                      className={`status-dot ${health.dotClass} ${health.pulse ? 'animate-pulse-dot' : ''}`}
-                                      style={{ marginRight: 0 }}
-                                    />
+                                  <StatusText badgeClass={health.cls} style={{ fontSize: 11 }}>
                                     {health.label}
-                                  </span>
+                                  </StatusText>
                                   <span
                                     className="accounts-health-reason"
                                     style={{
