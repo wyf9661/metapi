@@ -1545,6 +1545,7 @@ export class TokenRouter {
               + `可靠=${scored.factors.reliability.toFixed(2)}，健康=${scored.factors.health.toFixed(2)}，`
               + `连通=${scored.factors.connectivity.toFixed(2)}(${connText})，`
               + `协议=${scored.factors.protocolAffinity.toFixed(2)}，负载=${scored.factors.load.toFixed(2)}，`
+              + `吞吐=${scored.factors.throughput.toFixed(2)}，`
               + `概率≈${(scored.probability * 100).toFixed(1)}%）`,
             {
               probability: target.probability,
@@ -2279,6 +2280,7 @@ export class TokenRouter {
           customHeaders: (candidate.site as { customHeaders?: unknown }).customHeaders,
         }),
         ttftEwmaMs: ttftSample?.ttftEwmaMs ?? null,
+        tpsEwma: ttftSample?.tpsEwma ?? null,
       };
     });
   }

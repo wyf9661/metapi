@@ -31,6 +31,7 @@ function base(partial: Partial<ShadowCandidateInput> & Pick<ShadowCandidateInput
     connectivity: partial.connectivity ?? null,
     protocolAffinity: partial.protocolAffinity ?? 1,
     ttftEwmaMs: partial.ttftEwmaMs ?? null,
+    tpsEwma: partial.tpsEwma ?? null,
   };
 }
 
@@ -227,6 +228,45 @@ describe('routeScoringShadow', () => {
     const baseline = result.candidates.find((c) => c.channelId === 2)!;
     expect(unknown.factors.ttft).toBe(1);
     expect(baseline.factors.ttft).toBeCloseTo(1, 3);
+  });
+
+  it('rewards faster generation throughput', () => {
+    const scored = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, tpsEwma: 240 }),
+      base({ channelId: 2, siteId: 2, accountId: 2, unitCost: 0.01, tpsEwma: 40 }),
+    ]);
+    const fast = scored.candidates.find((c) => c.channelId === 1)!;
+    const slow = scored.candidates.find((c) => c.channelId === 2)!;
+
+    expect(fast.factors.throughput).toBeGreaterThan(1);
+    expect(slow.factors.throughput).toBeLessThan(1);
+    // Everything else is equal, so the throughput factor decides.
+    expect(fast.score).toBeGreaterThan(slow.score);
+    expect(fast.probability).toBeGreaterThan(slow.probability);
+  });
+
+  it('keeps throughput neutral when there is no sample yet', () => {
+    const unknown = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, tpsEwma: null }),
+    ]).candidates[0]!;
+    const atBaseline = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, tpsEwma: 120 }),
+    ]).candidates[0]!;
+
+    expect(unknown.factors.throughput).toBe(1);
+    expect(atBaseline.factors.throughput).toBeCloseTo(1, 3);
+  });
+
+  it('clamps the throughput factor so one fast site cannot dominate', () => {
+    const capped = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, tpsEwma: 10_000 }),
+    ]).candidates[0]!;
+    const floored = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01, tpsEwma: 0.5 }),
+    ]).candidates[0]!;
+
+    expect(capped.factors.throughput).toBeLessThanOrEqual(1.3);
+    expect(floored.factors.throughput).toBeGreaterThanOrEqual(0.7);
   });
 
   it('gives every healthy candidate a minimum probability floor', () => {

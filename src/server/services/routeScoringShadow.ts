@@ -55,6 +55,12 @@ export type ShadowCandidateInput = {
    * Faster first tokens raise the score; slower ones lower it.
    */
   ttftEwmaMs?: number | null;
+  /**
+   * Generation throughput EWMA (tokens/s, completion tokens over
+   * latency-minus-first-token) from live proxy samples, same key as ttft.
+   * null = no sample yet (neutral).
+   */
+  tpsEwma?: number | null;
 };
 
 export type ShadowScoreFactors = {
@@ -72,6 +78,8 @@ export type ShadowScoreFactors = {
   protocolAffinity: number;
   /** Time-to-first-token factor (faster = higher, neutral 1 when unknown). */
   ttft: number;
+  /** Generation-throughput factor (faster tokens/s = higher, neutral 1). */
+  throughput: number;
   /** Bounded minimum probability floor after normalization. */
   minShare: number;
   exclusion: string | null;
@@ -175,6 +183,23 @@ const TTFT_BASELINE_MS = 2_000;
 const TTFT_MAX_FACTOR = 1.35;
 const TTFT_MIN_FACTOR = 0.6;
 
+/** Throughput baseline (tokens/s) — calibrated on live samples, whose median is
+ *  ~120 t/s. Streams faster than this are rewarded, slower ones penalized. */
+const TPS_BASELINE = 120;
+/** How far a throughput difference can push the score (0.7x .. 1.3x). */
+const TPS_MAX_FACTOR = 1.3;
+const TPS_MIN_FACTOR = 0.7;
+
+/**
+ * Generation-throughput factor: completion tokens per second of generation time.
+ * Unknown throughput stays neutral so a site is never punished for a lack of
+ * samples, and the clamp keeps one very fast site from dominating the pool.
+ */
+export function computeThroughputFactor(tpsEwma: number | null | undefined): number {
+  if (tpsEwma == null || !Number.isFinite(tpsEwma) || tpsEwma <= 0) return 1;
+  return clampNumber(tpsEwma / TPS_BASELINE, TPS_MIN_FACTOR, TPS_MAX_FACTOR);
+}
+
 /**
  * Bounded minimum probability floor for every healthy candidate. With N active
  * candidates each keeps at least clamp(1/N, MIN..MAX) of the traffic share so
@@ -238,6 +263,7 @@ export function scoreShadowCandidate(
     1.5,
   );
   const ttft = computeTtftFactor(input.ttftEwmaMs);
+  const throughput = computeThroughputFactor(input.tpsEwma);
 
   let exclusion = balance.exclusion;
   let score = 0;
@@ -251,7 +277,8 @@ export function scoreShadowCandidate(
       * (load ** 0.8)
       * connectivity
       * protocolAffinity
-      * ttft;
+      * ttft
+      * throughput;
     if (!Number.isFinite(score) || score <= 0) {
       score = 0;
       exclusion = exclusion || '评分无效';
@@ -277,6 +304,7 @@ export function scoreShadowCandidate(
       connectivity,
       protocolAffinity,
       ttft,
+      throughput,
       minShare: 0,
       exclusion,
     },
