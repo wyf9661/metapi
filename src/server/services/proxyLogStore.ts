@@ -5,12 +5,14 @@ import {
   hasProxyLogBillingDetailsColumn,
   hasProxyLogCacheTokensColumns,
   hasProxyLogClientColumns,
+  hasProxyLogReasoningEffortColumn,
   hasProxyLogDownstreamApiKeyIdColumn,
   hasProxyLogStreamTimingColumns,
   hasProxyLogRequestTraceIdColumn,
 } from '../db/index.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { emitProxyLogCreated } from './proxyLogEventBus.js';
+import { getCurrentReasoningEffort } from './reasoningEffort.js';
 
 export type ProxyLogInsertInput = {
   routeId?: number | null;
@@ -29,6 +31,7 @@ export type ProxyLogInsertInput = {
   totalTokens?: number | null;
   cacheReadTokens?: number | null;
   cacheCreationTokens?: number | null;
+  reasoningEffort?: string | null;
   estimatedCost?: number | null;
   billingDetails?: unknown;
   clientFamily?: string | null;
@@ -97,6 +100,7 @@ function buildProxyLogSelectFields(options?: {
     ...(options?.includeCacheTokens ? {
       cacheReadTokens: schema.proxyLogs.cacheReadTokens,
       cacheCreationTokens: schema.proxyLogs.cacheCreationTokens,
+      reasoningEffort: schema.proxyLogs.reasoningEffort,
     } : {}),
     ...(options?.includeStreamTimingFields ? buildProxyLogStreamTimingSelectFields() : {}),
     ...(options?.includeClientFields ? buildProxyLogClientSelectFields() : {}),
@@ -315,6 +319,17 @@ export function isMissingProxyLogCacheTokensColumnsError(error: unknown): boolea
     );
 }
 
+export function isMissingProxyLogReasoningEffortColumnError(error: unknown): boolean {
+  const lowered = normalizeProxyLogStoreErrorMessage(error);
+  return lowered.includes('reasoning_effort')
+    && (
+      lowered.includes('does not exist')
+      || lowered.includes('unknown column')
+      || lowered.includes('no such column')
+      || lowered.includes('has no column named')
+    );
+}
+
 export function isMissingDownstreamApiKeyIdColumnError(error: unknown): boolean {
   const lowered = normalizeProxyLogStoreErrorMessage(error);
   return lowered.includes('downstream_api_key_id')
@@ -464,6 +479,10 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
   } | null | undefined)?.usage;
   const cacheReadTokens = input.cacheReadTokens ?? toNonNegativeIntOrNull(billingUsage?.cacheReadTokens);
   const cacheCreationTokens = input.cacheCreationTokens ?? toNonNegativeIntOrNull(billingUsage?.cacheCreationTokens);
+  // Reasoning effort: an explicit value wins, otherwise use whatever the proxy
+  // router captured for this request (chat: reasoning_effort, responses:
+  // reasoning.effort).
+  const reasoningEffort = input.reasoningEffort ?? getCurrentReasoningEffort();
   const requestedCacheTokens = cacheReadTokens != null || cacheCreationTokens != null;
   const includeCacheTokens = requestedCacheTokens
     && await hasProxyLogCacheTokensColumns();
@@ -485,6 +504,7 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
 
   let allowBillingDetails = includeBillingDetails;
   let allowCacheTokens = includeCacheTokens;
+  let allowReasoningEffort = reasoningEffort != null && await hasProxyLogReasoningEffortColumn();
   let allowDownstreamApiKeyId = includeDownstreamApiKeyId;
   let allowClientFields = includeClientFields;
   let allowStreamTimingFields = includeStreamTimingFields;
@@ -509,6 +529,7 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
           cacheCreationTokens,
         }
         : {}),
+      ...(allowReasoningEffort ? { reasoningEffort } : {}),
       ...(allowDownstreamApiKeyId ? { downstreamApiKeyId: input.downstreamApiKeyId } : {}),
       ...(allowClientFields
         ? {
@@ -534,6 +555,11 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
     } catch (error) {
       if (allowBillingDetails && isMissingBillingDetailsColumnError(error)) {
         allowBillingDetails = false;
+        continue;
+      }
+
+      if (allowReasoningEffort && isMissingProxyLogReasoningEffortColumnError(error)) {
+        allowReasoningEffort = false;
         continue;
       }
 

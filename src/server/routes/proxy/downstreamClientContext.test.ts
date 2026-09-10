@@ -154,6 +154,36 @@ describe('detectDownstreamClientContext', () => {
     });
   });
 
+  it('falls back to the raw downstream User-Agent when no rule matches', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/chat/completions',
+      headers: {
+        'user-agent': 'MyOwnTool/1.2.3 (linux; x64)',
+      },
+    })).toEqual({
+      clientKind: 'generic',
+      clientAppId: 'myowntool',
+      clientAppName: 'MyOwnTool/1.2.3 (linux; x64)',
+      clientConfidence: 'user_agent',
+    });
+  });
+
+  it('does not let the User-Agent fallback override a recognised client', () => {
+    expect(detectDownstreamClientContext({
+      downstreamPath: '/v1/chat/completions',
+      headers: {
+        'user-agent': 'MyOwnTool/1.2.3',
+        'x-title': 'Cherry Studio',
+        'http-referer': 'https://cherry-ai.com',
+      },
+    })).toEqual({
+      clientKind: 'generic',
+      clientAppId: 'cherry_studio',
+      clientAppName: 'Cherry Studio',
+      clientConfidence: 'exact',
+    });
+  });
+
   it('recognizes Claude Code requests from metadata.user_id without mutating the body', () => {
     const body = {
       model: 'claude-opus-4-6',

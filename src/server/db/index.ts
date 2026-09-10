@@ -53,6 +53,7 @@ let mysqlPool: mysql.Pool | null = null;
 let pgPool: pg.Pool | null = null;
 let proxyLogBillingDetailsColumnAvailable: boolean | null = null;
 let proxyLogCacheTokensColumnsAvailable: boolean | null = null;
+let proxyLogReasoningEffortColumnAvailable: boolean | null = null;
 let proxyLogDownstreamApiKeyIdColumnAvailable: boolean | null = null;
 let proxyLogClientColumnsAvailable: boolean | null = null;
 let proxyLogStreamTimingColumnsAvailable: boolean | null = null;
@@ -768,6 +769,33 @@ function isDuplicateIndexError(error: unknown): boolean {
     || lowered.includes('duplicate index');
 }
 
+export async function hasProxyLogReasoningEffortColumn(): Promise<boolean> {
+  if (proxyLogReasoningEffortColumnAvailable !== null) {
+    return proxyLogReasoningEffortColumnAvailable;
+  }
+
+  if (runtimeDbDialect === 'sqlite') {
+    proxyLogReasoningEffortColumnAvailable = tableExists('proxy_logs')
+      && tableColumnExists('proxy_logs', 'reasoning_effort');
+    return proxyLogReasoningEffortColumnAvailable;
+  }
+
+  if (runtimeDbDialect === 'mysql') {
+    if (!mysqlPool) return false;
+    const [rows] = await mysqlPool.query('SHOW COLUMNS FROM `proxy_logs` LIKE ?', ['reasoning_effort']);
+    proxyLogReasoningEffortColumnAvailable = Array.isArray(rows) && rows.length > 0;
+    return proxyLogReasoningEffortColumnAvailable;
+  }
+
+  if (!pgPool) return false;
+  const result = await pgPool.query(
+    'SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2 LIMIT 1',
+    ['proxy_logs', 'reasoning_effort'],
+  );
+  proxyLogReasoningEffortColumnAvailable = Number(result.rowCount || 0) > 0;
+  return proxyLogReasoningEffortColumnAvailable;
+}
+
 export async function hasProxyLogCacheTokensColumns(): Promise<boolean> {
   if (proxyLogCacheTokensColumnsAvailable !== null) {
     return proxyLogCacheTokensColumnsAvailable;
@@ -843,6 +871,47 @@ export async function ensureProxyLogCacheTokensColumns(): Promise<boolean> {
       return true;
     }
     proxyLogCacheTokensColumnsAvailable = false;
+    return false;
+  }
+}
+
+export async function ensureProxyLogReasoningEffortColumn(): Promise<boolean> {
+  if (runtimeDbDialect === 'sqlite') {
+    if (tableExists('proxy_logs')) {
+      if (!tableColumnExists('proxy_logs', 'reasoning_effort')) {
+        execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN reasoning_effort text;');
+      }
+      proxyLogReasoningEffortColumnAvailable = true;
+    }
+    return proxyLogReasoningEffortColumnAvailable === true;
+  }
+
+  if (await hasProxyLogReasoningEffortColumn()) {
+    return true;
+  }
+
+  try {
+    if (runtimeDbDialect === 'mysql') {
+      if (!mysqlPool) return false;
+      await executeLegacyCompat(
+        (statement) => mysqlPool!.query(statement).then(() => undefined),
+        'ALTER TABLE `proxy_logs` ADD COLUMN `reasoning_effort` TEXT',
+      );
+    } else {
+      if (!pgPool) return false;
+      await executeLegacyCompat(
+        (statement) => pgPool!.query(statement).then(() => undefined),
+        'ALTER TABLE "proxy_logs" ADD COLUMN "reasoning_effort" text',
+      );
+    }
+    proxyLogReasoningEffortColumnAvailable = true;
+    return true;
+  } catch (error) {
+    if (isDuplicateColumnError(error)) {
+      proxyLogReasoningEffortColumnAvailable = true;
+      return true;
+    }
+    proxyLogReasoningEffortColumnAvailable = false;
     return false;
   }
 }

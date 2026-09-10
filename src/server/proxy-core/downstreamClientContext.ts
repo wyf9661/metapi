@@ -5,7 +5,7 @@ import type {
 } from './cliProfiles/types.js';
 
 export type DownstreamClientKind = CliProfileId;
-export type DownstreamClientConfidence = CliProfileClientConfidence;
+export type DownstreamClientConfidence = CliProfileClientConfidence | 'user_agent';
 
 export type DownstreamClientContext = {
   clientKind: DownstreamClientKind;
@@ -233,6 +233,29 @@ function detectDownstreamClientFingerprint(input: {
   };
 }
 
+/**
+ * Last-resort client detection: when no explicit signal matches (x-title,
+ * referer, originator, x-openai-client-user-agent or a CLI profile), fall back
+ * to the downstream User-Agent as sent. The UI trims it for display, so nothing
+ * is lost here.
+ */
+function detectUserAgentClient(headers: NormalizedClientHeaders): DownstreamResolvedClientApp | null {
+  for (const value of headers['user-agent'] || []) {
+    const clientAppName = normalizeClientDisplayName(value);
+    if (!clientAppName) continue;
+    const productToken = value.split('/')[0]?.trim().split(/\s+/)[0]?.toLowerCase() || '';
+    return {
+      clientAppId: normalizeClientAppId(productToken) || 'user_agent',
+      clientAppName,
+      // Not a guess: this is the User-Agent the client actually sent, so it must
+      // not carry the "heuristic" badge the UI shows for inferred identities.
+      clientConfidence: 'user_agent',
+    };
+  }
+
+  return null;
+}
+
 function detectExplicitClientSelfReport(headers: NormalizedClientHeaders): DownstreamResolvedClientApp | null {
   for (const value of headers['x-openai-client-user-agent'] || []) {
     const clientAppName = parseExplicitClientSelfReportValue(value);
@@ -277,10 +300,13 @@ export function detectDownstreamClientContext(input: {
         }
         : null
     );
+  const userAgentClient = fingerprint || explicitSelfReport || profileClientApp
+    ? null
+    : detectUserAgentClient(normalizedHeaders);
   return {
     clientKind: detected.id,
     ...(detected.sessionId ? { sessionId: detected.sessionId } : {}),
     ...(detected.traceHint ? { traceHint: detected.traceHint } : {}),
-    ...(explicitSelfReport || fingerprint || profileClientApp || {}),
+    ...(explicitSelfReport || fingerprint || profileClientApp || userAgentClient || {}),
   };
 }

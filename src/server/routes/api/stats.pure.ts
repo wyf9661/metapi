@@ -91,6 +91,7 @@ export function normalizeClientConfidence(value: unknown): string | null {
   if (
     normalized === 'exact' ||
     normalized === 'heuristic' ||
+    normalized === 'user_agent' ||
     normalized === 'unknown'
   ) {
     return normalized;

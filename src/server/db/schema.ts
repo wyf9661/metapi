@@ -265,6 +265,10 @@ export const proxyLogs = sqliteTable('proxy_logs', {
   // prompt_tokens=3 + cache_read=50483 with promptTokensIncludeCache=false).
   cacheReadTokens: integer('cache_read_tokens'),
   cacheCreationTokens: integer('cache_creation_tokens'),
+  // Reasoning effort the downstream client asked for (chat/completions:
+  // `reasoning_effort`, responses: `reasoning.effort`). Display-only — nothing
+  // in the routing or billing path branches on it.
+  reasoningEffort: text('reasoning_effort'),
   estimatedCost: real('estimated_cost'),
   billingDetails: text('billing_details'),
   clientFamily: text('client_family'),

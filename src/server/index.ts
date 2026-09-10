@@ -121,6 +121,7 @@ import {
   ensureProxyLogDownstreamApiKeyIdColumn,
   ensureProxyLogBillingDetailsColumn,
   ensureProxyLogCacheTokensColumns,
+  ensureProxyLogReasoningEffortColumn,
   ensureProxyLogStreamTimingColumns,
   ensureRouteGroupingCompatibilityColumns,
   ensureSiteCompatibilityColumns,
@@ -235,6 +236,7 @@ try {
   }
   await ensureProxyLogBillingDetailsColumn();
   await ensureProxyLogCacheTokensColumns();
+  await ensureProxyLogReasoningEffortColumn();
   await repairStoredCreatedAtValues();
   await migrateSiteApiKeysToAccounts();
   await ensureDefaultSitesSeeded();

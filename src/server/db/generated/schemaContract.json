@@ -1525,6 +1525,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "reasoning_effort": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },

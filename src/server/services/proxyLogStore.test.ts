@@ -7,6 +7,7 @@ const {
   hasProxyLogDownstreamApiKeyIdColumnMock,
   hasProxyLogStreamTimingColumnsMock,
   hasProxyLogRequestTraceIdColumnMock,
+  hasProxyLogReasoningEffortColumnMock,
   dbInsertMock,
   dbInsertValuesMock,
   dbInsertRunMock,
@@ -18,6 +19,7 @@ const {
   hasProxyLogDownstreamApiKeyIdColumnMock: vi.fn(),
   hasProxyLogStreamTimingColumnsMock: vi.fn(),
   hasProxyLogRequestTraceIdColumnMock: vi.fn(),
+  hasProxyLogReasoningEffortColumnMock: vi.fn(),
   dbInsertMock: vi.fn(),
   dbInsertValuesMock: vi.fn(),
   dbInsertRunMock: vi.fn(),
@@ -38,6 +40,7 @@ const {
     totalTokens: 'total_tokens',
     cacheReadTokens: 'cache_read_tokens',
     cacheCreationTokens: 'cache_creation_tokens',
+    reasoningEffort: 'reasoning_effort',
     estimatedCost: 'estimated_cost',
     billingDetails: 'billing_details',
     clientFamily: 'client_family',
@@ -64,9 +67,11 @@ vi.mock('../db/index.js', () => ({
   hasProxyLogDownstreamApiKeyIdColumn: (...args: unknown[]) => hasProxyLogDownstreamApiKeyIdColumnMock(...args),
   hasProxyLogStreamTimingColumns: (...args: unknown[]) => hasProxyLogStreamTimingColumnsMock(...args),
   hasProxyLogRequestTraceIdColumn: (...args: unknown[]) => hasProxyLogRequestTraceIdColumnMock(...args),
+  hasProxyLogReasoningEffortColumn: (...args: unknown[]) => hasProxyLogReasoningEffortColumnMock(...args),
 }));
 
 import { insertProxyLog, parseProxyLogBillingDetails, withProxyLogSelectFields } from './proxyLogStore.js';
+import { setCurrentReasoningEffort } from './reasoningEffort.js';
 
 describe('proxyLogStore', () => {
   beforeEach(() => {
@@ -76,6 +81,7 @@ describe('proxyLogStore', () => {
     hasProxyLogDownstreamApiKeyIdColumnMock.mockReset();
     hasProxyLogStreamTimingColumnsMock.mockReset();
     hasProxyLogRequestTraceIdColumnMock.mockReset();
+    hasProxyLogReasoningEffortColumnMock.mockReset();
     dbInsertMock.mockReset();
     dbInsertValuesMock.mockReset();
     dbInsertRunMock.mockReset();
@@ -85,6 +91,7 @@ describe('proxyLogStore', () => {
     hasProxyLogDownstreamApiKeyIdColumnMock.mockResolvedValue(false);
     hasProxyLogStreamTimingColumnsMock.mockResolvedValue(false);
     hasProxyLogRequestTraceIdColumnMock.mockResolvedValue(false);
+    hasProxyLogReasoningEffortColumnMock.mockResolvedValue(false);
 
     dbInsertMock.mockReturnValue({
       values: (...args: unknown[]) => dbInsertValuesMock(...args),
@@ -109,6 +116,34 @@ describe('proxyLogStore', () => {
     const values = dbInsertValuesMock.mock.calls[0][0] as Record<string, unknown>;
     expect(values.cacheReadTokens).toBe(50483);
     expect(values.cacheCreationTokens).toBe(181);
+  });
+
+  it('persists the reasoning effort captured for the request', async () => {
+    hasProxyLogReasoningEffortColumnMock.mockResolvedValue(true);
+    setCurrentReasoningEffort('high');
+    try {
+      await insertProxyLog({
+        modelRequested: 'gpt-5',
+        status: 'success',
+      } as unknown as Parameters<typeof insertProxyLog>[0]);
+
+      const values = dbInsertValuesMock.mock.calls[0][0] as Record<string, unknown>;
+      expect(values.reasoningEffort).toBe('high');
+    } finally {
+      setCurrentReasoningEffort(null);
+    }
+  });
+
+  it('leaves the reasoning effort null when the client asked for none', async () => {
+    setCurrentReasoningEffort(null);
+
+    await insertProxyLog({
+      modelRequested: 'gpt-5',
+      status: 'success',
+    } as unknown as Parameters<typeof insertProxyLog>[0]);
+
+    const values = dbInsertValuesMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(values).not.toHaveProperty('reasoningEffort');
   });
 
   it('prefers explicit cache tokens over the billing details copy', async () => {
