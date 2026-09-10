@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { getInsertedRowId } from '../db/insertHelpers.js';
 import { getAdapter } from './platforms/index.js';
@@ -496,18 +496,21 @@ export async function probeSiteModels(
   const unsupportedModels = details.filter((d) => d.status === 'unsupported' || d.status === 'inconclusive').map((d) => d.modelName);
   if (unsupportedModels.length > 0) {
     const checkedAt = new Date().toISOString();
+    // Two statements for the whole batch instead of two per model: on SQLite each
+    // statement is its own commit, so a site with hundreds of dead models paid
+    // hundreds of round-trips (and fsyncs) here.
+    await db.update(schema.modelAvailability)
+      .set({ available: false, checkedAt })
+      .where(and(
+        eq(schema.modelAvailability.accountId, account.id),
+        inArray(schema.modelAvailability.modelName, unsupportedModels),
+      ))
+      .run();
+    await db.insert(schema.siteDisabledModels)
+      .values(unsupportedModels.map((modelName) => ({ siteId, modelName })))
+      .onConflictDoNothing()
+      .run();
     for (const modelName of unsupportedModels) {
-      await db.update(schema.modelAvailability)
-        .set({ available: false, checkedAt })
-        .where(and(
-          eq(schema.modelAvailability.accountId, account.id),
-          eq(schema.modelAvailability.modelName, modelName),
-        ))
-        .run();
-      await db.insert(schema.siteDisabledModels)
-        .values({ siteId, modelName })
-        .onConflictDoNothing()
-        .run();
       onProgress?.({ type: 'action', modelName, action: 'disabled' });
     }
     const reason = unsupportedModels.length === 1
@@ -574,21 +577,18 @@ async function runPostRefreshProbeIfEnabled(params: {
   const unsupportedModels = details.filter((d) => d.status === 'unsupported' || d.status === 'inconclusive').map((d) => d.modelName);
   if (unsupportedModels.length > 0) {
     const checkedAt = new Date().toISOString();
-    for (const modelName of unsupportedModels) {
-      // Mark model as unavailable
-      await db.update(schema.modelAvailability)
-        .set({ available: false, checkedAt })
-        .where(and(
-          eq(schema.modelAvailability.accountId, params.account.id),
-          eq(schema.modelAvailability.modelName, modelName),
-        ))
-        .run();
-      // Add to site-level disabled models
-      await db.insert(schema.siteDisabledModels)
-        .values({ siteId: params.site.id, modelName })
-        .onConflictDoNothing()
-        .run();
-    }
+    // Batched for the same reason as the manual-probe path above.
+    await db.update(schema.modelAvailability)
+      .set({ available: false, checkedAt })
+      .where(and(
+        eq(schema.modelAvailability.accountId, params.account.id),
+        inArray(schema.modelAvailability.modelName, unsupportedModels),
+      ))
+      .run();
+    await db.insert(schema.siteDisabledModels)
+      .values(unsupportedModels.map((modelName) => ({ siteId: params.site.id, modelName })))
+      .onConflictDoNothing()
+      .run();
     // Update account health
     const reason = unsupportedModels.length === 1
       ? `刷新后探测失败：模型 ${unsupportedModels[0]} 不可用`
@@ -691,9 +691,10 @@ async function doRefreshModelsForAccount(
       .where(eq(schema.accountTokens.accountId, accountId))
       .all();
 
-    for (const token of currentAccountTokens) {
+    const tokenIds = currentAccountTokens.map((token) => token.id);
+    if (tokenIds.length > 0) {
       await db.delete(schema.tokenModelAvailability)
-        .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+        .where(inArray(schema.tokenModelAvailability.tokenId, tokenIds))
         .run();
     }
   };

@@ -223,26 +223,24 @@ export async function populateRouteChannelsByModelPattern(
     sourceModel: channel.sourceModel,
   })));
 
-  let created = 0;
-  for (const candidate of candidates) {
-    const pairKey = buildChannelPairKey(candidate);
-    if (existingPairs.has(pairKey)) continue;
-    await db.insert(schema.routeChannels).values({
+  const toInsert = candidates.filter((candidate) => !existingPairs.has(buildChannelPairKey(candidate)));
+  if (toInsert.length > 0) {
+    // One insert for the whole batch (drizzle chunks it when needed) instead of
+    // one statement per channel.
+    await db.insert(schema.routeChannels).values(toInsert.map((candidate) => ({
       routeId,
       accountId: candidate.accountId,
       tokenId: candidate.tokenId,
-      oauthRouteUnitId: candidate.oauthRouteUnitId,
+      oauthRouteUnitId: candidate.oauthRouteUnitId ?? null,
       sourceModel: candidate.sourceModel,
       priority: candidate.priority,
       weight: candidate.weight,
       enabled: candidate.enabled,
       manualOverride: false,
-    }).run();
-    existingPairs.add(pairKey);
-    created += 1;
+    }))).run();
   }
 
-  return created;
+  return toInsert.length;
 }
 
 export async function rebuildAutomaticRouteChannelsByModelPattern(
@@ -259,8 +257,10 @@ export async function rebuildAutomaticRouteChannelsByModelPattern(
     )
     .all();
 
-  for (const channel of removableChannels) {
-    await db.delete(schema.routeChannels).where(eq(schema.routeChannels.id, channel.id)).run();
+  if (removableChannels.length > 0) {
+    await db.delete(schema.routeChannels)
+      .where(inArray(schema.routeChannels.id, removableChannels.map((channel: { id: number }) => channel.id)))
+      .run();
   }
 
   const createdChannels = await populateRouteChannelsByModelPattern(routeId, modelPattern, options);

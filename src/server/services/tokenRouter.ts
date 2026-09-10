@@ -1922,26 +1922,31 @@ export class TokenRouter {
         for (const modelName of modelNames) tokenModels.get(row.tokenId)!.add(modelName);
       }
     }
-    for (const [accountId, modelNames] of accountModels) {
-      await db.update(schema.modelAvailability)
-        .set({ connectivity: null })
-        .where(and(
-          eq(schema.modelAvailability.accountId, accountId),
-          eq(schema.modelAvailability.connectivity, false),
-          inArray(sql<string>`lower(trim(${schema.modelAvailability.modelName}))`, [...modelNames].map((name) => name.toLowerCase())),
-        ))
-        .run();
-    }
-    for (const [tokenId, modelNames] of tokenModels) {
-      await db.update(schema.tokenModelAvailability)
-        .set({ connectivity: null })
-        .where(and(
-          eq(schema.tokenModelAvailability.tokenId, tokenId),
-          eq(schema.tokenModelAvailability.connectivity, false),
-          inArray(sql<string>`lower(trim(${schema.tokenModelAvailability.modelName}))`, [...modelNames].map((name) => name.toLowerCase())),
-        ))
-        .run();
-    }
+    // One transaction for the whole sweep: the statement count is unchanged (each
+    // account needs its own model list) but SQLite commits and fsyncs once instead
+    // of once per account, which dominates when clearing a large batch.
+    await db.transaction(async (tx: any) => {
+      for (const [accountId, modelNames] of accountModels) {
+        await tx.update(schema.modelAvailability)
+          .set({ connectivity: null })
+          .where(and(
+            eq(schema.modelAvailability.accountId, accountId),
+            eq(schema.modelAvailability.connectivity, false),
+            inArray(sql<string>`lower(trim(${schema.modelAvailability.modelName}))`, [...modelNames].map((name) => name.toLowerCase())),
+          ))
+          .run();
+      }
+      for (const [tokenId, modelNames] of tokenModels) {
+        await tx.update(schema.tokenModelAvailability)
+          .set({ connectivity: null })
+          .where(and(
+            eq(schema.tokenModelAvailability.tokenId, tokenId),
+            eq(schema.tokenModelAvailability.connectivity, false),
+            inArray(sql<string>`lower(trim(${schema.tokenModelAvailability.modelName}))`, [...modelNames].map((name) => name.toLowerCase())),
+          ))
+          .run();
+      }
+    });
 
     if (clearRuntimeHealthStatesForChannels(runtimeHealthRows)) {
       await persistSiteRuntimeHealthState();
