@@ -77,3 +77,53 @@ describe('peer overview route', () => {
     expect(typeof payload.updatedAt).toBe('string');
   });
 });
+
+describe('peer cascade-key route', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'metapi-peer-cascade-'));
+    const routesModule = await import('./peer.js');
+    app = Fastify();
+    await app.register(routesModule.peerRoutes);
+  });
+
+  afterAll(async () => {
+    await app.close();
+    delete process.env.DATA_DIR;
+  });
+
+  it('answers a featureless 401 without or with a wrong token', async () => {
+    const bare = await app.inject({ method: 'POST', url: '/api/v1/peer/cascade-key' });
+    expect(bare.statusCode).toBe(401);
+    expect(bare.body).not.toContain('cascade');
+
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/api/v1/peer/cascade-key',
+      headers: { authorization: 'Bearer wrong-token' },
+    });
+    expect(wrong.statusCode).toBe(401);
+  });
+
+  it('issues a reusable cascade sk- key for the admin token', async () => {
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/peer/cascade-key',
+      headers: { authorization: 'Bearer peer-test-admin-token' },
+    });
+    expect(first.statusCode).toBe(200);
+    const payload = first.json();
+    expect(payload.name).toBe('cascade');
+    expect(payload.key).toMatch(/^sk-/);
+
+    // Reuse-first: the second call returns the same key, not a new row.
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/v1/peer/cascade-key',
+      headers: { authorization: 'Bearer peer-test-admin-token' },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().key).toBe(payload.key);
+  });
+});

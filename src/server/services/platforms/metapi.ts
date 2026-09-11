@@ -111,6 +111,39 @@ export class MetApiAdapter extends BasePlatformAdapter {
     return { tokenType: 'unknown' };
   }
 
+  override async getApiToken(baseUrl: string, accessToken: string): Promise<string | null> {
+    // Admin-token cascade: pull the peer's shared cascade downstream key so
+    // proxying runs on an sk- key instead of the admin token. The peer's
+    // /api/v1/peer/cascade-key is reuse-first and idempotent, mirroring the
+    // new-api token-list flow this feeds into.
+    const target = `${normalizePeerBaseUrl(baseUrl)}/api/v1/peer/cascade-key`;
+    try {
+      const { fetch } = await import('undici');
+      const res = await fetch(target, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return null;
+      const payload = (await res.json()) as { key?: unknown };
+      return typeof payload?.key === 'string' && payload.key.trim() ? payload.key.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  override async deleteApiToken(
+    _baseUrl: string,
+    _accessToken: string,
+    _tokenKey: string,
+    _platformUserId?: number,
+  ): Promise<boolean> {
+    // The cascade key is shared by every cascading peer on the upstream, so a
+    // local delete must never revoke it upstream — peers would lose their
+    // shared credential. Deleting the local row is enough; actual revocation
+    // happens on the peer's own dashboard.
+    return true;
+  }
+
   private mapOverviewToBalance(overview: PeerOverviewPayload): BalanceInfo {
     const site = overview.site || {};
     const today = overview.today || {};

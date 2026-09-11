@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { config } from '../../config.js';
 import { secretsEqual } from '../../middleware/auth.js';
 import { getDashboardSummarySnapshot } from '../../services/dashboardSnapshotService.js';
+import { getOrCreateCascadeDownstreamKey } from '../../services/cascadeCredentialService.js';
 
 /**
  * Peer overview: read-only site-level metrics for cascaded MetAPI instances.
@@ -53,5 +54,24 @@ export async function peerRoutes(app: FastifyInstance) {
       },
       updatedAt: new Date().toISOString(),
     });
+  });
+
+  // Cascade key handoff: a trusted peer holding the admin token can pull the
+  // downstream sk- key to route traffic with, instead of asking the operator
+  // to create one by hand. Reuse-first on the upstream side, idempotent on
+  // repeated calls.
+  app.post('/api/v1/peer/cascade-key', async (request, reply) => {
+    const token = extractBearerToken(request) || '';
+    if (!token || !secretsEqual(token, config.authToken)) {
+      reply.code(401).send({ error: 'Invalid token' });
+      return;
+    }
+    try {
+      const key = await getOrCreateCascadeDownstreamKey();
+      reply.send({ key, name: 'cascade' });
+    } catch (error) {
+      request.log.error({ err: error }, 'cascade key issuance failed');
+      reply.code(500).send({ error: 'failed to issue cascade key' });
+    }
   });
 }
