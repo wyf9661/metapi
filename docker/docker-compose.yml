@@ -7,6 +7,7 @@ services:
       - ./data:/app/data
     environment:
       AUTH_TOKEN: ${AUTH_TOKEN:?AUTH_TOKEN is required}
+      ACCOUNT_CREDENTIAL_SECRET: ${ACCOUNT_CREDENTIAL_SECRET:?ACCOUNT_CREDENTIAL_SECRET is required}
       CHECKIN_CRON: "0 8 * * *"
       BALANCE_REFRESH_CRON: "0 * * * *"
       PORT: ${PORT:-4000}

@@ -18,6 +18,7 @@ spec:
     ## Required Variables
 
     - `AUTH_TOKEN`: Admin login token for the dashboard.
+    - `ACCOUNT_CREDENTIAL_SECRET`: Encryption key for stored upstream credentials (must differ from the admin token).
 
     ## Data Persistence
 
@@ -27,6 +28,10 @@ spec:
       type: STRING
       name: Admin Token
       description: Dashboard login token (must be strong and private).
+    - key: ACCOUNT_CREDENTIAL_SECRET
+      type: STRING
+      name: Credential Secret
+      description: Encryption key for stored upstream credentials (must differ from the admin token).
     - key: TZ
       type: STRING
       name: Time Zone
@@ -54,7 +59,7 @@ spec:
             default: ${AUTH_TOKEN}
             expose: false
           ACCOUNT_CREDENTIAL_SECRET:
-            default: ${AUTH_TOKEN}
+            default: ${ACCOUNT_CREDENTIAL_SECRET}
             expose: false
           CHECKIN_CRON:
             default: 0 8 * * *
@@ -75,6 +80,9 @@ localization:
       - key: AUTH_TOKEN
         name: 管理员令牌
         description: 用于登录后台的管理员令牌（请设置强密码）。
+      - key: ACCOUNT_CREDENTIAL_SECRET
+        name: 凭证加密密钥
+        description: 上游凭证的加密密钥（需与管理员令牌不同）。
       - key: TZ
         name: 时区
         description: 服务时区（影响定时任务和日志时间）。
@@ -89,6 +97,7 @@ localization:
       ## 必填变量
 
       - `AUTH_TOKEN`：后台管理员登录令牌
+      - `ACCOUNT_CREDENTIAL_SECRET`：上游凭证加密密钥（需与管理员令牌不同）
 
       ## 数据持久化
 
