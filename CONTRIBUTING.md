@@ -48,7 +48,6 @@ Edit `.env` and set your tokens / 编辑 `.env` 并设置您的令牌:
 
 ```env
 AUTH_TOKEN=your-dev-admin-token
-PROXY_TOKEN=your-dev-proxy-token
 ```
 
 4. **Initialize database** / **初始化数据库**

@@ -139,7 +139,7 @@ The AI ecosystem is seeing a growing number of aggregation relay stations based 
 ## Architecture Overview
 
 **Downstream Clients** (Cursor · Claude Code · Codex · Open WebUI · Cherry Studio, etc.)
-&emsp;↓ &ensp;`Authorization: Bearer <PROXY_TOKEN>`
+&emsp;↓ &ensp;`Authorization: Bearer <downstream-key>`
 **Metapi Gateway**
 &emsp;• Unified `/v1` proxy for core OpenAI / Claude-compatible endpoints (Responses, Chat Completions, Messages, Completions, Embeddings, Images, Models)
 &emsp;• Smart Routing Engine — weighted selection by cost, balance, and availability; auto-cooldown & retry on failure

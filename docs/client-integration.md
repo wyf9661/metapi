@@ -155,23 +155,23 @@ base_url = "https://your-domain.com/v1"
 ```bash
 # 1. 检查模型列表
 curl -sS https://your-domain.com/v1/models \
-  -H "Authorization: Bearer <PROXY_TOKEN>" | head -50
+  -H "Authorization: Bearer $DOWNSTREAM_KEY" | head -50
 
 # 2. 测试对话（非流式）
 curl -sS https://your-domain.com/v1/chat/completions \
-  -H "Authorization: Bearer <PROXY_TOKEN>" \
+  -H "Authorization: Bearer $DOWNSTREAM_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
 
 # 3. 测试文件上传
 curl -sS https://your-domain.com/v1/files \
-  -H "Authorization: Bearer <PROXY_TOKEN>" \
+  -H "Authorization: Bearer $DOWNSTREAM_KEY" \
   -F "purpose=assistants" \
   -F "file=@./sample.pdf"
 
 # 4. 测试流式
 curl -sS https://your-domain.com/v1/chat/completions \
-  -H "Authorization: Bearer <PROXY_TOKEN>" \
+  -H "Authorization: Bearer $DOWNSTREAM_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}],"stream":true}'
 ```

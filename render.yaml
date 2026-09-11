@@ -9,8 +9,6 @@ services:
     envVars:
       - key: AUTH_TOKEN
         sync: false
-      - key: PROXY_TOKEN
-        sync: false
       - key: TZ
         value: Asia/Shanghai
       - key: PORT

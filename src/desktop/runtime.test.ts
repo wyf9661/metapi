@@ -18,7 +18,6 @@ describe('desktop runtime helpers', () => {
     const env = buildDesktopServerEnv({
       inheritedEnv: {
         AUTH_TOKEN: 'admin-token',
-        PROXY_TOKEN: 'proxy-token',
       },
       userDataDir: '/tmp/metapi-data',
       logsDir: '/tmp/metapi-logs',
@@ -30,7 +29,6 @@ describe('desktop runtime helpers', () => {
     expect(env.DATA_DIR).toBe('/tmp/metapi-data');
     expect(env.METAPI_LOG_DIR).toBe('/tmp/metapi-logs');
     expect(env.AUTH_TOKEN).toBe('admin-token');
-    expect(env.PROXY_TOKEN).toBe('proxy-token');
   });
 
   it('injects strong random auth token + credential secret when secrets are missing', () => {

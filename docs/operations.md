@@ -145,11 +145,11 @@ npm run dev
 ```bash
 # 检查服务是否响应
 curl -sS http://localhost:4000/v1/models \
-  -H "Authorization: Bearer <PROXY_TOKEN>" | head -5
+  -H "Authorization: Bearer $DOWNSTREAM_KEY" | head -5
 
 # 检查特定模型可用性
 curl -sS http://localhost:4000/v1/chat/completions \
-  -H "Authorization: Bearer <PROXY_TOKEN>" \
+  -H "Authorization: Bearer $DOWNSTREAM_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
 ```

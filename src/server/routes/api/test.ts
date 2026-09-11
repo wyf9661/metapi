@@ -481,8 +481,8 @@ function decodeDataUrl(dataUrl: string): { mimeType: string; buffer: Buffer } {
 }
 
 function createDefaultHeadersForPath(path: string): Record<string, string> {
-  // NewAPI-style: issue short-lived in-memory playground token under admin session,
-  // instead of relying on production-disabled global PROXY_TOKEN.
+  // NewAPI-style: issue short-lived in-memory playground token under admin session
+  // (downstream /v1/* auth uses per-project downstream API keys).
   const playgroundToken = issuePlaygroundProxyToken('sys_playground');
 
   if (/^\/v1\/messages$/i.test(path)) {

@@ -32,7 +32,7 @@ When deploying Metapi, please consider / 部署 Metapi 时，请考虑:
 ### Credential Storage / 凭证存储
 
 - All sensitive credentials (API keys, passwords) are encrypted at rest in the database / 所有敏感凭证（API 密钥、密码）在数据库中静态加密存储
-- Use strong `AUTH_TOKEN` and `PROXY_TOKEN` values / 使用强 `AUTH_TOKEN` 和 `PROXY_TOKEN` 值
+- Use a strong `AUTH_TOKEN` value and strong downstream API keys (generated per project in the UI) / 使用强 `AUTH_TOKEN` 值，下游 Key 在 UI 中按项目生成并保持强随机
 - Never commit `.env` files or expose tokens in logs / 切勿提交 `.env` 文件或在日志中暴露令牌
 
 ### Network Security / 网络安全

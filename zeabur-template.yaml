@@ -18,7 +18,6 @@ spec:
     ## Required Variables
 
     - `AUTH_TOKEN`: Admin login token for the dashboard.
-    - `PROXY_TOKEN`: Bearer token for downstream `/v1/*` proxy requests.
 
     ## Data Persistence
 
@@ -28,10 +27,6 @@ spec:
       type: STRING
       name: Admin Token
       description: Dashboard login token (must be strong and private).
-    - key: PROXY_TOKEN
-      type: STRING
-      name: Proxy Token
-      description: Bearer token used by downstream clients.
     - key: TZ
       type: STRING
       name: Time Zone
@@ -58,9 +53,6 @@ spec:
           AUTH_TOKEN:
             default: ${AUTH_TOKEN}
             expose: false
-          PROXY_TOKEN:
-            default: ${PROXY_TOKEN}
-            expose: false
           ACCOUNT_CREDENTIAL_SECRET:
             default: ${AUTH_TOKEN}
             expose: false
@@ -83,9 +75,6 @@ localization:
       - key: AUTH_TOKEN
         name: 管理员令牌
         description: 用于登录后台的管理员令牌（请设置强密码）。
-      - key: PROXY_TOKEN
-        name: 代理令牌
-        description: 下游客户端调用 /v1/* 时使用的 Bearer Token。
       - key: TZ
         name: 时区
         description: 服务时区（影响定时任务和日志时间）。
@@ -100,7 +89,6 @@ localization:
       ## 必填变量
 
       - `AUTH_TOKEN`：后台管理员登录令牌
-      - `PROXY_TOKEN`：下游调用 `/v1/*` 使用的 Bearer Token
 
       ## 数据持久化
 
