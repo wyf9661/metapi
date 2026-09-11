@@ -77,7 +77,6 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
     .select()
     .from(schema.accounts)
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-    .where(eq(schema.sites.status, 'active'))
     .all();
   const accounts = accountRows.map((row: any) => row.accounts);
   const totalBalance = accounts.reduce(

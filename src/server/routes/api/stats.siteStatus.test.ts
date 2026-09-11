@@ -8,7 +8,7 @@ import { formatLocalDate, formatUtcSqlDateTime } from '../../services/localTimeS
 
 type DbModule = typeof import('../../db/index.js');
 
-describe('stats dashboard filters disabled sites', () => {
+describe('stats dashboard site status handling', () => {
   let app: FastifyInstance;
   let db: DbModule['db'];
   let schema: DbModule['schema'];
@@ -45,7 +45,7 @@ describe('stats dashboard filters disabled sites', () => {
     delete process.env.DATA_DIR;
   });
 
-  it('excludes disabled-site balances from dashboard totals', async () => {
+  it('includes disabled-site balances in dashboard totals', async () => {
     const activeSite = await db.insert(schema.sites).values({
       name: 'active-site',
       url: 'https://active-site.example.com',
@@ -88,9 +88,11 @@ describe('stats dashboard filters disabled sites', () => {
       totalAccounts: number;
     };
 
-    expect(body.totalBalance).toBe(100);
-    expect(body.activeAccounts).toBe(1);
-    expect(body.totalAccounts).toBe(1);
+    // A disabled site still holds a balance asset and its accounts still
+    // exist, so the totals expose them instead of hiding the whole site.
+    expect(body.totalBalance).toBe(1000);
+    expect(body.activeAccounts).toBe(2);
+    expect(body.totalAccounts).toBe(2);
   });
 
   it('counts dashboard checkins by site, not by attempt logs', async () => {

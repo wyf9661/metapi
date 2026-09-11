@@ -78,11 +78,11 @@ describe('dashboardSnapshotService', () => {
     const envelope = await service.getDashboardSummarySnapshot({ forceRefresh: true });
     const payload = envelope.payload;
 
-    // Balance: all accounts on ACTIVE sites count (regardless of account
-    // status — a disabled account still holds a balance asset).
-    expect(payload.totalBalance).toBe(175); // 100 + 50 + 25 (excludes disabled site's 10)
-    expect(payload.activeAccounts).toBe(2); // a1, a2 (both active on active site)
-    expect(payload.totalAccounts).toBe(3); // a1, a2, a3 (all on active site)
+    // Balance: ALL accounts count regardless of account or site status —
+    // a disabled account/site still holds a balance asset.
+    expect(payload.totalBalance).toBe(185); // 100 + 50 + 25 + 10 (includes disabled site)
+    expect(payload.activeAccounts).toBe(3); // a1, a2, a4 (a4 is on a disabled site but its account is active)
+    expect(payload.totalAccounts).toBe(4); // all accounts, including disabled site's
 
     expect(payload.todaySpend).toBe(1.5); // from site_day_usage
 
