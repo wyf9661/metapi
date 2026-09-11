@@ -341,7 +341,7 @@ export default function Settings() {
       },
       primary: {
         borderColor: 'color-mix(in srgb, var(--color-primary) 20%, var(--color-border-light))',
-        background: 'color-mix(in srgb, var(--color-primary-light) 64%, var(--color-bg-card))',
+        background: 'var(--color-selection-bg)',
         color: 'var(--color-primary)',
       },
       warning: {

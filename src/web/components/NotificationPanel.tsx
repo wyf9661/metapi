@@ -104,7 +104,7 @@ export default function NotificationPanel({
             style={{
               fontSize: 11, padding: '3px 8px', borderRadius: 'var(--radius-xl)',
               border: filter === filterType ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-              background: filter === filterType ? 'var(--color-primary-light)' : 'transparent',
+              background: filter === filterType ? 'var(--color-selection-bg)' : 'transparent',
               color: filter === filterType ? 'var(--color-primary)' : 'var(--color-text-muted)',
               cursor: 'pointer',
             }}>

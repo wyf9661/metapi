@@ -168,7 +168,7 @@ export type BrandBadgeColors = {
 };
 
 const DEFAULT_BADGE_COLORS: BrandBadgeColors = {
-  bg: 'var(--color-primary-light)',
+  bg: 'var(--color-selection-bg)',
   border: 'rgba(79,70,229,0.15)',
   text: 'var(--color-primary)',
 };

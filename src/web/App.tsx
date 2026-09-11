@@ -734,21 +734,21 @@ function AppShell() {
                 <button
                   className="user-dropdown-item"
                   onClick={() => handleSelectThemeMode('system')}
-                  style={themeMode === 'system' ? { background: 'var(--color-primary-light)', color: 'var(--color-primary)' } : undefined}
+                  style={themeMode === 'system' ? { background: 'var(--color-selection-bg)', color: 'var(--color-primary)' } : undefined}
                 >
                   {t('跟随系统')}（{resolvedThemeLabel}）
                 </button>
                 <button
                   className="user-dropdown-item"
                   onClick={() => handleSelectThemeMode('light')}
-                  style={themeMode === 'light' ? { background: 'var(--color-primary-light)', color: 'var(--color-primary)' } : undefined}
+                  style={themeMode === 'light' ? { background: 'var(--color-selection-bg)', color: 'var(--color-primary)' } : undefined}
                 >
                   {t('浅色模式')}
                 </button>
                 <button
                   className="user-dropdown-item"
                   onClick={() => handleSelectThemeMode('dark')}
-                  style={themeMode === 'dark' ? { background: 'var(--color-primary-light)', color: 'var(--color-primary)' } : undefined}
+                  style={themeMode === 'dark' ? { background: 'var(--color-selection-bg)', color: 'var(--color-primary)' } : undefined}
                 >
                   {t('深色模式')}
                 </button>

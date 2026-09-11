@@ -2264,9 +2264,10 @@ export default function ProxyLogs() {
                       }}
                       style={{
                         cursor: 'pointer',
+                        /* Match the sidebar's selected entry: same subtle selection tint. */
                         background:
                           expanded === log.id
-                            ? 'var(--color-primary-light)'
+                            ? 'var(--color-selection-bg)'
                             : undefined,
                         transition: 'background 0.15s',
                       }}

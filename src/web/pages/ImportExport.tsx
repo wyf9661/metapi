@@ -594,7 +594,7 @@ export default function ImportExport() {
                 textAlign: 'center',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                background: dragOver ? 'var(--color-primary-light)' : 'var(--color-bg)',
+                background: dragOver ? 'var(--color-selection-bg)' : 'var(--color-bg)',
               }}
             >
               <input

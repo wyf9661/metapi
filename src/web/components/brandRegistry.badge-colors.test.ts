@@ -37,7 +37,7 @@ describe('brandBadgeColors', () => {
   it('supports shorthand hex and falls back when no color is present', () => {
     expect(brandBadgeColors('#abc').bg).toBe('rgba(94,103,113,0.12)');
     expect(brandBadgeColors(null)).toEqual({
-      bg: 'var(--color-primary-light)',
+      bg: 'var(--color-selection-bg)',
       border: 'rgba(79,70,229,0.15)',
       text: 'var(--color-primary)',
     });
