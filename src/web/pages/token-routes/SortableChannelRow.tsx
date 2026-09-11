@@ -192,7 +192,7 @@ export function SortableChannelRow({
                   style={{
                     fontSize: 10,
                     background: 'transparent',
-                    color: 'var(--color-warning)',
+                    color: 'var(--color-text-primary)',
                     fontWeight: 600,
                   }}
                   data-tooltip={suppressTooltips ? undefined : '该通道连续失败多次，已被暂时冷却。冷却结束后会自动恢复。可点击"清除路由冷却"提前解除。'}
@@ -444,7 +444,7 @@ export function SortableChannelRow({
             style={{
               fontSize: 10,
               background: 'transparent',
-              color: 'var(--color-warning)',
+              color: 'var(--color-text-primary)',
               fontWeight: 600,
             }}
           >
