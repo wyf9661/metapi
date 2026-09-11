@@ -2127,7 +2127,9 @@ export default function ProxyLogs() {
                       ) : null}
                       <MobileField
                         label="推理强度"
-                        value={detailLog.reasoningEffort || '-'}
+                        value={detailLog.reasoningEffort
+                          ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
+                          : '-'}
                       />
                       {firstByteLabel && detailLog.isStream === true ? (
                         <MobileField
@@ -2399,7 +2401,9 @@ export default function ProxyLogs() {
                             : 'var(--color-text-muted)',
                         }}
                       >
-                        {detailLog.reasoningEffort || '-'}
+                        {detailLog.reasoningEffort
+                          ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
+                          : '-'}
                       </td>
                       <td style={{ width: 48, minWidth: 48 }}>
                         <StreamModeIcon isStream={detailLog.isStream} />
@@ -2699,7 +2703,9 @@ export default function ProxyLogs() {
                                       <div>
                                         推理强度：
                                         <strong style={{ color: 'var(--color-text-primary)' }}>
-                                          {detailLog.reasoningEffort || '未指定'}
+                                          {detailLog.reasoningEffort
+                                            ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
+                                            : '未指定'}
                                         </strong>
                                       </div>
                                       <div>

@@ -35,7 +35,7 @@ export async function getOrCreateCascadeDownstreamKey(): Promise<string> {
     values: {
       name: CASCADE_KEY_NAME,
       key: generateDownstreamSkKey(),
-      description: 'Auto-issued for cascading MetAPI peers holding the admin token.',
+      description: 'Auto-issued for cascading MetAPI peers.',
       groupName: null,
       tags: JSON.stringify(['cascade']),
       enabled: true,
