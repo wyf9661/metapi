@@ -1260,9 +1260,6 @@ export default function Models() {
                   {m.successRate != null && m.successRate >= 90 && (
                     <span className="model-tag model-tag-green">{tr('健康')}</span>
                   )}
-                  {m.successRate != null && m.successRate < 60 && (
-                    <span className="model-tag model-tag-orange">{tr('风险')}</span>
-                  )}
                   {isKnownLatency(m.avgLatency) && m.avgLatency <= 500 && (
                     <span className="model-tag model-tag-purple">{tr('低延迟')}</span>
                   )}
@@ -1364,7 +1361,7 @@ export default function Models() {
                                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('令牌')}</span>
                                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                   {a.tokens.length > 0 ? a.tokens.map((t) => (
-                                    <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>{t.name}</span>
+                                    <span key={t.id} className="model-token-tag" style={{ fontSize: 11 }}>{t.name}</span>
                                   )) : <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>—</span>}
                                 </div>
                               </div>
@@ -1393,7 +1390,7 @@ export default function Models() {
                               <td style={{ fontSize: 11 }}><code style={{ wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                               <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                 {a.tokens.length > 0 ? a.tokens.map(t => (
-                                  <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: 11 }}>{t.name}</span>
+                                  <span key={t.id} className="model-token-tag" style={{ fontSize: 11 }}>{t.name}</span>
                                 )) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                               </td>
                               <td>
@@ -1610,7 +1607,7 @@ export default function Models() {
                                     <td style={{ padding: 8 }}><code style={{ fontSize: 11, wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                                     <td style={{ padding: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                       {a.tokens.length > 0 ? a.tokens.map(t => (
-                                        <span key={t.id} className={`badge ${t.isDefault ? 'badge-success' : 'badge-muted'}`}>{t.name}</span>
+                                        <span key={t.id} className="model-token-tag" style={{ fontSize: 11 }}>{t.name}</span>
                                       )) : '—'}
                                     </td>
                                     <td style={{ padding: 8, color: (probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) != null ? getMetricColor(probeResults[m.name]?.byAccountId?.[a.id]?.latencyMs ?? a.latency) : 'var(--color-text-muted)' }}>

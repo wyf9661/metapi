@@ -126,7 +126,6 @@ const zhToEn: Record<string, string> = {
   '复制模型名': 'Copy Model Name',
   '展开': 'Expand',
   '健康': 'Healthy',
-  '风险': 'Risk',
   '低延迟': 'Low Latency',
   '基础信息': 'Basic Info',
   '接口能力': 'Endpoint Capabilities',

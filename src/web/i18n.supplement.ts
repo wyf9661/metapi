@@ -168,7 +168,6 @@ export const zhToEnSupplemental: Record<string, string> = {
   '花费分布': 'spend distribution',
   '分组计费': 'Group charging',
   '分组加载中...': 'Group loading...',
-  '风险': 'risk',
   '复制': 'copy',
   '复制模型名': 'Copy model name',
   '复制失败，请手动复制。': 'Copy failed, please copy manually.',

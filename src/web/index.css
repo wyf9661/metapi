@@ -5454,7 +5454,8 @@ textarea {
 }
 
 .filter-item.active {
-  background: var(--color-primary-light);
+  /* Match the sidebar's selected entry: same subtle selection tint. */
+  background: var(--color-selection-bg);
   color: var(--color-primary);
   font-weight: 600;
 }
@@ -5602,22 +5603,24 @@ textarea {
 }
 
 .model-tag-green {
-  background: var(--color-success-soft);
-  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
-  color: var(--color-success);
+  /* Uniform with the site-name tag: outline only, neutral hue. */
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  color: var(--color-text-secondary);
 }
 
 .model-tag-blue {
-  /* Site names are labels, not statuses. */
-  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  /* Site names are labels, not statuses; outline-only like the brand tag. */
+  background: transparent;
   border-color: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
   color: var(--color-text-secondary);
 }
 
 .model-tag-purple {
-  background: var(--color-primary-light);
-  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
-  color: var(--color-primary);
+  /* Brand / 低延迟 tags: same neutral outline as the site-name tag. */
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  color: var(--color-text-secondary);
 }
 
 .model-tag-orange {
@@ -5625,6 +5628,19 @@ textarea {
   background: var(--color-warning-soft);
   border-color: color-mix(in srgb, var(--color-warning) 34%, transparent);
   color: var(--color-warning);
+}
+
+/* Token chips inside a model's expand area / account table: same neutral
+   outline as the site-name tag, no fill, no success colour. */
+.model-token-tag {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  background: transparent;
+  color: var(--color-text-secondary);
 }
 
 .model-tag-gray {
