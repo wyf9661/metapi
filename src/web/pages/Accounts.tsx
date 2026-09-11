@@ -258,6 +258,15 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     const normalized = (platform || '').toLowerCase();
     return normalized === 'new-api' || normalized === 'one-api';
   };
+  // Only platforms whose adapters really implement username/password login
+  // (POST /api/user/login) get the login tab; metapi (admin token / sk- key
+  // only), sub2api (JWT) and the token-based providers hide it.
+  const platformSupportsPasswordLogin = (platform?: string) => {
+    const normalized = (platform || '').toLowerCase();
+    return normalized === 'new-api' || normalized === 'one-api';
+  };
+  const selectedSiteSupportsLogin =
+    platformSupportsPasswordLogin(selectedTokenSite?.platform);
   const activeAddCredentialMode =
     activeSegment === 'apikey' ? 'apikey' : 'session';
   const createIntentPreset = useMemo(
@@ -1480,7 +1489,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   >
                     Session Token / Cookie
                   </button>
-                  {!isSub2ApiSelected && (
+                  {!isSub2ApiSelected && selectedSiteSupportsLogin && (
                     <button
                       onClick={() => {
                         setAddMode('login');
