@@ -41,7 +41,6 @@ services:
       - ./data:/app/data
     environment:
       AUTH_TOKEN: ${AUTH_TOKEN:?AUTH_TOKEN is required}
-      PROXY_TOKEN: ${PROXY_TOKEN:?PROXY_TOKEN is required}
       CHECKIN_CRON: "0 8 * * *"
       BALANCE_REFRESH_CRON: "0 * * * *"
       PORT: ${PORT:-4000}
@@ -50,13 +49,11 @@ services:
     restart: unless-stopped
 ```
 
-### 3. 设置令牌并启动
+### 3. 设置管理员令牌并启动
 
 ```bash
 # AUTH_TOKEN = 管理后台初始管理员令牌（登录后台时输入这个值）
 export AUTH_TOKEN=your-admin-token
-# PROXY_TOKEN = 下游客户端调用 /v1/* 使用的令牌
-export PROXY_TOKEN=your-proxy-sk-token
 docker compose up -d
 ```
 
@@ -251,11 +248,11 @@ npm run dev
 ```bash
 # 检查模型列表
 curl -sS http://localhost:4000/v1/models \
-  -H "Authorization: Bearer your-proxy-sk-token"
+  -H "Authorization: Bearer sk-your-downstream-key"
 
 # 测试对话
 curl -sS http://localhost:4000/v1/chat/completions \
-  -H "Authorization: Bearer your-proxy-sk-token" \
+  -H "Authorization: Bearer sk-your-downstream-key" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
 ```
@@ -273,7 +270,7 @@ Proxy API: http://127.0.0.1:4000/v1/chat/completions
 
 ```bash
 curl -sS http://127.0.0.1:4000/v1/models \
-  -H "Authorization: Bearer your-proxy-sk-token"
+  -H "Authorization: Bearer sk-your-downstream-key"
 ```
 
 如果你显式设置了 `METAPI_DESKTOP_SERVER_PORT`，再把上面的 `4000` 替换成日志里的实际端口。返回正常响应，说明代理链路已经可用。

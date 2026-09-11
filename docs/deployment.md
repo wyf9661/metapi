@@ -65,7 +65,6 @@
 | 变量 | 说明 |
 |------|------|
 | `AUTH_TOKEN` | 后台管理员登录令牌（请设置强密码） |
-| `PROXY_TOKEN` | 下游客户端调用 `/v1/*` 时使用的 Bearer Token |
 | `TZ` | 服务时区，影响定时任务和日志（如 `Asia/Shanghai`） |
 | `PORT` | 内部监听端口（默认 `4000`，一般无需修改） |
 
@@ -133,7 +132,6 @@
 | 变量 | 说明 | 示例值 |
 |------|------|--------|
 | `AUTH_TOKEN` | 管理后台登录令牌（**必填**） | 你的强密码 |
-| `PROXY_TOKEN` | 代理接口 Bearer Token（**必填**） | 你的代理密钥 |
 | `DB_TYPE` | 数据库类型（**必填**） | `mysql` |
 | `DB_URL` | TiDB 连接串（**必填**） | `mysql://user:pass@host:4000/db?ssl=...` |
 | `DB_SSL` | 启用 SSL 连接 | `true` |
@@ -166,7 +164,6 @@ mkdir metapi && cd metapi
 # 创建 docker-compose.yml（参见快速上手）
 # 设置环境变量
 export AUTH_TOKEN=your-admin-token
-export PROXY_TOKEN=your-proxy-sk-token
 
 # 启动
 docker compose up -d
@@ -179,7 +176,6 @@ docker compose up -d
 ```bash
 # .env
 AUTH_TOKEN=your-admin-token
-PROXY_TOKEN=your-proxy-sk-token
 TZ=Asia/Shanghai
 PORT=4000
 ```
@@ -196,7 +192,6 @@ docker compose --env-file .env up -d
 docker run -d --name metapi \
   -p 4000:4000 \
   -e AUTH_TOKEN=your-admin-token \
-  -e PROXY_TOKEN=your-proxy-sk-token \
   -e TZ=Asia/Shanghai \
   -v ./data:/app/data \
   --restart unless-stopped \

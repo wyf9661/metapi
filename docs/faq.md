@@ -80,7 +80,7 @@
 
 ### Q: 登录失败，提示令牌无效
 
-**A:** 先确认你输入的是管理员令牌，而不是代理令牌。登录后台使用的是 `AUTH_TOKEN`，注意：
+**A:** 先确认你输入的是管理员令牌，而不是下游 API Key。登录后台使用的是 `AUTH_TOKEN`，注意：
 
 - 初始管理员令牌 = 启动时设置的 `AUTH_TOKEN`
 - 如果你在非 Compose 场景未显式设置 `AUTH_TOKEN`，默认值是 `change-me-admin-token`（仅建议本地调试）
@@ -93,7 +93,6 @@
 
 ```bash
 export AUTH_TOKEN=your-token
-export PROXY_TOKEN=your-proxy-token
 docker compose up -d
 ```
 
@@ -116,7 +115,7 @@ docker compose up -d
 
 **A:** 排查：
 
-- 确认使用的是 `PROXY_TOKEN`（代理令牌），而非 `AUTH_TOKEN`（管理令牌）
+- 确认使用的是「下游密钥」页面生成的下游 API Key，而非 `AUTH_TOKEN`（管理令牌）
 - 确认反向代理正确透传了 `Authorization` 请求头
 - 检查是否设置了 `ADMIN_IP_ALLOWLIST` 限制了访问
 
@@ -169,9 +168,9 @@ docker compose up -d
 - 路由白名单（限制可走的路由规则）
 - 站点倍率（控制不同项目的上游偏好）
 
-### Q: 下游 Key 和 PROXY_TOKEN 有什么区别
+### Q: 下游 Key 可以配多个吗
 
-**A:** `PROXY_TOKEN` 是全局代理令牌，拥有完整权限。下游 Key 是项目级的细粒度控制，可设置过期时间、用量上限和模型限制，适合多团队共用的场景。
+**A:** 可以。下游 Key 是项目级的细粒度控制，可设置过期时间、用量上限和模型限制，适合多团队共用的场景。
 
 ---
 

@@ -170,7 +170,6 @@ services:
       - ./data:/app/data
     environment:
       AUTH_TOKEN: ${AUTH_TOKEN:?AUTH_TOKEN is required}
-      PROXY_TOKEN: ${PROXY_TOKEN:?PROXY_TOKEN is required}
       CHECKIN_CRON: "0 8 * * *"
       BALANCE_REFRESH_CRON: "0 * * * *"
       PORT: ${PORT:-4000}
@@ -179,11 +178,9 @@ services:
     restart: unless-stopped
 EOF
 
-# 设置 Token 并启动
+# 设置管理员令牌并启动
 # AUTH_TOKEN = 管理后台登录令牌（登录时输入此值）
 export AUTH_TOKEN=your-admin-token
-# PROXY_TOKEN = 下游客户端调用 /v1/* 的 Token
-export PROXY_TOKEN=your-proxy-sk-token
 docker compose up -d
 ```
 
@@ -194,7 +191,6 @@ docker compose up -d
 docker run -d --name metapi \
   -p 4000:4000 \
   -e AUTH_TOKEN=your-admin-token \
-  -e PROXY_TOKEN=your-proxy-sk-token \
   -e TZ=Asia/Shanghai \
   -v ./data:/app/data \
   --restart unless-stopped \
@@ -211,7 +207,7 @@ docker run -d --name metapi \
 
 <!-- markdownlint-disable-next-line MD028 -->
 > [!IMPORTANT]
-> 请务必修改 `AUTH_TOKEN` 和 `PROXY_TOKEN`，不要使用默认值。数据存储在 `./data` 目录，升级不会丢失。
+> 请务必修改 `AUTH_TOKEN`，不要使用默认值。数据存储在 `./data` 目录，升级不会丢失。
 
 > [!TIP]
 > 初始管理员令牌即启动时配置的 `AUTH_TOKEN`。
