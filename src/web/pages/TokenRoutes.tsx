@@ -1677,9 +1677,13 @@ export default function TokenRoutes() {
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
-                  border: '1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border))',
-                  background: enabledFilter === 'cooling' ? 'var(--color-warning)' : 'var(--color-warning-soft)',
-                  color: enabledFilter === 'cooling' ? '#fff' : 'var(--color-warning)',
+                  border: enabledFilter === 'cooling'
+                    ? '1px solid color-mix(in srgb, var(--color-info) 36%, var(--color-border))'
+                    : '1px solid color-mix(in srgb, var(--color-text-primary) 14%, transparent)',
+                  background: enabledFilter === 'cooling'
+                    ? 'color-mix(in srgb, var(--color-info) 10%, var(--color-bg-card))'
+                    : 'transparent',
+                  color: enabledFilter === 'cooling' ? 'var(--color-info)' : 'var(--color-text-secondary)',
                   padding: '4px 10px',
                 }}
               >

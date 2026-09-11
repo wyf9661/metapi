@@ -1509,7 +1509,7 @@ export default function Sites() {
                                   }
                                 }}
                                 className={`badge ${allDisabled ? 'badge-warning' : 'badge-muted'}`}
-                                style={{ fontSize: 10, cursor: 'pointer', border: 'none', padding: '3px 8px' }}
+                                style={{ fontSize: 10, cursor: 'pointer', padding: '3px 8px' }}
                                 data-tooltip={allDisabled ? `取消禁用全部 ${brandName} 模型 (${models.length})` : `禁用全部 ${brandName} 模型 (${models.length})`}
                               >
                                 {brandName} ({models.length})

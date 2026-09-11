@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/BrandIcon.js';
+import { BoltIcon, GearIcon } from '../../components/MiniIcons.js';
 import { useAnimatedVisibility } from '../../components/useAnimatedVisibility.js';
 import { tr } from '../../i18n.js';
 import type { GroupFilter, GroupRouteItem } from './types.js';
@@ -211,7 +212,7 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
                     active={!activeSite}
                     label={tr('全部')}
                     count={totalRouteCount}
-                    icon={<span style={{ fontSize: 10 }}>⚡</span>}
+                    icon={<BoltIcon />}
                     onClick={() => setActiveSite(null)}
                   />
                   {siteList.map(([siteName, { count }]) => (
@@ -277,7 +278,7 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
                   active={!activeEndpointType}
                   label={tr('全部')}
                   count={totalRouteCount}
-                  icon={<span style={{ fontSize: 10 }}>⚙</span>}
+                  icon={<GearIcon />}
                   onClick={() => setActiveEndpointType(null)}
                 />
                 {endpointTypeList.map(([endpointType, count]) => {
@@ -288,7 +289,7 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
                       active={activeEndpointType === endpointType}
                       label={endpointType}
                       count={count}
-                      icon={iconModel ? <InlineBrandIcon model={iconModel} size={12} /> : <span style={{ fontSize: 10 }}>⚙</span>}
+                      icon={iconModel ? <InlineBrandIcon model={iconModel} size={12} /> : <GearIcon />}
                       onClick={() => setActiveEndpointType(activeEndpointType === endpointType ? null : endpointType)}
                     />
                   );

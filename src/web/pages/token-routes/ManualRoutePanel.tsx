@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { BrandGlyph, InlineBrandIcon, type BrandInfo } from '../../components/BrandIcon.js';
+import { BoltIcon, GearIcon } from '../../components/MiniIcons.js';
 import CenteredModal from '../../components/CenteredModal.js';
 import ModernSelect from '../../components/ModernSelect.js';
 import { StatusPill } from '../../components/StatusText.js';
@@ -805,7 +806,7 @@ export default function ManualRoutePanel({
                     active={!activeSourceSite}
                     label={tr('全部')}
                     count={exactSourceRouteOptions.length}
-                    icon={<span style={{ fontSize: 10 }}>⚡</span>}
+                    icon={<BoltIcon />}
                     onClick={() => setActiveSourceSite(null)}
                   />
                   {sourceSiteList.map(([siteName, count]) => (
@@ -839,7 +840,7 @@ export default function ManualRoutePanel({
                   active={!activeSourceEndpointType}
                   label={tr('全部')}
                   count={exactSourceRouteOptions.length}
-                  icon={<span style={{ fontSize: 10 }}>⚙</span>}
+                  icon={<GearIcon />}
                   onClick={() => setActiveSourceEndpointType(null)}
                 />
                 {sourceEndpointTypeList.map(([endpointType, count]) => {
@@ -850,7 +851,7 @@ export default function ManualRoutePanel({
                       active={activeSourceEndpointType === endpointType}
                       label={endpointType}
                       count={count}
-                      icon={iconModel ? <InlineBrandIcon model={iconModel} size={12} /> : <span style={{ fontSize: 10 }}>⚙</span>}
+                      icon={iconModel ? <InlineBrandIcon model={iconModel} size={12} /> : <GearIcon />}
                       onClick={() => setActiveSourceEndpointType(activeSourceEndpointType === endpointType ? null : endpointType)}
                     />
                   );

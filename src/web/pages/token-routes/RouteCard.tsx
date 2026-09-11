@@ -750,7 +750,7 @@ function RouteCardInner({
                       marginLeft: 6,
                       fontSize: 10,
                       background: 'transparent',
-                      color: 'var(--color-warning)',
+                      color: 'var(--color-text-primary)',
                       fontWeight: 600,
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
@@ -770,7 +770,7 @@ function RouteCardInner({
                     marginLeft: 6,
                     fontSize: 10,
                     background: 'transparent',
-                    color: 'var(--color-warning)',
+                    color: 'var(--color-text-primary)',
                     fontWeight: 600,
                   }}
                   data-tooltip="单通道路由：无冗余，该通道冷却即整路由不可用"
@@ -785,7 +785,7 @@ function RouteCardInner({
                     marginLeft: 6,
                     fontSize: 10,
                     background: 'transparent',
-                    color: 'var(--color-warning)',
+                    color: 'var(--color-text-primary)',
                     fontWeight: 600,
                   }}
                   data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
@@ -883,7 +883,7 @@ function RouteCardInner({
                       marginLeft: 6,
                       fontSize: 10,
                       background: 'transparent',
-                      color: 'var(--color-warning)',
+                      color: 'var(--color-text-primary)',
                       fontWeight: 600,
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
@@ -903,7 +903,7 @@ function RouteCardInner({
                       marginLeft: 6,
                       fontSize: 10,
                       background: 'transparent',
-                      color: 'var(--color-warning)',
+                      color: 'var(--color-text-primary)',
                       fontWeight: 600,
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
@@ -1001,7 +1001,7 @@ function RouteCardInner({
                       marginLeft: 6,
                       fontSize: 10,
                       background: 'transparent',
-                      color: 'var(--color-warning)',
+                      color: 'var(--color-text-primary)',
                       fontWeight: 600,
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
