@@ -134,6 +134,17 @@ describe('routeScoringShadow', () => {
     expect(computeBalanceFactor(200).factor).toBeGreaterThan(0.8);
   });
 
+  it('tiny balance stays eligible when the token group is free (0× ratio)', () => {
+    // A 0× free-group key with 0.5 balance is NOT near exhaustion: coverage
+    // uses the token-group-adjusted reference cost (~0), so the account stays
+    // routeable instead of being hard-excluded as 余额不足.
+    const free = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, balance: 0.5, balanceKnown: true, credentialKind: 'session', unitCost: 1e-6, costSource: 'catalog' }),
+      base({ channelId: 2, siteId: 2, accountId: 2, balance: 20, balanceKnown: true, credentialKind: 'session', unitCost: 0.02 }),
+    ]);
+    expect(free.candidates.find((c) => c.channelId === 1)?.factors.exclusion).toBeNull();
+  });
+
   it('formats a compact shadow log line', () => {
     const shadow = rankShadowCandidates([
       base({ channelId: 1, siteId: 1, accountId: 1, balance: 0 }),

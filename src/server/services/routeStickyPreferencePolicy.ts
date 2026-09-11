@@ -37,6 +37,10 @@ type RouteChannelCandidate = {
     totalCost?: number | null;
     sourceModel?: string | null;
   };
+  // Bound group of the account token, when one exists. The routing-reference
+  // cost must bill at the token's group ratio (a 0× free group costs 0), not
+  // the model's enableGroups order.
+  token?: { tokenGroup?: string | null } | null;
   site: {
     id: number;
   };
@@ -74,6 +78,7 @@ export function resolveEffectiveUnitCost(
     siteId: candidate.site.id,
     accountId: candidate.account.id,
     modelName,
+    tokenGroup: candidate.token?.tokenGroup ?? null,
   });
   if (catalogCost != null && catalogCost > 0) {
     return {

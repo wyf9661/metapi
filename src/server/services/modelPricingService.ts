@@ -14,7 +14,6 @@ const PRICE_CACHE_FAILURE_TTL_MS = 60 * 1000;
 const PRICING_FETCH_TIMEOUT_MS = 8_000;
 const DEFAULT_GROUP = 'default';
 const ONE_HUB_PER_CALL_RATIO = 0.002;
-const MIN_ROUTING_REFERENCE_COST = 1e-6;
 const ROUTING_REFERENCE_USAGE = {
   promptTokens: 500_000,
   completionTokens: 500_000,
@@ -61,7 +60,8 @@ interface PricingCacheEntry {
 interface RoutingReferenceCostCacheEntry {
   fetchedAt: number;
   ttlMs: number;
-  costs: Map<string, number>;
+  models: Map<string, PricingModel>;
+  groupRatio: Record<string, number>;
 }
 
 export interface EstimateProxyCostInput {
@@ -380,16 +380,6 @@ function normalizeModelKey(modelName: string): string {
   return modelName.trim().toLowerCase();
 }
 
-function buildRoutingReferenceCostMap(data: PricingData): Map<string, number> {
-  const costs = new Map<string, number>();
-  for (const model of data.models.values()) {
-    const cost = calculateModelUsageCost(model, ROUTING_REFERENCE_USAGE, data.groupRatio);
-    if (!Number.isFinite(cost)) continue;
-    costs.set(normalizeModelKey(model.modelName), Math.max(cost, MIN_ROUTING_REFERENCE_COST));
-  }
-  return costs;
-}
-
 function syncRoutingReferenceCostCache(
   key: string,
   fetchedAt: number,
@@ -404,7 +394,8 @@ function syncRoutingReferenceCostCache(
   routingReferenceCostCache.set(key, {
     fetchedAt,
     ttlMs,
-    costs: buildRoutingReferenceCostMap(data),
+    models: data.models,
+    groupRatio: data.groupRatio,
   });
 }
 
@@ -470,6 +461,7 @@ export function getCachedModelRoutingReferenceCost(input: {
   siteId: number;
   accountId: number;
   modelName: string;
+  tokenGroup?: string | null;
 }): number | null {
   const key = `${input.siteId}:${input.accountId}`;
   const cached = routingReferenceCostCache.get(key);
@@ -479,8 +471,19 @@ export function getCachedModelRoutingReferenceCost(input: {
     return null;
   }
 
-  const cost = cached.costs.get(normalizeModelKey(input.modelName));
-  if (typeof cost !== 'number' || !Number.isFinite(cost) || cost <= 0) {
+  const model = cached.models.get(normalizeModelKey(input.modelName));
+  if (!model) return null;
+
+  // Bill the routing reference at the token's bound group ratio, mirroring
+  // real billing. A 0× free group must yield a (near-)zero reference cost —
+  // never test the ratio truthiness, check key presence.
+  const cost = calculateModelUsageCost(
+    model,
+    ROUTING_REFERENCE_USAGE,
+    cached.groupRatio,
+    input.tokenGroup ?? null,
+  );
+  if (!Number.isFinite(cost) || cost <= 0) {
     return null;
   }
 
