@@ -1,5 +1,5 @@
 import { spawn, execFile, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { platform, arch } from 'node:os';
 import { eq } from 'drizzle-orm';
@@ -172,6 +172,7 @@ async function waitForPublicUrlHealthy(publicUrl: string, timeoutMs = 60000): Pr
         redirect: 'follow',
         signal: AbortSignal.timeout(5000),
       });
+      dropUnreadResponseBody(response);
       // Any HTTP response means edge mapping is live (401/403 still OK).
       if (response.status > 0) return true;
     } catch {
@@ -298,6 +299,16 @@ export function resolveCloudflaredDownloadProxyUrl(env: NodeJS.ProcessEnv = proc
   return normalizeSiteProxyUrl(raw);
 }
 
+/** Drop an unread response body so a peer close can never strand a paused
+ *  HTTP/1.1 parser (undici assert, nodejs/undici#5360). Fire-and-forget. */
+function dropUnreadResponseBody(response: { body?: { cancel?: () => Promise<unknown> } | null }): void {
+  try {
+    void response.body?.cancel?.().catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
 async function ensureCloudflaredBinary(): Promise<string> {
   ensureDirs();
   const target = binaryPath();
@@ -329,28 +340,22 @@ async function ensureCloudflaredBinary(): Promise<string> {
         signal: AbortSignal.timeout(CLOUDFLARED_DOWNLOAD_TIMEOUT_MS),
       },
     ));
-    if (!response.ok || !response.body) {
+    if (!response.ok) {
+      dropUnreadResponseBody(response);
       throw new Error(`HTTP ${response.status}`);
     }
+    downloadProgress = 40;
 
-    const total = Number(response.headers.get('content-length') || 0);
-    let received = 0;
-    const fileStream = createWriteStream(tmpFile);
-    const reader = response.body.getReader();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      received += value.byteLength;
-      if (total > 0) downloadProgress = Math.min(99, Math.round((received / total) * 100));
-      await new Promise<void>((resolve, reject) => {
-        fileStream.write(Buffer.from(value), (err) => (err ? reject(err) : resolve()));
-      });
-    }
-    await new Promise<void>((resolve, reject) => {
-      fileStream.end((err: Error | null | undefined) => (err ? reject(err) : resolve()));
-    });
+    // Read the whole body before writing it out. A chunk-by-chunk streaming
+    // reader keeps undici's HTTP/1.1 parser paused while the file write
+    // drains; undici 6.28.0 can then fire `assert(!this.paused)` from
+    // Parser.finish() when the server closes the connection, killing the
+    // process (verified against an HTTP/1.0 server: 1-4 crashes per 6
+    // streaming runs, 0 per 12 buffered runs). The asset is ~40 MB, so
+    // buffering costs nothing meaningful.
+    const body = Buffer.from(await response.arrayBuffer());
+    writeFileSync(tmpFile, body);
+    downloadProgress = 90;
 
     if (asset.endsWith('.tgz')) {
       await new Promise<void>((resolve, reject) => {
@@ -470,6 +475,7 @@ async function probeTunnelPublicUrl(): Promise<boolean> {
       redirect: 'follow',
       signal: AbortSignal.timeout(TUNNEL_HEALTH_PROBE_TIMEOUT_MS),
     });
+    dropUnreadResponseBody(response);
     // Any response below 5xx means the edge → connector path is serving
     // (401/403 still fine). A dead quick tunnel answers 5xx (e.g. 530).
     return response.status < 500;
