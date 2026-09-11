@@ -14,7 +14,6 @@ const DEFAULT_CLAUDE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const DEFAULT_GEMINI_CLI_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 export const TOKEN_ROUTER_FAILURE_COOLDOWN_MAX_SEC_CEILING = 60 * 60;
 export const INSECURE_DEFAULT_AUTH_TOKEN = 'change-me-admin-token';
-export const INSECURE_DEFAULT_PROXY_TOKEN = 'change-me-proxy-sk-token';
 export const MIN_PRODUCTION_SECRET_LENGTH = 8;
 
 function parseBoolean(value: string | undefined, fallback = false): boolean {
@@ -83,13 +82,6 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
 
   return {
     authToken: env.AUTH_TOKEN || INSECURE_DEFAULT_AUTH_TOKEN,
-    proxyToken: env.PROXY_TOKEN || INSECURE_DEFAULT_PROXY_TOKEN,
-    // Production default: false — clients should use UI-generated managed keys.
-    // Dev/test default: true for backward compatibility with PROXY_TOKEN.
-    allowGlobalProxyToken: parseBoolean(
-      env.ALLOW_GLOBAL_PROXY_TOKEN,
-      (env.NODE_ENV || '').toLowerCase() !== 'production',
-    ),
     codexClientId: parseOptionalSecret(env.CODEX_CLIENT_ID) || DEFAULT_CODEX_CLIENT_ID,
     claudeClientId: parseOptionalSecret(env.CLAUDE_CLIENT_ID) || DEFAULT_CLAUDE_CLIENT_ID,
     claudeClientSecret: parseOptionalSecret(env.CLAUDE_CLIENT_SECRET),
@@ -291,7 +283,6 @@ export function isInsecureDefaultSecret(value: string | null | undefined): boole
   return (
     normalized.length === 0
     || normalized === INSECURE_DEFAULT_AUTH_TOKEN
-    || normalized === INSECURE_DEFAULT_PROXY_TOKEN
     || normalized === '123456'
     || normalized === 'REPLACE_WITH_STRONG_RANDOM_SECRET'
   );
@@ -331,18 +322,13 @@ export function assertProductionSecurity(
       'ACCOUNT_CREDENTIAL_SECRET must differ from AUTH_TOKEN (encryption key and admin login must not share a secret)',
     );
   }
-  if (appConfig.allowGlobalProxyToken && isInsecureDefaultSecret(appConfig.proxyToken)) {
-    problems.push(
-      'PROXY_TOKEN must be a strong unique value when ALLOW_GLOBAL_PROXY_TOKEN=true (global proxy token is still the built-in default)',
-    );
-  }
 
   if (problems.length === 0) return;
 
   const message = [
     '[security] Refusing to start in production with insecure configuration:',
     ...problems.map((item) => `  - ${item}`),
-    'Fix: set strong AUTH_TOKEN + ACCOUNT_CREDENTIAL_SECRET in env, prefer UI-generated downstream keys (ALLOW_GLOBAL_PROXY_TOKEN=false).',
+    'Fix: set strong AUTH_TOKEN + ACCOUNT_CREDENTIAL_SECRET in env; downstream clients use UI-generated keys.',
     'Emergency only: ALLOW_INSECURE_DEFAULTS=true',
   ].join('\n');
   throw new Error(message);

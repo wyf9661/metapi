@@ -42,7 +42,6 @@ describe('settings and auth events', () => {
     await db.delete(schema.settings).run();
 
     config.authToken = 'old-admin-token-123';
-    config.proxyToken = '«redacted:sk-…»';
     config.checkinCron = '0 8 * * *';
     (config as any).checkinScheduleMode = 'cron';
     (config as any).checkinIntervalHours = 6;

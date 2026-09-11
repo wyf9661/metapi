@@ -137,40 +137,25 @@ describe('assertProductionSecurity', () => {
       NODE_ENV: 'production',
       AUTH_TOKEN: strongSecret,
       ACCOUNT_CREDENTIAL_SECRET: strongSecret,
-      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
     };
     const config = buildConfig(env);
     expect(() => assertProductionSecurity(config, env)).toThrow(/must differ from AUTH_TOKEN/);
   });
 
-  it('passes with strong distinct secrets and global proxy token disabled', () => {
+  it('passes with strong distinct secrets', () => {
     const env = {
       NODE_ENV: 'production',
       AUTH_TOKEN: strongSecret,
       ACCOUNT_CREDENTIAL_SECRET: strongCredential,
-      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
     };
     const config = buildConfig(env);
-    expect(config.allowGlobalProxyToken).toBe(false);
     expect(() => assertProductionSecurity(config, env)).not.toThrow();
-  });
-
-  it('rejects enabled global proxy token still using default value', () => {
-    const env = {
-      NODE_ENV: 'production',
-      AUTH_TOKEN: strongSecret,
-      ACCOUNT_CREDENTIAL_SECRET: strongCredential,
-      ALLOW_GLOBAL_PROXY_TOKEN: 'true',
-    };
-    const config = buildConfig(env);
-    expect(() => assertProductionSecurity(config, env)).toThrow(/PROXY_TOKEN/);
   });
 
   it('accepts 8-char unique secrets in production', () => {
     const config = buildConfig({
       AUTH_TOKEN: 'Admin#01',
       ACCOUNT_CREDENTIAL_SECRET: 'Creds#02',
-      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
     });
     expect(() => assertProductionSecurity(config, { NODE_ENV: 'production' })).not.toThrow();
   });
@@ -179,7 +164,6 @@ describe('assertProductionSecurity', () => {
     const config = buildConfig({
       AUTH_TOKEN: 'short',
       ACCOUNT_CREDENTIAL_SECRET: 'Creds#02',
-      ALLOW_GLOBAL_PROXY_TOKEN: 'false',
     });
     expect(() => assertProductionSecurity(config, { NODE_ENV: 'production' })).toThrow(/AUTH_TOKEN/);
   });

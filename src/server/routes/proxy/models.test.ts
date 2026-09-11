@@ -8,7 +8,6 @@ type DbModule = typeof import('../../db/index.js');
 type ProxyRouterModule = typeof import('./router.js');
 type TokenRouterModule = typeof import('../../services/tokenRouter.js');
 type TokensRoutesModule = typeof import('../api/tokens.js');
-type ConfigModule = typeof import('../../config.js');
 
 describe('/v1/models route', () => {
   let db: DbModule['db'];
@@ -16,7 +15,6 @@ describe('/v1/models route', () => {
   let proxyRoutes: ProxyRouterModule['proxyRoutes'];
   let tokensRoutes: TokensRoutesModule['tokensRoutes'];
   let invalidateTokenRouterCache: TokenRouterModule['invalidateTokenRouterCache'];
-  let config: ConfigModule['config'];
   let app: FastifyInstance;
   let dataDir = '';
 
@@ -29,17 +27,12 @@ describe('/v1/models route', () => {
     const proxyRouterModule = await import('./router.js');
     const tokenRouterModule = await import('../../services/tokenRouter.js');
     const tokensRoutesModule = await import('../api/tokens.js');
-    const configModule = await import('../../config.js');
 
     db = dbModule.db;
     schema = dbModule.schema;
     proxyRoutes = proxyRouterModule.proxyRoutes;
     tokensRoutes = tokensRoutesModule.tokensRoutes;
     invalidateTokenRouterCache = tokenRouterModule.invalidateTokenRouterCache;
-    config = configModule.config;
-    config.proxyToken = 'sk-global-proxy-token';
-    config.allowGlobalProxyToken = true;
-    process.env.ALLOW_GLOBAL_PROXY_TOKEN = 'true';
 
     app = Fastify();
     await app.register(tokensRoutes);
