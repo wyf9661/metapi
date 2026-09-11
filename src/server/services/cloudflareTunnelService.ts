@@ -1,11 +1,13 @@
 import { spawn, execFile, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { platform, arch } from 'node:os';
 import { eq } from 'drizzle-orm';
+import { fetch } from 'undici';
 import { config } from '../config.js';
 import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
+import { normalizeSiteProxyUrl, withExplicitProxyRequestInit } from './siteProxy.js';
 
 type TunnelStateFile = {
   enabled: boolean;
@@ -35,6 +37,18 @@ const QUICK_TUNNEL_URL_RE = /https:\/\/([a-z0-9-]+)\.trycloudflare\.com/gi;
 const SHORT_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const DEFAULT_TUNNEL_WORKER_URL = 'https://abc-tunnel.us';
 const QUICK_TUNNEL_RETRY_DELAYS_MS = [10_000, 30_000, 60_000, 300_000] as const;
+const CLOUDFLARED_DOWNLOAD_DEFAULT_BASE_URL = 'https://github.com/cloudflare/cloudflared/releases/latest/download';
+// Hard cap for the one-time binary download: a blocked network (GitHub
+// unreachable, black-holed packets) otherwise hangs the enable request forever
+// instead of failing with an actionable error.
+const CLOUDFLARED_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+// Post-start health probe: a quick tunnel can lose its QUIC session while the
+// cloudflared process stays alive, so process liveness alone keeps reporting
+// running:true while the public URL serves 5xx. Probe the public URL and,
+// after a few consecutive failures, restart the connector via stop + retry.
+const TUNNEL_HEALTH_PROBE_INTERVAL_MS = 30_000;
+const TUNNEL_HEALTH_PROBE_TIMEOUT_MS = 15_000;
+const TUNNEL_HEALTH_PROBE_MAX_FAILURES = 3;
 
 let child: ChildProcessWithoutNullStreams | null = null;
 let currentTunnelUrl: string | null = null;
@@ -47,6 +61,8 @@ let downloadProgress: number | null = null;
 let enableToken = 0;
 let retryTimer: NodeJS.Timeout | null = null;
 let retryAttempt = 0;
+let healthProbeTimer: NodeJS.Timeout | null = null;
+let healthProbeFailures = 0;
 
 export function getQuickTunnelRetryDelay(attempt: number): number {
   const index = Math.max(0, Math.min(Math.floor(attempt), QUICK_TUNNEL_RETRY_DELAYS_MS.length - 1));
@@ -156,6 +172,7 @@ async function waitForPublicUrlHealthy(publicUrl: string, timeoutMs = 60000): Pr
         redirect: 'follow',
         signal: AbortSignal.timeout(5000),
       });
+      dropUnreadResponseBody(response);
       // Any HTTP response means edge mapping is live (401/403 still OK).
       if (response.status > 0) return true;
     } catch {
@@ -258,6 +275,40 @@ function downloadAssetName(): string {
   throw new Error(`Unsupported platform for cloudflared: ${p}/${a}`);
 }
 
+function cloudflaredDownloadBaseUrl(): string {
+  const override = String(process.env.CLOUDFLARED_DOWNLOAD_URL || '').trim();
+  const base = override || CLOUDFLARED_DOWNLOAD_DEFAULT_BASE_URL;
+  return base.replace(/\/+$/, '');
+}
+
+/** Absolute download URL of the cloudflared asset (environment-override aware). */
+export function buildCloudflaredDownloadUrl(assetName: string): string {
+  return `${cloudflaredDownloadBaseUrl()}/${assetName}`;
+}
+
+/**
+ * Proxy for the cloudflared download, resolved from standard proxy environment
+ * variables only (HTTPS_PROXY / HTTP_PROXY / ALL_PROXY, upper or lower case).
+ * Unset or invalid values resolve to null (direct connection).
+ */
+export function resolveCloudflaredDownloadProxyUrl(env: NodeJS.ProcessEnv = process.env): string | null {
+  const raw = env.HTTPS_PROXY || env.https_proxy
+    || env.HTTP_PROXY || env.http_proxy
+    || env.ALL_PROXY || env.all_proxy
+    || '';
+  return normalizeSiteProxyUrl(raw);
+}
+
+/** Drop an unread response body so a peer close can never strand a paused
+ *  HTTP/1.1 parser (undici assert, nodejs/undici#5360). Fire-and-forget. */
+function dropUnreadResponseBody(response: { body?: { cancel?: () => Promise<unknown> } | null }): void {
+  try {
+    void response.body?.cancel?.().catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
 async function ensureCloudflaredBinary(): Promise<string> {
   ensureDirs();
   const target = binaryPath();
@@ -270,35 +321,41 @@ async function ensureCloudflaredBinary(): Promise<string> {
     return target;
   }
 
+  const asset = downloadAssetName();
+  const tmpFile = join(binDir(), `${asset}.download`);
   downloadInProgress = true;
   downloadProgress = 0;
   try {
-    const asset = downloadAssetName();
-    const url = `https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}`;
-    const response = await fetch(url, { redirect: 'follow' });
-    if (!response.ok || !response.body) {
-      throw new Error(`下载 cloudflared 失败: HTTP ${response.status}`);
+    const url = buildCloudflaredDownloadUrl(asset);
+    const proxyUrl = resolveCloudflaredDownloadProxyUrl();
+    if (proxyUrl) {
+      console.log(`[Tunnel] downloading cloudflared via proxy ${proxyUrl}`);
     }
-
-    const total = Number(response.headers.get('content-length') || 0);
-    let received = 0;
-    const tmpFile = join(binDir(), `${asset}.download`);
-    const fileStream = createWriteStream(tmpFile);
-    const reader = response.body.getReader();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      received += value.byteLength;
-      if (total > 0) downloadProgress = Math.min(99, Math.round((received / total) * 100));
-      await new Promise<void>((resolve, reject) => {
-        fileStream.write(Buffer.from(value), (err) => (err ? reject(err) : resolve()));
-      });
+    const response = await fetch(url, withExplicitProxyRequestInit(
+      proxyUrl,
+      {
+        redirect: 'follow',
+        // A blocked route without this hint would hang here forever and the
+        // enable request would never settle.
+        signal: AbortSignal.timeout(CLOUDFLARED_DOWNLOAD_TIMEOUT_MS),
+      },
+    ));
+    if (!response.ok) {
+      dropUnreadResponseBody(response);
+      throw new Error(`HTTP ${response.status}`);
     }
-    await new Promise<void>((resolve, reject) => {
-      fileStream.end((err: Error | null | undefined) => (err ? reject(err) : resolve()));
-    });
+    downloadProgress = 40;
+
+    // Read the whole body before writing it out. A chunk-by-chunk streaming
+    // reader keeps undici's HTTP/1.1 parser paused while the file write
+    // drains; undici 6.28.0 can then fire `assert(!this.paused)` from
+    // Parser.finish() when the server closes the connection, killing the
+    // process (verified against an HTTP/1.0 server: 1-4 crashes per 6
+    // streaming runs, 0 per 12 buffered runs). The asset is ~40 MB, so
+    // buffering costs nothing meaningful.
+    const body = Buffer.from(await response.arrayBuffer());
+    writeFileSync(tmpFile, body);
+    downloadProgress = 90;
 
     if (asset.endsWith('.tgz')) {
       await new Promise<void>((resolve, reject) => {
@@ -323,6 +380,21 @@ async function ensureCloudflaredBinary(): Promise<string> {
     chmodSync(target, 0o755);
     downloadProgress = 100;
     return target;
+  } catch (error) {
+    try {
+      if (existsSync(tmpFile)) unlinkSync(tmpFile);
+    } catch {
+      // ignore
+    }
+    const name = error && typeof error === 'object' ? String((error as { name?: unknown }).name || '') : '';
+    const detail = error instanceof Error ? error.message : String(error);
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      throw new Error(
+        `下载 cloudflared 超时（${Math.round(CLOUDFLARED_DOWNLOAD_TIMEOUT_MS / 1000)}s）: ${detail}`
+        + '；网络受限时可设置 HTTPS_PROXY，或设置 CLOUDFLARED_DOWNLOAD_URL 指向可用镜像，或预置二进制到 <数据目录>/bin/cloudflared',
+      );
+    }
+    throw new Error(`下载 cloudflared 失败: ${detail}`);
   } finally {
     downloadInProgress = false;
   }
@@ -386,10 +458,73 @@ function killProcessTree(pid: number | null | undefined) {
   }
 }
 
+function stopTunnelHealthProbe() {
+  if (healthProbeTimer) {
+    clearInterval(healthProbeTimer);
+    healthProbeTimer = null;
+  }
+  healthProbeFailures = 0;
+}
+
+async function probeTunnelPublicUrl(): Promise<boolean> {
+  const url = currentPublicUrl;
+  if (!url) return true;
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(TUNNEL_HEALTH_PROBE_TIMEOUT_MS),
+    });
+    dropUnreadResponseBody(response);
+    // Any response below 5xx means the edge → connector path is serving
+    // (401/403 still fine). A dead quick tunnel answers 5xx (e.g. 530).
+    return response.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+function startTunnelHealthProbe() {
+  stopTunnelHealthProbe();
+  healthProbeTimer = setInterval(() => {
+    void (async () => {
+      if (!config.tunnelEnabled || spawnInProgress || !child || !isProcessRunning(child.pid)) return;
+      const healthy = await probeTunnelPublicUrl();
+      if (healthy) {
+        healthProbeFailures = 0;
+        return;
+      }
+      if (!config.tunnelEnabled || !child || !isProcessRunning(child.pid)) return;
+      healthProbeFailures += 1;
+      console.warn(`[Tunnel] public URL probe failed (${healthProbeFailures}/${TUNNEL_HEALTH_PROBE_MAX_FAILURES}): ${currentPublicUrl}`);
+      if (healthProbeFailures < TUNNEL_HEALTH_PROBE_MAX_FAILURES) return;
+      lastError = `隧道公网地址连续 ${TUNNEL_HEALTH_PROBE_MAX_FAILURES} 次探活失败，重启 cloudflared`;
+      console.warn(`[Tunnel] ${lastError}`);
+      stopTunnelHealthProbe();
+      writeStateFile({
+        enabled: true,
+        tunnelUrl: currentTunnelUrl,
+        publicUrl: currentPublicUrl,
+        shortId: currentShortId,
+        pid: null,
+        updatedAt: new Date().toISOString(),
+        lastError,
+      });
+      try {
+        await stopCloudflareTunnel({ persistDisabled: false });
+      } finally {
+        scheduleTunnelRetry('tunnel health probe failed');
+      }
+    })();
+  }, TUNNEL_HEALTH_PROBE_INTERVAL_MS);
+  healthProbeTimer.unref?.();
+}
+
 export async function stopCloudflareTunnel(options?: { persistDisabled?: boolean }): Promise<void> {
   enableToken += 1;
   const persistDisabled = options?.persistDisabled !== false;
   clearTunnelRetry();
+  stopTunnelHealthProbe();
 
   if (child && !child.killed) {
     try {
@@ -434,6 +569,7 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
   spawnInProgress = true;
   const token = ++enableToken;
   lastError = null;
+  stopTunnelHealthProbe();
 
   // Keep the persisted setting as user intent; one failed Quick Tunnel allocation is transient.
   config.tunnelEnabled = true;
@@ -481,6 +617,7 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
 
     proc.on('exit', (code, signal) => {
       if (child === proc) {
+        stopTunnelHealthProbe();
         child = null;
         writePid(null);
         if (config.tunnelEnabled) {
@@ -544,6 +681,8 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
       updatedAt: new Date().toISOString(),
       lastError: lastError,
     });
+
+    startTunnelHealthProbe();
 
     return getCloudflareTunnelStatus();
   } catch (error) {

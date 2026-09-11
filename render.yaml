@@ -9,6 +9,8 @@ services:
     envVars:
       - key: AUTH_TOKEN
         sync: false
+      - key: ACCOUNT_CREDENTIAL_SECRET
+        generateValue: true
       - key: TZ
         value: Asia/Shanghai
       - key: PORT
