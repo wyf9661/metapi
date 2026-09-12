@@ -960,7 +960,7 @@ function RouteCardInner({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <div
               data-testid="compact-route-header-main"
-              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap', minWidth: 0, flex: 1 }}
+              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap', minWidth: 0, flex: '1 1 300px' }}
             >
               <code
                 style={{
@@ -976,11 +976,22 @@ function RouteCardInner({
                   minWidth: 0,
                   maxWidth: '100%',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
                 }}
               >
-                {title}
+                {routeIcon.kind === 'brand' ? (
+                  <BrandGlyph icon={routeIcon.value} alt={title} size={18} fallbackText={title} />
+                ) : routeIcon.kind === 'text' ? (
+                  <span style={{ width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-card)', fontSize: 12, lineHeight: 1 }}>
+                    {routeIcon.value}
+                  </span>
+                ) : routeIcon.kind === 'auto' && brand ? (
+                  <BrandGlyph brand={brand} alt={title} size={18} fallbackText={title} />
+                ) : routeIcon.kind === 'auto' ? (
+                  <InlineBrandIcon model={route.modelPattern} size={18} />
+                ) : null}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                  {title}
+                </span>
               </code>
               {route.displayName && route.displayName.trim() !== route.modelPattern ? (
                 <span className="badge badge-muted" style={{ fontSize: 10 }}>{route.modelPattern}</span>

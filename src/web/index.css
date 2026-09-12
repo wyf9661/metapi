@@ -3182,6 +3182,21 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   background: var(--color-info);
 }
 
+/* Keep toasts inside narrow screens: `right: 1rem` alone let long toasts
+   overflow past the left edge of phones. */
+@media (max-width: 480px) {
+  .toast-container {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  .toast {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
 /* ===== Form Inputs ===== */
 input:not([type="checkbox"]):not([type="radio"]),
 select,
@@ -6705,9 +6720,17 @@ textarea {
 
 /* Fixed-height panel for site distribution/trend charts so the card
    doesn't resize when toggling between the two views. The chart plot
-   area uses flex:1 to fill the remaining space. */
+   area uses flex:1 to fill the remaining space. Both views stay mounted
+   as stacked layers; switching tabs only toggles visibility so no chart
+   ever re-mounts or flashes. */
 .site-chart-panel {
   height: 460px;
+  position: relative;
+}
+
+.site-chart-layer {
+  position: absolute;
+  inset: 0;
 }
 
 @media (max-width: 768px) {

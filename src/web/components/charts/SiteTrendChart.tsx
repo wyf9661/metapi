@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { api } from '../../api.js';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
@@ -39,7 +39,12 @@ function formatTrendBucketLabel(date: string): string {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function SiteTrendChart() {
+interface SiteTrendChartProps {
+  /** True while the host panel shows this chart; used to refresh stale data silently on re-activation. */
+  active?: boolean;
+}
+
+export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
   const [metric, setMetric] = useState<Metric>('spend');
   const labelColor = useThemeLabelColor();
   const isMobile = useIsMobile();
@@ -48,12 +53,18 @@ export default function SiteTrendChart() {
   const [data, setData] = useState<SiteTrendData[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const silentRefreshRef = useRef(false);
+  const lastLoadedAtRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     // Keep the previous chart on screen while the new window loads; only show
-    // a light overlay instead of blanking the whole card.
-    if (data.length > 0) setSwitching(true);
+    // a light overlay instead of blanking the whole card. Silent refreshes
+    // (tab re-activation) update in place without any overlay.
+    const silent = silentRefreshRef.current;
+    silentRefreshRef.current = false;
+    if (!silent && data.length > 0) setSwitching(true);
     api.getSiteTrend(trendDays)
       .then((res) => {
         if (cancelled) return;
@@ -65,13 +76,26 @@ export default function SiteTrendChart() {
       })
       .finally(() => {
         if (cancelled) return;
+        lastLoadedAtRef.current = Date.now();
         setLoading(false);
         setSwitching(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [trendDays]);
+  }, [trendDays, refreshTick]);
+
+  // Re-activated after being hidden: refresh silently if the data is stale
+  // (the component stays mounted, so without this it would keep old numbers).
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = active;
+    if (active && !wasActive && lastLoadedAtRef.current > 0 && Date.now() - lastLoadedAtRef.current > 60_000) {
+      silentRefreshRef.current = true;
+      setRefreshTick((t) => t + 1);
+    }
+  }, [active]);
 
   const allSites = useMemo(() => {
     if (!data || data.length === 0) return [] as string[];

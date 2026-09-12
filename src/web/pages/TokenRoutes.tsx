@@ -1662,7 +1662,7 @@ export default function TokenRoutes() {
           </button>
         </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0, maxWidth: '100%' }}>
           {(() => {
             const coolingRoutes = routeSummaries.filter((r) => (r.cooldownChannelCount || 0) > 0);
             if (coolingRoutes.length === 0) return null;
@@ -1699,7 +1699,7 @@ export default function TokenRoutes() {
           )}
           {decisionAutoSkipped && (
             <span style={{ fontSize: 12, color: 'var(--color-warning)', marginLeft: 4 }}>
-              {tr('部分路由尚无快照，可手动刷新或等待后台任务')}
+              {isMobile ? tr('部分路由暂无快照') : tr('部分路由尚无快照，可手动刷新或等待后台任务')}
             </span>
           )}
           <StatusPill tone="info" style={{ fontSize: 12, fontWeight: 500 }}>

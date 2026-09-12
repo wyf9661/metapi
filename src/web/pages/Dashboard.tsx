@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast.js';
 import { copyText } from '../clipboard.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { availabilityColor } from '../components/charts/chartShared.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 
 const ModelAnalysisPanel = lazy(
   () => import('../components/ModelAnalysisPanel.js'),
@@ -19,18 +20,27 @@ const SiteTrendChart = lazy(
 // Warm both site-chart chunks (including the shared ~1.9MB VChart bundle)
 // shortly after the dashboard mounts, so switching 站点分布 ↔ 站点趋势 is
 // instant instead of showing a blank card while the chunk downloads.
-let siteChartChunksWarm = false;
-function warmSiteChartChunks() {
-  if (siteChartChunksWarm) return;
-  siteChartChunksWarm = true;
-  const idle =
-    typeof window !== 'undefined' && 'requestIdleCallback' in window
-      ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 3000 })
-      : (cb: () => void) => window.setTimeout(cb, 1500);
-  idle(() => {
-    void import('../components/charts/SiteDistributionChart.js');
-    void import('../components/charts/SiteTrendChart.js');
+// Resolves once the chunks are in memory, letting the dashboard pre-mount
+// the hidden trend layer (background fetch + first render) so the very first
+// tab switch is instant as well.
+let siteChartPreloadPromise: Promise<void> | null = null;
+function warmSiteChartChunks(): Promise<void> {
+  if (siteChartPreloadPromise) return siteChartPreloadPromise;
+  siteChartPreloadPromise = new Promise((resolve) => {
+    const idle =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 3000 })
+        : (cb: () => void) => window.setTimeout(cb, 1500);
+    idle(() => {
+      void Promise.all([
+        import('../components/charts/SiteDistributionChart.js'),
+        import('../components/charts/SiteTrendChart.js'),
+      ])
+        .catch(() => {})
+        .finally(resolve);
+    });
   });
+  return siteChartPreloadPromise;
 }
 
 function getGreeting(): string {
@@ -282,6 +292,9 @@ export default function Dashboard({
   const [sites, setSites] = useState<any[]>([]);
   const [observabilityTab, setObservabilityTab] = useState<'sites' | 'models'>('sites');
   const [siteChartTab, setSiteChartTab] = useState<'distribution' | 'trend'>('distribution');
+  // Both chart views stay mounted as stacked layers; switching tabs only
+  // toggles visibility so a chart never re-mounts, re-fetches or flashes.
+  const [siteTrendMounted, setSiteTrendMounted] = useState(false);
   const toast = useToast();
   const normalizedAdminName = (adminName || '').trim() || '\u7ba1\u7406\u5458';
 
@@ -355,9 +368,16 @@ export default function Dashboard({
     loadSiteStats();
   }, [loadSiteStats]);
 
-  // Preload the other site chart chunk so tab switching never blanks out.
+  // Preload the other site chart chunk, then pre-mount the hidden trend layer
+  // so its fetch + first render finish before the user switches tabs.
   useEffect(() => {
-    warmSiteChartChunks();
+    let cancelled = false;
+    void warmSiteChartChunks().then(() => {
+      if (!cancelled) setSiteTrendMounted(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1095,23 +1115,43 @@ export default function Dashboard({
                 <button
                   type="button"
                   className={`pill-tab ${siteChartTab === 'trend' ? 'active' : ''}`}
-                  onClick={() => setSiteChartTab('trend')}
+                  onClick={() => {
+                    setSiteTrendMounted(true);
+                    setSiteChartTab('trend');
+                  }}
                 >
                   站点趋势
                 </button>
               </div>
             </div>
             <div className="chart-panel-enter animate-slide-up stagger-6 site-chart-panel">
-              <Suspense fallback={<ChartFallback />}>
-                {siteChartTab === 'distribution' ? (
-                  <SiteDistributionChart
-                    data={siteDistribution}
-                    loading={siteLoading}
-                  />
-                ) : (
-                  <SiteTrendChart />
-                )}
-              </Suspense>
+              <div
+                className="site-chart-layer"
+                style={{ visibility: siteChartTab === 'distribution' ? 'visible' : 'hidden' }}
+                aria-hidden={siteChartTab !== 'distribution'}
+              >
+                <ErrorBoundary compact>
+                  <Suspense fallback={<ChartFallback />}>
+                    <SiteDistributionChart
+                      data={siteDistribution}
+                      loading={siteLoading}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+              {siteTrendMounted && (
+                <div
+                  className="site-chart-layer"
+                  style={{ visibility: siteChartTab === 'trend' ? 'visible' : 'hidden' }}
+                  aria-hidden={siteChartTab !== 'trend'}
+                >
+                  <ErrorBoundary compact>
+                    <Suspense fallback={<ChartFallback />}>
+                      <SiteTrendChart active={siteChartTab === 'trend'} />
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
+              )}
             </div>
           </div>
           <div
@@ -1299,9 +1339,11 @@ export default function Dashboard({
             {insightsLoading && !insightsData ? (
               <ChartFallback height={300} />
             ) : (
-              <Suspense fallback={<ChartFallback height={300} />}>
-                <ModelAnalysisPanel data={insightsData?.modelAnalysis} />
-              </Suspense>
+              <ErrorBoundary compact>
+                <Suspense fallback={<ChartFallback height={300} />}>
+                  <ModelAnalysisPanel data={insightsData?.modelAnalysis} />
+                </Suspense>
+              </ErrorBoundary>
             )}
           </div>
           <div
