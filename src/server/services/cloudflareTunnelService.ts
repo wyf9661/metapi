@@ -150,20 +150,47 @@ function ensureShortId(existing?: string | null): string {
   return created;
 }
 
-async function registerStableTunnelMapping(shortId: string, tunnelUrl: string): Promise<void> {
+const REGISTER_MAPPING_ATTEMPTS = 3;
+const REGISTER_MAPPING_RETRY_DELAYS_MS: readonly number[] = [2_000, 6_000];
+const REGISTER_MAPPING_REQUEST_TIMEOUT_MS = 15_000;
+// 隧道重建或映射注册成功后的收敛缓冲期：期间探活失败不触发重启，避免"抖动→重启→再抖动"循环。
+const STABLE_MAPPING_RECOVERY_GRACE_MS = 6 * 60 * 1000;
+let stableMappingFreshAtMs = 0;
+
+export async function registerStableTunnelMapping(shortId: string, tunnelUrl: string): Promise<void> {
   const endpoint = `${tunnelWorkerBaseUrl()}/api/tunnel/register`;
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ shortId, tunnelUrl }),
-  });
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`持久化公网地址注册失败: HTTP ${response.status}${text ? ` ${text.slice(0, 160)}` : ''}`);
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= REGISTER_MAPPING_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) {
+      const delayMs = REGISTER_MAPPING_RETRY_DELAYS_MS[attempt - 2] ?? 6_000;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shortId, tunnelUrl }),
+        // 网络抖动时请求可能长时间挂起；设上界，失败交给重试兜底。
+        signal: AbortSignal.timeout(REGISTER_MAPPING_REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`持久化公网地址注册失败: HTTP ${response.status}${text ? ` ${text.slice(0, 160)}` : ''}`);
+      }
+      stableMappingFreshAtMs = Date.now();
+      if (attempt > 1) {
+        console.log(`[Tunnel] stable mapping registered on attempt ${attempt}/${REGISTER_MAPPING_ATTEMPTS}`);
+      }
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`[Tunnel] stable mapping register attempt ${attempt}/${REGISTER_MAPPING_ATTEMPTS} failed: ${lastError.message}`);
+    }
   }
+  throw lastError ?? new Error('持久化公网地址注册失败');
 }
 
-async function waitForPublicUrlHealthy(publicUrl: string, timeoutMs = 60000): Promise<boolean> {
+export async function waitForPublicUrlHealthy(publicUrl: string, timeoutMs = 60000): Promise<boolean> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     try {
@@ -173,8 +200,10 @@ async function waitForPublicUrlHealthy(publicUrl: string, timeoutMs = 60000): Pr
         signal: AbortSignal.timeout(5000),
       });
       dropUnreadResponseBody(response);
-      // Any HTTP response means edge mapping is live (401/403 still OK).
-      if (response.status > 0) return true;
+      // Any non-5xx response means the edge mapping serves (401/403 login page is
+      // fine); a 5xx — e.g. the 530 "Origin DNS error" page — means the mapped
+      // origin is gone and the mapping needs a re-register.
+      if (response.status < 500) return true;
     } catch {
       // retry
     }
@@ -466,14 +495,12 @@ function stopTunnelHealthProbe() {
   healthProbeFailures = 0;
 }
 
-async function probeTunnelPublicUrl(): Promise<boolean> {
-  const url = currentPublicUrl;
-  if (!url) return true;
+async function probeUrlAlive(url: string, timeoutMs: number): Promise<boolean> {
   try {
     const response = await fetch(url, {
       method: 'GET',
       redirect: 'follow',
-      signal: AbortSignal.timeout(TUNNEL_HEALTH_PROBE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     dropUnreadResponseBody(response);
     // Any response below 5xx means the edge → connector path is serving
@@ -484,17 +511,109 @@ async function probeTunnelPublicUrl(): Promise<boolean> {
   }
 }
 
+async function probeTunnelPublicUrl(): Promise<boolean> {
+  const url = currentPublicUrl;
+  if (!url) return true;
+  return probeUrlAlive(url, TUNNEL_HEALTH_PROBE_TIMEOUT_MS);
+}
+
+const STABLE_MAPPING_REPAIR_INTERVAL_MS = 5 * 60 * 1000;
+const PROBE_WARN_INTERVAL_MS = 2 * 60 * 1000;
+let lastStableMappingRepairAtMs = 0;
+let lastProbeWarnAtMs = 0;
+
+function currentStablePublicUrl(): string | null {
+  return buildStablePublicUrl(currentShortId);
+}
+
+/**
+ * 稳定地址（r<id>.abc-tunnel.us）的映射只在隧道启动时注册一次；若那次注册因网络
+ * 抖动失败，程序会降级为临时地址，稳定地址则一直指向已失效的旧隧道（访问时表现为
+ * 530 "Origin DNS error"）。这里在探活周期里兜底修复：重新注册 + 验证，成功后切
+ * 回稳定地址。限速执行，避免持续打点。
+ */
+async function attemptStableMappingRepair(options?: { directKnownHealthy?: boolean }): Promise<boolean> {
+  const stableUrl = currentStablePublicUrl();
+  if (!stableUrl || !currentShortId || !currentTunnelUrl) return false;
+  if (Date.now() - lastStableMappingRepairAtMs < STABLE_MAPPING_REPAIR_INTERVAL_MS) return false;
+  lastStableMappingRepairAtMs = Date.now();
+  if (!options?.directKnownHealthy && !(await probeUrlAlive(currentTunnelUrl, TUNNEL_HEALTH_PROBE_TIMEOUT_MS))) {
+    // 隧道本体也不通：不是映射问题，交给连续失败重启逻辑处理。
+    return false;
+  }
+  try {
+    await registerStableTunnelMapping(currentShortId, currentTunnelUrl);
+  } catch (error) {
+    console.warn(`[Tunnel] stable mapping repair failed: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
+  }
+  if (!(await waitForPublicUrlHealthy(stableUrl, 15_000))) {
+    return false;
+  }
+  if (currentPublicUrl !== stableUrl) {
+    currentPublicUrl = stableUrl;
+    lastError = null;
+    writeStateFile({
+      enabled: true,
+      tunnelUrl: currentTunnelUrl,
+      publicUrl: stableUrl,
+      shortId: currentShortId,
+      pid: child?.pid ?? null,
+      updatedAt: new Date().toISOString(),
+      lastError: null,
+    });
+  }
+  console.log(`[Tunnel] stable mapping repaired: ${stableUrl} -> ${currentTunnelUrl}`);
+  return true;
+}
+
 function startTunnelHealthProbe() {
   stopTunnelHealthProbe();
   healthProbeTimer = setInterval(() => {
     void (async () => {
       if (!config.tunnelEnabled || spawnInProgress || !child || !isProcessRunning(child.pid)) return;
       const healthy = await probeTunnelPublicUrl();
+      const stableUrl = currentStablePublicUrl();
       if (healthy) {
         healthProbeFailures = 0;
+        // 运行正常但公网地址还是降级后的临时地址：尝试把稳定地址修回来。
+        if (stableUrl && currentPublicUrl !== stableUrl) {
+          await attemptStableMappingRepair({ directKnownHealthy: true });
+        }
         return;
       }
       if (!config.tunnelEnabled || !child || !isProcessRunning(child.pid)) return;
+      // 连接器还活着时，探活失败只可能是映射/边缘侧问题——重启 cloudflared 毫无帮助，
+      // 先尝试重新注册映射即可。
+      const connectorAlive = currentTunnelUrl
+        ? await probeUrlAlive(currentTunnelUrl, TUNNEL_HEALTH_PROBE_TIMEOUT_MS)
+        : false;
+      if (connectorAlive) {
+        healthProbeFailures = 0;
+        if (stableUrl && (await attemptStableMappingRepair({ directKnownHealthy: true }))) return;
+        if (Date.now() - lastProbeWarnAtMs > PROBE_WARN_INTERVAL_MS) {
+          lastProbeWarnAtMs = Date.now();
+          console.warn(`[Tunnel] stable URL probe failed while connector is alive (mapping-side issue): ${currentPublicUrl}`);
+        }
+        return;
+      }
+      // 刚重建隧道或刚注册映射时，给公网映射收敛留出缓冲期，避免抖动引发重启循环。
+      if (Date.now() - stableMappingFreshAtMs < STABLE_MAPPING_RECOVERY_GRACE_MS) {
+        if (Date.now() - lastProbeWarnAtMs > PROBE_WARN_INTERVAL_MS) {
+          lastProbeWarnAtMs = Date.now();
+          console.warn('[Tunnel] connector unreachable during recovery grace window; restart deferred');
+        }
+        return;
+      }
+      // 本机到 Cloudflare 整体不可达（网络侧问题）时，重启 cloudflared 也救不了，等网络恢复再说。
+      const cloudflareReachable = await probeUrlAlive(tunnelWorkerBaseUrl(), TUNNEL_HEALTH_PROBE_TIMEOUT_MS);
+      if (!cloudflareReachable) {
+        if (Date.now() - lastProbeWarnAtMs > PROBE_WARN_INTERVAL_MS) {
+          lastProbeWarnAtMs = Date.now();
+          console.warn('[Tunnel] connector unreachable and Cloudflare unreachable from this host; restart deferred until network recovers');
+        }
+        return;
+      }
       healthProbeFailures += 1;
       console.warn(`[Tunnel] public URL probe failed (${healthProbeFailures}/${TUNNEL_HEALTH_PROBE_MAX_FAILURES}): ${currentPublicUrl}`);
       if (healthProbeFailures < TUNNEL_HEALTH_PROBE_MAX_FAILURES) return;
@@ -647,6 +766,7 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
     }
 
     currentTunnelUrl = tunnelUrl;
+    stableMappingFreshAtMs = Date.now();
     clearTunnelRetry();
     // Persist a stable shortId across restarts (Quick Tunnel URL itself always changes).
     const state = readStateFile();
@@ -664,7 +784,9 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
         }
       }
     } catch (error: any) {
-      // Fall back to direct trycloudflare URL if relay worker is unavailable.
+      // Fall back to the direct trycloudflare URL if the relay worker is
+      // unreachable; the health probe keeps retrying the stable mapping repair
+      // in the background (see attemptStableMappingRepair).
       console.warn(`[Tunnel] stable mapping failed: ${error?.message || error}`);
       currentPublicUrl = tunnelUrl;
       lastError = error?.message || String(error);
