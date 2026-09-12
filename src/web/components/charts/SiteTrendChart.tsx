@@ -56,6 +56,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
   const [refreshTick, setRefreshTick] = useState(0);
   const silentRefreshRef = useRef(false);
   const lastLoadedAtRef = useRef(0);
+  const chartRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +96,12 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
       silentRefreshRef.current = true;
       setRefreshTick((t) => t + 1);
     }
+  }, [active]);
+
+  // Same body-portaled tooltip as the distribution chart: dismiss a locked
+  // tooltip when this view is hidden.
+  useEffect(() => {
+    if (!active) chartRef.current?.hideTooltip?.();
   }, [active]);
 
   const allSites = useMemo(() => {
@@ -314,6 +321,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
       </div>
       <div style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0 }}>
         <VChart
+          ref={chartRef}
           spec={spec as any}
           style={{ width: '100%', height: '100%' }}
           onClick={(params: any) => {

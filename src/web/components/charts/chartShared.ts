@@ -144,6 +144,24 @@ export function buildHorizontalBarSpec({
       },
     ],
     tooltip: {
+      // Same rows on both tooltip modes; the default dimension tooltip used to
+      // print raw model names and unformatted numbers.
+      mark: {
+        content: [
+          {
+            key: (datum: Record<string, unknown>) => String(datum?.model ?? ''),
+            value: (datum: Record<string, unknown>) => formatLabel(Number(datum?.value ?? 0)),
+          },
+        ],
+      },
+      dimension: {
+        content: [
+          {
+            key: (datum: Record<string, unknown>) => String(datum?.model ?? ''),
+            value: (datum: Record<string, unknown>) => formatLabel(Number(datum?.value ?? 0)),
+          },
+        ],
+      },
       className: CHART_TOOLTIP_CLASS,
       trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
       triggerOff: (isMobile ? 'click' : 'hover') as 'click' | 'hover',

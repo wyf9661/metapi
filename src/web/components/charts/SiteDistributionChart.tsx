@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
 import { useIsMobile } from '../useIsMobile.js';
@@ -16,6 +16,8 @@ interface SiteDistributionData {
 interface SiteDistributionChartProps {
   data: SiteDistributionData[];
   loading?: boolean;
+  /** True while the host panel shows this chart (used to dismiss a locked tooltip on hide). */
+  active?: boolean;
 }
 
 type ViewMode = 'balance' | 'spend';
@@ -52,7 +54,8 @@ function SkeletonBars() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ mode }: { mode: ViewMode }) {
+  const isSpend = mode === 'spend';
   return (
     <div className="empty-state" style={{ padding: 40 }}>
       <div style={{ margin: '0 auto 16px', width: 64, height: 64, opacity: 0.35 }}>
@@ -78,15 +81,18 @@ function EmptyState() {
         </svg>
       </div>
       <div className="empty-state-title" style={{ marginBottom: 4 }}>
-        暂无站点数据
+        {isSpend ? '今日暂无消耗' : '暂无站点数据'}
       </div>
-      <div className="empty-state-desc">添加站点后将自动展示分布图表</div>
+      <div className="empty-state-desc">
+        {isSpend ? '站点今日产生消耗后会自动展示排行' : '添加站点后将自动展示分布图表'}
+      </div>
     </div>
   );
 }
 
-export default function SiteDistributionChart({ data, loading }: SiteDistributionChartProps) {
+export default function SiteDistributionChart({ data, loading, active = true }: SiteDistributionChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('balance');
+  const chartRef = useRef<any>(null);
   const labelColor = useThemeLabelColor();
   const isMobile = useIsMobile();
 
@@ -122,6 +128,36 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
     const axisHeadroom = barHeadroom(isMobile);
     const maxValue = chartData.reduce((s, d) => Math.max(s, d.value), 0);
     const yAxisMaxWidth = isMobile ? 76 : 140;
+
+    // Rows shown by the bar tooltip. Both the mark and the dimension tooltip
+    // carry them: depending on how the click resolves, VChart shows one or the
+    // other, and the dimension mode used to fall back to raw unformatted data.
+    const tooltipItems = [
+      {
+        key: (datum: unknown) => {
+          const item = coerceDatumRecord(datum);
+          return String(item.siteName || '-');
+        },
+        value: (datum: unknown) => {
+          const item = coerceDatumRecord(datum);
+          return formatValue(safeNumber(item.value));
+        },
+      },
+      {
+        key: '占比',
+        value: (datum: unknown) => {
+          const item = coerceDatumRecord(datum);
+          return `${safeNumber(item.pct).toFixed(1)}%`;
+        },
+      },
+      {
+        key: '账户数',
+        value: (datum: unknown) => {
+          const item = coerceDatumRecord(datum);
+          return String(item.accountCount || 0);
+        },
+      },
+    ] as any;
 
     return {
       type: 'bar' as const,
@@ -161,7 +197,21 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
         },
         {
           orient: 'bottom',
-          label: { visible: true, format: (value: unknown) => formatValue(safeNumber(value)), style: { fill: labelColor, fontSize: 11 } },
+          label: {
+            visible: true,
+            // Compact dollar ticks ($3k / $12k); sub-$10 ranges keep cents so
+            // a small today-spend axis doesn't collapse into "$0 $0 $1 $1".
+            formatMethod: (value: unknown) => {
+              const v = safeNumber(value);
+              if (Math.abs(v) >= 1000) {
+                const k = v / 1000;
+                return `$${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+              }
+              if (Number.isInteger(v)) return `$${v}`;
+              return `$${parseFloat(v.toFixed(2))}`;
+            },
+            style: { fill: labelColor, fontSize: 11 },
+          },
           grid: { visible: false },
           domainLine: { visible: false },
           tick: { visible: false },
@@ -169,36 +219,8 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
         },
       ],
       tooltip: {
-        mark: {
-          content: [
-            {
-              key: (datum: unknown) => {
-                const item = coerceDatumRecord(datum);
-                return String(item.siteName || '-');
-              },
-              value: (datum: unknown) => {
-                const item = coerceDatumRecord(datum);
-                const val = safeNumber(item.value);
-                return `${formatValue(val)}`;
-              },
-            },
-            {
-              key: '占比',
-              value: (datum: unknown) => {
-                const item = coerceDatumRecord(datum);
-                const pct = safeNumber(item.pct);
-                return `${pct.toFixed(1)}%`;
-              },
-            },
-            {
-              key: '账户数',
-              value: (datum: unknown) => {
-                const item = coerceDatumRecord(datum);
-                return String(item.accountCount || 0);
-              },
-            },
-          ] as any,
-        },
+        mark: { content: tooltipItems },
+        dimension: { content: tooltipItems },
         className: 'chart-tooltip',
         trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
         // Desktop must hide on hover-out; 'none' left the tooltip stuck on
@@ -212,6 +234,12 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       padding: { top: 0, bottom: 0, left: 0, right: 0 },
     };
   }, [chartData, hasData, labelColor, isMobile]);
+
+  // The tooltip DOM is portaled to <body>, so hiding the layer alone leaves a
+  // locked tooltip floating over the other tab — dismiss it on deactivate.
+  useEffect(() => {
+    if (!active) chartRef.current?.hideTooltip?.();
+  }, [active]);
 
   return (
     <div
@@ -324,7 +352,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       {loading ? (
         <SkeletonBars />
       ) : !hasData ? (
-        <EmptyState />
+        <EmptyState mode={viewMode} />
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <div
@@ -336,7 +364,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
             }}
           >
             <div style={{ width: '100%', height: '100%' }}>
-              {spec && <VChart spec={spec} style={{ width: '100%', height: '100%' }} />}
+              {spec && <VChart ref={chartRef} spec={spec} style={{ width: '100%', height: '100%' }} />}
             </div>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px', flexShrink: 0, maxHeight: 68, overflowY: 'auto' }}>

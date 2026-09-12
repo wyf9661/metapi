@@ -1135,6 +1135,7 @@ export default function Dashboard({
                     <SiteDistributionChart
                       data={siteDistribution}
                       loading={siteLoading}
+                      active={siteChartTab === 'distribution'}
                     />
                   </Suspense>
                 </ErrorBoundary>
