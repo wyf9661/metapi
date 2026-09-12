@@ -3,6 +3,40 @@
 // one place so changes apply to every chart and don't need shotgun edits.
 
 // ----------------------------------------------------------------
+// Shared money label formatter (bar labels / tooltips / legends)
+// ----------------------------------------------------------------
+/** Thousands separators; amounts below $1 keep up to 4 decimals so tiny
+ *  spends don't collapse into "$0.00" (mirrors the model panel's rule). */
+export function formatMoney(value: number): string {
+  const n = Number.isFinite(value) ? value : 0;
+  const abs = Math.abs(n);
+  if (abs === 0) return '$0.00';
+  if (abs >= 1000) {
+    return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  if (abs >= 1) return `$${n.toFixed(2)}`;
+  return `$${n.toFixed(4)}`;
+}
+
+/** Compact y-axis money label ($3k / $12k); cents kept for sub-$10 ranges so
+ *  small today-spend axes don't collapse into "$0 $0 $1 $1". */
+export function formatAxisMoney(value: number): string {
+  const v = Number.isFinite(value) ? value : 0;
+  const abs = Math.abs(v);
+  if (abs >= 1000) {
+    const k = v / 1000;
+    return `$${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+  }
+  if (Number.isInteger(v)) return `$${v}`;
+  if (abs > 0 && abs < 0.01) return `$${v.toFixed(4)}`;
+  return `$${parseFloat(v.toFixed(2))}`;
+}
+
+/** Header block height shared by both chart views so the plot areas stay
+ *  aligned when tabs switch (the trend header stacks metric + range rows). */
+export const SITE_CHART_HEADER_MIN_HEIGHT = 101;
+
+// ----------------------------------------------------------------
 // Radius / corner tokens  (VChart uses numeric pixel values, not CSS vars)
 // ----------------------------------------------------------------
 export const BAR_CORNER_RADIUS: [number, number, number, number] = [0, 6, 6, 0];

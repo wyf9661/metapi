@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
 import { useIsMobile } from '../useIsMobile.js';
-import { barHeadroom, CHART_CATEGORY_PALETTE } from './chartShared.js';
+import {
+  barHeadroom,
+  CHART_CATEGORY_PALETTE,
+  formatAxisMoney,
+  formatMoney,
+  SITE_CHART_HEADER_MIN_HEIGHT,
+} from './chartShared.js';
+import { SegmentedToggle } from './SegmentedToggle.js';
+import { useI18nOptional } from '../../i18n.js';
 
 interface SiteDistributionData {
   siteName: string;
@@ -90,16 +98,37 @@ function EmptyState({ mode }: { mode: ViewMode }) {
   );
 }
 
+const VIEW_MODE_STORAGE_KEY = 'metapi:site-chart-view-mode';
+
 export default function SiteDistributionChart({ data, loading, active = true }: SiteDistributionChartProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('balance');
+  // Non-throwing language accessor: keeps the chart renderable in bare tests.
+  const language = useI18nOptional()?.language ?? 'zh';
+  // Remember the chosen sub-tab across remounts (站点/模型 tab switches) so the
+  // layout doesn't silently snap back to the default view.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try {
+      const stored = window.sessionStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      return stored === 'spend' || stored === 'balance' ? stored : 'balance';
+    } catch {
+      return 'balance';
+    }
+  });
   const chartRef = useRef<any>(null);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch {
+      // Session storage unavailable — the in-memory state still works.
+    }
+  }, [viewMode]);
   const labelColor = useThemeLabelColor();
   const isMobile = useIsMobile();
 
   // 横向柱状图：每站点一行，按值降序。图区固定 344px 与趋势图对齐，
   // 柱子粗细由 barMaxWidth 限制，站点少时留白而非撑粗。
-  const chartData = useMemo(() => {
-    const rows = (data ?? [])
+  const { rows: chartData, rankedCount } = useMemo(() => {
+    const ranked = (data ?? [])
       .map((item: any) => ({
         siteName: String(item.siteName || '-'),
         platform: String(item.platform || ''),
@@ -107,16 +136,13 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
         accountCount: safeNumber(item.accountCount),
       }))
       .filter((d) => d.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, Math.min(10, Array.isArray(data) ? data.length : 10));
-    return rows;
+      .sort((a, b) => b.value - a.value);
+    return { rows: ranked.slice(0, 10), rankedCount: ranked.length };
   }, [data, viewMode]);
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
 
   const BAR_COLORS = CHART_CATEGORY_PALETTE;
-
-  const formatValue = (value: number): string => `$${value.toFixed(2)}`;
 
   const spec = useMemo(() => {
     if (!hasData) return null;
@@ -140,7 +166,7 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
         },
         value: (datum: unknown) => {
           const item = coerceDatumRecord(datum);
-          return formatValue(safeNumber(item.value));
+          return formatMoney(safeNumber(item.value));
         },
       },
       {
@@ -158,6 +184,10 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
         },
       },
     ] as any;
+
+    // Pin the tooltip near the chart's top-left on phones so it no longer
+    // covers the rows around the finger; desktop keeps the hover-follow.
+    const tooltipAnchor = isMobile ? ({ left: 8, top: 8 } as any) : undefined;
 
     return {
       type: 'bar' as const,
@@ -180,7 +210,7 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
       label: {
         visible: true,
         position: 'right',
-        formatMethod: (text: string | number) => formatValue(Number(text)),
+        formatMethod: (text: string | number) => formatMoney(Number(text)),
         style: { fill: labelColor, fontSize: 11, stroke: 'transparent' },
       },
       axes: [
@@ -201,15 +231,7 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
             visible: true,
             // Compact dollar ticks ($3k / $12k); sub-$10 ranges keep cents so
             // a small today-spend axis doesn't collapse into "$0 $0 $1 $1".
-            formatMethod: (value: unknown) => {
-              const v = safeNumber(value);
-              if (Math.abs(v) >= 1000) {
-                const k = v / 1000;
-                return `$${Number.isInteger(k) ? k : k.toFixed(1)}k`;
-              }
-              if (Number.isInteger(v)) return `$${v}`;
-              return `$${parseFloat(v.toFixed(2))}`;
-            },
+            formatMethod: (value: unknown) => formatAxisMoney(safeNumber(value)),
             style: { fill: labelColor, fontSize: 11 },
           },
           grid: { visible: false },
@@ -219,8 +241,8 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
         },
       ],
       tooltip: {
-        mark: { content: tooltipItems },
-        dimension: { content: tooltipItems },
+        mark: { content: tooltipItems, position: tooltipAnchor },
+        dimension: { content: tooltipItems, position: tooltipAnchor },
         className: 'chart-tooltip',
         trigger: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
         // Desktop must hide on hover-out; 'none' left the tooltip stuck on
@@ -252,7 +274,12 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          alignContent: 'space-between',
+          rowGap: 8,
+          columnGap: 12,
           marginBottom: 16,
+          minHeight: isMobile ? SITE_CHART_HEADER_MIN_HEIGHT : undefined,
         }}
       >
         <div
@@ -263,6 +290,8 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
             fontSize: 14,
             fontWeight: 600,
             color: 'var(--color-text-primary)',
+            whiteSpace: 'nowrap',
+            ...(isMobile ? { flexBasis: '100%' } : {}),
           }}
         >
           <svg
@@ -288,64 +317,31 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
           站点 TOP 排行榜
         </div>
 
-        {/* Toggle buttons */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 0,
-            background: 'var(--color-bg)',
-            borderRadius: 'var(--radius-sm)',
-            padding: 3,
-            border: '1px solid var(--color-border-light)',
-          }}
-        >
-          <button
-            onClick={() => setViewMode('balance')}
-            style={{
-              padding: '5px 14px',
-              fontSize: 12,
-              fontWeight: 500,
-              border: 'none',
-              borderRadius: 'calc(var(--radius-sm) - 2px)',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              background: viewMode === 'balance' ? 'var(--color-primary)' : 'transparent',
-              color: viewMode === 'balance' ? '#ffffff' : 'var(--color-text-secondary)',
-              boxShadow: viewMode === 'balance' ? 'var(--shadow-sm)' : 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            余额分布
-          </button>
-          <button
-            onClick={() => setViewMode('spend')}
-            style={{
-              padding: '5px 14px',
-              fontSize: 12,
-              fontWeight: 500,
-              border: 'none',
-              borderRadius: 'calc(var(--radius-sm) - 2px)',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              background: viewMode === 'spend' ? 'var(--color-primary)' : 'transparent',
-              color: viewMode === 'spend' ? '#ffffff' : 'var(--color-text-secondary)',
-              boxShadow: viewMode === 'spend' ? 'var(--shadow-sm)' : 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-            </svg>
-            今日消耗
-          </button>
-        </div>
+        <SegmentedToggle
+          style={{ marginLeft: 'auto' }}
+          options={[
+            {
+              key: 'balance' as ViewMode,
+              label: '余额分布',
+              icon: (
+                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ),
+            },
+            {
+              key: 'spend' as ViewMode,
+              label: '今日消耗',
+              icon: (
+                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                </svg>
+              ),
+            },
+          ]}
+          value={viewMode}
+          onChange={setViewMode}
+        />
       </div>
 
       {/* Content */}
@@ -367,16 +363,23 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
               {spec && <VChart ref={chartRef} spec={spec} style={{ width: '100%', height: '100%' }} />}
             </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px', flexShrink: 0, maxHeight: 68, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px', flexShrink: 0, maxHeight: 68, minHeight: isMobile ? 68 : undefined, overflowY: 'auto' }}>
             {chartData.map((d, idx) => (
               <span key={d.siteName} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: BAR_COLORS[idx % BAR_COLORS.length], flexShrink: 0 }} />
                 <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.siteName}</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                  {formatValue(d.value)}
+                  {formatMoney(d.value)}
                 </span>
               </span>
             ))}
+          </div>
+          <div style={{ marginTop: 6, padding: '0 4px', fontSize: 11, color: 'var(--color-text-muted)', flexShrink: 0, minHeight: isMobile ? 16 : undefined }}>
+            {rankedCount > chartData.length
+              ? (language === 'en'
+                ? `Top ${chartData.length} of ${rankedCount} sites shown`
+                : `仅显示前 ${chartData.length} 个站点（共 ${rankedCount} 个）`)
+              : null}
           </div>
         </div>
       )}

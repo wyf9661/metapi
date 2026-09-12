@@ -1674,4 +1674,28 @@ export const zhToEnSupplemental: Record<string, string> = {
   '路由探测率（跳过亲和性，直接走加权随机）': 'Probe rate (skip affinity, go straight to weighted random)',
   '路由策略已保存': 'Routing strategy saved',
   '默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。': 'Default 0.15 (15%). Each first hop has a chance to skip session stickiness and last-success affinity and go straight to weighted balancing. Set to 0 to disable probing, 1 to probe every time.',
+  '站点趋势': 'Site Trend',
+  '站点排行榜': 'Site Ranking',
+  '站点 TOP 排行榜': 'Site TOP Ranking',
+  '余额分布': 'Balance Distribution',
+  '暂无站点数据': 'No site data yet',
+  '添加站点后将自动展示分布图表': 'The distribution chart appears automatically once sites are added',
+  '今日暂无消耗': 'No spend today yet',
+  '站点今日产生消耗后会自动展示排行': 'The ranking appears automatically once sites spend today',
+  '暂无趋势数据': 'No trend data yet',
+  '数据加载后将自动展示趋势图表': 'The trend chart appears automatically once data loads',
+  '当前查看：': 'Viewing: ',
+  '显示全部': 'Show all',
+  '占比': 'Share',
+  '账户数': 'Accounts',
+  '1天': '1d',
+  '3天': '3d',
+  '7天': '7d',
+
+  '站点与模型分析': 'Site & Model Analysis',
+  '站点分布与今日消耗 · 最近 24 小时可用性': 'Site distribution & today spend · Last 24h availability',
+  '模型消耗与调用分布 · 最近 24 小时可用性': 'Model spend & call distribution · Last 24h availability',
+
+  '站点分布': 'Site Distribution',
+
 };

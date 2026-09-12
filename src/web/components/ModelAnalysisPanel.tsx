@@ -4,7 +4,7 @@ import { InlineBrandIcon } from './BrandIcon.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { useThemeLabelColor } from './useThemeLabelColor.js';
 import { useIsMobile } from './useIsMobile.js';
-import { availabilityRgb, buildHorizontalBarSpec, CHART_BAR_GRADIENTS } from './charts/chartShared.js';
+import { availabilityRgb, buildHorizontalBarSpec, CHART_BAR_GRADIENTS, formatMoney } from './charts/chartShared.js';
 
 type TabKey = 'spend' | 'trend' | 'calls' | 'rank';
 
@@ -36,14 +36,6 @@ const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
 function toSafeNumber(value: unknown): number {
   if (typeof value !== 'number' || Number.isNaN(value) || !Number.isFinite(value)) return 0;
   return value;
-}
-
-function formatCurrency(value: number): string {
-  const n = toSafeNumber(value);
-  if (n >= 1000) return `$${n.toFixed(2)}`;
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  // <1: keep 4 decimals max so small balances fit their card on mobile.
-  return `$${n.toFixed(4)}`;
 }
 
 function formatPercent(value: number): string {
@@ -85,7 +77,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
   const spendBarSpec = useMemo(() => buildHorizontalBarSpec({
     values: spendDistribution.map(d => ({ model: String(d.model || '-'), value: toSafeNumber(d.spend) })).reverse(),
     gradientFrom: CHART_BAR_GRADIENTS.spend.from, gradientTo: CHART_BAR_GRADIENTS.spend.to,
-    formatLabel: (v) => formatCurrency(v),
+    formatLabel: (v) => formatMoney(v),
     labelColor, isMobile,
   }), [spendDistribution, labelColor, isMobile]);
 
@@ -148,7 +140,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
               <span key={d.model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
                 <InlineBrandIcon model={d.model} size={13} />
                 <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.model}</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>{formatCurrency(d.spend)}</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)' }}>{formatMoney(d.spend)}</span>
               </span>
             ))}
           </div>
@@ -264,7 +256,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                       </span>
                     </td>
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: 13 }}>
-                      {formatCurrency(item.spend)}
+                      {formatMoney(item.spend)}
                     </td>
                   </tr>
                 );

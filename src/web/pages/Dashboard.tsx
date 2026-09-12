@@ -1101,7 +1101,7 @@ export default function Dashboard({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 {siteChartTab === 'distribution'
-                  ? '站点排行榜与今日消耗'
+                  ? '站点排行榜'
                   : '站点趋势'}
               </div>
               <div className="pill-tabs">

@@ -585,3 +585,9 @@ export function useI18n() {
   }
   return value;
 }
+
+/** Non-throwing variant for components that can also render outside the
+ *  provider (e.g. unit tests) — falls back to null instead of crashing. */
+export function useI18nOptional() {
+  return useContext(I18nContext);
+}

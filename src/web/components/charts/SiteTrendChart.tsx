@@ -3,7 +3,13 @@ import { VChart } from '@visactor/react-vchart';
 import { api } from '../../api.js';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
 import { useIsMobile } from '../useIsMobile.js';
-import { CHART_CATEGORY_PALETTE } from './chartShared.js';
+import {
+  CHART_CATEGORY_PALETTE,
+  formatAxisMoney,
+  formatMoney,
+  SITE_CHART_HEADER_MIN_HEIGHT,
+} from './chartShared.js';
+import { SegmentedToggle } from './SegmentedToggle.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -25,6 +31,9 @@ const METRIC_OPTIONS: { key: Metric; label: string }[] = [
   { key: 'calls', label: '调用趋势' },
 ];
 
+const METRIC_STORAGE_KEY = 'metapi:site-trend-metric';
+const DAYS_STORAGE_KEY = 'metapi:site-trend-days';
+
 /** Short x-axis label: "08-22" for daily buckets, "13:00" for hourly ones. */
 function formatTrendBucketLabel(date: string): string {
   if (!date) return '';
@@ -45,11 +54,30 @@ interface SiteTrendChartProps {
 }
 
 export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
-  const [metric, setMetric] = useState<Metric>('spend');
+  // Remember metric + range across remounts (站点/模型 tab switches).
+  const [metric, setMetric] = useState<Metric>(() => {
+    try {
+      const stored = window.sessionStorage.getItem(METRIC_STORAGE_KEY);
+      return stored === 'spend' || stored === 'calls' ? stored : 'spend';
+    } catch {
+      return 'spend';
+    }
+  });
   const labelColor = useThemeLabelColor();
   const isMobile = useIsMobile();
+  // Shared header height so both chart views keep the plot areas aligned.
+  const headerStyleWithMinHeight: React.CSSProperties = isMobile
+    ? { ...headerStyle, minHeight: SITE_CHART_HEADER_MIN_HEIGHT }
+    : headerStyle;
   const [focusedSite, setFocusedSite] = useState<string | null>(null);
-  const [trendDays, setTrendDays] = useState(1);
+  const [trendDays, setTrendDays] = useState(() => {
+    try {
+      const stored = Number(window.sessionStorage.getItem(DAYS_STORAGE_KEY));
+      return stored === 3 || stored === 7 ? stored : 1;
+    } catch {
+      return 1;
+    }
+  });
   const [data, setData] = useState<SiteTrendData[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
@@ -57,6 +85,14 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
   const silentRefreshRef = useRef(false);
   const lastLoadedAtRef = useRef(0);
   const chartRef = useRef<any>(null);
+
+  useEffect(() => {
+    try { window.sessionStorage.setItem(METRIC_STORAGE_KEY, metric); } catch { /* storage unavailable */ }
+  }, [metric]);
+
+  useEffect(() => {
+    try { window.sessionStorage.setItem(DAYS_STORAGE_KEY, String(trendDays)); } catch { /* storage unavailable */ }
+  }, [trendDays]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +173,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
   if (loading) {
     return (
       <div style={containerStyle}>
-        <div style={headerStyle}>
+        <div style={headerStyleWithMinHeight}>
           <div className="skeleton" style={{ width: 200, height: 32, borderRadius: 'var(--radius-sm)' }} />
         </div>
         <div className="skeleton" style={{ width: '100%', height: 300, borderRadius: 'var(--radius-sm)' }} />
@@ -150,7 +186,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
   if (!data || data.length === 0 || flatData.length === 0) {
     return (
       <div style={containerStyle}>
-        <div style={headerStyle}>
+        <div style={headerStyleWithMinHeight}>
           <MetricToggle metric={metric} onChange={setMetric} />
         </div>
         <div className="empty-state" style={{ padding: 48 }}>
@@ -162,6 +198,10 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
   }
 
   /* ---------- vchart spec ---------- */
+
+  // Pin the tooltip near the chart's top-left on phones so it stops covering
+  // the lines around the finger; desktop keeps the hover-follow behaviour.
+  const tooltipAnchor = isMobile ? ({ left: 8, top: 8 } as any) : undefined;
 
   const spec: Record<string, unknown> = {
     type: 'line' as const,
@@ -182,25 +222,27 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
     },
     tooltip: {
       mark: {
+        position: tooltipAnchor,
         title: { value: (datum: Record<string, unknown>) => formatTrendBucketLabel(String(datum?.date ?? '')) },
         content: [
           {
             key: (datum: Record<string, unknown>) => datum?.site ?? '',
             value: (datum: Record<string, unknown>) => {
               const v = Number(datum?.value ?? 0);
-              return metric === 'spend' ? `$${v.toFixed(4)}` : String(v);
+              return metric === 'spend' ? formatMoney(v) : String(v);
             },
           },
         ],
       },
       dimension: {
+        position: tooltipAnchor,
         title: { value: (datum: Record<string, unknown>) => formatTrendBucketLabel(String(datum?.date ?? '')) },
         content: [
           {
             key: (datum: Record<string, unknown>) => datum?.site ?? '',
             value: (datum: Record<string, unknown>) => {
               const v = Number(datum?.value ?? 0);
-              return metric === 'spend' ? `$${v.toFixed(4)}` : String(v);
+              return metric === 'spend' ? formatMoney(v) : String(v);
             },
           },
         ],
@@ -233,7 +275,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
           visible: true,
           formatMethod: (value: string | number) => {
             const v = Number(value);
-            return metric === 'spend' ? `$${v.toFixed(2)}` : String(Math.round(v));
+            return metric === 'spend' ? formatAxisMoney(v) : String(Math.round(v));
           },
           style: { fontSize: 11, fill: labelColor },
         },
@@ -254,7 +296,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
 
   return (
     <div style={containerStyle}>
-      <div style={headerStyle}>
+      <div style={headerStyleWithMinHeight}>
         <div
           style={{
             display: 'flex',
@@ -263,6 +305,8 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
             fontSize: 14,
             fontWeight: 600,
             color: 'var(--color-text-primary)',
+            whiteSpace: 'nowrap',
+            ...(isMobile ? { flexBasis: '100%' } : {}),
           }}
         >
           <svg
@@ -287,23 +331,17 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
           </svg>
           站点趋势
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
           <MetricToggle metric={metric} onChange={setMetric} />
-          <div style={toggleGroupStyle}>
-            {[1, 3, 7].map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setTrendDays(d)}
-                style={{
-                  ...toggleBtnBase,
-                  ...(trendDays === d ? toggleBtnActive : toggleBtnInactive),
-                }}
-              >
-                {d}天
-              </button>
-            ))}
-          </div>
+          <SegmentedToggle
+            options={[
+              { key: '1', label: '1天' },
+              { key: '3', label: '3天' },
+              { key: '7', label: '7天' },
+            ]}
+            value={String(trendDays)}
+            onChange={(key) => setTrendDays(Number(key))}
+          />
           {focusedSite && (
             <div style={focusChipStyle}>
               <span>当前查看：</span>
@@ -360,7 +398,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
       </div>
       {/* Site list / selector (replaces chart built-in legend) */}
       {allSites.length > 0 && (
-        <div style={legendFallbackStyle}>
+        <div style={{ ...legendFallbackStyle, ...(isMobile ? { minHeight: 68 } : {}) }}>
           {allSites.map((site, idx) => {
             const active = !focusedSite || focusedSite === site;
             return (
@@ -394,6 +432,9 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
           })}
         </div>
       )}
+      {/* Reserved strip matching the distribution view's "top 10" footer so
+          both views keep identical plot heights on phones. */}
+      {isMobile && <div style={{ marginTop: 6, minHeight: 16, flexShrink: 0 }} aria-hidden="true" />}
     </div>
   );
 }
@@ -410,32 +451,23 @@ function MetricToggle({
   onChange: (m: Metric) => void;
 }) {
   return (
-    <div style={toggleGroupStyle}>
-      {METRIC_OPTIONS.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => onChange(opt.key)}
-          style={{
-            ...toggleBtnBase,
-            ...(metric === opt.key ? toggleBtnActive : toggleBtnInactive),
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          {opt.key === 'spend' ? (
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-            </svg>
-          ) : (
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          )}
-          {opt.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedToggle
+      options={METRIC_OPTIONS.map((opt) => ({
+        key: opt.key,
+        label: opt.label,
+        icon: opt.key === 'spend' ? (
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        ),
+      }))}
+      value={metric}
+      onChange={onChange}
+    />
   );
 }
 
@@ -455,37 +487,11 @@ const headerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: 12,
+  rowGap: 8,
+  columnGap: 12,
+  alignContent: 'space-between',
   marginBottom: 16,
   flexWrap: 'wrap',
-};
-
-const toggleGroupStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  gap: 0,
-  borderRadius: 'var(--radius-sm)',
-  border: '1px solid var(--color-border)',
-  overflow: 'hidden',
-};
-
-const toggleBtnBase: React.CSSProperties = {
-  padding: '6px 16px',
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: 'pointer',
-  border: 'none',
-  transition: 'all 0.2s ease',
-  fontFamily: 'inherit',
-};
-
-const toggleBtnActive: React.CSSProperties = {
-  background: 'var(--color-primary)',
-  color: '#ffffff',
-};
-
-const toggleBtnInactive: React.CSSProperties = {
-  background: 'var(--color-bg-card)',
-  color: 'var(--color-text-secondary)',
 };
 
 const focusChipStyle: React.CSSProperties = {
