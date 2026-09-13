@@ -318,7 +318,7 @@ describe('update center version service', () => {
         displayVersion: 'latest @ sha256:efb2ee655386',
         publishedAt: '2026-03-29T11:54:35.591877Z',
       });
-      expect(String(fetchMock.mock.calls[0]?.[0] || '')).toContain('/v2/repositories/1467078763/metapi/tags');
+      expect(String(fetchMock.mock.calls[0]?.[0] || '')).toContain('/v2/repositories/wyf9661/metapi/tags');
     });
 
     it('falls back to the highest stable semver tag when no alias tags are present', async () => {

@@ -46,7 +46,7 @@ spec:
       template: PREBUILT
       spec:
         source:
-          image: 1467078763/metapi:latest
+          image: wyf9661/metapi:latest
         ports:
           - id: web
             port: 4000

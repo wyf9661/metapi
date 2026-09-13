@@ -34,7 +34,7 @@ mkdir metapi && cd metapi
 ```yaml
 services:
   metapi:
-    image: 1467078763/metapi:latest
+    image: wyf9661/metapi:latest
     ports:
       - "4000:4000"
     volumes:

@@ -55,7 +55,7 @@
 
 模板会自动完成：
 
-- 拉取 `1467078763/metapi:latest` 镜像
+- 拉取 `wyf9661/metapi:latest` 镜像
 - 配置 HTTP 端口（4000）
 - 挂载持久化存储（`/app/data`）
 - 分配域名
@@ -195,7 +195,7 @@ docker run -d --name metapi \
   -e TZ=Asia/Shanghai \
   -v ./data:/app/data \
   --restart unless-stopped \
-  1467078763/metapi:latest
+  wyf9661/metapi:latest
 ```
 
 > **路径说明：**
