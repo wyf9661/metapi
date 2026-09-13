@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import compress from '@fastify/compress';
 import fastifyStatic from '@fastify/static';
+import { isSpaShellFallbackCandidate } from './webSpaFallback.js';
 import {
   assertProductionSecurity,
   buildFastifyOptions,
@@ -347,7 +348,12 @@ if (existsSync(webDir)) {
   await app.register(fastifyStatic, {
     root: webDir,
     prefix: '/',
-    wildcard: false,
+    // Serve from disk per request (wildcard: true). The previous
+    // `wildcard: false` registered one route per file at boot, so a web build
+    // swapped under a running server left every NEW chunk unroutable — the
+    // request fell through to the SPA shell and the browser rejected the HTML
+    // as a module — until a restart re-scanned dist/web.
+    wildcard: true,
     setHeaders: (reply, filePath) => {
       const normalizedPath = normalize(filePath);
       if (normalizedPath.includes(`${sep}assets${sep}`)) {
@@ -361,10 +367,18 @@ if (existsSync(webDir)) {
   });
   // SPA fallback
   app.setNotFoundHandler(async (request, reply) => {
-    if (!request.url.startsWith('/api/') && !request.url.startsWith('/v1/')) {
-      return reply.sendFile('index.html');
+    if (request.url.startsWith('/api/') || request.url.startsWith('/v1/')) {
+      reply.code(404).send({ error: 'Not found' });
+      return;
     }
-    reply.code(404).send({ error: 'Not found' });
+    // Missing assets must 404 instead of receiving the SPA shell: a 200
+    // text/html body at a .js/.css URL is rejected as a MIME mismatch and
+    // hides the real cause (stale cached shell pointing at a deleted chunk).
+    if (!isSpaShellFallbackCandidate(request.url)) {
+      reply.code(404).type('text/plain; charset=utf-8').send('Not found');
+      return;
+    }
+    return reply.sendFile('index.html');
   });
 }
 
