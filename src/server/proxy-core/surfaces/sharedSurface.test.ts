@@ -547,6 +547,83 @@ describe('selectSurfaceChannelForAttempt', () => {
     }));
   });
 
+  it('estimates cost for failed attempts that already consumed tokens', async () => {
+    composeProxyLogMessageMock.mockReturnValue('normalized error');
+    formatUtcSqlDateTimeMock.mockReturnValue('2026-03-21 22:00:00');
+    insertProxyLogMock.mockResolvedValue(undefined);
+    shouldRetryProxyRequestMock.mockReturnValue(false);
+    isTokenExpiredErrorMock.mockReturnValue(false);
+    recordOauthQuotaResetHintMock.mockResolvedValue(null);
+    resolveProxyLogBillingMock.mockResolvedValue({
+      estimatedCost: 0.042,
+      billingDetails: { source: 'estimate' },
+    });
+
+    const { createSurfaceFailureToolkit } = await import('./sharedSurface.js');
+    const toolkit = createSurfaceFailureToolkit({
+      warningScope: 'chat',
+      downstreamPath: '/v1/chat/completions',
+      maxRetries: 1,
+      clientContext: null,
+      downstreamApiKeyId: null,
+    });
+
+    await toolkit.handleDetectedFailure({
+      selected: {
+        channel: { id: 11, routeId: 22 },
+        account: { id: 33, username: 'relay-user' },
+        site: { id: 55, name: 'MotoMoto' },
+        actualModel: 'upstream-model',
+      },
+      requestedModel: 'gpt-5.6-terra',
+      modelName: 'upstream-model',
+      failure: { status: 502, reason: 'Upstream returned empty content' },
+      latencyMs: 323,
+      retryCount: 1,
+      promptTokens: 1200,
+      completionTokens: 0,
+      totalTokens: 1200,
+    });
+
+    // The relay may bill consumed prompt tokens even though no output was
+    // produced; the failed row must carry the best-effort estimate.
+    expect(resolveProxyLogBillingMock).toHaveBeenCalledWith(expect.objectContaining({
+      modelName: 'upstream-model',
+      parsedUsage: expect.objectContaining({
+        promptTokens: 1200,
+        completionTokens: 0,
+        totalTokens: 1200,
+      }),
+    }));
+    expect(insertProxyLogMock).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'failed',
+      estimatedCost: 0.042,
+      billingDetails: { source: 'estimate' },
+    }));
+
+    // Attempts without token usage skip the estimate entirely (no pricing call).
+    resolveProxyLogBillingMock.mockClear();
+    insertProxyLogMock.mockClear();
+    await toolkit.handleDetectedFailure({
+      selected: {
+        channel: { id: 11, routeId: 22 },
+        account: { id: 33, username: 'relay-user' },
+        site: { id: 55, name: 'MotoMoto' },
+        actualModel: 'upstream-model',
+      },
+      requestedModel: 'gpt-5.6-terra',
+      modelName: 'upstream-model',
+      failure: { status: 502, reason: 'Upstream returned HTTP 502' },
+      latencyMs: 100,
+      retryCount: 1,
+    });
+    expect(resolveProxyLogBillingMock).not.toHaveBeenCalled();
+    expect(insertProxyLogMock).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'failed',
+      estimatedCost: 0,
+    }));
+  });
+
   it('keeps retryable failures on the retry path even when quota hint recording fails', async () => {
     composeProxyLogMessageMock.mockReturnValue('normalized error');
     formatUtcSqlDateTimeMock.mockReturnValue('2026-03-21 22:00:00');

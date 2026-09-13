@@ -644,6 +644,59 @@ export function createSurfaceFailureToolkit(input: {
     });
   };
 
+  /**
+   * Best-effort cost estimate for a FAILED attempt that already consumed
+   * tokens upstream (prompt tokens burned before an empty-content failure, a
+   * truncated stream that still metered input): the relay may bill those
+   * tokens even though no output reached the client, so record the estimated
+   * spend on the failed row instead of hiding it behind estimated_cost = 0.
+   * Returns null when no tokens were consumed or pricing is unavailable.
+   */
+  const resolveAttemptUsageCost = async (args: {
+    selected: SurfaceSelectedChannel;
+    modelName: string;
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+    totalTokens?: number | null;
+  }): Promise<{ estimatedCost: number; billingDetails: unknown } | null> => {
+    const promptTokens = Math.max(0, Math.trunc(args.promptTokens ?? 0));
+    const completionTokens = Math.max(0, Math.trunc(args.completionTokens ?? 0));
+    if (promptTokens <= 0 && completionTokens <= 0) return null;
+    const totalTokens = Math.max(0, Math.trunc(args.totalTokens ?? 0))
+      || promptTokens + completionTokens;
+    try {
+      const billing = await resolveProxyLogBilling({
+        // The failure toolkit's channel shape narrows `site`; the runtime
+        // object is the same record the success path passes in full.
+        site: args.selected.site as { id: number; url: string; platform: string; apiKey?: string | null },
+        account: args.selected.account,
+        modelName: args.modelName,
+        parsedUsage: {
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          promptTokensIncludeCache: null,
+        },
+        resolvedUsage: {
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          recoveredFromSelfLog: false,
+          estimatedCostFromQuota: 0,
+          selfLogBillingMeta: null,
+        },
+        tokenGroup: (args.selected as { token?: { tokenGroup?: string | null } | null }).token?.tokenGroup
+          ?? args.selected.tokenGroup ?? null,
+      });
+      if (!Number.isFinite(billing.estimatedCost) || billing.estimatedCost <= 0) return null;
+      return { estimatedCost: billing.estimatedCost, billingDetails: billing.billingDetails };
+    } catch {
+      return null;
+    }
+  };
+
   const maybeRetry = (
     retryCount: number,
     status: number,
@@ -800,6 +853,13 @@ export function createSurfaceFailureToolkit(input: {
           modelName: args.modelName,
         });
       }
+      const attemptCost = await resolveAttemptUsageCost({
+        selected: args.selected,
+        modelName: args.modelName,
+        promptTokens: args.promptTokens,
+        completionTokens: args.completionTokens,
+        totalTokens: args.totalTokens,
+      });
       await log({
         selected: args.selected,
         modelRequested: args.requestedModel,
@@ -813,6 +873,8 @@ export function createSurfaceFailureToolkit(input: {
         promptTokens: args.promptTokens,
         completionTokens: args.completionTokens,
         totalTokens: args.totalTokens,
+        estimatedCost: attemptCost?.estimatedCost,
+        billingDetails: attemptCost?.billingDetails,
         upstreamPath: args.upstreamPath,
       });
 
@@ -938,6 +1000,13 @@ export function createSurfaceFailureToolkit(input: {
           modelName: args.modelName,
         });
       }
+      const attemptCost = await resolveAttemptUsageCost({
+        selected: args.selected,
+        modelName: args.modelName,
+        promptTokens: args.promptTokens,
+        completionTokens: args.completionTokens,
+        totalTokens: args.totalTokens,
+      });
       await log({
         selected: args.selected,
         modelRequested: args.requestedModel,
@@ -951,6 +1020,8 @@ export function createSurfaceFailureToolkit(input: {
         promptTokens: args.promptTokens,
         completionTokens: args.completionTokens,
         totalTokens: args.totalTokens,
+        estimatedCost: attemptCost?.estimatedCost,
+        billingDetails: attemptCost?.billingDetails,
         upstreamPath: args.upstreamPath,
       });
     },
