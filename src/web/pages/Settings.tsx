@@ -947,7 +947,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" style={{ width: '100%', maxWidth: 1320, margin: '0 auto' }}>
       <div className="page-header">
         <h2 className="page-title">系统设置</h2>
       </div>
@@ -1018,9 +1018,9 @@ export default function Settings() {
           </label>
         </div>
 
-        <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 3 }}>
+        <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 3, gridColumn: '1 / -1' }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>定时任务</div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '180px 180px auto', gap: 12, alignItems: 'end', marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(140px, 180px) minmax(140px, 180px) max-content', gap: 12, alignItems: 'end', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到方式</div>
               <ModernSelect
@@ -1140,7 +1140,7 @@ export default function Settings() {
         </div>
 
 
-        <div className="card animate-slide-up stagger-4" style={{ padding: 20, order: 5 }}>
+        <div className="card animate-slide-up stagger-5" style={{ padding: 20, order: 4 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>代理失败判定</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             命中任一关键词或空内容时判定失败，可触发重试。
@@ -1172,7 +1172,7 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="card animate-slide-up stagger-4" style={{ ...settingsModernCardStyle, order: 6 }} data-settings-card="payload-rules">
+        <div className="card animate-slide-up stagger-7" style={{ ...settingsModernCardStyle, order: 7, gridColumn: '1 / -1' }} data-settings-card="payload-rules">
           <div style={settingsModernHeaderStyle}>
             <div style={settingsModernTitleBlockStyle}>
               <div style={settingsModernTitleStyle}>Payload 规则</div>
@@ -1422,7 +1422,7 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="card animate-slide-up stagger-4" style={{ ...settingsModernCardStyle, order: 4 }} data-settings-card="proxy-transport">
+        <div className="card animate-slide-up stagger-4" style={{ ...settingsModernCardStyle, order: 6, gridColumn: '1 / -1' }} data-settings-card="proxy-transport">
           <div style={settingsModernHeaderStyle}>
             <div style={settingsModernTitleBlockStyle}>
               <div style={settingsModernTitleStyle}>Codex 上游传输与会话并发</div>
@@ -1518,7 +1518,7 @@ export default function Settings() {
             </button>
           </div>
         </div>
-        <div className="card animate-slide-up stagger-5" style={{ padding: 20, gridColumn: '1 / -1', order: 7 }}>
+        <div className="card animate-slide-up stagger-8" style={{ padding: 20, gridColumn: '1 / -1', order: 8 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>路由策略</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             先选择预设策略，只有需要精调时再展开高级参数。
@@ -2057,7 +2057,7 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="card animate-slide-up stagger-7" style={{ padding: 20, order: 11 }}>
+        <div className="card animate-slide-up stagger-6" style={{ padding: 20, order: 5 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>反探测（敏感词检测）</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
             用于伪装成内容审核以拦截探活请求。开启后，短文本（低于下方阈值）的非继续对话请求会被 400 拦截；多轮对话中的简短后续消息不受影响。可在每个下游 Key 上单独覆盖。

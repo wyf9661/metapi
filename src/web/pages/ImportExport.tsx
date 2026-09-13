@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
 import { tr } from '../i18n.js';
+import { useIsMobile } from '../components/useIsMobile.js';
 import { StatusPill } from '../components/StatusText.js';
 
 type BackupType = 'all' | 'accounts' | 'preferences';
@@ -276,6 +277,7 @@ function buildImportSuccessMessage(result: any): string {
 }
 
 export default function ImportExport() {
+  const isMobile = useIsMobile();
   const toast = useToast();
   const [exportingType, setExportingType] = useState<BackupType | ''>('');
   const [importing, setImporting] = useState(false);
@@ -510,7 +512,7 @@ export default function ImportExport() {
   };
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" style={{ width: '100%', maxWidth: 1320, margin: '0 auto' }}>
       <div className="page-header" style={{ alignItems: 'flex-end', marginBottom: 18 }}>
         <div>
           <h2 className="page-title" style={{ marginBottom: 6 }}>{tr('导入 / 导出')}</h2>
@@ -524,7 +526,7 @@ export default function ImportExport() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(380px,1fr))', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(380px, 100%), 1fr))', gap: 20 }}>
         {/* ====== 导出区 ====== */}
         <div className="card animate-slide-up stagger-1" style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -734,7 +736,7 @@ export default function ImportExport() {
           支持手动推送、手动拉取，以及定时自动导出到 WebDAV。
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '16px 20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: '16px 20px' }}>
           <div style={{ gridColumn: '1 / -1' }}>
             <div style={formFieldLabelStyle}>文件 URL</div>
             <input
@@ -839,12 +841,12 @@ export default function ImportExport() {
           </label>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           <button
             onClick={handleSaveWebdavConfig}
             disabled={webdavSaving}
             className="btn btn-primary"
-            style={{ flex: 1, justifyContent: 'center' }}
+            style={{ flex: isMobile ? '1 1 100%' : 1, justifyContent: 'center' }}
           >
             {webdavSaving ? '保存中...' : '保存 WebDAV 配置'}
           </button>
@@ -852,7 +854,7 @@ export default function ImportExport() {
             onClick={handleExportToWebdav}
             disabled={webdavAction !== '' || webdavSaving || webdavConfigDirty}
             className="btn btn-ghost"
-            style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
+            style={{ flex: isMobile ? '1 1 100%' : 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
           >
             {webdavAction === 'export' ? '导出中...' : '立即导出到 WebDAV'}
           </button>
@@ -860,7 +862,7 @@ export default function ImportExport() {
             onClick={handleImportFromWebdav}
             disabled={webdavAction !== '' || webdavSaving || webdavConfigDirty}
             className="btn btn-ghost"
-            style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
+            style={{ flex: isMobile ? '1 1 100%' : 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
           >
             {webdavAction === 'import' ? '拉取中...' : '从 WebDAV 拉取'}
           </button>
