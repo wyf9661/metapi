@@ -158,6 +158,80 @@ export function applyCodexCompatibilityMode(form: SiteForm, enabled: boolean): S
 }
 
 
+/** Preset used by the “Browser UA” switch for Cloudflare / WAF-gated sites. */
+export const BROWSER_UA_PROFILE_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36',
+} as const;
+
+const BROWSER_UA_PROFILE_MATCH_TOKENS = ['mozilla/5.0', 'chrome/128.0'];
+
+function looksLikeBrowserUaProfileValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  return BROWSER_UA_PROFILE_MATCH_TOKENS.every((token) => normalized.includes(token));
+}
+
+export function isBrowserUaProfileEnabled(fields: SiteCustomHeaderField[]): boolean {
+  return fields.some(
+    (field) => field.key.trim().toLowerCase() === 'user-agent'
+      && looksLikeBrowserUaProfileValue(field.value),
+  );
+}
+
+export function applyBrowserUaProfile(
+  fields: SiteCustomHeaderField[],
+  enabled: boolean,
+): SiteCustomHeaderField[] {
+  // Drop empty rows; when enabling replace any existing User-Agent row, when
+  // disabling remove it only if it still carries the preset value.
+  const kept = fields.filter((field) => {
+    const key = field.key.trim();
+    if (!key && !field.value.trim()) return false;
+    if (key.toLowerCase() !== 'user-agent') return true;
+    if (enabled) return false;
+    return !looksLikeBrowserUaProfileValue(field.value);
+  });
+
+  if (!enabled) {
+    return kept.length > 0 ? kept : [emptySiteCustomHeader()];
+  }
+
+  const next = [
+    { key: 'User-Agent', value: BROWSER_UA_PROFILE_HEADERS['User-Agent'] },
+    ...kept,
+  ];
+  return next.length > 0 ? next : [emptySiteCustomHeader()];
+}
+
+/** Keep the browser-UA switch's outbound override flag in sync. */
+export function isBrowserUaModeEnabled(
+  form: Pick<SiteForm, 'customHeaders' | 'customHeadersOverrideRequestHeaders'>,
+): boolean {
+  return isBrowserUaProfileEnabled(form.customHeaders) && form.customHeadersOverrideRequestHeaders;
+}
+
+export function applyBrowserUaMode(form: SiteForm, enabled: boolean): SiteForm {
+  if (!enabled) {
+    return {
+      ...form,
+      customHeaders: applyBrowserUaProfile(form.customHeaders, false),
+      customHeadersOverrideRequestHeaders: false,
+    };
+  }
+
+  // Both switches claim the User-Agent header — clear a previously applied
+  // Codex profile before installing the browser profile.
+  const base = isCodexCompatibilityModeEnabled(form)
+    ? applyCodexCompatibilityMode(form, false)
+    : form;
+  return {
+    ...base,
+    customHeaders: applyBrowserUaProfile(base.customHeaders, true),
+    customHeadersOverrideRequestHeaders: true,
+  };
+}
+
+
 export function emptySiteApiEndpoint(): SiteApiEndpointField {
   return {
     url: '',

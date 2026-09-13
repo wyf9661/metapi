@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyBrowserUaMode,
+  applyBrowserUaProfile,
+  BROWSER_UA_PROFILE_HEADERS,
   buildSiteSaveAction,
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   applyCodexClientProfile,
   applyCodexCompatibilityMode,
   emptySiteForm,
+  isBrowserUaModeEnabled,
+  isBrowserUaProfileEnabled,
   isCodexClientProfileEnabled,
   isCodexCompatibilityModeEnabled,
   serializeSiteApiEndpoints,
@@ -259,5 +264,63 @@ describe('codex client profile helpers', () => {
       ...form,
       protocolProfile: { ...form.protocolProfile, requireCodexClient: true },
     })).toBe(true);
+  });
+});
+
+describe('browser UA profile helpers', () => {
+  it('applies and detects the preset header', () => {
+    const enabled = applyBrowserUaProfile([], true);
+    expect(isBrowserUaProfileEnabled(enabled)).toBe(true);
+    expect(enabled.some((item) => (
+      item.key === 'User-Agent'
+      && item.value === BROWSER_UA_PROFILE_HEADERS['User-Agent']
+    ))).toBe(true);
+
+    const disabled = applyBrowserUaProfile(enabled, false);
+    expect(isBrowserUaProfileEnabled(disabled)).toBe(false);
+    expect(disabled).toEqual([{ key: '', value: '' }]);
+  });
+
+  it('replaces a foreign User-Agent row and keeps unrelated headers', () => {
+    const base = [
+      { key: 'X-Trace', value: '1' },
+      { key: 'user-agent', value: 'custom-agent/1.0' },
+    ];
+    const enabled = applyBrowserUaProfile(base, true);
+    expect(enabled.filter((item) => item.key.toLowerCase() === 'user-agent')).toEqual([
+      { key: 'User-Agent', value: BROWSER_UA_PROFILE_HEADERS['User-Agent'] },
+    ]);
+    expect(enabled.some((item) => item.key === 'X-Trace' && item.value === '1')).toBe(true);
+
+    const disabled = applyBrowserUaProfile(enabled, false);
+    expect(disabled).toEqual([{ key: 'X-Trace', value: '1' }]);
+
+    // A hand-written non-preset UA row survives a disable toggle.
+    const manualKept = applyBrowserUaProfile([{ key: 'User-Agent', value: 'curl/8.0' }], false);
+    expect(manualKept).toEqual([{ key: 'User-Agent', value: 'curl/8.0' }]);
+  });
+
+  it('keeps the outbound override flag in sync through the mode switch', () => {
+    const base = emptySiteForm();
+    expect(isBrowserUaModeEnabled(base)).toBe(false);
+
+    const enabled = applyBrowserUaMode(base, true);
+    expect(isBrowserUaModeEnabled(enabled)).toBe(true);
+    expect(enabled.customHeadersOverrideRequestHeaders).toBe(true);
+    expect(isBrowserUaProfileEnabled(enabled.customHeaders)).toBe(true);
+
+    const disabled = applyBrowserUaMode(enabled, false);
+    expect(isBrowserUaModeEnabled(disabled)).toBe(false);
+    expect(disabled.customHeadersOverrideRequestHeaders).toBe(false);
+    expect(isBrowserUaProfileEnabled(disabled.customHeaders)).toBe(false);
+  });
+
+  it('replaces a previously applied codex profile when switching modes', () => {
+    const codexOn = applyCodexCompatibilityMode(emptySiteForm(), true);
+    const switched = applyBrowserUaMode(codexOn, true);
+    expect(isCodexCompatibilityModeEnabled(switched)).toBe(false);
+    expect(isBrowserUaModeEnabled(switched)).toBe(true);
+    expect(switched.customHeaders.some((item) => item.key === 'originator')).toBe(false);
+    expect(serializeSiteCustomHeaders(switched.customHeaders).valid).toBe(true);
   });
 });

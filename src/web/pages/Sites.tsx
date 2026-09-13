@@ -28,11 +28,13 @@ import { tr } from '../i18n.js';
 import { buildCustomReorderUpdates, buildUnpinMoveToFrontUpdates, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
 import {
+  applyBrowserUaMode,
   applyCodexCompatibilityMode,
   buildSiteSaveAction,
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   emptySiteForm,
+  isBrowserUaModeEnabled,
   isCodexCompatibilityModeEnabled,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
@@ -1460,6 +1462,32 @@ export default function Sites() {
                 <span>Codex 兼容模式</span>
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                   用于只允许 Codex 客户端访问的站点。开启后自动配置 Responses 协议、客户端指纹和请求头，无需手动设置。
+                </span>
+              </span>
+            </label>
+            <label style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '10px 12px',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--color-bg)',
+              color: 'var(--color-text-primary)',
+              fontSize: 13,
+            }}>
+              <input
+                type="checkbox"
+                checked={isBrowserUaModeEnabled(form)}
+                onChange={(e) => {
+                  setForm((prev) => applyBrowserUaMode(prev, e.target.checked));
+                }}
+                style={{ marginTop: 2 }}
+              />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>浏览器 UA（绕过 Cloudflare / WAF 拦截）</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                  用于被 Cloudflare / WAF 拦截（403 / 1010）的站点。开启后自动添加浏览器 User-Agent 并允许覆盖同名出站请求头，无需手动设置。
                 </span>
               </span>
             </label>

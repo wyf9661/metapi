@@ -1417,6 +1417,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '停止': 'Stop',
   '允许 metapi 到 Codex 上游使用 WebSocket': 'Allow WebSocket from metapi to Codex upstream',
   '允许站点自定义请求头覆盖同名出站请求头': 'Allow site custom headers to override outbound headers',
+  '浏览器 UA（绕过 Cloudflare / WAF 拦截）': 'Browser UA (bypass Cloudflare / WAF)',
+  '用于被 Cloudflare / WAF 拦截（403 / 1010）的站点。开启后自动添加浏览器 User-Agent 并允许覆盖同名出站请求头，无需手动设置。': 'For sites blocked by Cloudflare / WAF (403 / 1010). Adds a browser User-Agent and enables outbound-header override automatically — no manual setup needed.',
   '公网地址': 'Public URL',
   '公网隧道': 'Public Tunnel',
   '公网隧道访问': 'Public Tunnel Access',
