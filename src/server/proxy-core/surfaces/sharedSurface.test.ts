@@ -64,6 +64,14 @@ vi.mock('../../services/proxyChannelCoordinator.js', () => ({
 
 vi.mock('../../services/routeRefreshWorkflow.js', () => ({
   refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
+  refreshModelsAndRebuildRoutesBounded: async (...args: unknown[]) => {
+    try {
+      await refreshModelsAndRebuildRoutesMock(...args);
+      return true;
+    } catch {
+      return false;
+    }
+  },
 }));
 
 vi.mock('../../services/proxyLogMessage.js', () => ({
@@ -348,8 +356,7 @@ describe('selectSurfaceChannelForAttempt', () => {
     expect(result).toBe(selected);
     expect(selectChannelMock).toHaveBeenCalledTimes(2);
     expect(consoleWarnMock).toHaveBeenCalledWith(
-      '[proxy/surface] failed to refresh routes after empty selection',
-      expect.any(Error),
+      '[proxy/surface] route refresh did not complete (bounded) after empty selection',
     );
   });
 

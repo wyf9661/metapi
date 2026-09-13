@@ -24,6 +24,14 @@ const intervalAttemptByAccount = new Map<number, number>();
 let checkinPassInFlight: Promise<void> | null = null;
 let balancePassInFlight: Promise<void> | null = null;
 let modelRefreshPassInFlight: Promise<void> | null = null;
+let balancePassStartedAtMs = 0;
+let modelRefreshPassStartedAtMs = 0;
+
+// A pass can wedge on an unbounded upstream call. Past this age the guard no
+// longer counts the hung pass as "running" and the next tick starts a fresh
+// one (the stale pass keeps draining in the background). Without this, one
+// wedged pass silently disabled refreshes for 15h+ (2026-09-12).
+const PASS_STALE_AFTER_MS = 20 * 60_000;
 
 const DAILY_SUMMARY_DEFAULT_CRON = '58 23 * * *';
 const LOG_CLEANUP_DEFAULT_CRON = '0 6 * * *';
@@ -254,10 +262,14 @@ function startCheckinSchedule() {
 
 function createBalanceTask(cronExpr: string) {
   return cron.schedule(cronExpr, () => {
-    if (balancePassInFlight) {
+    if (balancePassInFlight && Date.now() - balancePassStartedAtMs < PASS_STALE_AFTER_MS) {
       console.log('[Scheduler] Balance refresh skipped: previous pass is still running');
       return balancePassInFlight;
     }
+    if (balancePassInFlight) {
+      console.log('[Scheduler] Balance refresh stale (previous pass wedged); starting a fresh pass');
+    }
+    balancePassStartedAtMs = Date.now();
     const pass = (async () => {
       console.log(`[Scheduler] Refreshing balances at ${new Date().toISOString()}`);
       try {
@@ -277,10 +289,14 @@ function createBalanceTask(cronExpr: string) {
 
 function createModelRefreshTask(cronExpr: string) {
   return cron.schedule(cronExpr, async () => {
-    if (modelRefreshPassInFlight) {
+    if (modelRefreshPassInFlight && Date.now() - modelRefreshPassStartedAtMs < PASS_STALE_AFTER_MS) {
       console.log('[Scheduler] Model refresh skipped: previous pass is still running');
       return modelRefreshPassInFlight;
     }
+    if (modelRefreshPassInFlight) {
+      console.log('[Scheduler] Model refresh stale (previous pass wedged); starting a fresh pass');
+    }
+    modelRefreshPassStartedAtMs = Date.now();
     const pass = (async () => {
       console.log(`[Scheduler] Refreshing models at ${new Date().toISOString()}`);
       try {

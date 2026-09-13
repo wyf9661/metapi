@@ -41,6 +41,14 @@ vi.mock('../../services/routeRefreshWorkflow.js', async () => {
     ...actual,
     refreshModelsAndRebuildRoutes: (...args: unknown[]) =>
       refreshModelsAndRebuildRoutesMock(...args),
+    refreshModelsAndRebuildRoutesBounded: async (...args: unknown[]) => {
+      try {
+        await refreshModelsAndRebuildRoutesMock(...args);
+        return true;
+      } catch {
+        return false;
+      }
+    },
   };
 });
 

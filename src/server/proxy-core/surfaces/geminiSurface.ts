@@ -399,7 +399,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         if (!isDirectGeminiFamilyPlatform(selected.site.platform)) {
           let models = await readRouteAwareGeminiModels(request);
           if (models.length <= 0) {
-            await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+            await routeRefreshWorkflow.refreshModelsAndRebuildRoutesBounded();
             models = await readRouteAwareGeminiModels(request);
           }
           await safeUpdateSurfaceProxyDebugCandidates(debugTrace, {

@@ -6,6 +6,7 @@ import {
   type UserInfo,
 } from './base.js';
 import { normalizePlatformBaseUrl, resolveVersionedModelsUrl } from './standardApiProvider.js';
+import { withManagementRequestTimeout } from './upstreamRequestTimeout.js';
 
 /**
  * MetAPI peer-site adapter.
@@ -54,10 +55,10 @@ function toFiniteNumber(value: unknown): number | null {
 async function fetchPeerOverview(baseUrl: string, token: string): Promise<PeerOverviewPayload | null> {
   const target = `${normalizePeerBaseUrl(baseUrl)}/api/v1/peer/overview`;
   const { fetch } = await import('undici');
-  const res = await fetch(target, {
+  const res = await fetch(target, withManagementRequestTimeout({
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
-  });
+  }));
   if (!res.ok) return null;
   const payload = (await res.json()) as PeerOverviewPayload;
   if (payload?.protocolVersion !== PEER_PROTOCOL_VERSION) return null;
@@ -119,10 +120,10 @@ export class MetApiAdapter extends BasePlatformAdapter {
     const target = `${normalizePeerBaseUrl(baseUrl)}/api/v1/peer/cascade-key`;
     try {
       const { fetch } = await import('undici');
-      const res = await fetch(target, {
+      const res = await fetch(target, withManagementRequestTimeout({
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      }));
       if (!res.ok) return null;
       const payload = (await res.json()) as { key?: unknown };
       return typeof payload?.key === 'string' && payload.key.trim() ? payload.key.trim() : null;
@@ -176,9 +177,9 @@ export class MetApiAdapter extends BasePlatformAdapter {
     const url = resolveVersionedModelsUrl(normalizePeerBaseUrl(baseUrl));
     try {
       const { fetch } = await import('undici');
-      const res = await fetch(url, {
+      const res = await fetch(url, withManagementRequestTimeout({
         headers: { Authorization: `Bearer ${apiToken}` },
-      });
+      }));
       if (!res.ok) return [];
       const payload = (await res.json()) as { data?: Array<{ id?: unknown }> };
       if (!Array.isArray(payload?.data)) return [];

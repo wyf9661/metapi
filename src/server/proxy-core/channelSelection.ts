@@ -144,13 +144,14 @@ export async function selectProxyChannelForAttempt(input: {
   const refreshRoutesForFirstAttempt = async (): Promise<boolean> => {
     if (input.retryCount > 0 || refreshedRoutes) return false;
     refreshedRoutes = true;
-    try {
-      await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
-      return true;
-    } catch (error) {
-      console.warn('[proxy/surface] failed to refresh routes after empty selection', error);
-      return false;
+    // Bounded on purpose: in the request path a wedged refresh pass must
+    // never hold client traffic; on timeout we fall through with the existing
+    // route state instead of hanging (see refreshModelsAndRebuildRoutesBounded).
+    const refreshed = await routeRefreshWorkflow.refreshModelsAndRebuildRoutesBounded();
+    if (!refreshed) {
+      console.warn('[proxy/surface] route refresh did not complete (bounded) after empty selection');
     }
+    return refreshed;
   };
 
   const tryPreferredChannel = async (

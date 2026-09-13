@@ -14,7 +14,7 @@ export async function modelsProxyRoute(app: FastifyInstance) {
       downstreamPolicy,
       responseFormat: wantsClaudeFormat ? 'claude' : 'openai',
       tokenRouter,
-      refreshModelsAndRebuildRoutes: routeRefreshWorkflow.refreshModelsAndRebuildRoutes,
+      refreshModelsAndRebuildRoutes: () => routeRefreshWorkflow.refreshModelsAndRebuildRoutesBounded(),
       isModelAllowed: isModelAllowedByPolicyOrAllowedRoutes,
     });
   });

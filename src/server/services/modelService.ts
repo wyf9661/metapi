@@ -59,6 +59,14 @@ let inFlightRefreshModelsAndRebuildRoutes: Promise<{
   refresh: ModelRefreshResult[];
   rebuild: Awaited<ReturnType<typeof rebuildTokenRoutesFromAvailability>>;
 }> | null = null;
+let inFlightRefreshModelsAndRebuildRoutesStartedAtMs = 0;
+
+// A refresh pass can wedge on an unbounded upstream call; the single-flight
+// guard must not hand that stale pass to every later caller forever. After
+// this age, later callers start a fresh pass while the stale one drains in
+// the background (2026-09-12: a wedged pass stayed pending 15h and hung both
+// the scheduler and every request that awaited the refresh).
+const REFRESH_INFLIGHT_MAX_AGE_MS = 10 * 60_000;
 
 type ModelRefreshErrorCode = 'timeout' | 'unauthorized' | 'empty_models' | 'unknown';
 type ModelRefreshSkipCode = 'site_disabled' | 'adapter_or_status';
@@ -1784,17 +1792,29 @@ async function runRefreshModelsAndRebuildRoutes() {
 }
 
 export async function refreshModelsAndRebuildRoutes() {
-  if (inFlightRefreshModelsAndRebuildRoutes) {
+  const nowMs = Date.now();
+  if (
+    inFlightRefreshModelsAndRebuildRoutes
+    && nowMs - inFlightRefreshModelsAndRebuildRoutesStartedAtMs < REFRESH_INFLIGHT_MAX_AGE_MS
+  ) {
     return inFlightRefreshModelsAndRebuildRoutes;
   }
 
-  inFlightRefreshModelsAndRebuildRoutes = (async () => {
+  let run!: Promise<{
+    refresh: ModelRefreshResult[];
+    rebuild: Awaited<ReturnType<typeof rebuildTokenRoutesFromAvailability>>;
+  }>;
+  run = (async () => {
     try {
       return await runRefreshModelsAndRebuildRoutes();
     } finally {
-      inFlightRefreshModelsAndRebuildRoutes = null;
+      // Identity guard: never clear a newer run that replaced a stale one.
+      if (inFlightRefreshModelsAndRebuildRoutes === run) {
+        inFlightRefreshModelsAndRebuildRoutes = null;
+      }
     }
   })();
-
-  return inFlightRefreshModelsAndRebuildRoutes;
+  inFlightRefreshModelsAndRebuildRoutes = run;
+  inFlightRefreshModelsAndRebuildRoutesStartedAtMs = nowMs;
+  return run;
 }
