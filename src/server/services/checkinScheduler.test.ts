@@ -56,6 +56,10 @@ vi.mock('./modelPriceCatalogService.js', () => ({
   stopModelsDevPriceSync: (...args: unknown[]) => stopModelsDevPriceSyncMock(...args),
 }));
 
+vi.mock('./notifyService.js', () => ({
+  sendNotification: vi.fn(async () => undefined),
+}));
+
 describe('checkinScheduler', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -192,5 +196,30 @@ describe('checkinScheduler', () => {
     clearIntervalSpy.mockClear();
     scheduler.stopScheduler();
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('deduplicates overlapping check-in cron passes and clears the lock after completion', async () => {
+    let releaseCheckin!: () => void;
+    allMock.mockImplementation(() => new Promise<unknown[]>((resolve) => {
+      releaseCheckin = () => resolve([]);
+    }));
+    const scheduler = await import('./checkinScheduler.js');
+    scheduler.updateCheckinSchedule({ mode: 'cron', cronExpr: '3 3 * * *', intervalHours: 6 });
+    const checkinCall = (scheduleMock.mock.calls as unknown as Array<[string, () => Promise<void>]>)
+      .find((call) => call[0] === '3 3 * * *');
+    expect(checkinCall).toBeDefined();
+    const checkinCallback = checkinCall![1];
+
+    const first = checkinCallback();
+    const second = checkinCallback();
+    expect(allMock).toHaveBeenCalledTimes(1);
+    releaseCheckin();
+    await Promise.all([first, second]);
+    expect(allMock).toHaveBeenCalledTimes(1);
+
+    // Lock cleared → the next tick runs a fresh pass.
+    allMock.mockResolvedValue([]);
+    await checkinCallback();
+    expect(allMock).toHaveBeenCalledTimes(2);
   });
 });

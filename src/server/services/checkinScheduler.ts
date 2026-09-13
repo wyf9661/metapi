@@ -26,6 +26,8 @@ let balancePassInFlight: Promise<void> | null = null;
 let modelRefreshPassInFlight: Promise<void> | null = null;
 let balancePassStartedAtMs = 0;
 let modelRefreshPassStartedAtMs = 0;
+let checkinCronPassInFlight: Promise<void> | null = null;
+let checkinCronPassStartedAtMs = 0;
 
 // A pass can wedge on an unbounded upstream call. Past this age the guard no
 // longer counts the hung pass as "running" and the next tick starts a fresh
@@ -133,25 +135,43 @@ async function notifyCheckinSummary(results: Array<{ accountId?: number; usernam
 }
 
 function createCheckinTask(cronExpr: string) {
-  return cron.schedule(cronExpr, async () => {
-    console.log(`[Scheduler] Running check-in at ${new Date().toISOString()}`);
-    try {
-      const results = await checkinAll({ scheduleMode: 'cron' });
-      const notification = await notifyCheckinSummary(results as any);
-      console.log(
-        `[Scheduler] Check-in complete: ${notification.summary.success} success, ${notification.summary.skipped} skipped, ${notification.summary.failed} failed`,
-      );
-    } catch (err) {
-      console.error('[Scheduler] Check-in error:', err);
-      try {
-        await sendNotification(
-          '定时签到失败',
-          `定时签到任务异常：${err instanceof Error ? err.message : String(err)}`,
-          'error',
-          { bypassThrottle: true },
-        );
-      } catch {}
+  return cron.schedule(cronExpr, () => {
+    // Same single-flight + stale-unlock contract as the balance / model-refresh
+    // cron passes: a wedged check-in run must not stack a second full sweep,
+    // but past PASS_STALE_AFTER_MS the guard stops counting it as running.
+    if (checkinCronPassInFlight && Date.now() - checkinCronPassStartedAtMs < PASS_STALE_AFTER_MS) {
+      console.log('[Scheduler] Check-in skipped: previous pass is still running');
+      return checkinCronPassInFlight;
     }
+    if (checkinCronPassInFlight) {
+      console.log('[Scheduler] Check-in stale (previous pass wedged); starting a fresh pass');
+    }
+    checkinCronPassStartedAtMs = Date.now();
+    const pass = (async () => {
+      console.log(`[Scheduler] Running check-in at ${new Date().toISOString()}`);
+      try {
+        const results = await checkinAll({ scheduleMode: 'cron' });
+        const notification = await notifyCheckinSummary(results as any);
+        console.log(
+          `[Scheduler] Check-in complete: ${notification.summary.success} success, ${notification.summary.skipped} skipped, ${notification.summary.failed} failed`,
+        );
+      } catch (err) {
+        console.error('[Scheduler] Check-in error:', err);
+        try {
+          await sendNotification(
+            '定时签到失败',
+            `定时签到任务异常：${err instanceof Error ? err.message : String(err)}`,
+            'error',
+            { bypassThrottle: true },
+          );
+        } catch {}
+      }
+    })();
+    const trackedPass = pass.finally(() => {
+      if (checkinCronPassInFlight === trackedPass) checkinCronPassInFlight = null;
+    });
+    checkinCronPassInFlight = trackedPass;
+    return trackedPass;
   });
 }
 
