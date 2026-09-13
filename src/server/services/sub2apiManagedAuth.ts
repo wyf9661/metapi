@@ -6,6 +6,7 @@ import {
   resolveProxyUrlFromExtraConfig,
 } from './accountExtraConfig.js';
 import { withSiteRecordProxyRequestInit } from './siteProxy.js';
+import { fetchWithManagementTimeout } from './platforms/upstreamRequestTimeout.js';
 
 export const SUB2API_MANAGED_REFRESH_LEAD_MS = 120 * 1000;
 
@@ -135,12 +136,11 @@ export async function refreshSub2ApiManagedSession(params: {
     headers.Authorization = `Bearer ${authHeaderToken}`;
   }
 
-  const { fetch } = await import('undici');
   let status = 0;
   let rawText = '';
   let payload: unknown = null;
   try {
-    const response = await fetch(endpoint, withSiteRecordProxyRequestInit(params.site, {
+    const response = await fetchWithManagementTimeout(endpoint, withSiteRecordProxyRequestInit(params.site, {
       method: 'POST',
       headers,
       body: JSON.stringify({ refresh_token: refreshToken }),

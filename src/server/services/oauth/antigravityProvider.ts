@@ -1,5 +1,5 @@
-import { fetch } from 'undici';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import type { OAuthProviderDefinition } from './providers.js';
 
 export const ANTIGRAVITY_OAUTH_PROVIDER = 'antigravity';
@@ -113,7 +113,7 @@ async function callAntigravityInternalApi<T>(
   body: Record<string, unknown>,
   proxyUrl?: string | null,
 ): Promise<T | undefined> {
-  const response = await fetch(
+  const response = await fetchWithManagementTimeout(
     `${ANTIGRAVITY_UPSTREAM_BASE_URL}/${ANTIGRAVITY_INTERNAL_API_VERSION}:${method}`,
     withExplicitProxyRequestInit(proxyUrl, {
       method: 'POST',
@@ -136,7 +136,7 @@ async function postAntigravityToken(
   body: URLSearchParams,
   proxyUrl?: string | null,
 ) {
-  const response = await fetch(ANTIGRAVITY_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(ANTIGRAVITY_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -168,7 +168,7 @@ async function fetchAntigravityUserEmail(
   accessToken: string,
   proxyUrl?: string | null,
 ): Promise<string | undefined> {
-  const response = await fetch(ANTIGRAVITY_USERINFO_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(ANTIGRAVITY_USERINFO_URL, withExplicitProxyRequestInit(proxyUrl, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',

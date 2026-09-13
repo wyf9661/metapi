@@ -1,6 +1,6 @@
-import { fetch } from 'undici';
 import { config } from '../../config.js';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import type { OAuthProviderDefinition } from './providers.js';
 
 export const GEMINI_CLI_OAUTH_PROVIDER = 'gemini-cli';
@@ -152,7 +152,7 @@ async function postGeminiToken(
   body: URLSearchParams,
   proxyUrl?: string | null,
 ) {
-  const response = await fetch(GEMINI_CLI_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(GEMINI_CLI_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -184,7 +184,7 @@ async function fetchGeminiUserEmail(
   accessToken: string,
   proxyUrl?: string | null,
 ): Promise<string | undefined> {
-  const response = await fetch(GEMINI_CLI_USERINFO_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(GEMINI_CLI_USERINFO_URL, withExplicitProxyRequestInit(proxyUrl, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
@@ -201,7 +201,7 @@ async function callGeminiCliInternalApi<T>(
   body: Record<string, unknown>,
   proxyUrl?: string | null,
 ): Promise<T> {
-  const response = await fetch(
+  const response = await fetchWithManagementTimeout(
     `${GEMINI_CLI_UPSTREAM_BASE_URL}/${GEMINI_CLI_INTERNAL_API_VERSION}:${method}`,
     withExplicitProxyRequestInit(proxyUrl, {
       method: 'POST',
@@ -223,7 +223,7 @@ async function callGeminiCliInternalApi<T>(
 }
 
 async function fetchGcpProjects(accessToken: string, proxyUrl?: string | null): Promise<string[]> {
-  const response = await fetch(GEMINI_CLI_PROJECTS_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(GEMINI_CLI_PROJECTS_URL, withExplicitProxyRequestInit(proxyUrl, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
@@ -244,7 +244,7 @@ async function checkCloudAIAPIEnabled(
   projectId: string,
   proxyUrl?: string | null,
 ): Promise<void> {
-  const checkResponse = await fetch(
+  const checkResponse = await fetchWithManagementTimeout(
     `${GEMINI_CLI_SERVICE_USAGE_URL}/projects/${encodeURIComponent(projectId)}/services/${encodeURIComponent(GEMINI_CLI_REQUIRED_SERVICE)}`,
     withExplicitProxyRequestInit(proxyUrl, {
       headers: {
@@ -263,7 +263,7 @@ async function checkCloudAIAPIEnabled(
     }
   }
 
-  const response = await fetch(
+  const response = await fetchWithManagementTimeout(
     `${GEMINI_CLI_SERVICE_USAGE_URL}/projects/${encodeURIComponent(projectId)}/services/${encodeURIComponent(GEMINI_CLI_REQUIRED_SERVICE)}:enable`,
     withExplicitProxyRequestInit(proxyUrl, {
       method: 'POST',

@@ -1,7 +1,7 @@
-import { fetch } from 'undici';
 import { config } from '../../config.js';
 import { inferCodexOfficialOriginator } from '../../shared/codexClientFamily.js';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import { createPkceChallenge } from './sessionStore.js';
 import type { OAuthProviderDefinition } from './providers.js';
 
@@ -112,7 +112,7 @@ async function exchangeCodexToken(
   form: URLSearchParams,
   proxyUrl?: string | null,
 ): Promise<CodexTokenExchangeResult> {
-  const response = await fetch(CODEX_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(CODEX_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

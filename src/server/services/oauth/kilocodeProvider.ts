@@ -1,5 +1,5 @@
-import { fetch } from 'undici';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import type {
   OAuthDeviceFlowPollResult,
   OAuthDeviceFlowStartResult,
@@ -88,7 +88,7 @@ export const kilocodeOauthProvider: OAuthProviderDefinition = {
     return { 'X-Kilocode-OrganizationID': orgId };
   },
   startDeviceFlow: async (input): Promise<OAuthDeviceFlowStartResult> => {
-    const response = await fetch(
+    const response = await fetchWithManagementTimeout(
       KILOCODE_INITIATE_URL,
       withExplicitProxyRequestInit(input.proxyUrl, {
         method: 'POST',
@@ -125,7 +125,7 @@ export const kilocodeOauthProvider: OAuthProviderDefinition = {
     };
   },
   pollDeviceFlow: async (input): Promise<OAuthDeviceFlowPollResult> => {
-    const response = await fetch(
+    const response = await fetchWithManagementTimeout(
       `${KILOCODE_POLL_URL_BASE}/${encodeURIComponent(input.deviceCode)}`,
       withExplicitProxyRequestInit(input.proxyUrl, {
         method: 'GET',
@@ -157,7 +157,7 @@ export const kilocodeOauthProvider: OAuthProviderDefinition = {
     // 拉取组织 ID，转发时注入 X-Kilocode-OrganizationID（9router kilocodeOrg hook）
     let orgId: string | undefined;
     try {
-      const profileResponse = await fetch(
+      const profileResponse = await fetchWithManagementTimeout(
         `${KILOCODE_OAUTH_BASE_URL}/api/profile`,
         withExplicitProxyRequestInit(input.proxyUrl, {
           method: 'GET',

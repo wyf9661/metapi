@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { fetch } from 'undici';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import { createPkceChallenge } from './sessionStore.js';
 import type {
   OAuthProviderDefinition,
@@ -91,7 +91,7 @@ async function exchangeTokenJson(
   if (input.basicAuth) {
     headers.Authorization = `Basic ${Buffer.from(`${input.clientId}:${input.clientSecret || ''}`).toString('base64')}`;
   }
-  const response = await fetch(input.tokenUrl, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(input.tokenUrl, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers,
     body: input.tokenJsonBody
@@ -181,7 +181,7 @@ function createAuthCodeOauthProvider(input: AuthCodeProviderInput): OAuthProvide
       if (input.basicAuth) {
         headers.Authorization = `Basic ${Buffer.from(`${input.clientId}:${input.clientSecret || ''}`).toString('base64')}`;
       }
-      const response = await fetch(input.refreshUrl, withExplicitProxyRequestInit(proxyUrl, {
+      const response = await fetchWithManagementTimeout(input.refreshUrl, withExplicitProxyRequestInit(proxyUrl, {
         method: 'POST',
         headers,
         body: new URLSearchParams({
@@ -262,7 +262,7 @@ export const iflowOauthProvider = createAuthCodeOauthProvider({
   postExchange: async (tokens) => {
     const accessToken = asTrimmedString(tokens.access_token);
     if (!accessToken) throw new Error('iflow token missing access_token');
-    const response = await fetch(
+    const response = await fetchWithManagementTimeout(
       `https://iflow.cn/api/oauth/getUserInfo?accessToken=${encodeURIComponent(accessToken)}`,
       { headers: { Accept: 'application/json' } },
     );
@@ -368,7 +368,7 @@ async function fetchTraeLoginHost(loginTraceId: string): Promise<string> {
   let lastError = 'no successful response';
   for (const url of TRAE_LOGIN_GUIDANCE_URLS) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithManagementTimeout(url, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': TRAE_USER_AGENT },
         body,
@@ -477,7 +477,7 @@ export const traeOauthProvider: OAuthProviderDefinition = {
     let lastError = 'no successful response';
     for (const url of TRAE_EXCHANGE_URLS) {
       try {
-        const res = await fetch(url, {
+        const res = await fetchWithManagementTimeout(url, {
           method: 'POST',
           headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': TRAE_USER_AGENT },
           body,
@@ -511,7 +511,7 @@ export const traeOauthProvider: OAuthProviderDefinition = {
         if (refreshToken) exchange.refreshToken = refreshToken;
         // 拉取用户信息（尽力而为）
         try {
-          const userRes = await fetch(TRAE_USER_INFO_URLS[0]!, {
+          const userRes = await fetchWithManagementTimeout(TRAE_USER_INFO_URLS[0]!, {
             method: 'POST',
             headers: {
               Accept: 'application/json',
@@ -543,7 +543,7 @@ export const traeOauthProvider: OAuthProviderDefinition = {
   },
   refreshAccessToken: async ({ refreshToken }) => {
     // Trae 的 refresh 与 exchange 同端点，用 refresh_token 换新 token（9router 同款）
-    const response = await fetch(TRAE_EXCHANGE_URLS[0]!, {
+    const response = await fetchWithManagementTimeout(TRAE_EXCHANGE_URLS[0]!, {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': TRAE_USER_AGENT },
       body: JSON.stringify({ refresh_token: refreshToken, grant_type: 'refresh_token', client_id: TRAE_CLIENT_ID }),
@@ -625,7 +625,7 @@ export const clinepassOauthProvider: OAuthProviderDefinition = {
     }, proxyUrl);
   },
   refreshAccessToken: async ({ refreshToken, proxyUrl }) => {
-    const response = await fetch('https://api.cline.bot/api/v1/auth/refresh', withExplicitProxyRequestInit(proxyUrl, {
+    const response = await fetchWithManagementTimeout('https://api.cline.bot/api/v1/auth/refresh', withExplicitProxyRequestInit(proxyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),

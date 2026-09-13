@@ -1,6 +1,6 @@
-import { fetch } from 'undici';
 import { config } from '../../config.js';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import { createPkceChallenge } from './sessionStore.js';
 import type { OAuthProviderDefinition } from './providers.js';
 
@@ -82,7 +82,7 @@ async function postClaudeToken(
   body: Record<string, unknown>,
   proxyUrl?: string | null,
 ) {
-  const response = await fetch(CLAUDE_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(CLAUDE_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

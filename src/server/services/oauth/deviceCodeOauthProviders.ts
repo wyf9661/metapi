@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { fetch } from 'undici';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import type {
   OAuthDeviceFlowPollResult,
   OAuthDeviceFlowStartResult,
@@ -89,7 +89,7 @@ async function requestDeviceCodeJson(
     ...(input.extraDeviceBody || {}),
   };
   const body = new URLSearchParams(bodyParams);
-  const response = await fetch(input.deviceCodeUrl, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(input.deviceCodeUrl, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -111,7 +111,7 @@ async function pollDeviceTokenJson(
   proxyUrl?: string | null,
   deviceId?: string,
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
-  const response = await fetch(input.tokenUrl, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(input.tokenUrl, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -179,7 +179,7 @@ function createDeviceCodeOauthProvider(input: DeviceCodeProviderInput): OAuthPro
       if (!input.refreshUrl) {
         throw new Error(`${input.label} 不提供 token 刷新，过期后请重新授权`);
       }
-      const response = await fetch(input.refreshUrl, withExplicitProxyRequestInit(proxyUrl, {
+      const response = await fetchWithManagementTimeout(input.refreshUrl, withExplicitProxyRequestInit(proxyUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -298,7 +298,7 @@ export const githubOauthProvider = createDeviceCodeOauthProvider({
     };
     const extra: Record<string, unknown> = {};
     try {
-      const copilotRes = await fetch('https://api.github.com/copilot_internal/v2/token', { headers });
+      const copilotRes = await fetchWithManagementTimeout('https://api.github.com/copilot_internal/v2/token', { headers });
       if (copilotRes.ok) {
         const copilot = await copilotRes.json() as { token?: unknown; expires_at?: unknown };
         extra.copilotToken = copilot.token;
@@ -306,7 +306,7 @@ export const githubOauthProvider = createDeviceCodeOauthProvider({
       }
     } catch { /* non-fatal */ }
     try {
-      const userRes = await fetch('https://api.github.com/user', { headers });
+      const userRes = await fetchWithManagementTimeout('https://api.github.com/user', { headers });
       if (userRes.ok) {
         const user = await userRes.json() as { login?: unknown; id?: unknown; name?: unknown; email?: unknown };
         extra.githubUserId = user.id;
@@ -360,7 +360,7 @@ export const grokCliOauthProvider = createDeviceCodeOauthProvider({
   extraDeviceBody: { referrer: 'grok-build' },
   postExchange: async (tokens) => {
     try {
-      const res = await fetch('https://cli-chat-proxy.grok.com/v1/user', {
+      const res = await fetchWithManagementTimeout('https://cli-chat-proxy.grok.com/v1/user', {
         headers: {
           Authorization: `Bearer ${tokens.access_token}`,
           Accept: 'application/json',

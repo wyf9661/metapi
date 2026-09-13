@@ -1,5 +1,5 @@
-import { fetch } from 'undici';
 import { withExplicitProxyRequestInit } from '../siteProxy.js';
+import { fetchWithManagementTimeout } from '../platforms/upstreamRequestTimeout.js';
 import type {
   OAuthProviderDefinition,
   OAuthProviderExchangeResult,
@@ -112,7 +112,7 @@ export async function exchangeClineToken(
   body: Record<string, unknown>,
   proxyUrl?: string | null,
 ): Promise<OAuthProviderExchangeResult> {
-  const response = await fetch(CLINE_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
+  const response = await fetchWithManagementTimeout(CLINE_TOKEN_URL, withExplicitProxyRequestInit(proxyUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -186,7 +186,7 @@ export const clineOauthProvider: OAuthProviderDefinition = {
     }, proxyUrl);
   },
   refreshAccessToken: async ({ refreshToken, proxyUrl }): Promise<OAuthProviderRefreshResult> => {
-    const response = await fetch(CLINE_REFRESH_URL, withExplicitProxyRequestInit(proxyUrl, {
+    const response = await fetchWithManagementTimeout(CLINE_REFRESH_URL, withExplicitProxyRequestInit(proxyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
