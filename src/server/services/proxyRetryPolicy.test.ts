@@ -185,6 +185,10 @@ describe('proxyRetryPolicy', () => {
     expect(isRecoveringTransientFailure(403, 'This organization has been disabled.')).toBe(false);
     expect(isRecoveringTransientFailure(403, 'Your access was terminated')).toBe(false);
     expect(isRecoveringTransientFailure(401, 'This account has been deactivated.')).toBe(false);
+    // Empty-content 200s are a persisted channel defect, not a transient block:
+    // same-channel retries must not engage (failover handles them instead).
+    expect(isRecoveringTransientFailure(502, 'Upstream returned empty content')).toBe(false);
+    expect(isRecoveringTransientFailure(502, 'upstream returned empty content')).toBe(false);
   });
 
   it('returns zero backoff when disabled or not a recovering failure', () => {
@@ -205,6 +209,8 @@ describe('proxyRetryPolicy', () => {
     // Not for credential death / request-shape errors.
     expect(canRetryInPlaceForRecoveringFailure(0, 401, 'invalid access token', 800)).toBe(false);
     expect(canRetryInPlaceForRecoveringFailure(0, 400, 'invalid request body', 800)).toBe(false);
+    // Not for empty-content channel defects either.
+    expect(canRetryInPlaceForRecoveringFailure(0, 502, 'Upstream returned empty content', 800)).toBe(false);
     // Backoff disabled → never.
     expect(canRetryInPlaceForRecoveringFailure(0, 403, 'forbidden', 0)).toBe(false);
   });
@@ -222,6 +228,8 @@ describe('proxyRetryPolicy', () => {
     // Non-recovering failures never grace-retry.
     expect(shouldGraceRetryInPlace(0, 8000, 401, 'invalid access token')).toBe(false);
     expect(shouldGraceRetryInPlace(0, 8000, 400, 'invalid request body')).toBe(false);
+    // Empty-content 200s are a persisted channel defect, not a transient block.
+    expect(shouldGraceRetryInPlace(1000, 8000, 502, 'Upstream returned empty content')).toBe(false);
     // Invalid elapsed time → never.
     expect(shouldGraceRetryInPlace(-1, 8000, 403, 'forbidden')).toBe(false);
     expect(shouldGraceRetryInPlace(Number.NaN, 8000, 403, 'forbidden')).toBe(false);

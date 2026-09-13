@@ -9,6 +9,16 @@ import {
 export const RETRYABLE_TIMEOUT_PATTERNS = SHARED_RETRYABLE_TIMEOUT_PATTERNS;
 
 /**
+ * Failure text emitted by the proxy failure judge / stream transformers when an
+ * upstream completes with no usable output. A text predicate (not an enum) is
+ * deliberate: the same message crosses the judge, stream terminal results and
+ * the retry policy without a shared failure-code type.
+ */
+export function isEmptyContentFailureText(upstreamErrorText?: string | null): boolean {
+  return /empty content/i.test(upstreamErrorText || '');
+}
+
+/**
  * Protocol / policy failures that will not improve by switching channel with the
  * same client request shape (after in-channel endpoint cascade already ran).
  * Fail fast instead of burning the multi-channel retry budget.
@@ -44,6 +54,12 @@ export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErro
  * pausing would only add latency to failures that will not self-heal.
  */
 export function isRecoveringTransientFailure(status: number, upstreamErrorText?: string | null): boolean {
+  // A 200-with-empty-body ('Upstream returned empty content') is a persisted
+  // channel defect — the relay answers instantly with nothing — not an edge
+  // block that clears within seconds. Same-channel grace/in-place retries only
+  // burn the failover budget (observed: three same-channel attempts in 7s on a
+  // dead relay channel), so fail over to the next channel immediately.
+  if (isEmptyContentFailureText(upstreamErrorText)) return false;
   if (status === 429) return true;
   if (status >= 500) return true;
   const decision = classifyProxyFailure({ status, errorText: upstreamErrorText || '' });
