@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isTunnelClientView } from './tunnelView.js';
 
-function makeHost(hostname: string): string {
-  // stub window.location.hostname
-  return hostname;
-}
-
 describe('isTunnelClientView', () => {
   const savedWindow = globalThis.window;
 
