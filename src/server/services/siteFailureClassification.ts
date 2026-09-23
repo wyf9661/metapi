@@ -497,8 +497,8 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       class: 'local_capacity',
       retryChannel: true,
       cascadeEndpoint: false,
-      cooldownWeight: 0,
-      cooldownScope: 'none',
+      cooldownWeight: 0.1,
+      cooldownScope: 'channel_model',
     };
   }
 

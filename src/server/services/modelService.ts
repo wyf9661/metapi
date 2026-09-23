@@ -552,6 +552,21 @@ export async function probeSiteModels(
     });
   }
 
+  // A successful probe is positive proof the upstream is reachable: refresh the
+  // connectivity mark, otherwise a stale `connectivity = false` (soft-avoided by
+  // the router) is never contradicted — probes only bumped checkedAt, which kept
+  // the negative mark "fresh" so its TTL never expired.
+  const supportedModels = details.filter((d) => d.status === 'supported').map((d) => d.modelName);
+  if (supportedModels.length > 0) {
+    await db.update(schema.modelAvailability)
+      .set({ available: true, connectivity: true, checkedAt: new Date().toISOString() })
+      .where(and(
+        eq(schema.modelAvailability.accountId, account.id),
+        inArray(schema.modelAvailability.modelName, supportedModels),
+      ))
+      .run();
+  }
+
   return {
     success: true,
     scope,
@@ -642,6 +657,19 @@ async function runPostRefreshProbeIfEnabled(params: {
     rebuildTokenRoutesFromAvailability().catch((err) => {
       console.warn('[post-refresh-probe] route rebuild failed', err);
     });
+  }
+
+  // Same positive-proof refresh as the manual-probe path: a supported verdict
+  // clears a stale `connectivity = false` instead of letting it ride on TTL.
+  const supportedModels = details.filter((d) => d.status === 'supported').map((d) => d.modelName);
+  if (supportedModels.length > 0) {
+    await db.update(schema.modelAvailability)
+      .set({ available: true, connectivity: true, checkedAt: new Date().toISOString() })
+      .where(and(
+        eq(schema.modelAvailability.accountId, params.account.id),
+        inArray(schema.modelAvailability.modelName, supportedModels),
+      ))
+      .run();
   }
 
   return {

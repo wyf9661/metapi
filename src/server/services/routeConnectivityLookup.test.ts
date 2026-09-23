@@ -26,6 +26,10 @@ describe('routeConnectivityLookup', () => {
     expect(recentFalse).toBe(false);
     expect(staleFalse).toBeNull();
     expect(recentTrue).toBe(true);
+    // Negative marks expire within the hour: a recovered upstream must not stay
+    // soft-avoided for a whole day.
+    expect(freshnessForConnectivity(false, now - 2 * 60 * 60 * 1000, now)).toBeNull();
+    expect(freshnessForConnectivity(false, now - 30 * 60 * 1000, now)).toBe(false);
   });
 
   it('soft-avoids disconnected candidates only when alternatives exist', () => {

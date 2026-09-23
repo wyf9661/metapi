@@ -761,6 +761,30 @@ export function createSurfaceFailureToolkit(input: {
 
   return {
     log,
+    /**
+     * Record a failure mark for the selected channel without writing a proxy
+     * log row or deciding the retry. Paths that already log and decide locally
+     * (e.g. the channel-lease timeout) still must leave a cooldown mark,
+     * otherwise the router immediately reselects the same saturated channel.
+     */
+    async recordChannelFailure(args: {
+      selected: SurfaceSelectedChannel;
+      modelName: string;
+      status: number;
+      errorText: string;
+    }): Promise<void> {
+      const disposition = buildProxyFailureDisposition({
+        status: args.status,
+        errorText: args.errorText,
+        modelName: args.modelName,
+      });
+      if (!disposition.incrementFailure) return;
+      await tokenRouter.recordFailure(args.selected.channel.id, {
+        status: args.status,
+        errorText: args.errorText,
+        modelName: args.modelName,
+      });
+    },
     async handleUpstreamFailure(args: {
       selected: SurfaceSelectedChannel;
       requestedModel: string;

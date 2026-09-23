@@ -55,7 +55,10 @@ describe('siteFailureClassification', () => {
     });
   });
 
-  it('classifies local channel capacity as non-health failure', () => {
+  it('records a light failure for local channel capacity so the router avoids it', () => {
+    // A saturated channel ("Channel busy") must leave a failure mark: with
+    // cooldownScope 'none' the router skipped recordFailure entirely, so the
+    // very next request picked the same saturated channel again.
     expect(buildProxyFailureDisposition({
       status: 503,
       errorText: 'Channel busy: no session slot available',
@@ -63,10 +66,10 @@ describe('siteFailureClassification', () => {
       class: 'local_capacity',
       retryAction: 'failover_channel',
       retryChannel: true,
-      cooldownScope: 'none',
-      incrementFailure: false,
-      clearSticky: false,
-      clearLastSuccess: false,
+      cooldownScope: 'channel_model',
+      incrementFailure: true,
+      clearSticky: true,
+      clearLastSuccess: true,
     });
   });
 

@@ -266,6 +266,14 @@ export async function handleClaudeCountTokensSurfaceRequest(
         errorMessage: busyMessage,
         retryCount,
       });
+      // A saturated channel must leave a failure mark: without one the retry
+      // below reselects the same "Channel busy" channel.
+      await failureToolkit.recordChannelFailure({
+        selected,
+        modelName,
+        status: 503,
+        errorText: busyMessage,
+      });
       if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
         retryCount += 1;
         continue;

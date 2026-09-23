@@ -25,8 +25,13 @@ export const CONNECTIVITY_FACTOR_TRUE = 1.25;
 export const CONNECTIVITY_FACTOR_NULL = 1.0;
 export const CONNECTIVITY_FACTOR_FALSE = 0.12;
 
-/** Stale false should not permanently black-hole a channel. */
-const CONNECTIVITY_FALSE_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * Stale false should not permanently black-hole a channel. A supported probe
+ * now writes connectivity=true and clears it immediately; this TTL is the
+ * fallback for when no probe runs at all, so keep it short enough that a
+ * recovered upstream is retried within the hour.
+ */
+const CONNECTIVITY_FALSE_TTL_MS = 60 * 60 * 1000;
 /** Positive proofs stay trusted longer. */
 const CONNECTIVITY_TRUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
