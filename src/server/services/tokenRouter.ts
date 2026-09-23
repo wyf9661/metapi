@@ -30,6 +30,7 @@ import {
 
 import { resolveDownstreamPolicyModel } from './downstreamPolicyTypes.js';
 import { type DownstreamRoutingPolicy } from './downstreamPolicyTypes.js';
+import { aggregateSiteScoresPerAccount } from './tokenRouterSiteAggregation.js';
 
 import { ensureSiteContextCapabilityLoaded } from './siteContextCapabilityService.js';
 import { filterRecentlyFailedCandidates, isChannelRecentlyFailed } from './tokenRouterFailurePolicy.js';
@@ -505,10 +506,15 @@ export class TokenRouter {
       // reached ceil(1 / probability) calls since its last selection gets one
       // real request before weighted sampling resumes.
       if (active.length > 1) {
-        const siteScores = new Map<number, number>();
-        for (const row of active) {
-          siteScores.set(row.siteId, (siteScores.get(row.siteId) ?? 0) + row.score);
-        }
+        // Site-level aggregation is quota-aware: best key per ACCOUNT (+ bounded
+        // bonus for extra same-account keys), summed over accounts. Sharing one
+        // quota pool must not multiply a site's share by its key count.
+        const siteScores = aggregateSiteScoresPerAccount(active.map((row) => ({
+          siteId: row.siteId,
+          accountId: row.accountId,
+          channelId: row.channelId,
+          score: row.score,
+        })));
         const siteIds = [...siteScores.keys()];
         const bounded = selectWithBoundedGap(
           siteIds.map((siteId) => siteScores.get(siteId) ?? 0),
