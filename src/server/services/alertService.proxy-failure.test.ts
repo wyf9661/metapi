@@ -1,11 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  __resetProxyFailureNotifyStateForTests,
-  createProxyFailureNotifyKey,
-  evaluateProxyFailureNotifyThrottle,
   formatProxyFailureAlert,
-  PROXY_FAILURE_NOTIFY_COOLDOWN_MS,
-  shouldPushProxyFailureNotification,
 } from './alertService.js';
 
 describe('formatProxyFailureAlert', () => {
@@ -44,36 +39,5 @@ describe('formatProxyFailureAlert', () => {
       configuredAttempts: 3,
     });
     expect(alert.title).toBe('代理无可用渠道');
-  });
-});
-
-describe('proxy failure notify policy', () => {
-  beforeEach(() => {
-    __resetProxyFailureNotifyStateForTests();
-  });
-
-  it('never pushes external notify for proxy failures (events-only)', () => {
-    expect(shouldPushProxyFailureNotification('request_failed')).toBe(false);
-    expect(shouldPushProxyFailureNotification('all_attempted_channels_failed')).toBe(false);
-    expect(shouldPushProxyFailureNotification('no_available_channels')).toBe(false);
-  });
-
-  it('throttles same model+outcome for 10 minutes regardless of reason text', () => {
-    const key = createProxyFailureNotifyKey('GPT-5.6-sol', 'no_available_channels');
-    expect(key).toBe('no_available_channels||gpt-5.6-sol');
-
-    const first = evaluateProxyFailureNotifyThrottle('gpt-5.6-sol', 'no_available_channels', 1_000);
-    expect(first.shouldSend).toBe(true);
-
-    const second = evaluateProxyFailureNotifyThrottle('gpt-5.6-sol', 'no_available_channels', 2_000);
-    expect(second.shouldSend).toBe(false);
-
-    const afterCooldown = evaluateProxyFailureNotifyThrottle(
-      'gpt-5.6-sol',
-      'no_available_channels',
-      1_000 + PROXY_FAILURE_NOTIFY_COOLDOWN_MS + 1,
-    );
-    expect(afterCooldown.shouldSend).toBe(true);
-    expect(afterCooldown.suppressedSinceLast).toBe(1);
   });
 });

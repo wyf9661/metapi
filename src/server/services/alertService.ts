@@ -5,11 +5,6 @@ import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { appendSessionTokenRebindHint } from './alertRules.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
 
-/** Proxy midstream noise is high; suppress external push unless terminal multi-channel failure. */
-export const PROXY_FAILURE_NOTIFY_COOLDOWN_MS = 10 * 60 * 1000;
-
-const proxyFailureNotifyState = new Map<string, { lastSentAtMs: number; suppressedCount: number }>();
-
 /**
  * Token-expiry sightings need confirmation before full alerting. A single
  * 401/token-looking error is often transient (upstream WAF, gateway default
@@ -178,53 +173,13 @@ export function formatProxyFailureAlert(params: ProxyFailureAlertParams): {
 }
 
 /**
- * All proxy failure alerts are now events-only (stored in the events table,
- * never pushed to DingTalk/email/bark). The previous behavior of pushing
- * only 'no_available_channels' externally was too noisy for group bots.
- */
-export function shouldPushProxyFailureNotification(
-  _outcome: ProxyFailureOutcome = 'request_failed',
-): boolean {
-  return false;
-}
-
-/** Throttle key ignores exact reason text so the same model cannot flood. */
-export function createProxyFailureNotifyKey(model: string, outcome: ProxyFailureOutcome): string {
-  return `${outcome}||${String(model || '').trim().toLowerCase()}`;
-}
-
-export function evaluateProxyFailureNotifyThrottle(
-  model: string,
-  outcome: ProxyFailureOutcome,
-  nowMs = Date.now(),
-  cooldownMs = PROXY_FAILURE_NOTIFY_COOLDOWN_MS,
-): { shouldSend: boolean; suppressedSinceLast: number } {
-  if (cooldownMs <= 0) {
-    return { shouldSend: true, suppressedSinceLast: 0 };
-  }
-  const key = createProxyFailureNotifyKey(model, outcome);
-  const current = proxyFailureNotifyState.get(key);
-  if (!current) {
-    proxyFailureNotifyState.set(key, { lastSentAtMs: nowMs, suppressedCount: 0 });
-    return { shouldSend: true, suppressedSinceLast: 0 };
-  }
-  if (nowMs - current.lastSentAtMs < cooldownMs) {
-    current.suppressedCount += 1;
-    proxyFailureNotifyState.set(key, current);
-    return { shouldSend: false, suppressedSinceLast: 0 };
-  }
-  const suppressedSinceLast = current.suppressedCount;
-  proxyFailureNotifyState.set(key, { lastSentAtMs: nowMs, suppressedCount: 0 });
-  return { shouldSend: true, suppressedSinceLast };
-}
-
-export function __resetProxyFailureNotifyStateForTests(): void {
-  proxyFailureNotifyState.clear();
-}
-
-/**
  * Legacy name retained for callers/tests.
  * Default title is "代理请求失败", not "代理全部失败".
+ *
+ * Proxy failure alerts are events-only: recorded in the events table, never
+ * pushed to DingTalk/email/bark (the previous external push was too noisy for
+ * group bots; the push path and its throttle were removed — reintroduce a
+ * configurable push in notifyService if ever needed again).
  */
 export async function reportProxyAllFailed(params: ProxyFailureAlertParams) {
   const createdAt = formatUtcSqlDateTime(new Date());
@@ -239,24 +194,4 @@ export async function reportProxyAllFailed(params: ProxyFailureAlertParams) {
     relatedType: 'route',
     createdAt,
   }).run();
-
-  if (!shouldPushProxyFailureNotification(outcome)) {
-    return;
-  }
-
-  const throttle = evaluateProxyFailureNotifyThrottle(params.model, outcome);
-  if (!throttle.shouldSend) {
-    return;
-  }
-
-  let message = formatted.message;
-  if (throttle.suppressedSinceLast > 0) {
-    message = `${message}\n\n[通知合并] 过去 ${Math.round(PROXY_FAILURE_NOTIFY_COOLDOWN_MS / 60_000)} 分钟内同模型同类告警已抑制 ${throttle.suppressedSinceLast} 次`;
-  }
-
-  await sendNotification(
-    formatted.title,
-    message,
-    'error',
-  );
 }
