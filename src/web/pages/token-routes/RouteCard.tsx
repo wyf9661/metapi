@@ -676,7 +676,7 @@ function RouteCardInner({
             ) : routeIcon.kind === 'text' ? (
               <span style={{ fontSize: 14, lineHeight: 1 }}>{routeIcon.value}</span>
             ) : routeIcon.kind === 'auto' && brand ? (
-              <BrandGlyph brand={brand} alt={title} size={18} fallbackText={title} />
+              <BrandGlyph brand={brand} icon={brand.modelIcon || undefined} alt={title} size={18} fallbackText={title} />
             ) : routeIcon.kind === 'auto' ? (
               <InlineBrandIcon model={route.modelPattern} size={18} />
             ) : null}
@@ -845,7 +845,7 @@ function RouteCardInner({
                   {routeIcon.value}
                 </span>
               ) : routeIcon.kind === 'auto' && brand ? (
-                <BrandGlyph brand={brand} alt={title} size={20} fallbackText={title} />
+                <BrandGlyph brand={brand} icon={brand.modelIcon || undefined} alt={title} size={20} fallbackText={title} />
               ) : routeIcon.kind === 'auto' ? (
                 <InlineBrandIcon model={route.modelPattern} size={20} />
               ) : null}
@@ -985,7 +985,7 @@ function RouteCardInner({
                     {routeIcon.value}
                   </span>
                 ) : routeIcon.kind === 'auto' && brand ? (
-                  <BrandGlyph brand={brand} alt={title} size={18} fallbackText={title} />
+                  <BrandGlyph brand={brand} icon={brand.modelIcon || undefined} alt={title} size={18} fallbackText={title} />
                 ) : routeIcon.kind === 'auto' ? (
                   <InlineBrandIcon model={route.modelPattern} size={18} />
                 ) : null}
