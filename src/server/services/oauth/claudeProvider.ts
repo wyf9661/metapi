@@ -6,7 +6,10 @@ import type { OAuthProviderDefinition } from './providers.js';
 
 export const CLAUDE_OAUTH_PROVIDER = 'claude';
 export const CLAUDE_AUTH_URL = 'https://claude.ai/oauth/authorize';
-export const CLAUDE_TOKEN_URL = 'https://api.anthropic.com/v1/oauth/token';
+// Claude Code consumer OAuth exchanges at console.anthropic.com. The
+// api.anthropic.com/v1/oauth/token endpoint belongs to the enterprise WIF
+// federation flow and will reject consumer authorization codes.
+export const CLAUDE_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
 export const CLAUDE_CLIENT_ID = config.claudeClientId;
 export const CLAUDE_LOOPBACK_CALLBACK_PORT = 54545;
 export const CLAUDE_LOOPBACK_CALLBACK_PATH = '/callback';
