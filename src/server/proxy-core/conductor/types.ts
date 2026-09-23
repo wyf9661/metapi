@@ -38,6 +38,8 @@ export type ExecuteAttemptContext = {
 };
 
 export type ProxyConductorDependencies = {
+  /** Hard ceiling on attempts; bounds the branches that loop without consuming a channel. */
+  maxAttempts?: number;
   selectChannel: (requestedModel: string, downstreamPolicy?: unknown) => Promise<SelectedChannelLike | null>;
   previewSelectedChannel?: (requestedModel: string, downstreamPolicy?: unknown) => Promise<SelectedChannelLike | null>;
   selectNextChannel: (

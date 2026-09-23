@@ -8,6 +8,13 @@ import {
 import type { ExecuteInput, ExecuteResult, ProxyConductorDependencies, SelectedChannelLike } from './types.js';
 import { recordFailedAttempt, recordSuccessfulAttempt } from './usageHooks.js';
 
+/**
+ * Hard ceiling on attempts. 'retry_same_channel' and 'refresh_auth' both loop
+ * without consuming a channel from the pool, so without a cap a persistent
+ * retryable failure spins forever.
+ */
+const DEFAULT_MAX_ATTEMPTS = 10;
+
 export class DefaultProxyConductor {
   constructor(private readonly deps: ProxyConductorDependencies) {}
 
@@ -52,6 +59,8 @@ export class DefaultProxyConductor {
       }
 
       const action = failureActionOf(result);
+      const maxAttempts = this.deps.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+
       await recordFailedAttempt(this.deps, selected.channel.id, {
         status: result.status,
         rawErrorText: result.rawErrorText,
@@ -65,6 +74,19 @@ export class DefaultProxyConductor {
         return {
           ok: false,
           reason: 'terminal',
+          selected,
+          status: result.status,
+          rawErrorText: result.rawErrorText,
+          attempts,
+        };
+      }
+
+      // Only the branches below loop without consuming a channel from the pool:
+      // cap them so a persistently retryable failure cannot spin forever.
+      if ((shouldRetrySameChannel(action) || shouldRefreshAuth(action)) && attempts >= maxAttempts) {
+        return {
+          ok: false,
+          reason: 'failed',
           selected,
           status: result.status,
           rawErrorText: result.rawErrorText,
@@ -108,6 +130,8 @@ export class DefaultProxyConductor {
         continue;
       }
 
+      // 'stop' and any unrecognized action land here: one failed attempt without
+      // failover. (Terminal failures were handled above with different semantics.)
       return {
         ok: false,
         reason: 'failed',

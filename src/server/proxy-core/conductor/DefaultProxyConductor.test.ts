@@ -90,6 +90,41 @@ describe('DefaultProxyConductor', () => {
     });
   });
 
+  it('stops after maxAttempts when the attempt keeps asking for a same-channel retry', async () => {
+    const selectChannel = vi.fn().mockResolvedValue(baseSelectedChannel);
+    const selectNextChannel = vi.fn();
+    const recordSuccess = vi.fn().mockResolvedValue(undefined);
+    const recordFailure = vi.fn().mockResolvedValue(undefined);
+    const conductor = new DefaultProxyConductor({
+      maxAttempts: 3,
+      selectChannel,
+      selectNextChannel,
+      recordSuccess,
+      recordFailure,
+    });
+    // A persistently retryable failure must not spin forever: same-channel
+    // retry does not consume a channel from the pool.
+    const attempt = vi.fn().mockResolvedValue({
+      ok: false,
+      action: 'retry_same_channel',
+      status: 429,
+      rawErrorText: 'rate limited',
+    });
+
+    const result = await conductor.execute({
+      requestedModel: 'gpt-5.4',
+      attempt,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'failed',
+      attempts: 3,
+    });
+    expect(attempt).toHaveBeenCalledTimes(3);
+    expect(selectNextChannel).not.toHaveBeenCalled();
+  });
+
   it('fails over to the next channel when the attempt asks for failover', async () => {
     const nextSelectedChannel = {
       ...baseSelectedChannel,
