@@ -7,6 +7,7 @@ import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
+import { isTunnelClientView as checkTunnelClientView } from './helpers/tunnelView.js';
 import {
   createCodexDefaultHighReasoningVisualPreset,
   createVisualPayloadRule,
@@ -63,7 +64,6 @@ type RuntimeSettings = {
   logCleanupUsageLogsEnabled: boolean;
   logCleanupProgramLogsEnabled: boolean;
   logCleanupRetentionDays: number;
-  modelAvailabilityProbeEnabled: boolean;
   sensitiveWordDetectionEnabled: boolean;
   antiProbeMinTextLength: number;
   codexUpstreamWebsocketEnabled: boolean;
@@ -124,11 +124,7 @@ type RuntimeDatabaseState = {
 
 export default function Settings() {
   const isMobile = useIsMobile();
-  const isTunnelClientView = typeof window !== 'undefined'
-    && (
-      window.location.hostname.endsWith('.trycloudflare.com')
-      || window.location.hostname.endsWith('.abc-tunnel.us')
-    );
+  const isTunnelClientView = checkTunnelClientView();
   const [runtime, setRuntime] = useState<RuntimeSettings>({
     tunnelDashboardAccess: false,
     tunnelEnabled: false,
@@ -140,7 +136,6 @@ export default function Settings() {
     logCleanupUsageLogsEnabled: false,
     logCleanupProgramLogsEnabled: false,
     logCleanupRetentionDays: 30,
-    modelAvailabilityProbeEnabled: false,
     sensitiveWordDetectionEnabled: true,
     antiProbeMinTextLength: 8,
     codexUpstreamWebsocketEnabled: false,
@@ -429,7 +424,6 @@ export default function Settings() {
         logCleanupRetentionDays: Number(runtimeInfo.logCleanupRetentionDays) >= 1
           ? Math.trunc(Number(runtimeInfo.logCleanupRetentionDays))
           : 30,
-        modelAvailabilityProbeEnabled: !!runtimeInfo.modelAvailabilityProbeEnabled,
         sensitiveWordDetectionEnabled: runtimeInfo.sensitiveWordDetectionEnabled !== false,
         antiProbeMinTextLength: Number(runtimeInfo.antiProbeMinTextLength) >= 1
           ? Math.trunc(Number(runtimeInfo.antiProbeMinTextLength))
@@ -1017,7 +1011,8 @@ export default function Settings() {
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-border-light)',
             background: 'var(--color-bg)',
-            cursor: 'pointer',
+            cursor: isTunnelClientView ? 'not-allowed' : 'pointer',
+            opacity: isTunnelClientView ? 0.55 : 1,
           }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>

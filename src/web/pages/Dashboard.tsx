@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { copyText } from '../clipboard.js';
+import { isTunnelClientView as checkTunnelClientView } from './helpers/tunnelView.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { availabilityColor } from '../components/charts/chartShared.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
@@ -278,11 +279,7 @@ export default function Dashboard({
   const [tunnelBusy, setTunnelBusy] = useState(false);
   const [tunnelError, setTunnelError] = useState<string | null>(null);
   const [localAddress, setLocalAddress] = useState<{ baseUrl: string; port: number } | null>(null);
-  const isTunnelClientView = typeof window !== 'undefined'
-    && (
-      window.location.hostname.endsWith('.trycloudflare.com')
-      || window.location.hostname.endsWith('.abc-tunnel.us')
-    );
+  const isTunnelClientView = checkTunnelClientView();
 
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
