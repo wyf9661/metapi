@@ -395,7 +395,16 @@ export function createCodexWebsocketRuntime(input?: {
       const session = sessionStore.getOrCreate(sessionId);
       const run = session.queue
         .catch(() => undefined)
-        .then(() => sendSessionRequest(session, payload));
+        .then(async () => {
+          session.lastUsedAt = Date.now();
+          session.inFlight += 1;
+          try {
+            return await sendSessionRequest(session, payload);
+          } finally {
+            session.inFlight -= 1;
+            session.lastUsedAt = Date.now();
+          }
+        });
       session.queue = run.then(() => undefined, () => undefined);
       return run;
     },

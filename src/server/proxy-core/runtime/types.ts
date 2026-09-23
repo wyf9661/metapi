@@ -17,6 +17,10 @@ export type CodexWebsocketSession = {
   socket: WebSocket | null;
   socketUrl: string | null;
   queue: Promise<unknown>;
+  /** Last time the session was used (ms epoch). */
+  lastUsedAt: number;
+  /** Number of sends currently executing against this session. */
+  inFlight: number;
 };
 
 export type CodexWebsocketSessionStore = {
