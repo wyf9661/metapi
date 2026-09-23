@@ -60,14 +60,20 @@ let inFlightRefreshModelsAndRebuildRoutes: Promise<{
   refresh: ModelRefreshResult[];
   rebuild: Awaited<ReturnType<typeof rebuildTokenRoutesFromAvailability>>;
 }> | null = null;
-let inFlightRefreshModelsAndRebuildRoutesStartedAtMs = 0;
-
+let inFlightRefreshModelsAndRebuildRoutesHeartbeatMs = 0;
 // A refresh pass can wedge on an unbounded upstream call; the single-flight
 // guard must not hand that stale pass to every later caller forever. After
-// this age, later callers start a fresh pass while the stale one drains in
-// the background (2026-09-12: a wedged pass stayed pending 15h and hung both
-// the scheduler and every request that awaited the refresh).
-const REFRESH_INFLIGHT_MAX_AGE_MS = 10 * 60_000;
+// this much time WITHOUT PROGRESS, later callers start a fresh pass while the
+// stale one drains in the background (2026-09-12: a wedged pass stayed pending
+// 15h and hung both the scheduler and every request that awaited the refresh).
+//
+// Progress is tracked by heartbeat (each finished account batch bumps it), not
+// by the pass start time: a healthy multi-account pass can legitimately run
+// longer than 10 minutes (N batches x 8-12s discovery timeouts + full route
+// rebuild). Age-based staleness would overlap a slow-but-advancing pass with a
+// second one, double-writing route/channel tables; heartbeat-based staleness
+// only fires when the pass is genuinely wedged.
+const REFRESH_INFLIGHT_MAX_IDLE_MS = 5 * 60_000;
 
 type ModelRefreshErrorCode = 'timeout' | 'unauthorized' | 'empty_models' | 'unknown';
 type ModelRefreshSkipCode = 'site_disabled' | 'adapter_or_status';
@@ -1553,6 +1559,12 @@ async function refreshModelsForAllActiveAccounts(): Promise<ModelRefreshResult[]
     const batch = accounts.slice(offset, offset + MODEL_REFRESH_BATCH_SIZE);
     const batchResults = await Promise.all(batch.map(async (account: any) => refreshModelsForAccount(account.id)));
     results.push(...batchResults);
+    // Heartbeat: a finished batch means this pass is advancing, not wedged.
+    // The single-flight staleness guard keys off this timestamp so a healthy
+    // slow pass (N batches x discovery timeouts) is never overlapped by a
+    // second pass mid-run. Uses the injectable clock so tests can drive the
+    // heartbeat/staleness relationship deterministically.
+    inFlightRefreshModelsAndRebuildRoutesHeartbeatMs = refreshInflightNow();
   }
   return results;
 }
@@ -1814,13 +1826,32 @@ async function runRefreshModelsAndRebuildRoutes() {
   return { refresh, rebuild };
 }
 
+// Injectable clock for tests (single-flight staleness uses wall time).
+let refreshInflightNow: () => number = () => Date.now();
+let refreshInflightStaleTakeoversForTests = 0;
+
+/** Test hook: override the clock used by the single-flight staleness guard. */
+export function __setRefreshInflightClockForTests(clock: { now: () => number }): void {
+  refreshInflightNow = clock.now;
+}
+
+/** Test hook: number of times a fresh pass took over an in-flight (stale) pass. */
+export function __getAndResetRefreshInflightStaleTakeoversForTests(): number {
+  const value = refreshInflightStaleTakeoversForTests;
+  refreshInflightStaleTakeoversForTests = 0;
+  return value;
+}
+
 export async function refreshModelsAndRebuildRoutes() {
-  const nowMs = Date.now();
+  const nowMs = refreshInflightNow();
   if (
     inFlightRefreshModelsAndRebuildRoutes
-    && nowMs - inFlightRefreshModelsAndRebuildRoutesStartedAtMs < REFRESH_INFLIGHT_MAX_AGE_MS
+    && nowMs - inFlightRefreshModelsAndRebuildRoutesHeartbeatMs < REFRESH_INFLIGHT_MAX_IDLE_MS
   ) {
     return inFlightRefreshModelsAndRebuildRoutes;
+  }
+  if (inFlightRefreshModelsAndRebuildRoutes) {
+    refreshInflightStaleTakeoversForTests += 1;
   }
 
   let run!: Promise<{
@@ -1838,6 +1869,6 @@ export async function refreshModelsAndRebuildRoutes() {
     }
   })();
   inFlightRefreshModelsAndRebuildRoutes = run;
-  inFlightRefreshModelsAndRebuildRoutesStartedAtMs = nowMs;
+  inFlightRefreshModelsAndRebuildRoutesHeartbeatMs = nowMs;
   return run;
 }
