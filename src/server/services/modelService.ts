@@ -128,6 +128,7 @@ export type ModelRefreshSuccessResult = {
     scope: 'single' | 'all';
     probed: number;
     unsupported: number;
+    inconclusive: number;
     details: Array<{
       modelName: string;
       status: RuntimeModelProbeStatus;
@@ -415,6 +416,7 @@ export type ProbeSiteModelsResult = {
   scope: 'single' | 'all';
   probed: number;
   unsupported: number;
+  inconclusive: number;
   details: Array<{ modelName: string; status: RuntimeModelProbeStatus; latencyMs: number | null; reason?: string }>;
 };
 
@@ -429,7 +431,7 @@ export async function probeSiteModels(
   onProgress?: (event: ProbeSiteModelsProgress) => void,
 ): Promise<ProbeSiteModelsResult> {
   const empty = (scope: 'single' | 'all', error: string): ProbeSiteModelsResult =>
-    ({ success: false, error, scope, probed: 0, unsupported: 0, details: [] });
+    ({ success: false, error, scope, probed: 0, unsupported: 0, inconclusive: 0, details: [] });
 
   const site = await db.select().from(schema.sites).where(eq(schema.sites.id, siteId)).get();
   if (!site) return empty('single', '站点不存在');
@@ -516,7 +518,12 @@ export async function probeSiteModels(
   // Restore original model order for the final details list
   const details = modelsToProbe.map((m) => detailsMap.get(m)!);
 
-  const unsupportedModels = details.filter((d) => d.status === 'unsupported' || d.status === 'inconclusive').map((d) => d.modelName);
+  // Only a definite 'unsupported' verdict may disable a model. 'inconclusive'
+  // means the probe reached no conclusion (timeout / transport error), so
+  // treating it as unsupported would let a single transient failure write a
+  // permanent site_disabled_models row — there is no automatic recovery path.
+  const unsupportedModels = details.filter((d) => d.status === 'unsupported').map((d) => d.modelName);
+  const inconclusiveModels = details.filter((d) => d.status === 'inconclusive').map((d) => d.modelName);
   if (unsupportedModels.length > 0) {
     const checkedAt = new Date().toISOString();
     // Two statements for the whole batch instead of two per model: on SQLite each
@@ -545,7 +552,14 @@ export async function probeSiteModels(
     });
   }
 
-  return { success: true, scope, probed: details.length, unsupported: unsupportedModels.length, details };
+  return {
+    success: true,
+    scope,
+    probed: details.length,
+    unsupported: unsupportedModels.length,
+    inconclusive: inconclusiveModels.length,
+    details,
+  };
 }
 
 async function runPostRefreshProbeIfEnabled(params: {
@@ -596,8 +610,10 @@ async function runPostRefreshProbeIfEnabled(params: {
     }
   }
 
-  // Handle unsupported models
-  const unsupportedModels = details.filter((d) => d.status === 'unsupported' || d.status === 'inconclusive').map((d) => d.modelName);
+  // Handle unsupported models. 'inconclusive' is deliberately excluded: it is
+  // an unfinished probe, not a verdict, and must not disable anything.
+  const unsupportedModels = details.filter((d) => d.status === 'unsupported').map((d) => d.modelName);
+  const inconclusiveModels = details.filter((d) => d.status === 'inconclusive').map((d) => d.modelName);
   if (unsupportedModels.length > 0) {
     const checkedAt = new Date().toISOString();
     // Batched for the same reason as the manual-probe path above.
@@ -632,6 +648,7 @@ async function runPostRefreshProbeIfEnabled(params: {
     scope,
     probed: details.length,
     unsupported: unsupportedModels.length,
+    inconclusive: inconclusiveModels.length,
     details,
   };
 }

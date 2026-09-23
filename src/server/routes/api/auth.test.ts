@@ -99,4 +99,54 @@ describe('auth routes', () => {
     // The bootstrap hint endpoint must stay public for desktop first-run.
     expect(desktopModule.isPublicApiRoute('/api/settings/auth/info')).toBe(true);
   });
+
+  it('only exposes the first-run bootstrap token to loopback clients', async () => {
+    const originalDesktop = process.env.METAPI_DESKTOP;
+    process.env.METAPI_DESKTOP = '1';
+    try {
+      config.authToken = 'bootstrap-secret-token';
+      // No 'auth_token' row persisted → this is the desktop first-run case.
+
+      const loopback = await app.inject({
+        method: 'GET',
+        url: '/api/settings/auth/info',
+        remoteAddress: '127.0.0.1',
+      });
+      expect(loopback.statusCode).toBe(200);
+      expect(loopback.json().bootstrapToken).toBe('bootstrap-secret-token');
+
+      // Same request from the LAN must not publish the live admin token.
+      const lan = await app.inject({
+        method: 'GET',
+        url: '/api/settings/auth/info',
+        remoteAddress: '192.168.1.50',
+      });
+      expect(lan.statusCode).toBe(200);
+      expect(lan.json().bootstrapToken).toBeNull();
+      expect(lan.json().masked).not.toBe('bootstrap-secret-token');
+    } finally {
+      if (originalDesktop === undefined) delete process.env.METAPI_DESKTOP;
+      else process.env.METAPI_DESKTOP = originalDesktop;
+    }
+  });
+
+  it('stops exposing the bootstrap token once the token is persisted', async () => {
+    const originalDesktop = process.env.METAPI_DESKTOP;
+    process.env.METAPI_DESKTOP = '1';
+    try {
+      config.authToken = 'bootstrap-secret-token';
+      await db.insert(schema.settings).values({ key: 'auth_token', value: 'user-set-token' }).run();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/settings/auth/info',
+        remoteAddress: '127.0.0.1',
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().bootstrapToken).toBeNull();
+    } finally {
+      if (originalDesktop === undefined) delete process.env.METAPI_DESKTOP;
+      else process.env.METAPI_DESKTOP = originalDesktop;
+    }
+  });
 });

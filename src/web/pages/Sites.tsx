@@ -788,10 +788,11 @@ export default function Sites() {
               : d.status === 'unsupported'
                 ? (d.latencyExceeded ? `✗ 延迟超限 (${d.latencyMs}ms)` : '✗ 不可用')
               : d.status === 'skipped' ? '— 已跳过'
+              : d.status === 'inconclusive' ? '? 未得出结论'
               : '✗ 不可用';
             const lat = d.latencyMs != null && d.status !== 'skipped' ? ` (${d.latencyMs}ms)` : '';
             const c = d.status === 'supported' ? 'var(--color-success)'
-              : d.status === 'skipped' ? 'var(--color-text-muted)'
+              : d.status === 'skipped' || d.status === 'inconclusive' ? 'var(--color-text-muted)'
               : 'var(--color-danger)';
             const reasonText = (() => {
               if (!d.reason || d.status === 'supported' || d.status === 'skipped') return '';
@@ -811,9 +812,16 @@ export default function Sites() {
           } else if (type === 'action') {
             if (d.action === 'disabled') addLog(`  ↳ 已加入站点禁用列表: ${d.modelName}`, 'var(--color-text-muted)');
           } else if (type === 'complete') {
+            const inconclusiveCount = Number(d.inconclusive || 0);
             if (d.unsupported > 0) {
               addLog(`完成：${d.probed} 个模型已探测，${d.unsupported} 个不可用已自动加入禁用列表`, 'var(--color-danger)');
-              toast.error(`${d.unsupported} 个模型不可用，已自动加入站点禁用列表`);
+              toast.error(`${d.unsupported} 个模型不可用，已自动加入禁用列表`);
+              if (inconclusiveCount > 0) {
+                addLog(`另有 ${inconclusiveCount} 个模型未得出结论（超时/异常），未做任何禁用`, 'var(--color-text-muted)');
+              }
+            } else if (inconclusiveCount > 0) {
+              addLog(`完成：${d.probed} 个模型已探测，${inconclusiveCount} 个未得出结论（超时/异常），未做任何禁用`, 'var(--color-text-muted)');
+              toast.info(`${inconclusiveCount} 个模型未得出结论（超时/异常），未做禁用，可稍后重试`);
             } else {
               addLog(`完成：${d.probed} 个模型均可用`, 'var(--color-success)');
               toast.success(`探测完成：${d.probed} 个模型均可用`);
