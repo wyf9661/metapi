@@ -210,6 +210,7 @@ function hydrateAffinityMap(
   target: Map<string, StickyEntry>,
   raw: unknown,
   nowMs: number,
+  liveChannelIdFilter: ((channelId: number) => boolean) | null,
 ): void {
   if (!raw || typeof raw !== 'object') return;
   for (const [key, entryRaw] of Object.entries(raw as Record<string, unknown>)) {
@@ -220,17 +221,36 @@ function hydrateAffinityMap(
       || !Number.isFinite(entryRaw.expiresAtMs)
       || entryRaw.expiresAtMs <= nowMs
     ) continue;
+    // Hygiene: channels deleted since the last save leave stale bindings that
+    // can never fail-and-clear on their own. Drop them at hydration.
+    const entryChannelId = Math.trunc(entryRaw.channelId);
+    if (liveChannelIdFilter && !liveChannelIdFilter(entryChannelId)) continue;
     target.set(normalizedKey, {
-      channelId: Math.trunc(entryRaw.channelId),
+      channelId: entryChannelId,
       expiresAtMs: Math.trunc(entryRaw.expiresAtMs),
       hitCount: normalizeAffinityHitCount(entryRaw.hitCount),
     });
   }
 }
 
+async function loadLiveRouteChannelIdSet(): Promise<Set<number> | null> {
+  try {
+    const rows = await db.select({ id: schema.routeChannels.id })
+      .from(schema.routeChannels)
+      .all();
+    return new Set(rows.map((row: { id: number }) => Math.trunc(row.id)));
+  } catch (error) {
+    console.warn(
+      `[proxyChannelCoordinator] failed to list route channels for affinity hygiene: ${(error as Error)?.message || 'unknown error'}`,
+    );
+    return null;
+  }
+}
+
 function hydrateLastSuccessMap(
   target: Map<string, LastSuccessEntry>,
   raw: unknown,
+  liveChannelIdFilter: ((channelId: number) => boolean) | null,
 ): void {
   if (!raw || typeof raw !== 'object') return;
   for (const [key, entryRaw] of Object.entries(raw as Record<string, unknown>)) {
@@ -239,8 +259,13 @@ function hydrateLastSuccessMap(
     // last-success entries never expire by time; hydrate every valid one.
     // The sort key falls back to the current time when the persisted row
     // predates the lastSuccessAtMs field (legacy schema).
+    // Hygiene: drop entries whose channel was deleted since the last save —
+    // they can never fail-and-clear on their own (e.g. 2026-09 zz-verify
+    // residue pointing at long-removed channels).
+    const entryChannelId = Math.trunc(entryRaw.channelId);
+    if (liveChannelIdFilter && !liveChannelIdFilter(entryChannelId)) continue;
     target.set(normalizedKey, {
-      channelId: Math.trunc(entryRaw.channelId),
+      channelId: entryChannelId,
       lastSuccessAtMs:
         typeof entryRaw.lastSuccessAtMs === 'number'
           ? Math.trunc(entryRaw.lastSuccessAtMs)
@@ -327,8 +352,12 @@ async function loadProxyChannelAffinityFromSettings(): Promise<void> {
   if (!parsed || typeof parsed !== 'object') return;
   const record = parsed as Record<string, unknown>;
   const nowMs = Date.now();
-  hydrateAffinityMap(stickySessionBindings, record.sticky, nowMs);
-  hydrateLastSuccessMap(lastSuccessByModelKey, record.lastSuccess);
+  const liveChannelIds = await loadLiveRouteChannelIdSet();
+  const liveChannelIdFilter = liveChannelIds
+    ? (channelId: number) => liveChannelIds.has(channelId)
+    : null;
+  hydrateAffinityMap(stickySessionBindings, record.sticky, nowMs, liveChannelIdFilter);
+  hydrateLastSuccessMap(lastSuccessByModelKey, record.lastSuccess, liveChannelIdFilter);
 }
 
 export async function ensureProxyChannelAffinityLoaded(): Promise<void> {
