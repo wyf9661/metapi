@@ -21,6 +21,10 @@ describe('isTunnelClientView', () => {
     }
   }
 
+  it('treats a shell without window.location as local', () => {
+    withHost(undefined as unknown as string, () => expect(isTunnelClientView()).toBe(false));
+  });
+
   it('treats localhost / loopback as local', () => {
     for (const h of ['localhost', '127.0.0.1', '::1']) {
       withHost(h, () => expect(isTunnelClientView(), h).toBe(false));

@@ -4,7 +4,7 @@ import { config, normalizeTokenRouterFailureCooldownMaxSec } from '../../config.
 import { db, runtimeDbDialect, schema } from '../../db/index.js';
 import { eq } from 'drizzle-orm';
 import { upsertSetting } from '../../db/upsertSetting.js';
-import { isLikelyTunnelRequest } from '../../services/cloudflareTunnelService.js';
+import { isTunnelAdminRequest, rejectTunnelAdminAction } from '../../tunnelAccessPolicy.js';
 import { normalizeRouteRoutingStrategy } from '../../services/routeRoutingStrategy.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { updateBalanceRefreshCron, updateCheckinSchedule, updateLogCleanupSettings } from '../../services/checkinScheduler.js';
@@ -576,7 +576,7 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
   }
 }
 
-async function getRuntimeSettingsResponse(currentAdminIp = '') {
+async function getRuntimeSettingsResponse(currentAdminIp = '', tunnelClientView = false) {
   const { resolveGlobalSensitiveWordDetection, resolveAntiProbeMinTextLength } = await import('../../services/sensitiveWordDetectionService.js');
   const sensitiveWordDetectionEnabled = await resolveGlobalSensitiveWordDetection();
   const antiProbeMinTextLength = await resolveAntiProbeMinTextLength();
@@ -642,6 +642,9 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     tunnelDashboardAccess: config.tunnelDashboardAccess,
     tunnelEnabled: config.tunnelEnabled,
     currentAdminIp,
+    // Authoritative answer for UI locking: whether THIS request arrived through
+    // the public tunnel. The console must not re-derive this from the hostname.
+    tunnelClientView,
     serverTimeZone: getResolvedTimeZone(),
     payloadRules: config.payloadRules,
     proxyErrorKeywords: config.proxyErrorKeywords,
@@ -720,7 +723,7 @@ function buildRuntimeDatabaseState(saved: RuntimeDatabaseConfig | null) {
 export async function settingsRoutes(app: FastifyInstance) {
   await app.get('/api/settings/runtime', async (request) => {
     const currentAdminIp = getTrustedClientIp(request);
-    return getRuntimeSettingsResponse(currentAdminIp);
+    return getRuntimeSettingsResponse(currentAdminIp, isTunnelAdminRequest(request));
   });
 
   // User profile (display name) persisted in the settings table.
@@ -770,7 +773,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const currentRequestIp = getTrustedClientIp(request);
 
     // Tunnel clients must not change session/security or tunnel access policy.
-    if (isLikelyTunnelRequest(request as any)) {
+    if (isTunnelAdminRequest(request)) {
       const blockedSecurityKeys = [
         body.adminIpAllowlist !== undefined ? 'adminIpAllowlist' : null,
         body.tunnelDashboardAccess !== undefined ? 'tunnelDashboardAccess' : null,
@@ -1658,7 +1661,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return {
       success: true,
       message: '运行时设置已更新',
-      ...await getRuntimeSettingsResponse(currentRequestIp),
+      ...await getRuntimeSettingsResponse(currentRequestIp, isTunnelAdminRequest(request)),
     };
   });
 
@@ -1671,6 +1674,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.put<{ Body: unknown }>('/api/settings/database/runtime', async (request, reply) => {
+    if (rejectTunnelAdminAction(request, reply, '切换运行时数据库')) return;
     try {
       const parsedBody = parseDatabaseMigrationPayload(request.body);
       if (!parsedBody.success) {
@@ -1737,6 +1741,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: unknown }>('/api/settings/database/migrate', async (request, reply) => {
+    if (rejectTunnelAdminAction(request, reply, '迁移数据库')) return;
     try {
       const parsedBody = parseDatabaseMigrationPayload(request.body);
       if (!parsedBody.success) {
@@ -1776,6 +1781,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: unknown }>('/api/settings/backup/import', async (request, reply) => {
+    if (rejectTunnelAdminAction(request, reply, '导入备份数据')) return;
     const parsedBody = parseBackupImportPayload(request.body);
     if (!parsedBody.success) {
       return reply.code(400).send({ success: false, message: '导入数据格式错误：需要 JSON 对象' });
@@ -1862,7 +1868,8 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/settings/backup/webdav/import', async (_, reply) => {
+  app.post('/api/settings/backup/webdav/import', async (request, reply) => {
+    if (rejectTunnelAdminAction(request, reply, '从 WebDAV 导入备份')) return;
     try {
       const result = await importBackupFromWebdav();
       for (const item of result.appliedSettings) {
@@ -2040,6 +2047,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/settings/maintenance/factory-reset', async (request, reply) => {
+    if (rejectTunnelAdminAction(request, reply, '恢复出厂设置')) return;
     const body = (request.body || {}) as { confirm?: unknown };
     if (body.confirm !== true) {
       return reply.code(400).send({

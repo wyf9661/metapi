@@ -6,7 +6,7 @@ import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { createRateLimitGuard } from '../../middleware/requestRateLimit.js';
 import { secretsEqual } from '../../middleware/auth.js';
 import { parseAuthChangePayload } from '../../contracts/supportRoutePayloads.js';
-import { isLikelyTunnelRequest } from '../../services/cloudflareTunnelService.js';
+import { rejectTunnelAdminAction } from '../../tunnelAccessPolicy.js';
 
 const limitAdminTokenChange = createRateLimitGuard({
   bucket: 'auth-change',
@@ -20,12 +20,7 @@ export async function authRoutes(app: FastifyInstance) {
     '/api/settings/auth/change',
     { preHandler: [limitAdminTokenChange] },
     async (request, reply) => {
-    if (isLikelyTunnelRequest(request as any)) {
-      return reply.code(403).send({
-        success: false,
-        message: '通过公网隧道时不允许修改管理员登录令牌。请在本机/内网控制台操作。',
-      });
-    }
+    if (rejectTunnelAdminAction(request, reply, '修改管理员登录令牌')) return;
 
     const parsedBody = parseAuthChangePayload(request.body);
     if (!parsedBody.success) {

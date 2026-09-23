@@ -4,6 +4,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
 import { tr } from '../i18n.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import { useTunnelClientView } from './helpers/useTunnelClientView.js';
 import { StatusPill } from '../components/StatusText.js';
 
 type BackupType = 'all' | 'accounts' | 'preferences';
@@ -279,6 +280,9 @@ function buildImportSuccessMessage(result: any): string {
 export default function ImportExport() {
   const isMobile = useIsMobile();
   const toast = useToast();
+  // Backup import replaces settings/credentials, so the server keeps it
+  // local-only; mirror that here instead of failing after the click.
+  const isTunnelClientView = useTunnelClientView();
   const [exportingType, setExportingType] = useState<BackupType | ''>('');
   const [importing, setImporting] = useState(false);
   const [importData, setImportData] = useState('');
@@ -421,6 +425,10 @@ export default function ImportExport() {
   };
 
   const handleImport = async () => {
+    if (isTunnelClientView) {
+      toast.error('公网隧道访问时不允许导入备份，请在本机/内网控制台操作');
+      return;
+    }
     if (!importData.trim()) {
       toast.error('请先选择或粘贴 JSON 备份内容');
       return;
@@ -494,6 +502,10 @@ export default function ImportExport() {
   };
 
   const handleImportFromWebdav = async () => {
+    if (isTunnelClientView) {
+      toast.error('公网隧道访问时不允许从 WebDAV 拉取备份，请在本机/内网控制台操作');
+      return;
+    }
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
       ? true
       : window.confirm('从 WebDAV 导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？');
@@ -604,6 +616,7 @@ export default function ImportExport() {
                 type="file"
                 accept=".json,application/json"
                 onChange={handleImportFile}
+                disabled={isTunnelClientView}
                 style={{ display: 'none' }}
               />
               {selectedFileName ? (
@@ -711,7 +724,8 @@ export default function ImportExport() {
             {/* ---- 操作按钮 ---- */}
             <button
               onClick={handleImport}
-              disabled={importing || !summary?.valid}
+              disabled={isTunnelClientView || importing || !summary?.valid}
+              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
               className="btn btn-primary"
               style={{ width: '100%', padding: '10px 0', fontSize: 14, fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
             >
@@ -860,7 +874,8 @@ export default function ImportExport() {
           </button>
           <button
             onClick={handleImportFromWebdav}
-            disabled={webdavAction !== '' || webdavSaving || webdavConfigDirty}
+            disabled={isTunnelClientView || webdavAction !== '' || webdavSaving || webdavConfigDirty}
+            title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
             className="btn btn-ghost"
             style={{ flex: isMobile ? '1 1 100%' : 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
           >

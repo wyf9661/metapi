@@ -7,7 +7,8 @@
  */
 export function isTunnelClientView(): boolean {
   if (typeof window === 'undefined') return false;
-  const host = window.location.hostname.toLowerCase().trim();
+  // `window.location` can be absent in test/SSR-ish shells.
+  const host = String(window.location?.hostname || '').toLowerCase().trim();
   if (!host) return false; // file:// or no host — treat as local
   if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
 

@@ -7,7 +7,7 @@ import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
-import { isTunnelClientView as checkTunnelClientView } from './helpers/tunnelView.js';
+import { useTunnelClientView } from './helpers/useTunnelClientView.js';
 import {
   createCodexDefaultHighReasoningVisualPreset,
   createVisualPayloadRule,
@@ -124,7 +124,10 @@ type RuntimeDatabaseState = {
 
 export default function Settings() {
   const isMobile = useIsMobile();
-  const isTunnelClientView = checkTunnelClientView();
+  // Server answer wins once /api/settings/runtime has loaded; the hostname
+  // heuristic only covers the window before it arrives (and offline shells).
+  const [serverTunnelClientView, setServerTunnelClientView] = useState<boolean | null>(null);
+  const isTunnelClientView = useTunnelClientView(serverTunnelClientView);
   const [runtime, setRuntime] = useState<RuntimeSettings>({
     tunnelDashboardAccess: false,
     tunnelEnabled: false,
@@ -478,6 +481,9 @@ export default function Settings() {
         tunnelEnabled: !!runtimeInfo.tunnelEnabled,
         currentAdminIp: typeof runtimeInfo.currentAdminIp === 'string' ? runtimeInfo.currentAdminIp : '',
       });
+      setServerTunnelClientView(
+        typeof runtimeInfo.tunnelClientView === 'boolean' ? runtimeInfo.tunnelClientView : null,
+      );
       setProxyErrorKeywordsText(
         Array.isArray(runtimeInfo.proxyErrorKeywords)
           ? runtimeInfo.proxyErrorKeywords.filter((item: unknown) => typeof item === 'string').join('\n')
@@ -2063,14 +2069,16 @@ export default function Settings() {
             </button>
             <button
               onClick={handleMigrateToExternalDatabase}
-              disabled={migratingDatabase || testingMigrationConnection || savingRuntimeDatabase}
+              disabled={isTunnelClientView || migratingDatabase || testingMigrationConnection || savingRuntimeDatabase}
+              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
               className="btn btn-primary"
             >
               {migratingDatabase ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 迁移中...</> : '开始迁移'}
             </button>
             <button
               onClick={handleSaveRuntimeDatabaseConfig}
-              disabled={savingRuntimeDatabase || migratingDatabase || testingMigrationConnection}
+              disabled={isTunnelClientView || savingRuntimeDatabase || migratingDatabase || testingMigrationConnection}
+              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
@@ -2114,7 +2122,12 @@ export default function Settings() {
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 14 }}>
             完成后管理员 Token 保留当前值不变，页面将自动刷新并恢复登录态。
           </div>
-          <button onClick={() => setFactoryResetOpen(true)} className="btn btn-danger">
+          <button
+            onClick={() => setFactoryResetOpen(true)}
+            disabled={isTunnelClientView}
+            title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+            className="btn btn-danger"
+          >
             重新初始化系统
           </button>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
@@ -2150,7 +2163,12 @@ export default function Settings() {
             style={{ ...inputStyle, fontFamily: 'var(--font-mono)', resize: 'vertical', marginBottom: 10 }}
           />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={saveSecuritySettings} disabled={savingSecurity || isTunnelClientView} className="btn btn-primary">
+            <button
+              onClick={saveSecuritySettings}
+              disabled={savingSecurity || isTunnelClientView}
+              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+              className="btn btn-primary"
+            >
               {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存安全设置'}
             </button>
             <button
@@ -2202,7 +2220,7 @@ export default function Settings() {
             </label>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={saveAntiProbeSettings} disabled={savingSecurity || isTunnelClientView} className="btn btn-primary">
+            <button onClick={saveAntiProbeSettings} disabled={savingSecurity} className="btn btn-primary">
               {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存反探测设置'}
             </button>
           </div>
