@@ -137,7 +137,6 @@ describe('tunnel access policy on admin routes', () => {
     });
     expect(tunnelled.statusCode).toBe(200);
     expect(tunnelled.json().tunnelClientView).toBe(true);
-
     const local = await app.inject({
       method: 'GET',
       url: '/api/settings/runtime',
@@ -152,5 +151,28 @@ describe('tunnel access policy on admin routes', () => {
     });
     expect(status.statusCode).toBe(200);
     expect(status.json().tunnelClientView).toBe(true);
+  });
+
+  it('keeps backup export available from the tunnel (read-only, unlike import)', async () => {
+    // Export pulls data out; only the data-replacing actions are local-only.
+    // The console locks its import controls on the tunnel flag but must keep
+    // the export buttons usable, so this pins both halves of that split.
+    for (const type of ['all', 'accounts', 'preferences']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/settings/backup/export?type=${type}`,
+        headers: TUNNEL_HEADERS,
+      });
+      expect(res.statusCode, `export type=${type}: ${res.body.slice(0, 200)}`).toBe(200);
+      const exported = JSON.parse(res.body);
+      expect(exported.version).toBeTruthy();
+      if (type === 'all') {
+        // The 'all' payload carries both sections and no `type` discriminator.
+        expect(exported.accounts).toBeTruthy();
+        expect(exported.preferences).toBeTruthy();
+      } else {
+        expect(exported.type).toBe(type);
+      }
+    }
   });
 });
