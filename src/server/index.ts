@@ -67,10 +67,6 @@ import { ensureOauthIdentityBackfill } from './services/oauth/oauthIdentityBackf
 import { startOAuthLoopbackCallbackServers, stopOAuthLoopbackCallbackServers } from './services/oauth/localCallbackServer.js';
 import { startSiteAnnouncementPolling, stopSiteAnnouncementPolling } from './services/siteAnnouncementPollingService.js';
 import {
-  startModelAvailabilityProbeScheduler,
-  stopModelAvailabilityProbeScheduler,
-} from './services/modelAvailabilityProbeService.js';
-import {
   startChannelProbeScheduler,
   stopChannelProbeScheduler,
 } from './services/channelRecoveryProbeService.js';
@@ -392,7 +388,6 @@ if (existsSync(webDir)) {
 await startScheduler();
 await reloadBackupWebdavScheduler();
 startSiteAnnouncementPolling();
-startModelAvailabilityProbeScheduler();
 startChannelProbeScheduler();
 startSub2ApiManagedRefreshScheduler();
 startUpdateCenterPolling();
@@ -415,7 +410,6 @@ app.addHook('onClose', async () => {
   stopUpdateCenterPolling();
   stopProxyFileRetentionService();
   stopProxyLogRetentionService();
-  stopModelAvailabilityProbeScheduler();
   stopChannelProbeScheduler();
   await stopUsageAggregationProjectorScheduler();
   await stopAdminSnapshotWarmScheduler();

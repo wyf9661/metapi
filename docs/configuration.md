@@ -44,7 +44,6 @@ Metapi 当前有三类主要配置入口：
 | 系统代理 | `SYSTEM_PROXY_URL` | 保存后即时生效 |
 | 代理失败判定 | 失败关键词、空内容失败判定 | 保存后即时生效 |
 | Codex 上游传输与会话并发 | WebSocket 开关、并发与队列参数 | 保存后即时生效 |
-| 批量测活 | 后台模型可用性探测开关 | 保存后即时生效 |
 | 路由策略 | 成本/余额/使用率权重、默认单价、首字超时、路由探测率、协议回退、失败冷却上限 | 保存后即时生效 |
 | 全局品牌屏蔽 | 全局品牌屏蔽 | 保存后即时生效，并触发路由重建 |
 | 全局模型白名单 | 全局模型白名单 | 保存后即时生效，并触发路由重建 |
@@ -178,19 +177,11 @@ Metapi 当前有三类主要配置入口：
 | `TOKEN_ROUTER_CACHE_TTL_MS` | Token 路由缓存 TTL（毫秒） | `1500` |
 | `PROXY_LOG_RETENTION_DAYS` | 代理日志保留天数 | `30` |
 | `PROXY_LOG_RETENTION_PRUNE_INTERVAL_MINUTES` | 代理日志清理任务执行间隔（分钟） | `30` |
-| `MODEL_AVAILABILITY_PROBE_ALLOW` | 是否允许启用批量测活（默认禁止） | `false` |
-| `MODEL_AVAILABILITY_PROBE_ENABLED` | 批量测活开关（需先设 `MODEL_AVAILABILITY_PROBE_ALLOW=true` 才生效） | `false` |
-| `MODEL_AVAILABILITY_PROBE_INTERVAL_MS` | 批量测活间隔（毫秒） | `1800000` |
-| `MODEL_AVAILABILITY_PROBE_TIMEOUT_MS` | 批量测活单次探测超时（毫秒） | `30000` |
+| `MODEL_AVAILABILITY_PROBE_TIMEOUT_MS` | 按需模型探测单次超时（毫秒） | `30000` |
 | `PROXY_FIRST_BYTE_TIMEOUT_SEC` | 单次通道首字超时（秒）；0 关闭 | `30` |
 | `PROXY_STICKY_SESSION_TTL_MS` | soft sticky / 会话粘性 TTL（毫秒） | `30000` |
 | `PROXY_CHANNEL_FAILOVER_BUDGET_MS` | 多通道 failover 总预算（毫秒）；0 用 soft 默认 30s | `0` |
-| `MODEL_AVAILABILITY_PROBE_CONCURRENCY` | 批量测活并发数 | `1` |
 
-注意：
-
-- **批量测活开关本身**已经在 UI 里有了
-- 这里只剩下间隔、超时、并发这些更高级的细项还没有 UI
 
 ### 5. 路由与故障转移（proxy 核心行为）
 
@@ -306,7 +297,6 @@ Metapi 当前有三类主要配置入口：
 - 系统代理
 - 定时任务
 - 路由策略
-- 批量测活开关
 - 安全白名单
 - 通知渠道
 - 下游密钥

@@ -474,7 +474,7 @@ export async function probeSiteModels(
 
   onProgress?.({ type: 'start', scope, modelsCount: modelsToProbe.length, modelsToProbe });
 
-  // Probe models concurrently, limited by modelAvailabilityProbeConcurrency
+  // Probe models concurrently, limited by the caller-provided concurrency
   const concurrency = Math.max(1, options?.concurrency ?? 10);
   const detailsMap = new Map<string, { modelName: string; status: RuntimeModelProbeStatus; latencyMs: number | null; reason?: string }>();
 

@@ -21,14 +21,11 @@ import {
   fetchModelPricingCatalog,
 } from '../../services/modelPricingService.js';
 import {
-  buildModelAvailabilityProbeTaskDedupeKey,
   probeSingleModelAvailability,
   probeSingleModelAvailabilityStream,
-  queueModelAvailabilityProbeTask,
-  type ModelAvailabilityProbeExecutionResult,
-} from '../../services/modelAvailabilityProbeService.js';
+} from '../../services/modelMarketplaceProbeService.js';
 import { getUpstreamModelDescriptionsCached } from '../../services/upstreamModelDescriptionService.js';
-import {getRunningTaskByDedupeKey, startBackgroundTask, waitForBackgroundTaskCompletion} from '../../services/backgroundTaskService.js';
+import {getRunningTaskByDedupeKey, startBackgroundTask} from '../../services/backgroundTaskService.js';
 import {
   parseProxyLogBillingDetails,
   withProxyLogSelectFields,
@@ -2135,120 +2132,6 @@ export async function statsRoutes(app: FastifyInstance) {
       const refresh = await refreshModelsForAccount(accountId);
       const rebuild = await routeRefreshWorkflow.rebuildRoutesOnly();
       return { success: true, refresh, rebuild };
-    },
-  );
-
-  app.post<{ Body?: { accountId?: number; wait?: boolean } }>(
-    '/api/models/probe',
-    async (request, reply) => {
-      if (!config.modelAvailabilityProbeAllow || !config.modelAvailabilityProbeEnabled) {
-        return reply.code(403).send({
-          success: false,
-          message: '批量测活已禁用。请使用 /api/models/probe-one 进行单模型定点探测，或设置 MODEL_AVAILABILITY_PROBE_ALLOW=true 后启用批量测活。',
-        });
-      }
-      const requestBody = request.body;
-      if (requestBody !== undefined && !isRecord(requestBody)) {
-        return reply
-          .code(400)
-          .send({ success: false, message: '请求体必须是对象' });
-      }
-
-      const rawAccountId = requestBody?.accountId as unknown;
-      const normalizedAccountId =
-        rawAccountId === undefined || rawAccountId === null
-          ? ''
-          : String(rawAccountId).trim();
-      const hasAccountId = normalizedAccountId !== '';
-      const parsedAccountId =
-        hasAccountId && /^[1-9]\d*$/.test(normalizedAccountId)
-          ? Number(normalizedAccountId)
-          : undefined;
-      const accountId =
-        parsedAccountId !== undefined && Number.isSafeInteger(parsedAccountId)
-          ? parsedAccountId
-          : undefined;
-      const wait = requestBody?.wait === true;
-
-      if (hasAccountId && accountId === undefined) {
-        return reply
-          .code(400)
-          .send({ success: false, message: '账号 ID 无效' });
-      }
-
-      if (wait) {
-        const taskTitle = accountId
-          ? `探测模型可用性 #${accountId}`
-          : '探测全部模型可用性';
-        const dedupeKey = buildModelAvailabilityProbeTaskDedupeKey(accountId);
-        const runningTask = getRunningTaskByDedupeKey(dedupeKey);
-        const { task, reused } = runningTask
-          ? { task: runningTask, reused: true }
-          : queueModelAvailabilityProbeTask({
-              accountId,
-              title: taskTitle,
-            });
-        const completedTask = await waitForBackgroundTaskCompletion(task.id);
-        if (!completedTask) {
-          return reply
-            .code(500)
-            .send({
-              success: false,
-              message: '模型可用性探测任务不存在或已过期',
-            });
-        }
-        if (completedTask.status === 'failed') {
-          return reply.code(500).send({
-            success: false,
-            reused,
-            jobId: completedTask.id,
-            status: completedTask.status,
-            message: completedTask.error || '模型可用性探测失败',
-          });
-        }
-        const result =
-          completedTask.result as ModelAvailabilityProbeExecutionResult | null;
-        if (!result) {
-          return reply.code(500).send({
-            success: false,
-            reused,
-            jobId: completedTask.id,
-            status: completedTask.status,
-            message: '模型可用性探测结果为空',
-          });
-        }
-        if (accountId && result.summary.totalAccounts === 0) {
-          return reply
-            .code(404)
-            .send({ success: false, message: '账号不存在' });
-        }
-        return {
-          success: true,
-          reused,
-          jobId: completedTask.id,
-          status: completedTask.status,
-          ...result,
-        };
-      }
-
-      const taskTitle = accountId
-        ? `探测模型可用性 #${accountId}`
-        : '探测全部模型可用性';
-      const { task, reused } = queueModelAvailabilityProbeTask({
-        accountId,
-        title: taskTitle,
-      });
-
-      return reply.code(202).send({
-        success: true,
-        queued: true,
-        reused,
-        jobId: task.id,
-        status: task.status,
-        message: reused
-          ? '模型可用性探测任务进行中，请稍后查看任务列表'
-          : '已开始模型可用性探测，请稍后查看任务列表',
-      });
     },
   );
 

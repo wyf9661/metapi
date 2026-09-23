@@ -43,11 +43,6 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
   const authToken = parseSettingFromMap<string>(settingsMap, 'auth_token');
   if (typeof authToken === 'string' && authToken) config.authToken = authToken;
 
-  const modelAvailabilityProbeEnabled = parseSettingFromMap<boolean>(settingsMap, 'model_availability_probe_enabled');
-  if (typeof modelAvailabilityProbeEnabled === 'boolean') {
-    config.modelAvailabilityProbeEnabled = modelAvailabilityProbeEnabled && config.modelAvailabilityProbeAllow;
-  }
-
   const codexUpstreamWebsocketEnabled = parseSettingFromMap<boolean>(settingsMap, 'codex_upstream_websocket_enabled');
   if (typeof codexUpstreamWebsocketEnabled === 'boolean') {
     config.codexUpstreamWebsocketEnabled = codexUpstreamWebsocketEnabled;

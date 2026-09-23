@@ -1232,7 +1232,6 @@ export const zhToEnSupplemental: Record<string, string> = {
   '状态=禁用': 'Status=Disabled',
   '现在': 'Now',
   '确认屏蔽': 'Confirm Block',
-  '确认开启批量测活': 'Confirm batch liveness check',
   '确认操作': 'Confirm Action',
   '确认移除': 'Confirm Remove',
   '确认移除通道': 'Confirm Remove Channel',

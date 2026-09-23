@@ -44,17 +44,12 @@ import { findInvalidIpAllowlistEntries, getTrustedClientIp, isIpAllowed } from '
 import { performFactoryReset } from '../../services/factoryResetService.js';
 import { normalizeLogCleanupRetentionDays } from '../../shared/logCleanupRetentionDays.js';
 import { stopProxyLogRetentionService } from '../../services/proxyLogRetentionService.js';
-import {
-  startModelAvailabilityProbeScheduler,
-  stopModelAvailabilityProbeScheduler,
-} from '../../services/modelAvailabilityProbeService.js';
 import { parsePayloadRulesConfigInput } from '../../services/payloadRules.js';
 
 type RoutingWeights = typeof config.routingWeights;
 
 interface RuntimeSettingsBody {
   payloadRules?: unknown;
-  modelAvailabilityProbeEnabled?: boolean;
   sensitiveWordDetectionEnabled?: boolean;
   antiProbeMinTextLength?: number;
   codexUpstreamWebsocketEnabled?: boolean;
@@ -304,17 +299,6 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.logCleanupConfigured = true;
       updateLogCleanupSettings({ retentionDays: Math.trunc(retentionDays) });
       stopProxyLogRetentionService();
-      return;
-    }
-    case 'model_availability_probe_enabled': {
-      if (typeof value !== 'boolean') return;
-      const enabled = value && config.modelAvailabilityProbeAllow;
-      config.modelAvailabilityProbeEnabled = enabled;
-      if (enabled) {
-        startModelAvailabilityProbeScheduler();
-      } else {
-        stopModelAvailabilityProbeScheduler();
-      }
       return;
     }
     case 'codex_upstream_websocket_enabled': {
@@ -605,7 +589,6 @@ async function getRuntimeSettingsResponse(currentAdminIp = '') {
     logCleanupUsageLogsEnabled: config.logCleanupUsageLogsEnabled,
     logCleanupProgramLogsEnabled: config.logCleanupProgramLogsEnabled,
     logCleanupRetentionDays: config.logCleanupRetentionDays,
-    modelAvailabilityProbeEnabled: config.modelAvailabilityProbeEnabled,
     sensitiveWordDetectionEnabled,
     antiProbeMinTextLength,
     codexUpstreamWebsocketEnabled: config.codexUpstreamWebsocketEnabled,
@@ -1013,38 +996,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         changedLabels.push('Payload 规则');
       }
       pendingPayloadRules = parsedPayloadRules.normalized;
-    }
-
-    if (body.modelAvailabilityProbeEnabled !== undefined) {
-      let nextValue = false;
-      try {
-        nextValue = parseBooleanFlag(body.modelAvailabilityProbeEnabled, '批量测活开关');
-      } catch (err) {
-        const errMessage = err instanceof Error ? err.message : String(err);
-        return reply.code(400).send({
-          success: false,
-          message: errMessage || '批量测活开关格式无效',
-        });
-      }
-
-      // Fork policy: batch probe is disabled unless MODEL_AVAILABILITY_PROBE_ALLOW=true.
-      if (nextValue && !config.modelAvailabilityProbeAllow) {
-        return reply.code(403).send({
-          success: false,
-          message: '当前版本已禁用批量测活。如需启用请设置 MODEL_AVAILABILITY_PROBE_ALLOW=true 后重启服务。',
-        });
-      }
-
-      if (nextValue !== config.modelAvailabilityProbeEnabled) {
-        changedLabels.push(nextValue ? '开启批量测活' : '关闭批量测活');
-      }
-      await upsertSetting('model_availability_probe_enabled', nextValue);
-      config.modelAvailabilityProbeEnabled = nextValue && config.modelAvailabilityProbeAllow;
-      if (config.modelAvailabilityProbeEnabled) {
-        startModelAvailabilityProbeScheduler();
-      } else {
-        stopModelAvailabilityProbeScheduler();
-      }
     }
 
     if (body.sensitiveWordDetectionEnabled !== undefined) {

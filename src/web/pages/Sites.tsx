@@ -2174,7 +2174,7 @@ export default function Sites() {
                   </button>
                 )}
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                  {probeEnabled ? '实际探测超时复用「批量测活超时」设置' : '当前已关闭'}
+                  {probeEnabled ? '实际探测超时复用「模型探测超时」设置' : '当前已关闭'}
                 </span>
               </div>
               {probeLog.length > 0 && (

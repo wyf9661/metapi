@@ -301,7 +301,6 @@ export type RuntimeRoutingWeightsPayload = {
 
 export type RuntimeSettingsPayload = {
   payloadRules?: Record<string, unknown> | null;
-  modelAvailabilityProbeEnabled?: boolean;
   sensitiveWordDetectionEnabled?: boolean;
   antiProbeMinTextLength?: number;
   codexUpstreamWebsocketEnabled?: boolean;
