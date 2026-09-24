@@ -2353,4 +2353,40 @@ describe('selectPreferredChannel low-balance yield', () => {
     // must not be bypassed by the cooldown fallback — still null.
     expect(selected).toBeNull();
   });
+
+  it('rotates a site\'s turn between sibling keys instead of always serving one of them', async () => {
+    const route = await createRoute('intra-site-rotation');
+    const site = await createSite('intra-rotation');
+    const accountA = await createAccount(site.id, 'intra-rotation-a');
+    const accountB = await createAccount(site.id, 'intra-rotation-b');
+    // Two keys on ONE site with identical weights — the shape that starved the
+    // second key. The site-level draw picks the site; the choice INSIDE it used
+    // to be "highest score wins" with ties broken by array order, so one
+    // channel served every one of that site's turns while its sibling key sat
+    // at zero traffic despite an equal probability in the panel.
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: accountA.id, priority: 0, weight: 10, enabled: true,
+    }).run();
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: accountB.id, priority: 0, weight: 10, enabled: true,
+    }).run();
+
+    const router = new TokenRouter();
+    const picks: number[] = [];
+    for (let index = 0; index < 8; index += 1) {
+      const selected = await router.selectChannel('intra-site-rotation');
+      expect(selected).not.toBeNull();
+      picks.push(selected!.channel.id);
+    }
+
+    // Equal scores inside the site => the bounded gap forces alternation (only
+    // the first pick is a weighted draw), so each key serves about half of the
+    // site's turns. The spread below stays tolerant of small score differences:
+    // unequal keys keep their weighted ratio and only the floor is guaranteed.
+    const distinct = new Set(picks);
+    expect(distinct.size).toBe(2);
+    for (const channelId of distinct) {
+      expect(picks.filter((id) => id === channelId).length).toBeGreaterThanOrEqual(3);
+    }
+  });
 });
