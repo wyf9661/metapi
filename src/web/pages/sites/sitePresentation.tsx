@@ -58,14 +58,10 @@ export function hasSiteOutboundProxy(proxyUrl?: string | null): boolean {
 }
 
 /**
- * Markers for configuration that silently changes how a site reaches upstream:
- * its own outbound proxy and custom request headers. Neither was visible in the
- * list, so locating them meant opening the editor site by site — while a tester
- * tracking down a site-specific 502 needs exactly that answer in the row.
- *
- * Each marker labels itself through HoverPopover — desktop hover, touch tap —
- * matching the connection markers in the same row. The native `title` reads as
- * a panel at this icon size and is unavailable on touch devices.
+ * Markers for configuration that silently changes how a site reaches upstream —
+ * its own outbound proxy and custom request headers — which previously could
+ * only be found by opening the editor site by site. Each marker labels itself
+ * through HoverPopover, matching the connection markers in the same row.
  */
 export function SiteOutboundFlags(props: {
   proxyUrl?: string | null;
@@ -332,11 +328,11 @@ export const platformColors: Record<string, string> = {
 
 export const SITE_PLATFORM_OPTIONS = [
   { value: '', label: '平台类型（可自动检测）' },
-  { value: 'new-api', label: 'new-api', description: '聚合面板，适合多渠道统一管理' },
-  { value: 'one-api', label: 'one-api', description: '经典聚合面板，常见于通用 OpenAI 中转' },
-  { value: 'sub2api', label: 'sub2api', description: '订阅式中转面板，可同步套餐与余额信息' },
-  { value: 'metapi', label: 'metapi', description: '另一个 MetAPI 实例，提供下游 key 即可同步余额与用量' },
-  { value: 'openai', label: 'openai', description: '通用 OpenAI 兼容接口，手填 Base URL 即可' },
+  { value: 'new-api', label: 'new-api', description: '聚合面板，多渠道统一管理' },
+  { value: 'one-api', label: 'one-api', description: '经典聚合面板，通用 OpenAI 中转' },
+  { value: 'sub2api', label: 'sub2api', description: '订阅式中转面板，可同步套餐与余额' },
+  { value: 'metapi', label: 'metapi', description: '另一个 MetAPI 实例，填下游 key 同步余额与用量' },
+  { value: 'openai', label: 'openai', description: '通用 OpenAI 兼容接口，手填 Base URL' },
   { value: 'claude', label: 'claude', description: 'Claude / Anthropic 接口，手填 Base URL + API Key' },
   { value: 'gemini', label: 'gemini', description: '通用 Gemini / Google AI 兼容接口' },
 ];

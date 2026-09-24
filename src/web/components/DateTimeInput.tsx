@@ -10,11 +10,9 @@ interface DateTimeInputProps {
 /**
  * 包装 datetime-local 输入框。
  *
- * 原生 <input type="datetime-local"> 的占位文字由浏览器根据系统语言渲染，
- * 在中文系统上会出现 "yyyy/mm/dd --:--" 这种中英文混合、难以阅读的文字，
- * 且无法通过 HTML/CSS/JS 修改。
- *
- * 本组件在值为空时叠加一个自定义占位层，让占位文字完全可控、中英文界面统一。
+ * 原生 <input type="datetime-local"> 的占位文字由浏览器按系统语言渲染（中文系统上会出现
+ * "yyyy/mm/dd --:--" 这种中英混合文字），且无法通过 HTML/CSS/JS 修改。本组件在值为空时
+ * 叠加自定义占位层，让占位文字可控、中英文界面统一。
  */
 export default function DateTimeInput({
   value,

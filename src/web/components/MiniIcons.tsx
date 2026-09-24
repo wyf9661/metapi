@@ -1,12 +1,7 @@
 /**
- * Small stroke icons used in filter chips and similar dense controls.
- *
- * These replace bare text glyphs (⚡ / ⚙) that render as colour emoji on
- * platforms with emoji fonts installed — the emoji presentation clashes with
- * the monochrome stroke icon set and its optical size varies per system font.
- *
- * Geometry from Feather Icons (MIT license): same 24-unit grid and 2px stroke
- * as the inline icons used elsewhere in the UI.
+ * Small stroke icons for filter chips and other dense controls, replacing the
+ * ⚡ / ⚙ text glyphs (colour emoji on systems with emoji fonts, and optically
+ * inconsistent). Geometry from Feather Icons (MIT): 24-unit grid, 2px stroke.
  */
 
 type IconProps = {

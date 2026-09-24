@@ -15,13 +15,10 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * A small floating card anchored to its trigger — the interaction the dashboard
- * charts use: a pointer device opens it on hover and it closes again when the
- * pointer leaves, a touch device toggles it on tap.
- *
- * Positioning follows `TooltipLayer` (same 12px viewport padding, 10px gap and
- * above-then-below flip) so the two read as one family, but the content is real
- * markup rather than a `data-tooltip` string.
+ * A small floating card anchored to its trigger: hover opens it on a pointer
+ * device, tap toggles it on touch. Positioning follows `TooltipLayer` (same 12px
+ * viewport padding and above-then-below flip) so the two read as one family; the
+ * content is real markup rather than a `data-tooltip` string.
  */
 export default function HoverPopover({
   content,

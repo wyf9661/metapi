@@ -1,8 +1,3 @@
-/**
- * @Author: 橘子
- * @Project_description: Metapi 站点管理页
- * @Description: 代码是我抄的，不会也是真的
- */
 import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 /** Debounce before auto-detecting while the operator is still typing. */
@@ -1648,7 +1643,7 @@ export default function Sites() {
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
             {selectedOauthProvider
               ? '该平台使用 OAuth 授权，官方连接地址已自动配置。'
-              : '请填写准确的主站点 URL。这里填写主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径直接填到主站点 URL；如果 API 请求地址和主站点不同，请在下面的 API 请求地址池里填写。'}
+              : '主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径填到这里，API 请求地址不同时请填到下方 API 请求地址池。'}
           </div>
           {primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix' && primarySiteUrlAnalysis.persistedUrl ? (
             <div className="alert alert-info animate-scale-in">
@@ -1662,7 +1657,7 @@ export default function Sites() {
             <div className="alert alert-warning animate-scale-in">
               <div className="alert-title">请确认主站点 URL</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                当前 URL 含 /api 路径，将原样保留。请确认这就是准确的主站点 URL；如果这是 API 请求地址，请填到下方的 API 请求地址池。
+                URL 已含 /api 路径，原样保留；请确认这是主站点地址而非 API 请求地址，后者请填到下方 API 请求地址池。
               </div>
             </div>
           ) : null}
@@ -1670,7 +1665,7 @@ export default function Sites() {
             <div className="alert alert-warning animate-scale-in">
               <div className="alert-title">请确认主站点 URL</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                当前 URL 含额外路径，将原样保留。请确认这就是准确的主站点 URL；如果这是 API 请求地址，请填到下方的 API 请求地址池。
+                URL 含额外路径，原样保留；请确认这是主站点地址而非 API 请求地址。
               </div>
             </div>
           ) : null}
@@ -1699,7 +1694,7 @@ export default function Sites() {
               </button>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-              这里只用于 `/v1/*`、模型发现和 API Key 验证。不填时默认跟随主站点 URL；多条地址会按列表顺序参与轮询，禁用的地址不会参与调度。
+              仅用于 `/v1/*`、模型发现和 API Key 验证。不填时跟随主站点 URL；多条地址按列表顺序轮询，禁用的地址不参与调度。
             </div>
             {form.apiEndpoints.map((endpoint, index) => (
               <div
@@ -1845,7 +1840,7 @@ export default function Sites() {
               <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span>Codex 兼容模式</span>
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                  用于只允许 Codex 客户端访问的站点。开启后自动配置 Responses 协议、客户端指纹和请求头，无需手动设置。
+                  用于仅允许 Codex 客户端访问的站点：自动配置 Responses 协议、客户端指纹与请求头。
                 </span>
               </span>
             </label>
@@ -1871,18 +1866,18 @@ export default function Sites() {
               <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span>浏览器 UA（绕过 Cloudflare / WAF 拦截）</span>
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                  用于被 Cloudflare / WAF 拦截（403 / 1010）的站点。开启后自动添加浏览器 User-Agent 并允许覆盖同名出站请求头，无需手动设置。
+                  用于被 Cloudflare/WAF 拦截（403/1010）的站点：自动添加浏览器 User-Agent，并允许覆盖同名出站请求头。
                 </span>
               </span>
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-              按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。
+              按 key/value 逐行填写；留空行自动忽略，同名请求头不可重复。
             </div>
             {isEditing && (
               <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>禁用模型管理</div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                  在此站点禁用指定模型后，路由重建时将不为该站点的这些模型创建通道。勾选表示禁用该模型。
+                  勾选的模型在路由重建时不会为该站点创建通道。
                 </div>
                 {disabledModelsLoading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>

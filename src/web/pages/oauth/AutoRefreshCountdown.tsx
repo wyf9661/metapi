@@ -3,14 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * Auto-refresh countdown label with its own tick state.
  *
- * The countdown used to live in OAuthManagement's top-level state, so a 1s
- * setInterval re-rendered the whole 2200-line page (large connection tables and
- * toolbars) once per second the entire time auto-refresh was enabled. Owning the
- * tick here confines the per-second re-render to this label.
- *
- * The timer also pauses while the tab is hidden, so a backgrounded page stops
- * refreshing connections; the countdown restarts from the full interval when the
- * tab becomes visible again.
+ * The tick lives here, not in OAuthManagement: while the countdown was
+ * top-level state, its 1s interval re-rendered that whole page every second.
+ * The timer pauses while the tab is hidden.
  */
 export default function AutoRefreshCountdown({
   intervalSeconds,

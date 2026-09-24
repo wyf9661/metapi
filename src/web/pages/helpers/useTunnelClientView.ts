@@ -3,13 +3,11 @@ import { api } from '../../api.js';
 import { isTunnelClientView } from './tunnelView.js';
 
 /**
- * Whether this browser reached the console through the public tunnel.
- *
- * The server is authoritative (it can see the Cloudflare tunnel headers), so
- * callers that already hold the `tunnelClientView` value from their own
- * response should pass it in and skip the extra request. Otherwise the flag is
- * fetched from /api/tunnel/status, and the hostname heuristic only covers the
- * window before the answer arrives.
+ * Whether this browser reached the console through the public tunnel. The server
+ * is authoritative (it sees the Cloudflare tunnel headers), so callers that
+ * already hold `tunnelClientView` from their own response should pass it in and
+ * skip the extra request; otherwise it is fetched from /api/tunnel/status, with
+ * the hostname heuristic covering only the window before that answer arrives.
  */
 export function useTunnelClientView(serverValue?: boolean | null): boolean {
   const [fetched, setFetched] = useState<boolean | null>(null);

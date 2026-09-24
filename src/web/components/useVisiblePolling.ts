@@ -3,18 +3,11 @@ import { useEffect, useRef } from 'react';
 /**
  * Runs `callback` on a fixed interval, but only while the tab is visible.
  *
- * Three guarantees that a bare setInterval poll does not give you:
- * - Reentrancy guard: a tick is skipped while the previous invocation is still
- *   in flight, so slow endpoints never stack overlapping requests.
- * - Visibility pausing: the timer stops while the document is hidden and fires
- *   one immediate refresh when the tab becomes visible again, so a backgrounded
- *   tab does not keep hammering the server.
- * - Unmount safety: the timer and the visibilitychange listener are always torn
- *   down on cleanup.
- *
- * The callback is read through a ref, so changing `callback` on every render
- * (e.g. a useCallback with many deps) does NOT restart the interval — only
- * `enabled` and `intervalMs` do.
+ * Beyond a bare setInterval: ticks are skipped while the previous call is still
+ * in flight, the timer stops while the document is hidden and fires one refresh
+ * when it returns, and everything is torn down on unmount. Playback is keyed on
+ * `enabled` / `intervalMs` alone — `callback` is read through a ref so a new
+ * identity does not restart the interval.
  */
 export function useVisiblePolling(
   callback: () => void | Promise<void>,
