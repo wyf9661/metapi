@@ -4,6 +4,7 @@ import { sendNotification } from './notifyService.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { appendSessionTokenRebindHint } from './alertRules.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
+import { formatNoChannelDiagnostic, getNoChannelDiagnostic } from './proxyNoChannelDiagnostics.js';
 
 /**
  * Token-expiry sightings need confirmation before full alerting. A single
@@ -185,11 +186,20 @@ export async function reportProxyAllFailed(params: ProxyFailureAlertParams) {
   const createdAt = formatUtcSqlDateTime(new Date());
   const outcome = params.outcome || 'request_failed';
   const formatted = formatProxyFailureAlert({ ...params, outcome });
+  // Attach the selection-time exclusion reasons when the router just failed to
+  // find a channel for this model. Without them the event only says "no
+  // available channels", and the condition that emptied the pool (a cooldown, a
+  // status flip, an unusable token) is usually gone by the time it is read.
+  // Attribution is bounded by the diagnostic's own short TTL.
+  const noChannelDiagnostic = getNoChannelDiagnostic(params.model);
+  const message = noChannelDiagnostic
+    ? `${formatted.message}, ${formatNoChannelDiagnostic(noChannelDiagnostic)}`
+    : formatted.message;
 
   await db.insert(schema.events).values({
     type: 'proxy',
     title: formatted.title,
-    message: formatted.message,
+    message,
     level: 'error',
     relatedType: 'route',
     createdAt,

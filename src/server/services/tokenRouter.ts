@@ -187,6 +187,7 @@ export {
   isSiteRuntimeBreakerOpen,
   resetSiteRuntimeHealthState,
 } from './tokenRouterRuntimeHealthStore.js';
+import { recordNoChannelDiagnostic } from './proxyNoChannelDiagnostics.js';
 
 export class TokenRouter {
   /**
@@ -625,7 +626,21 @@ export class TokenRouter {
       ));
     }
 
-    if (available.length === 0) return null;
+    if (available.length === 0) {
+      // These reasons are computed for every candidate and would otherwise be
+      // discarded, leaving the 503 report unable to say which condition emptied
+      // the pool (cooldown / account / site / token / context / policy).
+      recordNoChannelDiagnostic({
+        model: requestedModel,
+        stage: 'no_eligible_candidate',
+        poolSize: match.channels.length,
+        candidates: match.channels.map((candidate) => ({
+          channelId: candidate.channel.id,
+          reasons: this.getCandidateEligibilityReasons(candidate, eligibilityOptions),
+        })),
+      });
+      return null;
+    }
 
     const connectivityLookup = await loadConnectivityLookup(
       available.map((candidate) => candidate.account.id),
@@ -808,6 +823,15 @@ export class TokenRouter {
       if (resolved) return resolved;
     }
 
+    // Candidates passed the eligibility check but scoring/dispatch still picked
+    // none (all probabilities zeroed, or dispatch resolution refused) — record
+    // the pool so a repeat is not misread as "every candidate was excluded".
+    recordNoChannelDiagnostic({
+      model: requestedModel,
+      stage: 'dispatch_no_selection',
+      poolSize: available.length,
+      candidates: available.map((candidate) => ({ channelId: candidate.channel.id, reasons: [] })),
+    });
     return null;
   }
 
