@@ -134,6 +134,34 @@ export async function explainSelectionFromMatch(
   }
 
   if (available.length === 0) {
+    // Availability-first: a channel cooldown is a temporal signal, not a hard
+    // exclusion — don't let it be the ONLY reason the pool is empty (mirrors
+    // the context-filter pattern in selectFromMatch so the decision snapshot
+    // is consistent with what the live path will choose).
+    const relaxed = match.channels.filter((row) => (
+      getCandidateEligibilityReasons(row, {
+        requestedModel,
+        bypassSourceModelCheck,
+        excludeChannelIds,
+        nowIso,
+        downstreamPolicy,
+        ignoreChannelCooldown: true,
+      }).length === 0
+    ));
+    if (relaxed.length > 0) {
+      for (const row of relaxed) {
+        const candidate = candidateMap.get(row.channel.id);
+        if (!candidate) continue;
+        candidate.eligible = true;
+        candidate.reason = '可用（冷却放行 — 临时信号不得清空整个候选池）';
+        candidate.reasonCodes = ['eligible'];
+      }
+      summary.push(`冷却放行：${relaxed.length} 个候选仅处于冷却，已放行给路由选择`);
+      available.push(...relaxed);
+    }
+  }
+
+  if (available.length === 0) {
     summary.push('没有可用通道（全部被禁用、站点不可用、冷却或令牌不可用）');
     return {
       requestedModel,
@@ -968,7 +996,7 @@ export function getCandidateEligibilityReasons(
     addReason('token_unavailable', '令牌不可用');
   }
 
-  if (candidate.channel.cooldownUntil && candidate.channel.cooldownUntil > nowIso) {
+  if (!options.ignoreChannelCooldown && candidate.channel.cooldownUntil && candidate.channel.cooldownUntil > nowIso) {
     addReason('channel_cooldown', '冷却中', { cooldownUntil: candidate.channel.cooldownUntil });
   }
 

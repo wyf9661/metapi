@@ -143,6 +143,9 @@ export type CandidateEligibilityOptions = {
   downstreamPolicy?: DownstreamRoutingPolicy;
   /** Request's estimated context requirement (input + output budget + margin). */
   requiredContextTokens?: number;
+  /** Availability-first: relax the channel-cooldown check so a temporal signal
+   * does not empty the candidate set on its own (mirrors the context filter pattern). */
+  ignoreChannelCooldown?: boolean;
 };
 
 import {
@@ -624,6 +627,25 @@ export class TokenRouter {
           requiredContextTokens: undefined,
         }).length === 0
       ));
+    }
+
+    if (available.length === 0) {
+      // Availability-first: a channel cooldown is a temporal signal, not a hard
+      // exclusion — don't let it be the ONLY reason the pool is empty (mirrors
+      // the context-filter pattern above).
+      available = match.channels.filter((candidate) => (
+        this.getCandidateEligibilityReasons(candidate, {
+          ...eligibilityOptions,
+          requiredContextTokens: undefined,
+          ignoreChannelCooldown: true,
+        }).length === 0
+      ));
+      if (available.length > 0) {
+        console.warn(
+          `[cooldown-fallback] ${requestedModel}: all candidates are cooling, ` +
+          'falling back to the candidate set',
+        );
+      }
     }
 
     if (available.length === 0) {

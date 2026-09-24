@@ -2286,4 +2286,42 @@ describe('selectPreferredChannel low-balance yield', () => {
     expect(channelAfter?.failCount).toBeGreaterThan(0);
   });
 });
+
+  it('fails open when channel cooldown would empty a single-candidate pool', async () => {
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'cooldown-alone-fallback',
+      enabled: true,
+    }).returning().get();
+    const site = await createSite('cd-fallback');
+    const account = await createAccount(site.id, 'cd-fallback');
+    const channel = await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: account.id, priority: 0, weight: 10, enabled: true,
+      cooldownUntil: new Date(Date.now() + 120_000).toISOString(),
+    }).returning().get();
+
+    const router = new TokenRouter();
+    const selected = await router.selectChannel('cooldown-alone-fallback');
+    // The only candidate is cooling; availability-first must let it through
+    // so the request gets a real attempt instead of a hard 503.
+    expect(selected?.channel.id).toBe(channel.id);
+  });
+
+  it('does not resurrect a candidate blocked by a hard exclusion even when also cooling', async () => {
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'cooldown-hard-blocked',
+      enabled: true,
+    }).returning().get();
+    const site = await createSite('cd-hard');
+    const account = await createAccount(site.id, 'cd-hard');
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: account.id, priority: 0, weight: 10, enabled: false,
+      cooldownUntil: new Date(Date.now() + 120_000).toISOString(),
+    }).run();
+
+    const router = new TokenRouter();
+    const selected = await router.selectChannel('cooldown-hard-blocked');
+    // The channel is both disabled AND cooling; the hard exclusion (disabled)
+    // must not be bypassed by the cooldown fallback — still null.
+    expect(selected).toBeNull();
+  });
 });
