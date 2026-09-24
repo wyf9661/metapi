@@ -109,7 +109,7 @@ const LEGACY_COMPAT_TABLES = new Set([
 ]);
 
 const LEGACY_COMPAT_COLUMNS = new Set([
-  ...SITE_COLUMN_COMPATIBILITY_SPECS.map((spec) => `sites.${spec.column}`),
+  ...SITE_COLUMN_COMPATIBILITY_SPECS.map((spec) => `${spec.table ?? 'sites'}.${spec.column}`),
   ...ACCOUNT_TOKEN_COLUMN_COMPATIBILITY_SPECS.map((spec) => `${spec.table}.${spec.column}`),
   ...ROUTE_GROUPING_COLUMN_COMPATIBILITY_SPECS.map((spec) => `${spec.table}.${spec.column}`),
   ...PROXY_FILE_COLUMN_COMPATIBILITY_SPECS.map((spec) => `${spec.table}.${spec.column}`),

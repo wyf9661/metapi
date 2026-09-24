@@ -1,7 +1,11 @@
 import baselineContractJson from './generated/fixtures/2026-03-14-baseline.schemaContract.json' with { type: 'json' };
 import currentContractJson from './generated/schemaContract.json' with { type: 'json' };
+import Database from 'better-sqlite3';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { classifyLegacyCompatMutation } from './legacySchemaCompat.js';
-import { generateUpgradeSql } from './schemaArtifactGenerator.js';
+import { generateBootstrapSql, generateUpgradeSql } from './schemaArtifactGenerator.js';
 import type { SchemaContract, SchemaContractColumn } from './schemaContract.js';
 import { describe, expect, it } from 'vitest';
 import {
@@ -73,6 +77,53 @@ describe('runtime schema bootstrap', () => {
     expect(dropStatements).toHaveLength(1);
     expect(dropStatements[0]).toContain('site_disabled_models_site_model_unique');
     expect(executedSql.indexOf(dropStatements[0]!)).toBeGreaterThanOrEqual(expectedUpgradeSql.length);
+  });
+
+  it('passes per-key disabled-model shim through the legacy compat guard and into a real sqlite database', async () => {
+    // End-to-end guard for classifyLegacyCompatMutation: the compat layer runs
+    // behind the mutation guard, so a non-whitelisted statement throws at boot
+    // and the column never reaches a live database (the production bug was that
+    // the whitelist hardcoded a `sites.` table prefix for all column specs).
+    const dataDir = mkdtempSync(join(tmpdir(), 'metapi-legacy-compat-sqlite-'));
+    const dbPath = join(dataDir, 'hub.db');
+    const sqlite = new Database(dbPath);
+    try {
+      // Create the baseline schema (site_disabled_models without account_id).
+      for (const statement of __runtimeSchemaBootstrapTestUtils.splitSqlStatements(
+        generateBootstrapSql('sqlite', baselineContract),
+      )) {
+        if (!statement.trim()) continue;
+        try { sqlite.exec(statement); } catch { /* skip non-replayable baseline statements */ }
+      }
+
+      const baselineColumns = sqlite.prepare("PRAGMA table_info('site_disabled_models')").all() as Array<{ name: string }>;
+      expect(baselineColumns.some((column) => column.name === 'account_id')).toBe(false);
+
+      const { ensureLegacySchemaCompatibility } = await import('./legacySchemaCompat.js');
+      const inspector: import('./legacySchemaCompat.js').LegacySchemaCompatInspector = {
+        dialect: 'sqlite',
+        tableExists: async (table) => {
+          return Number((sqlite.prepare('SELECT COUNT(*) FROM sqlite_master WHERE type = ? AND name = ?').get('table', table ?? '') as any)?.['COUNT(*)'] ?? 0) > 0;
+        },
+        columnExists: async (table, column) => {
+          return Number((sqlite.prepare('SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?').get(table ?? '', column ?? '') as any)?.['COUNT(*)'] ?? 0) > 0;
+        },
+        execute: async (sqlText) => { sqlite.exec(sqlText); },
+      };
+      await ensureLegacySchemaCompatibility(inspector);
+
+      const columns = sqlite.prepare("PRAGMA table_info('site_disabled_models')").all() as Array<{ name: string }>;
+      expect(columns.some((column) => column.name === 'account_id')).toBe(true);
+
+      const indexes = sqlite
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'site_disabled_models'")
+        .all() as Array<{ name: string }>;
+      const indexNames = indexes.map((index) => index.name);
+      expect(indexNames).toContain('site_disabled_models_site_account_model_unique');
+      expect(indexNames).not.toContain('site_disabled_models_site_model_unique');
+    } finally {
+      sqlite.close();
+    }
   });
 
   it('skips external schema execution when live schema already matches the current contract', async () => {
