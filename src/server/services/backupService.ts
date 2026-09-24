@@ -6,6 +6,7 @@ import { upsertSetting } from '../db/upsertSetting.js';
 import { mergeAccountExtraConfig } from './accountExtraConfig.js';
 import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { PLATFORM_ALIASES, detectPlatformByUrlHint } from '../../shared/platformIdentity.js';
+import { fanoutSiteWideDisabledModels } from './siteDisabledModels.js';
 
 const BACKUP_VERSION = '2.1';
 
@@ -1840,6 +1841,11 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
       }).run();
     }
   });
+
+  // Backups may carry legacy site-wide disabled-model rows (account_id NULL,
+  // pre-v1.8). Fan the leftovers out to each key so the imported data follows
+  // the per-key model immediately — no restart needed.
+  await fanoutSiteWideDisabledModels();
 }
 
 async function importPreferencesSection(section: PreferencesBackupSection): Promise<Array<{ key: string; value: unknown }>> {

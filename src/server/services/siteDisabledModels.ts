@@ -1,8 +1,10 @@
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 
 export type SiteDisabledModelsIndex = Map<number, {
-  // Site-wide rows (account_id NULL): match every account of the site.
+  // Legacy site-wide rows (account_id NULL) — kept for backward compatibility;
+  // after the v1.8 boot-time fan-out all such rows are deleted so this is empty.
   raw: Set<string>;
   canonicalFree: Set<string>;
   canonicalNonFree: Set<string>;
@@ -18,12 +20,6 @@ function normalizeRawModelName(modelName: string): string {
   return String(modelName || '').trim().toLowerCase();
 }
 
-/**
- * Whether a model name carries a free-suffix packaging label (:free / -free).
- * Free variants are distinct quota/rate tiers on relay sites (e.g.
- * deepseek-v4-flash vs deepseek-v4-flash-free), so disabling a non-free model
- * must not block its free sibling and vice versa.
- */
 function hasFreeSuffix(modelName: string): boolean {
   return /:free$/i.test(String(modelName || '').trim()) || /-free$/i.test(String(modelName || '').trim());
 }
@@ -33,14 +29,85 @@ function makeEntry() {
 }
 
 /**
+ * Migrate legacy site-wide disabled-model rows (account_id IS NULL) to
+ * per-key rows for every account of the owning site, then remove the originals.
+ *
+ * Idempotent — after the first run there are no NULL rows left.
+ */
+export async function fanoutSiteWideDisabledModels(): Promise<void> {
+  const siteWideRows = await db.select({
+    siteId: schema.siteDisabledModels.siteId,
+    modelName: schema.siteDisabledModels.modelName,
+  }).from(schema.siteDisabledModels)
+    .where(isNull(schema.siteDisabledModels.accountId))
+    .all();
+
+  if (siteWideRows.length === 0) return;
+
+  // Group by site.
+  const bySite = new Map<number, string[]>();
+  for (const row of siteWideRows) {
+    const siteId = Number(row.siteId);
+    if (!Number.isFinite(siteId) || siteId <= 0) continue;
+    const models = bySite.get(siteId) ?? [];
+    models.push(row.modelName);
+    bySite.set(siteId, models);
+  }
+
+  for (const [siteId, modelNames] of bySite) {
+    const accounts = await db.select({ id: schema.accounts.id })
+      .from(schema.accounts)
+      .where(eq(schema.accounts.siteId, siteId))
+      .all();
+    if (accounts.length === 0) {
+      // Orphaned rows (no accounts for this site) — delete them.
+      await db.delete(schema.siteDisabledModels)
+        .where(and(eq(schema.siteDisabledModels.siteId, siteId), isNull(schema.siteDisabledModels.accountId)))
+        .run();
+      continue;
+    }
+
+    // Collect existing per-key rows to avoid duplicates.
+    const accountIds = accounts.map((a) => a.id);
+    const existingRows = await db.select({
+      accountId: schema.siteDisabledModels.accountId,
+      modelName: schema.siteDisabledModels.modelName,
+    }).from(schema.siteDisabledModels)
+      .where(and(
+        eq(schema.siteDisabledModels.siteId, siteId),
+        inArray(schema.siteDisabledModels.accountId, accountIds),
+      ))
+      .all();
+    const existing = new Set(
+      existingRows
+        .filter((r) => r.accountId != null)
+        .map((r) => `${r.accountId}::${normalizeRawModelName(r.modelName)}`),
+    );
+
+    // Fan out.
+    const values: Array<{ siteId: number; accountId: number; modelName: string }> = [];
+    for (const account of accounts) {
+      for (const modelName of modelNames) {
+        if (existing.has(`${account.id}::${normalizeRawModelName(modelName)}`)) continue;
+        values.push({ siteId, accountId: account.id, modelName });
+      }
+    }
+    if (values.length > 0) {
+      await db.insert(schema.siteDisabledModels).values(values);
+    }
+
+    // Delete the original site-wide rows.
+    await db.delete(schema.siteDisabledModels)
+      .where(and(eq(schema.siteDisabledModels.siteId, siteId), isNull(schema.siteDisabledModels.accountId)));
+  }
+}
+
+/**
  * Load all site_disabled_models rows into an in-memory index.
  *
- * A row with account_id NULL is site-wide: it matches every key of the site.
- * A row with account_id set is per-key: it matches only that account. Both are
- * matched case-insensitively on the raw name, with provider-prefix aliases
- * resolved via the canonical name. The :free / -free packaging state is
- * preserved so disabling a non-free model never blocks the free variant (and
- * the reverse).
+ * After the v1.8 boot-time fan-out, only per-key rows exist (account_id set).
+ * Legacy site-wide rows (account_id NULL) are deleted by the fan-out, but the
+ * index still accepts them for backward compatibility during the transition.
  */
 export async function loadSiteDisabledModelsIndex(): Promise<SiteDisabledModelsIndex> {
   const rows = await db.select({
@@ -92,12 +159,14 @@ function matches(entry: { raw: Set<string>; canonicalFree: Set<string>; canonica
 }
 
 /**
- * Whether a model is disabled for a site, optionally scoped to one key.
+ * Whether a model is disabled for a site and optionally for a specific key.
  *
- * Site-wide rows always apply. Per-key rows apply only when `accountId` matches
- * and the caller is evaluating that account — pass accountId to get the
- * per-key semantics, omit it to see only site-wide disabling (used by
- * site-level views that have no account context).
+ * Per-key rows (account_id set) are matched when `accountId` is provided.
+ * Legacy site-wide rows (account_id NULL), if any exist after the v1.8 boot
+ * migration, match every key of the site for backward compatibility.
+ *
+ * Callers should always pass `accountId` when querying from a per-key context.
+ * Without it, only legacy site-wide rows are checked (empty after migration).
  */
 export function isModelDisabledForSite(
   index: SiteDisabledModelsIndex | null | undefined,
@@ -109,7 +178,7 @@ export function isModelDisabledForSite(
   const entry = index.get(siteId);
   if (!entry) return false;
 
-  // Site-wide rows apply to every key.
+  // Legacy site-wide rows (NULL account_id) — empty after migration.
   if (matches(entry, modelName || '')) return true;
 
   // Per-key rows apply only when evaluating that key.

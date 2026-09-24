@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { db, schema, runtimeDbDialect } from '../../db/index.js';
 import { parsePositiveIntParam } from '../../shared/routeParams.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { parseSiteDisabledModelsPayload } from '../../contracts/siteRoutePayloads.js';
 import { invalidateSiteProxyCache } from '../../services/siteProxy.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
@@ -1830,39 +1830,35 @@ export async function accountsRoutes(app: FastifyInstance) {
         .where(eq(schema.modelAvailability.accountId, accountId))
         .all();
 
-      // Disabled flags: site-wide rows (account_id NULL) apply to every key,
-      // per-key rows only to this one. siteDisabled marks the site-wide ones so
-      // the console can show them as locked in a per-key editor.
+      // Disabled models are keyed per account: only this key's own rows apply.
       const disabledRows = await db
-        .select({
-          modelName: schema.siteDisabledModels.modelName,
-          accountId: schema.siteDisabledModels.accountId,
-        })
+        .select({ modelName: schema.siteDisabledModels.modelName })
         .from(schema.siteDisabledModels)
         .where(and(
           eq(schema.siteDisabledModels.siteId, siteId),
-          or(
-            isNull(schema.siteDisabledModels.accountId),
-            eq(schema.siteDisabledModels.accountId, accountId),
-          ),
+          eq(schema.siteDisabledModels.accountId, accountId),
         ))
         .all();
 
-      const siteDisabledSet = new Set(
-        disabledRows.filter((r: any) => r.accountId == null).map((r: any) => r.modelName),
-      );
-      const accountDisabledSet = new Set(
-        disabledRows.filter((r: any) => r.accountId != null).map((r: any) => r.modelName),
-      );
+      const disabledSet = new Set<string>(disabledRows.map((r) => String(r.modelName)));
 
-      const models = modelRows
-        .filter((r: any) => r.available)
-        .map((r: any) => ({
-          name: r.modelName,
-          latencyMs: r.latencyMs,
-          disabled: siteDisabledSet.has(r.modelName) || accountDisabledSet.has(r.modelName),
-          siteDisabled: siteDisabledSet.has(r.modelName),
-          isManual: !!r.isManual,
+      // Merge this key's disabled models into the list even when availability
+      // no longer reports them, so they stay reachable and can be re-enabled.
+      const rowsByName = new Map<string, { latencyMs: unknown; isManual: boolean }>();
+      for (const r of modelRows) {
+        if (!r.available) continue;
+        rowsByName.set(r.modelName, { latencyMs: r.latencyMs, isManual: !!r.isManual });
+      }
+      for (const modelName of disabledSet) {
+        if (!rowsByName.has(modelName)) rowsByName.set(modelName, { latencyMs: null, isManual: false });
+      }
+
+      const models = Array.from(rowsByName.entries())
+        .map(([name, info]) => ({
+          name,
+          latencyMs: info.latencyMs,
+          disabled: disabledSet.has(name),
+          isManual: info.isManual,
         }))
         .sort((a: any, b: any) => a.name.localeCompare(b.name));
 

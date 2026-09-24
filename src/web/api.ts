@@ -752,13 +752,6 @@ export const api = {
         proxyUrl && proxyUrl.trim() ? { url, proxyUrl: proxyUrl.trim() } : { url },
       ),
     }),
-  getSiteDisabledModels: (siteId: number) =>
-    request(`/api/sites/${siteId}/disabled-models`),
-  updateSiteDisabledModels: (siteId: number, models: string[]) =>
-    request(`/api/sites/${siteId}/disabled-models`, {
-      method: 'PUT',
-      body: JSON.stringify({ models }),
-    }),
   // Per-key disabled models: only this account's rows are replaced.
   updateAccountDisabledModels: (accountId: number, models: string[]) =>
     request(`/api/accounts/${accountId}/models/disabled`, {

@@ -537,7 +537,7 @@ export async function probeSiteModels(
       ))
       .run();
     await db.insert(schema.siteDisabledModels)
-      .values(unsupportedModels.map((modelName) => ({ siteId, modelName })))
+      .values(unsupportedModels.map((modelName) => ({ siteId, accountId: account.id, modelName })))
       .onConflictDoNothing()
       .run();
     for (const modelName of unsupportedModels) {
@@ -640,7 +640,7 @@ async function runPostRefreshProbeIfEnabled(params: {
       ))
       .run();
     await db.insert(schema.siteDisabledModels)
-      .values(unsupportedModels.map((modelName) => ({ siteId: params.site.id, modelName })))
+      .values(unsupportedModels.map((modelName) => ({ siteId: params.site.id, accountId: params.account.id, modelName })))
       .onConflictDoNothing()
       .run();
     // Update account health

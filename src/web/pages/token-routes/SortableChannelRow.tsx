@@ -346,12 +346,12 @@ export function SortableChannelRow({
                     {channel.enabled === false ? '启用' : '禁用'}
                   </button>
 
-                  {onSiteBlockModel && channel.site?.id ? (
+                  {onSiteBlockModel && channel.accountId ? (
                     <button
                       onClick={onSiteBlockModel}
                       className="btn btn-link btn-link-warning"
                     >
-                      站点屏蔽
+                      屏蔽模型
                     </button>
                   ) : null}
 
@@ -592,13 +592,13 @@ export function SortableChannelRow({
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            {onSiteBlockModel && channel.site?.id ? (
+            {onSiteBlockModel && channel.accountId ? (
               <button
                 onClick={onSiteBlockModel}
                 className="btn btn-link btn-link-warning"
-                data-tooltip={suppressTooltips ? undefined : `将此模型加入站点「${channel.site?.name || '未知'}」的禁用列表，rebuild 后该站点的此模型通道将不再生成`}
+                data-tooltip={suppressTooltips ? undefined : `将此模型加入该账号（站点「${channel.site?.name || '未知'}」）的禁用列表，rebuild 后该账号的此模型通道将不再生成，同站点其他账号不受影响`}
               >
-                站点屏蔽
+                屏蔽模型
               </button>
             ) : null}
 

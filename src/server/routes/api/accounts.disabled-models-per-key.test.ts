@@ -96,25 +96,24 @@ describe('per-key disabled models', () => {
     const flagged = (list: any) => list.models.filter((m: any) => m.disabled).map((m: any) => m.name);
     expect(flagged(listA)).toEqual(['only-a']);
     expect(flagged(listB)).toEqual(['shared-model']);
-    // Neither key set a site-wide row, so nothing shows as locked.
-    expect(listA.models.every((m: any) => m.siteDisabled === false)).toBe(true);
   });
 
-  it('applies site-wide rows to every key and marks them as siteDisabled', async () => {
-    const { site, keyA, keyB } = await seed();
+  it('keeps a disabled model listed even when availability no longer reports it (so it can be re-enabled)', async () => {
+    const { site, keyA } = await seed();
     await db.insert(schema.siteDisabledModels).values({
-      siteId: site.id, accountId: null, modelName: 'shared-model',
+      siteId: site.id, accountId: keyA.id, modelName: 'shared-model',
     }).run();
+    // The probe marked the model unavailable for this key afterwards.
+    await db.update(schema.modelAvailability)
+      .set({ available: false })
+      .where(eq(schema.modelAvailability.accountId, keyA.id))
+      .run();
 
     const listA = (await app.inject({ method: 'GET', url: `/api/accounts/${keyA.id}/models` })).json();
-    const listB = (await app.inject({ method: 'GET', url: `/api/accounts/${keyB.id}/models` })).json();
-
-    for (const list of [listA, listB]) {
-      const entry = list.models.find((m: any) => m.name === 'shared-model');
-      expect(entry).toMatchObject({ disabled: true, siteDisabled: true });
-      expect(list.models.find((m: any) => m.name === 'only-a' || m.name === 'only-b')?.siteDisabled)
-        .toBe(false);
-    }
+    const entry = listA.models.find((m: any) => m.name === 'shared-model');
+    expect(entry).toMatchObject({ disabled: true });
+    // The model is still there: the key can re-enable it instead of being stuck.
+    expect(listA.models.some((m: any) => m.name === 'shared-model')).toBe(true);
   });
 
   it('saving one key leaves site-wide rows and other keys untouched', async () => {

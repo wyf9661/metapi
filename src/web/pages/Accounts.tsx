@@ -626,10 +626,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
 
   const applyLoadedModelModal = (account: any, result: any) => {
     const models = Array.isArray(result?.models) ? result.models : [];
-    // Only the key's own rows are editable here; site-wide rows (siteDisabled)
-    // are shown locked because the key cannot re-enable them.
     const disabledSet = new Set<string>(
-      models.filter((m: any) => m.disabled && !m.siteDisabled).map((m: any) => m.name as string),
+      models.filter((m: any) => m.disabled).map((m: any) => m.name as string),
     );
     setModelModal((s) => ({
       ...s,

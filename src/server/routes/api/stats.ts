@@ -1544,7 +1544,7 @@ export async function statsRoutes(app: FastifyInstance) {
 
         const sourceModel = String(m.modelName || '').trim();
         if (!sourceModel) continue;
-        if (isModelDisabledForSite(disabledModelsIndex, s.id, sourceModel)) continue;
+        if (isModelDisabledForSite(disabledModelsIndex, s.id, sourceModel, a.id)) continue;
         const canonicalName = canonicalizeModelName(sourceModel) || sourceModel;
         if (!modelMap[canonicalName]) {
           modelMap[canonicalName] = {
@@ -1930,7 +1930,7 @@ export async function statsRoutes(app: FastifyInstance) {
         if (!requiresManagedAccountTokens(row)) continue;
         const modelName = (row.modelName || '').trim();
         if (!modelName) continue;
-        if (isModelDisabledForSite(disabledModelsIndex, row.siteId, modelName)) continue;
+        if (isModelDisabledForSite(disabledModelsIndex, row.siteId, modelName, row.accountId)) continue;
         const coverageKey = `${row.accountId}::${modelName.toLowerCase()}`;
         if (coveredAccountModelSet.has(coverageKey)) continue;
         if (!modelsWithoutToken[modelName]) modelsWithoutToken[modelName] = [];

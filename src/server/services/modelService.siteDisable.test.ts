@@ -41,7 +41,7 @@ describe('rebuildTokenRoutesFromAvailability with site disabled models', () => {
         delete process.env.DATA_DIR;
     });
 
-    it('does not create route/channel for a model disabled on its site', async () => {
+    it('does not create route/channel for a model disabled on that key', async () => {
         const site = await db.insert(schema.sites).values({
             name: 'site-a',
             url: 'https://site-a.example.com',
@@ -65,9 +65,10 @@ describe('rebuildTokenRoutesFromAvailability with site disabled models', () => {
             checkedAt: '2026-03-12T00:00:00.000Z',
         }).run();
 
-        // Disable gpt-4o for this site
+        // Disable gpt-4o for this key
         await db.insert(schema.siteDisabledModels).values({
             siteId: site.id,
+            accountId: account.id,
             modelName: 'gpt-4o',
         }).run();
 
@@ -118,9 +119,10 @@ describe('rebuildTokenRoutesFromAvailability with site disabled models', () => {
             { accountId: accountB.id, modelName: 'claude-sonnet-4-5-20250929', available: true, latencyMs: 400 },
         ]).run();
 
-        // Disable the model only on site A
+        // Disable the model only for site A's key
         await db.insert(schema.siteDisabledModels).values({
             siteId: siteA.id,
+            accountId: accountA.id,
             modelName: 'claude-sonnet-4-5-20250929',
         }).run();
 
@@ -173,5 +175,57 @@ describe('rebuildTokenRoutesFromAvailability with site disabled models', () => {
             .where(eq(schema.tokenRoutes.modelPattern, 'gpt-5'))
             .get();
         expect(route).toBeDefined();
+    });
+
+    it('keeps two keys of the same site independent', async () => {
+        const site = await db.insert(schema.sites).values({
+            name: 'codebuddy',
+            url: 'https://codebuddy.example.com',
+            platform: 'new-api',
+        }).returning().get();
+
+        const keyA = await db.insert(schema.accounts).values({
+            siteId: site.id,
+            username: 'key-291',
+            accessToken: '',
+            apiToken: 'sk-a',
+            status: 'active',
+            extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+        }).returning().get();
+
+        const keyB = await db.insert(schema.accounts).values({
+            siteId: site.id,
+            username: 'key-292',
+            accessToken: '',
+            apiToken: 'sk-b',
+            status: 'active',
+            extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+        }).returning().get();
+
+        await db.insert(schema.modelAvailability).values([
+            { accountId: keyA.id, modelName: 'glm-5.2', available: true, latencyMs: 300 },
+            { accountId: keyB.id, modelName: 'glm-5.2', available: true, latencyMs: 400 },
+        ]).run();
+
+        // Only key A disables the model; key B must keep its channel.
+        await db.insert(schema.siteDisabledModels).values({
+            siteId: site.id,
+            accountId: keyA.id,
+            modelName: 'glm-5.2',
+        }).run();
+
+        const rebuild = await rebuildTokenRoutesFromAvailability();
+        expect(rebuild.models).toBe(1);
+
+        const route = await db.select().from(schema.tokenRoutes)
+            .where(eq(schema.tokenRoutes.modelPattern, 'glm-5.2'))
+            .get();
+        expect(route).toBeDefined();
+
+        const channels = await db.select().from(schema.routeChannels)
+            .where(eq(schema.routeChannels.routeId, route!.id))
+            .all();
+        expect(channels).toHaveLength(1);
+        expect(channels[0]?.accountId).toBe(keyB.id);
     });
 });

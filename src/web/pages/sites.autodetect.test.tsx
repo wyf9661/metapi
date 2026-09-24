@@ -10,7 +10,6 @@ const { apiMock, toastMock } = vi.hoisted(() => ({
     getSites: vi.fn(),
     getOAuthProviders: vi.fn().mockResolvedValue({ providers: [] }),
     detectSite: vi.fn(),
-    getSiteDisabledModels: vi.fn().mockResolvedValue({ models: [] }),
     getSiteAvailableModels: vi.fn().mockResolvedValue({ models: [] }),
   },
   toastMock: {

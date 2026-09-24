@@ -327,7 +327,7 @@ describe('ImportExport', () => {
 
       const rendered = collectText(root!.root);
       expect(rendered).not.toContain('ALL-API-Hub V2');
-      expect(rendered).toContain('统计：站点 1 / 账号 1 / 令牌 1 / 路由 1 / 通道 1 / 站点禁用模型 1 / 手工模型 1 / 下游 Key 1 / 设置 1');
+      expect(rendered).toContain('统计：站点 1 / 账号 1 / 令牌 1 / 路由 1 / 通道 1 / 禁用模型 1 / 手工模型 1 / 下游 Key 1 / 设置 1');
     } finally {
       root?.unmount();
     }

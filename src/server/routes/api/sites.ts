@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { db, schema } from '../../db/index.js';
 import { getInsertedRowId } from '../../db/insertHelpers.js';
-import { and, asc, eq, inArray, gte, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, gte, lt, sql } from 'drizzle-orm';
 import { detectSite } from '../../services/siteDetector.js';
 import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services/siteProxy.js';
 import { formatUtcSqlDateTime, getLocalDayRangeUtc } from '../../services/localTimeService.js';
@@ -18,13 +18,11 @@ import {
   parseSiteBatchPayload,
   parseSiteCreatePayload,
   parseSiteDetectPayload,
-  parseSiteDisabledModelsPayload,
   parseSiteUpdatePayload,
 } from '../../contracts/siteRoutePayloads.js';
 import { normalizeSiteApiEndpointBaseUrl } from '../../services/siteApiEndpointService.js';
 import { analyzePrimarySiteUrl } from '../../../shared/sitePrimaryUrl.js';
-import { probeSiteModels, rebuildTokenRoutesFromAvailability } from '../../services/modelService.js';
-import { clearModelsMarketplaceCache } from './stats.js';
+import { probeSiteModels } from '../../services/modelService.js';
 import { rebuildRoutesBestEffort } from '../../services/routeRefreshWorkflow.js';
 import { invalidateAccountsSnapshot } from '../../services/accountsOverviewService.js';
 
@@ -1165,78 +1163,6 @@ export async function sitesRoutes(app: FastifyInstance) {
       successIds,
       failedItems,
     };
-  });
-
-  // Get disabled models for a site
-  app.get<{ Params: { id: string } }>('/api/sites/:id/disabled-models', async (request, reply) => {
-    const id = parseInt(request.params.id);
-    if (Number.isNaN(id)) {
-      return reply.code(400).send({ error: 'Invalid site id' });
-    }
-    const existingSite = await db.select().from(schema.sites).where(eq(schema.sites.id, id)).get();
-    if (!existingSite) {
-      return reply.code(404).send({ error: 'Site not found' });
-    }
-    // Site-wide rows only: per-key rows belong to the account views.
-    const rows = await db.select({ modelName: schema.siteDisabledModels.modelName })
-      .from(schema.siteDisabledModels)
-      .where(and(
-        eq(schema.siteDisabledModels.siteId, id),
-        isNull(schema.siteDisabledModels.accountId),
-      ))
-      .all() as SiteModelNameRow[];
-    return { siteId: id, models: rows.map((r) => r.modelName) };
-  });
-
-  // Update disabled models for a site (full replace)
-  app.put<{ Params: { id: string }; Body: unknown }>('/api/sites/:id/disabled-models', async (request, reply) => {
-    const parsedBody = parseSiteDisabledModelsPayload(request.body);
-    if (!parsedBody.success) {
-      return reply.code(400).send({ error: parsedBody.error });
-    }
-
-    const id = parseInt(request.params.id);
-    if (Number.isNaN(id)) {
-      return reply.code(400).send({ error: 'Invalid site id' });
-    }
-    const existingSite = await db.select().from(schema.sites).where(eq(schema.sites.id, id)).get();
-    if (!existingSite) {
-      return reply.code(404).send({ error: 'Site not found' });
-    }
-    const rawModels = parsedBody.data.models;
-    if (!Array.isArray(rawModels)) {
-      return reply.code(400).send({ error: 'models must be an array of strings' });
-    }
-    const models = rawModels
-      .filter((m): m is string => typeof m === 'string')
-      .map((m) => m.trim())
-      .filter((m) => m.length > 0);
-    const uniqueModels = Array.from(new Set(models));
-
-    await db.transaction(async (tx: any) => {
-      // Site-wide rows only (account_id NULL): per-key rows are owned by the
-      // account endpoints and must survive a site-level save.
-      await tx.delete(schema.siteDisabledModels)
-        .where(and(
-          eq(schema.siteDisabledModels.siteId, id),
-          isNull(schema.siteDisabledModels.accountId),
-        ))
-        .run();
-
-      if (uniqueModels.length > 0) {
-        await tx.insert(schema.siteDisabledModels).values(
-          uniqueModels.map((modelName) => ({ siteId: id, accountId: null, modelName })),
-        ).run();
-      }
-    });
-
-    invalidateSiteCaches();
-    clearModelsMarketplaceCache();
-    // Drop channels/routes that now hit site-disabled models immediately.
-    rebuildTokenRoutesFromAvailability().catch((err) => {
-      console.warn('[sites] rebuild routes after disabled-models update failed', err);
-    });
-    return { siteId: id, models: uniqueModels };
   });
 
   // Get all discovered models for a site (from model_availability and token_model_availability)

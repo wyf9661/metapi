@@ -12,7 +12,6 @@ const { apiMock, toastMock } = vi.hoisted(() => ({
     getAccountsSnapshot: vi.fn(),
     getSites: vi.fn(),
     updateAccount: vi.fn(),
-    updateSiteDisabledModels: vi.fn(),
     updateAccountDisabledModels: vi.fn(),
     rebuildRoutes: vi.fn(),
     refreshAccountHealth: vi.fn(),
@@ -78,7 +77,6 @@ describe('Accounts edit panel', () => {
       },
     ]);
     apiMock.updateAccount.mockResolvedValue({ success: true });
-    apiMock.updateSiteDisabledModels.mockResolvedValue({ success: true });
     apiMock.updateAccountDisabledModels.mockResolvedValue({ success: true });
     apiMock.rebuildRoutes.mockResolvedValue({ success: true });
     apiMock.refreshAccountHealth.mockResolvedValue({ success: true });

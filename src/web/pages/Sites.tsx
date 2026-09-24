@@ -350,10 +350,6 @@ export default function Sites() {
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const [disabledModels, setDisabledModels] = useState<string[]>([]);
-  const [disabledModelInput, setDisabledModelInput] = useState('');
-  const [disabledModelsLoading, setDisabledModelsLoading] = useState(false);
-  const [disabledModelsSaving, setDisabledModelsSaving] = useState(false);
   const [probeEnabled, setProbeEnabled] = useState(false);
   const [probeModel, setProbeModel] = useState('');
   const [probeScope, setProbeScope] = useState<'single' | 'all'>('single');
@@ -367,7 +363,6 @@ export default function Sites() {
   const autoDetectTimerRef = useRef<number | null>(null);
   const probeLogEndRef = useRef<HTMLDivElement | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [disabledModelSearch, setDisabledModelSearch] = useState('');
   const selectedInitializationPreset = useMemo(
     () => getSiteInitializationPreset(selectedInitializationPresetId),
     [selectedInitializationPresetId],
@@ -417,10 +412,8 @@ export default function Sites() {
     probeAbortRef.current = null;
   }, []);
 
-  const disabledModelSet = useMemo(() => new Set(disabledModels), [disabledModels]);
-
   const brandGroups = useMemo(() => {
-    const allModels = Array.from(new Set([...availableModels, ...disabledModels]));
+    const allModels = Array.from(new Set(availableModels));
     const groups = new Map<string, string[]>();
     for (const model of allModels) {
       const brand = getBrand(model);
@@ -433,15 +426,7 @@ export default function Sites() {
       if (b[0] === '其他') return -1;
       return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
     });
-  }, [availableModels, disabledModels]);
-
-  const filteredBrandGroups = useMemo(() => {
-    const q = String(disabledModelSearch ?? '').trim().toLowerCase();
-    if (!q) return brandGroups;
-    return brandGroups
-      .map(([brandName, models]) => [brandName, models.filter((m) => m.toLowerCase().includes(q))] as [string, string[]])
-      .filter(([, models]) => models.length > 0);
-  }, [brandGroups, disabledModelSearch]);
+  }, [availableModels]);
 
   if (editor) lastEditorRef.current = editor;
   const activeEditor = editor || lastEditorRef.current;
@@ -633,15 +618,9 @@ export default function Sites() {
     setForm(hydrateSiteForm(siteFormFromSite(site)));
     setSelectedInitializationPresetId(detectSiteInitializationPreset(site.url, site.platform)?.id || null);
     scrollToEditorTop();
-    // Load disabled models and discovered models independently so a best-effort
-    // availability fetch cannot wipe the existing disabled-model state.
     const loadSiteId = site.id;
     loadingModelsSiteIdRef.current = loadSiteId;
-    setDisabledModelsLoading(true);
-    setDisabledModels([]);
-    setDisabledModelInput('');
     setAvailableModels([]);
-    setDisabledModelSearch('');
     setProbeEnabled(!!site.postRefreshProbeEnabled);
     setProbeModel(typeof site.postRefreshProbeModel === 'string' ? site.postRefreshProbeModel : '');
     setProbeScope(site.postRefreshProbeScope === 'all' ? 'all' : 'single');
@@ -650,24 +629,6 @@ export default function Sites() {
     setProbeCompleted(false);
     probeAbortRef.current?.abort();
     probeAbortRef.current = null;
-    let pendingLoads = 2;
-    const markLoadFinished = () => {
-      pendingLoads -= 1;
-      if (pendingLoads <= 0 && loadingModelsSiteIdRef.current === loadSiteId) {
-        setDisabledModelsLoading(false);
-      }
-    };
-
-    api.getSiteDisabledModels(site.id)
-      .then((disabledRes: any) => {
-        if (loadingModelsSiteIdRef.current !== loadSiteId) return;
-        setDisabledModels(Array.isArray(disabledRes?.models) ? disabledRes.models : []);
-      })
-      .catch((err: any) => {
-        console.warn('Failed to load site disabled models:', err?.message || err);
-      })
-      .finally(markLoadFinished);
-
     api.getSiteAvailableModels(site.id)
       .then((availableRes: any) => {
         if (loadingModelsSiteIdRef.current !== loadSiteId) return;
@@ -675,39 +636,7 @@ export default function Sites() {
       })
       .catch((err: any) => {
         console.warn('Failed to load site available models:', err?.message || err);
-      })
-      .finally(markLoadFinished);
-  };
-
-  const handleAddDisabledModel = () => {
-    const model = String(disabledModelInput ?? '').trim();
-    if (!model) return;
-    if (disabledModels.includes(model)) {
-      toast.info(`模型 "${model}" 已在禁用列表中`);
-      setDisabledModelInput('');
-      return;
-    }
-    setDisabledModels((prev) => [...prev, model]);
-    setDisabledModelInput('');
-  };
-
-  const handleSaveDisabledModels = async () => {
-    if (!editor || editor.mode !== 'edit') return;
-    setDisabledModelsSaving(true);
-    try {
-      await api.updateSiteDisabledModels(editor.editingSiteId, disabledModels);
-      try {
-        await api.rebuildRoutes(false, false);
-        toast.success('禁用模型列表已保存，路由已重建');
-      } catch {
-        toast.error('禁用模型列表已保存，但路由重建失败，请手动刷新路由');
-      }
-    } catch (e) {
-      const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '保存禁用模型失败');
-    } finally {
-      setDisabledModelsSaving(false);
-    }
+      });
   };
 
   const handleSaveProbeSettings = async () => {
@@ -803,7 +732,7 @@ export default function Sites() {
             addLog(`${s}${lat}  ${d.modelName}${reasonText ? `  —  ${reasonText}` : ''}`, c);
             setTimeout(() => probeLogEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
           } else if (type === 'action') {
-            if (d.action === 'disabled') addLog(`  ↳ 已加入站点禁用列表: ${d.modelName}`, 'var(--color-text-muted)');
+            if (d.action === 'disabled') addLog(`  ↳ 已加入该 key 的禁用列表: ${d.modelName}`, 'var(--color-text-muted)');
           } else if (type === 'complete') {
             const inconclusiveCount = Number(d.inconclusive || 0);
             if (d.unsupported > 0) {
@@ -820,27 +749,23 @@ export default function Sites() {
               toast.success(`探测完成：${d.probed} 个模型均可用`);
             }
             setTimeout(() => probeLogEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
-            // Refresh model lists to reflect probe results
-            Promise.all([
-              api.getSiteAvailableModels(siteId).then((res: any) => {
+            // Refresh the discovered-model list to reflect probe results
+            api.getSiteAvailableModels(siteId)
+              .then((res: any) => {
                 setAvailableModels(Array.isArray(res?.models) ? res.models : []);
-              }),
-              api.getSiteDisabledModels(siteId).then((res: any) => {
-                setDisabledModels(Array.isArray(res?.models) ? res.models : []);
-              }),
-            ]).catch(() => {}).finally(() => setProbeCompleted(true));
+              })
+              .catch(() => {})
+              .finally(() => setProbeCompleted(true));
           } else if (type === 'error') {
             addLog(d.message || '探测失败', 'var(--color-danger)');
             toast.error(d.message || '探测失败');
             // Refresh model state even on error
-            Promise.all([
-              api.getSiteAvailableModels(siteId).then((res: any) => {
+            api.getSiteAvailableModels(siteId)
+              .then((res: any) => {
                 setAvailableModels(Array.isArray(res?.models) ? res.models : []);
-              }),
-              api.getSiteDisabledModels(siteId).then((res: any) => {
-                setDisabledModels(Array.isArray(res?.models) ? res.models : []);
-              }),
-            ]).catch(() => {}).finally(() => setProbeCompleted(true));
+              })
+              .catch(() => {})
+              .finally(() => setProbeCompleted(true));
           }
         } catch { /* ignore parse errors */ }
       };
@@ -1873,147 +1798,6 @@ export default function Sites() {
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
               按 key/value 逐行填写；留空行自动忽略，同名请求头不可重复。
             </div>
-            {isEditing && (
-              <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>禁用模型管理</div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                  勾选的模型对该站点所有 key 生效（路由重建时不再创建通道）；单个 key 的禁用请到该账号的模型列表里设置。
-                </div>
-                {disabledModelsLoading ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <span className="spinner spinner-sm" /> 加载中...
-                  </div>
-                ) : (
-                  <>
-                    {/* Search and brand group controls */}
-                    {brandGroups.length > 0 ? (
-                      <div style={{ marginBottom: 10 }}>
-                        <input
-                          placeholder="搜索模型名称..."
-                          value={disabledModelSearch}
-                          onChange={(e) => setDisabledModelSearch(e.target.value)}
-                          style={{
-                            width: '100%', padding: '6px 10px', border: '1px solid var(--color-border)',
-                            borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
-                            background: 'var(--color-bg)', color: 'var(--color-text-primary)', marginBottom: 8,
-                          }}
-                        />
-                        {/* Brand group quick actions */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: '24px' }}>按品牌全选：</span>
-                          {brandGroups.map(([brandName, models]) => {
-                            const allDisabled = models.every((m) => disabledModelSet.has(m));
-                            return (
-                              <button
-                                key={brandName}
-                                type="button"
-                                onClick={() => {
-                                  if (allDisabled) {
-                                    const removeSet = new Set(models);
-                                    setDisabledModels((prev) => prev.filter((m) => !removeSet.has(m)));
-                                  } else {
-                                    setDisabledModels((prev) => Array.from(new Set([...prev, ...models])));
-                                  }
-                                }}
-                                className={`badge ${allDisabled ? 'badge-warning' : 'badge-muted'}`}
-                                style={{ fontSize: 10, cursor: 'pointer', padding: '3px 8px' }}
-                                data-tooltip={allDisabled ? `取消禁用全部 ${brandName} 模型 (${models.length})` : `禁用全部 ${brandName} 模型 (${models.length})`}
-                              >
-                                {brandName} ({models.length})
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {/* Checkbox list */}
-                        <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px 0' }}>
-                          {filteredBrandGroups.length === 0 ? (
-                            <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>无匹配模型</div>
-                          ) : filteredBrandGroups.map(([brandName, models]) => (
-                            <div key={brandName}>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 12px', background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border-light)' }}>
-                                {brandName} ({models.length})
-                              </div>
-                              {models.map((model) => {
-                                const isDisabled = disabledModelSet.has(model);
-                                return (
-                                  <label
-                                    key={model}
-                                    style={{
-                                      display: 'flex', alignItems: 'center', gap: 8, padding: '3px 12px',
-                                      fontSize: 12, cursor: 'pointer', lineHeight: 1.6,
-                                      background: isDisabled ? 'color-mix(in srgb, var(--color-warning) 8%, transparent)' : 'transparent',
-                                    }}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isDisabled}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setDisabledModels((prev) => Array.from(new Set([...prev, model])));
-                                        } else {
-                                          setDisabledModels((prev) => prev.filter((m) => m !== model));
-                                        }
-                                      }}
-                                    />
-                                    <span style={{ color: isDisabled ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>
-                                      {model}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                        暂无已发现模型，仍可手动添加需要屏蔽的模型名。
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10, marginBottom: 10 }}>
-                      <input
-                        placeholder="输入模型名称，如 gpt-4o"
-                        value={disabledModelInput}
-                        onChange={(e) => setDisabledModelInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddDisabledModel();
-                          }
-                        }}
-                        style={{
-                          flex: 1, padding: '8px 12px', border: '1px solid var(--color-border)',
-                          borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
-                          background: 'var(--color-bg)', color: 'var(--color-text-primary)',
-                        }}
-                      />
-                      <button
-                        onClick={handleAddDisabledModel}
-                        className="btn btn-ghost"
-                        style={{ padding: '8px 14px', fontSize: 12, border: '1px solid var(--color-border)' }}
-                      >
-                        添加模型
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                      <button
-                        onClick={handleSaveDisabledModels}
-                        disabled={disabledModelsSaving}
-                        className="btn btn-primary"
-                        style={{ fontSize: 12, padding: '6px 16px' }}
-                      >
-                        {disabledModelsSaving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存禁用列表'}
-                      </button>
-                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                        已禁用 {disabledModels.length} 个模型
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
           </div>
 
           <div style={{ display: selectedOauthProvider ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
@@ -2077,7 +1861,7 @@ export default function Sites() {
             <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>刷新后自动测试请求</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                开启后，每次自动获取模型列表成功后，会对指定模型发送一次真实测试请求。若判定不可用，自动加入站点禁用列表并重建路由。
+                开启后，每次自动获取模型列表成功后，会对指定模型发送一次真实测试请求。若判定不可用，自动加入该 key 的禁用列表并重建路由。
               </div>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, cursor: 'pointer' }}>
                 <input
@@ -2197,9 +1981,9 @@ export default function Sites() {
               {probeCompleted && brandGroups.length > 0 && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
-                    探测后模型状态
+                    探测后可用模型
                     <span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>
-                      — 可用 {availableModels.filter((m) => !disabledModelSet.has(m)).length} 个，已禁用 {disabledModels.length} 个
+                      — 共 {availableModels.length} 个
                     </span>
                   </div>
                   <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px 0' }}>
@@ -2210,18 +1994,15 @@ export default function Sites() {
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '6px 12px' }}>
                           {models.map((model) => {
-                            const isDisabled = disabledModelSet.has(model);
                             return (
                               <span
                                 key={model}
                                 style={{
                                   fontSize: 11, padding: '2px 7px', borderRadius: 'var(--radius-md)',
                                   fontFamily: 'var(--font-mono)',
-                                  background: isDisabled
-                                    ? 'color-mix(in srgb, var(--color-danger) 12%, transparent)'
-                                    : 'color-mix(in srgb, var(--color-success) 12%, transparent)',
-                                  color: isDisabled ? 'var(--color-danger)' : 'var(--color-success)',
-                                  border: `1px solid ${isDisabled ? 'color-mix(in srgb, var(--color-danger) 30%, transparent)' : 'color-mix(in srgb, var(--color-success) 30%, transparent)'}`,
+                                  background: 'color-mix(in srgb, var(--color-success) 12%, transparent)',
+                                  color: 'var(--color-success)',
+                                  border: '1px solid color-mix(in srgb, var(--color-success) 30%, transparent)',
                                 }}
                               >
                                 {model}
