@@ -80,9 +80,8 @@ interface RuntimeSettingsBody {
   logCleanupRetentionDays?: number;
   webhookUrl?: string;
   webhookSecret?: string;
-  barkUrl?: string;
   webhookEnabled?: boolean;
-  barkEnabled?: boolean;
+  notifyChannels?: Array<{ id: string; url: string; secret?: string; enabled?: boolean; label?: string; kind?: 'dingtalk' | 'feishu' | 'wecom' | 'custom' }>;
   serverChanEnabled?: boolean;
   serverChanKey?: string;
   telegramEnabled?: boolean;
@@ -436,13 +435,19 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.webhookEnabled = !!value;
       return;
     }
-    case 'bark_url': {
-      if (typeof value !== 'string') return;
-      config.barkUrl = value.trim();
-      return;
-    }
-    case 'bark_enabled': {
-      config.barkEnabled = !!value;
+    case 'notify_channels': {
+      let candidate: unknown = value;
+      if (typeof value === 'string') {
+        try { candidate = JSON.parse(value) as unknown; } catch { return; }
+      }
+      if (Array.isArray(candidate)) {
+        config.notifyChannels = candidate.filter(
+          (c): c is { id: string; url: string; secret: string; enabled: boolean; label?: string; kind?: 'dingtalk' | 'feishu' | 'wecom' | 'custom' } =>
+            typeof c === 'object' && c !== null
+            && typeof (c as { id?: unknown }).id === 'string'
+            && typeof (c as { url?: unknown }).url === 'string',
+        );
+      }
       return;
     }
     case 'serverchan_enabled': {
@@ -619,9 +624,15 @@ async function getRuntimeSettingsResponse(currentAdminIp = '', tunnelClientView 
     defaultRoutingStrategy: config.defaultRoutingStrategy,
     webhookUrl: config.webhookUrl,
     webhookSecret: config.webhookSecret || '',
-    barkUrl: config.barkUrl,
     webhookEnabled: config.webhookEnabled,
-    barkEnabled: config.barkEnabled,
+    notifyChannels: config.notifyChannels.map((c) => ({
+      id: c.id,
+      url: c.url,
+      enabled: c.enabled,
+      label: c.label,
+      kind: c.kind,
+      secret: c.secret ? maskSecret(c.secret) : '',
+    })),
     serverChanEnabled: config.serverChanEnabled,
     serverChanKeyMasked: maskSecret(config.serverChanKey),
     telegramEnabled: config.telegramEnabled,
@@ -803,19 +814,24 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
     }
 
-    const barkTouched = body.barkUrl !== undefined || body.barkEnabled !== undefined;
-    const nextBarkUrl = body.barkUrl !== undefined
-      ? String(body.barkUrl || '').trim()
-      : config.barkUrl;
-    const nextBarkEnabled = body.barkEnabled !== undefined
-      ? !!body.barkEnabled
-      : config.barkEnabled;
-    if (barkTouched && nextBarkEnabled) {
-      if (!nextBarkUrl) {
-        return reply.code(400).send({ success: false, message: 'Bark URL 不能为空（启用 Bark 时）' });
-      }
-      if (!isValidHttpUrl(nextBarkUrl)) {
-        return reply.code(400).send({ success: false, message: 'Bark URL 无效，请填写 http/https 地址' });
+    const notifyChannelsTouched = body.notifyChannels !== undefined;
+    if (notifyChannelsTouched) {
+      const seen = new Set<string>();
+      for (const row of (body.notifyChannels ?? []) as Array<{ id?: unknown; url?: unknown; enabled?: unknown }>) {
+        if (typeof row?.id !== 'string' || !row.id.trim()) {
+          return reply.code(400).send({ success: false, message: '推送通道缺少 id' });
+        }
+        if (seen.has(row.id)) {
+          return reply.code(400).send({ success: false, message: '推送通道 id 重复' });
+        }
+        seen.add(row.id);
+        const channelUrl = String(row.url || '').trim();
+        if (row.enabled && !channelUrl) {
+          return reply.code(400).send({ success: false, message: '启用的推送通道必须填写地址' });
+        }
+        if (channelUrl && !isValidHttpUrl(channelUrl)) {
+          return reply.code(400).send({ success: false, message: '推送通道地址无效，请填写 http/https 地址' });
+        }
       }
     }
 
@@ -1355,20 +1371,23 @@ export async function settingsRoutes(app: FastifyInstance) {
       upsertSetting('webhook_enabled', config.webhookEnabled);
     }
 
-    if (body.barkUrl !== undefined) {
-      if (String(body.barkUrl || '').trim() !== config.barkUrl) {
-        changedLabels.push('Bark 地址');
+    if (body.notifyChannels !== undefined) {
+      const existingChannels = config.notifyChannels;
+      const nextChannels = (body.notifyChannels ?? []).map((ch) => ({
+        id: ch.id,
+        url: String(ch.url || '').trim(),
+        enabled: !!ch.enabled,
+        label: typeof ch.label === 'string' ? ch.label.trim() : undefined,
+        kind: ch.kind,
+        secret: String(ch.secret || '').trim()
+          || existingChannels.find((e) => e.id === ch.id)?.secret
+          || '',
+      }));
+      if (JSON.stringify(nextChannels) !== JSON.stringify(existingChannels)) {
+        changedLabels.push('推送通道');
       }
-      config.barkUrl = String(body.barkUrl || '').trim();
-      upsertSetting('bark_url', config.barkUrl);
-    }
-
-    if (body.barkEnabled !== undefined) {
-      if (!!body.barkEnabled !== config.barkEnabled) {
-        changedLabels.push('Bark 开关');
-      }
-      config.barkEnabled = !!body.barkEnabled;
-      upsertSetting('bark_enabled', config.barkEnabled);
+      config.notifyChannels = nextChannels;
+      upsertSetting('notify_channels', nextChannels);
     }
 
     if (body.serverChanEnabled !== undefined) {

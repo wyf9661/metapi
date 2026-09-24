@@ -45,9 +45,8 @@ describe('notifyService', () => {
     config.notifyCooldownSec = 300;
     config.webhookEnabled = false;
     config.webhookUrl = '';
-    (config as any).webhookSecret = '';
-    config.barkEnabled = false;
-    config.barkUrl = '';
+    config.notifyChannels = config.notifyChannels.map((c) => ({ ...c, secret: '' }));
+    config.notifyChannels = [];
     config.serverChanEnabled = false;
     config.serverChanKey = '';
     (config as any).telegramEnabled = false;
@@ -101,10 +100,11 @@ describe('notifyService', () => {
 
   it('includes failed channel details when all enabled channels fail', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://webhook.example.com/notify';
-    config.barkEnabled = true;
-    config.barkUrl = 'https://api.day.app/mock-key';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://webhook.example.com/notify', secret: '', enabled: true }];
+    config.notifyChannels = [
+      { id: 'test-1', url: 'https://webhook.example.com/notify', secret: '', enabled: true },
+      { id: 'test-2', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/second', secret: '', enabled: true },
+    ];
     config.smtpEnabled = false;
 
     fetchMock
@@ -124,15 +124,14 @@ describe('notifyService', () => {
         bypassThrottle: true,
         throwOnFailure: true,
       }),
-    ).rejects.toThrow(/webhook|bark|Webhook 响应状态|Bark 响应状态/i);
+    ).rejects.toThrow(/Webhook 响应状态/i);
   });
 
   it('times out a stalled channel without blocking successful channels', async () => {
     vi.useFakeTimers();
     try {
       const { config } = await import('../config.js');
-      config.webhookEnabled = true;
-      config.webhookUrl = 'https://webhook.example.com/notify';
+      config.notifyChannels = [{ id: 'test-1', url: 'https://webhook.example.com/notify', secret: '', enabled: true }];
       config.smtpEnabled = true;
       fetchMock.mockImplementation((_url: string, init?: { signal?: AbortSignal }) => new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
@@ -177,8 +176,7 @@ describe('notifyService', () => {
 
   it('sends enterprise wechat webhook payload as structured text message', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=demo-key';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=demo-key', secret: '', enabled: true }];
     config.smtpEnabled = false;
 
     fetchMock.mockResolvedValue({
@@ -203,8 +201,7 @@ describe('notifyService', () => {
 
   it('fails when enterprise wechat webhook returns non-zero errcode', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=demo-key';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=demo-key', secret: '', enabled: true }];
     config.smtpEnabled = false;
 
     fetchMock.mockResolvedValue({
@@ -315,8 +312,7 @@ describe('notifyService', () => {
 
   it('sends feishu webhook payload with msg_type text format', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
     config.smtpEnabled = false;
 
     fetchMock.mockResolvedValue({
@@ -338,10 +334,41 @@ describe('notifyService', () => {
     expect(payload.content?.text || '').toContain('feishu message');
   });
 
+  it('signs the feishu body when a signature secret is configured', async () => {
+    const { config } = await import('../config.js');
+    const { createHmac } = await import('node:crypto');
+    const secret = 'feishu-sign-secret-demo';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
+    config.notifyChannels = config.notifyChannels.map((c) => ({ ...c, secret: secret }));
+    config.smtpEnabled = false;
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ code: 0, msg: 'success' }),
+    });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('测试通知', 'feishu message', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const payload = JSON.parse(call[1]?.body || '{}') as {
+      msg_type?: string;
+      timestamp?: string;
+      sign?: string;
+    };
+    // Feishu 签名校验签的是请求体：timestamp 为 epoch 秒，sign =
+    // base64(HMAC-SHA256(key = `${timestamp}\n${secret}`, message = ""))。
+    expect(payload.msg_type).toBe('text');
+    expect(payload.timestamp).toMatch(/^\d{9,}$/);
+    const stringToSign = `${payload.timestamp}\n${secret}`;
+    const expected = createHmac('sha256', stringToSign).update('').digest('base64');
+    expect(payload.sign).toBe(expected);
+  });
+
   it('fails when feishu webhook returns non-zero code', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
     config.smtpEnabled = false;
 
     fetchMock.mockResolvedValue({
@@ -361,8 +388,7 @@ describe('notifyService', () => {
 
   it('sends feishu webhook payload for larksuite.com domain', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://open.larksuite.com/open-apis/bot/v2/hook/demo-token';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.larksuite.com/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
     config.smtpEnabled = false;
 
     fetchMock.mockResolvedValue({
@@ -386,11 +412,9 @@ describe('notifyService', () => {
 
   it('sends dingtalk text payload and signs url when secret is configured', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://oapi.dingtalk.com/robot/send?access_token=demo-token';
-    (config as any).webhookSecret = 'SECdemo';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://oapi.dingtalk.com/robot/send?access_token=demo-token', secret: '', enabled: true }];
+    config.notifyChannels = config.notifyChannels.map((c) => ({ ...c, secret: 'SECdemo' }));
     config.smtpEnabled = false;
-    config.barkEnabled = false;
     config.serverChanEnabled = false;
     (config as any).telegramEnabled = false;
 
@@ -418,11 +442,9 @@ describe('notifyService', () => {
 
   it('fails when dingtalk webhook returns non-zero errcode', async () => {
     const { config } = await import('../config.js');
-    config.webhookEnabled = true;
-    config.webhookUrl = 'https://oapi.dingtalk.com/robot/send?access_token=demo-token';
-    (config as any).webhookSecret = '';
+    config.notifyChannels = [{ id: 'test-1', url: 'https://oapi.dingtalk.com/robot/send?access_token=demo-token', secret: '', enabled: true }];
+    config.notifyChannels = config.notifyChannels.map((c) => ({ ...c, secret: '' }));
     config.smtpEnabled = false;
-    config.barkEnabled = false;
     config.serverChanEnabled = false;
     (config as any).telegramEnabled = false;
 

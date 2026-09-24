@@ -12,7 +12,7 @@ const FEATURES = [
   { icon: '🔍', title: '自动模型发现', desc: '上游新增模型自动出现在模型列表，零配置路由生成' },
   { icon: '🏪', title: '模型广场', desc: '跨站模型覆盖、定价对比、延迟与成功率实测数据' },
   { icon: '✅', title: '自动签到', desc: '定时签到 + 余额刷新，不再手动操心' },
-  { icon: '🔔', title: '多渠道告警', desc: 'Webhook / Bark / Server酱 / 邮件，余额不足及时提醒' },
+  { icon: '🔔', title: '多渠道告警', desc: '钉钉 / 飞书 / Server酱 / 邮件，余额不足及时提醒' },
   { icon: '📦', title: '轻量部署', desc: '单 Docker 容器，内置 SQLite，无外部依赖' },
 ];
 

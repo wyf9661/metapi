@@ -38,7 +38,6 @@ export const DESKTOP_ENV_TEMPLATE = `# ─────────────�
 # ── 通知 ────────────────────────────────────────────────────
 # 通知渠道建议在后台「通知设置」页面配置；如需脚本注入可在此覆盖。
 # WEBHOOK_URL=
-# BARK_URL=
 # SERVERCHAN_KEY=
 # TELEGRAM_ENABLED=false
 # TELEGRAM_BOT_TOKEN=

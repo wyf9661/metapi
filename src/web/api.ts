@@ -329,9 +329,15 @@ export type RuntimeSettingsPayload = {
   logCleanupRetentionDays?: number;
   webhookUrl?: string;
   webhookSecret?: string;
-  barkUrl?: string;
   webhookEnabled?: boolean;
-  barkEnabled?: boolean;
+  notifyChannels?: Array<{
+    id: string;
+    url: string;
+    secret?: string;
+    enabled?: boolean;
+    label?: string;
+    kind?: 'dingtalk' | 'feishu' | 'wecom' | 'custom';
+  }>;
   serverChanEnabled?: boolean;
   serverChanKey?: string;
   telegramEnabled?: boolean;

@@ -118,9 +118,13 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     logCleanupRetentionDays: Math.max(1, Math.trunc(parseNumber(env.LOG_CLEANUP_RETENTION_DAYS, 30))),
     webhookUrl: env.WEBHOOK_URL || '',
     webhookSecret: env.WEBHOOK_SECRET || '',
-    barkUrl: env.BARK_URL || '',
     webhookEnabled: parseBoolean(env.WEBHOOK_ENABLED, true),
-    barkEnabled: parseBoolean(env.BARK_ENABLED, true),
+    /**
+     * Push channels (one bot webhook + secret each). The legacy
+     * webhook_url/webhook_secret/webhook_enabled keys feed the one-time
+     * migration and stay as a rollback path.
+     */
+    notifyChannels: [] as Array<{ id: string; url: string; secret: string; enabled: boolean; label?: string; kind?: 'dingtalk' | 'feishu' | 'wecom' | 'custom' }>, 
     serverChanEnabled: parseBoolean(env.SERVERCHAN_ENABLED, true),
     serverChanKey: env.SERVERCHAN_KEY || '',
     telegramEnabled: parseBoolean(env.TELEGRAM_ENABLED, false),

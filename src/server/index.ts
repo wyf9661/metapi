@@ -90,6 +90,7 @@ import {
   stopRouteDecisionRefreshScheduler,
 } from './services/routeDecisionRefreshScheduler.js';
 import { fanoutSiteWideDisabledModels } from './services/siteDisabledModels.js';
+import { migrateLegacyNotifyChannels } from './services/notifyService.js';
 import {
   startOauthTokenRefreshScheduler,
   stopOauthTokenRefreshScheduler,
@@ -224,6 +225,7 @@ try {
   // Disabled models are keyed per account: legacy site-wide rows (account_id
   // NULL) are fanned out to every key of their site, then removed. Idempotent.
   await fanoutSiteWideDisabledModels();
+  await migrateLegacyNotifyChannels();
   await ensureRouteGroupingCompatibilityColumns();
   await ensureProxyFileCompatibilityColumns();
   await ensureProxyLogStreamTimingColumns();

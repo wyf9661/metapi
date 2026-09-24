@@ -35,9 +35,8 @@ describe('NotificationSettings', () => {
     vi.clearAllMocks();
     apiMock.getRuntimeSettings.mockResolvedValue({
       webhookUrl: '',
-      barkUrl: '',
-      webhookEnabled: true,
-      barkEnabled: true,
+      webhookEnabled: false,
+      notifyChannels: [],
       serverChanEnabled: false,
       telegramEnabled: true,
       telegramApiBaseUrl: 'https://tg-proxy.example.com',

@@ -392,19 +392,37 @@ describe('settings and auth events', () => {
     expect((body.serverTimeZone || '').length).toBeGreaterThan(0);
   });
 
-  it('rejects invalid bark url when bark channel is enabled', async () => {
+  it('rejects an enabled push channel whose url is not http(s)', async () => {
     const response = await app.inject({
       method: 'PUT',
       url: '/api/settings/runtime',
       payload: {
-        barkEnabled: true,
-        barkUrl: 'juricek.chen@gmail.com',
+        notifyChannels: [{ id: 'ch-1', url: 'not-a-url', enabled: true }],
       },
     });
 
     expect(response.statusCode).toBe(400);
     const body = response.json() as { message?: string };
-    expect(body.message).toContain('Bark URL');
+    expect(body.message).toContain('推送通道');
+  });
+
+  it('accepts a channel list and keeps independent urls per platform', async () => {
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/runtime',
+      payload: {
+        notifyChannels: [
+          { id: 'ch-ding', kind: 'dingtalk', url: 'https://oapi.dingtalk.com/robot/send?access_token=a', enabled: true },
+          { id: 'ch-fs', kind: 'feishu', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/b', enabled: true },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const readBack = await app.inject({ method: 'GET', url: '/api/settings/runtime' });
+    const payload = readBack.json() as { notifyChannels?: Array<{ id: string; kind?: string; enabled?: boolean }> };
+    expect(payload.notifyChannels?.map((c) => c.id)).toEqual(['ch-ding', 'ch-fs']);
+    expect(payload.notifyChannels?.map((c) => c.kind)).toEqual(['dingtalk', 'feishu']);
   });
 
   it('rejects invalid webhook url when webhook channel is enabled', async () => {

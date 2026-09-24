@@ -244,7 +244,7 @@ const zhToEn: Record<string, string> = {
   '自动签到': 'Auto Check-in',
   '定时签到 + 余额刷新，不再手动操心': 'Scheduled check-in and balance refresh, never miss one again',
   '多渠道告警': 'Multi-Channel Alerts',
-  'Webhook / Bark / Server酱 / 邮件，余额不足及时提醒': 'Webhook / Bark / ServerChan / Email — get notified when balance is low',
+  '钉钉 / 飞书 / Server酱 / 邮件，余额不足及时提醒': 'DingTalk / Feishu / ServerChan / Email — get notified when balance is low',
   '轻量部署': 'Lightweight Deployment',
   '单 Docker 容器，内置 SQLite，无外部依赖': 'Single Docker container with built-in SQLite, no external dependencies',
   '技术栈': 'Tech Stack',

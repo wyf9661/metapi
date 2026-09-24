@@ -1,15 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { api, type RuntimeSettingsPayload } from '../api.js';
 import { useToast } from '../components/Toast.js';
+import ModernSelect from '../components/ModernSelect.js';
 import { tr } from '../i18n.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 
+type NotifyChannelKind = 'dingtalk' | 'feishu' | 'wecom' | 'custom';
+
+type NotifyChannelRow = {
+    id: string;
+    kind: NotifyChannelKind;
+    url: string;
+    /** Only carries a new value the user typed; empty means "keep the saved one". */
+    secret: string;
+    secretMasked?: string;
+    enabled: boolean;
+    label?: string;
+};
+
+const NOTIFY_KIND_OPTIONS = [
+    { value: 'dingtalk', label: '钉钉' },
+    { value: 'feishu', label: '飞书' },
+    { value: 'wecom', label: '企业微信' },
+    { value: 'custom', label: '自定义' },
+];
+
+/** Mirrors the server-side host detection so a pasted URL preselects the platform. */
+function detectChannelKind(url: string): NotifyChannelKind {
+    try {
+        const { hostname, pathname } = new URL(url.trim());
+        if (hostname === 'qyapi.weixin.qq.com' && pathname.includes('/cgi-bin/webhook/send')) return 'wecom';
+        if ((hostname === 'open.feishu.cn' || hostname === 'open.larksuite.com') && pathname.includes('/bot/v2/hook/')) return 'feishu';
+        if (hostname === 'oapi.dingtalk.com' && pathname.includes('/robot/send')) return 'dingtalk';
+    } catch { /* keep the current choice while the URL is half-typed */ }
+    return 'custom';
+}
+
+const CHANNEL_URL_PLACEHOLDER: Record<NotifyChannelKind, string> = {
+    dingtalk: 'https://oapi.dingtalk.com/robot/send?access_token=...',
+    feishu: 'https://open.feishu.cn/open-apis/bot/v2/hook/...',
+    wecom: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...',
+    custom: 'https://example.com/webhook',
+};
+
 type RuntimeSettings = {
+    notifyChannels: NotifyChannelRow[];
     webhookUrl: string;
     webhookSecret: string;
-    barkUrl: string;
     webhookEnabled: boolean;
-    barkEnabled: boolean;
     serverChanEnabled: boolean;
     telegramEnabled: boolean;
     telegramApiBaseUrl: string;
@@ -31,11 +69,10 @@ type RuntimeSettings = {
 export default function NotificationSettings() {
     const isMobile = useIsMobile();
     const [runtime, setRuntime] = useState<RuntimeSettings>({
+        notifyChannels: [],
         webhookUrl: '',
         webhookSecret: '',
-        barkUrl: '',
         webhookEnabled: true,
-        barkEnabled: true,
         serverChanEnabled: false,
         telegramEnabled: false,
         telegramApiBaseUrl: 'https://api.telegram.org',
@@ -76,11 +113,41 @@ export default function NotificationSettings() {
         try {
             const runtimeInfo = await api.getRuntimeSettings();
             setRuntime({
+                notifyChannels: (() => {
+                    const rows = (runtimeInfo.notifyChannels || []).map((ch: {
+                        id: string;
+                        url: string;
+                        secret?: string;
+                        enabled?: boolean;
+                        label?: string;
+                        kind?: NotifyChannelKind;
+                    }) => ({
+                        id: ch.id,
+                        kind: (ch as { kind?: NotifyChannelKind }).kind
+                            || detectChannelKind(ch.url || ''),
+                        url: ch.url || '',
+                        secret: '',
+                        secretMasked: ch.secret || '',
+                        enabled: ch.enabled !== false,
+                        label: ch.label,
+                    }));
+                    if (rows.length > 0) return rows;
+                    // Pre-migration payload: surface the legacy single webhook as one row.
+                    if (runtimeInfo.webhookUrl) {
+                        return [{
+                            id: 'legacy-1',
+                            kind: detectChannelKind(runtimeInfo.webhookUrl),
+                            url: runtimeInfo.webhookUrl,
+                            secret: '',
+                            secretMasked: (runtimeInfo as any).webhookSecret || '',
+                            enabled: runtimeInfo.webhookEnabled !== false,
+                        }];
+                    }
+                    return [];
+                })(),
                 webhookUrl: runtimeInfo.webhookUrl || '',
                 webhookSecret: (runtimeInfo as any).webhookSecret || '',
-                barkUrl: runtimeInfo.barkUrl || '',
                 webhookEnabled: runtimeInfo.webhookEnabled ?? true,
-                barkEnabled: runtimeInfo.barkEnabled ?? true,
                 serverChanEnabled: !!runtimeInfo.serverChanEnabled,
                 telegramEnabled: !!runtimeInfo.telegramEnabled,
                 telegramApiBaseUrl: runtimeInfo.telegramApiBaseUrl || 'https://api.telegram.org',
@@ -112,15 +179,39 @@ export default function NotificationSettings() {
         loadSettings();
     }, []);
 
+    const updateChannel = (id: string, patch: Partial<NotifyChannelRow>) => {
+        setRuntime((prev) => ({
+            ...prev,
+            notifyChannels: prev.notifyChannels.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+        }));
+    };
+
+    const addChannel = () => {
+        setRuntime((prev) => ({
+            ...prev,
+            notifyChannels: [
+                ...prev.notifyChannels,
+                { id: `ch-${Date.now().toString(36)}-${prev.notifyChannels.length}`, kind: 'dingtalk', url: '', secret: '', enabled: true },
+            ],
+        }));
+    };
+
+    const removeChannel = (id: string) => {
+        setRuntime((prev) => ({ ...prev, notifyChannels: prev.notifyChannels.filter((row) => row.id !== id) }));
+    };
+
     const saveNotify = async () => {
         setSavingNotify(true);
         try {
             const payload: RuntimeSettingsPayload = {
-                webhookUrl: runtime.webhookUrl,
-                webhookSecret: runtime.webhookSecret,
-                barkUrl: runtime.barkUrl,
-                webhookEnabled: runtime.webhookEnabled,
-                barkEnabled: runtime.barkEnabled,
+                notifyChannels: runtime.notifyChannels.map((row) => ({
+                    id: row.id,
+                    kind: row.kind,
+                    url: row.url,
+                    secret: row.secret,
+                    enabled: row.enabled,
+                    label: row.label,
+                })),
                 serverChanEnabled: runtime.serverChanEnabled,
                 telegramEnabled: runtime.telegramEnabled,
                 telegramApiBaseUrl: runtime.telegramApiBaseUrl,
@@ -197,7 +288,9 @@ export default function NotificationSettings() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
 
-                <div className="card animate-slide-up stagger-1" style={{ padding: 20, order: 1 }}>
+                <div style={{ gridColumn: '1 / -1', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>告警策略</div>
+
+                <div className="card animate-slide-up stagger-1" style={{ padding: 20 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>告警去噪与冷静期</div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
                         相同告警在冷静期内不会重复推送；冷静期结束后会自动合并重复条数。
@@ -219,82 +312,113 @@ export default function NotificationSettings() {
                     </div>
                 </div>
 
-                {/* 卡片：Webhook & Bark */}
-                <div className="card animate-slide-up stagger-2" style={{ padding: 24, order: 3, gridColumn: '1 / -1', border: (runtime.webhookEnabled || runtime.barkEnabled) ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10, marginBottom: 16 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 32, height: 32, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                            </div>
-                            <div>
-                                <div style={{ fontWeight: 600, fontSize: 15 }}>Webhook & Bark</div>
-                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>通过 HTTP URL 推送消息通知（自动识别企业微信、飞书格式）</div>
-                            </div>
-                        </div>
+                <div style={{ gridColumn: '1 / -1', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>推送通道</div>
 
-                        <div style={{ display: 'flex', gap: 16 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                                <span style={{ fontSize: 13, fontWeight: 500, color: runtime.webhookEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>启用 Webhook</span>
-                                <input
-                                    type="checkbox"
-                                    style={{ width: 16, height: 16, cursor: 'pointer' }}
-                                    checked={runtime.webhookEnabled}
-                                    onChange={(e) => setRuntime((prev) => ({ ...prev, webhookEnabled: e.target.checked }))}
-                                />
-                            </label>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                                <span style={{ fontSize: 13, fontWeight: 500, color: runtime.barkEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>启用 Bark</span>
-                                <input
-                                    type="checkbox"
-                                    style={{ width: 16, height: 16, cursor: 'pointer' }}
-                                    checked={runtime.barkEnabled}
-                                    onChange={(e) => setRuntime((prev) => ({ ...prev, barkEnabled: e.target.checked }))}
-                                />
-                            </label>
+                {/* 卡片：机器人推送（列表，每行一条独立通道） */}
+                <div
+                    className="card animate-slide-up stagger-2"
+                    style={{
+                        padding: 24,
+                        gridColumn: '1 / -1',
+                        border: runtime.notifyChannels.some((row) => row.enabled)
+                            ? '1px solid var(--color-primary)'
+                            : '1px solid var(--color-border-light)',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                        <div style={{ width: 32, height: 32, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: 600, fontSize: 15 }}>机器人推送</div>
+                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>钉钉、飞书、企业微信，每条通道独立地址与密钥，可同时启用</div>
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div style={{ opacity: runtime.webhookEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
-                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Webhook URL</div>
-                            <input
-                                value={runtime.webhookUrl}
-                                onChange={(e) => setRuntime((prev) => ({ ...prev, webhookUrl: e.target.value }))}
-                                placeholder="https://oapi.dingtalk.com/robot/send?access_token=... 或企业微信/飞书 Webhook"
-                                style={inputStyle}
-                                disabled={!runtime.webhookEnabled}
-                            />
-                            <div style={{ fontSize: 13, fontWeight: 500, margin: '12px 0 8px', color: 'var(--color-text-secondary)' }}>钉钉加签密钥（SEC，可选）</div>
-                            <input
-                                value={runtime.webhookSecret}
-                                onChange={(e) => setRuntime((prev) => ({ ...prev, webhookSecret: e.target.value }))}
-                                placeholder="SEC...（仅钉钉加签机器人需要，可留空）"
-                                style={inputStyle}
-                                disabled={!runtime.webhookEnabled}
-                            />
-                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
-                                钉钉开启“加签”时填写 SEC 密钥；也可把 secret=SEC... 拼在 Webhook URL 查询参数里。
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 10, lineHeight: 1.6 }}>
-                                <strong>飞书</strong>：群会话 → 设置 → 群机器人 → 添加「自定义机器人」→ 复制 Webhook 地址（形如
-                                https://open.feishu.cn/open-apis/bot/v2/hook/xxxx）粘贴到上方，勾选“启用 Webhook”后点“发送测试通知”。企业微信 / 钉钉 / 飞书地址都能自动识别。
-                            </div>
+                    {runtime.notifyChannels.length === 0 && (
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', padding: '4px 0 12px' }}>
+                            还没有推送通道，点下面的按钮添加一条。
                         </div>
-                        <div style={{ opacity: runtime.barkEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
-                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Bark URL</div>
-                            <input
-                                value={runtime.barkUrl}
-                                onChange={(e) => setRuntime((prev) => ({ ...prev, barkUrl: e.target.value }))}
-                                placeholder="https://api.day.app/your_key (可选)"
-                                style={inputStyle}
-                                disabled={!runtime.barkEnabled}
-                            />
-                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {runtime.notifyChannels.map((row) => (
+                            <div
+                                key={row.id}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: isMobile ? 'column' : 'row',
+                                    gap: 10,
+                                    alignItems: isMobile ? 'stretch' : 'center',
+                                    padding: 12,
+                                    border: '1px solid var(--color-border-light)',
+                                    borderRadius: 10,
+                                    opacity: row.enabled ? 1 : 0.65,
+                                    transition: 'opacity 0.2s',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: isMobile ? 'none' : '0 0 auto' }}>
+                                    <div style={{ width: isMobile ? '100%' : 116 }}>
+                                        <ModernSelect
+                                            size="sm"
+                                            value={row.kind}
+                                            onChange={(value) => updateChannel(row.id, { kind: value as NotifyChannelKind })}
+                                            options={NOTIFY_KIND_OPTIONS}
+                                        />
+                                    </div>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                        <input
+                                            type="checkbox"
+                                            style={{ width: 16, height: 16, cursor: 'pointer' }}
+                                            checked={row.enabled}
+                                            onChange={(e) => updateChannel(row.id, { enabled: e.target.checked })}
+                                        />
+                                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>启用</span>
+                                    </label>
+                                </div>
+
+                                <input
+                                    value={row.url}
+                                    onChange={(e) => {
+                                        const nextUrl = e.target.value;
+                                        const detected = detectChannelKind(nextUrl);
+                                        updateChannel(row.id, detected === 'custom'
+                                            ? { url: nextUrl }
+                                            : { url: nextUrl, kind: detected });
+                                    }}
+                                    placeholder={CHANNEL_URL_PLACEHOLDER[row.kind]}
+                                    style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                                />
+
+                                <input
+                                    value={row.secret}
+                                    onChange={(e) => updateChannel(row.id, { secret: e.target.value })}
+                                    placeholder={row.secretMasked ? '已保存密钥，留空不改' : '加签密钥（可选）'}
+                                    style={{ ...inputStyle, flex: isMobile ? 1 : '0 0 220px' }}
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={() => removeChannel(row.id)}
+                                    className="btn btn-link btn-link-warning"
+                                    style={{ fontSize: 12, flex: isMobile ? 'none' : '0 0 auto' }}
+                                >
+                                    删除
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+                        <button type="button" onClick={addChannel} className="btn btn-soft-primary">添加通道</button>
+                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                            加签密钥：钉钉「加签」与飞书「签名校验」都填这里，留空表示不需要。
+                        </span>
                     </div>
                 </div>
 
                 {/* 卡片：Server酱 */}
-                <div className="card animate-slide-up stagger-3" style={{ padding: 24, order: 2, border: runtime.serverChanEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
+                <div className="card animate-slide-up stagger-3" style={{ padding: 24, border: runtime.serverChanEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10, marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -333,7 +457,7 @@ export default function NotificationSettings() {
                 </div>
 
                 {/* 卡片：Telegram */} 
-                <div className="card animate-slide-up stagger-4" style={{ padding: 24, order: 4, border: runtime.telegramEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
+                <div className="card animate-slide-up stagger-4" style={{ padding: 24, border: runtime.telegramEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10, marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -410,7 +534,7 @@ export default function NotificationSettings() {
                 </div>
 
                 {/* 卡片：SMTP 邮件设置 */}
-                <div className="card animate-slide-up stagger-4" style={{ padding: 24, order: 5, border: runtime.smtpEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
+                <div className="card animate-slide-up stagger-4" style={{ padding: 24, border: runtime.smtpEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10, marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

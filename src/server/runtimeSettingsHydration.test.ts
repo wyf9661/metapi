@@ -14,21 +14,22 @@ describe('applyRuntimeSettings', () => {
     config.disableCrossProtocolFallback = false;
     config.responsesCompactFallbackToResponsesEnabled = false;
     config.webhookEnabled = true;
-    config.barkEnabled = true;
     config.serverChanEnabled = true;
 
     applyRuntimeSettings(new Map([
       ['disable_cross_protocol_fallback', JSON.stringify(true)],
       ['responses_compact_fallback_to_responses_enabled', JSON.stringify(true)],
       ['webhook_enabled', JSON.stringify(false)],
-      ['bark_enabled', JSON.stringify(false)],
+      ['notify_channels', JSON.stringify([{ id: 'ch-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/x', secret: 's', enabled: true, kind: 'feishu' }])],
       ['serverchan_enabled', JSON.stringify(false)],
     ]));
 
     expect(config.disableCrossProtocolFallback).toBe(true);
     expect(config.responsesCompactFallbackToResponsesEnabled).toBe(true);
     expect(config.webhookEnabled).toBe(false);
-    expect(config.barkEnabled).toBe(false);
+    expect(config.notifyChannels).toEqual([
+      { id: 'ch-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/x', secret: 's', enabled: true, kind: 'feishu' },
+    ]);
     expect(config.serverChanEnabled).toBe(false);
   });
 
