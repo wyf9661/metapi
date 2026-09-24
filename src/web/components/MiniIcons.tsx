@@ -210,8 +210,9 @@ export function BanIcon({ size = 12 }: IconProps) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+      {/* r=9 keeps this circle distinct from the globe glyph. */}
+      <circle cx="12" cy="12" r="9" />
+      <line x1="5.64" y1="5.64" x2="18.36" y2="18.36" />
     </svg>
   );
 }
