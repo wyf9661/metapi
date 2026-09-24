@@ -98,13 +98,11 @@ export function formatTokensPerSecond(tokens: number | null | undefined, latency
 }
 
 /**
- * Effective input tokens for display. Upstreams differ: OpenAI-style responses
- * report prompt_tokens INCLUDING the cached prefix, while Anthropic-style ones
- * report only the non-cached part and carry the rest in cache_read /
- * cache_creation (observed prompt_tokens=3 with cache_read=50483). Without an
- * explicit include flag on the list row, a cache total larger than the prompt
- * is read as the split form and added back, so the usage log never shows a
- * 3-token input for a 50k-token cached request (2026-09-09).
+ * Effective input tokens for display. OpenAI-style upstreams report prompt_tokens
+ * INCLUDING the cached prefix; Anthropic-style ones report only the non-cached
+ * part and carry the rest in cache_read / cache_creation. Without an explicit
+ * include flag the list row reads a cache total larger than the prompt as that
+ * split form and adds it back.
  */
 export function resolveProxyLogInputTokens(log: {
   promptTokens?: number | null;

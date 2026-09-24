@@ -24,7 +24,7 @@ export function isTruthyFlag(input: string | null): boolean {
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
-// ── OAuth account info helpers ─────────────────────────────────────────────
+// OAuth account info helpers
 
 export type OauthAccountQuotaWindow = {
   supported: boolean;
@@ -94,10 +94,9 @@ function normalizeQuotaWindowState(window: any): OauthAccountQuotaWindow | null 
 }
 
 /**
- * Normalise the legacy `usedPercent / resetAfterSeconds` window shape
- * (as described by the task contract) into the standard
+ * Normalise the legacy `usedPercent / resetAfterSeconds` window shape into the
  * OauthAccountQuotaWindow shape that resolveQuotaWindowPercent /
- * resolveQuotaWindowSummary understand.
+ * resolveQuotaWindowSummary expect.
  */
 function normalizeQuotaWindowLegacy(window: any): OauthAccountQuotaWindow | null {
   if (!window || typeof window !== 'object' || Array.isArray(window)) return null;
@@ -182,17 +181,11 @@ function normalizeOauthQuotaEntries(quota: any): OauthAccountQuotaEntry[] {
 }
 
 /**
- * Parse OAuth account info from an account row.
- *
- * Returns a structured OauthAccountInfo when the account is managed by an
- * OAuth provider (detected via the oauthProvider column or extraConfig.oauth.provider).
- * Returns null for non-OAuth accounts so callers can conditionally render.
- *
- * Quota windows are normalised into the same shape that
- * resolveQuotaWindowPercent / resolveQuotaWindowSummary from
- * connectionPresentation.tsx understand (supported / used / limit / remaining / resetAt).
- *
- * No extra API requests are made — all data comes from the account row itself.
+ * OAuth account info for a row, or null when the account is not OAuth-managed
+ * (the oauthProvider column, else extraConfig.oauth.provider). Quota windows are
+ * normalised into the shape resolveQuotaWindowPercent /
+ * resolveQuotaWindowSummary expect. No extra API requests — everything comes
+ * from the row.
  */
 export function parseOauthAccountInfo(account: any): OauthAccountInfo | null {
   if (!account) return null;
@@ -215,10 +208,7 @@ export function parseOauthAccountInfo(account: any): OauthAccountInfo | null {
   return { provider, email, planType, quota, entries };
 }
 
-// ── Sub2API subscription usage helpers ─────────────────────────────────────
-// 参考 sites.ts aggregateSiteSubscription 的聚合语义，在账号行内展示订阅用量
-// （套餐 / 已用 / 总额度 / 剩余），让 sub2api 账号在账户管理页也能看到用量，
-// 而不是只有裸余额。
+// Sub2API 订阅用量：语义同 sites.ts aggregateSiteSubscription，按账号行展示套餐 / 已用 / 总额度 / 剩余。
 
 export type Sub2ApiAccountUsage = {
   planNames: string[];
