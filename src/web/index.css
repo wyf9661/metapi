@@ -2417,12 +2417,14 @@ html[data-layout="desktop"] .main-content {
 }
 
 /* The whole row is the drag surface — no handle button. */
-.sites-table tbody tr.site-row-draggable {
+.sites-table tbody tr.site-row-draggable,
+.accounts-table tbody tr.site-row-draggable {
   cursor: grab;
   touch-action: manipulation;
 }
 
-.sites-table tbody tr.site-row-draggable:active {
+.sites-table tbody tr.site-row-draggable:active,
+.accounts-table tbody tr.site-row-draggable:active {
   cursor: grabbing;
 }
 
@@ -2443,7 +2445,8 @@ body.site-drag-active * {
  * transparent: without it the rows underneath bleed through while it moves.
  * Nothing here changes layout, so the row's box stays exactly the same size.
  */
-.sites-table tbody tr.site-sort-dragging > td {
+.sites-table tbody tr.site-sort-dragging > td,
+.accounts-table tbody tr.site-sort-dragging > td {
   background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-card));
   box-shadow: 0 12px 26px -8px rgba(0, 0, 0, 0.38);
 }
@@ -2455,6 +2458,7 @@ body.site-drag-active * {
 
 /* Moving at the pointer's own pace: the dragged row must not lag behind it. */
 .sites-table tbody tr.site-sort-dragging,
+.accounts-table tbody tr.site-sort-dragging,
 .mobile-card-list > .site-sort-dragging {
   transition: none;
 }

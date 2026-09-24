@@ -1,4 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import CenteredModal from '../components/CenteredModal.js';
@@ -36,7 +55,7 @@ import {
 import { TokensPanel } from './tokens/TokensPanel.js';
 import { tr } from '../i18n.js';
 import {
-  buildCustomReorderUpdates,
+  buildCustomDragReorderUpdates,
   sortItemsForDisplay,
   type SortMode,
 } from './helpers/listSorting.js';
@@ -115,6 +134,101 @@ type AccountsProps = {
   siteId?: number;
 };
 
+/**
+ * 列表拖拽排序：与「站点管理」保持一致的交互 —— 整行/整卡就是拖拽面，没有独立把手。
+ * listeners 落在 <tr>/<div> 自身，靠 sensor 的 activationConstraint（鼠标 6px 位移、
+ * 触屏 180ms 长按）把「拖动排序」和「点击行内的按钮」区分开。
+ */
+function SortableAccountTableRow({
+  id,
+  label,
+  disabled,
+  className,
+  dataTestId,
+  isDropTarget,
+  rowRef,
+  children,
+}: {
+  id: number;
+  label?: string | null;
+  disabled: boolean;
+  className: string;
+  dataTestId?: string;
+  isDropTarget?: boolean;
+  rowRef: (node: HTMLTableRowElement | null) => void;
+  children: React.ReactNode;
+}) {
+  const sortable = useSortable({ id, disabled });
+  const translatedTransform = sortable.transform
+    ? { ...sortable.transform, scaleX: 1, scaleY: 1 }
+    : null;
+
+  return (
+      <tr
+        ref={(node) => {
+          sortable.setNodeRef(node);
+          rowRef(node);
+        }}
+        // 不用 {...sortable.attributes}：那会带上 role="button"，把 <tr> 变成按钮、
+        // 破坏表格语义。键盘拖拽只需要 listeners + 可聚焦元素。
+        {...sortable.listeners}
+        tabIndex={disabled ? undefined : 0}
+        aria-roledescription={disabled ? undefined : '可拖拽排序的连接行'}
+        aria-describedby={sortable.attributes['aria-describedby']}
+        aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
+        data-testid={dataTestId}
+        className={`${className} ${sortable.isDragging ? 'site-sort-dragging' : ''} ${
+          !disabled ? 'site-row-draggable' : ''
+        } ${isDropTarget ? 'site-sort-drop-before' : ''}`.trim()}
+        style={{
+          transform: CSS.Translate.toString(translatedTransform),
+          transition: sortable.isDragging ? undefined : (sortable.transition || undefined),
+          position: 'relative',
+          zIndex: sortable.isDragging ? 3 : undefined,
+        }}
+      >
+        {children}
+      </tr>
+  );
+}
+
+function SortableAccountMobileCard({
+  id,
+  label,
+  disabled,
+  isDropTarget,
+  children,
+}: {
+  id: number;
+  label?: string | null;
+  disabled: boolean;
+  isDropTarget?: boolean;
+  children: React.ReactNode;
+}) {
+  const sortable = useSortable({ id, disabled });
+  return (
+      <div
+        ref={sortable.setNodeRef}
+        {...sortable.listeners}
+        tabIndex={disabled ? undefined : 0}
+        aria-roledescription={disabled ? undefined : '可拖拽排序的连接卡片'}
+        aria-describedby={sortable.attributes['aria-describedby']}
+        aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
+        className={`${sortable.isDragging ? 'site-sort-dragging' : ''} ${
+          !disabled ? 'site-card-draggable' : ''
+        } ${isDropTarget ? 'site-sort-drop-before' : ''}`.trim()}
+        style={{
+          transform: CSS.Translate.toString(sortable.transform),
+          transition: sortable.isDragging ? undefined : (sortable.transition || undefined),
+          position: 'relative',
+          zIndex: sortable.isDragging ? 3 : undefined,
+        }}
+      >
+        {children}
+      </div>
+  );
+}
+
 export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -126,11 +240,20 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
   const [sites, setSites] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('custom');
+  const [activeDragAccountId, setActiveDragAccountId] = useState<number | null>(null);
+  const [overDragAccountId, setOverDragAccountId] = useState<number | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<number | null>(
     null,
   );
   const [expandedAccountIds, setExpandedAccountIds] = useState<number[]>([]);
   const isMobile = useIsMobile();
+  // 与站点管理同一套传感器：鼠标位移 6px 或触屏长按 180ms 才开始拖拽，
+  // 这样行内的「置顶/编辑/删除」等按钮仍然是正常点击。
+  const accountSortSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [addMode, setAddMode] = useState<'token' | 'login'>('token');
@@ -332,6 +455,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     visibleAccounts,
     `${activeSegment}:${sortMode}:${accounts.length}:${filterSiteId || 0}`,
     exactPageSize,
+  );
+  /** 拖拽排序的候选集合 —— 当前页的行，与站点管理同一套 DndContext 约定。 */
+  const sortableContextItems = useMemo(
+    () => pagedAccounts.map((a: any) => a.id),
+    [pagedAccounts],
   );
   const verifyFailureHint = buildVerifyFailureHint(verifyResult);
   const addAccountPrereqHint = buildAddAccountPrereqHint(verifyResult);
@@ -943,14 +1071,55 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     }
   };
 
-  const handleMoveCustomOrder = async (
-    account: any,
-    direction: 'up' | 'down',
-  ) => {
-    const key = `reorder-${account.id}`;
-    const updates = buildCustomReorderUpdates(accounts, account.id, direction);
+  const clearAccountDragState = () => {
+    setActiveDragAccountId(null);
+    setOverDragAccountId(null);
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('site-drag-active');
+    }
+  };
+
+  const handleAccountDragStart = (event: DragStartEvent) => {
+    const accountId = Number(event.active.id);
+    setActiveDragAccountId(Number.isFinite(accountId) ? accountId : null);
+    setOverDragAccountId(Number.isFinite(accountId) ? accountId : null);
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('site-drag-active');
+    }
+  };
+
+  const handleAccountDragOver = (event: DragOverEvent) => {
+    const overId = event.over ? Number(event.over.id) : null;
+    setOverDragAccountId(overId != null && Number.isFinite(overId) ? overId : null);
+  };
+
+  /**
+   * 拖拽落位：算出受影响账号的新 sortOrder 后逐条落库，再整表重载 —— 与站点管理
+   * `handleSiteDragEnd` 同一条路径。置顶 / 普通 / 已禁用是三个连续分组，跨组拖拽
+   * 会被拒绝并给出提示（`buildCustomDragReorderUpdates` 本身也会返回空）。
+   */
+  const handleAccountDragEnd = async (event: DragEndEvent) => {
+    const activeId = Number(event.active.id);
+    const overId = event.over ? Number(event.over.id) : null;
+    clearAccountDragState();
+    if (!Number.isFinite(activeId) || overId == null || !Number.isFinite(overId)) return;
+    if (activeId === overId) return;
+
+    const active = accounts.find((item: any) => item.id === activeId);
+    const over = accounts.find((item: any) => item.id === overId);
+    if (!active || !over) return;
+    if (
+      !!active.isPinned !== !!over.isPinned
+      || (active.status === 'disabled') !== (over.status === 'disabled')
+    ) {
+      toast.info('置顶、普通和禁用账号需在各自分组内排序');
+      return;
+    }
+
+    const updates = buildCustomDragReorderUpdates(accounts, activeId, overId);
     if (updates.length === 0) return;
 
+    const key = `reorder-${activeId}`;
     setActionLoading((s) => ({ ...s, [key]: true }));
     try {
       await Promise.all(
@@ -2456,9 +2625,17 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             {visibleAccounts.length > 0 ? (
               isMobile ? (
                 <div className="mobile-card-list" ref={accountsMobileListRef}>
+                  <DndContext
+                    sensors={accountSortSensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleAccountDragStart}
+                    onDragOver={handleAccountDragOver}
+                    onDragCancel={clearAccountDragState}
+                    onDragEnd={handleAccountDragEnd}
+                  >
+                  <SortableContext items={sortableContextItems} strategy={verticalListSortingStrategy}>
                   {pagedAccounts.map((a: any) => {
                     const capabilities = resolveAccountCapabilities(a);
-                    const connectionMode = resolveAccountCredentialMode(a);
                     const health = resolveRuntimeHealth(a);
                     const isExpanded = expandedAccountIds.includes(a.id);
                     const hintMessage =
@@ -2466,27 +2643,15 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         ? '账号已过期，请重新绑定'
                         : health.reason || '-';
                     return (
-                      <MobileCard
+                      <SortableAccountMobileCard
                         key={a.id}
+                        id={a.id}
+                        label={resolveAccountDisplayName(a)}
+                        disabled={sortMode !== 'custom'}
+                        isDropTarget={overDragAccountId === a.id && activeDragAccountId !== a.id}
+                      >
+                      <MobileCard
                         title={resolveAccountDisplayName(a)}
-                        headerActions={
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <StatusPill
-                              tone={connectionMode === 'apikey' ? 'warning' : 'info'}
-                              style={{ fontSize: 10 }}
-                            >
-                              {connectionMode === 'apikey'
-                                ? 'API Key'
-                                : 'Session'}
-                            </StatusPill>
-                          </div>
-                        }
                         footerActions={
                           <>
                             <button
@@ -2677,32 +2842,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   '置顶'
                                 )}
                               </button>
-                              {sortMode === 'custom' && (
-                                <>
-                                  <button
-                                    onClick={() =>
-                                      handleMoveCustomOrder(a, 'up')
-                                    }
-                                    disabled={
-                                      !!actionLoading[`reorder-${a.id}`]
-                                    }
-                                    className="btn btn-link btn-link-muted"
-                                  >
-                                    ↑ 上移
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleMoveCustomOrder(a, 'down')
-                                    }
-                                    disabled={
-                                      !!actionLoading[`reorder-${a.id}`]
-                                    }
-                                    className="btn btn-link btn-link-muted"
-                                  >
-                                    ↓ 下移
-                                  </button>
-                                </>
-                              )}
                               {capabilities.canRefreshBalance && (
                                 <button
                                   onClick={() =>
@@ -2771,11 +2910,23 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           </div>
                         ) : null}
                       </MobileCard>
+                      </SortableAccountMobileCard>
                     );
                   })}
+                  </SortableContext>
+                  </DndContext>
                 </div>
                 ) : (
                   <div className="accounts-desktop-table-wrap" ref={accountsTableWrapRef}>
+                <DndContext
+                  sensors={accountSortSensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleAccountDragStart}
+                  onDragOver={handleAccountDragOver}
+                  onDragCancel={clearAccountDragState}
+                  onDragEnd={handleAccountDragEnd}
+                >
+                <SortableContext items={sortableContextItems} strategy={verticalListSortingStrategy}>
                 <table className="data-table accounts-table">
                   <thead>
                     <tr>
@@ -2792,32 +2943,23 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   <tbody>
                     {pagedAccounts.map((a: any, i: number) => {
                       const capabilities = resolveAccountCapabilities(a);
-                      const connectionMode = resolveAccountCredentialMode(a);
                       return (
-                        <tr
+                        <SortableAccountTableRow
                           key={a.id}
-                          data-testid={`account-row-${a.id}`}
-                          ref={(node) => {
+                          id={a.id}
+                          label={resolveAccountDisplayName(a)}
+                          disabled={sortMode !== 'custom'}
+                          isDropTarget={overDragAccountId === a.id && activeDragAccountId !== a.id}
+                          dataTestId={`account-row-${a.id}`}
+                          className={`animate-slide-up stagger-${Math.min(i + 1, 5)} ${highlightAccountId === a.id ? 'row-focus-highlight' : ''}`.trim()}
+                          rowRef={(node) => {
                             if (node) rowRefs.current.set(a.id, node);
                             else rowRefs.current.delete(a.id);
                           }}
-                          className={`animate-slide-up stagger-${Math.min(i + 1, 5)} ${highlightAccountId === a.id ? 'row-focus-highlight' : ''}`.trim()}
                         >
                           <td className="accounts-name-cell" style={{ color: 'var(--color-text-primary)' }}>
                             <div className="inventory-name-title" style={{ fontWeight: 600 }} title={resolveAccountDisplayName(a)}>
                               {resolveAccountDisplayName(a)}
-                            </div>
-                            <div
-                              style={{ display: 'flex', gap: 4, marginTop: 4 }}
-                            >
-                              <StatusPill
-                                tone={connectionMode === 'apikey' ? 'warning' : 'info'}
-                                style={{ fontSize: 10 }}
-                              >
-                                {connectionMode === 'apikey'
-                                  ? 'API Key'
-                                  : 'Session'}
-                              </StatusPill>
                             </div>
                           </td>
                           <td className="accounts-site-cell">
@@ -2961,32 +3103,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   '置顶'
                                 )}
                               </button>
-                              {sortMode === 'custom' && (
-                                <>
-                                  <button
-                                    onClick={() =>
-                                      handleMoveCustomOrder(a, 'up')
-                                    }
-                                    disabled={
-                                      !!actionLoading[`reorder-${a.id}`]
-                                    }
-                                    className="btn btn-link btn-link-muted"
-                                  >
-                                    ↑
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleMoveCustomOrder(a, 'down')
-                                    }
-                                    disabled={
-                                      !!actionLoading[`reorder-${a.id}`]
-                                    }
-                                    className="btn btn-link btn-link-muted"
-                                  >
-                                    ↓
-                                  </button>
-                                </>
-                              )}
                               {capabilities.canRefreshBalance && (
                                 <button
                                   onClick={() =>
@@ -3066,11 +3182,13 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               </button>
                             </div>
                           </td>
-                        </tr>
+                        </SortableAccountTableRow>
                       );
                     })}
                   </tbody>
                 </table>
+                </SortableContext>
+                </DndContext>
                 <PaginationControls
                   page={safePage}
                   totalPages={totalPages}
