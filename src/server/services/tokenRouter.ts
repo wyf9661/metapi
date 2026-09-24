@@ -100,8 +100,10 @@ export type WeightedSelectionResult = {
 const boundedGapStates = new Map<string, BoundedGapState>();
 attachBoundedGapStateMap(boundedGapStates);
 
-function getBoundedGapState(requestedModel: string, siteId: number): BoundedGapState {
-  const key = `${requestedModel}\u0000${siteId}`;
+function getBoundedGapState(requestedModel: string, siteId: number, channelId?: number): BoundedGapState {
+  const key = channelId != null
+    ? `${requestedModel}\u0000${siteId}\u0000ch:${channelId}`
+    : `${requestedModel}\u0000${siteId}`;
   const existing = boundedGapStates.get(key);
   if (existing) return existing;
   const state = { sequence: 0, lastSelectedSequence: null };
@@ -143,9 +145,11 @@ export type CandidateEligibilityOptions = {
   downstreamPolicy?: DownstreamRoutingPolicy;
   /** Request's estimated context requirement (input + output budget + margin). */
   requiredContextTokens?: number;
-  /** Availability-first: relax the channel-cooldown check so a temporal signal
-   * does not empty the candidate set on its own (mirrors the context filter pattern). */
-  ignoreChannelCooldown?: boolean;
+  /** Availability-first: relax a cooldown that came from a HEALTH PROBE when it
+   * would be the only reason the candidate set is empty. Real-failure and
+   * credential-scoped cooldowns stay hard exclusions (see
+   * isProbeAttributableCooldown). */
+  ignoreProbeCooldown?: boolean;
 };
 
 import {
@@ -526,9 +530,18 @@ export class TokenRouter {
         );
         if (bounded) {
           const selectedSiteId = siteIds[bounded.selectedIndex];
-          selectedId = active
-            .filter((row) => row.siteId === selectedSiteId)
-            .sort((left, right) => right.score - left.score)[0]?.channelId ?? selectedId;
+          const siteRows = active.filter((row) => row.siteId === selectedSiteId);
+          if (siteRows.length > 1) {
+            const inner = selectWithBoundedGap(
+              siteRows.map((row) => row.score),
+              siteRows.map((row) => getBoundedGapState(requestedModel, selectedSiteId, row.channelId)),
+            );
+            if (inner) {
+              selectedId = siteRows[inner.selectedIndex]?.channelId ?? selectedId;
+            }
+          } else {
+            selectedId = siteRows[0]?.channelId ?? selectedId;
+          }
           markBoundedGapStateDirty();
         }
       }
@@ -630,20 +643,23 @@ export class TokenRouter {
     }
 
     if (available.length === 0) {
-      // Availability-first: a channel cooldown is a temporal signal, not a hard
-      // exclusion — don't let it be the ONLY reason the pool is empty (mirrors
-      // the context-filter pattern above).
+      // Availability-first: a cooldown written by a HEALTH PROBE is a
+      // prediction, not an observation — don't let it be the ONLY reason the
+      // pool is empty (mirrors the context-filter pattern above). Cooldowns
+      // from real traffic failures and credential-scoped (usage limit)
+      // exclusions are deliberately not relaxed: retrying a usage-limited
+      // account, or one that just failed real traffic, only wastes the request.
       available = match.channels.filter((candidate) => (
         this.getCandidateEligibilityReasons(candidate, {
           ...eligibilityOptions,
           requiredContextTokens: undefined,
-          ignoreChannelCooldown: true,
+          ignoreProbeCooldown: true,
         }).length === 0
       ));
       if (available.length > 0) {
         console.warn(
-          `[cooldown-fallback] ${requestedModel}: all candidates are cooling, ` +
-          'falling back to the candidate set',
+          `[probe-cooldown-fallback] ${requestedModel}: every candidate was ` +
+          'parked by a health probe, falling back to the candidate set',
         );
       }
     }

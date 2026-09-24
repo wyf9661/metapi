@@ -20,6 +20,7 @@ import { isUsableAccountToken } from './accountTokenService.js';
 import { getCredentialModeFromExtraConfig } from './accountExtraConfig.js';
 import { lookupSiteContextLimitForNames } from './siteContextCapabilityService.js';
 import { filterRecentlyFailedCandidates, formatContextTokens, isChannelRecentlyFailed, isSiteDisabled } from './tokenRouterFailurePolicy.js';
+import { isProbeAttributableCooldown } from './tokenRouterFailureRecording.js';
 import { formatChannelRuntimeLoad, isExplicitTokenChannel, isOauthRouteUnitCandidate, isOauthRouteUnitMemberCoolingDown, resolveChannelRuntimeLoadMultiplier, resolveRouteStrategy, setCandidateDecisionReason } from './tokenRouterCandidateHelpers.js';
 import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { getOauthRouteUnitStrategyLabel } from './oauth/routeUnitService.js';
@@ -134,10 +135,13 @@ export async function explainSelectionFromMatch(
   }
 
   if (available.length === 0) {
-    // Availability-first: a channel cooldown is a temporal signal, not a hard
-    // exclusion — don't let it be the ONLY reason the pool is empty (mirrors
-    // the context-filter pattern in selectFromMatch so the decision snapshot
-    // is consistent with what the live path will choose).
+    // Availability-first: a cooldown written by a HEALTH PROBE is a prediction,
+    // not an observation — don't let it be the only reason the pool is empty
+    // (mirrors the context-filter pattern in selectFromMatch so the decision
+    // snapshot stays consistent with what the live path will choose).
+    // Cooldowns from real traffic failures and credential-scoped (usage limit)
+    // exclusions are deliberately NOT relaxed here: see
+    // isProbeAttributableCooldown.
     const relaxed = match.channels.filter((row) => (
       getCandidateEligibilityReasons(row, {
         requestedModel,
@@ -145,7 +149,7 @@ export async function explainSelectionFromMatch(
         excludeChannelIds,
         nowIso,
         downstreamPolicy,
-        ignoreChannelCooldown: true,
+        ignoreProbeCooldown: true,
       }).length === 0
     ));
     if (relaxed.length > 0) {
@@ -153,10 +157,10 @@ export async function explainSelectionFromMatch(
         const candidate = candidateMap.get(row.channel.id);
         if (!candidate) continue;
         candidate.eligible = true;
-        candidate.reason = '可用（冷却放行 — 临时信号不得清空整个候选池）';
+        candidate.reason = '可用（探测冷却放行 — 探测是预测，不得单凭它清空候选池）';
         candidate.reasonCodes = ['eligible'];
       }
-      summary.push(`冷却放行：${relaxed.length} 个候选仅处于冷却，已放行给路由选择`);
+      summary.push(`探测冷却放行：${relaxed.length} 个候选仅有健康探测写入的冷却，已放行给路由选择`);
       available.push(...relaxed);
     }
   }
@@ -996,7 +1000,11 @@ export function getCandidateEligibilityReasons(
     addReason('token_unavailable', '令牌不可用');
   }
 
-  if (!options.ignoreChannelCooldown && candidate.channel.cooldownUntil && candidate.channel.cooldownUntil > nowIso) {
+  if (
+    candidate.channel.cooldownUntil
+    && candidate.channel.cooldownUntil > nowIso
+    && !(options.ignoreProbeCooldown && isProbeAttributableCooldown(candidate.channel))
+  ) {
     addReason('channel_cooldown', '冷却中', { cooldownUntil: candidate.channel.cooldownUntil });
   }
 

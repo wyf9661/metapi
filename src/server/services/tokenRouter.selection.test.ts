@@ -2287,23 +2287,51 @@ describe('selectPreferredChannel low-balance yield', () => {
   });
 });
 
-  it('fails open when channel cooldown would empty a single-candidate pool', async () => {
+  it('fails open when a probe-written cooldown would empty a single-candidate pool', async () => {
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'cooldown-alone-fallback',
       enabled: true,
     }).returning().get();
     const site = await createSite('cd-fallback');
     const account = await createAccount(site.id, 'cd-fallback');
+    // Exactly what recordProbeFailure writes: a cooldown plus a bumped
+    // consecutiveFailCount, and no touch to failCount (which tracks real
+    // traffic only). This is the shape a failed health probe leaves behind.
     const channel = await db.insert(schema.routeChannels).values({
       routeId: route.id, accountId: account.id, priority: 0, weight: 10, enabled: true,
       cooldownUntil: new Date(Date.now() + 120_000).toISOString(),
+      consecutiveFailCount: 1,
+      failCount: 0,
     }).returning().get();
 
     const router = new TokenRouter();
     const selected = await router.selectChannel('cooldown-alone-fallback');
-    // The only candidate is cooling; availability-first must let it through
-    // so the request gets a real attempt instead of a hard 503.
+    // The only candidate was parked by a probe — a prediction, not an
+    // observation. Availability-first must let it through so the request gets a
+    // real attempt instead of a hard 503.
     expect(selected?.channel.id).toBe(channel.id);
+  });
+
+  it('keeps a real-traffic cooldown as a hard exclusion on a single-candidate pool', async () => {
+    const route = await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'cooldown-real-traffic',
+      enabled: true,
+    }).returning().get();
+    const site = await createSite('cd-traffic');
+    const account = await createAccount(site.id, 'cd-traffic');
+    // recordFailure resets consecutiveFailCount to 0 and bumps failCount, so
+    // this cooldown was written by real traffic, not by a probe. Retrying it
+    // would only burn the request, so the exclusion must hold.
+    await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: account.id, priority: 0, weight: 10, enabled: true,
+      cooldownUntil: new Date(Date.now() + 120_000).toISOString(),
+      consecutiveFailCount: 0,
+      failCount: 3,
+    }).run();
+
+    const router = new TokenRouter();
+    const selected = await router.selectChannel('cooldown-real-traffic');
+    expect(selected).toBeNull();
   });
 
   it('does not resurrect a candidate blocked by a hard exclusion even when also cooling', async () => {
@@ -2316,6 +2344,7 @@ describe('selectPreferredChannel low-balance yield', () => {
     await db.insert(schema.routeChannels).values({
       routeId: route.id, accountId: account.id, priority: 0, weight: 10, enabled: false,
       cooldownUntil: new Date(Date.now() + 120_000).toISOString(),
+      consecutiveFailCount: 1,
     }).run();
 
     const router = new TokenRouter();

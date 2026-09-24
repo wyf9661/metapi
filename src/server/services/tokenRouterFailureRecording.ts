@@ -279,6 +279,28 @@ export async function recordProbeSuccess(
 }
 
 /**
+ * True when the channel's cooldown was written by the recovery-probe path
+ * rather than by a real request failure.
+ *
+ * `recordProbeFailure` bumps `consecutiveFailCount` (it doubles as the probe's
+ * own backoff driver) and deliberately never touches `failCount`; every
+ * `recordFailure` branch — fibonacci, round-robin, short-window credential
+ * (usage limit) and provider-directed quota — resets `consecutiveFailCount` to
+ * 0. A positive value therefore means the most recent writer was a health
+ * probe: a PREDICTION about the channel, not an observation of it.
+ *
+ * Routing reads this to relax a probe-induced cooldown when it would otherwise
+ * be the ONLY reason the candidate pool is empty. Real-failure and
+ * credential-scoped cooldowns stay hard exclusions — a usage-limited account
+ * must not be retried just because it is the last candidate left.
+ */
+export function isProbeAttributableCooldown(channel: {
+  consecutiveFailCount?: number | null;
+}): boolean {
+  return (channel.consecutiveFailCount ?? 0) > 0;
+}
+
+/**
  * Probe-only failure path: a failed liveness probe must NOT reuse
  * recordFailure — the probe passes no status/errorText, so classifyProxyFailure
  * would land on 'unknown' (skipCooldown) and CLEAR the cooldown, throwing the
