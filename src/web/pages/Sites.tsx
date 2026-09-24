@@ -1877,7 +1877,7 @@ export default function Sites() {
               <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>禁用模型管理</div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                  勾选的模型在路由重建时不会为该站点创建通道。
+                  勾选的模型对该站点所有 key 生效（路由重建时不再创建通道）；单个 key 的禁用请到该账号的模型列表里设置。
                 </div>
                 {disabledModelsLoading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>

@@ -42,9 +42,9 @@ describe('schema contract generation', () => {
     );
     expect(contract.uniques).toContainEqual(
       expect.objectContaining({
-        name: 'site_disabled_models_site_model_unique',
+        name: 'site_disabled_models_site_account_model_unique',
         table: 'site_disabled_models',
-        columns: ['site_id', 'model_name'],
+        columns: ['site_id', 'account_id', 'model_name'],
       }),
     );
     expect(contract.uniques).toContainEqual(

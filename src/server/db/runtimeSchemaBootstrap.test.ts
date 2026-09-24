@@ -55,8 +55,10 @@ function makeColumn(overrides: Partial<SchemaContractColumn> = {}): SchemaContra
 describe('runtime schema bootstrap', () => {
   it.each(['mysql', 'postgres'] as const)('executes live-schema upgrade statements for %s', async (dialect) => {
     const executedSql: string[] = [];
-    const expectedUpgradeSql = __runtimeSchemaBootstrapTestUtils.splitSqlStatements(
-      generateUpgradeSql(dialect, currentContract, baselineContract),
+    const expectedUpgradeSql = __runtimeSchemaBootstrapTestUtils.buildExternalUpgradeStatements(
+      dialect,
+      currentContract,
+      baselineContract,
     );
 
     await ensureRuntimeDatabaseSchema(createStubClient(dialect, executedSql), {
@@ -65,6 +67,12 @@ describe('runtime schema bootstrap', () => {
     });
 
     expect(executedSql.slice(0, expectedUpgradeSql.length)).toEqual(expectedUpgradeSql);
+    // The additive upgrade statements come first and never drop anything; the
+    // index replacement is the compat layer's job, which runs right after them.
+    const dropStatements = executedSql.filter((sqlText) => sqlText.trim().toLowerCase().startsWith('drop index'));
+    expect(dropStatements).toHaveLength(1);
+    expect(dropStatements[0]).toContain('site_disabled_models_site_model_unique');
+    expect(executedSql.indexOf(dropStatements[0]!)).toBeGreaterThanOrEqual(expectedUpgradeSql.length);
   });
 
   it('skips external schema execution when live schema already matches the current contract', async () => {

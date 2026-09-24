@@ -759,6 +759,12 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ models }),
     }),
+  // Per-key disabled models: only this account's rows are replaced.
+  updateAccountDisabledModels: (accountId: number, models: string[]) =>
+    request(`/api/accounts/${accountId}/models/disabled`, {
+      method: 'PUT',
+      body: JSON.stringify({ models }),
+    }),
   getSiteAvailableModels: (siteId: number) =>
     request(`/api/sites/${siteId}/available-models`),
   probeSiteNow: (siteId: number, options?: { scope?: 'single' | 'all'; modelName?: string; latencyThresholdMs?: number }) =>

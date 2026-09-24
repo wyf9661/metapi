@@ -13,6 +13,7 @@ const { apiMock, toastMock } = vi.hoisted(() => ({
     getSites: vi.fn(),
     updateAccount: vi.fn(),
     updateSiteDisabledModels: vi.fn(),
+    updateAccountDisabledModels: vi.fn(),
     rebuildRoutes: vi.fn(),
     refreshAccountHealth: vi.fn(),
     checkModels: vi.fn(),
@@ -78,6 +79,7 @@ describe('Accounts edit panel', () => {
     ]);
     apiMock.updateAccount.mockResolvedValue({ success: true });
     apiMock.updateSiteDisabledModels.mockResolvedValue({ success: true });
+    apiMock.updateAccountDisabledModels.mockResolvedValue({ success: true });
     apiMock.rebuildRoutes.mockResolvedValue({ success: true });
     apiMock.refreshAccountHealth.mockResolvedValue({ success: true });
     apiMock.getAccountModels.mockResolvedValue({
@@ -309,7 +311,7 @@ describe('Accounts edit panel', () => {
       });
       await flushMicrotasks();
 
-      expect(apiMock.updateSiteDisabledModels).toHaveBeenCalledWith(1, []);
+      expect(apiMock.updateAccountDisabledModels).toHaveBeenCalledWith(1, []);
       expect(apiMock.rebuildRoutes).toHaveBeenCalledWith(false, false);
       expect(toastMock.error).toHaveBeenCalledWith('模型禁用设置已保存，但路由重建失败，请手动刷新路由');
       expect(toastMock.success).not.toHaveBeenCalledWith('模型禁用设置已保存，路由已重建');

@@ -220,7 +220,7 @@ describe('backupService', () => {
     const exported = await backupService.exportBackup('all') as any;
     expect(exported.version).toBe('2.1');
     expect(exported.accounts.siteDisabledModels).toEqual([
-      { siteId: site.id, modelName: 'gpt-hidden' },
+      { siteId: site.id, accountId: null, modelName: 'gpt-hidden' },
     ]);
     expect(exported.accounts.siteApiEndpoints).toEqual([
       expect.objectContaining({
