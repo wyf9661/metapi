@@ -647,6 +647,46 @@ export async function sitesRoutes(app: FastifyInstance) {
       }
     }
 
+    // Per-key disabled models: shown in the site list so a customized list is
+    // visible without opening each key. Disabled models belong to keys only.
+    const disabledModelRows = await db.select({
+      siteId: schema.siteDisabledModels.siteId,
+      accountId: schema.siteDisabledModels.accountId,
+      modelName: schema.siteDisabledModels.modelName,
+    }).from(schema.siteDisabledModels).all();
+    const usernameById: Record<number, string | null> = {};
+    for (const row of accountRows) {
+      usernameById[row.id] = null;
+    }
+    const usernameRows = await db.select({
+      id: schema.accounts.id,
+      username: schema.accounts.username,
+    }).from(schema.accounts).all();
+    for (const row of usernameRows) {
+      usernameById[row.id] = row.username ?? null;
+    }
+    const disabledModelsBySiteId: Record<number, {
+      total: number;
+      keys: Array<{ accountId: number; username: string | null; count: number }>;
+    }> = {};
+    for (const row of disabledModelRows) {
+      const siteId = Number(row.siteId);
+      if (!Number.isFinite(siteId) || siteId <= 0) continue;
+      const bucket = disabledModelsBySiteId[siteId] ?? (disabledModelsBySiteId[siteId] = { total: 0, keys: [] });
+      bucket.total += 1;
+      if (row.accountId == null) continue;
+      const accountId = Number(row.accountId);
+      const existing = bucket.keys.find((item) => item.accountId === accountId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        bucket.keys.push({ accountId, username: usernameById[accountId] ?? null, count: 1 });
+      }
+    }
+    for (const bucket of Object.values(disabledModelsBySiteId)) {
+      bucket.keys.sort((a, b) => (a.username || '').localeCompare(b.username || '') || a.accountId - b.accountId);
+    }
+
     return siteRowsWithApiEndpoints.map((site) => ({
       ...site,
       totalBalance: Math.round((totalBalanceBySiteId[site.id] || 0) * 1_000_000) / 1_000_000,
@@ -664,6 +704,7 @@ export async function sitesRoutes(app: FastifyInstance) {
         tokens: tokenCountBySiteId[site.id] || 0,
         oauth: oauthCountBySiteId[site.id] || 0,
       },
+      disabledModels: disabledModelsBySiteId[site.id] || null,
     }));
   });
 

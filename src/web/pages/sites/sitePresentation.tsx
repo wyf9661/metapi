@@ -4,7 +4,7 @@
  * format a SiteRow/SubscriptionSummary or render a label.
  */
 
-import { FileTextIcon, GlobeIcon, KeyIcon, SlidersIcon, UnlockIcon, UserIcon } from '../../components/MiniIcons.js';
+import { BanIcon, FileTextIcon, GlobeIcon, KeyIcon, SlidersIcon, UnlockIcon, UserIcon } from '../../components/MiniIcons.js';
 import HoverPopover from '../../components/HoverPopover.js';
 
 export type SiteSubscriptionSummary = {
@@ -100,6 +100,12 @@ export type SiteConnectionStatsLike = {
   oauth: number;
 };
 
+/** Per-key disabled-model summary carried by the sites list payload. */
+export type SiteDisabledModelsSummary = {
+  total: number;
+  keys: Array<{ accountId: number; username: string | null; count: number }>;
+};
+
 /**
  * Connection counts as icon+number markers. Shared by the sites table row and
  * the mobile card so the two surfaces cannot drift apart.
@@ -109,13 +115,25 @@ export type SiteConnectionStatsLike = {
  * colour glyphs at a different optical size than the rest of the UI. Hidden
  * counts stay hidden — a zero count is not a signal.
  */
-export function SiteConnectionStats(props: { stats?: SiteConnectionStatsLike | null }) {
+export function SiteConnectionStats(props: {
+  stats?: SiteConnectionStatsLike | null;
+  disabledModels?: SiteDisabledModelsSummary | null;
+}) {
   const stats = props.stats;
+  const disabled = props.disabledModels;
+  // Disabled models belong to keys, so the marker reports how many keys carry a
+  // list and how big each one is.
+  const disabledLabel = disabled && disabled.keys.length > 0
+    ? `禁用模型（按 key）：${disabled.keys
+      .map((entry) => `${entry.username || `账号 ${entry.accountId}`} ${entry.count} 个`)
+      .join('；')}`
+    : '禁用模型';
   const markers = [
     { key: 'sessions', label: 'Session 账号', count: stats?.sessions || 0, Icon: UserIcon },
     { key: 'apiKeys', label: 'API Key', count: stats?.apiKeys || 0, Icon: KeyIcon },
     { key: 'tokens', label: '令牌', count: stats?.tokens || 0, Icon: FileTextIcon },
     { key: 'oauth', label: 'OAuth', count: stats?.oauth || 0, Icon: UnlockIcon },
+    { key: 'disabledModels', label: disabledLabel, count: disabled?.total || 0, Icon: BanIcon },
   ].filter((marker) => marker.count > 0);
 
   if (markers.length === 0) {

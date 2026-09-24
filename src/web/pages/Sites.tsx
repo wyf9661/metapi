@@ -127,6 +127,10 @@ type SiteRow = {
     tokens: number;
     oauth: number;
   } | null;
+  disabledModels?: {
+    total: number;
+    keys: Array<{ accountId: number; username: string | null; count: number }>;
+  } | null;
   createdAt?: string;
   postRefreshProbeEnabled?: boolean;
   postRefreshProbeModel?: string | null;
@@ -2205,7 +2209,7 @@ export default function Sites() {
                           className="sites-connection-summary"
                           style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}
                         >
-                          <SiteConnectionStats stats={site.connectionStats} />
+                          <SiteConnectionStats stats={site.connectionStats} disabledModels={site.disabledModels} />
                         </span>
                       )}
                     />
@@ -2422,7 +2426,7 @@ export default function Sites() {
                         className="sites-connection-summary"
                         style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}
                       >
-                        <SiteConnectionStats stats={site.connectionStats} />
+                        <SiteConnectionStats stats={site.connectionStats} disabledModels={site.disabledModels} />
                       </div>
                     </td>
                     <td className="sites-actions-cell">
