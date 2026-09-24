@@ -5,7 +5,6 @@ type PageJumpInputProps = {
   onJump: (page: number) => void;
 };
 
-/** 分页跳转输入框：输入页码 + 回车/点按钮跳到任意页。 */
 export default function PageJumpInput({ totalPages, onJump }: PageJumpInputProps) {
   const [value, setValue] = useState('');
 

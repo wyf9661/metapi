@@ -4,25 +4,15 @@ import { fetchAuthenticatedResponse } from '../api.js';
 /**
  * Subscribe to the server-side SSE stream for proxy-log events.
  *
- * When `enabled`, opens an authenticated fetch stream to
- * `/api/stats/proxy-logs/stream`. Native EventSource cannot send the
- * admin Bearer header, so using EventSource here would cause a 401 loop.
- * On each `data` event, calls `onEvent` with the parsed payload so the
- * component can decide whether to reload (e.g. only refresh if filters
- * match, or always reload since the server already filters).
+ * Opens an authenticated fetch stream to `/api/stats/proxy-logs/stream`:
+ * EventSource cannot send the admin Bearer header, so it would 401-loop.
  *
- * Guarantees:
- * - Auto-reconnect with exponential backoff (1s → 2s → 4s → max 10s)
- * - Pauses (closes the connection) while the tab is hidden
- * - Cleans up on unmount
- * - `onEvent` is read through a ref so changing it on every render does NOT
- *   restart the connection
- * - Watchdog: if no frame (including heartbeat) is received within
- *   `WDOG_MS`, the connection is assumed to be buffered by an
- *   intermediate proxy (e.g. Cloudflare quick tunnels). In that case
- *   SSE is abandoned and `onEvent` is invoked on a polling interval
- *   (`FALLBACK_MS`) instead, so auto-refresh keeps working behind
- *   proxies that cannot stream SSE.
+ * - Reconnects with exponential backoff (1s → 10s) and closes while the tab is
+ *   hidden. `onEvent` is read through a ref so a new identity does not restart
+ *   the connection.
+ * - Watchdog: no frame (including the heartbeat) within `WDOG_MS` means an
+ *   intermediate proxy is buffering the stream (Cloudflare quick tunnels do), so
+ *   SSE is abandoned and `onEvent` runs on a `FALLBACK_MS` poll instead.
  */
 
 const WDOG_MS = 15_000; // Must exceed typical proxy flush delay but be short

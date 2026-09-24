@@ -216,7 +216,6 @@ describe('buildSiteSaveAction', () => {
   });
 });
 
-
 describe('codex client profile helpers', () => {
   it('applies and detects the preset headers', () => {
     const enabled = applyCodexClientProfile([], true);

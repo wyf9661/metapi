@@ -114,7 +114,6 @@ export function normalizePlatformKey(platform: string | null | undefined): strin
   return PLATFORM_ALIASES[raw] || raw;
 }
 
-
 export function siteAvatarLetters(siteName: string): string {
   const normalized = String(siteName || '').trim();
   if (!normalized) return 'S';
@@ -141,8 +140,6 @@ export function normalizeChannels(channels: RouteChannel[]): RouteChannel[] {
     return pa - pb;
   });
 }
-
-
 
 export function getPriorityTagStyle(priority: number): CSSProperties {
   if (priority <= 0) {

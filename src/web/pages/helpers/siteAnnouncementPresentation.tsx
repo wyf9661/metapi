@@ -54,7 +54,6 @@ function isLikelyHtml(content: string): boolean {
   return /<([a-z][a-z0-9-]*)(?:\s[^>]*)?>/i.test(content) || /<\/([a-z][a-z0-9-]*)>/i.test(content);
 }
 
-
 function sanitizeUrl(raw: string | null | undefined, allowDataImage = false): string | null {
   const value = String(raw || '').trim();
   if (!value) return null;
@@ -378,7 +377,6 @@ export function renderMarkdownContentHtml(content: string, options?: { emptyHtml
 export function renderSiteAnnouncementHtml(content: string): string {
   return renderMarkdownContentHtml(content, { emptyHtml: '<p>-</p>' });
 }
-
 
 export function SiteAnnouncementContent({ content }: { content: string }) {
   return (

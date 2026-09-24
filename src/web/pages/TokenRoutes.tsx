@@ -161,7 +161,6 @@ export function DesktopDetailPanelPresence({
   );
 }
 
-
 function formatDecisionRefreshedHint(summaries: Array<{ decisionRefreshedAt?: string | null }>): string | null {
   const times = summaries
     .map((row) => String(row.decisionRefreshedAt || '').trim())
@@ -818,7 +817,6 @@ export default function TokenRoutes() {
       })
   ), [listVisibleRoutes, routeBrandById]);
 
-
   const sortedRoutes = useMemo(() => (
     [...listVisibleRoutes].sort((a, b) => {
       if (sortBy === 'channelCount') {
@@ -1283,7 +1281,6 @@ export default function TokenRoutes() {
       setClearingCooldownByRoute((prev) => ({ ...prev, [routeId]: false }));
     }
   };
-
 
   const toggleExpand = async (routeId: number) => {
     const isCurrentlyExpanded = expandedRouteIds.includes(routeId);

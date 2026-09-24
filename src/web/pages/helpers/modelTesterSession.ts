@@ -1258,7 +1258,6 @@ export const buildSearchRequestEnvelope = (
   };
 };
 
-
 export const buildFileUploadRequestEnvelope = (
   file: Omit<PlaygroundMultipartFile, 'field'> & { field?: string },
   purpose = 'assistants',
@@ -1279,9 +1278,6 @@ export const buildFileUploadRequestEnvelope = (
     dataUrl: file.dataUrl,
   }],
 });
-
-
-
 
 export const buildApiPayload = (
   messages: ChatMessage[],
@@ -1368,7 +1364,6 @@ export const syncMessagesToCustomRequestBody = (
   return JSON.stringify({ ...payload, ...conversationBody }, null, 2);
 };
 
-
 export const buildRawProxyRequestEnvelope = (
   method: ProxyRequestMethod,
   path: string,
@@ -1384,7 +1379,6 @@ export const buildRawProxyRequestEnvelope = (
   rawMode: true,
   rawJsonText,
 });
-
 
 export const countConversationTurns = (messages: ChatMessage[]): number =>
   messages.reduce((turns, message) => turns + (message.role === 'user' ? 1 : 0), 0);

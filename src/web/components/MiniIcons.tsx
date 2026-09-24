@@ -119,7 +119,6 @@ export function SlidersIcon({ size = 12 }: IconProps) {
   );
 }
 
-/** Session count — replaces the 👤 in connection stats. */
 export function UserIcon({ size = 12 }: IconProps) {
   return (
     <svg
@@ -139,7 +138,6 @@ export function UserIcon({ size = 12 }: IconProps) {
   );
 }
 
-/** API key count — replaces the 🔑 in connection stats. */
 export function KeyIcon({ size = 12 }: IconProps) {
   return (
     <svg
@@ -159,7 +157,6 @@ export function KeyIcon({ size = 12 }: IconProps) {
   );
 }
 
-/** Token count — replaces the 🎫 in connection stats. */
 export function FileTextIcon({ size = 12 }: IconProps) {
   return (
     <svg
@@ -181,7 +178,6 @@ export function FileTextIcon({ size = 12 }: IconProps) {
   );
 }
 
-/** OAuth connection count — replaces the 🔓 in connection stats. */
 export function UnlockIcon({ size = 12 }: IconProps) {
   return (
     <svg

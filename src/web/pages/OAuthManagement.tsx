@@ -131,7 +131,6 @@ function asTrimmedString(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-
 function listImportFiles(files: ArrayLike<OAuthImportFileLike> | null | undefined): OAuthImportFileLike[] {
   return files ? Array.from(files) : [];
 }
@@ -305,7 +304,6 @@ function parseOauthImportPreview(source: OAuthImportSource): OAuthImportPreview 
     };
   }
 }
-
 
 type OAuthManagementProps = {
   siteId?: number;

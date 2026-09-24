@@ -132,7 +132,6 @@ const resolveAccountLabel = (result: AccountTokenSyncResult | null | undefined) 
   return '未知账号';
 };
 
-
 export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId: filterSiteId }: TokensPanelProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -449,8 +448,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     }
   };
 
-
-
   const toggleTokenDetails = (tokenId: number) => {
     setExpandedTokenIds((current) => (
       current.includes(tokenId)
@@ -458,7 +455,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         : [...current, tokenId]
     ));
   };
-
 
   const confirmDelete = async () => {
     const target = deleteConfirm;
@@ -570,7 +566,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     openEditPanel(token);
     setPendingAutoOpenTokenId(null);
   }, [focusTokenRow, loading, openEditPanel, pendingAutoOpenTokenId, tokens]);
-
 
   const handleCopyToken = async (tokenId: number, tokenName: string) => {
     try {
@@ -1099,7 +1094,6 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
           </>
         ) : null}
       </CenteredModal>
-
 
       <CenteredModal
         open={showAdd}

@@ -277,14 +277,11 @@ export function SiteBalanceDisplay(props: {
 }
 
 /**
- * Platform is a category, not a health signal. Colouring `one-api` green and
- * `claude` amber made the sites table look like a status board, so every
- * platform now uses the neutral chip and the name itself carries the meaning.
- */
-/**
  * Platform chip class for every surface that shows a platform (sites table,
- * site detail header, site announcements). Category, not health — keep it in one
- * place so the three surfaces cannot drift apart again.
+ * detail header, announcements). Platform is a category, not a health signal:
+ * colouring one-api green and claude amber made the table look like a status
+ * board, so every platform uses the neutral chip. Kept in one place so the three
+ * surfaces cannot drift apart again.
  */
 export function platformBadgeClass(platform?: string | null): string {
   const key = String(platform || '').trim();
@@ -297,11 +294,9 @@ export type OAuthProviderSiteInfo = {
 };
 
 /**
- * Whether a platform reaches the form via auto-detect or the OAuth flow and
- * may map to an OAuth provider. Platforms in the manual dropdown are
- * manual-entry and must never resolve to an OAuth provider — doing so prefills
- * the editor with the provider's own upstream URL instead of a user-entered
- * Base URL.
+ * Whether a platform reaches the form via auto-detect or the OAuth flow rather
+ * than the manual dropdown. Manual-entry platforms must never resolve to an
+ * OAuth provider — that prefills the editor with the provider's own upstream URL.
  */
 export function isOauthFlowPlatform(platform?: string | null): boolean {
   const normalized = String(platform || '').trim().toLowerCase();

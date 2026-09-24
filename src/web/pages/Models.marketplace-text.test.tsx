@@ -77,7 +77,6 @@ describe('Models marketplace text', () => {
     globalThis.matchMedia = originalMatchMedia;
   });
 
-
   it('toggles expanded state when clicking the expand/collapse button on a model card', async () => {
     let root!: WebTestRenderer;
 

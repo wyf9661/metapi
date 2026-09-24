@@ -15,7 +15,6 @@ function normalizeString(value?: string | null): string {
   return String(value || '').trim();
 }
 
-
 export function buildUpdateReminder(input: {
   currentVersion?: string | null;
   helper: UpdateHelperRuntimeLike | null | undefined;

@@ -71,7 +71,6 @@ describe('siteAnnouncementPresentation helpers', () => {
   });
 });
 
-
 describe('renderMarkdownContentHtml', () => {
   it('renders streaming markdown without waiting for a complete document', () => {
     const html = renderMarkdownContentHtml('# Title\n\n- item **bold**\n\n```ts\nconst x = 1;');

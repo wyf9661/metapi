@@ -438,7 +438,6 @@ export default function Dashboard({
     };
   }, []);
 
-
   const refreshTunnel = useCallback(async () => {
     try {
       const res = await api.getTunnelStatus() as any;
@@ -910,7 +909,6 @@ export default function Dashboard({
           </div>
         </div>
       </div>
-
 
       {!loading && !siteLoading && (sites.length === 0 || totalAccounts === 0) && (
         <div

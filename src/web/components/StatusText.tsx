@@ -39,15 +39,10 @@ export function statusToneColor(tone: StatusTone): string {
   return TONE_COLORS[tone];
 }
 
-
 /**
- * Status text for dense tables: colour and weight only, no filled chip.
- *
- * A chip carries padding and a border, so it sits on a different baseline and
- * changes glyph height — which breaks vertical alignment the moment one row in a
- * column differs (e.g. "有重试" next to "无重试", or one coloured status among
- * grey ones). Colour alone already carries the meaning, and the column stops
- * looking like a colour chart when every row repeats the same value.
+ * Status text for dense tables: colour and weight only, no filled chip. A chip's
+ * padding and border change the glyph height, which breaks vertical alignment as
+ * soon as one row in a column differs.
  */
 export type StatusTextProps = {
   tone?: StatusTone;

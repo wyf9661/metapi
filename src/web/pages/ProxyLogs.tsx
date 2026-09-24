@@ -798,8 +798,6 @@ export default function ProxyLogs() {
     [toast],
   );
 
-
-
   const filterControls = (
     <>
       <div className="pill-tabs">

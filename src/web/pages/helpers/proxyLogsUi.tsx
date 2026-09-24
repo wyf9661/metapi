@@ -279,7 +279,6 @@ export function DetailDisclosureCard({
   );
 }
 
-
 export function renderProxyLogClientCell(
   log: Pick<
     ProxyLogRenderItem,

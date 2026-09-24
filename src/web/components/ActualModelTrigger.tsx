@@ -5,7 +5,6 @@ import { tr } from '../i18n.js';
 type ActualModelTriggerProps = {
   /** The model the client asked for (may be a group/alias name). */
   requestedModel: string;
-  /** The model the request really went to upstream. */
   actualModel?: string | null;
   size?: number;
 };

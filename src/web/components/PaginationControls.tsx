@@ -15,7 +15,6 @@ type PaginationControlsProps = {
   className?: string;
   /** Current rows-per-page. When provided, render a page-size selector. */
   pageSize?: number;
-  /** Called when the user picks a new rows-per-page. */
   onPageSizeChange?: (next: number) => void;
   /** Optional range summary pinned to the left side of the pagination row. */
   rangeLabel?: string;

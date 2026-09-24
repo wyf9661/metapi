@@ -63,7 +63,6 @@ export function emptySiteCustomHeader(): SiteCustomHeaderField {
   return { key: '', value: '' };
 }
 
-
 /** Preset used by “Codex 客户端” checkbox for NewAPI codex-only gateways. */
 export const CODEX_CLIENT_PROFILE_HEADERS = {
   'User-Agent': 'codex_cli_rs/0.39.0',
@@ -229,7 +228,6 @@ export function applyBrowserUaMode(form: SiteForm, enabled: boolean): SiteForm {
     customHeadersOverrideRequestHeaders: true,
   };
 }
-
 
 export function emptySiteApiEndpoint(): SiteApiEndpointField {
   return {

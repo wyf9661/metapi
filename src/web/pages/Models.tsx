@@ -953,7 +953,6 @@ export default function Models() {
     return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
   };
 
-
   const filterControls = (
     <>
       <div className="filter-panel-section">

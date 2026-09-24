@@ -319,4 +319,3 @@ describe('Accounts edit panel', () => {
   });
 });
 
-

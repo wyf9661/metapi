@@ -624,9 +624,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     }
   };
 
-
-
-
   const applyLoadedModelModal = (account: any, result: any) => {
     const models = Array.isArray(result?.models) ? result.models : [];
     const disabledSet = new Set<string>(
@@ -978,7 +975,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     }
   };
 
-
   const openEditPanel = (account: any) => {
     closeAddPanel();
     setRebindTarget(null);
@@ -989,9 +985,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     setEditingAccount(null);
   };
 
-
-
-
   const toggleAccountDetails = (accountId: number) => {
     setExpandedAccountIds((current) =>
       current.includes(accountId)
@@ -999,7 +992,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         : [...current, accountId],
     );
   };
-
 
   const confirmDelete = async () => {
     const target = deleteConfirm;
@@ -1012,7 +1004,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       '已删除',
     );
   };
-
 
   const extractPlatformUserId = (account: any): string => {
     const parsed = parseAccountExtraConfig(account);
@@ -1421,7 +1412,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           </>
         }
       />
-
 
       {activeSegment === 'tokens' ? (
         <TokensPanel

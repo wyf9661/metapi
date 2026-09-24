@@ -289,8 +289,6 @@ async function proxyTestStreamRequest(
   });
 }
 
-
-
 export type RuntimeRoutingWeightsPayload = {
   baseWeightFactor?: number;
   valueScoreFactor?: number;
@@ -1447,7 +1445,6 @@ export const api = {
     }),
   testNotification: () =>
     request('/api/settings/notify/test', { method: 'POST' }),
-
 
   // Models marketplace
   getModelsMarketplace: (options?: {

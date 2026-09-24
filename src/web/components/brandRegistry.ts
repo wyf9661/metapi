@@ -70,8 +70,8 @@ export function getBrandIconUrl(icon: string | null | undefined, cdn: string): s
   if (!normalized) return null;
   // Absolute URLs pass through: brand records may carry their own logo.
   if (isAbsoluteHttpUrl(normalized)) return normalized;
-  // Every icon comes from the shared icon CDN — no per-brand hard-coded sources,
-  // so a vendor nobody has catalogued yet simply shows its letter glyph.
+  // Icons come from the shared icon CDN; a vendor nobody has catalogued yet
+  // falls back to its letter glyph.
   const theme = cdn === 'dark' ? 'dark' : 'light';
   return `/api/brand-icon?icon=${encodeURIComponent(normalized)}&theme=${theme}`;
 }
@@ -133,13 +133,10 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 /**
- * Nudge a base colour with a per-name hash so sites/models that share the same
- * icon or brand colour still get clearly distinguishable badges. Hue moves
- * within ±60° and luminance ±15% — enough that two same-brand entries read as
- * different chips while staying in an adjacent hue family. Grayscale colours
- * (black logos) get a wider luminance-only (±25%) nudge so every same-icon
- * site still differs while staying black-family. The result is then
- * theme-clamped for readability.
+ * Nudge a base colour by a per-name hash so entries sharing an icon or brand
+ * colour still read as different chips: hue ±60°, luminance ±15%. Grayscale
+ * logos get a luminance-only ±25% nudge (hue is meaningless there). The result
+ * is theme-clamped.
  */
 export function perturbBadgeColor(hex: string, name: string, theme: 'dark' | 'light'): string {
   const rgb = hexToRgb(hex);
@@ -147,11 +144,8 @@ export function perturbBadgeColor(hex: string, name: string, theme: 'dark' | 'li
   const isGray = rgb.r === rgb.g && rgb.g === rgb.b;
   let shifted: string;
   if (isGray) {
-    // Grayscale: hue is meaningless. Directly pick a luminance within the
-    // theme's readable band via name hash so black/white brands (OpenAI vs
-    // Kimi vs xAI vs Z.ai) each get a distinct neutral chip, and same-brand
-    // models also differ per hash. The result is already clamp-safe so the
-    // after-return clampBadgeColor call is a no-op for this branch.
+    // Luminance within the theme's readable band; already clamp-safe, so the
+    // clampBadgeColor below is a no-op here.
     const [lo, hi] = theme === 'dark' ? [0.47, 0.75] : [0.16, 0.38];
     const t = nameHash(name, 'luma');
     const lum = lo + t * (hi - lo);

@@ -5,7 +5,6 @@
  */
 import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-
 /** Debounce before auto-detecting while the operator is still typing. */
 const AUTO_DETECT_DEBOUNCE_MS = 700;
 
@@ -286,7 +285,6 @@ function SortableSiteMobileItem({
     </SiteSortableContext.Provider>
   );
 }
-
 
 export default function Sites() {
   const location = useLocation();
@@ -1487,7 +1485,6 @@ export default function Sites() {
           </div>
         )}
       />
-
 
       <div className="info-tip" style={{ marginBottom: 12 }}>
         站点倍率 = 全局权重 × 下游 API Key 站点倍率；数值越大越容易被选中。建议 0.5-3，默认 1，长期不超过 5。

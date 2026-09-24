@@ -86,7 +86,6 @@ type BatchMetadataForm = {
   tags: string[];
 };
 
-
 function toDateTimeLocal(isoString: string | null | undefined): string {
   if (!isoString) return '';
   const ts = Date.parse(isoString);
@@ -235,7 +234,6 @@ function tagChipStyle(kind: 'normal' | 'accent' = 'normal'): React.CSSProperties
       : 'var(--color-bg-card)',
   };
 }
-
 
 function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined }) {
   const toast = useToast();

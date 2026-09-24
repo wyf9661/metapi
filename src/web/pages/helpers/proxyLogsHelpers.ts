@@ -132,12 +132,10 @@ export function formatProxyLogTokenPair(
   return `${input == null ? '-' : formatProxyLogTokenValue(input)} / ${output == null ? '-' : formatProxyLogTokenValue(output)}`;
 }
 
-// ---------------------------------------------------------------------------
 // Timing column, ported from NewAPI's TimingMetricsCell / StreamTpsCell so the
 // usage log reads the same in both dashboards:
 //   web/src/features/usage-logs/components/timing-metrics-cell.tsx
 //   web/src/features/usage-logs/lib/format.ts (get*Color thresholds)
-// ---------------------------------------------------------------------------
 
 export type ProxyLogTimingVariant = 'success' | 'warning' | 'danger';
 
@@ -380,7 +378,6 @@ export function normalizeRouteStatus(raw: string | null): ProxyLogStatusFilter {
 export function normalizeRouteSearch(raw: string | null): string {
   return (raw || '').trim();
 }
-
 
 export function normalizeRouteSiteId(raw: string | null): number | null {
   const parsed = Number.parseInt(raw || '', 10);

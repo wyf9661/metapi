@@ -5,5 +5,3 @@ export function normalizeRouteRoutingStrategyValue(value?: RouteRoutingStrategy 
   return 'weighted';
 }
 
-
-

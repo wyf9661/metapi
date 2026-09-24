@@ -90,7 +90,6 @@ type RuntimeSettings = {
   currentAdminIp?: string;
 };
 
-
 type DatabaseMigrationSummary = {
   dialect: DbDialect;
   connection: string;
@@ -120,7 +119,6 @@ type RuntimeDatabaseState = {
   } | null;
   restartRequired: boolean;
 };
-
 
 export default function Settings() {
   const isMobile = useIsMobile();
@@ -237,7 +235,6 @@ export default function Settings() {
       database: defaults.database,
     }));
   }, [migrationDialect]);
-
 
   useEffect(() => {
     if (!factoryResetOpen) {
@@ -567,8 +564,6 @@ export default function Settings() {
     }
   };
 
-
-
   const saveProxyTransportSettings = async () => {
     setSavingProxyTransport(true);
     try {
@@ -617,7 +612,6 @@ export default function Settings() {
       setSavingProxyTransport(false);
     }
   };
-
 
   const saveProxyFailureRules = async () => {
     setSavingProxyFailureRules(true);
@@ -791,7 +785,6 @@ export default function Settings() {
     }
   };
 
-
   const handleClearCache = async () => {
     if (!window.confirm('确认清理模型缓存并重建路由？')) return;
     setClearingCache(true);
@@ -849,7 +842,6 @@ export default function Settings() {
     if (factoryResetting) return;
     setFactoryResetOpen(false);
   };
-
 
   const handleFactoryReset = async () => {
     if (factoryResetSecondsLeft > 0 || factoryResetting) return;
@@ -1173,7 +1165,6 @@ export default function Settings() {
             </button>
           </div>
         </div>
-
 
         <div className="card animate-slide-up stagger-5" style={{ padding: 20, order: 4 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>代理失败判定</div>
@@ -1806,7 +1797,6 @@ export default function Settings() {
           </div>
           </div>
 
-
           <div className={`anim-collapse ${showAdvancedRouting ? 'is-open' : ''}`.trim()}>
             <div className="anim-collapse-inner" style={{ paddingTop: 2 }}>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
@@ -2111,8 +2101,6 @@ export default function Settings() {
         </div>
 
         <div style={{ order: 0, gridColumn: '1 / -1' }}><UpdateCenterSection /></div>
-
-
 
         <div className="card animate-slide-up stagger-7" style={{ padding: 20, order: 10, border: '1px solid color-mix(in srgb, var(--color-danger) 30%, var(--color-border))' }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: 'var(--color-danger)' }}>危险操作</div>
