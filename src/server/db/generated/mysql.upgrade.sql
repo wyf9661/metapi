@@ -1,3 +1,5 @@
-CREATE TABLE IF NOT EXISTS `site_model_context` (`id` INT AUTO_INCREMENT NOT NULL PRIMARY KEY, `site_id` INT NOT NULL, `model_name` TEXT NOT NULL, `model_name_raw` TEXT, `context_limit` INT, `source` VARCHAR(191) NOT NULL DEFAULT 'error', `observed_max_prompt` INT, `note` TEXT, `created_at` VARCHAR(191) DEFAULT (DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s')), `updated_at` VARCHAR(191) DEFAULT (DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s')), FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON DELETE CASCADE);
-CREATE UNIQUE INDEX `site_model_context_site_model_unique` ON `site_model_context` (`site_id`, `model_name`(191));
-CREATE INDEX `site_model_context_site_id_idx` ON `site_model_context` (`site_id`);
+DROP INDEX `site_disabled_models_site_model_unique` ON `site_disabled_models`;
+ALTER TABLE `site_disabled_models` ADD COLUMN `account_id` INT;
+ALTER TABLE `site_disabled_models` ADD CONSTRAINT `site_disabled_models_account_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON DELETE CASCADE;
+CREATE UNIQUE INDEX `site_disabled_models_site_account_model_unique` ON `site_disabled_models` (`site_id`, `account_id`, `model_name`(191));
+CREATE INDEX `site_disabled_models_account_id_idx` ON `site_disabled_models` (`account_id`);
