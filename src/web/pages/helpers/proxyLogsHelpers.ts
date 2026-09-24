@@ -303,6 +303,7 @@ export function renderDownstreamKeySummary(log: ProxyLogRenderItem) {
 export function buildBillingProcessLines(log: ProxyLogRenderItem) {
   const detail = log.billingDetails;
   if (!detail) return [];
+  if (detail.usage.totalTokens <= 0) return [];
 
   const lines = [
     `提示价格：${formatPerMillionPrice(detail.breakdown.inputPerMillion)}`,
