@@ -1696,7 +1696,7 @@ export async function rebuildTokenRoutesFromAvailability() {
   ) => {
     const sourceModel = (modelNameRaw || '').trim();
     if (!sourceModel) return;
-    if (isModelDisabledForSite(disabledModelsIndex, siteId, sourceModel)) return;
+    if (isModelDisabledForSite(disabledModelsIndex, siteId, sourceModel, accountId)) return;
     const modelName = canonicalizeModelName(sourceModel) || sourceModel;
     if (!modelCandidates.has(modelName)) modelCandidates.set(modelName, new Map());
     const candidate = { accountId, tokenId, oauthRouteUnitId, sourceModel };
@@ -1791,6 +1791,7 @@ export async function rebuildTokenRoutesFromAvailability() {
         disabledModelsIndex,
         channelSiteId,
         channel.sourceModel,
+        channel.accountId,
       );
       if (desiredKeys.has(channelKey) && !forceRemoveDisabled) {
         continue;

@@ -389,10 +389,11 @@ function buildStatements(
   for (const row of snapshot.accounts.siteDisabledModels) {
     statements.push({
       table: 'site_disabled_models',
-      columns: ['id', 'site_id', 'model_name', 'created_at'],
+      columns: ['id', 'site_id', 'account_id', 'model_name', 'created_at'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.siteId, 0),
+        row.accountId == null ? null : asNumber(row.accountId, 0),
         asNullableString(row.modelName),
         asNullableString(row.createdAt),
       ],

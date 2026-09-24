@@ -284,11 +284,13 @@ function assertAdditiveSchemaDiff(currentContract: SchemaContract, previousContr
     }
   }
 
+  // Removing an index or unique index is allowed: it loses no data, and the
+  // upgrade generator emits the matching DROP. Removing or changing a table,
+  // column or foreign key stays forbidden.
   const currentIndexes = new Map(currentContract.indexes.map((index) => [index.name, index]));
   for (const previousIndex of previousContract.indexes) {
     const currentIndex = currentIndexes.get(previousIndex.name);
     if (!currentIndex) {
-      violations.push(`removed index ${previousIndex.name}`);
       continue;
     }
     if (serializeIndex(currentIndex) !== serializeIndex(previousIndex)) {
@@ -300,7 +302,6 @@ function assertAdditiveSchemaDiff(currentContract: SchemaContract, previousContr
   for (const previousUnique of previousContract.uniques) {
     const currentUnique = currentUniques.get(previousUnique.name);
     if (!currentUnique) {
-      violations.push(`removed unique ${previousUnique.name}`);
       continue;
     }
     if (serializeUnique(currentUnique) !== serializeUnique(previousUnique)) {
@@ -339,13 +340,48 @@ export function generateBootstrapSql(dialect: SqlDialect, contract: SchemaContra
   return `${[...tableStatements, ...uniqueStatements, ...indexStatements].join(';\n')};\n`;
 }
 
+function buildInlineForeignKeyClause(dialect: SqlDialect, foreignKey: SchemaContractForeignKey): string {
+  const targetColumns = foreignKey.referencedColumns.map((column) => quoteIdentifier(dialect, column)).join(', ');
+  const onDelete = foreignKey.onDelete ? ` ON DELETE ${foreignKey.onDelete.toUpperCase()}` : '';
+  return `REFERENCES ${quoteIdentifier(dialect, foreignKey.referencedTable)}(${targetColumns})${onDelete}`;
+}
+
 function buildAddColumnStatement(
   dialect: SqlDialect,
   tableName: string,
   columnName: string,
   column: SchemaContractColumn,
+  foreignKey?: SchemaContractForeignKey | null,
 ): string {
-  return `ALTER TABLE ${quoteIdentifier(dialect, tableName)} ADD COLUMN ${buildColumnDefinition(dialect, columnName, column)}`;
+  // MySQL ignores an inline REFERENCES clause on ADD COLUMN, so it gets a
+  // separate ADD CONSTRAINT statement instead (see buildAddForeignKeyStatement).
+  const inlineForeignKey = foreignKey && dialect !== 'mysql'
+    ? ` ${buildInlineForeignKeyClause(dialect, foreignKey)}`
+    : '';
+  return `ALTER TABLE ${quoteIdentifier(dialect, tableName)} ADD COLUMN ${buildColumnDefinition(dialect, columnName, column)}${inlineForeignKey}`;
+}
+
+function buildAddForeignKeyStatement(
+  dialect: SqlDialect,
+  tableName: string,
+  columnName: string,
+  foreignKey: SchemaContractForeignKey,
+): string {
+  const sourceColumns = foreignKey.columns.map((column) => quoteIdentifier(dialect, column)).join(', ');
+  const targetColumns = foreignKey.referencedColumns.map((column) => quoteIdentifier(dialect, column)).join(', ');
+  const onDelete = foreignKey.onDelete ? ` ON DELETE ${foreignKey.onDelete.toUpperCase()}` : '';
+  const constraintName = `${tableName}_${columnName}_fk`;
+  return `ALTER TABLE ${quoteIdentifier(dialect, tableName)} ADD CONSTRAINT ${quoteIdentifier(dialect, constraintName)} FOREIGN KEY (${sourceColumns}) REFERENCES ${quoteIdentifier(dialect, foreignKey.referencedTable)}(${targetColumns})${onDelete}`;
+}
+
+function buildDropIndexStatement(dialect: SqlDialect, indexName: string, tableName: string): string {
+  const quotedIndex = quoteIdentifier(dialect, indexName);
+  if (dialect === 'mysql') {
+    // MySQL has no DROP INDEX IF EXISTS; the runtime bootstrap tolerates the
+    // "index does not exist" error for already-migrated databases.
+    return `DROP INDEX ${quotedIndex} ON ${quoteIdentifier(dialect, tableName)}`;
+  }
+  return `DROP INDEX IF EXISTS ${quotedIndex}`;
 }
 
 export function generateUpgradeSql(
@@ -373,6 +409,7 @@ export function generateUpgradeSql(
     .map((tableName) => buildCreateTableStatement(dialect, tableName, currentContract));
 
   const addColumnStatements: string[] = [];
+  const addForeignKeyStatements: string[] = [];
   for (const tableName of currentTableNames) {
     if (!previousTableNames.has(tableName)) {
       continue;
@@ -384,7 +421,17 @@ export function generateUpgradeSql(
       if (previousColumns[columnName]) {
         continue;
       }
-      addColumnStatements.push(buildAddColumnStatement(dialect, tableName, columnName, column));
+      // Carry the foreign key of a newly added column along with it, so an
+      // upgraded database matches the contract instead of losing the constraint.
+      const singleColumnForeignKey = currentContract.foreignKeys.find(
+        (foreignKey) => foreignKey.table === tableName
+          && foreignKey.columns.length === 1
+          && foreignKey.columns[0] === columnName,
+      ) ?? null;
+      addColumnStatements.push(buildAddColumnStatement(dialect, tableName, columnName, column, singleColumnForeignKey));
+      if (dialect === 'mysql' && singleColumnForeignKey) {
+        addForeignKeyStatements.push(buildAddForeignKeyStatement(dialect, tableName, columnName, singleColumnForeignKey));
+      }
     }
   }
 
@@ -404,7 +451,35 @@ export function generateUpgradeSql(
     .sort((left, right) => left.name.localeCompare(right.name, 'en'))
     .map((index) => buildIndexStatement(dialect, index, currentContract, options));
 
-  const statements = [...addedTableStatements, ...addColumnStatements, ...uniqueStatements, ...indexStatements];
+  // A unique index is listed in both `uniques` and `indexes`, so collect the
+  // removed ones by name to avoid emitting the same DROP twice.
+  const currentIndexNames = new Set([
+    ...currentContract.uniques.map((unique) => unique.name),
+    ...currentContract.indexes.map((index) => index.name),
+  ]);
+  const droppedIndexEntries = new Map<string, { name: string; table: string }>();
+  for (const unique of previousContract.uniques) {
+    if (!currentIndexNames.has(unique.name)) {
+      droppedIndexEntries.set(unique.name, { name: unique.name, table: unique.table });
+    }
+  }
+  for (const index of previousContract.indexes) {
+    if (!currentIndexNames.has(index.name)) {
+      droppedIndexEntries.set(index.name, { name: index.name, table: index.table });
+    }
+  }
+  const droppedIndexStatements = [...droppedIndexEntries.values()]
+    .sort((left, right) => left.name.localeCompare(right.name, 'en'))
+    .map((entry) => buildDropIndexStatement(dialect, entry.name, entry.table));
+
+  const statements = [
+    ...droppedIndexStatements,
+    ...addedTableStatements,
+    ...addColumnStatements,
+    ...addForeignKeyStatements,
+    ...uniqueStatements,
+    ...indexStatements,
+  ];
   if (statements.length === 0) {
     return `-- no schema changes detected for ${dialect}\n`;
   }

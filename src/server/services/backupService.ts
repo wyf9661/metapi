@@ -80,7 +80,10 @@ type BackupRouteChannelRow = Omit<RouteChannelRow,
   | 'cooldownUntil'
 >>;
 
-type BackupSiteDisabledModelRow = Pick<SiteDisabledModelRow, 'siteId' | 'modelName'>;
+type BackupSiteDisabledModelRow = Pick<SiteDisabledModelRow, 'siteId' | 'modelName'> & {
+  /** Nullable: absent in backups written before per-key disabling. */
+  accountId?: number | null;
+};
 type BackupManualModelRow = {
   accountId: number;
   modelName: string;
@@ -1342,6 +1345,7 @@ async function exportAccountsSection(): Promise<AccountsBackupSection> {
     routeGroupSources,
     siteDisabledModels: siteDisabledModels.map((row) => ({
       siteId: row.siteId,
+      accountId: row.accountId ?? null,
       modelName: row.modelName,
     })),
     manualModels: manualModels.map((row) => ({
@@ -1672,6 +1676,7 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
       for (const row of section.siteDisabledModels || []) {
         await tx.insert(schema.siteDisabledModels).values({
           siteId: row.siteId,
+          accountId: row.accountId ?? null,
           modelName: row.modelName,
         }).run();
       }

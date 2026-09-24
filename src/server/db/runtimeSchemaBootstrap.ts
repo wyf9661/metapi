@@ -53,12 +53,14 @@ function isExistingSchemaObjectError(error: unknown): boolean {
   return code === 'ER_DUP_KEYNAME'
     || code === 'ER_DUP_FIELDNAME'
     || code === 'ER_TABLE_EXISTS_ERROR'
+    || code === 'ER_FK_DUP_NAME'
     || code === '42P07'
     || code === '42701'
     || code === '42710'
     || lowered.includes('already exists')
     || lowered.includes('duplicate column')
     || lowered.includes('duplicate key name')
+    || lowered.includes('duplicate foreign key constraint name')
     || lowered.includes('relation') && lowered.includes('already exists');
 }
 

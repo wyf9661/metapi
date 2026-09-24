@@ -627,12 +627,22 @@ function deduplicateLegacySitesForUniqueIndex(sqlite: Database.Database): boolea
     ORDER BY id ASC
   `);
   const rebindAccounts = sqlite.prepare('UPDATE accounts SET site_id = ? WHERE site_id = ?');
-  const mergeDisabledModels = sqlite.prepare(`
-    INSERT OR IGNORE INTO site_disabled_models (site_id, model_name, created_at)
-    SELECT ?, model_name, created_at
-    FROM site_disabled_models
-    WHERE site_id = ?
-  `);
+  // Merge disabled models explicitly instead of relying on a unique index:
+  // site-wide rows (account_id NULL) are distinct to UNIQUE, so INSERT OR IGNORE
+  // would keep duplicates after a legacy site merge.
+  const disabledModelColumns = (sqlite.prepare("PRAGMA table_info('site_disabled_models')").all() as Array<{ name: string }>)
+    .map((column) => column.name);
+  const hasDisabledModelAccountColumn = disabledModelColumns.includes('account_id');
+  const selectDisabledModels = sqlite.prepare(
+    hasDisabledModelAccountColumn
+      ? 'SELECT account_id, model_name, created_at FROM site_disabled_models WHERE site_id = ?'
+      : 'SELECT NULL AS account_id, model_name, created_at FROM site_disabled_models WHERE site_id = ?',
+  );
+  const insertDisabledModel = sqlite.prepare(
+    hasDisabledModelAccountColumn
+      ? 'INSERT INTO site_disabled_models (site_id, account_id, model_name, created_at) VALUES (?, ?, ?, ?)'
+      : 'INSERT INTO site_disabled_models (site_id, model_name, created_at) VALUES (?, ?, ?)',
+  );
   const deleteDisabledModels = sqlite.prepare('DELETE FROM site_disabled_models WHERE site_id = ?');
   const deleteSite = sqlite.prepare('DELETE FROM sites WHERE id = ?');
 
@@ -644,8 +654,21 @@ function deduplicateLegacySitesForUniqueIndex(sqlite: Database.Database): boolea
       if (sites.length <= 1) continue;
 
       const canonicalSiteId = sites[0]!.id;
+      const mergedKeys = new Set(
+        (selectDisabledModels.all(canonicalSiteId) as Array<{ account_id: number | null; model_name: string }>)
+          .map((row) => `${row.account_id ?? 'site'}:${row.model_name}`),
+      );
       for (const site of sites.slice(1)) {
-        mergeDisabledModels.run(canonicalSiteId, site.id);
+        for (const row of selectDisabledModels.all(site.id) as Array<{ account_id: number | null; model_name: string; created_at: string | null }>) {
+          const mergeKey = `${row.account_id ?? 'site'}:${row.model_name}`;
+          if (mergedKeys.has(mergeKey)) continue;
+          mergedKeys.add(mergeKey);
+          if (hasDisabledModelAccountColumn) {
+            insertDisabledModel.run(canonicalSiteId, row.account_id, row.model_name, row.created_at);
+          } else {
+            insertDisabledModel.run(canonicalSiteId, row.model_name, row.created_at);
+          }
+        }
         deleteDisabledModels.run(site.id);
         rebindAccounts.run(canonicalSiteId, site.id);
         siteIdMapping.set(site.id, canonicalSiteId);

@@ -112,6 +112,7 @@ async function diagnoseNoProbeTargets(
     siteId: schema.sites.id,
     siteName: schema.sites.name,
     siteStatus: schema.sites.status,
+    accountId: schema.accounts.id,
     accountStatus: schema.accounts.status,
   })
     .from(schema.modelAvailability)
@@ -175,8 +176,8 @@ async function diagnoseNoProbeTargets(
   const disabledModelsIndex = await loadSiteDisabledModelsIndex();
   const activeRows = matchingRows.filter((r: any) => r.siteStatus === 'active' && r.accountStatus === 'active');
   const disabledBySiteModel = activeRows.filter((r: any) =>
-    isModelDisabledForSite(disabledModelsIndex, r.siteId, r.modelName)
-    || isModelDisabledForSite(disabledModelsIndex, r.siteId, canonicalModel),
+    isModelDisabledForSite(disabledModelsIndex, r.siteId, r.modelName, r.accountId)
+    || isModelDisabledForSite(disabledModelsIndex, r.siteId, canonicalModel, r.accountId),
   );
 
   if (activeRows.length > 0 && disabledBySiteModel.length === activeRows.length) {
@@ -407,8 +408,8 @@ async function collectMarketplaceProbeTargets(
   const targetsByAccount = new Map<number, MarketplaceProbeTarget>();
   for (const hit of accountHits) {
     if (targetsByAccount.has(hit.account.id)) continue;
-    if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName)
-      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, canonicalModel)) {
+    if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName, hit.account.id)
+      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, canonicalModel, hit.account.id)) {
       continue;
     }
     targetsByAccount.set(hit.account.id, {
@@ -450,8 +451,8 @@ async function collectMarketplaceProbeTargets(
 
   for (const hit of tokenHits) {
     if (!isUsableAccountToken(hit.token)) continue;
-    if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName)
-      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, canonicalModel)) {
+    if (isModelDisabledForSite(disabledModelsIndex, hit.site.id, hit.modelName, hit.account.id)
+      || isModelDisabledForSite(disabledModelsIndex, hit.site.id, canonicalModel, hit.account.id)) {
       continue;
     }
     if (targetsByAccount.has(hit.account.id)) {

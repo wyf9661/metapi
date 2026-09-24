@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { db, schema } from '../../db/index.js';
 import { getInsertedRowId } from '../../db/insertHelpers.js';
-import { and, asc, eq, inArray, gte, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, gte, isNull, lt, sql } from 'drizzle-orm';
 import { detectSite } from '../../services/siteDetector.js';
 import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services/siteProxy.js';
 import { formatUtcSqlDateTime, getLocalDayRangeUtc } from '../../services/localTimeService.js';
@@ -1177,9 +1177,13 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (!existingSite) {
       return reply.code(404).send({ error: 'Site not found' });
     }
+    // Site-wide rows only: per-key rows belong to the account views.
     const rows = await db.select({ modelName: schema.siteDisabledModels.modelName })
       .from(schema.siteDisabledModels)
-      .where(eq(schema.siteDisabledModels.siteId, id))
+      .where(and(
+        eq(schema.siteDisabledModels.siteId, id),
+        isNull(schema.siteDisabledModels.accountId),
+      ))
       .all() as SiteModelNameRow[];
     return { siteId: id, models: rows.map((r) => r.modelName) };
   });
@@ -1210,13 +1214,18 @@ export async function sitesRoutes(app: FastifyInstance) {
     const uniqueModels = Array.from(new Set(models));
 
     await db.transaction(async (tx: any) => {
+      // Site-wide rows only (account_id NULL): per-key rows are owned by the
+      // account endpoints and must survive a site-level save.
       await tx.delete(schema.siteDisabledModels)
-        .where(eq(schema.siteDisabledModels.siteId, id))
+        .where(and(
+          eq(schema.siteDisabledModels.siteId, id),
+          isNull(schema.siteDisabledModels.accountId),
+        ))
         .run();
 
       if (uniqueModels.length > 0) {
         await tx.insert(schema.siteDisabledModels).values(
-          uniqueModels.map((modelName) => ({ siteId: id, modelName })),
+          uniqueModels.map((modelName) => ({ siteId: id, accountId: null, modelName })),
         ).run();
       }
     });

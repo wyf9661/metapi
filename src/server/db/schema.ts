@@ -49,11 +49,14 @@ export const siteApiEndpoints = sqliteTable('site_api_endpoints', {
 export const siteDisabledModels = sqliteTable('site_disabled_models', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   siteId: integer('site_id').notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  // NULL = disabled for every key of the site; set = disabled for this key only.
+  accountId: integer('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
   modelName: text('model_name').notNull(),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 }, (table) => ({
-  siteModelUnique: uniqueIndex('site_disabled_models_site_model_unique').on(table.siteId, table.modelName),
+  siteAccountModelUnique: uniqueIndex('site_disabled_models_site_account_model_unique').on(table.siteId, table.accountId, table.modelName),
   siteIdIdx: index('site_disabled_models_site_id_idx').on(table.siteId),
+  accountIdIdx: index('site_disabled_models_account_id_idx').on(table.accountId),
 }));
 
 // Per-site effective context window, learned from live traffic / metadata /

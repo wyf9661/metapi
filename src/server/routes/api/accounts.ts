@@ -2,7 +2,12 @@ import { FastifyInstance } from 'fastify';
 import { db, schema, runtimeDbDialect } from '../../db/index.js';
 import { parsePositiveIntParam } from '../../shared/routeParams.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { parseSiteDisabledModelsPayload } from '../../contracts/siteRoutePayloads.js';
+import { invalidateSiteProxyCache } from '../../services/siteProxy.js';
+import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
+import { rebuildTokenRoutesFromAvailability } from '../../services/modelService.js';
+import { clearModelsMarketplaceCache } from './stats.js';
 import { refreshBalance } from '../../services/balanceService.js';
 import { getAdapter } from '../../services/platforms/index.js';
 import {
@@ -1825,23 +1830,38 @@ export async function accountsRoutes(app: FastifyInstance) {
         .where(eq(schema.modelAvailability.accountId, accountId))
         .all();
 
-      // Get disabled models for this site
+      // Disabled flags: site-wide rows (account_id NULL) apply to every key,
+      // per-key rows only to this one. siteDisabled marks the site-wide ones so
+      // the console can show them as locked in a per-key editor.
       const disabledRows = await db
         .select({
           modelName: schema.siteDisabledModels.modelName,
+          accountId: schema.siteDisabledModels.accountId,
         })
         .from(schema.siteDisabledModels)
-        .where(eq(schema.siteDisabledModels.siteId, siteId))
+        .where(and(
+          eq(schema.siteDisabledModels.siteId, siteId),
+          or(
+            isNull(schema.siteDisabledModels.accountId),
+            eq(schema.siteDisabledModels.accountId, accountId),
+          ),
+        ))
         .all();
 
-      const disabledSet = new Set(disabledRows.map((r: any) => r.modelName));
+      const siteDisabledSet = new Set(
+        disabledRows.filter((r: any) => r.accountId == null).map((r: any) => r.modelName),
+      );
+      const accountDisabledSet = new Set(
+        disabledRows.filter((r: any) => r.accountId != null).map((r: any) => r.modelName),
+      );
 
       const models = modelRows
         .filter((r: any) => r.available)
         .map((r: any) => ({
           name: r.modelName,
           latencyMs: r.latencyMs,
-          disabled: disabledSet.has(r.modelName),
+          disabled: siteDisabledSet.has(r.modelName) || accountDisabledSet.has(r.modelName),
+          siteDisabled: siteDisabledSet.has(r.modelName),
           isManual: !!r.isManual,
         }))
         .sort((a: any, b: any) => a.name.localeCompare(b.name));
@@ -1853,6 +1873,66 @@ export async function accountsRoutes(app: FastifyInstance) {
         totalCount: models.length,
         disabledCount: models.filter((m: any) => m.disabled).length,
       };
+    },
+  );
+
+  // Replace the disabled models of one key. Site-wide rows are untouched, and
+  // other keys of the same site keep their own sets.
+  app.put<{ Params: { id: string }; Body: unknown }>(
+    '/api/accounts/:id/models/disabled',
+    async (request, reply) => {
+      const accountId = parseInt(request.params.id, 10);
+      if (!Number.isFinite(accountId) || accountId <= 0) {
+        return reply.code(400).send({ message: '账号 ID 无效' });
+      }
+
+      const parsedBody = parseSiteDisabledModelsPayload(request.body);
+      if (!parsedBody.success) {
+        return reply.code(400).send({ error: parsedBody.error });
+      }
+
+      const account = await db
+        .select()
+        .from(schema.accounts)
+        .where(eq(schema.accounts.id, accountId))
+        .get();
+
+      if (!account) {
+        return reply.code(404).send({ message: '账号不存在' });
+      }
+
+      const siteId = account.siteId;
+      const uniqueModels = Array.from(new Set(
+        (parsedBody.data.models as unknown[])
+          .filter((m): m is string => typeof m === 'string')
+          .map((m) => m.trim())
+          .filter((m) => m.length > 0),
+      ));
+
+      await db.transaction(async (tx: any) => {
+        await tx.delete(schema.siteDisabledModels)
+          .where(and(
+            eq(schema.siteDisabledModels.siteId, siteId),
+            eq(schema.siteDisabledModels.accountId, accountId),
+          ))
+          .run();
+
+        if (uniqueModels.length > 0) {
+          await tx.insert(schema.siteDisabledModels).values(
+            uniqueModels.map((modelName) => ({ siteId, accountId, modelName })),
+          ).run();
+        }
+      });
+
+      invalidateSiteProxyCache();
+      invalidateTokenRouterCache();
+      clearModelsMarketplaceCache();
+      // Drop channels/routes for this key's now-disabled models immediately.
+      rebuildTokenRoutesFromAvailability().catch((err) => {
+        console.warn('[accounts] rebuild routes after per-key disabled-models update failed', err);
+      });
+
+      return { accountId, siteId, models: uniqueModels };
     },
   );
 
