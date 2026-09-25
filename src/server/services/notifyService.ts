@@ -162,16 +162,80 @@ function isWeComBotWebhook(url: string): boolean {
   }
 }
 
-function buildWeComText(
-  title: string,
-  message: string,
-  level: 'info' | 'warning' | 'error',
-  timeFootnote: string,
-): string {
-  const maxLength = 1900;
-  const raw = `[metapi][${level.toUpperCase()}] ${title}\n\n${message}\n\n${timeFootnote}`;
-  if (raw.length <= maxLength) return raw;
-  return `${raw.slice(0, maxLength)}\n...(truncated)`;
+type NotifyLevel = 'info' | 'warning' | 'error';
+
+/**
+ * 机器人通道共用的 markdown 正文。前缀里保留 metapi / 级别 / 标题：钉钉与飞书的关键词校验扫的是
+ * 消息正文，标题若只放在 title / header 字段里可能不参与校验。正文原样透传——站点公告本身
+ * 就是上游站点写的 markdown，转义或改写会把它弄坏。
+ */
+function buildBotMarkdown(title: string, message: string, level: NotifyLevel, timeFootnote: string): string {
+  return `**[metapi][${level.toUpperCase()}] ${title}**\n\n${message}\n\n> ${timeFootnote}`;
+}
+
+/** 三个平台的限额都是 UTF-8 字节而不是字符，按字节截断且不切断多字节字符。 */
+function truncateToBytes(text: string, maxBytes: number, suffix = '\n...(truncated)'): string {
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) return text;
+  const budget = Math.max(0, maxBytes - Buffer.byteLength(suffix, 'utf8'));
+  let out = '';
+  let used = 0;
+  for (const char of text) {
+    const size = Buffer.byteLength(char, 'utf8');
+    if (used + size > budget) break;
+    out += char;
+    used += size;
+  }
+  return `${out}${suffix}`;
+}
+
+/** 飞书自定义机器人请求体上限 20KB，留出 JSON 包装的余量。 */
+const FEISHU_CARD_BODY_BYTE_LIMIT = 19_000;
+/** 钉钉 markdown 正文的保守上限（官方可抓取文档未给出具体数值）。 */
+const DINGTALK_MARKDOWN_BYTE_LIMIT = 19_000;
+/** 企业微信 markdown content 上限：4096 字节。 */
+const WECOM_MARKDOWN_BYTE_LIMIT = 4096;
+
+/**
+ * 飞书卡片标题只接受内置配色枚举（blue|wathet|turquoise|green|yellow|orange|red|carmine|violet|
+ * purple|indigo|grey|default），不支持自定义色值。turquoise 官方浅色主题值为 #067062，与 metapi 的
+ * 品牌色 teal #00727f 同色系且明度接近，因此 info 用 turquoise；warning/error 保留橙/红以保留级别语义。
+ */
+const FEISHU_HEADER_TEMPLATE: Record<NotifyLevel, string> = {
+  info: 'turquoise',
+  warning: 'orange',
+  error: 'red',
+};
+
+/**
+ * 飞书消息卡片（schema 2.0）。自定义机器人的 text 是纯文本、post 是结构化富文本（都不是 markdown），
+ * 只有 interactive 卡片里的 markdown 元素会渲染 markdown。
+ */
+function buildFeishuCard(title: string, message: string, level: NotifyLevel, timeFootnote: string) {
+  const markdown = truncateToBytes(
+    buildBotMarkdown(title, message, level, timeFootnote),
+    FEISHU_CARD_BODY_BYTE_LIMIT,
+  );
+  return {
+    schema: '2.0',
+    config: { update_multi: true },
+    header: {
+      title: { tag: 'plain_text', content: `[metapi] ${title}` },
+      template: FEISHU_HEADER_TEMPLATE[level],
+    },
+    body: {
+      direction: 'vertical',
+      padding: '12px 12px 12px 12px',
+      elements: [
+        {
+          tag: 'markdown',
+          content: markdown,
+          text_align: 'left',
+          text_size: 'normal_v2',
+          margin: '0px 0px 0px 0px',
+        },
+      ],
+    },
+  };
 }
 
 function isFeishuBotWebhook(url: string): boolean {
@@ -184,18 +248,6 @@ function isFeishuBotWebhook(url: string): boolean {
   } catch {
     return false;
   }
-}
-
-function buildFeishuText(
-  title: string,
-  message: string,
-  level: 'info' | 'warning' | 'error',
-  timeFootnote: string,
-): string {
-  const maxLength = 3900;
-  const raw = `[metapi][${level.toUpperCase()}] ${title}\n\n${message}\n\n${timeFootnote}`;
-  if (raw.length <= maxLength) return raw;
-  return `${raw.slice(0, maxLength)}\n...(truncated)`;
 }
 
 /**
@@ -273,18 +325,6 @@ function buildDingTalkSignedUrl(url: string, secret: string, nowMs = Date.now())
   parsed.searchParams.set('timestamp', timestamp);
   parsed.searchParams.set('sign', sign);
   return parsed.toString();
-}
-
-function buildDingTalkText(
-  title: string,
-  message: string,
-  level: 'info' | 'warning' | 'error',
-  timeFootnote: string,
-): string {
-  const maxLength = 1900;
-  const raw = `【metapi】[${level.toUpperCase()}] ${title}\n\n${message}\n\n${timeFootnote}`;
-  if (raw.length <= maxLength) return raw;
-  return `${raw.slice(0, maxLength)}\n...(truncated)`;
 }
 
 /**
@@ -404,28 +444,35 @@ export async function sendNotification(
           const isDingTalkWebhook = channelKind === 'dingtalk';
           let body: string;
           if (isWeComWebhook) {
+            // 企业微信只有 markdown / markdown_v2 类型会渲染 markdown。
             body = JSON.stringify({
-              msgtype: 'text',
-              text: {
-                content: buildWeComText(title, resolvedMessage, level, timeFootnote),
+              msgtype: 'markdown',
+              markdown: {
+                content: truncateToBytes(
+                  buildBotMarkdown(title, resolvedMessage, level, timeFootnote),
+                  WECOM_MARKDOWN_BYTE_LIMIT,
+                ),
               },
             });
           } else if (isFeishuWebhook) {
             const feishuPayload: Record<string, unknown> = {
-              msg_type: 'text',
-              content: {
-                text: buildFeishuText(title, resolvedMessage, level, timeFootnote),
-              },
+              msg_type: 'interactive',
+              card: buildFeishuCard(title, resolvedMessage, level, timeFootnote),
             };
             const feishuSecret = extractWebhookSigningSecret(channelUrl, channelSecret);
             body = JSON.stringify(
               feishuSecret ? signFeishuBody(feishuPayload, feishuSecret, now.getTime()) : feishuPayload,
             );
           } else if (isDingTalkWebhook) {
+            // 钉钉 markdown 类型的 title 必填（首屏透出），text 才是 markdown 正文。
             body = JSON.stringify({
-              msgtype: 'text',
-              text: {
-                content: buildDingTalkText(title, resolvedMessage, level, timeFootnote),
+              msgtype: 'markdown',
+              markdown: {
+                title,
+                text: truncateToBytes(
+                  buildBotMarkdown(title, resolvedMessage, level, timeFootnote),
+                  DINGTALK_MARKDOWN_BYTE_LIMIT,
+                ),
               },
             });
           } else {

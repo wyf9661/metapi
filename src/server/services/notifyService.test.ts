@@ -192,11 +192,14 @@ describe('notifyService', () => {
     const call = fetchMock.mock.calls[0] as [string, { body?: string }];
     expect(call[0]).toContain('qyapi.weixin.qq.com/cgi-bin/webhook/send');
 
-    const payload = JSON.parse(call[1]?.body || '{}') as { msgtype?: string; text?: { content?: string } };
+    const payload = JSON.parse(call[1]?.body || '{}') as { msgtype?: string; markdown?: { content?: string } };
     expect(Array.isArray(payload)).toBe(false);
-    expect(payload.msgtype).toBe('text');
-    expect(payload.text?.content || '').toContain('[metapi][INFO] 测试通知');
-    expect(payload.text?.content || '').toContain('message');
+    // 企业微信只有 markdown / markdown_v2 类型才渲染 markdown，text 是纯文本。
+    expect(payload.msgtype).toBe('markdown');
+    expect(payload.markdown?.content || '').toContain('[metapi][INFO] 测试通知');
+    expect(payload.markdown?.content || '').toContain('message');
+    // 官方上限是 4096 字节（不是字符），必须按字节截断。
+    expect(Buffer.byteLength(payload.markdown?.content || '', 'utf8')).toBeLessThanOrEqual(4096);
   });
 
   it('fails when enterprise wechat webhook returns non-zero errcode', async () => {
@@ -328,10 +331,27 @@ describe('notifyService', () => {
     const call = fetchMock.mock.calls[0] as [string, { body?: string }];
     expect(call[0]).toContain('open.feishu.cn/open-apis/bot/v2/hook/');
 
-    const payload = JSON.parse(call[1]?.body || '{}') as { msg_type?: string; content?: { text?: string } };
-    expect(payload.msg_type).toBe('text');
-    expect(payload.content?.text || '').toContain('[metapi][INFO] 测试通知');
-    expect(payload.content?.text || '').toContain('feishu message');
+    const payload = JSON.parse(call[1]?.body || '{}') as {
+      msg_type?: string;
+      card?: {
+        schema?: string;
+        header?: { title?: { content?: string }; template?: string };
+        body?: { elements?: Array<{ tag?: string; content?: string }> };
+      };
+    };
+    // 飞书自定义机器人只有消息卡片（interactive）能渲染 markdown；text / post 都不是 markdown。
+    expect(payload.msg_type).toBe('interactive');
+    expect(payload.card?.schema).toBe('2.0');
+    expect(payload.card?.header?.title?.content || '').toContain('测试通知');
+    // 品牌色：飞书无自定义色值，info 用最接近 metapi teal 的 turquoise（#067062）。
+    expect(payload.card?.header?.template).toBe('turquoise');
+    const md = (payload.card?.body?.elements || []).filter((e) => e?.tag === 'markdown');
+    expect(md.length).toBeGreaterThan(0);
+    const joined = md.map((e) => e.content || '').join('\n');
+    expect(joined).toContain('feishu message');
+    expect(joined).toContain('[metapi][INFO]');
+    // 官方上限：请求体 20KB。
+    expect(Buffer.byteLength(call[1]?.body || '', 'utf8')).toBeLessThan(20000);
   });
 
   it('signs the feishu body when a signature secret is configured', async () => {
@@ -359,7 +379,7 @@ describe('notifyService', () => {
     };
     // Feishu 签名校验签的是请求体：timestamp 为 epoch 秒，sign =
     // base64(HMAC-SHA256(key = `${timestamp}\n${secret}`, message = ""))。
-    expect(payload.msg_type).toBe('text');
+    expect(payload.msg_type).toBe('interactive');
     expect(payload.timestamp).toMatch(/^\d{9,}$/);
     const stringToSign = `${payload.timestamp}\n${secret}`;
     const expected = createHmac('sha256', stringToSign).update('').digest('base64');
@@ -404,10 +424,16 @@ describe('notifyService', () => {
     const call = fetchMock.mock.calls[0] as [string, { body?: string }];
     expect(call[0]).toContain('open.larksuite.com/open-apis/bot/v2/hook/');
 
-    const payload = JSON.parse(call[1]?.body || '{}') as { msg_type?: string; content?: { text?: string } };
-    expect(payload.msg_type).toBe('text');
-    expect(payload.content?.text || '').toContain('[metapi][WARNING] 测试通知');
-    expect(payload.content?.text || '').toContain('lark message');
+    const payload = JSON.parse(call[1]?.body || '{}') as {
+      msg_type?: string;
+      card?: { header?: { template?: string; title?: { content?: string } }; body?: { elements?: Array<{ tag?: string; content?: string }> } };
+    };
+    expect(payload.msg_type).toBe('interactive');
+    expect(payload.card?.header?.template).toBe('orange');
+    expect(payload.card?.header?.title?.content || '').toContain('测试通知');
+    const joined = (payload.card?.body?.elements || []).filter((e) => e?.tag === 'markdown').map((e) => e.content || '').join('\n');
+    expect(joined).toContain('lark message');
+    expect(joined).toContain('[metapi][WARNING]');
   });
 
   it('sends dingtalk text payload and signs url when secret is configured', async () => {
@@ -435,9 +461,12 @@ describe('notifyService', () => {
     expect(String(url)).toContain('sign=');
     expect(String(url)).not.toContain('secret=');
     const body = JSON.parse(String((init as any).body));
-    expect(body.msgtype).toBe('text');
-    expect(body.text.content).toContain('测试通知');
-    expect(body.text.content).toContain('dingtalk message');
+    // 钉钉 markdown 类型：title 必填（首屏透出），text 才是 markdown 正文。
+    expect(body.msgtype).toBe('markdown');
+    expect(body.markdown.title).toBe('测试通知');
+    expect(body.markdown.text).toContain('测试通知');
+    expect(body.markdown.text).toContain('dingtalk message');
+    expect(body.markdown.text).toContain('[metapi][INFO]');
   });
 
   it('fails when dingtalk webhook returns non-zero errcode', async () => {
@@ -461,5 +490,60 @@ describe('notifyService', () => {
         throwOnFailure: true,
       }),
     ).rejects.toThrow(/钉钉|310000|sign not match/i);
+  });
+  it('passes markdown bodies through verbatim so site announcements render', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ code: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    const announcement = '# 欢迎使用 liWAN公益站\n\n## 日常开发\n**加粗重点**\n1. 第一条\n2. 第二条';
+    await sendNotification('站点公告：liWAN LAB', announcement, 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const payload = JSON.parse(call[1]?.body || '{}') as { card?: { body?: { elements?: Array<{ tag?: string; content?: string }> } } };
+    const joined = (payload.card?.body?.elements || []).map((e) => e.content || '').join('\n');
+    expect(joined).toContain('# 欢迎使用 liWAN公益站');
+    expect(joined).toContain('**加粗重点**');
+    expect(joined).toContain('1. 第一条');
+  });
+
+  it('truncates enterprise wechat markdown by utf-8 bytes, not by characters', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=demo-key', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ errcode: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    // 2000 个汉字 = 6000 字节，远超 4096 字节上限。
+    await sendNotification('长公告', '汉'.repeat(2000), 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const payload = JSON.parse(call[1]?.body || '{}') as { markdown?: { content?: string } };
+    const bytes = Buffer.byteLength(payload.markdown?.content || '', 'utf8');
+    expect(bytes).toBeLessThanOrEqual(4096);
+    expect(bytes).toBeGreaterThan(3000);
+    expect(payload.markdown?.content || '').toContain('truncated');
+  });
+
+  it('keeps the feishu card request body under the 20KB limit for huge announcements', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ code: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    // 生产库最长的一条站点公告是 24143 字节正文，已超飞书 20KB 请求体上限。
+    await sendNotification('站点公告：JustDoWork', '汉'.repeat(9000), 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    expect(Buffer.byteLength(call[1]?.body || '', 'utf8')).toBeLessThan(20000);
+    const payload = JSON.parse(call[1]?.body || '{}') as { card?: { body?: { elements?: Array<{ content?: string }> } } };
+    const joined = (payload.card?.body?.elements || []).map((e) => e.content || '').join('\n');
+    expect(joined).toContain('truncated');
   });
 });
