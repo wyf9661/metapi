@@ -90,7 +90,7 @@ export async function checkinRoutes(app: FastifyInstance) {
         failureMessage: (currentTask) => `全部账号签到任务失败：${currentTask.error || 'unknown error'}`,
       },
       async () => {
-        const results = await checkinAll({ scheduleMode: config.checkinScheduleMode });
+        const results = await checkinAll({ scheduleMode: config.checkinScheduleMode, skipNotification: true });
         return {
           summary: summarizeCheckinResults(results),
           total: results.length,

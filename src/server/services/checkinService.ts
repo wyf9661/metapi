@@ -93,6 +93,31 @@ function inferRewardFromBalanceDelta(previousBalance: unknown, latestBalance: un
   return Math.round(delta * 1_000_000) / 1_000_000;
 }
 
+export function buildSiteCheckinFailureNotification(
+  site: string,
+  results: Array<{ success?: boolean; status?: string; skipped?: boolean; message?: string }>,
+) {
+  const failed = results.filter((result) => result.status !== 'skipped' && !result.skipped && !result.success);
+  if (failed.length === 0) return null;
+
+  const success = results.filter((result) => result.success && result.status !== 'skipped' && !result.skipped).length;
+  const skipped = results.length - success - failed.length;
+  const reasons = new Map<string, number>();
+  for (const result of failed) {
+    const reason = String(result.message || '签到失败').trim().slice(0, 80);
+    reasons.set(reason, (reasons.get(reason) || 0) + 1);
+  }
+  const reasonLines = [...reasons.entries()].slice(0, 4)
+    .map(([reason, count]) => `- ${reason}${count > 1 ? `（${count} 个账号）` : ''}`);
+  if (reasons.size > reasonLines.length) reasonLines.push('- 另有其他失败原因');
+
+  return {
+    title: `${site} 签到失败汇总（${failed.length}）`,
+    message: `${site}：成功 ${success}，跳过 ${skipped}，失败 ${failed.length}\n失败原因：\n${reasonLines.join('\n')}`,
+    level: 'warning' as const,
+  };
+}
+
 async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
   const adapter = getAdapter(site.platform);
   if (!adapter) return null;
@@ -121,7 +146,11 @@ async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
   return result.accessToken;
 }
 
-export async function checkinAccount(accountId: number, options?: { skipEvent?: boolean; scheduleMode?: 'cron' | 'interval' }) {
+export async function checkinAccount(accountId: number, options?: {
+  skipEvent?: boolean;
+  skipNotification?: boolean;
+  scheduleMode?: 'cron' | 'interval';
+}) {
   const rows = await db
     .select()
     .from(schema.accounts)
@@ -306,7 +335,7 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
       });
     }
 
-    if (isCloudflare) {
+    if (!options?.skipNotification && isCloudflare) {
       await sendNotification(
         'Cloudflare challenge',
         `${account.username || 'ID:' + accountId} @ ${site.name}: ${result.message}`,
@@ -314,7 +343,7 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
       );
     }
 
-    if (!unsupportedCheckin && !manualVerificationRequired) {
+    if (!options?.skipNotification && !unsupportedCheckin && !manualVerificationRequired) {
       await sendNotification(
         'checkin failed',
         `${account.username || 'ID:' + accountId} @ ${site.name}: ${result.message}`,
@@ -333,7 +362,7 @@ export async function checkinAccount(accountId: number, options?: { skipEvent?: 
 }
 
 export async function checkinAll(
-  options?: { accountIds?: number[]; scheduleMode?: 'cron' | 'interval' },
+  options?: { accountIds?: number[]; scheduleMode?: 'cron' | 'interval'; skipNotification?: boolean },
 ): Promise<CheckinTaskResultItem[]> {
   const rows = await db
     .select()
@@ -359,17 +388,31 @@ export async function checkinAll(
   }
 
   const promises = Array.from(grouped.entries()).map(async ([_, siteRows]) => {
+    const siteResults: CheckinTaskResultItem[] = [];
     for (const row of siteRows) {
       const r = await checkinAccount(row.accounts.id, {
         skipEvent: true,
+        skipNotification: true,
         scheduleMode: options?.scheduleMode,
       });
-      results.push({
+      const item = {
         accountId: row.accounts.id,
         username: row.accounts.username,
         site: row.sites.name,
         result: r,
-      });
+      };
+      results.push(item);
+      siteResults.push(item);
+    }
+    if (!options?.skipNotification) {
+      const notification = buildSiteCheckinFailureNotification(siteRows[0]?.sites.name || 'unknown', siteResults.map((item) => item.result));
+      if (notification) {
+        try {
+          await sendNotification(notification.title, notification.message, notification.level);
+        } catch (error) {
+          console.warn(`[Checkin] Site summary notification failed (${siteRows[0]?.sites.name || 'unknown'}):`, (error as Error)?.message || error);
+        }
+      }
     }
   });
 

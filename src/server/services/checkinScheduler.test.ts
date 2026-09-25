@@ -10,6 +10,11 @@ const refreshAllBalancesMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const startModelsDevPriceSyncMock = vi.fn();
 const stopModelsDevPriceSyncMock = vi.fn();
+const sendNotificationMock = vi.fn(async () => undefined);
+const intervalAccounts = [
+  { accounts: { id: 201, checkinEnabled: true, status: 'active', lastCheckinAt: null }, sites: { status: 'active' } },
+];
+const selectAllMock = vi.fn();
 
 vi.mock('node-cron', () => ({
   default: {
@@ -22,7 +27,7 @@ vi.mock('../db/index.js', () => {
   const queryChain = {
     where: () => queryChain,
     get: () => undefined,
-    all: () => [],
+    all: () => selectAllMock(),
     from: () => queryChain,
     innerJoin: () => queryChain,
   };
@@ -57,7 +62,7 @@ vi.mock('./modelPriceCatalogService.js', () => ({
 }));
 
 vi.mock('./notifyService.js', () => ({
-  sendNotification: vi.fn(async () => undefined),
+  sendNotification: (...args: unknown[]) => sendNotificationMock(...args),
 }));
 
 describe('checkinScheduler', () => {
@@ -71,6 +76,8 @@ describe('checkinScheduler', () => {
     refreshModelsAndRebuildRoutesMock.mockReset();
     startModelsDevPriceSyncMock.mockReset();
     stopModelsDevPriceSyncMock.mockReset();
+    sendNotificationMock.mockReset();
+    selectAllMock.mockReset().mockReturnValue([]);
   });
 
   afterEach(async () => {
@@ -198,7 +205,7 @@ describe('checkinScheduler', () => {
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('deduplicates overlapping check-in cron passes and clears the lock after completion', async () => {
+  it('deduplicates overlapping interval check-in passes and sends one summary', async () => {
     let releaseCheckin!: () => void;
     allMock.mockImplementation(() => new Promise<unknown[]>((resolve) => {
       releaseCheckin = () => resolve([]);
@@ -213,8 +220,16 @@ describe('checkinScheduler', () => {
     const first = checkinCallback();
     const second = checkinCallback();
     expect(allMock).toHaveBeenCalledTimes(1);
+    expect(allMock).toHaveBeenCalledWith({ scheduleMode: 'cron', skipNotification: true });
     releaseCheckin();
     await Promise.all([first, second]);
+    expect(sendNotificationMock).toHaveBeenCalledTimes(1);
+    expect(sendNotificationMock).toHaveBeenCalledWith(
+      '签到完成（成功0）',
+      '全部账号签到完成：成功 0，跳过 0，失败 0',
+      'info',
+      expect.objectContaining({ bypassThrottle: true }),
+    );
     expect(allMock).toHaveBeenCalledTimes(1);
 
     // Lock cleared → the next tick runs a fresh pass.

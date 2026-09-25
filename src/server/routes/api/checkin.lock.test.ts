@@ -82,7 +82,10 @@ describe('POST /api/checkin/trigger background task dedupe', () => {
     const secondBody = secondResponse.json() as { reused: boolean; jobId: string };
     expect(secondBody.reused).toBe(true);
     expect(secondBody.jobId).toBe(firstBody.jobId);
-    expect(checkinAllMock).toHaveBeenCalledTimes(1);
+    expect(checkinAllMock).toHaveBeenCalledWith({
+      scheduleMode: expect.any(String),
+      skipNotification: true,
+    });
 
     resolveFirst([]);
     await new Promise((resolve) => setTimeout(resolve, 20));

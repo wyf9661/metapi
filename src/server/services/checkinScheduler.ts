@@ -89,37 +89,22 @@ function summarizeCheckinRun(results: Array<{ result?: any }>) {
   return { total: results.length, success, skipped, failed };
 }
 
-function buildCheckinSummaryNotification(results: Array<{ accountId?: number; username?: string; site?: string; result?: any }>) {
+export function buildCheckinSummaryNotification(results: Array<{ accountId?: number; username?: string; site?: string; result?: any }>) {
   const summary = summarizeCheckinRun(results);
-  const lines: string[] = [
+  const lines = [
     `全部账号签到完成：成功 ${summary.success}，跳过 ${summary.skipped}，失败 ${summary.failed}`,
   ];
-  const failedRows = results.filter((item) => {
-    const status = item?.result?.status;
-    if (status === 'skipped' || item?.result?.skipped) return false;
-    return !item?.result?.success;
-  }).slice(0, 8);
-  if (failedRows.length > 0) {
-    lines.push('失败明细:');
-    for (const item of failedRows) {
-      const label = `${item?.username || (item?.accountId ? `#${item.accountId}` : 'unknown')} @ ${item?.site || 'unknown'}`;
-      const reason = String(item?.result?.message || 'failed').trim().slice(0, 80);
-      lines.push(`- ${label}: ${reason}`);
-    }
-    if (summary.failed > failedRows.length) {
-      lines.push(`- ... 另有 ${summary.failed - failedRows.length} 个失败未展开`);
-    }
-  }
   const title = summary.failed > 0
     ? `签到完成（成功${summary.success}/失败${summary.failed}）`
     : `签到完成（成功${summary.success}）`;
   return {
     title,
     message: lines.join('\n'),
-    level: (summary.failed > 0 ? 'warning' : 'info') as 'info' | 'warning' | 'error',
+    level: (summary.failed > 0 ? 'warning' : 'info') as 'info' | 'warning',
     summary,
   };
 }
+
 
 async function notifyCheckinSummary(results: Array<{ accountId?: number; username?: string; site?: string; result?: any }>) {
   const notification = buildCheckinSummaryNotification(results);
@@ -150,7 +135,7 @@ function createCheckinTask(cronExpr: string) {
     const pass = (async () => {
       console.log(`[Scheduler] Running check-in at ${new Date().toISOString()}`);
       try {
-        const results = await checkinAll({ scheduleMode: 'cron' });
+        const results = await checkinAll({ scheduleMode: 'cron', skipNotification: true });
         const notification = await notifyCheckinSummary(results as any);
         console.log(
           `[Scheduler] Check-in complete: ${notification.summary.success} success, ${notification.summary.skipped} skipped, ${notification.summary.failed} failed`,
@@ -238,6 +223,7 @@ async function executeIntervalCheckinPass(now = new Date()) {
     const results = await checkinAll({
       accountIds: dueAccountIds,
       scheduleMode: 'interval',
+      skipNotification: true,
     });
     const nowMs = now.getTime();
     for (const item of results) {
