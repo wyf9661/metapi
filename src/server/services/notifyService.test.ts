@@ -546,4 +546,107 @@ describe('notifyService', () => {
     const joined = (payload.card?.body?.elements || []).map((e) => e.content || '').join('\n');
     expect(joined).toContain('truncated');
   });
+  it('degrades inline base64 images instead of shipping half of one', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ code: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    // 真实公告形状：一行文字 + 一张 base64 内嵌图（生产库里最长的一条长 24143 字节，其中 99.8% 是图片数据）
+    const base64 = 'iVBORw0KGgoAAAANSUhEUg'.repeat(300);
+    await sendNotification(
+      '站点公告：JustDoWork',
+      `Join Discord：https://discord.gg/demo\n\n![discord](data:image/png;base64,${base64})`,
+      'info',
+      { bypassThrottle: true, throwOnFailure: true },
+    );
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const body = call[1]?.body || '';
+    // 不能把 base64 发出去（平台渲染不了，还会把正文挤爆并截断成半截乱码）
+    expect(body).not.toContain('iVBORw0KGgo');
+    expect(body).not.toContain('data:image');
+    expect(Buffer.byteLength(body, 'utf8')).toBeLessThan(1200);
+    const payload = JSON.parse(body) as { card?: { body?: { elements?: Array<{ content?: string }> } } };
+    const joined = (payload.card?.body?.elements || []).map((e) => e.content || '').join('\n');
+    expect(joined).toContain('[图片：discord]');
+    expect(joined).toContain('Join Discord：https://discord.gg/demo');
+  });
+
+  it('degrades external image links too, since no webhook platform renders them', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ code: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('公告', '看图：![活动海报](https://example.com/a.png)', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const payload = JSON.parse(call[1]?.body || '{}') as { card?: { body?: { elements?: Array<{ content?: string }> } } };
+    const joined = (payload.card?.body?.elements || []).map((e) => e.content || '').join('\n');
+    expect(joined).not.toContain('https://example.com/a.png');
+    expect(joined).toContain('[图片：活动海报]');
+  });
+
+  it('keeps tables intact for feishu cards and guarantees a blank line before them', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ code: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('公告', '| 平台 | 表格 |\n| --- | --- |\n| 飞书 | 支持 |', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const payload = JSON.parse(call[1]?.body || '{}') as { card?: { body?: { elements?: Array<{ content?: string }> } } };
+    const joined = (payload.card?.body?.elements || []).map((e) => e.content || '').join('\n');
+    expect(joined).toContain('| 平台 | 表格 |');
+    expect(joined).toContain('| --- | --- |');
+    // 表格前必须有空行
+    expect(joined).toMatch(/公告\*\*\n\n\| 平台 \| 表格 \|/);
+  });
+
+  it('sends the published markdown as-is to dingtalk, leaving rendering to the client', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://oapi.dingtalk.com/robot/send?access_token=demo', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ errcode: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('公告', '| 平台 | 表格 |\n| --- | --- |\n| 钉钉 | 不支持 |\n| 飞书 | 支持 |', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const payload = JSON.parse(call[1]?.body || '{}') as { markdown?: { text?: string } };
+    const text = payload.markdown?.text || '';
+    // metapi 不替平台做渲染兜底：钉钉客户端能不能渲染表格由它自己决定，正文原样发出。
+    expect(text).toContain('| 平台 | 表格 |');
+    expect(text).toContain('| --- | --- |');
+    expect(text).toContain('| 钉钉 | 不支持 |');
+    expect(text).not.toContain('- 平台：');
+  });
+
+  it('sends the published markdown as-is to enterprise wechat as well', async () => {
+    const { config } = await import('../config.js');
+    config.notifyChannels = [{ id: 'test-1', url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=demo-key', secret: '', enabled: true }];
+    config.smtpEnabled = false;
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ errcode: 0 }) });
+
+    const { sendNotification } = await import('./notifyService.js');
+    await sendNotification('公告', '| 项 | 值 |\n| --- | --- |\n| 余额 | 12 |', 'info', { bypassThrottle: true, throwOnFailure: true });
+
+    const call = fetchMock.mock.calls[0] as [string, { body?: string }];
+    const payload = JSON.parse(call[1]?.body || '{}') as { markdown?: { content?: string } };
+    const content = payload.markdown?.content || '';
+    expect(content).toContain('| 项 | 值 |');
+    expect(content).toContain('| --- | --- |');
+    expect(content).toContain('| 余额 | 12 |');
+    expect(content).not.toContain('项：余额');
+  });
 });

@@ -188,6 +188,60 @@ function truncateToBytes(text: string, maxBytes: number, suffix = '\n...(truncat
   return `${out}${suffix}`;
 }
 
+/**
+ * 图片降级。三家机器人 webhook 都渲染不了图片：飞书只认 `![alt](image_key)` 而且 key 必须由
+ * 上传图片接口换取（data URL 和外链一律不认），钉钉/企微的 markdown 子集里根本没有图片这一项。
+ * 更糟的是 base64 内嵌图会把正文撑到几十 KB，截断后只剩半截乱码。所以统一换成一行提示文字。
+ */
+function degradeImages(text: string): string {
+  return text.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, (_match, alt: string, target: string) => {
+    const label = String(alt || '').trim() || '无描述';
+    const isBase64 = /^data:/i.test(target.trim());
+    return isBase64 ? `[图片：${label}]（内嵌图片过大，请在面板查看）` : `[图片：${label}]（请在面板查看）`;
+  });
+}
+
+/** 解析表格行：以 | 开头结尾且至少两列，否则返回 null。 */
+function parseTableRow(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return null;
+  const cells = trimmed.slice(1, -1).split('|').map((cell) => cell.trim());
+  return cells.length >= 2 ? cells : null;
+}
+
+/**
+ * 保留表格时保证表格前后各有一个空行。这是让 markdown 合法（GFM 里表格不能打断段落），
+ * 不是替平台兜底渲染——钉钉/企微渲染不出表格是它们客户端的事，metapi 不做补偿。
+ */
+function ensureTableSpacing(text: string): string {
+  const lines = text.split('\n');
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const isTable = parseTableRow(lines[i]) !== null;
+    const prevIsTable = i > 0 && parseTableRow(lines[i - 1]) !== null;
+    if (isTable && !prevIsTable && out.length > 0 && out[out.length - 1].trim() !== '') {
+      out.push('');
+    }
+    out.push(lines[i]);
+    const nextIsTable = i + 1 < lines.length && parseTableRow(lines[i + 1]) !== null;
+    if (isTable && !nextIsTable && i + 1 < lines.length && lines[i + 1].trim() !== '') {
+      out.push('');
+    }
+  }
+  return out.join('\n');
+}
+
+/**
+ * 三个机器人平台共用的正文：图片降级 + 表格补空行 + 统一前缀与时间。
+ *
+ * 不按平台做渲染兜底（表格、行内代码、列表各自能不能渲染由客户端决定，metapi 不转换内容），
+ * 只做一件事是必须的：把 base64 内嵌图片换掉——它不是渲染问题，不换会把正文撑到几十 KB，
+ * 飞书直接超 20KB 上限发不出去、其余平台正文被截断成半截乱码。
+ */
+function buildBotBody(title: string, message: string, level: NotifyLevel, timeFootnote: string): string {
+  return ensureTableSpacing(degradeImages(buildBotMarkdown(title, message, level, timeFootnote)));
+}
+
 /** 飞书自定义机器人请求体上限 20KB，留出 JSON 包装的余量。 */
 const FEISHU_CARD_BODY_BYTE_LIMIT = 19_000;
 /** 钉钉 markdown 正文的保守上限（官方可抓取文档未给出具体数值）。 */
@@ -211,10 +265,7 @@ const FEISHU_HEADER_TEMPLATE: Record<NotifyLevel, string> = {
  * 只有 interactive 卡片里的 markdown 元素会渲染 markdown。
  */
 function buildFeishuCard(title: string, message: string, level: NotifyLevel, timeFootnote: string) {
-  const markdown = truncateToBytes(
-    buildBotMarkdown(title, message, level, timeFootnote),
-    FEISHU_CARD_BODY_BYTE_LIMIT,
-  );
+  const markdown = truncateToBytes(buildBotBody(title, message, level, timeFootnote), FEISHU_CARD_BODY_BYTE_LIMIT);
   return {
     schema: '2.0',
     config: { update_multi: true },
@@ -449,7 +500,7 @@ export async function sendNotification(
               msgtype: 'markdown',
               markdown: {
                 content: truncateToBytes(
-                  buildBotMarkdown(title, resolvedMessage, level, timeFootnote),
+                  buildBotBody(title, resolvedMessage, level, timeFootnote),
                   WECOM_MARKDOWN_BYTE_LIMIT,
                 ),
               },
@@ -470,7 +521,7 @@ export async function sendNotification(
               markdown: {
                 title,
                 text: truncateToBytes(
-                  buildBotMarkdown(title, resolvedMessage, level, timeFootnote),
+                  buildBotBody(title, resolvedMessage, level, timeFootnote),
                   DINGTALK_MARKDOWN_BYTE_LIMIT,
                 ),
               },
