@@ -44,9 +44,14 @@ vi.mock('../db/index.js', () => {
   };
 });
 
-vi.mock('./checkinService.js', () => ({
-  checkinAll: (...args: unknown[]) => allMock(...args),
-}));
+vi.mock('./checkinService.js', async (importOriginal) => {
+  // 只替掉会打网络的 checkinAll；汇总正文用真实实现，测试才有意义
+  const actual = await importOriginal<typeof import('./checkinService.js')>();
+  return {
+    ...actual,
+    checkinAll: (...args: unknown[]) => allMock(...args),
+  };
+});
 
 vi.mock('./balanceService.js', () => ({
   refreshAllBalances: (...args: unknown[]) => refreshAllBalancesMock(...args),
@@ -220,13 +225,13 @@ describe('checkinScheduler', () => {
     const first = checkinCallback();
     const second = checkinCallback();
     expect(allMock).toHaveBeenCalledTimes(1);
-    expect(allMock).toHaveBeenCalledWith({ scheduleMode: 'cron', skipNotification: true });
+    expect(allMock).toHaveBeenCalledWith({ scheduleMode: 'cron' });
     releaseCheckin();
     await Promise.all([first, second]);
     expect(sendNotificationMock).toHaveBeenCalledTimes(1);
     expect(sendNotificationMock).toHaveBeenCalledWith(
       '签到完成（成功0）',
-      '全部账号签到完成：成功 0，跳过 0，失败 0',
+      '成功 0 ｜ 跳过 0 ｜ 失败 0',
       'info',
       expect.objectContaining({ bypassThrottle: true }),
     );
@@ -236,5 +241,53 @@ describe('checkinScheduler', () => {
     allMock.mockResolvedValue([]);
     await checkinCallback();
     expect(allMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders one counts line plus non-success rows grouped by reason', async () => {
+    const scheduler = await import('./checkinScheduler.js');
+    const notification = scheduler.buildCheckinSummaryNotification([
+      { accountId: 1, username: 'u1', site: '咕嘎咕嘎公益站', result: { success: false, status: 'failed', message: 'Invalid URL (POST /api/user/sign_in)' } },
+      { accountId: 2, username: 'u2', site: 'CoeeApi', result: { success: false, status: 'failed', message: 'fetch failed' } },
+      { accountId: 3, username: 'u3', site: 'liWAN LAB', result: { success: true, status: 'success' } },
+      { accountId: 4, username: 'u4', site: '大喵喵API', result: { success: false, status: 'skipped', skipped: true, message: '站点开启了 Turnstile 校验，需要人工签到' } },
+    ]);
+
+    expect(notification.title).toBe('签到完成（成功1/失败2）');
+    expect(notification.level).toBe('warning');
+    expect(notification.message.split('\n')).toEqual([
+      '成功 1 ｜ 跳过 1 ｜ 失败 2',
+      '',
+      '**失败（2）**',
+      '- 咕嘎咕嘎公益站：Invalid URL (POST /api/user/sign_in)',
+      '- CoeeApi：fetch failed',
+      '',
+      '**跳过（1）**',
+      '- 大喵喵API：站点开启了 Turnstile 校验，需要人工签到',
+    ]);
+    // 成功账号只计数不列名（12 个成功账号曾经把消息刷成一屏）
+    expect(notification.message).not.toContain('liWAN LAB');
+    expect(notification.message).not.toContain('u3');
+    expect(notification.message).not.toContain('u1');
+  });
+
+  it('keeps a clean one-line summary when nothing failed and collapses long lists', async () => {
+    const scheduler = await import('./checkinScheduler.js');
+    const clean = scheduler.buildCheckinSummaryNotification([
+      { accountId: 1, username: 'u1', site: 'site-a', result: { success: true, status: 'success' } },
+      { accountId: 2, username: 'u2', site: 'site-b', result: { success: false, status: 'skipped', skipped: true, message: 'Turnstile' } },
+    ]);
+    expect(clean.title).toBe('签到完成（成功1）');
+    expect(clean.level).toBe('info');
+    expect(clean.message).toBe('成功 1 ｜ 跳过 1 ｜ 失败 0\n\n**跳过（1）**\n- site-b：Turnstile');
+
+    // 同名原因归并到一行，站点超过 3 个时折叠
+    const manySites = Array.from({ length: 5 }, (_, index) => ({
+      accountId: index,
+      username: `u${index}`,
+      site: `site-${index}`,
+      result: { success: false, status: 'failed', message: 'boom' },
+    }));
+    const collapsed = scheduler.buildCheckinSummaryNotification(manySites);
+    expect(collapsed.message).toContain('- site-0、site-1、site-2等 5 个站点：boom');
   });
 });

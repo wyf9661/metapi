@@ -1,7 +1,6 @@
 import { db, schema } from '../db/index.js';
 import { getAdapter } from './platforms/index.js';
 import { eq, and } from 'drizzle-orm';
-import { sendNotification } from './notifyService.js';
 import { isCloudflareChallenge, isTokenExpiredError } from './alertRules.js';
 import { reportTokenExpired } from './alertService.js';
 import { refreshBalance } from './balanceService.js';
@@ -93,29 +92,54 @@ function inferRewardFromBalanceDelta(previousBalance: unknown, latestBalance: un
   return Math.round(delta * 1_000_000) / 1_000_000;
 }
 
-export function buildSiteCheckinFailureNotification(
-  site: string,
-  results: Array<{ success?: boolean; status?: string; skipped?: boolean; message?: string }>,
+/**
+ * The single body builder for every check-in notification (scheduled pass and
+ * the manual "check in all" task): one counts line, then the non-success rows
+ * grouped by reason. Successful accounts are counted, never listed — a wall of
+ * names is the noise this replaced, and the panel already shows the full log.
+ */
+export function buildCheckinSummaryMessage(
+  results: Array<{ accountId?: number; username?: string | null; site?: string; result?: any }>,
 ) {
-  const failed = results.filter((result) => result.status !== 'skipped' && !result.skipped && !result.success);
-  if (failed.length === 0) return null;
-
-  const success = results.filter((result) => result.success && result.status !== 'skipped' && !result.skipped).length;
-  const skipped = results.length - success - failed.length;
-  const reasons = new Map<string, number>();
-  for (const result of failed) {
-    const reason = String(result.message || '签到失败').trim().slice(0, 80);
-    reasons.set(reason, (reasons.get(reason) || 0) + 1);
-  }
-  const reasonLines = [...reasons.entries()].slice(0, 4)
-    .map(([reason, count]) => `- ${reason}${count > 1 ? `（${count} 个账号）` : ''}`);
-  if (reasons.size > reasonLines.length) reasonLines.push('- 另有其他失败原因');
-
-  return {
-    title: `${site} 签到失败汇总（${failed.length}）`,
-    message: `${site}：成功 ${success}，跳过 ${skipped}，失败 ${failed.length}\n失败原因：\n${reasonLines.join('\n')}`,
-    level: 'warning' as const,
+  let success = 0;
+  const grouped: Record<'failed' | 'skipped', Map<string, string[]>> = {
+    failed: new Map(),
+    skipped: new Map(),
   };
+
+  for (const item of results) {
+    const result = item?.result;
+    if (result && result.success && result.status !== 'skipped' && !result.skipped) {
+      success += 1;
+      continue;
+    }
+    const bucket = result?.status === 'skipped' || result?.skipped ? 'skipped' : 'failed';
+    const reason = String(result?.message || (bucket === 'skipped' ? '已跳过' : '签到失败')).trim().slice(0, 80);
+    const sites = grouped[bucket].get(reason) || [];
+    const site = String(item?.site || 'unknown');
+    if (!sites.includes(site)) sites.push(site);
+    grouped[bucket].set(reason, sites);
+  }
+
+  const skipped = [...grouped.skipped.values()].reduce((total, sites) => total + sites.length, 0);
+  const failed = [...grouped.failed.values()].reduce((total, sites) => total + sites.length, 0);
+  const lines = [`成功 ${success} ｜ 跳过 ${skipped} ｜ 失败 ${failed}`];
+
+  const renderGroup = (label: string, reasons: Map<string, string[]>) => {
+    if (reasons.size === 0) return;
+    lines.push('', `**${label}（${[...reasons.values()].reduce((total, sites) => total + sites.length, 0)}）**`);
+    const entries = [...reasons.entries()].slice(0, 5);
+    for (const [reason, sites] of entries) {
+      const shown = sites.slice(0, 3).join('、');
+      const rest = sites.length > 3 ? `等 ${sites.length} 个站点` : '';
+      lines.push(`- ${shown}${rest}：${reason}`);
+    }
+    if (reasons.size > entries.length) lines.push(`- 另有 ${reasons.size - entries.length} 类原因，详见签到日志`);
+  };
+
+  renderGroup('失败', grouped.failed);
+  renderGroup('跳过', grouped.skipped);
+  return lines.join('\n');
 }
 
 async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
@@ -148,7 +172,6 @@ async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
 
 export async function checkinAccount(accountId: number, options?: {
   skipEvent?: boolean;
-  skipNotification?: boolean;
   scheduleMode?: 'cron' | 'interval';
 }) {
   const rows = await db
@@ -334,24 +357,7 @@ export async function checkinAccount(accountId: number, options?: {
         detail: result.message,
       });
     }
-
-    if (!options?.skipNotification && isCloudflare) {
-      await sendNotification(
-        'Cloudflare challenge',
-        `${account.username || 'ID:' + accountId} @ ${site.name}: ${result.message}`,
-        'warning',
-      );
-    }
-
-    if (!options?.skipNotification && !unsupportedCheckin && !manualVerificationRequired) {
-      await sendNotification(
-        'checkin failed',
-        `${account.username || 'ID:' + accountId} @ ${site.name}: ${result.message}`,
-        'error',
-      );
-    }
   }
-
 
   return {
     ...result,
@@ -362,7 +368,7 @@ export async function checkinAccount(accountId: number, options?: {
 }
 
 export async function checkinAll(
-  options?: { accountIds?: number[]; scheduleMode?: 'cron' | 'interval'; skipNotification?: boolean },
+  options?: { accountIds?: number[]; scheduleMode?: 'cron' | 'interval' },
 ): Promise<CheckinTaskResultItem[]> {
   const rows = await db
     .select()
@@ -388,35 +394,22 @@ export async function checkinAll(
   }
 
   const promises = Array.from(grouped.entries()).map(async ([_, siteRows]) => {
-    const siteResults: CheckinTaskResultItem[] = [];
     for (const row of siteRows) {
       const r = await checkinAccount(row.accounts.id, {
         skipEvent: true,
-        skipNotification: true,
         scheduleMode: options?.scheduleMode,
       });
-      const item = {
+      results.push({
         accountId: row.accounts.id,
         username: row.accounts.username,
         site: row.sites.name,
         result: r,
-      };
-      results.push(item);
-      siteResults.push(item);
-    }
-    if (!options?.skipNotification) {
-      const notification = buildSiteCheckinFailureNotification(siteRows[0]?.sites.name || 'unknown', siteResults.map((item) => item.result));
-      if (notification) {
-        try {
-          await sendNotification(notification.title, notification.message, notification.level);
-        } catch (error) {
-          console.warn(`[Checkin] Site summary notification failed (${siteRows[0]?.sites.name || 'unknown'}):`, (error as Error)?.message || error);
-        }
-      }
+      });
     }
   });
 
   await Promise.all(promises);
+
   return results;
 }
 

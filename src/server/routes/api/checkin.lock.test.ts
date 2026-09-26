@@ -84,7 +84,6 @@ describe('POST /api/checkin/trigger background task dedupe', () => {
     expect(secondBody.jobId).toBe(firstBody.jobId);
     expect(checkinAllMock).toHaveBeenCalledWith({
       scheduleMode: expect.any(String),
-      skipNotification: true,
     });
 
     resolveFirst([]);

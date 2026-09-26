@@ -238,24 +238,7 @@ describe('checkinService auto relogin', () => {
     expect(Number(firstInsertPayload?.reward)).toBeCloseTo(2.5, 6);
   });
 
-  it('builds one concise failure summary per site and groups duplicate reasons', async () => {
-    const { buildSiteCheckinFailureNotification } = await import('./checkinService.js');
-    expect(buildSiteCheckinFailureNotification('兰兰的公益站', [
-      { success: false, status: 'failed', message: '无法解析上游风控挑战（HTML），未继续重试' },
-      { success: false, status: 'failed', message: '无法解析上游风控挑战（HTML），未继续重试' },
-      { success: true, status: 'success' },
-      { success: false, status: 'skipped', skipped: true, message: 'not supported' },
-    ])).toEqual({
-      title: '兰兰的公益站 签到失败汇总（2）',
-      message: '兰兰的公益站：成功 1，跳过 1，失败 2\n失败原因：\n- 无法解析上游风控挑战（HTML），未继续重试（2 个账号）',
-      level: 'warning',
-    });
-    expect(buildSiteCheckinFailureNotification('健康站点', [
-      { success: true, status: 'success' },
-    ])).toBeNull();
-  });
-
-  it('keeps manual single-account failure notifications enabled', async () => {
+  it('does not send a per-account failure alert — the run summary owns messaging', async () => {
     selectAllMock.mockReturnValue([{
       accounts: { id: 99, username: 'manual-user', accessToken: 'token', status: 'active', extraConfig: null },
       sites: { id: 99, name: 'manual-site', url: 'https://example.com', platform: 'new-api' },
@@ -265,11 +248,10 @@ describe('checkinService auto relogin', () => {
     const { checkinAccount } = await import('./checkinService.js');
     await checkinAccount(99);
 
-    expect(notifyMock).toHaveBeenCalledTimes(1);
-    expect(notifyMock).toHaveBeenCalledWith('checkin failed', expect.stringContaining('manual-user @ manual-site: upstream failed'), 'error');
+    expect(notifyMock).not.toHaveBeenCalled();
   });
 
-  it('sends one grouped site summary for a batch and no site alert on success', async () => {
+  it('never notifies per site — a batch run stays silent and lets the summary speak', async () => {
     selectAllMock.mockReturnValue([
       { accounts: { id: 101, username: 'u1', accessToken: 't1', status: 'active', extraConfig: null }, sites: { id: 10, name: 'site-a', url: 'https://example.com', platform: 'new-api' } },
       { accounts: { id: 102, username: 'u2', accessToken: 't2', status: 'active', extraConfig: null }, sites: { id: 10, name: 'site-a', url: 'https://example.com', platform: 'new-api' } },
@@ -280,25 +262,6 @@ describe('checkinService auto relogin', () => {
     const results = await checkinAll({ scheduleMode: 'cron' });
 
     expect(results).toHaveLength(2);
-    expect(notifyMock).toHaveBeenCalledTimes(1);
-    expect(notifyMock).toHaveBeenCalledWith(
-      'site-a 签到失败汇总（2）',
-      expect.stringContaining('site-a：成功 0，跳过 0，失败 2'),
-      'warning',
-    );
-    expect(notifyMock.mock.calls[0]?.[1]).not.toContain('u1');
-    expect(notifyMock.mock.calls[0]?.[1]).not.toContain('u2');
-  });
-
-  it('sends a grouped failure summary once for the site batch', async () => {
-    selectAllMock.mockReturnValue([
-      { accounts: { id: 111, username: 'u1', accessToken: 't1', status: 'active', extraConfig: null }, sites: { id: 10, name: 'site-a', url: 'https://example.com', platform: 'new-api' } },
-    ]);
-    adapterMock.checkin.mockResolvedValue({ success: false, message: 'same error' });
-
-    const { checkinAll } = await import('./checkinService.js');
-    await checkinAll({ scheduleMode: 'cron', skipNotification: true });
-
     expect(notifyMock).not.toHaveBeenCalled();
   });
 

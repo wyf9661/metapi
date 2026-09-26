@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db, schema } from '../db/index.js';
 import { refreshAllBalances } from './balanceService.js';
-import { checkinAll } from './checkinService.js';
+import { buildCheckinSummaryMessage, checkinAll } from './checkinService.js';
 import * as routeRefreshWorkflow from './routeRefreshWorkflow.js';
 import { sendNotification } from './notifyService.js';
 import { buildDailySummaryNotification, collectDailySummaryMetrics } from './dailySummaryService.js';
@@ -91,15 +91,12 @@ function summarizeCheckinRun(results: Array<{ result?: any }>) {
 
 export function buildCheckinSummaryNotification(results: Array<{ accountId?: number; username?: string; site?: string; result?: any }>) {
   const summary = summarizeCheckinRun(results);
-  const lines = [
-    `全部账号签到完成：成功 ${summary.success}，跳过 ${summary.skipped}，失败 ${summary.failed}`,
-  ];
   const title = summary.failed > 0
     ? `签到完成（成功${summary.success}/失败${summary.failed}）`
     : `签到完成（成功${summary.success}）`;
   return {
     title,
-    message: lines.join('\n'),
+    message: buildCheckinSummaryMessage(results),
     level: (summary.failed > 0 ? 'warning' : 'info') as 'info' | 'warning',
     summary,
   };
@@ -135,7 +132,7 @@ function createCheckinTask(cronExpr: string) {
     const pass = (async () => {
       console.log(`[Scheduler] Running check-in at ${new Date().toISOString()}`);
       try {
-        const results = await checkinAll({ scheduleMode: 'cron', skipNotification: true });
+        const results = await checkinAll({ scheduleMode: 'cron' });
         const notification = await notifyCheckinSummary(results as any);
         console.log(
           `[Scheduler] Check-in complete: ${notification.summary.success} success, ${notification.summary.skipped} skipped, ${notification.summary.failed} failed`,
@@ -223,7 +220,6 @@ async function executeIntervalCheckinPass(now = new Date()) {
     const results = await checkinAll({
       accountIds: dueAccountIds,
       scheduleMode: 'interval',
-      skipNotification: true,
     });
     const nowMs = now.getTime();
     for (const item of results) {
