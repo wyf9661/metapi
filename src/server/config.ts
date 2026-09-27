@@ -210,6 +210,12 @@ export function buildConfig(env: NodeJS.ProcessEnv) {
     // Sticky max-hits only applies to session affinity; last-success uses its
     // own exploration interval above.
     proxyStickyMaxHits: Math.max(1, Math.trunc(parseNumber(env.PROXY_STICKY_MAX_HITS, 5))),
+    // Concurrency-spread routing: when the affinity channel (sticky /
+    // last-success) is already serving a request, a second concurrent hop
+    // picks another idle candidate (different site first) instead of piling
+    // onto the same site, so one site's instant RPM does not spike. Serial
+    // traffic (concurrency == 1) keeps the historical behavior.
+    proxyConcurrencySpreadEnabled: parseBoolean(env.PROXY_CONCURRENCY_SPREAD_ENABLED, true),
     // Probability (0-1) that a first-hop request skips sticky and last-success
     // affinity and goes directly to balanced-v2 weighted sampling. This keeps
     // short-session distributions converging to the configured weights without

@@ -233,6 +233,11 @@ export function applyRuntimeSettings(settingsMap: Map<string, string>) {
     config.proxyRouteProbeRate = Math.min(1, Math.max(0, proxyRouteProbeRate));
   }
 
+  const proxyConcurrencySpreadEnabled = parseSettingFromMap<boolean>(settingsMap, 'proxy_concurrency_spread_enabled');
+  if (typeof proxyConcurrencySpreadEnabled === 'boolean') {
+    config.proxyConcurrencySpreadEnabled = proxyConcurrencySpreadEnabled;
+  }
+
   const tokenRouterFailureCooldownMaxSec = parseSettingFromMap<number>(settingsMap, 'token_router_failure_cooldown_max_sec');
   const normalizedFailureCooldownMaxSec = normalizeTokenRouterFailureCooldownMaxSec(tokenRouterFailureCooldownMaxSec);
   if (normalizedFailureCooldownMaxSec != null) {

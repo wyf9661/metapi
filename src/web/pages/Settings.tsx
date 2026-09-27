@@ -78,6 +78,7 @@ type RuntimeSettings = {
   routingFallbackUnitCost: number;
   proxyFirstByteTimeoutSec: number;
   proxyRouteProbeRate: number;
+  proxyConcurrencySpreadEnabled: boolean;
   routeFailureCooldownMaxValue: number;
   routeFailureCooldownMaxUnit: RouteCooldownUnit;
   routeProbabilityFloor: number;
@@ -151,6 +152,7 @@ export default function Settings() {
     routingFallbackUnitCost: 1,
     proxyFirstByteTimeoutSec: 15,
     proxyRouteProbeRate: 0.15,
+    proxyConcurrencySpreadEnabled: true,
     routeFailureCooldownMaxValue: 30,
     routeFailureCooldownMaxUnit: 'day',
     routeProbabilityFloor: 0.05,
@@ -456,6 +458,7 @@ export default function Settings() {
         proxyRouteProbeRate: Number(runtimeInfo.proxyRouteProbeRate) >= 0 && Number(runtimeInfo.proxyRouteProbeRate) <= 1
           ? Number(runtimeInfo.proxyRouteProbeRate)
           : 0.15,
+        proxyConcurrencySpreadEnabled: runtimeInfo.proxyConcurrencySpreadEnabled !== false,
         routeFailureCooldownMaxValue: routeCooldownInput.value,
         routeFailureCooldownMaxUnit: routeCooldownInput.unit,
         routeProbabilityFloor: Number(runtimeInfo.routeProbabilityFloor) >= 0.03 && Number(runtimeInfo.routeProbabilityFloor) <= 0.15
@@ -729,6 +732,7 @@ export default function Settings() {
         proxyRouteProbeRate: Number.isFinite(runtime.proxyRouteProbeRate)
           ? Math.min(1, Math.max(0, runtime.proxyRouteProbeRate))
           : 0.15,
+        proxyConcurrencySpreadEnabled: runtime.proxyConcurrencySpreadEnabled !== false,
         tokenRouterFailureCooldownMaxSec: toRouteCooldownSeconds(
           runtime.routeFailureCooldownMaxValue,
           runtime.routeFailureCooldownMaxUnit,
@@ -1677,6 +1681,26 @@ export default function Settings() {
             />
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
               默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+              并发分散路由（并发请求避开占用中的通道）
+            </div>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={runtime.proxyConcurrencySpreadEnabled !== false}
+                onChange={(e) => setRuntime((prev) => ({
+                  ...prev,
+                  proxyConcurrencySpreadEnabled: e.target.checked,
+                }))}
+                style={{ width: 15, height: 15, accentColor: 'var(--color-primary)' }}
+              />
+              并发大于 1 时，第二路请求改挑空闲的另一条通道（不同站点优先）
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
+              默认开启。粘性/上次成功通道正在服务请求时，第二路并发改走空闲候选，避免单站点瞬时 RPM 过高；并发为 1 时行为完全不变。
             </div>
           </div>
           </div>

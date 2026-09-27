@@ -42,4 +42,24 @@ describe('applyRuntimeSettings', () => {
 
     expect(config.smtpPort).toBe(587);
   });
+
+  it('hydrates the concurrency-spread switch from persisted settings', () => {
+    config.proxyConcurrencySpreadEnabled = true;
+
+    applyRuntimeSettings(new Map([
+      ['proxy_concurrency_spread_enabled', JSON.stringify(false)],
+    ]));
+    expect(config.proxyConcurrencySpreadEnabled).toBe(false);
+
+    applyRuntimeSettings(new Map([
+      ['proxy_concurrency_spread_enabled', JSON.stringify(true)],
+    ]));
+    expect(config.proxyConcurrencySpreadEnabled).toBe(true);
+
+    // Malformed values must not flip the switch.
+    applyRuntimeSettings(new Map([
+      ['proxy_concurrency_spread_enabled', JSON.stringify('maybe')],
+    ]));
+    expect(config.proxyConcurrencySpreadEnabled).toBe(true);
+  });
 });

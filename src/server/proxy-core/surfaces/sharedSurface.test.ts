@@ -1,10 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Response as UndiciResponse } from 'undici';
 import { EMPTY_DOWNSTREAM_ROUTING_POLICY } from '../../services/downstreamPolicyTypes.js';
+import { config } from '../../config.js';
 
 const selectChannelMock = vi.fn();
 const selectNextChannelMock = vi.fn();
 const selectPreferredChannelMock = vi.fn();
+const selectSpreadChannelMock = vi.fn();
 const recordFailureMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const composeProxyLogMessageMock = vi.fn();
@@ -32,6 +34,9 @@ const bindStickyChannelMock = vi.fn();
 const clearStickyChannelMock = vi.fn();
 const acquireChannelLeaseMock = vi.fn();
 const buildStickySessionKeyMock = vi.fn();
+const getChannelInFlightCountMock = vi.fn();
+const shouldExploreFromLastSuccessMock = vi.fn();
+const incrementStickyHitCountMock = vi.fn(() => 1);
 const consoleWarnMock = vi.spyOn(console, 'warn').mockImplementation(() => {});
 const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
 const mathRandomMock = vi.spyOn(Math, 'random');
@@ -41,6 +46,7 @@ vi.mock('../../services/tokenRouter.js', () => ({
     selectChannel: (...args: unknown[]) => selectChannelMock(...args),
     selectNextChannel: (...args: unknown[]) => selectNextChannelMock(...args),
     selectPreferredChannel: (...args: unknown[]) => selectPreferredChannelMock(...args),
+    selectSpreadChannel: (...args: unknown[]) => selectSpreadChannelMock(...args),
     recordFailure: (...args: unknown[]) => recordFailureMock(...args),
     recordSuccess: (...args: unknown[]) => recordSuccessMock(...args),
   },
@@ -50,7 +56,9 @@ vi.mock('../../services/proxyChannelCoordinator.js', () => ({
   ensureProxyChannelAffinityLoaded: vi.fn(async () => {}),
   proxyChannelCoordinator: {
     getStickyChannelId: (...args: unknown[]) => getStickyChannelIdMock(...args),
-    incrementStickyHitCount: vi.fn(() => 1),
+    incrementStickyHitCount: (...args: unknown[]) => incrementStickyHitCountMock(...args),
+    getChannelInFlightCount: (...args: unknown[]) => getChannelInFlightCountMock(...args),
+    shouldExploreFromLastSuccess: (...args: unknown[]) => shouldExploreFromLastSuccessMock(...args),
     getLastSuccessChannelId: (...args: unknown[]) => getLastSuccessChannelIdMock(...args),
     incrementLastSuccessHitCount: vi.fn(() => 1),
     rememberLastSuccessChannel: (...args: unknown[]) => rememberLastSuccessChannelMock(...args),
@@ -166,6 +174,13 @@ describe('selectSurfaceChannelForAttempt', () => {
     clearStickyChannelMock.mockReset();
     acquireChannelLeaseMock.mockReset();
     buildStickySessionKeyMock.mockReset();
+    selectSpreadChannelMock.mockReset();
+    getChannelInFlightCountMock.mockReset();
+    getChannelInFlightCountMock.mockReturnValue(0);
+    shouldExploreFromLastSuccessMock.mockReset();
+    shouldExploreFromLastSuccessMock.mockReturnValue(false);
+    incrementStickyHitCountMock.mockReset();
+    incrementStickyHitCountMock.mockReturnValue(1);
     consoleWarnMock.mockClear();
     consoleErrorMock.mockClear();
     mathRandomMock.mockReturnValue(0.99);
@@ -259,6 +274,140 @@ describe('selectSurfaceChannelForAttempt', () => {
     );
     expect(selectChannelMock).not.toHaveBeenCalled();
     expect(clearStickyChannelMock).not.toHaveBeenCalled();
+  });
+
+  it('spreads to an idle alternative while the sticky channel is already in flight', async () => {
+    const spreadSelected = { channel: { id: 66 } };
+    getStickyChannelIdMock.mockReturnValue(55);
+    getChannelInFlightCountMock.mockImplementation((channelId: number) => (channelId === 55 ? 1 : 0));
+    selectSpreadChannelMock.mockResolvedValueOnce(spreadSelected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+      stickySessionKey: 'sticky-session',
+    });
+
+    expect(result).toBe(spreadSelected);
+    expect(selectSpreadChannelMock).toHaveBeenCalledWith(
+      'gpt-5.2',
+      55,
+      EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      expect.objectContaining({
+        excludeChannelIds: [],
+        channelLoad: expect.any(Function),
+      }),
+    );
+    expect(selectPreferredChannelMock).not.toHaveBeenCalled();
+    // The spread hop never used the sticky binding: its hit chain must not advance.
+    expect(incrementStickyHitCountMock).not.toHaveBeenCalled();
+    expect(clearStickyChannelMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the sticky channel when no spread alternative is dispatchable', async () => {
+    const stickySelected = { channel: { id: 55 } };
+    getStickyChannelIdMock.mockReturnValue(55);
+    getChannelInFlightCountMock.mockImplementation((channelId: number) => (channelId === 55 ? 2 : 0));
+    selectSpreadChannelMock.mockResolvedValueOnce(null);
+    selectPreferredChannelMock.mockResolvedValueOnce(stickySelected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+      stickySessionKey: 'sticky-session',
+    });
+
+    expect(result).toBe(stickySelected);
+    expect(selectSpreadChannelMock).toHaveBeenCalledTimes(1);
+    expect(selectPreferredChannelMock).toHaveBeenCalledWith(
+      'gpt-5.2',
+      55,
+      EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      [],
+      { yieldOnLowBalance: true },
+    );
+    expect(incrementStickyHitCountMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps serial sticky behavior when the affinity channel is idle', async () => {
+    const stickySelected = { channel: { id: 55 } };
+    getStickyChannelIdMock.mockReturnValue(55);
+    getChannelInFlightCountMock.mockReturnValue(0);
+    selectPreferredChannelMock.mockResolvedValueOnce(stickySelected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+      stickySessionKey: 'sticky-session',
+    });
+
+    expect(result).toBe(stickySelected);
+    expect(selectSpreadChannelMock).not.toHaveBeenCalled();
+    expect(selectPreferredChannelMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not spread when the concurrency-spread switch is off', async () => {
+    const originalSpreadEnabled = config.proxyConcurrencySpreadEnabled;
+    config.proxyConcurrencySpreadEnabled = false;
+    try {
+      const stickySelected = { channel: { id: 55 } };
+      getStickyChannelIdMock.mockReturnValue(55);
+      getChannelInFlightCountMock.mockReturnValue(4);
+      selectPreferredChannelMock.mockResolvedValueOnce(stickySelected);
+
+      const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+      const result = await selectSurfaceChannelForAttempt({
+        requestedModel: 'gpt-5.2',
+        downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+        excludeChannelIds: [],
+        retryCount: 0,
+        stickySessionKey: 'sticky-session',
+      });
+
+      expect(result).toBe(stickySelected);
+      expect(selectSpreadChannelMock).not.toHaveBeenCalled();
+      expect(selectPreferredChannelMock).toHaveBeenCalledTimes(1);
+    } finally {
+      config.proxyConcurrencySpreadEnabled = originalSpreadEnabled;
+    }
+  });
+
+  it('spreads off the last-success channel when the sticky binding is gone', async () => {
+    const spreadSelected = { channel: { id: 88 } };
+    getStickyChannelIdMock.mockReturnValue(null);
+    getLastSuccessChannelIdMock.mockReturnValue(77);
+    getChannelInFlightCountMock.mockImplementation((channelId: number) => (channelId === 77 ? 1 : 0));
+    selectSpreadChannelMock.mockResolvedValueOnce(spreadSelected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+    });
+
+    expect(result).toBe(spreadSelected);
+    expect(shouldExploreFromLastSuccessMock).toHaveBeenCalledTimes(1);
+    expect(selectSpreadChannelMock).toHaveBeenCalledWith(
+      'gpt-5.2',
+      77,
+      EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      expect.objectContaining({
+        excludeChannelIds: [],
+        channelLoad: expect.any(Function),
+      }),
+    );
+    expect(selectPreferredChannelMock).not.toHaveBeenCalled();
   });
 
   it('uses the forced tester channel before sticky or automatic selection', async () => {

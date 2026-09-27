@@ -358,6 +358,7 @@ export type RuntimeSettingsPayload = {
   routingFallbackUnitCost?: number;
   proxyFirstByteTimeoutSec?: number;
   proxyRouteProbeRate?: number;
+  proxyConcurrencySpreadEnabled?: boolean;
   tokenRouterFailureCooldownMaxSec?: number;
   routeProbabilityFloor?: number;
   routeQuotaExhaustionExclude?: boolean;

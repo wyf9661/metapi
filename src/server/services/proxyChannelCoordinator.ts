@@ -63,6 +63,14 @@ const stickySessionBindings = new Map<string, StickyEntry>();
 /** key+model last-success affinity (independent of client session / path). */
 const lastSuccessByModelKey = new Map<string, LastSuccessEntry>();
 const channelRuntimeStates = new Map<number, ChannelRuntimeState>();
+/**
+ * In-flight dispatch count for channels WITHOUT a guarded session pool
+ * (API-key channels). Session-scoped channels already track their in-flight
+ * work through `activeLeaseIds`; this map covers everything else so the
+ * concurrency-spread router can see whether a channel is currently serving a
+ * request. Entries live only while count > 0.
+ */
+const channelDispatchCounts = new Map<number, number>();
 let nextLeaseId = 1;
 
 const PROXY_CHANNEL_AFFINITY_SETTING_KEY = 'proxy_channel_affinity_v1';
@@ -596,6 +604,20 @@ class ProxyChannelCoordinator {
     return ids;
   }
 
+  /**
+   * In-flight dispatch count for one channel: guarded session-pool leases plus
+   * generic counting leases. 0 means idle. Used by the concurrency-spread
+   * routing to pick an idle alternative while the affinity channel is already
+   * serving a request.
+   */
+  getChannelInFlightCount(channelId: number): number {
+    const normalized = Math.trunc(channelId || 0);
+    if (normalized <= 0) return 0;
+    const sessionActiveCount = channelRuntimeStates.get(normalized)?.activeLeaseIds.size ?? 0;
+    const countingActiveCount = channelDispatchCounts.get(normalized) ?? 0;
+    return sessionActiveCount + countingActiveCount;
+  }
+
   getChannelLoadSnapshot(input: {
     channelId: number;
     accountExtraConfig?: string | null;
@@ -659,9 +681,13 @@ class ProxyChannelCoordinator {
       oauthProvider: input.accountOauthProvider,
     });
     if (concurrencyLimit <= 0) {
+      // No guarded session pool for this channel: hand out a lightweight
+      // counting lease instead of a noop. It never queues or times out — it
+      // only keeps the per-channel in-flight count honest so the
+      // concurrency-spread routing can prefer idle candidates.
       return {
         status: 'acquired',
-        lease: createNoopLease(channelId),
+        lease: this.createCountingLease(channelId),
       };
     }
 
@@ -701,6 +727,26 @@ class ProxyChannelCoordinator {
       shouldUnrefTimer(waiter.timer);
       state.queue.push(waiter);
     });
+  }
+
+  private createCountingLease(channelId: number): ProxyChannelLease {
+    channelDispatchCounts.set(channelId, (channelDispatchCounts.get(channelId) ?? 0) + 1);
+    let released = false;
+    return {
+      channelId,
+      isActive: () => !released,
+      release: () => {
+        if (released) return;
+        released = true;
+        const next = (channelDispatchCounts.get(channelId) ?? 1) - 1;
+        if (next > 0) {
+          channelDispatchCounts.set(channelId, next);
+        } else {
+          channelDispatchCounts.delete(channelId);
+        }
+      },
+      touch: () => {},
+    };
   }
 
   private createTrackedLease(channelId: number, state: ChannelRuntimeState): ProxyChannelLease {
@@ -770,6 +816,7 @@ export function resetProxyChannelCoordinatorState(): void {
   stickySessionBindings.clear();
   lastSuccessByModelKey.clear();
   channelRuntimeStates.clear();
+  channelDispatchCounts.clear();
   nextLeaseId = 1;
   if (affinitySaveTimer) {
     clearTimeout(affinitySaveTimer);

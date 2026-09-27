@@ -103,6 +103,7 @@ interface RuntimeSettingsBody {
   routingFallbackUnitCost?: number;
   proxyFirstByteTimeoutSec?: number;
   proxyRouteProbeRate?: number;
+  proxyConcurrencySpreadEnabled?: boolean;
   tokenRouterFailureCooldownMaxSec?: number;
   routeProbabilityFloor?: number;
   routeQuotaExhaustionExclude?: boolean;
@@ -566,6 +567,17 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.proxyRouteProbeRate = Math.min(1, Math.max(0, n));
       return;
     }
+    case 'proxy_concurrency_spread_enabled': {
+      if (typeof value === 'boolean') {
+        config.proxyConcurrencySpreadEnabled = value;
+        return;
+      }
+      const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+      if (normalized === 'true' || normalized === 'false') {
+        config.proxyConcurrencySpreadEnabled = normalized === 'true';
+      }
+      return;
+    }
     case 'token_router_failure_cooldown_max_sec': {
       const normalized = normalizeTokenRouterFailureCooldownMaxSec(value);
       if (normalized == null) return;
@@ -617,6 +629,7 @@ async function getRuntimeSettingsResponse(currentAdminIp = '', tunnelClientView 
     routingFallbackUnitCost: config.routingFallbackUnitCost,
     proxyFirstByteTimeoutSec: config.proxyFirstByteTimeoutSec,
     proxyRouteProbeRate: config.proxyRouteProbeRate,
+    proxyConcurrencySpreadEnabled: config.proxyConcurrencySpreadEnabled,
     tokenRouterFailureCooldownMaxSec: config.tokenRouterFailureCooldownMaxSec,
     routeProbabilityFloor: config.routeProbabilityFloor ?? 0.05,
     routeQuotaExhaustionExclude: config.routeQuotaExhaustionExclude !== false,
@@ -1622,6 +1635,17 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.proxyRouteProbeRate = normalized;
       upsertSetting('proxy_route_probe_rate', normalized);
+    }
+
+    if (body.proxyConcurrencySpreadEnabled !== undefined) {
+      const nextValue = body.proxyConcurrencySpreadEnabled === true;
+      if (nextValue !== config.proxyConcurrencySpreadEnabled) {
+        changedLabels.push(
+          `并发分散路由（${config.proxyConcurrencySpreadEnabled ? '开' : '关'} -> ${nextValue ? '开' : '关'}）`,
+        );
+      }
+      config.proxyConcurrencySpreadEnabled = nextValue;
+      upsertSetting('proxy_concurrency_spread_enabled', nextValue);
     }
 
     if (body.routeProbabilityFloor !== undefined) {

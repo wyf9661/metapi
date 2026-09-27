@@ -482,6 +482,49 @@ describe('proxyChannelCoordinator', () => {
     });
   });
 
+  it('counts in-flight dispatches for channels without a session pool', async () => {
+    expect(proxyChannelCoordinator.getChannelInFlightCount(0)).toBe(0);
+
+    const first = await proxyChannelCoordinator.acquireChannelLease({ channelId: 71 });
+    expect(first.status).toBe('acquired');
+    if (first.status !== 'acquired') return;
+    expect(first.lease.isActive()).toBe(true);
+    expect(proxyChannelCoordinator.getChannelInFlightCount(71)).toBe(1);
+
+    const second = await proxyChannelCoordinator.acquireChannelLease({ channelId: 71 });
+    expect(second.status).toBe('acquired');
+    if (second.status !== 'acquired') return;
+    expect(proxyChannelCoordinator.getChannelInFlightCount(71)).toBe(2);
+
+    second.lease.release();
+    expect(second.lease.isActive()).toBe(false);
+    expect(proxyChannelCoordinator.getChannelInFlightCount(71)).toBe(1);
+
+    first.lease.release();
+    expect(proxyChannelCoordinator.getChannelInFlightCount(71)).toBe(0);
+    // Generic counting must not leak into the guarded session-pool view.
+    expect(proxyChannelCoordinator.getActiveChannelIds()).toEqual([]);
+  });
+
+  it('releases a counting lease idempotently', async () => {
+    const lease = await proxyChannelCoordinator.acquireChannelLease({ channelId: 72 });
+    if (lease.status !== 'acquired') throw new Error('expected an acquired lease');
+    lease.lease.release();
+    lease.lease.release();
+    expect(proxyChannelCoordinator.getChannelInFlightCount(72)).toBe(0);
+  });
+
+  it('adds guarded session-pool activity to the in-flight count', async () => {
+    const lease = await proxyChannelCoordinator.acquireChannelLease({
+      channelId: 73,
+      accountExtraConfig: JSON.stringify({ credentialMode: 'session' }),
+    });
+    if (lease.status !== 'acquired') throw new Error('expected an acquired lease');
+    expect(proxyChannelCoordinator.getChannelInFlightCount(73)).toBe(1);
+    lease.lease.release();
+    expect(proxyChannelCoordinator.getChannelInFlightCount(73)).toBe(0);
+  });
+
   it('increments sticky hit count across same-channel rebinds and resets on channel change', () => {
     const key = proxyChannelCoordinator.buildStickySessionKey({
       clientKind: 'codex',

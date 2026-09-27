@@ -151,6 +151,7 @@ export async function selectProxyChannelForAttempt(input: {
   let selected: SelectedChannel = null;
   let refreshedRoutes = false;
   let preferredSource: 'sticky' | 'last_success' | null = null;
+  let spreadSource: 'sticky' | 'last_success' | null = null;
 
   const refreshRoutesForFirstAttempt = async (): Promise<boolean> => {
     if (input.retryCount > 0 || refreshedRoutes) return false;
@@ -208,6 +209,33 @@ export async function selectProxyChannelForAttempt(input: {
     return preferred;
   };
 
+  // Concurrency-spread (config.proxyConcurrencySpreadEnabled): when the
+  // affinity channel (sticky / last-success) is already serving a request, a
+  // second concurrent hop must not pile onto the same site. Prefer another
+  // idle eligible candidate (different site first); when everything is busy
+  // the router falls back to the least-loaded alternative; when no
+  // alternative is dispatchable the historical affinity path below runs
+  // unchanged. Serial traffic (affinity channel idle) never enters here.
+  const tryConcurrentSpread = async (
+    preferredChannelId: number,
+    source: 'sticky' | 'last_success',
+  ): Promise<SelectedChannel> => {
+    if (!config.proxyConcurrencySpreadEnabled) return null;
+    if (proxyChannelCoordinator.getChannelInFlightCount(preferredChannelId) <= 0) return null;
+    const spread = await tokenRouter.selectSpreadChannel(
+      input.requestedModel,
+      preferredChannelId,
+      input.downstreamPolicy,
+      {
+        excludeChannelIds: input.excludeChannelIds,
+        ...(contextTokens ? { requiredContextTokens: contextTokens } : {}),
+        channelLoad: (channelId: number) => proxyChannelCoordinator.getChannelInFlightCount(channelId),
+      },
+    );
+    if (spread) spreadSource = source;
+    return spread;
+  };
+
   if (input.retryCount === 0) {
     // Probability-Guarded Routing: each first-hop request independently skips
     // sticky and last-success affinity with probability `probeRate`, forcing
@@ -220,6 +248,12 @@ export async function selectProxyChannelForAttempt(input: {
     if (!shouldProbe && input.stickySessionKey) {
       const stickyChannelId = proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey);
       if (stickyChannelId) {
+        // Concurrency-spread first: spreading never consumes the sticky hit
+        // count (the binding was not used), so once the burst ends the serial
+        // sticky-chain behavior is exactly what it was.
+        selected = await tryConcurrentSpread(stickyChannelId, 'sticky');
+      }
+      if (!selected && stickyChannelId) {
         const hitCount = proxyChannelCoordinator.incrementStickyHitCount(input.stickySessionKey);
         if (hitCount > config.proxyStickyMaxHits) {
           // Consecutive-hit cap reached: discard the session-level affinity so
@@ -247,12 +281,18 @@ export async function selectProxyChannelForAttempt(input: {
           explorationInterval: config.proxyLastSuccessExplorationInterval,
         });
         if (!explore) {
-          // Model-level last-success affinity is an event-driven safety net:
-          // it has no hit-count cap (unlike the session-level sticky binding,
-          // which re-balances to avoid one client monopolizing a channel).
-          // A good channel stays preferred until it fails or an exploration
-          // replaces it with another successful channel.
-          selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
+          // Concurrency-spread: while the last-success channel is serving a
+          // request, a second concurrent hop prefers another idle candidate
+          // before reusing it. Null keeps the safety-net path below.
+          selected = await tryConcurrentSpread(lastSuccessChannelId, 'last_success');
+          if (!selected) {
+            // Model-level last-success affinity is an event-driven safety net:
+            // it has no hit-count cap (unlike the session-level sticky binding,
+            // which re-balances to avoid one client monopolizing a channel).
+            // A good channel stays preferred until it fails or an exploration
+            // replaces it with another successful channel.
+            selected = await tryPreferredChannel(lastSuccessChannelId, 'last_success');
+          }
         }
       }
     }
@@ -313,7 +353,7 @@ export async function selectProxyChannelForAttempt(input: {
     requestedModel: input.requestedModel,
     selected,
     retryCount: input.retryCount,
-    sticky: stickyHit || preferredSource === 'last_success',
+    sticky: !spreadSource && (stickyHit || preferredSource === 'last_success'),
     forcedChannelId: input.forcedChannelId,
     reason: input.forcedChannelId
       ? 'forced'
@@ -321,7 +361,9 @@ export async function selectProxyChannelForAttempt(input: {
         ? 'sticky'
         : preferredSource === 'last_success'
           ? 'last_success'
-          : (input.retryCount > 0 ? 'failover' : 'primary'),
+          : spreadSource
+            ? 'concurrent_spread'
+            : (input.retryCount > 0 ? 'failover' : 'primary'),
   });
 
   return selected;

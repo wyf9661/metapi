@@ -125,6 +125,22 @@ export type ExplainSelectionOptions = {
   downstreamPolicy?: DownstreamRoutingPolicy;
 };
 
+/**
+ * Options for concurrency-spread selection: pick a different channel while the
+ * affinity channel (sticky / last-success) is already serving a request.
+ */
+export type ConcurrencySpreadOptions = {
+  excludeChannelIds?: number[];
+  /** Request's estimated context requirement (same semantics as other paths). */
+  requiredContextTokens?: number;
+  /**
+   * Current in-flight dispatch count by channel id (0 or missing = idle).
+   * Supplied by the proxy surface from the channel coordinator; tests pass
+   * synthetic loads.
+   */
+  channelLoad?: (channelId: number) => number;
+};
+
 type PricingReferenceRefreshOptions = {
   useChannelSourceModelForCost?: boolean;
   downstreamPolicy?: DownstreamRoutingPolicy;
@@ -328,6 +344,39 @@ export class TokenRouter {
       downstreamPolicy,
       excludeChannelIds,
       true,
+      options,
+    );
+  }
+
+  /**
+   * Concurrency-spread selection: while the affinity channel (sticky /
+   * last-success) is already serving a request, pick a DIFFERENT eligible
+   * channel — preferably idle, preferably on another site — so parallel
+   * downstream requests do not pile onto one site's instant RPM.
+   *
+   * Returns null when no alternative is dispatchable; callers then fall back
+   * to the historical affinity path. The caller only invokes this while the
+   * affinity channel is in flight (serial traffic keeps old behavior).
+   */
+  async selectSpreadChannel(
+    requestedModel: string,
+    preferredChannelId: number,
+    downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
+    options: ConcurrencySpreadOptions = {},
+  ): Promise<SelectedChannel | null> {
+    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
+    const normalizedPreferredChannelId = Math.trunc(preferredChannelId || 0);
+    if (normalizedPreferredChannelId <= 0) return null;
+    await ensureSiteRuntimeHealthStateLoaded();
+    await ensureSiteContextCapabilityLoaded();
+
+    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    if (!match) return null;
+    return await this.selectSpreadFromMatch(
+      match,
+      requestedModel,
+      normalizedPreferredChannelId,
+      downstreamPolicy,
       options,
     );
   }
@@ -976,6 +1025,95 @@ export class TokenRouter {
       routeStrategy === 'stable_first' ? `${this.buildStableFirstRotationKey(match.route.id, requestedModel)}:observe` : undefined,
       false,
       excludeChannelIds,
+    );
+  }
+
+  /**
+   * Pick and resolve a spread target for concurrency spreading. Ordering:
+   * eligible pool → drop the affinity channel → dispatchable (breaker/failure)
+   * → best priority layer → idle first / least-loaded fallback → prefer a
+   * different site → weighted sample → resolve like a sticky hop (a refusal
+   * means "no usable alternative" and the caller falls back).
+   */
+  private async selectSpreadFromMatch(
+    match: RouteMatch,
+    requestedModel: string,
+    preferredChannelId: number,
+    downstreamPolicy: DownstreamRoutingPolicy,
+    options: ConcurrencySpreadOptions = {},
+  ): Promise<SelectedChannel | null> {
+    const excludeChannelIds = options.excludeChannelIds ?? [];
+    const mappedModel = resolveMappedModel(requestedModel, match.route.modelMapping);
+    const requestedByDisplayName = isRouteDisplayNameMatch(requestedModel, match.route.displayName);
+    const runtimeModelResolver = requestedByDisplayName
+      ? ((candidate: RouteChannelCandidate) => normalizeChannelSourceModel(candidate.channel.sourceModel) || mappedModel)
+      : mappedModel;
+
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const available = match.channels.filter((candidate) => (
+      this.getCandidateEligibilityReasons(candidate, {
+        requestedModel,
+        bypassSourceModelCheck: requestedByDisplayName,
+        excludeChannelIds,
+        nowIso,
+        downstreamPolicy,
+        requiredContextTokens: options.requiredContextTokens,
+      }).length === 0
+    ));
+
+    const preferred = available.find((candidate) => candidate.channel.id === preferredChannelId);
+    // No affinity candidate inside this route's eligible pool: there is nothing
+    // to spread away from — the caller's normal path decides what to do.
+    if (!preferred) return null;
+
+    const others = available.filter((candidate) => candidate.channel.id !== preferred.channel.id);
+    if (others.length === 0) return null;
+
+    const dispatchable = filterRecentlyFailedCandidates(
+      filterSiteRuntimeBrokenCandidatesByModel(others, runtimeModelResolver, nowMs).candidates,
+      nowMs,
+    );
+    if (dispatchable.length === 0) return null;
+
+    // Stay inside the best available priority layer: a lower-priority (backup)
+    // tier must not be consumed just to avoid a busy channel.
+    const minPriority = Math.min(...dispatchable.map((candidate) => candidate.channel.priority ?? 0));
+    const layer = dispatchable.filter((candidate) => (candidate.channel.priority ?? 0) === minPriority);
+
+    // Idle candidates first; when every candidate is busy fall back to the
+    // least-loaded ones. Same-site candidates are used only when no candidate
+    // on another site is in the running.
+    const loadOf = options.channelLoad ?? (() => 0);
+    const idle = layer.filter((candidate) => loadOf(candidate.channel.id) <= 0);
+    let pool = idle;
+    if (pool.length === 0) {
+      const minLoad = Math.min(...layer.map((candidate) => loadOf(candidate.channel.id)));
+      pool = layer.filter((candidate) => loadOf(candidate.channel.id) === minLoad);
+    }
+    const offSite = pool.filter((candidate) => candidate.site.id !== preferred.site.id);
+    const finalPool = offSite.length > 0 ? offSite : pool;
+
+    const picked = finalPool.length === 1
+      ? finalPool[0]
+      : this.weightedRandomSelect(finalPool, runtimeModelResolver, downstreamPolicy, nowMs, requestedModel);
+    if (!picked) return null;
+
+    // Resolve the picked channel exactly like a sticky hop (eligibility,
+    // low-balance yield, connectivity soft-break, breaker/failure checks,
+    // dispatch token resolution). A refusal here means "no usable alternative"
+    // and the caller falls back to the original affinity logic.
+    const selectionOptions = options.requiredContextTokens
+      ? { yieldOnLowBalance: true, requiredContextTokens: options.requiredContextTokens }
+      : { yieldOnLowBalance: true };
+    return await this.selectPreferredFromMatch(
+      match,
+      requestedModel,
+      picked.channel.id,
+      downstreamPolicy,
+      excludeChannelIds,
+      true,
+      selectionOptions,
     );
   }
 
