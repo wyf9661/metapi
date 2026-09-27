@@ -428,6 +428,88 @@ describe('chat proxy stream behavior', () => {
     expect(recordFailureMock).toHaveBeenCalledTimes(1);
   });
 
+  it('streams reasoning live and fails with empty content when only reasoning arrives before DONE', async () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    const encoder = new TextEncoder();
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"id":"chatcmpl-reasoning-only","choices":[{"index":0,"delta":{"role":"assistant"}}]}\n\n'));
+        controller.enqueue(encoder.encode('data: {"id":"chatcmpl-reasoning-only","choices":[{"index":0,"delta":{"reasoning_content":"thinking about the question"}}]}\n\n'));
+        controller.enqueue(encoder.encode('data: {"id":"chatcmpl-reasoning-only","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+
+    fetchMock.mockResolvedValue(new Response(upstreamBody, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream; charset=utf-8' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        stream: true,
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    });
+
+    // Reasoning streams to the client as it arrives (live thinking display):
+    // the response is committed before the stream outcome is known.
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.body).toContain('"reasoning_content":"thinking about the question"');
+    // The empty-content gate still fails the attempt: no fabricated [DONE]
+    // claims a normal completion, and the channel gets penalized.
+    expect(response.body).not.toContain('data: [DONE]');
+    expect(response.body).not.toContain('upstream_error');
+    expect(recordSuccessMock).not.toHaveBeenCalled();
+    expect(recordFailureMock).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(recordFailureMock.mock.calls)).toContain('reasoning only');
+  });
+
+  it('streams reasoning followed by the final answer when visible output arrives', async () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    const encoder = new TextEncoder();
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"id":"chatcmpl-reasoning-answer","choices":[{"index":0,"delta":{"reasoning_content":"thinking about the question"}}]}\n\n'));
+        controller.enqueue(encoder.encode('data: {"id":"chatcmpl-reasoning-answer","choices":[{"index":0,"delta":{"content":"final visible answer"}}]}\n\n'));
+        controller.enqueue(encoder.encode('data: {"id":"chatcmpl-reasoning-answer","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+
+    fetchMock.mockResolvedValue(new Response(upstreamBody, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream; charset=utf-8' },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        stream: true,
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('final visible answer');
+    expect(response.body).toContain('thinking about the question');
+    expect(response.body.indexOf('thinking about the question'))
+      .toBeLessThan(response.body.indexOf('final visible answer'));
+    expect(response.body).toContain('data: [DONE]');
+    expect(recordSuccessMock).toHaveBeenCalledTimes(1);
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
+
   it('returns HTTP upstream_error when streamed chat SSE carries prompt usage but no assistant output', async () => {
     config.proxyEmptyContentFailEnabled = true;
 

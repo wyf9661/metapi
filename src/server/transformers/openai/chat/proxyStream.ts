@@ -83,7 +83,20 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     };
   };
 
-  const hasMeaningfulChatAggregateOutput = (): boolean => {
+  // Two distinct notions of "output" for OpenAI-format downstreams:
+  // - Forwarding (display): everything the model produced — reasoning tokens
+  //   included — streams to the client as it arrives, so thinking displays
+  //   live. Only pre-output housekeeping lines stay in pendingWrites.
+  // - Deliverable output (success gate): assistant content and tool calls.
+  //   Reasoning alone is not deliverable — a stream that only produced
+  //   thinking and stopped before the final answer is a truncation. The
+  //   empty-content gate below still fails it (distinct message) so the
+  //   attempt is recorded as a failure and the channel is penalized. Once
+  //   reasoning was forwarded the response is committed and the attempt can
+  //   no longer silently fail over (upstream [DONE] is not synthesized once
+  //   the gate trips, so the client can tell the stream did not end
+  //   normally); recovery then belongs to the client's own machinery.
+  const hasForwardableChatAggregateOutput = (): boolean => {
     if (input.downstreamFormat !== 'openai' || !chatAggregateState) return false;
     for (const choice of chatAggregateState.choices.values()) {
       if (choice.content.length > 0) return true;
@@ -93,7 +106,7 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     return false;
   };
 
-  const hasMeaningfulNormalizedFinalOutput = (): boolean => {
+  const hasForwardableNormalizedFinalOutput = (): boolean => {
     if (!terminalNormalizedFinal) return false;
     const choices = Array.isArray(terminalNormalizedFinal.choices)
       ? terminalNormalizedFinal.choices
@@ -107,6 +120,46 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     }
     if (terminalNormalizedFinal.content.length > 0) return true;
     if (terminalNormalizedFinal.reasoningContent.length > 0) return true;
+    return terminalNormalizedFinal.toolCalls.some((toolCall) => toolCall.id || toolCall.name || toolCall.arguments);
+  };
+
+  const hasVisibleChatAggregateOutput = (): boolean => {
+    if (input.downstreamFormat !== 'openai' || !chatAggregateState) return false;
+    for (const choice of chatAggregateState.choices.values()) {
+      if (choice.content.length > 0) return true;
+      if (choice.toolCalls.some((item) => item.id || item.name || item.arguments)) return true;
+    }
+    return false;
+  };
+
+  const hasReasoningChatOutput = (): boolean => {
+    if (chatAggregateState) {
+      for (const choice of chatAggregateState.choices.values()) {
+        if (choice.reasoning.length > 0) return true;
+      }
+    }
+    if (terminalNormalizedFinal) {
+      const choices = Array.isArray(terminalNormalizedFinal.choices)
+        ? terminalNormalizedFinal.choices
+        : [];
+      if (choices.some((choice) => choice.reasoningContent.length > 0)) return true;
+      if (terminalNormalizedFinal.reasoningContent.length > 0) return true;
+    }
+    return false;
+  };
+
+  const hasVisibleNormalizedFinalOutput = (): boolean => {
+    if (!terminalNormalizedFinal) return false;
+    const choices = Array.isArray(terminalNormalizedFinal.choices)
+      ? terminalNormalizedFinal.choices
+      : [];
+    if (choices.some((choice) => (
+      choice.content.length > 0
+      || choice.toolCalls.some((toolCall) => toolCall.id || toolCall.name || toolCall.arguments)
+    ))) {
+      return true;
+    }
+    if (terminalNormalizedFinal.content.length > 0) return true;
     return terminalNormalizedFinal.toolCalls.some((toolCall) => toolCall.id || toolCall.name || toolCall.arguments);
   };
 
@@ -170,8 +223,8 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     if (!config.proxyEmptyContentFailEnabled) return false;
     if (input.downstreamFormat !== 'openai') return false;
     if (terminalResult.status === 'failed') return false;
-    if (hasMeaningfulChatAggregateOutput()) return false;
-    if (hasMeaningfulNormalizedFinalOutput()) return false;
+    if (hasVisibleChatAggregateOutput()) return false;
+    if (hasVisibleNormalizedFinalOutput()) return false;
     return true;
   };
 
@@ -180,11 +233,14 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     finalized = true;
 
     if (shouldFailEmptyChatCompletion()) {
+      const message = hasReasoningChatOutput()
+        ? 'Upstream returned empty content (reasoning only)'
+        : 'Upstream returned empty content';
       markFailed({
         error: {
-          message: 'Upstream returned empty content',
+          message,
         },
-      }, 'Upstream returned empty content');
+      }, message);
       return;
     }
 
@@ -277,7 +333,7 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
       emitLines(
         downstreamTransformer.serializeStreamEvent(normalizedEvent, streamContext, claudeContext),
         {
-          meaningful: hasMeaningfulChatAggregateOutput(),
+          meaningful: hasForwardableChatAggregateOutput(),
           force: isFailurePayload,
         },
       );
@@ -317,7 +373,7 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
         emitLines(
           buildNormalizedFinalToOpenAiChatChunks(normalizedFinal)
             .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`),
-          { meaningful: true },
+          { meaningful: hasForwardableNormalizedFinalOutput() },
         );
       } else {
         emitLines(

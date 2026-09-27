@@ -2,8 +2,10 @@ import { createProxyStreamLifecycle } from '../../shared/protocolLifecycle.js';
 import { type ParsedSseEvent } from '../../shared/normalized.js';
 import { completeResponsesStream, createOpenAiResponsesAggregateState, failResponsesStream, serializeConvertedResponsesEvents } from './aggregator.js';
 import {
-  hasMeaningfulResponsesOutputItem,
-  hasMeaningfulResponsesPayloadOutput,
+  hasReasoningResponsesOutputItem,
+  hasReasoningResponsesPayloadOutput,
+  hasVisibleResponsesOutputItem,
+  hasVisibleResponsesPayloadOutput,
   openAiResponsesStream,
   preserveMeaningfulResponsesTerminalPayload,
   serializeResponsesUpstreamFinalAsStream,
@@ -47,10 +49,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
 }
 
-function hasMeaningfulAggregateOutput(state: ReturnType<typeof createOpenAiResponsesAggregateState>): boolean {
-  return state.outputItems.some((item) => hasMeaningfulResponsesOutputItem(item));
+function hasVisibleAggregateOutput(state: ReturnType<typeof createOpenAiResponsesAggregateState>): boolean {
+  return state.outputItems.some((item) => hasVisibleResponsesOutputItem(item));
 }
 
+function hasReasoningAggregateOutput(state: ReturnType<typeof createOpenAiResponsesAggregateState>): boolean {
+  return state.outputItems.some((item) => hasReasoningResponsesOutputItem(item));
+}
+
+// Empty-content gate. Reasoning items are not deliverable output: a
+// completion that only produced reasoning never delivered a final answer, so
+// it fails here (with a distinct message) just like a fully empty completion,
+// and the attempt can still fail over. Returns the failure message, or null
+// when the payload is fine.
 function shouldFailEmptyResponsesCompletion(input: {
   payload: unknown;
   state: ReturnType<typeof createOpenAiResponsesAggregateState>;
@@ -59,14 +70,17 @@ function shouldFailEmptyResponsesCompletion(input: {
     completionTokens: number;
     totalTokens: number;
   };
-}): boolean {
-  if (!config.proxyEmptyContentFailEnabled) return false;
+}): string | null {
+  if (!config.proxyEmptyContentFailEnabled) return null;
   const responsePayload = isRecord(input.payload) && isRecord(input.payload.response)
     ? input.payload.response
     : null;
-  if (hasMeaningfulAggregateOutput(input.state)) return false;
-  if (responsePayload && hasMeaningfulResponsesPayloadOutput(responsePayload)) return false;
-  return input.usage.completionTokens <= 0;
+  if (hasVisibleAggregateOutput(input.state)) return null;
+  if (responsePayload && hasVisibleResponsesPayloadOutput(responsePayload)) return null;
+  const reasoningOnly = hasReasoningAggregateOutput(input.state)
+    || (responsePayload ? hasReasoningResponsesPayloadOutput(responsePayload) : false);
+  if (reasoningOnly) return 'Upstream returned empty content (reasoning only)';
+  return input.usage.completionTokens <= 0 ? 'Upstream returned empty content' : null;
 }
 
 function getResponsesStreamFailureMessage(payload: unknown, fallback = 'upstream stream failed'): string {
@@ -187,21 +201,21 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
       } else if (eventBlock.event === 'response.completed' || payloadType === 'response.completed') {
         convertedLines = preserveMeaningfulResponsesTerminalPayload(convertedLines, 'response.completed', parsedPayload);
       }
-      if (
-        (eventBlock.event === 'response.completed' || payloadType === 'response.completed')
-        && shouldFailEmptyResponsesCompletion({
+      if (eventBlock.event === 'response.completed' || payloadType === 'response.completed') {
+        const emptyFailureMessage = shouldFailEmptyResponsesCompletion({
           payload: parsedPayload,
           state: responsesState,
           usage: input.getUsage(),
-        })
-      ) {
-        fail({
-          type: 'response.failed',
-          error: {
-            message: 'Upstream returned empty content',
-          },
-        }, 'Upstream returned empty content');
-        return true;
+        });
+        if (emptyFailureMessage) {
+          fail({
+            type: 'response.failed',
+            error: {
+              message: emptyFailureMessage,
+            },
+          }, emptyFailureMessage);
+          return true;
+        }
       }
       input.writeLines(convertedLines);
       if (eventBlock.event === 'response.completed' || payloadType === 'response.completed' || isIncompleteEvent) {
@@ -245,17 +259,20 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
       streamContext.id = normalizedFinal.id;
       streamContext.model = normalizedFinal.model;
       streamContext.created = normalizedFinal.created;
-      if (!isIncompletePayload && shouldFailEmptyResponsesCompletion({
-        payload: { type: 'response.completed', response: streamPayload },
-        state: responsesState,
-        usage: input.getUsage(),
-      })) {
+      const emptyFailureMessage = isIncompletePayload
+        ? null
+        : shouldFailEmptyResponsesCompletion({
+          payload: { type: 'response.completed', response: streamPayload },
+          state: responsesState,
+          usage: input.getUsage(),
+        });
+      if (emptyFailureMessage) {
         fail({
           type: 'response.failed',
           error: {
-            message: 'Upstream returned empty content',
+            message: emptyFailureMessage,
           },
-        }, 'Upstream returned empty content');
+        }, emptyFailureMessage);
         response?.end();
         return terminalResult;
       }

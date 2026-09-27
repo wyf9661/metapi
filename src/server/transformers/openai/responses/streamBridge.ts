@@ -70,6 +70,40 @@ export function hasMeaningfulResponsesPayloadOutput(payload: unknown): boolean {
   return Array.isArray(payload.output) && payload.output.some((item) => hasMeaningfulResponsesOutputItem(item));
 }
 
+function isReasoningResponsesOutputItem(item: unknown): boolean {
+  if (!isRecord(item)) return false;
+  return asTrimmedString(item.type).toLowerCase() === 'reasoning';
+}
+
+export function hasReasoningResponsesOutputItem(item: unknown): boolean {
+  return isReasoningResponsesOutputItem(item);
+}
+
+export function hasReasoningResponsesPayloadOutput(payload: unknown): boolean {
+  if (!isRecord(payload)) return false;
+  return Array.isArray(payload.output) && payload.output.some((item) => isReasoningResponsesOutputItem(item));
+}
+
+// Visible (deliverable) output excludes pure reasoning items: a completion
+// that only produced reasoning never delivered a final answer. Reasoning
+// stays "meaningful" for payload preservation above, but the empty-content
+// gate must not accept thinking-only completions as success.
+export function hasVisibleResponsesOutputItem(item: unknown): boolean {
+  if (!isRecord(item)) return false;
+  const itemType = asTrimmedString(item.type).toLowerCase();
+  if (itemType === 'reasoning') return false;
+  if (itemType === 'message') {
+    return Array.isArray(item.content) && item.content.some((part) => hasMeaningfulContentPart(part));
+  }
+  return itemType.length > 0;
+}
+
+export function hasVisibleResponsesPayloadOutput(payload: unknown): boolean {
+  if (!isRecord(payload)) return false;
+  if (hasNonEmptyString(payload.output_text)) return true;
+  return Array.isArray(payload.output) && payload.output.some((item) => hasVisibleResponsesOutputItem(item));
+}
+
 export function preserveMeaningfulResponsesTerminalPayload(
   lines: string[],
   eventType: 'response.completed' | 'response.incomplete',

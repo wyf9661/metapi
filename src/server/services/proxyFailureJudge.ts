@@ -167,6 +167,59 @@ function detectHasUpstreamOutput(rawText: string): boolean {
   }
 }
 
+function hasCompletionReasoningFromChoice(choice: any): boolean {
+  if (hasNonEmptyString(choice?.reasoning_content)) return true;
+  if (hasNonEmptyString(choice?.reasoning)) return true;
+  const message = choice?.message;
+  if (hasNonEmptyString(message?.reasoning_content)) return true;
+  if (hasNonEmptyString(message?.reasoning)) return true;
+  const delta = choice?.delta;
+  if (hasNonEmptyString(delta?.reasoning_content)) return true;
+  if (hasNonEmptyString(delta?.reasoning)) return true;
+  return false;
+}
+
+function hasCompletionReasoningFromPayload(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const obj: any = payload;
+  if (Array.isArray(obj?.choices)) {
+    for (const choice of obj.choices) {
+      if (hasCompletionReasoningFromChoice(choice)) return true;
+    }
+    if (hasCompletionReasoningFromChoice(obj)) return true;
+  }
+  if (hasNonEmptyString(obj?.reasoning_content)) return true;
+  if (Array.isArray(obj?.output)) {
+    for (const item of obj.output) {
+      if (!isRecord(item)) continue;
+      if (String((item as any).type || '').toLowerCase() === 'reasoning') return true;
+    }
+  }
+  return false;
+}
+
+function detectHasUpstreamReasoning(rawText: string): boolean {
+  const text = typeof rawText === 'string' ? rawText : '';
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  try {
+    return hasCompletionReasoningFromPayload(JSON.parse(trimmed));
+  } catch {
+    // Non-JSON bodies fall through to SSE parsing below.
+  }
+  const pulled = pullSseDataEvents(text);
+  for (const event of pulled.events) {
+    const payload = event.trim();
+    if (!payload || payload === '[DONE]') continue;
+    try {
+      if (hasCompletionReasoningFromPayload(JSON.parse(payload))) return true;
+    } catch {
+      // Non-JSON event: no reasoning signal to read.
+    }
+  }
+  return false;
+}
+
 export function detectProxyFailure(input: {
   rawText: string;
   usage?: UsageSummary | null;
@@ -194,11 +247,19 @@ export function detectProxyFailure(input: {
   if (config.proxyEmptyContentFailEnabled && !input.downstreamAborted) {
     const completionTokens = toNonNegativeInt(input.usage?.completionTokens ?? input.completionTokens);
     const hasOutput = detectHasUpstreamOutput(rawText);
+    // Reasoning (thinking chain) is not deliverable output: a response that
+    // only produced reasoning never delivered a final answer. Flag it as an
+    // empty-content failure (channel-level, sibling channels stay usable) so
+    // the attempt can fail over instead of passing a thinking-only response
+    // to the client as success.
+    const reasoningOnly = !hasOutput && detectHasUpstreamReasoning(rawText);
 
-    if (!hasOutput && completionTokens <= 0) {
+    if (!hasOutput && (completionTokens <= 0 || reasoningOnly)) {
       return {
         status: 502,
-        reason: 'Upstream returned empty content',
+        reason: reasoningOnly
+          ? 'Upstream returned empty content (reasoning only)'
+          : 'Upstream returned empty content',
       };
     }
   }

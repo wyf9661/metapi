@@ -79,6 +79,70 @@ describe('detectProxyFailure (empty content)', () => {
     expect(failure).toBeNull();
   });
 
+  it('flags reasoning-only chat completions as empty content even with completion tokens', () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    const rawText = JSON.stringify({
+      id: 'chatcmpl_reasoning_only',
+      object: 'chat.completion',
+      choices: [{
+        index: 0,
+        message: { role: 'assistant', content: '', reasoning_content: 'thinking but never answering' },
+        finish_reason: 'stop',
+      }],
+      usage: { prompt_tokens: 10, completion_tokens: 32, total_tokens: 42 },
+    });
+
+    const failure = detectProxyFailure({
+      rawText,
+      usage: { promptTokens: 10, completionTokens: 32, totalTokens: 42 },
+    });
+
+    expect(failure).toMatchObject({ status: 502 });
+    expect(failure?.reason).toContain('reasoning only');
+  });
+
+  it('flags reasoning-only SSE streams as empty content', () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    const rawText = [
+      'data: {"id":"evt_1","choices":[{"delta":{"reasoning_content":"thinking"}}]}',
+      '',
+      'data: [DONE]',
+      '',
+      '',
+    ].join('\n');
+
+    const failure = detectProxyFailure({
+      rawText,
+      usage: { promptTokens: 0, completionTokens: 15, totalTokens: 15 },
+    });
+
+    expect(failure).toMatchObject({ status: 502 });
+    expect(failure?.reason).toContain('reasoning only');
+  });
+
+  it('still passes when reasoning is followed by visible content', () => {
+    config.proxyEmptyContentFailEnabled = true;
+
+    const rawText = JSON.stringify({
+      id: 'chatcmpl_reasoning_and_content',
+      object: 'chat.completion',
+      choices: [{
+        index: 0,
+        message: { role: 'assistant', content: 'the answer', reasoning_content: 'thinking' },
+        finish_reason: 'stop',
+      }],
+    });
+
+    const failure = detectProxyFailure({
+      rawText,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    });
+
+    expect(failure).toBeNull();
+  });
+
   it('flags empty SSE streams that contain no content deltas', () => {
     config.proxyEmptyContentFailEnabled = true;
 
