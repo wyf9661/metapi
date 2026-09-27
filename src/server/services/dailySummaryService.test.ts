@@ -29,9 +29,9 @@ describe('dailySummaryService', () => {
     const { title, message } = buildDailySummaryNotification(metrics);
     expect(title).toBe('每日总结 2026-02-27');
     expect(message).toContain('生成时间: 2026-02-27 23:58:00 (Asia/Shanghai)');
-    expect(message).toContain('签到统计(按站点): 总计 7 | 成功 5 | 失败 2');
-    expect(message).toContain('代理统计: 总计 120 | 成功 114 | 失败 6');
-    expect(message).toContain('费用统计: 支出 $12.345678 | 奖励 $3.210987 | 净值 $-9.134691');
+    expect(message).toContain('**✅ 签到** 总计 7 · 成功 5 · 失败 2');
+    expect(message).toContain('**🔁 代理** 总计 120 · 成功 114 · 失败 6');
+    expect(message).toContain('**💰 费用** 支出 $12.345678 · 奖励 $3.210987 · 净值 $-9.134691');
   });
 
   it('counts checkins by site, not by attempt logs', () => {

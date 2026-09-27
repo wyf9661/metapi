@@ -166,14 +166,16 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
 export function buildDailySummaryNotification(metrics: DailySummaryMetrics): { title: string; message: string } {
   const net = round6(metrics.todayReward - metrics.todaySpend);
   const title = `每日总结 ${metrics.localDay}`;
+  // Layout tuned for IM markdown cards (Feishu/WeCom): bold labels, one
+  // metric family per line, `·` instead of `|` so the lines stay scannable.
   const message = [
-    `日期: ${metrics.localDay}`,
-    `生成时间: ${metrics.generatedAtLocal} (${metrics.timeZone})`,
+    `**📊 账号** 总计 ${metrics.totalAccounts} · 活跃 ${metrics.activeAccounts} · 低余额(<$1) ${metrics.lowBalanceAccounts}`,
+    `**✅ 签到** 总计 ${metrics.checkinTotal} · 成功 ${metrics.checkinSuccess} · 失败 ${metrics.checkinFailed}`,
+    `**🔁 代理** 总计 ${metrics.proxyTotal} · 成功 ${metrics.proxySuccess} · 失败 ${metrics.proxyFailed}`,
+    `**🎟️ Tokens** ${metrics.proxyTotalTokens.toLocaleString()}`,
+    `**💰 费用** 支出 $${metrics.todaySpend.toFixed(6)} · 奖励 $${metrics.todayReward.toFixed(6)} · 净值 $${net.toFixed(6)}`,
     '',
-    `账号概览: 总计 ${metrics.totalAccounts} | 活跃 ${metrics.activeAccounts} | 低余额(<$1) ${metrics.lowBalanceAccounts}`,
-    `签到统计(按站点): 总计 ${metrics.checkinTotal} | 成功 ${metrics.checkinSuccess} | 失败 ${metrics.checkinFailed}`,
-    `代理统计: 总计 ${metrics.proxyTotal} | 成功 ${metrics.proxySuccess} | 失败 ${metrics.proxyFailed} | Tokens ${metrics.proxyTotalTokens.toLocaleString()}`,
-    `费用统计: 支出 $${metrics.todaySpend.toFixed(6)} | 奖励 $${metrics.todayReward.toFixed(6)} | 净值 $${net.toFixed(6)}`,
+    `生成时间: ${metrics.generatedAtLocal} (${metrics.timeZone})`,
   ].join('\n');
   return { title, message };
 }
