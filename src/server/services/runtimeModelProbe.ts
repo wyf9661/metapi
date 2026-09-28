@@ -14,7 +14,6 @@ import {
   collectResponsesFinalPayloadFromSseText,
   looksLikeResponsesSseText,
 } from '../proxy-core/runtime/responsesSseFinal.js';
-import { resolveSiteProtocolProfile } from '../shared/siteProtocolProfile.js';
 import { isEndpointDowngradeError } from '../transformers/shared/endpointCompatibility.js';
 import { shouldAbortSameSiteEndpointFallback } from './proxyRetryPolicy.js';
 import type { schema } from '../db/index.js';
@@ -676,10 +675,6 @@ export async function probeRuntimeModel(input: {
         oauthProvider: oauth?.provider,
         oauthProjectId: oauth?.projectId,
         sitePlatform: input.site.platform,
-        requireCodexClient: resolveSiteProtocolProfile({
-          protocolProfile: input.site.protocolProfile,
-          customHeaders: input.site.customHeaders,
-        }).requireCodexClient,
         siteUrl: endpointBaseUrl,
         openaiBody,
         downstreamFormat: 'openai',

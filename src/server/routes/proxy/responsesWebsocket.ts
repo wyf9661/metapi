@@ -21,7 +21,6 @@ import { buildUpstreamEndpointRequest } from './upstreamEndpoint.js';
 import { config } from '../../config.js';
 import { applyOpenAiServiceTierPolicy } from '../../proxy-core/serviceTierPolicy.js';
 import { asTrimmedString } from '../../shared/trimString.js';
-import { resolveSiteProtocolProfile } from '../../shared/siteProtocolProfile.js';
 import { resolveWebsocketReasoningEffort, setCurrentReasoningEffort } from '../../services/reasoningEffort.js';
 
 
@@ -727,10 +726,6 @@ async function handleResponsesWebsocketConnection(
                     stream: true,
                     tokenValue: codexWebsocketChannel.tokenValue,
                     sitePlatform: codexWebsocketChannel.site.platform,
-                    requireCodexClient: resolveSiteProtocolProfile({
-                      protocolProfile: codexWebsocketChannel.site.protocolProfile,
-                      customHeaders: codexWebsocketChannel.site.customHeaders,
-                    }).requireCodexClient,
                     siteUrl: target.baseUrl,
                     openaiBody: normalized.request,
                     downstreamFormat: 'responses',

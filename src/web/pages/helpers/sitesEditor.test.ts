@@ -242,6 +242,7 @@ describe('codex client profile helpers', () => {
     expect(isCodexClientProfileEnabled(enabled.customHeaders)).toBe(true);
     expect(enabled.protocolProfile).toEqual({
       preferResponses: true,
+      preferMessages: false,
       requireCodexClient: true,
       credentialMode: 'auto',
     });

@@ -8,6 +8,12 @@ export type SiteCredentialModeHint = 'auto' | 'api_key' | 'session';
 export type SiteProtocolProfile = {
   /** Prefer /v1/responses before chat/messages when building endpoint candidates. */
   preferResponses: boolean;
+  /**
+   * Site is an Anthropic Messages-native gateway: Claude-family traffic keeps
+   * messages-first ordering even when the site otherwise prefers Responses
+   * (mirror of preferResponses for Anthropic-compatible upstreams).
+   */
+  preferMessages: boolean;
   /** Upstream expects Codex client fingerprint (User-Agent / originator). */
   requireCodexClient: boolean;
   /** Hint for account verify UX (session cookie vs sk-). */
@@ -18,6 +24,7 @@ export type SiteProtocolProfile = {
 
 export const DEFAULT_SITE_PROTOCOL_PROFILE: SiteProtocolProfile = {
   preferResponses: false,
+  preferMessages: false,
   requireCodexClient: false,
   credentialMode: 'auto',
 };
@@ -65,6 +72,7 @@ export function parseSiteProtocolProfile(raw: unknown): SiteProtocolProfile {
   if (!obj) return { ...DEFAULT_SITE_PROTOCOL_PROFILE };
   return {
     preferResponses: asBoolean(obj.preferResponses ?? obj.prefer_responses) ?? false,
+    preferMessages: asBoolean(obj.preferMessages ?? obj.prefer_messages) ?? false,
     requireCodexClient: asBoolean(obj.requireCodexClient ?? obj.require_codex_client) ?? false,
     credentialMode: asCredentialMode(obj.credentialMode ?? obj.credential_mode),
     notes: typeof obj.notes === 'string' ? obj.notes : undefined,
@@ -74,6 +82,7 @@ export function parseSiteProtocolProfile(raw: unknown): SiteProtocolProfile {
 export function serializeSiteProtocolProfile(profile: SiteProtocolProfile): string {
   const payload: SiteProtocolProfile = {
     preferResponses: !!profile.preferResponses,
+    preferMessages: !!profile.preferMessages,
     requireCodexClient: !!profile.requireCodexClient,
     credentialMode: profile.credentialMode || 'auto',
   };
@@ -114,6 +123,7 @@ export function resolveSiteProtocolProfile(input: {
   const inferred = inferProtocolProfileFromCustomHeaders(input.customHeaders);
   return {
     preferResponses: base.preferResponses || !!inferred.preferResponses,
+    preferMessages: base.preferMessages || !!inferred.preferMessages,
     requireCodexClient: base.requireCodexClient || !!inferred.requireCodexClient,
     credentialMode: base.credentialMode || 'auto',
     notes: base.notes,
@@ -125,6 +135,13 @@ export function siteProtocolPrefersResponses(input: {
   customHeaders?: unknown;
 }): boolean {
   return resolveSiteProtocolProfile(input).preferResponses;
+}
+
+export function siteProtocolPrefersMessages(input: {
+  protocolProfile?: unknown;
+  customHeaders?: unknown;
+}): boolean {
+  return resolveSiteProtocolProfile(input).preferMessages;
 }
 
 export function siteProtocolRequiresCodexClient(input: {
@@ -147,6 +164,7 @@ export function siteProtocolAffinityFactor(input: {
   const profile = resolveSiteProtocolProfile(input);
   if (profile.requireCodexClient && profile.preferResponses) return 1.18;
   if (profile.preferResponses || profile.requireCodexClient) return 1.1;
+  if (profile.preferMessages) return 1.1;
   return 1;
 }
 

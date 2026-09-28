@@ -63,7 +63,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
     vi.useRealTimers();
   });
 
-  it('uses downstream-aligned endpoint priority for unknown platforms', async () => {
+  it('uses family-driven endpoint priority for unknown platforms', async () => {
     const openaiOrder = await resolveUpstreamEndpointCandidates(
       {
         ...baseContext,
@@ -72,17 +72,18 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'gpt-5.3',
       'openai',
     );
-    expect(openaiOrder).toEqual(['chat', 'messages', 'responses']);
+    // OpenAI 家族 → responses 面（Codex 客户端面）
+    expect(openaiOrder).toEqual(['responses', 'chat', 'messages']);
 
-    const claudeOrder = await resolveUpstreamEndpointCandidates(
+    const claudeModelOrder = await resolveUpstreamEndpointCandidates(
       {
         ...baseContext,
         site: { ...baseContext.site, platform: 'new-api' },
       },
-      'gpt-5.3',
-      'claude',
+      'claude-haiku-4-5-20251001',
+      'openai',
     );
-    expect(claudeOrder).toEqual(['messages', 'chat', 'responses']);
+    expect(claudeModelOrder).toEqual(['messages', 'chat', 'responses']);
 
     const responsesOrder = await resolveUpstreamEndpointCandidates(
       {
@@ -149,7 +150,8 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'gpt-5.3',
       'openai',
     );
-    expect(openaiOrder).toEqual(['chat', 'messages', 'responses']);
+    // OpenAI 家族（含普通 GPT）→ responses 面
+    expect(openaiOrder).toEqual(['responses', 'chat', 'messages']);
 
     const openaiResponsesOrder = await resolveUpstreamEndpointCandidates(
       {
@@ -169,6 +171,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       'claude-opus-4-6',
       'openai',
     );
+    // Claude 家族 → messages 面优先
     expect(openaiClaudeOrder).toEqual(['messages', 'chat', 'responses']);
 
     const antigravityOrder = await resolveUpstreamEndpointCandidates(
@@ -216,6 +219,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
+    // continuation-aware 排序把 responses 提到最前；Claude 家族仍 messages 次之。
     expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 
@@ -289,6 +293,7 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
+    // 文档能力排序：responses(messages 文档) 优先于纯 chat；GPT 家族仍 responses 居首。
     expect(order).toEqual(['responses', 'messages', 'chat']);
   });
 
@@ -326,7 +331,8 @@ describe('resolveUpstreamEndpointCandidates', () => {
       },
     );
 
-    expect(order).toEqual(['chat', 'messages', 'responses']);
+    // GPT 家族 responses 居首（家族排序，与图片记忆无关）。
+    expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
   it('does not expose preferred endpoint in snapshot when runtime memory is disabled for multimodal requests', () => {
@@ -473,7 +479,8 @@ describe('resolveUpstreamEndpointCandidates', () => {
     );
 
     expect(learnedOrder).toEqual(['responses', 'chat', 'messages']);
-    expect(unrelatedModelOrder).toEqual(['chat', 'messages', 'responses']);
+    // 未学习的同家族模型也走家族序（responses 居首），而非旧的下游对齐序。
+    expect(unrelatedModelOrder).toEqual(['responses', 'chat', 'messages']);
   });
 
   it('bounds runtime model keys before storing them', () => {

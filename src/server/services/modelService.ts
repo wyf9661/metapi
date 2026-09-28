@@ -32,7 +32,7 @@ import {
 } from './platformDiscoveryRegistry.js';
 import { probeRuntimeModel, type RuntimeModelProbeStatus } from './runtimeModelProbe.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
-import { siteProtocolRequiresCodexClient } from '../shared/siteProtocolProfile.js';
+import { isCodexGatedPlatform } from '../shared/codexGatedPlatforms.js';
 import {
   isModelDisabledForSite,
   loadSiteDisabledModelsIndex,
@@ -1336,15 +1336,12 @@ async function doRefreshModelsForAccount(
     });
   }
 
-  // Codex-gated NewAPI sites ("Codex 兼容" / requireCodexClient) reject
-  // /v1/models unless the caller presents the Codex CLI client fingerprint —
-  // verified on AgentRouter (401 "unauthorized client detected" without it,
-  // full model list with it). Chat traffic gets the fingerprint from
-  // upstreamRequestBuilder; discovery does not, so pass it into the adapter.
-  const codexClientFingerprint = siteProtocolRequiresCodexClient({
-    protocolProfile: site.protocolProfile,
-    customHeaders: site.customHeaders,
-  });
+  // Codex-gated NewAPI-class platforms reject /v1/models unless the caller
+  // presents the Codex CLI client fingerprint — verified on AgentRouter
+  // (401 "unauthorized client detected" without it, full model list with it).
+  // Identity is face/platform-driven (no user-facing site switch): discovery
+  // carries the fingerprint automatically on gated platforms.
+  const codexClientFingerprint = isCodexGatedPlatform(site.platform);
 
   const accountModels = new Map<string, string>();   // lowercase key → original name (first-wins)
   const modelLatency = new Map<string, number | null>();

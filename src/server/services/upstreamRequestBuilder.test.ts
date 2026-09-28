@@ -77,7 +77,7 @@ describe('upstreamRequestBuilder', () => {
     expect((nonStreaming.body as Record<string, unknown>).stream_options).toBeUndefined();
   });
 
-  it('strips chat-only stream_options and pins store:false for Codex-client sites on responses endpoints', () => {
+  it('strips chat-only stream_options and keeps the Codex instructions marker on gated responses endpoints', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'responses',
       modelName: 'gpt-6-astra',
@@ -85,7 +85,6 @@ describe('upstreamRequestBuilder', () => {
       tokenValue: 'sk-test',
       sitePlatform: 'new-api',
       siteUrl: 'https://anyrouter.top',
-      requireCodexClient: true,
       openaiBody: {
         model: 'gpt-6-astra',
         stream: true,
@@ -97,11 +96,13 @@ describe('upstreamRequestBuilder', () => {
 
     expect(request.path).toBe('/v1/responses');
     expect(request.body.stream_options).toBeUndefined();
-    expect(request.body.store).toBe(false);
     expect(request.body.instructions).toEqual(expect.any(String));
+    // 门禁平台走安全归一化（仅补 instructions / 去 chat-only 字段）；
+    // 钉 store:false 属于原生 codex 平台的完整处理，不再由站点开关触发。
+    expect(request.body.store).toBeUndefined();
   });
 
-  it('stamps the Codex fingerprint on messages and chat for Codex-client sites', () => {
+  it('keeps the Codex fingerprint off the messages and chat faces (face-driven identity)', () => {
     const messagesRequest = buildUpstreamEndpointRequest({
       endpoint: 'messages',
       modelName: 'claude-opus-5',
@@ -109,7 +110,6 @@ describe('upstreamRequestBuilder', () => {
       tokenValue: 'sk-test',
       sitePlatform: 'new-api',
       siteUrl: 'https://agentrouter.org',
-      requireCodexClient: true,
       openaiBody: {
         model: 'claude-opus-5',
         stream: true,
@@ -119,8 +119,9 @@ describe('upstreamRequestBuilder', () => {
     });
 
     expect(messagesRequest.path).toBe('/v1/messages');
-    expect(messagesRequest.headers['User-Agent']).toContain('codex_cli_rs');
-    expect(messagesRequest.headers.Originator).toBe('codex_cli_rs');
+    // messages 面带 Claude Code 包头（claude-cli），不再叠加 Codex 指纹。
+    expect(messagesRequest.headers['User-Agent']).toContain('claude-cli');
+    expect(messagesRequest.headers.Originator).toBeUndefined();
     expect(messagesRequest.headers['anthropic-version']).toBeTruthy();
 
     const chatRequest = buildUpstreamEndpointRequest({
@@ -130,7 +131,6 @@ describe('upstreamRequestBuilder', () => {
       tokenValue: 'sk-test',
       sitePlatform: 'new-api',
       siteUrl: 'https://agentrouter.org',
-      requireCodexClient: true,
       openaiBody: {
         model: 'claude-opus-5',
         stream: true,
@@ -139,7 +139,8 @@ describe('upstreamRequestBuilder', () => {
       downstreamFormat: 'openai',
     });
 
-    expect(chatRequest.headers['User-Agent']).toContain('codex_cli_rs');
+    // chat 面（通用面）不带任何客户端指纹。
+    expect(chatRequest.headers['User-Agent'] ?? '').not.toContain('codex_cli_rs');
   });
 
   it('does not stamp the Claude fingerprint when Claude mode is off', () => {

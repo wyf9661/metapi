@@ -2,7 +2,6 @@ import { TextDecoder } from 'node:util';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { config, resolveProxyStreamIdleTimeoutMs } from '../../config.js';
 import { resolveRequestContextRequirement } from '../../shared/requestContextEstimate.js';
-import { resolveSiteProtocolProfile } from '../../shared/siteProtocolProfile.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { reportProxyAllFailed } from '../../services/alertService.js';
 import { hasProxyUsagePayload, mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
@@ -529,10 +528,6 @@ export async function handleChatSurfaceRequest(
           oauthProvider: oauth?.provider,
           oauthProjectId: oauth?.projectId,
           sitePlatform: selected.site.platform,
-          requireCodexClient: resolveSiteProtocolProfile({
-            protocolProfile: selected.site.protocolProfile,
-            customHeaders: selected.site.customHeaders,
-          }).requireCodexClient,
           siteUrl: siteApiBaseUrl,
           openaiBody: bodyForEndpoint,
           downstreamFormat,

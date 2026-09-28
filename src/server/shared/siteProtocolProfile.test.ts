@@ -5,6 +5,7 @@ import {
   resolveSiteProtocolProfile,
   serializeSiteProtocolProfile,
   siteProtocolAffinityFactor,
+  siteProtocolPrefersMessages,
   siteProtocolPrefersResponses,
 } from './siteProtocolProfile.js';
 
@@ -67,6 +68,28 @@ describe('siteProtocolProfile', () => {
     expect(siteProtocolAffinityFactor({
       protocolProfile: JSON.stringify({ preferResponses: true, requireCodexClient: true, credentialMode: 'auto' }),
     })).toBeCloseTo(1.18, 5);
+    expect(siteProtocolAffinityFactor({
+      protocolProfile: JSON.stringify({ preferMessages: true, credentialMode: 'api_key' }),
+    })).toBeCloseTo(1.1, 5);
+  });
+
+  it('round-trips the Anthropic-compat flags', () => {
+    const profile = parseSiteProtocolProfile({
+      preferMessages: true,
+    });
+    expect(profile.preferMessages).toBe(true);
+
+    const serialized = JSON.parse(serializeSiteProtocolProfile(profile));
+    expect(serialized.preferMessages).toBe(true);
+
+    expect(siteProtocolPrefersMessages({
+      protocolProfile: JSON.stringify({ preferMessages: true }),
+    })).toBe(true);
+  });
+
+  it('keeps unset flags out of the stored payload', () => {
+    const serialized = JSON.parse(serializeSiteProtocolProfile(parseSiteProtocolProfile({ preferResponses: true })));
+    expect(serialized.preferMessages).toBe(false);
   });
 });
 

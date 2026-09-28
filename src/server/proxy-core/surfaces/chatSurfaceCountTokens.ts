@@ -301,7 +301,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
         sitePlatform: selected.site.platform,
         claudeBody: rawBody,
         downstreamHeaders: request.headers as Record<string, unknown>,
-      });
+        });
       return {
         endpoint: 'messages' as const,
         path: upstreamRequest.path,

@@ -10,6 +10,7 @@ import {
 import { normalizeCodexResponsesBodyForProxy } from '../transformers/openai/responses/codexCompatibility.js';
 import { asTrimmedString } from '../shared/trimString.js';
 import { CODEX_CLI_USER_AGENT } from '../shared/codexClientFamily.js';
+import { isCodexGatedPlatform } from '../shared/codexGatedPlatforms.js';
 import {
   convertOpenAiBodyToAnthropicMessagesBody,
   sanitizeAnthropicMessagesBody,
@@ -262,19 +263,11 @@ function ensureStreamAcceptHeader(
 }
 
 
-const CODEX_GATED_PLATFORMS = new Set([
-  'new-api',
-  'one-api',
-
-  'sub2api',
-  'openai',
-]);
-
 function ensureCodexClientFingerprintHeaders(
   headers: Record<string, string>,
   sitePlatform: string,
 ): Record<string, string> {
-  if (!CODEX_GATED_PLATFORMS.has(sitePlatform)) return headers;
+  if (!isCodexGatedPlatform(sitePlatform)) return headers;
 
   // Do NOT early-return on an existing codex-like UA/originator: a partial
   // fingerprint (e.g. custom_headers with only user-agent + originator) would
@@ -472,11 +465,6 @@ export function buildUpstreamEndpointRequest(input: {
   oauthProvider?: string;
   oauthProjectId?: string;
   sitePlatform?: string;
-  /**
-   * Site protocol-profile flag: the upstream validates requests as Codex-client
-   * traffic, so responses bodies get the same treatment as platform 'codex'.
-   */
-  requireCodexClient?: boolean;
   siteUrl?: string;
   openaiBody: Record<string, unknown>;
   downstreamFormat: DownstreamFormat | 'responses';
@@ -761,14 +749,9 @@ export function buildUpstreamEndpointRequest(input: {
       isClaudeOauthUpstream,
       tokenValue: input.tokenValue,
     });
-    // Sites gated to the Codex client fingerprint (「Codex 客户端」) validate the
-    // client identity on every face, not only /v1/responses: stamp the same
-    // fingerprint on the Anthropic Messages face so Claude models pass the
-    // upstream client-whitelist gate instead of being rejected as unknown clients.
-    if (input.requireCodexClient) {
-      headers = ensureCodexClientFingerprintHeaders(headers, sitePlatform);
-    }
-
+    // Identity follows the face: the Anthropic Messages face carries the
+    // Claude Code client package (buildClaudeRuntimeHeaders) and nothing else.
+    // Codex-gated platforms get the Codex fingerprint on the responses face.
     return {
       path: resolveEndpointPath('messages'),
       headers,
@@ -800,15 +783,14 @@ export function buildUpstreamEndpointRequest(input: {
     if (preserveWebsocketIncrementalMode && rawBody.generate === false) {
       sanitizedResponsesBody.generate = false;
     }
-    // A site that requires the Codex client fingerprint gets the same body
-    // treatment as a native codex platform: the upstream validates the request
-    // as official-client traffic (drop chat-only fields like stream_options,
-    // pin store:false, ensure instructions).
-    const codexCompat = input.requireCodexClient === true;
+    // Codex-gated platforms get the safe Codex-client body normalization
+    // (strip chat-only fields such as stream_options, ensure top-level
+    // instructions) inside normalizeCodexResponsesBodyForProxy; native codex
+    // platforms get the full treatment. No site toggle is involved: identity
+    // follows the protocol face.
     const body = normalizeCodexResponsesBodyForProxy(
       sanitizedResponsesBody,
       sitePlatform,
-      { codexCompat },
     );
     const configuredResponsesBody = normalizeCodexResponsesBodyForProxy(
       normalizeSub2ApiResponsesBodyForProxy(
@@ -816,7 +798,6 @@ export function buildUpstreamEndpointRequest(input: {
         sitePlatform,
       ),
       sitePlatform,
-      { codexCompat },
     );
 
     if (sitePlatform === 'codex') {
@@ -863,9 +844,8 @@ export function buildUpstreamEndpointRequest(input: {
   }
 
   let headers = ensureStreamAcceptHeader(commonHeaders, input.stream);
-  if (input.requireCodexClient) {
-    headers = ensureCodexClientFingerprintHeaders(headers, sitePlatform);
-  }
+  // Identity follows the face: /v1/chat/completions goes out as a plain
+  // OpenAI-compatible caller — no Codex/Claude client package is stamped.
   const chatBody: Record<string, unknown> = {
     ...openaiBody,
     model: input.modelName,

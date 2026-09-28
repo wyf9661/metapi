@@ -184,6 +184,64 @@ describe('siteProxy', () => {
     expect(modelHeaders.get('x-site-token')).toBe('keep-me');
   });
 
+  it('keeps site fingerprint custom headers off the runtime-owned faces on gated platforms', async () => {
+    await db.insert(schema.sites).values({
+      name: 'face-identity-site',
+      url: 'https://face-identity.example.com',
+      platform: 'new-api',
+      customHeaders: JSON.stringify({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0',
+        originator: 'codex_cli_rs',
+        'X-Site-Token': 'keep-me',
+      }),
+      customHeadersOverrideRequestHeaders: true,
+    }).run();
+
+    const { withSiteProxyRequestInit, invalidateSiteProxyCache } = await import('./siteProxy.js');
+
+    // /v1/responses：指纹面由运行时掌控，自定义 UA/originator 被剥离（其余自定义头保留）。
+    const responsesInit = await withSiteProxyRequestInit('https://face-identity.example.com/v1/responses', {
+      method: 'POST',
+      headers: { 'user-agent': 'codex-cli-runtime-ua' },
+    });
+    const responsesHeaders = new Headers(responsesInit.headers);
+    expect(responsesHeaders.get('user-agent')).toBe('codex-cli-runtime-ua');
+    expect(responsesHeaders.get('originator')).toBeNull();
+    expect(responsesHeaders.get('x-site-token')).toBe('keep-me');
+
+    // /v1/messages 同样由运行时掌控（Claude Code 包头）。
+    const messagesInit = await withSiteProxyRequestInit('https://face-identity.example.com/v1/messages', {
+      method: 'POST',
+      headers: { 'user-agent': 'claude-cli/2.1.63 (external, cli)' },
+    });
+    const messagesHeaders = new Headers(messagesInit.headers);
+    expect(messagesHeaders.get('user-agent')).toBe('claude-cli/2.1.63 (external, cli)');
+
+    // chat 面仍可携带浏览器 UA（override 开启时站点头优先）——"仅用于 chat 接口"。
+    const chatInit = await withSiteProxyRequestInit('https://face-identity.example.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'user-agent': 'request-agent' },
+    });
+    const chatHeaders = new Headers(chatInit.headers);
+    expect(chatHeaders.get('user-agent')).toBe('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0');
+    expect(chatHeaders.get('originator')).toBe('codex_cli_rs');
+
+    // 非门禁平台不受影响（面部仍可携带站点 UA，例如 WAF 站点）。
+    await db.insert(schema.sites).values({
+      name: 'plain-face-site',
+      url: 'https://plain-face.example.com',
+      platform: 'claude',
+      customHeaders: JSON.stringify({ 'User-Agent': 'browser-ua-plain' }),
+      customHeadersOverrideRequestHeaders: true,
+    }).run();
+    invalidateSiteProxyCache();
+    const plainInit = await withSiteProxyRequestInit('https://plain-face.example.com/v1/responses', {
+      method: 'POST',
+    });
+    const plainHeaders = new Headers(plainInit.headers);
+    expect(plainHeaders.get('user-agent')).toBe('browser-ua-plain');
+  });
+
   it('strips codex fingerprint from site custom headers even when the override flag is enabled', async () => {
     // Codex safety: a codex-gated site (requireCodexClient) must never let a
     // stale site User-Agent/originator override the runtime-injected Codex

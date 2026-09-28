@@ -2413,8 +2413,9 @@ describe('chat proxy stream behavior', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [firstUrl, firstOptions] = fetchMock.mock.calls[0] as [string, any];
     const [secondUrl, secondOptions] = fetchMock.mock.calls[1] as [string, any];
-    expect(firstUrl).toContain('/v1/chat/completions');
-    expect(secondUrl).toContain('/v1/chat/completions');
+    // 首选端点是 responses（GPT 家族）：415 在原端点用最小化 JSON 头重试。
+    expect(firstUrl).toContain('/v1/responses');
+    expect(secondUrl).toContain('/v1/responses');
     expect(firstOptions.headers['openai-beta']).toBe('responses-2025-03-11');
     expect(secondOptions.headers['openai-beta']).toBeUndefined();
     expect(secondOptions.headers['content-type']).toBe('application/json');
@@ -3451,7 +3452,7 @@ describe('chat proxy stream behavior', () => {
     expect(targetUrl).toContain('/v1/messages');
   });
 
-  it('prefers /v1/responses on openai platform for claude-family models on /v1/chat/completions', async () => {
+  it('routes claude-family models to /v1/messages on openai platform (site profile no longer forces responses)', async () => {
     fetchModelPricingCatalogMock.mockResolvedValue({
       models: [
         {
@@ -3468,6 +3469,7 @@ describe('chat proxy stream behavior', () => {
         name: 'openai-site',
         url: 'https://api.openai.com',
         platform: 'openai',
+        // 旧 preferResponses 档案已失效：协议面只跟模型家族走。
         protocolProfile: JSON.stringify({ preferResponses: true }),
       },
       account: { id: 33, username: 'demo-user' },
@@ -3477,18 +3479,13 @@ describe('chat proxy stream behavior', () => {
     });
 
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      id: 'resp_openai_platform_claude',
-      object: 'response',
+      id: 'msg_openai_platform_claude',
+      type: 'message',
+      role: 'assistant',
       model: 'claude-opus-4-6',
-      status: 'completed',
-      output: [{
-        id: 'msg_openai_platform_claude',
-        type: 'message',
-        role: 'assistant',
-        status: 'completed',
-        content: [{ type: 'output_text', text: 'responses endpoint selected' }],
-      }],
-      usage: { input_tokens: 6, output_tokens: 2, total_tokens: 8 },
+      content: [{ type: 'text', text: 'messages endpoint selected' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 6, output_tokens: 2 },
     }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -3507,10 +3504,10 @@ describe('chat proxy stream behavior', () => {
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [targetUrl] = fetchMock.mock.calls[0] as [string, any];
-    expect(targetUrl).toContain('/v1/responses');
+    expect(targetUrl).toContain('/v1/messages');
   });
 
-  it('falls back from /v1/responses to /v1/messages on openai platform when responses endpoint is unavailable', async () => {
+  it('falls back from /v1/messages to /v1/chat/completions on openai platform when messages endpoint is unavailable', async () => {
     selectChannelMock.mockReturnValue({
       channel: { id: 11, routeId: 22 },
       site: {
@@ -3533,12 +3530,16 @@ describe('chat proxy stream behavior', () => {
         headers: { 'content-type': 'application/json' },
       }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        id: 'msg_openai_fallback_messages',
-        type: 'message',
+        id: 'chatcmpl_openai_fallback_chat',
+        object: 'chat.completion',
+        created: 1_700_000_000,
         model: 'claude-opus-4-6',
-        content: [{ type: 'text', text: 'fallback to messages completed' }],
-        stop_reason: 'end_turn',
-        usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: 'fallback to chat completed' },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
       }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -3558,8 +3559,8 @@ describe('chat proxy stream behavior', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [firstUrl] = fetchMock.mock.calls[0] as [string, any];
     const [secondUrl] = fetchMock.mock.calls[1] as [string, any];
-    expect(firstUrl).toContain('/v1/responses');
-    expect(secondUrl).toContain('/v1/messages');
+    expect(firstUrl).toContain('/v1/messages');
+    expect(secondUrl).toContain('/v1/chat/completions');
   });
 
   it('stops after the first failed protocol when cross protocol fallback is disabled', async () => {
@@ -4697,7 +4698,7 @@ describe('chat proxy stream behavior', () => {
     expect(targetUrl).toContain('/v1/messages');
   });
 
-  it('falls back to /v1/messages when catalog only declares openai and chat endpoint fails', async () => {
+  it('falls back to /v1/chat/completions when catalog only declares openai and the responses endpoint fails', async () => {
     fetchModelPricingCatalogMock.mockResolvedValue({
       models: [
         {
@@ -4720,12 +4721,16 @@ describe('chat proxy stream behavior', () => {
         headers: { 'content-type': 'application/json' },
       }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        id: 'msg_fallback_500',
-        type: 'message',
+        id: 'chatcmpl_fallback_chat',
+        object: 'chat.completion',
+        created: 1_700_000_000,
         model: 'upstream-gpt',
-        content: [{ type: 'text', text: 'fallback to messages from openai-only catalog' }],
-        stop_reason: 'end_turn',
-        usage: { input_tokens: 12, output_tokens: 7, total_tokens: 19 },
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: 'fallback to chat from openai-only catalog' },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 12, completion_tokens: 7, total_tokens: 19 },
       }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -4743,13 +4748,13 @@ describe('chat proxy stream behavior', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body?.choices?.[0]?.message?.content).toContain('fallback to messages from openai-only catalog');
+    expect(body?.choices?.[0]?.message?.content).toContain('fallback to chat from openai-only catalog');
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [firstUrl] = fetchMock.mock.calls[0] as [string, any];
     const [secondUrl] = fetchMock.mock.calls[1] as [string, any];
-    expect(firstUrl).toContain('/v1/chat/completions');
-    expect(secondUrl).toContain('/v1/messages');
+    expect(firstUrl).toContain('/v1/responses');
+    expect(secondUrl).toContain('/v1/chat/completions');
   });
 
 });

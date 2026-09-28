@@ -137,7 +137,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(tokenRows).toHaveLength(0);
   });
 
-  it('passes the site codex-client requirement into model discovery calls', async () => {
+  it('passes the Codex fingerprint into model discovery calls on codex-gated platforms', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockImplementation(async (_baseUrl: string, token: string) => (
       token === 'session-token' ? ['gpt-6-astra', 'claude-opus-5'] : []
@@ -333,7 +333,8 @@ describe('refreshModelsForAccount credential discovery', () => {
       modelCount: 1,
       modelsPreview: ['gpt-4.1'],
     });
-    expect(getModelsMock).toHaveBeenCalledWith('https://api.example.com', 'session-token', undefined);
+    // new-api 平台 = Codex 门禁平台，发现请求自动带指纹（无站点开关）。
+    expect(getModelsMock).toHaveBeenCalledWith('https://api.example.com', 'session-token', undefined, { requireCodexClient: true });
   });
 
   it('deduplicates discovered model names before writing availability rows', async () => {

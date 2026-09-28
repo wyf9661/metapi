@@ -183,7 +183,7 @@ describe('upstreamEndpointDerivation', () => {
     expect(order).toEqual(['messages', 'chat', 'responses']);
   });
 
-  it('uses responses-first only when site explicitly prefers responses (Codex compat)', async () => {
+  it('keeps chat-only families chat-first even when a legacy profile prefers responses', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {
         ...baseContext,
@@ -199,10 +199,12 @@ describe('upstreamEndpointDerivation', () => {
       'glm-5.2',
       'openai',
     );
-    expect(order).toEqual(['responses', 'messages', 'chat']);
+    // 排序由模型家族决定，站点档案不再参与：glm 属 chat-only 家族
+    // （new-api PR #5209），走通用面 chat。
+    expect(order).toEqual(['chat', 'messages', 'responses']);
   });
 
-  it('keeps Claude-family models messages-first on Codex-client sites even when responses are preferred', async () => {
+  it('keeps Claude-family models messages-first regardless of legacy Codex-site profiles', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {
         ...baseContext,
@@ -221,7 +223,7 @@ describe('upstreamEndpointDerivation', () => {
     expect(order).toEqual(['messages', 'chat', 'responses']);
   });
 
-  it('keeps non-Claude models responses-first on Codex-client sites that prefer responses', async () => {
+  it('keeps OpenAI-family models responses-first (the Codex face) with legacy Codex-site profiles', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {
         ...baseContext,
@@ -237,10 +239,10 @@ describe('upstreamEndpointDerivation', () => {
       'gpt-5.6-sol',
       'openai',
     );
-    expect(order).toEqual(['responses', 'messages', 'chat']);
+    expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
-  it('keeps preferResponses sites responses-first even when runtime memory blocks responses', async () => {
+  it('lets runtime memory demote responses for OpenAI-family models when the upstream only serves chat', async () => {
     const { recordUpstreamEndpointFailure } = await import('./upstreamEndpointRuntimeMemory.js');
     recordUpstreamEndpointFailure({
       siteId: baseContext.site.id,
@@ -271,7 +273,39 @@ describe('upstreamEndpointDerivation', () => {
       'openai',
     );
 
-    expect(order).toEqual(['responses', 'messages', 'chat']);
+    // 家族初始序让 responses 居首，但没有钉死：记忆记录 404 后降权，回落 chat。
+    expect(order).toEqual(['chat', 'messages']);
+  });
+
+  it('lets runtime memory demote responses for chat-only families', async () => {
+    const { recordUpstreamEndpointFailure } = await import('./upstreamEndpointRuntimeMemory.js');
+    recordUpstreamEndpointFailure({
+      siteId: baseContext.site.id,
+      endpoint: 'responses',
+      downstreamFormat: 'openai',
+      modelName: 'glm-5.2',
+      status: 404,
+      errorText: 'endpoint not found',
+    });
+
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          protocolProfile: JSON.stringify({
+            preferResponses: true,
+            requireCodexClient: false,
+            credentialMode: 'auto',
+          }),
+        },
+      },
+      'glm-5.2',
+      'openai',
+    );
+
+    // responses 被记忆挡住后，chat-only 家族落到原生面 chat，而不是被钉回第一位。
+    expect(order).toEqual(['chat', 'messages']);
   });
 
   it('keeps Claude count_tokens messages-only on preferResponses sites', async () => {
@@ -297,7 +331,7 @@ describe('upstreamEndpointDerivation', () => {
     expect(order).toEqual(['messages']);
   });
 
-  it('infers preferResponses from Codex custom headers alone', async () => {
+  it('keeps OpenAI-family models responses-first with Codex custom headers alone', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {
         ...baseContext,
@@ -313,5 +347,45 @@ describe('upstreamEndpointDerivation', () => {
       'openai',
     );
     expect(order[0]).toBe('responses');
+  });
+
+  it('keeps Claude-family traffic messages-first on Anthropic-compat sites that also prefer responses', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          protocolProfile: JSON.stringify({
+            preferResponses: true,
+            preferMessages: true,
+            requireCodexClient: false,
+            credentialMode: 'api_key',
+          }),
+        },
+      },
+      'claude-opus-5-5',
+      'openai',
+    );
+    expect(order).toEqual(['messages', 'chat', 'responses']);
+  });
+
+  it('keeps OpenAI-family traffic responses-first with legacy Anthropic-compat profiles', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          protocolProfile: JSON.stringify({
+            preferResponses: true,
+            preferMessages: true,
+            requireCodexClient: false,
+            credentialMode: 'api_key',
+          }),
+        },
+      },
+      'gpt-5.6-sol',
+      'openai',
+    );
+    expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 });

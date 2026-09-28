@@ -2,10 +2,6 @@ import {
   rankConversationFileEndpoints,
   type ConversationFileInputSummary,
 } from '../proxy-core/capabilities/conversationFileCapabilities.js';
-import {
-  siteProtocolPrefersResponses,
-  siteProtocolRequiresCodexClient,
-} from '../shared/siteProtocolProfile.js';
 import type { UpstreamEndpoint } from '../proxy-core/orchestration/upstreamRequest.js';
 import { fetchModelPricingCatalog } from './modelPricingService.js';
 import {
@@ -42,8 +38,6 @@ type ChannelContext = {
 function normalizePlatformName(platform: unknown): string {
   return asTrimmedString(platform).toLowerCase();
 }
-
-/** Site custom headers that look like a Codex client → force responses-first. */
 
 function normalizeEndpointTypes(value: unknown): UpstreamEndpoint[] {
   const raw = asTrimmedString(value).toLowerCase();
@@ -88,8 +82,8 @@ function normalizeEndpointTypes(value: unknown): UpstreamEndpoint[] {
 }
 
 function preferredEndpointOrder(
-  downstreamFormat: EndpointPreference,
   sitePlatform?: string,
+  modelName?: string,
   preferMessagesForClaudeModel = false,
   hints?: EndpointDerivationHints,
 ): UpstreamEndpoint[] {
@@ -121,31 +115,44 @@ function preferredEndpointOrder(
     return ['messages'];
   }
 
-  if (downstreamFormat === 'responses') {
-    if (preferMessagesForClaudeModel) {
-      return ['messages', 'chat', 'responses'];
-    }
+  if (oauthProvider === 'codex') {
     return ['responses', 'chat', 'messages'];
   }
 
-  if (downstreamFormat === 'claude') {
+  // The protocol face follows the model family, never a site-level switch:
+  //   OpenAI/Codex family → /v1/responses   (the Codex-client face)
+  //   Claude family       → /v1/messages    (the Claude Code face)
+  //   everything else     → /v1/chat/completions (the universal face)
+  // Runtime memory may still demote the leading face per model (and per
+  // site) when the upstream only serves these models on another one, so a
+  // relay with GPT on responses *and* GLM on chat serves both from the first
+  // call without a site-wide lock.
+  if (preferMessagesForClaudeModel) {
     return ['messages', 'chat', 'responses'];
   }
-
-  if (downstreamFormat === 'openai' && preferMessagesForClaudeModel) {
-    return ['messages', 'chat', 'responses'];
+  if (isOpenAiFamilyModel(modelName)) {
+    return ['responses', 'chat', 'messages'];
   }
+  return ['chat', 'messages', 'responses'];
+}
 
-  // Generic NewAPI-class gateways for OpenAI-compatible clients: prefer chat
-  // (matches the downstream path), then messages, then responses.
-  // Messages-first is reserved for Claude downstream / Claude-family models.
-  // Responses-first is reserved for explicit Codex/preferResponses sites and
-  // native openai/codex platforms.
-  const base = ['chat', 'messages', 'responses'] as UpstreamEndpoint[];
-  if (oauthProvider === 'codex' && base.includes('responses')) {
-    return ['responses', ...base.filter((endpoint) => endpoint !== 'responses')];
-  }
-  return base;
+/**
+ * OpenAI/Codex-family detection for endpoint ordering. These are the models a
+ * Responses-native upstream serves on /v1/responses, so they lead with the
+ * /v1/responses face. The leading face is never pinned: runtime endpoint
+ * evidence (e.g. a 404 from an upstream that only serves chat) may demote it —
+ * the same rule chat-only families follow (glm / gemini / deepseek / qwen …,
+ * see new-api PR #5209).
+ */
+function isOpenAiFamilyModel(modelName?: string): boolean {
+  const raw = asTrimmedString(modelName).toLowerCase();
+  if (!raw) return false;
+  const normalized = raw.includes('/') ? raw.slice(raw.lastIndexOf('/') + 1) : raw;
+  if (normalized.includes('claude')) return false;
+  return normalized.includes('codex')
+    || /(?:^|[-_.])gpt(?:[-_.]|$)/.test(normalized)
+    || normalized.startsWith('chatgpt')
+    || /^o[1-9](?:[-_.]|$)/.test(normalized);
 }
 
 export async function resolveUpstreamEndpointCandidates(
@@ -202,39 +209,9 @@ export async function resolveUpstreamEndpointCandidates(
     hasRemoteDocumentUrl: false,
   };
 
-  const siteProfileInput = {
-    protocolProfile: context.site.protocolProfile,
-    customHeaders: (context.site as any).customHeaders,
-  };
-  // Codex-gated sites carry the Codex fingerprint on the Anthropic Messages
-  // face too, so Claude-family models keep messages-first ordering even when
-  // the site otherwise prefers Responses: the upstream serves Claude traffic
-  // natively on that protocol. Non-Claude models keep the Responses-first
-  // guarantee below.
-  const codexClientSiteMessagesFirst = (
-    preferMessagesForClaudeModel
-    && siteProtocolRequiresCodexClient(siteProfileInput)
-  );
-  // Explicit Codex/Responses compatibility only — never infer from client alone.
-  // Order: responses first, then messages, then chat (messages remains preferred fallback).
-  // Runtime endpoint memory may promote a previously successful chat/messages
-  // endpoint; for Codex-compat sites that must never demote responses.
-  if (!codexClientSiteMessagesFirst && siteProtocolPrefersResponses(siteProfileInput)) {
-    const candidates = finalizeCandidates(['responses', 'messages', 'chat']);
-    // count_tokens is a native Anthropic operation; preserve its messages-only
-    // constraint even for sites that otherwise require Responses.
-    if (hints?.requestKind === 'claude-count-tokens') return candidates;
-    // Always keep responses first for Codex-compat sites — runtime memory
-    // must not remove it because the upstream requires it.
-    return [
-      'responses',
-      ...candidates.filter((endpoint) => endpoint !== 'responses'),
-    ];
-  }
-
   const preferred = preferredEndpointOrder(
-    downstreamFormat,
     context.site.platform,
+    modelName,
     preferMessagesForClaudeModel,
     hints,
   );
@@ -244,7 +221,10 @@ export async function resolveUpstreamEndpointCandidates(
       if (sitePlatform === 'gemini') return ['responses', 'chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini-cli') return ['chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'antigravity') return ['messages'] as UpstreamEndpoint[];
-      if (sitePlatform === 'openai') return ['chat', 'messages', 'responses'] as UpstreamEndpoint[];
+      // Documents only exist natively on the Responses face for OpenAI-class
+      // upstreams (never on plain chat): Responses leads, messages/chat remain
+      // downgrade fallbacks.
+      if (sitePlatform === 'openai') return ['responses', 'messages', 'chat'] as UpstreamEndpoint[];
       return rankConversationFileEndpoints({
         sitePlatform,
         requestedOrder: preferMessagesForClaudeModel

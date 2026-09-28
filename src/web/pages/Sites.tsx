@@ -66,13 +66,11 @@ import { buildCustomDragReorderUpdates, buildCrossPageDropUpdates, buildUnpinMov
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
 import {
   applyBrowserUaMode,
-  applyCodexCompatibilityMode,
   buildSiteSaveAction,
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   emptySiteForm,
   isBrowserUaModeEnabled,
-  isCodexCompatibilityModeEnabled,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
   siteFormFromSite,
@@ -834,7 +832,7 @@ export default function Sites() {
       paramOverride: selectedOauthProvider ? null : (String(form.paramOverride ?? '').trim() || null),
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
       protocolProfile: selectedOauthProvider
-        ? JSON.stringify({ preferResponses: false, requireCodexClient: false, credentialMode: 'auto' })
+        ? JSON.stringify({ preferResponses: false, preferMessages: false, requireCodexClient: false, credentialMode: 'auto' })
         : JSON.stringify(form.protocolProfile),
       postRefreshProbeEnabled: probeEnabled,
       postRefreshProbeModel: String(probeModel ?? '').trim(),
@@ -1528,7 +1526,7 @@ export default function Sites() {
                       customHeaders: [],
                       customHeadersOverrideRequestHeaders: false,
                       paramOverride: '',
-                      protocolProfile: { preferResponses: false, requireCodexClient: false, credentialMode: 'auto' },
+                      protocolProfile: { preferResponses: false, preferMessages: false, requireCodexClient: false, credentialMode: 'auto' },
                     }));
                     return;
                   }
@@ -1558,7 +1556,7 @@ export default function Sites() {
                         customHeaders: [],
                         customHeadersOverrideRequestHeaders: false,
                         paramOverride: '',
-                        protocolProfile: { preferResponses: false, requireCodexClient: false, credentialMode: 'auto' },
+                        protocolProfile: { preferResponses: false, preferMessages: false, requireCodexClient: false, credentialMode: 'auto' },
                       }
                       : {}),
                   }));
@@ -1747,32 +1745,6 @@ export default function Sites() {
                 </button>
               </div>
             ))}
-            <label style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 10,
-              padding: '10px 12px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-bg)',
-              color: 'var(--color-text-primary)',
-              fontSize: 13,
-            }}>
-              <input
-                type="checkbox"
-                checked={isCodexCompatibilityModeEnabled(form)}
-                onChange={(e) => {
-                  setForm((prev) => applyCodexCompatibilityMode(prev, e.target.checked));
-                }}
-                style={{ marginTop: 2 }}
-              />
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>Codex 兼容模式</span>
-                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                  用于仅允许 Codex 客户端访问的站点：自动配置 Responses 协议、客户端指纹与请求头。
-                </span>
-              </span>
-            </label>
             <label style={{
               display: 'flex',
               alignItems: 'flex-start',

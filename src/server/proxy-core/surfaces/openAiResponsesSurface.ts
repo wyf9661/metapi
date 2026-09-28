@@ -66,7 +66,7 @@ import {
   resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
-import { mapUpstreamErrorForClient, resolveSiteProtocolProfile } from '../../shared/siteProtocolProfile.js';
+import { mapUpstreamErrorForClient } from '../../shared/siteProtocolProfile.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce } from '../../services/proxyRetryPolicy.js';
 import {
@@ -516,10 +516,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
             oauthProvider: oauth?.provider,
             oauthProjectId: oauth?.projectId,
             sitePlatform: selected.site.platform,
-            requireCodexClient: resolveSiteProtocolProfile({
-              protocolProfile: selected.site.protocolProfile,
-              customHeaders: selected.site.customHeaders,
-            }).requireCodexClient,
             siteUrl: siteApiBaseUrl,
             openaiBody: openAiBody,
             downstreamFormat: 'responses',

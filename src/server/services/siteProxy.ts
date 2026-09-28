@@ -10,6 +10,7 @@ import { mergeHeadersWithSiteCustomHeaders, type SiteCustomHeadersMergePriority 
 import { resolveProxyUrlFromExtraConfig } from './accountExtraConfig.js';
 import { stripTrailingSlashes } from './urlNormalization.js';
 import { parseSiteProtocolProfile } from '../shared/siteProtocolProfile.js';
+import { isCodexGatedPlatform } from '../shared/codexGatedPlatforms.js';
 
 // Global keep-alive Agent for direct (non-proxy) upstream requests.
 // This enables HTTP/1.1 keep-alive across all upstream fetches that don't
@@ -96,6 +97,7 @@ const DEFAULT_PROXY_KEEPALIVE_INITIAL_DELAY_MS = 60_000;
 
 type SiteProxyRow = {
   siteUrl: string;
+  platform: string | null;
   proxyUrl: string | null;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean;
@@ -103,6 +105,7 @@ type SiteProxyRow = {
 };
 type SiteProxyQueryRow = {
   siteUrl: string;
+  platform: string | null;
   proxyUrl: string | null;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean | null;
@@ -184,6 +187,7 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
     const rows = await db
       .select({
         siteUrl: schema.sites.url,
+        platform: schema.sites.platform,
         proxyUrl: schema.sites.proxyUrl,
         customHeaders: schema.sites.customHeaders,
         customHeadersOverrideRequestHeaders: schema.sites.customHeadersOverrideRequestHeaders,
@@ -196,6 +200,7 @@ async function getCachedSiteProxyRows(nowMs = Date.now()): Promise<SiteProxyRow[
       loadedAt: nowMs,
       rows: rows.map((row) => ({
         siteUrl: normalizeSiteUrl(row.siteUrl),
+        platform: row.platform ?? null,
         proxyUrl: normalizeSiteProxyUrl(row.proxyUrl),
         customHeaders: row.customHeaders ?? null,
         customHeadersOverrideRequestHeaders: !!row.customHeadersOverrideRequestHeaders,
@@ -455,13 +460,14 @@ function findBestMatchingSiteRow(rows: SiteProxyRow[], normalizedRequestUrl: str
 
 async function resolveSiteRequestConfigByRequestUrl(requestUrl: string): Promise<{
   proxyUrl: string | null;
+  platform: string | null;
   customHeaders: unknown;
   customHeadersOverrideRequestHeaders: boolean;
   protocolProfile: unknown;
 }> {
   const normalizedRequestUrl = normalizeSiteUrl(requestUrl);
   if (!normalizedRequestUrl) {
-    return { proxyUrl: null, customHeaders: null, customHeadersOverrideRequestHeaders: false, protocolProfile: null };
+    return { proxyUrl: null, platform: null, customHeaders: null, customHeadersOverrideRequestHeaders: false, protocolProfile: null };
   }
 
   const rows = await getCachedSiteProxyRows();
@@ -469,6 +475,7 @@ async function resolveSiteRequestConfigByRequestUrl(requestUrl: string): Promise
   const proxyUrl = matchedRow?.proxyUrl;
   return {
     proxyUrl: proxyUrl || null,
+    platform: matchedRow?.platform ?? null,
     customHeaders: matchedRow?.customHeaders ?? null,
     customHeadersOverrideRequestHeaders: !!matchedRow?.customHeadersOverrideRequestHeaders,
     protocolProfile: matchedRow?.protocolProfile ?? null,
@@ -498,6 +505,23 @@ function shouldApplyCodexClientCustomHeaders(requestUrl: string): boolean {
 function isCodexClientCustomHeaderName(name: string): boolean {
   const key = name.trim().toLowerCase();
   return key === 'user-agent' || key === 'originator' || key.startsWith('x-codex-');
+}
+
+/**
+ * Protocol faces whose client identity is owned by the runtime: the Codex
+ * client package on /v1/responses and the Claude Code package on /v1/messages.
+ * Site custom headers must not override the User-Agent / originator on those
+ * faces — they stay available for the chat face only (e.g. the browser UA
+ * switch that clears a Cloudflare/WAF 403).
+ */
+function isFingerprintOwnedFacePath(requestUrl: string): boolean {
+  try {
+    const path = new URL(requestUrl).pathname.toLowerCase();
+    return path.startsWith('/v1/responses') || path.startsWith('/v1/messages');
+  } catch {
+    const lower = String(requestUrl || '').toLowerCase();
+    return lower.includes('/v1/responses') || lower.includes('/v1/messages');
+  }
 }
 
 /**
@@ -613,7 +637,15 @@ export async function withSiteProxyRequestInit(
     ...(options || {}),
   };
   const profile = parseSiteProtocolProfile(resolved.protocolProfile);
-  const effectiveCustomHeaders = profile.requireCodexClient
+  // Identity follows the protocol face: on Codex-gated platforms the runtime
+  // stamps the complete Codex (responses) / Claude Code (messages) client
+  // package itself, so a site's custom User-Agent / originator / x-codex-*
+  // headers must not override those faces — they stay chat-only (e.g. the
+  // browser UA switch). The legacy requireCodexClient profile flag keeps its
+  // previous full-strip behavior for sites saved before the switch was removed.
+  const faceOwnedByRuntime = isCodexGatedPlatform(resolved.platform)
+    && isFingerprintOwnedFacePath(requestUrl);
+  const effectiveCustomHeaders = (profile.requireCodexClient || faceOwnedByRuntime)
     ? stripCodexClientFingerprintHeaders(resolved.customHeaders)
     : resolved.customHeaders;
   const mergedHeaders = mergeHeadersWithSiteCustomHeaders(
