@@ -26,8 +26,8 @@ export type SummaryItem = {
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
-  excludedSiteIds: number[];
-  excludedCredentialRefs: Array<
+  allowedSiteIds: number[];
+  allowedCredentialRefs: Array<
     | { kind: 'account_token'; siteId: number; accountId: number; tokenId: number }
     | { kind: 'default_api_key'; siteId: number; accountId: number }
   >;

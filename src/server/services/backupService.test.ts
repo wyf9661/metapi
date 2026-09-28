@@ -208,8 +208,8 @@ describe('backupService', () => {
       supportedModels: '["gpt-4o-mini"]',
       allowedRouteIds: `[${route.id}]`,
       siteWeightMultipliers: `{"${site.id}":1.5}`,
-      excludedSiteIds: `[${site.id}]`,
-      excludedCredentialRefs: JSON.stringify([
+      allowedSiteIds: `[${site.id}]`,
+      allowedCredentialRefs: JSON.stringify([
         { kind: 'account_token', siteId: site.id, accountId: account.id, tokenId: accountToken.id },
       ]),
       lastUsedAt: now,
@@ -248,8 +248,8 @@ describe('backupService', () => {
         supportedModels: '["gpt-4o-mini"]',
         allowedRouteIds: `[${route.id}]`,
         siteWeightMultipliers: `{"${site.id}":1.5}`,
-        excludedSiteIds: `[${site.id}]`,
-        excludedCredentialRefs: `[{"kind":"account_token","siteId":${site.id},"accountId":${account.id},"tokenId":${accountToken.id}}]`,
+        allowedSiteIds: `[${site.id}]`,
+        allowedCredentialRefs: `[{"kind":"account_token","siteId":${site.id},"accountId":${account.id},"tokenId":${accountToken.id}}]`,
       }),
     ]);
     expect(exported.accounts.accounts[0]).not.toHaveProperty('balanceUsed');
@@ -319,8 +319,8 @@ describe('backupService', () => {
         supportedModels: '["gpt-4o-mini"]',
         allowedRouteIds: `[${route.id}]`,
         siteWeightMultipliers: `{"${site.id}":1.5}`,
-        excludedSiteIds: `[${site.id}]`,
-        excludedCredentialRefs: `[{"kind":"account_token","siteId":${site.id},"accountId":${account.id},"tokenId":${accountToken.id}}]`,
+        allowedSiteIds: `[${site.id}]`,
+        allowedCredentialRefs: `[{"kind":"account_token","siteId":${site.id},"accountId":${account.id},"tokenId":${accountToken.id}}]`,
         lastUsedAt: now,
       }),
     ]);
@@ -698,8 +698,8 @@ describe('backupService', () => {
       supportedModels: '["gpt-4o"]',
       allowedRouteIds: `[${route.id}]`,
       siteWeightMultipliers: `{"${site.id}":1.25}`,
-      excludedSiteIds: `[${site.id}]`,
-      excludedCredentialRefs: JSON.stringify([
+      allowedSiteIds: `[${site.id}]`,
+      allowedCredentialRefs: JSON.stringify([
         { kind: 'account_token', siteId: site.id, accountId: account.id, tokenId: accountToken.id },
       ]),
       lastUsedAt: exportedAt,
@@ -846,8 +846,8 @@ describe('backupService', () => {
       supportedModels: '["gpt-local"]',
       allowedRouteIds: '[999]',
       siteWeightMultipliers: '{"999":9}',
-      excludedSiteIds: '[999]',
-      excludedCredentialRefs: '[{"kind":"default_api_key","siteId":999,"accountId":999}]',
+      allowedSiteIds: '[999]',
+      allowedCredentialRefs: '[{"kind":"default_api_key","siteId":999,"accountId":999}]',
       lastUsedAt: localRuntimeAt,
       updatedAt: localRuntimeAt,
     }).where(eq(schema.downstreamApiKeys.id, downstreamKey.id)).run();
@@ -1011,8 +1011,8 @@ describe('backupService', () => {
         supportedModels: '["gpt-4o"]',
         allowedRouteIds: `[${route.id}]`,
         siteWeightMultipliers: `{"${site.id}":1.25}`,
-        excludedSiteIds: `[${site.id}]`,
-        excludedCredentialRefs: `[{"kind":"account_token","siteId":${site.id},"accountId":${account.id},"tokenId":${accountToken.id}}]`,
+        allowedSiteIds: `[${site.id}]`,
+        allowedCredentialRefs: `[{"kind":"account_token","siteId":${site.id},"accountId":${account.id},"tokenId":${accountToken.id}}]`,
         lastUsedAt: localRuntimeAt,
       }),
     ]);

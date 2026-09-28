@@ -14,7 +14,7 @@ import { useIsMobile } from '../components/useIsMobile.js';
 import DownstreamKeyEditorModal, {
   TagInput,
   type DownstreamCredentialOption,
-  type DownstreamExcludedCredentialRef,
+  type DownstreamAllowedCredentialRef,
   type DownstreamKeyEditorForm,
   type DownstreamSiteOption,
 } from './downstream-keys/DownstreamKeyEditorModal.js';
@@ -56,8 +56,8 @@ type DownstreamApiKeyItem = {
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
-  excludedSiteIds: number[];
-  excludedCredentialRefs: DownstreamExcludedCredentialRef[];
+  allowedSiteIds: number[];
+  allowedCredentialRefs: DownstreamAllowedCredentialRef[];
   lastUsedAt: string | null;
 };
 
@@ -139,39 +139,39 @@ function uniqIds(values: number[]): number[] {
   return [...new Set(values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0).map((value) => Math.trunc(value)))];
 }
 
-function buildExcludedCredentialRefKey(ref: DownstreamExcludedCredentialRef): string {
+function buildAllowedCredentialRefKey(ref: DownstreamAllowedCredentialRef): string {
   return ref.kind === 'account_token'
     ? `${ref.kind}:${ref.siteId}:${ref.accountId}:${ref.tokenId}`
     : `${ref.kind}:${ref.siteId}:${ref.accountId}`;
 }
 
-function normalizeExcludedSiteIds(values: number[]): number[] {
+function normalizeAllowedSiteIds(values: number[]): number[] {
   return uniqIds(values).sort((left, right) => left - right);
 }
 
-function normalizeExcludedCredentialRefs(values: DownstreamExcludedCredentialRef[]): DownstreamExcludedCredentialRef[] {
-  const deduped = new Map<string, DownstreamExcludedCredentialRef>();
+function normalizeAllowedCredentialRefs(values: DownstreamAllowedCredentialRef[]): DownstreamAllowedCredentialRef[] {
+  const deduped = new Map<string, DownstreamAllowedCredentialRef>();
   for (const value of values) {
     if (!value || !Number.isFinite(value.siteId) || !Number.isFinite(value.accountId)) continue;
     if (value.kind === 'account_token') {
       if (!Number.isFinite(value.tokenId)) continue;
-      const normalized: DownstreamExcludedCredentialRef = {
+      const normalized: DownstreamAllowedCredentialRef = {
         kind: 'account_token',
         siteId: Math.trunc(value.siteId),
         accountId: Math.trunc(value.accountId),
         tokenId: Math.trunc(value.tokenId),
       };
-      deduped.set(buildExcludedCredentialRefKey(normalized), normalized);
+      deduped.set(buildAllowedCredentialRefKey(normalized), normalized);
       continue;
     }
-    const normalized: DownstreamExcludedCredentialRef = {
+    const normalized: DownstreamAllowedCredentialRef = {
       kind: 'default_api_key',
       siteId: Math.trunc(value.siteId),
       accountId: Math.trunc(value.accountId),
     };
-    deduped.set(buildExcludedCredentialRefKey(normalized), normalized);
+    deduped.set(buildAllowedCredentialRefKey(normalized), normalized);
   }
-  return Array.from(deduped.values()).sort((left, right) => buildExcludedCredentialRefKey(left).localeCompare(buildExcludedCredentialRefKey(right)));
+  return Array.from(deduped.values()).sort((left, right) => buildAllowedCredentialRefKey(left).localeCompare(buildAllowedCredentialRefKey(right)));
 }
 
 function parseTagText(value: string): string[] {
@@ -333,8 +333,8 @@ function buildEditorForm(
     selectedModels: uniqStrings(selectedModels),
     selectedGroupRouteIds: uniqIds(selectedGroupRouteIds),
     siteWeightMultipliersText: JSON.stringify(item?.siteWeightMultipliers || {}, null, 2),
-    excludedSiteIds: normalizeExcludedSiteIds(Array.isArray(item?.excludedSiteIds) ? item.excludedSiteIds : []),
-    excludedCredentialRefs: normalizeExcludedCredentialRefs(Array.isArray(item?.excludedCredentialRefs) ? item.excludedCredentialRefs : []),
+    allowedSiteIds: normalizeAllowedSiteIds(Array.isArray(item?.allowedSiteIds) ? item.allowedSiteIds : []),
+    allowedCredentialRefs: normalizeAllowedCredentialRefs(Array.isArray(item?.allowedCredentialRefs) ? item.allowedCredentialRefs : []),
   };
 }
 
@@ -584,7 +584,7 @@ export default function DownstreamKeys() {
       setExclusionSourceLoaded(true);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '加载可排除站点与令牌失败');
+      toast.error(errMessage || '加载可允许站点与令牌失败');
     } finally {
       setExclusionSourceLoading(false);
     }
@@ -623,8 +623,8 @@ export default function DownstreamKeys() {
         supportedModels: raw?.supportedModels ?? item.supportedModels,
         allowedRouteIds: raw?.allowedRouteIds ?? item.allowedRouteIds,
         siteWeightMultipliers: raw?.siteWeightMultipliers ?? item.siteWeightMultipliers,
-        excludedSiteIds: raw?.excludedSiteIds ?? item.excludedSiteIds,
-        excludedCredentialRefs: raw?.excludedCredentialRefs ?? item.excludedCredentialRefs,
+        allowedSiteIds: raw?.allowedSiteIds ?? item.allowedSiteIds,
+        allowedCredentialRefs: raw?.allowedCredentialRefs ?? item.allowedCredentialRefs,
         lastUsedAt: raw?.lastUsedAt ?? item.lastUsedAt,
       };
     })
@@ -825,8 +825,8 @@ export default function DownstreamKeys() {
         supportedModels: uniqStrings(editorForm.selectedModels),
         allowedRouteIds: uniqIds(editorForm.selectedGroupRouteIds).filter((id) => routeMap.has(id) && isGroupRouteOption(routeMap.get(id)!)),
         siteWeightMultipliers,
-        excludedSiteIds: normalizeExcludedSiteIds(editorForm.excludedSiteIds),
-        excludedCredentialRefs: normalizeExcludedCredentialRefs(editorForm.excludedCredentialRefs),
+        allowedSiteIds: normalizeAllowedSiteIds(editorForm.allowedSiteIds),
+        allowedCredentialRefs: normalizeAllowedCredentialRefs(editorForm.allowedCredentialRefs),
       };
       if (editingId) {
         await api.updateDownstreamApiKey(editingId, payload);

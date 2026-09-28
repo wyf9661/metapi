@@ -585,6 +585,18 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "allowed_site_ids": {
+          "logicalType": "json",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
+        },
+        "allowed_credential_refs": {
+          "logicalType": "json",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },

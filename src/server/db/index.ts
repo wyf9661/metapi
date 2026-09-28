@@ -639,6 +639,8 @@ function ensureDownstreamApiKeySchema() {
       supported_models text,
       allowed_route_ids text,
       site_weight_multipliers text,
+      allowed_site_ids text,
+      allowed_credential_refs text,
       last_used_at text,
       created_at text DEFAULT (datetime('now')),
       updated_at text DEFAULT (datetime('now'))
@@ -676,6 +678,14 @@ function ensureDownstreamApiKeySchema() {
 
   if (!tableColumnExists('downstream_api_keys', 'model_mappings')) {
     execSqliteLegacyCompat('ALTER TABLE downstream_api_keys ADD COLUMN model_mappings text;');
+  }
+
+  if (!tableColumnExists('downstream_api_keys', 'allowed_site_ids')) {
+    execSqliteLegacyCompat('ALTER TABLE downstream_api_keys ADD COLUMN allowed_site_ids text;');
+  }
+
+  if (!tableColumnExists('downstream_api_keys', 'allowed_credential_refs')) {
+    execSqliteLegacyCompat('ALTER TABLE downstream_api_keys ADD COLUMN allowed_credential_refs text;');
   }
 }
 

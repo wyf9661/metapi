@@ -878,7 +878,7 @@ describe('DownstreamKeys page', () => {
     }
   });
 
-  it('lazy loads exclusion sources and submits excluded sites and credentials', async () => {
+  it('lazy loads exclusion sources and submits allowed sites and credentials', async () => {
     let root!: WebTestRenderer;
     try {
       await act(async () => {
@@ -911,8 +911,8 @@ describe('DownstreamKeys page', () => {
       await flushMicrotasks();
 
       const text = collectText(root!.root);
-      expect(text).toContain('排除站点');
-      expect(text).toContain('排除 API Key/令牌');
+      expect(text).toContain('允许站点');
+      expect(text).toContain('允许 API Key/令牌');
       expect(text).toContain('默认 API Key');
       expect(text).toContain('group-a');
 
@@ -948,8 +948,8 @@ describe('DownstreamKeys page', () => {
       expect(apiMock.createDownstreamApiKey).toHaveBeenCalledWith(expect.objectContaining({
         name: 'excluded-key',
         key: 'sk-excluded-key-0405',
-        excludedSiteIds: [202],
-        excludedCredentialRefs: [
+        allowedSiteIds: [202],
+        allowedCredentialRefs: [
           { kind: 'account_token', siteId: 201, accountId: 101, tokenId: 301 },
           { kind: 'default_api_key', siteId: 201, accountId: 101 },
         ],

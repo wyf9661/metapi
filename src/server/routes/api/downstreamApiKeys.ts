@@ -9,7 +9,7 @@ import {
   toDownstreamApiKeyPolicyView,
   toPersistenceJson,
 } from '../../services/downstreamApiKeyService.js';
-import type { DownstreamExcludedCredentialRef } from '../../services/downstreamPolicyTypes.js';
+import type { DownstreamCredentialRef } from '../../services/downstreamPolicyTypes.js';
 import {
   readDownstreamApiKeyTrendBuckets,
   resolveDownstreamTrendBucketSeconds,
@@ -136,8 +136,8 @@ function resolveRangeSinceUtc(range: DownstreamKeyRange): string | null {
 async function validatePolicyReferences(input: {
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
-  excludedSiteIds: number[];
-  excludedCredentialRefs: DownstreamExcludedCredentialRef[];
+  allowedSiteIds: number[];
+  allowedCredentialRefs: DownstreamCredentialRef[];
 }): Promise<string | null> {
   const routeIds = input.allowedRouteIds || [];
   if (routeIds.length > 0) {
@@ -156,10 +156,10 @@ async function validatePolicyReferences(input: {
     .map((key) => Number(key))
     .filter((value) => Number.isFinite(value) && value > 0)
     .map((value) => Math.trunc(value));
-  const excludedSiteIds = (input.excludedSiteIds || [])
+  const allowedSiteIds = (input.allowedSiteIds || [])
     .filter((value) => Number.isFinite(value) && value > 0)
     .map((value) => Math.trunc(value));
-  const siteIds = Array.from(new Set([...weightedSiteIds, ...excludedSiteIds]));
+  const siteIds = Array.from(new Set([...weightedSiteIds, ...allowedSiteIds]));
   if (siteIds.length > 0) {
     const rows = await db.select({ id: schema.sites.id })
       .from(schema.sites)
@@ -172,8 +172,8 @@ async function validatePolicyReferences(input: {
     }
   }
 
-  const credentialRefs = input.excludedCredentialRefs || [];
-  const accountTokenRefs = credentialRefs.filter((ref): ref is Extract<DownstreamExcludedCredentialRef, { kind: 'account_token' }> => ref.kind === 'account_token');
+  const credentialRefs = input.allowedCredentialRefs || [];
+  const accountTokenRefs = credentialRefs.filter((ref): ref is Extract<DownstreamCredentialRef, { kind: 'account_token' }> => ref.kind === 'account_token');
   if (accountTokenRefs.length > 0) {
     const tokenIds = Array.from(new Set(accountTokenRefs.map((ref) => ref.tokenId)));
     const rows = await db.select({
@@ -195,15 +195,15 @@ async function validatePolicyReferences(input: {
     for (const ref of accountTokenRefs) {
       const matched = tokenById.get(ref.tokenId);
       if (!matched) {
-        return `excludedCredentialRefs 包含不存在的令牌: ${ref.tokenId}`;
+        return `allowedCredentialRefs 包含不存在的令牌: ${ref.tokenId}`;
       }
       if (Number(matched.accountId) !== ref.accountId || Number(matched.siteId) !== ref.siteId) {
-        return `excludedCredentialRefs 中的 account_token 引用与账号/站点不匹配: ${ref.tokenId}`;
+        return `allowedCredentialRefs 中的 account_token 引用与账号/站点不匹配: ${ref.tokenId}`;
       }
     }
   }
 
-  const defaultApiKeyRefs = credentialRefs.filter((ref): ref is Extract<DownstreamExcludedCredentialRef, { kind: 'default_api_key' }> => ref.kind === 'default_api_key');
+  const defaultApiKeyRefs = credentialRefs.filter((ref): ref is Extract<DownstreamCredentialRef, { kind: 'default_api_key' }> => ref.kind === 'default_api_key');
   if (defaultApiKeyRefs.length > 0) {
     const accountIds = Array.from(new Set(defaultApiKeyRefs.map((ref) => ref.accountId)));
     const rows = await db.select({
@@ -224,13 +224,13 @@ async function validatePolicyReferences(input: {
     for (const ref of defaultApiKeyRefs) {
       const matched = accountById.get(ref.accountId);
       if (!matched) {
-        return `excludedCredentialRefs 包含不存在的账号: ${ref.accountId}`;
+        return `allowedCredentialRefs 包含不存在的账号: ${ref.accountId}`;
       }
       if (Number(matched.siteId) !== ref.siteId) {
-        return `excludedCredentialRefs 中的 default_api_key 引用与站点不匹配: ${ref.accountId}`;
+        return `allowedCredentialRefs 中的 default_api_key 引用与站点不匹配: ${ref.accountId}`;
       }
       if (!(matched.apiToken || '').trim()) {
-        return `excludedCredentialRefs 中的 default_api_key 账号缺少默认 API Key: ${ref.accountId}`;
+        return `allowedCredentialRefs 中的 default_api_key 账号缺少默认 API Key: ${ref.accountId}`;
       }
     }
   }
@@ -496,8 +496,8 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
     const policyRefError = await validatePolicyReferences({
       allowedRouteIds: normalized.allowedRouteIds,
       siteWeightMultipliers: normalized.siteWeightMultipliers,
-      excludedSiteIds: normalized.excludedSiteIds,
-      excludedCredentialRefs: normalized.excludedCredentialRefs,
+      allowedSiteIds: normalized.allowedSiteIds,
+      allowedCredentialRefs: normalized.allowedCredentialRefs,
     });
     if (policyRefError) {
       return reply.code(400).send({ success: false, message: policyRefError });
@@ -533,8 +533,8 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
           modelMappings: toPersistenceJson(normalized.modelMappings),
           allowedRouteIds: toPersistenceJson(normalized.allowedRouteIds),
           siteWeightMultipliers: toPersistenceJson(normalized.siteWeightMultipliers),
-          excludedSiteIds: toPersistenceJson(normalized.excludedSiteIds),
-          excludedCredentialRefs: toPersistenceJson(normalized.excludedCredentialRefs),
+          allowedSiteIds: toPersistenceJson(normalized.allowedSiteIds),
+          allowedCredentialRefs: toPersistenceJson(normalized.allowedCredentialRefs),
           createdAt: nowIso,
           updatedAt: nowIso,
         },
@@ -599,8 +599,8 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         modelMappings: hasOwn('modelMappings') ? body.modelMappings : existingView.modelMappings,
         allowedRouteIds: hasOwn('allowedRouteIds') ? body.allowedRouteIds : existingView.allowedRouteIds,
         siteWeightMultipliers: hasOwn('siteWeightMultipliers') ? body.siteWeightMultipliers : existingView.siteWeightMultipliers,
-        excludedSiteIds: hasOwn('excludedSiteIds') ? body.excludedSiteIds : existingView.excludedSiteIds,
-        excludedCredentialRefs: hasOwn('excludedCredentialRefs') ? body.excludedCredentialRefs : existingView.excludedCredentialRefs,
+        allowedSiteIds: hasOwn('allowedSiteIds') ? body.allowedSiteIds : existingView.allowedSiteIds,
+        allowedCredentialRefs: hasOwn('allowedCredentialRefs') ? body.allowedCredentialRefs : existingView.allowedCredentialRefs,
       });
     } catch (error: unknown) {
       return reply.code(400).send({ success: false, message: (error as Error)?.message || '参数无效' });
@@ -618,8 +618,8 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
     const policyRefError = await validatePolicyReferences({
       allowedRouteIds: normalized.allowedRouteIds,
       siteWeightMultipliers: normalized.siteWeightMultipliers,
-      excludedSiteIds: normalized.excludedSiteIds,
-      excludedCredentialRefs: normalized.excludedCredentialRefs,
+      allowedSiteIds: normalized.allowedSiteIds,
+      allowedCredentialRefs: normalized.allowedCredentialRefs,
     });
     if (policyRefError) {
       return reply.code(400).send({ success: false, message: policyRefError });
@@ -646,8 +646,8 @@ export async function downstreamApiKeysRoutes(app: FastifyInstance) {
         sensitiveWordDetection: normalized.sensitiveWordDetection,
         allowedRouteIds: toPersistenceJson(normalized.allowedRouteIds),
         siteWeightMultipliers: toPersistenceJson(normalized.siteWeightMultipliers),
-        excludedSiteIds: toPersistenceJson(normalized.excludedSiteIds),
-        excludedCredentialRefs: toPersistenceJson(normalized.excludedCredentialRefs),
+        allowedSiteIds: toPersistenceJson(normalized.allowedSiteIds),
+        allowedCredentialRefs: toPersistenceJson(normalized.allowedCredentialRefs),
         updatedAt: nowIso,
       }).where(eq(schema.downstreamApiKeys.id, id)).run();
 

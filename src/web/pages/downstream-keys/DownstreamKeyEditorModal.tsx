@@ -4,7 +4,7 @@ import { generateDownstreamSkKey } from '../helpers/generateDownstreamSkKey.js';
 
 const DOWNSTREAM_KEY_PREFIX = 'sk-';
 
-export type DownstreamExcludedCredentialRef =
+export type DownstreamAllowedCredentialRef =
   | {
     kind: 'account_token';
     siteId: number;
@@ -35,8 +35,8 @@ export type DownstreamKeyEditorForm = {
   selectedModels: string[];
   selectedGroupRouteIds: number[];
   siteWeightMultipliersText: string;
-  excludedSiteIds: number[];
-  excludedCredentialRefs: DownstreamExcludedCredentialRef[];
+  allowedSiteIds: number[];
+  allowedCredentialRefs: DownstreamAllowedCredentialRef[];
 };
 
 export type DownstreamSiteOption = {
@@ -47,7 +47,7 @@ export type DownstreamSiteOption = {
 
 export type DownstreamCredentialOption = {
   key: string;
-  ref: DownstreamExcludedCredentialRef;
+  ref: DownstreamAllowedCredentialRef;
   siteName: string;
   accountName: string;
   label: string;
@@ -124,39 +124,39 @@ function tagChipStyle(kind: 'normal' | 'accent' = 'normal'): React.CSSProperties
   };
 }
 
-function buildExcludedCredentialRefKey(ref: DownstreamExcludedCredentialRef): string {
+function buildAllowedCredentialRefKey(ref: DownstreamAllowedCredentialRef): string {
   return ref.kind === 'account_token'
     ? `${ref.kind}:${ref.siteId}:${ref.accountId}:${ref.tokenId}`
     : `${ref.kind}:${ref.siteId}:${ref.accountId}`;
 }
 
-function normalizeExcludedSiteIds(values: number[]): number[] {
+function normalizeAllowedSiteIds(values: number[]): number[] {
   return uniqIds(values).sort((left, right) => left - right);
 }
 
-function normalizeExcludedCredentialRefs(values: DownstreamExcludedCredentialRef[]): DownstreamExcludedCredentialRef[] {
-  const deduped = new Map<string, DownstreamExcludedCredentialRef>();
+function normalizeAllowedCredentialRefs(values: DownstreamAllowedCredentialRef[]): DownstreamAllowedCredentialRef[] {
+  const deduped = new Map<string, DownstreamAllowedCredentialRef>();
   for (const value of values) {
     if (!value || !Number.isFinite(value.siteId) || !Number.isFinite(value.accountId)) continue;
     if (value.kind === 'account_token') {
       if (!Number.isFinite(value.tokenId)) continue;
-      const normalized: DownstreamExcludedCredentialRef = {
+      const normalized: DownstreamAllowedCredentialRef = {
         kind: 'account_token',
         siteId: Math.trunc(value.siteId),
         accountId: Math.trunc(value.accountId),
         tokenId: Math.trunc(value.tokenId),
       };
-      deduped.set(buildExcludedCredentialRefKey(normalized), normalized);
+      deduped.set(buildAllowedCredentialRefKey(normalized), normalized);
       continue;
     }
-    const normalized: DownstreamExcludedCredentialRef = {
+    const normalized: DownstreamAllowedCredentialRef = {
       kind: 'default_api_key',
       siteId: Math.trunc(value.siteId),
       accountId: Math.trunc(value.accountId),
     };
-    deduped.set(buildExcludedCredentialRefKey(normalized), normalized);
+    deduped.set(buildAllowedCredentialRefKey(normalized), normalized);
   }
-  return Array.from(deduped.values()).sort((left, right) => buildExcludedCredentialRefKey(left).localeCompare(buildExcludedCredentialRefKey(right)));
+  return Array.from(deduped.values()).sort((left, right) => buildAllowedCredentialRefKey(left).localeCompare(buildAllowedCredentialRefKey(right)));
 }
 
 export function TagInput({
@@ -594,12 +594,15 @@ export default function DownstreamKeyEditorModal({
               <div className="downstream-key-advanced-panel">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div>
-                    <div className="downstream-key-modal-section-title">排除站点</div>
-                    <div className="downstream-key-modal-help">命中的站点会直接跳过，不参与当前下游密钥的通道路由。</div>
+                    <div className="downstream-key-modal-section-title">允许站点</div>
+                    <div className="downstream-key-modal-help">留空表示放行所有站点；勾选后仅允许所选站点，新增站点需手动补充。</div>
                   </div>
-                  <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, excludedSiteIds: [] }))}>清空</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedSiteIds: normalizeAllowedSiteIds(siteOptions.map((site) => site.siteId)) }))}>全选</button>
+                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedSiteIds: [] }))}>清空</button>
+                  </div>
                 </div>
-                <div className="downstream-key-modal-meta">已排除 {form.excludedSiteIds.length} 个站点</div>
+                <div className="downstream-key-modal-meta">已允许 {form.allowedSiteIds.length} 个站点</div>
                 <div className="toolbar-search" style={{ maxWidth: '100%' }}>
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -610,9 +613,9 @@ export default function DownstreamKeyEditorModal({
                   {exclusionSourceLoading ? (
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>加载站点与令牌中...</div>
                   ) : filteredSites.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可排除站点</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可允许站点</div>
                   ) : filteredSites.map((site) => {
-                    const checked = form.excludedSiteIds.includes(site.siteId);
+                    const checked = form.allowedSiteIds.includes(site.siteId);
                     return (
                       <label key={site.siteId} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', background: checked ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-card))' : 'var(--color-bg-card)' }}>
                         <input
@@ -620,10 +623,10 @@ export default function DownstreamKeyEditorModal({
                           checked={checked}
                           onChange={(e) => onChange((prev) => ({
                             ...prev,
-                            excludedSiteIds: normalizeExcludedSiteIds(
+                            allowedSiteIds: normalizeAllowedSiteIds(
                               e.target.checked
-                                ? [...prev.excludedSiteIds, site.siteId]
-                                : prev.excludedSiteIds.filter((item) => item !== site.siteId),
+                                ? [...prev.allowedSiteIds, site.siteId]
+                                : prev.allowedSiteIds.filter((item) => item !== site.siteId),
                             ),
                           }))}
                         />
@@ -640,12 +643,15 @@ export default function DownstreamKeyEditorModal({
               <div className="downstream-key-advanced-panel">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div>
-                    <div className="downstream-key-modal-section-title">排除 API Key/令牌</div>
-                    <div className="downstream-key-modal-help">支持排除显式令牌，以及 `tokenId` 为空时实际使用的默认 API Key。</div>
+                    <div className="downstream-key-modal-section-title">允许 API Key/令牌</div>
+                    <div className="downstream-key-modal-help">留空表示放行所有 API Key/令牌；勾选后仅允许所选凭证，新增凭证需手动补充。</div>
                   </div>
-                  <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, excludedCredentialRefs: [] }))}>清空</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedCredentialRefs: normalizeAllowedCredentialRefs(credentialOptions.map((item) => item.ref)) }))}>全选</button>
+                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedCredentialRefs: [] }))}>清空</button>
+                  </div>
                 </div>
-                <div className="downstream-key-modal-meta">已排除 {form.excludedCredentialRefs.length} 个凭证</div>
+                <div className="downstream-key-modal-meta">已允许 {form.allowedCredentialRefs.length} 个凭证</div>
                 <div className="toolbar-search" style={{ maxWidth: '100%' }}>
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -656,9 +662,9 @@ export default function DownstreamKeyEditorModal({
                   {exclusionSourceLoading ? (
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>加载站点与令牌中...</div>
                   ) : filteredCredentials.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可排除 API Key/令牌</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可允许 API Key/令牌</div>
                   ) : filteredCredentials.map((item) => {
-                    const checked = form.excludedCredentialRefs.some((ref) => buildExcludedCredentialRefKey(ref) === buildExcludedCredentialRefKey(item.ref));
+                    const checked = form.allowedCredentialRefs.some((ref) => buildAllowedCredentialRefKey(ref) === buildAllowedCredentialRefKey(item.ref));
                     return (
                       <label key={item.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', background: checked ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-card))' : 'var(--color-bg-card)' }}>
                         <input
@@ -666,10 +672,10 @@ export default function DownstreamKeyEditorModal({
                           checked={checked}
                           onChange={(e) => onChange((prev) => ({
                             ...prev,
-                            excludedCredentialRefs: normalizeExcludedCredentialRefs(
+                            allowedCredentialRefs: normalizeAllowedCredentialRefs(
                               e.target.checked
-                                ? [...prev.excludedCredentialRefs, item.ref]
-                                : prev.excludedCredentialRefs.filter((ref) => buildExcludedCredentialRefKey(ref) !== buildExcludedCredentialRefKey(item.ref)),
+                                ? [...prev.allowedCredentialRefs, item.ref]
+                                : prev.allowedCredentialRefs.filter((ref) => buildAllowedCredentialRefKey(ref) !== buildAllowedCredentialRefKey(item.ref)),
                             ),
                           }))}
                           style={{ marginTop: 2 }}

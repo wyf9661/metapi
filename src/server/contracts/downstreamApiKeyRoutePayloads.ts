@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const downstreamExcludedCredentialRefSchema = z.union([
+const downstreamCredentialRefSchema = z.union([
   z.object({
     kind: z.literal('account_token'),
     siteId: z.union([z.number(), z.string()]),
@@ -32,8 +32,8 @@ const downstreamApiKeyPayloadSchema = z.object({
     z.string(),
     z.record(z.string(), z.union([z.number(), z.string()])),
   ]).optional(),
-  excludedSiteIds: z.union([z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
-  excludedCredentialRefs: z.union([z.string(), z.array(downstreamExcludedCredentialRefSchema)]).optional(),
+  allowedSiteIds: z.union([z.string(), z.array(z.union([z.number(), z.string()]))]).optional(),
+  allowedCredentialRefs: z.union([z.string(), z.array(downstreamCredentialRefSchema)]).optional(),
 }).passthrough();
 
 const downstreamApiKeyBatchPayloadSchema = z.object({

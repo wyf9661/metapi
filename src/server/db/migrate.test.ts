@@ -408,6 +408,9 @@ describe('sqlite migrate bootstrap', () => {
       '0033_downstream_key_sensitive_word_detection',
       '0037_downstream_api_key_model_mappings',
       '0040_downstream_api_key_max_inflight',
+      // 0046 alters downstream_api_keys, which 0008 creates, so it stays missing
+      // in this partial-journal fixture too.
+      '0046_downstream_api_key_allow_lists',
       // 0045 alters site_disabled_models, which 0006 creates, so it has to stay
       // missing in this partial-journal fixture as well.
       '0045_per_key_disabled_models',

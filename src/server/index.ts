@@ -36,6 +36,7 @@ import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService
 import { buildStartupSummaryLines } from './services/startupInfo.js';
 import { repairStoredCreatedAtValues } from './services/storedTimestampRepairService.js';
 import { migrateSiteApiKeysToAccounts } from './services/siteApiKeyMigrationService.js';
+import { migrateDownstreamKeyExclusionsToAllowLists } from './services/downstreamApiKeyAllowListMigration.js';
 import { stopDispatcherCacheSweep } from './services/siteProxy.js';
 
 function installProcessCrashHandlers(): void {
@@ -245,6 +246,11 @@ try {
   await ensureProxyLogReasoningEffortColumn();
   await repairStoredCreatedAtValues();
   await migrateSiteApiKeysToAccounts();
+  // Downstream keys used to store site/credential *exclusions*; they now store
+  // allow-lists (empty = no restriction). Legacy rows are converted once, then
+  // the legacy columns are cleared. Data-driven so a restored old backup is
+  // converted on the next boot instead of staying on the old semantics.
+  await migrateDownstreamKeyExclusionsToAllowLists();
   await ensureDefaultSitesSeeded();
   await ensureOauthIdentityBackfill();
   await routeRefreshWorkflow.rebuildRoutesOnly();

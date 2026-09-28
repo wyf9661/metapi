@@ -868,21 +868,26 @@ export function resolveDownstreamExclusionReason(
 ): string | null {
   if (!downstreamPolicy) return null;
 
-  const excludedSiteIds = Array.isArray(downstreamPolicy.excludedSiteIds)
-    ? downstreamPolicy.excludedSiteIds
+  // Allow-list semantics, same shape as the model / route dimensions: an empty
+  // list means "no restriction", a non-empty list means "only these". A site or
+  // credential that appears later stays out of a restricted key until it is
+  // explicitly allowed — the fail-closed direction, which is the one that makes
+  // sense for keys handed out to third parties.
+  const allowedSiteIds = Array.isArray(downstreamPolicy.allowedSiteIds)
+    ? downstreamPolicy.allowedSiteIds
     : [];
-  if (excludedSiteIds.includes(candidate.site.id)) {
-    return '站点已被下游密钥排除';
+  if (allowedSiteIds.length > 0 && !allowedSiteIds.includes(candidate.site.id)) {
+    return '站点未在下游密钥允许列表内';
   }
 
-  const excludedCredentialRefs = Array.isArray(downstreamPolicy.excludedCredentialRefs)
-    ? downstreamPolicy.excludedCredentialRefs
+  const allowedCredentialRefs = Array.isArray(downstreamPolicy.allowedCredentialRefs)
+    ? downstreamPolicy.allowedCredentialRefs
     : [];
-  if (excludedCredentialRefs.length <= 0) {
+  if (allowedCredentialRefs.length <= 0) {
     return null;
   }
 
-  for (const ref of excludedCredentialRefs) {
+  for (const ref of allowedCredentialRefs) {
     if (ref.kind === 'account_token') {
       if (
         candidate.channel.tokenId === ref.tokenId
@@ -890,7 +895,7 @@ export function resolveDownstreamExclusionReason(
         && candidate.account.id === ref.accountId
         && candidate.site.id === ref.siteId
       ) {
-        return 'API Key/令牌已被下游密钥排除';
+        return null;
       }
       continue;
     }
@@ -903,12 +908,12 @@ export function resolveDownstreamExclusionReason(
       const resolvedTokenValue = resolveChannelTokenValue(candidate);
       const accountApiToken = candidate.account.apiToken?.trim() || '';
       if (resolvedTokenValue && accountApiToken && resolvedTokenValue === accountApiToken) {
-        return 'API Key/令牌已被下游密钥排除';
+        return null;
       }
     }
   }
 
-  return null;
+  return 'API Key/令牌未在下游密钥允许列表内';
 }
 
 export function getCandidateEligibilityReasons(

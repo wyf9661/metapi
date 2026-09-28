@@ -11,9 +11,12 @@ export type DownstreamDefaultApiKeyCredentialRef = {
   accountId: number;
 };
 
-export type DownstreamExcludedCredentialRef =
+export type DownstreamCredentialRef =
   | DownstreamAccountTokenCredentialRef
   | DownstreamDefaultApiKeyCredentialRef;
+
+/** @deprecated Use DownstreamCredentialRef instead. Kept for backup/restore compat. */
+export type DownstreamExcludedCredentialRef = DownstreamCredentialRef;
 
 export type DownstreamModelMapping = {
   from: string;
@@ -25,8 +28,8 @@ export type DownstreamRoutingPolicy = {
   modelMappings?: DownstreamModelMapping[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
-  excludedSiteIds: number[];
-  excludedCredentialRefs: DownstreamExcludedCredentialRef[];
+  allowedSiteIds: number[];
+  allowedCredentialRefs: DownstreamCredentialRef[];
   denyAllWhenEmpty?: boolean;
 };
 
@@ -61,6 +64,6 @@ export const EMPTY_DOWNSTREAM_ROUTING_POLICY: DownstreamRoutingPolicy = {
   modelMappings: [],
   allowedRouteIds: [],
   siteWeightMultipliers: {},
-  excludedSiteIds: [],
-  excludedCredentialRefs: [],
+  allowedSiteIds: [],
+  allowedCredentialRefs: [],
 };

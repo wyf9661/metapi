@@ -275,8 +275,8 @@ describe('downstream api keys routes', () => {
         name: 'exclude-key',
         key: 'sk-exclude-key-001',
         allowedRouteIds: [route.id],
-        excludedSiteIds: [siteB.id],
-        excludedCredentialRefs: [
+        allowedSiteIds: [siteB.id],
+        allowedCredentialRefs: [
           { kind: 'default_api_key', siteId: siteB.id, accountId: accountB.id },
           { kind: 'account_token', siteId: siteA.id, accountId: accountA.id, tokenId: tokenA.id },
         ],
@@ -287,8 +287,8 @@ describe('downstream api keys routes', () => {
     expect(createRes.json()).toMatchObject({
       success: true,
       item: {
-        excludedSiteIds: [siteB.id],
-        excludedCredentialRefs: [
+        allowedSiteIds: [siteB.id],
+        allowedCredentialRefs: [
           { kind: 'account_token', siteId: siteA.id, accountId: accountA.id, tokenId: tokenA.id },
           { kind: 'default_api_key', siteId: siteB.id, accountId: accountB.id },
         ],
@@ -300,8 +300,8 @@ describe('downstream api keys routes', () => {
       method: 'PUT',
       url: `/api/downstream-keys/${keyId}`,
       payload: {
-        excludedSiteIds: [siteB.id, siteA.id, siteB.id],
-        excludedCredentialRefs: [
+        allowedSiteIds: [siteB.id, siteA.id, siteB.id],
+        allowedCredentialRefs: [
           { kind: 'default_api_key', siteId: siteB.id, accountId: accountB.id },
           { kind: 'account_token', siteId: siteA.id, accountId: accountA.id, tokenId: tokenA.id },
           { kind: 'account_token', siteId: siteA.id, accountId: accountA.id, tokenId: tokenA.id },
@@ -313,8 +313,8 @@ describe('downstream api keys routes', () => {
     expect(updateRes.json()).toMatchObject({
       success: true,
       item: {
-        excludedSiteIds: [siteA.id, siteB.id],
-        excludedCredentialRefs: [
+        allowedSiteIds: [siteA.id, siteB.id],
+        allowedCredentialRefs: [
           { kind: 'account_token', siteId: siteA.id, accountId: accountA.id, tokenId: tokenA.id },
           { kind: 'default_api_key', siteId: siteB.id, accountId: accountB.id },
         ],
@@ -332,8 +332,8 @@ describe('downstream api keys routes', () => {
       items: [
         expect.objectContaining({
           id: keyId,
-          excludedSiteIds: [siteA.id, siteB.id],
-          excludedCredentialRefs: [
+          allowedSiteIds: [siteA.id, siteB.id],
+          allowedCredentialRefs: [
             { kind: 'account_token', siteId: siteA.id, accountId: accountA.id, tokenId: tokenA.id },
             { kind: 'default_api_key', siteId: siteB.id, accountId: accountB.id },
           ],
@@ -384,7 +384,7 @@ describe('downstream api keys routes', () => {
       payload: {
         name: 'bad-site',
         key: 'sk-bad-site-001',
-        excludedSiteIds: [999999],
+        allowedSiteIds: [999999],
       },
     });
     expect(unknownSiteRes.statusCode).toBe(400);
@@ -395,7 +395,7 @@ describe('downstream api keys routes', () => {
       payload: {
         name: 'bad-token',
         key: 'sk-bad-token-001',
-        excludedCredentialRefs: [
+        allowedCredentialRefs: [
           { kind: 'account_token', siteId: siteB.id, accountId: accountA.id, tokenId: tokenA.id },
         ],
       },
@@ -408,7 +408,7 @@ describe('downstream api keys routes', () => {
       payload: {
         name: 'bad-default',
         key: 'sk-bad-default-001',
-        excludedCredentialRefs: [
+        allowedCredentialRefs: [
           { kind: 'default_api_key', siteId: siteB.id, accountId: accountB.id },
         ],
       },
