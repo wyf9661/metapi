@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { insertAndGetById } from '../db/insertHelpers.js';
 import { getCredentialModeFromExtraConfig, mergeAccountExtraConfig } from './accountExtraConfig.js';
@@ -31,6 +31,26 @@ async function clearSiteApiKey(siteId: number) {
     .run();
 }
 
+/**
+ * Cheap data-shape probe: does any site still carry a legacy api_key?
+ *
+ * Deliberately data-driven instead of a "migration already ran" marker: the
+ * backup restore / import paths write `sites.api_key` again, and those keys must
+ * still be migrated on the next boot. Returning false lets the boot migration
+ * skip loading every site and account.
+ */
+export async function hasPendingLegacySiteApiKeys(): Promise<boolean> {
+  const row = await db.select({ id: schema.sites.id })
+    .from(schema.sites)
+    .where(and(
+      isNotNull(schema.sites.apiKey),
+      ne(sql`trim(${schema.sites.apiKey})`, ''),
+    ))
+    .limit(1)
+    .get();
+  return !!row;
+}
+
 export async function migrateSiteApiKeysToAccounts(): Promise<SiteApiKeyMigrationSummary> {
   const summary: SiteApiKeyMigrationSummary = {
     migrated: 0,
@@ -39,6 +59,8 @@ export async function migrateSiteApiKeysToAccounts(): Promise<SiteApiKeyMigratio
     removedMirrorTokens: 0,
     warned: 0,
   };
+
+  if (!(await hasPendingLegacySiteApiKeys())) return summary;
 
   const sites = await db.select().from(schema.sites).all();
   if (sites.length === 0) return summary;

@@ -11,6 +11,7 @@ describe('siteApiKeyMigrationService', () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let migrateSiteApiKeysToAccounts: MigrationModule['migrateSiteApiKeysToAccounts'];
+  let hasPendingLegacySiteApiKeys: MigrationModule['hasPendingLegacySiteApiKeys'];
   let dataDir = '';
 
   beforeAll(async () => {
@@ -23,6 +24,7 @@ describe('siteApiKeyMigrationService', () => {
     db = dbModule.db;
     schema = dbModule.schema;
     migrateSiteApiKeysToAccounts = migrationModule.migrateSiteApiKeysToAccounts;
+    hasPendingLegacySiteApiKeys = migrationModule.hasPendingLegacySiteApiKeys;
   });
 
   beforeEach(async () => {
@@ -153,5 +155,62 @@ describe('siteApiKeyMigrationService', () => {
 
     const tokens = await db.select().from(schema.accountTokens).where(eq(schema.accountTokens.accountId, account.id)).all();
     expect(tokens).toHaveLength(2);
+  });
+
+  it('probes for a pending legacy site api key without loading every site and account', async () => {
+    expect(await hasPendingLegacySiteApiKeys()).toBe(false);
+
+    await db.insert(schema.sites).values({
+      name: 'keyless',
+      url: 'https://keyless.example.com',
+      platform: 'new-api',
+    }).run();
+    expect(await hasPendingLegacySiteApiKeys()).toBe(false);
+
+    await db.insert(schema.sites).values({
+      name: 'blank-key',
+      url: 'https://blank.example.com',
+      platform: 'new-api',
+      apiKey: '   ',
+    }).run();
+    expect(await hasPendingLegacySiteApiKeys()).toBe(false);
+
+    await db.insert(schema.sites).values({
+      name: 'legacy-key',
+      url: 'https://legacy-key.example.com',
+      platform: 'new-api',
+      apiKey: 'sk-legacy',
+    }).run();
+    expect(await hasPendingLegacySiteApiKeys()).toBe(true);
+  });
+
+  it('leaves accounts untouched when no site carries a legacy api key', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'already-migrated',
+      url: 'https://migrated.example.com',
+      platform: 'new-api',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: null,
+      accessToken: '',
+      apiToken: 'sk-account-only',
+      checkinEnabled: false,
+      extraConfig: JSON.stringify({ credentialMode: 'apikey' }),
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }).returning().get();
+
+    const summary = await migrateSiteApiKeysToAccounts();
+
+    expect(summary).toEqual({
+      migrated: 0,
+      deduped: 0,
+      clearedSites: 0,
+      removedMirrorTokens: 0,
+      warned: 0,
+    });
+    const after = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+    expect(after?.updatedAt).toBe(account.updatedAt);
   });
 });
