@@ -1243,7 +1243,14 @@ export async function tokensRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, message: `通道不存在: ${missingId}` });
     }
 
+    const existingById = new Map(existingChannels.map((channel: any) => [channel.id, channel]));
     for (const update of parsed.updates) {
+      const currentRow = existingById.get(update.id) as { priority?: number } | undefined;
+      const currentPriority = currentRow?.priority ?? 0;
+      // Reordering only pins what actually moved: the drag payload re-sends the
+      // whole rail, and pinning untouched siblings froze routes against every
+      // later automatic rebuild (the main source of accidental manual pins).
+      if (currentPriority === update.priority) continue;
       await db.update(schema.routeChannels).set({
         priority: update.priority,
         manualOverride: true,

@@ -155,6 +155,47 @@ describe('PUT /api/channels/batch', () => {
     expect(dbB?.manualOverride).toBe(true);
   });
 
+  it('pins only the channels whose priority actually changed in a batch update', async () => {
+    const changed = await seedChannel({ priority: 0, weight: 10, manualOverride: false });
+    const untouched = await seedChannel({ priority: 5, weight: 10, manualOverride: false });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/channels/batch',
+      payload: {
+        updates: [
+          { id: changed.id, priority: 2 },
+          { id: untouched.id, priority: 5 }, // re-sent by the drag payload, but the value did not move
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const changedDb = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, changed.id)).get();
+    const untouchedDb = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, untouched.id)).get();
+    expect(changedDb?.priority).toBe(2);
+    expect(changedDb?.manualOverride).toBe(true);
+    expect(untouchedDb?.priority).toBe(5);
+    expect(untouchedDb?.manualOverride).toBe(false);
+  });
+
+  it('does not pin a channel when the normalized priority still matches its current value', async () => {
+    // 3.8 normalizes to 3, and the channel already sits at 3: nothing moved.
+    const channel = await seedChannel({ priority: 3, weight: 10, manualOverride: false });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/channels/batch',
+      payload: { updates: [{ id: channel.id, priority: 3.8 }] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const dbRow = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, channel.id)).get();
+    expect(dbRow?.priority).toBe(3);
+    expect(dbRow?.manualOverride).toBe(false);
+  });
+
   it('reports the number of routes actually updated in route batch operations', async () => {
     const route = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-4o-mini',
