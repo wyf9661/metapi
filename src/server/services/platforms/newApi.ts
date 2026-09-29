@@ -794,7 +794,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   private async getOpenAiModelsViaShieldCookie(baseUrl: string, token: string, options?: ModelDiscoveryOptions): Promise<string[]> {
-    for (const cookie of this.buildCookieCandidates(token)) {
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
       try {
         const { data } = await fetchJsonWithShieldCookieRetry<any>(`${baseUrl}/v1/models`, {
           headers: {
@@ -805,11 +806,14 @@ export class NewApiAdapter extends BasePlatformAdapter {
         });
         const models = this.extractOpenAiModels(data);
         if (models.length > 0) return models;
-      } catch {}
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
+      } catch (error) {
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeVariantError(error) });
+      }
     }
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] getOpenAiModelsViaShieldCookie: all variants failed');
+    logAllVariantsFailed('getOpenAiModelsViaShieldCookie', failures);
     return [];
   }
 
@@ -876,6 +880,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   override async getUserInfo(baseUrl: string, accessToken: string, platformUserId?: number): Promise<UserInfo | null> {
+    const failures: PlatformVariantFailure[] = [];
     try {
       const directRes = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self`, {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -883,14 +888,20 @@ export class NewApiAdapter extends BasePlatformAdapter {
       if (directRes?.success && directRes?.data) {
         return this.parseUserInfo(directRes.data);
       }
-    } catch {}
+      failures.push({ variant: 'bearer', reason: describeUnusableVariantResponse() });
+    } catch (error) {
+      failures.push({ variant: 'bearer', reason: describeVariantError(error) });
+    }
 
     try {
       const cookieRes = await this.fetchUserSelfByCookie(baseUrl, accessToken, platformUserId);
       if (cookieRes?.success && cookieRes?.data) {
         return this.parseUserInfo(cookieRes.data);
       }
-    } catch {}
+      failures.push({ variant: 'cookie', reason: describeUnusableVariantResponse() });
+    } catch (error) {
+      failures.push({ variant: 'cookie', reason: describeVariantError(error) });
+    }
 
     try {
       const fallbackUserId = await this.probeAlternateUserIdByCookie(baseUrl, accessToken, platformUserId);
@@ -900,11 +911,14 @@ export class NewApiAdapter extends BasePlatformAdapter {
           return this.parseUserInfo(cookieRetry.data);
         }
       }
-    } catch {}
+      failures.push({ variant: 'cookie+alternate-uid', reason: describeUnusableVariantResponse() });
+    } catch (error) {
+      failures.push({ variant: 'cookie+alternate-uid', reason: describeVariantError(error) });
+    }
 
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] getUserInfo: all variants failed');
+    logAllVariantsFailed('getUserInfo', failures);
     return null;
   }
 
@@ -1044,7 +1058,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] verifyToken: all variants failed');
+    logAllVariantsFailed('verifyToken', [
+      { variant: 'session-chain', reason: describeUnusableVariantResponse('bearer/cookie/alternate-user-id all returned no user info') },
+    ]);
     return { tokenType: 'unknown' };
   }
 
@@ -1391,7 +1407,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     } catch {}
 
     const cookieUserId = resolvedUserId || await this.probeUserIdByCookie(baseUrl, accessToken);
-    for (const cookie of this.buildCookieCandidates(accessToken)) {
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of this.buildCookieCandidates(accessToken).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
         Object.assign(headers, this.userIdHeaders(cookieUserId));
@@ -1401,12 +1418,15 @@ export class NewApiAdapter extends BasePlatformAdapter {
           body: payload,
         });
         if (res?.success) return true;
-      } catch {}
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
+      } catch (error) {
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeVariantError(error) });
+      }
     }
 
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] createApiToken: all variants failed');
+    logAllVariantsFailed('createApiToken', failures);
     return false;
   }
 
@@ -1534,7 +1554,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     }
 
     const cookieUserId = resolvedUserId || await this.probeUserIdByCookie(baseUrl, accessToken);
-    for (const cookie of this.buildCookieCandidates(accessToken)) {
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of this.buildCookieCandidates(accessToken).entries()) {
       const headers: Record<string, string> = { Cookie: cookie };
       Object.assign(headers, this.userIdHeaders(cookieUserId));
 
@@ -1551,8 +1572,10 @@ export class NewApiAdapter extends BasePlatformAdapter {
           headers,
         });
         if (res?.success) return 'deleted';
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
       } catch (error) {
         if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeVariantError(error) });
       }
     }
 
@@ -1562,7 +1585,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
     if (!tokenId) return 'unconfirmed';
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] deleteApiToken: all variants failed');
+    logAllVariantsFailed('deleteApiToken', failures);
     return 'unconfirmed';
   }
 
