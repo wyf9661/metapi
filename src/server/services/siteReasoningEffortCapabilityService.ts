@@ -97,6 +97,38 @@ export function recordReasoningEffortRejection(input: {
   return taught;
 }
 
+/**
+ * Record an explicit ceiling (usually parsed from the relay's own "valid
+ * levels" list) instead of stepping down one rung from the rejected value.
+ * Only ever tightens an existing fresh ceiling, mirroring
+ * recordReasoningEffortRejection.
+ */
+export function recordReasoningEffortCeiling(input: {
+  siteId: number;
+  endpoint: string;
+  maxEffort: string;
+  rejectedEffort?: string | null;
+  nowMs?: number;
+}): string | null {
+  const nowMs = input.nowMs ?? Date.now();
+  const maxEffort = typeof input.maxEffort === 'string' ? input.maxEffort.trim() : '';
+  if (ladderIndex(maxEffort) < 0) return null;
+  const key = ceilingKey(input.siteId, input.endpoint);
+  const existing = ceilings.get(key);
+  const stillFresh = existing && nowMs - existing.learnedAtMs < REASONING_EFFORT_CEILING_TTL_MS;
+  if (stillFresh && existing && ladderIndex(existing.maxEffort) <= ladderIndex(maxEffort)) {
+    existing.learnedAtMs = nowMs;
+    return existing.maxEffort;
+  }
+  ceilings.set(key, {
+    maxEffort,
+    learnedAtMs: nowMs,
+    rejectedEffort: input.rejectedEffort || null,
+  });
+  pruneExpired(nowMs);
+  return maxEffort;
+}
+
 /** The ceiling currently in force for a site+protocol, or null when unknown/expired. */
 export function resolveReasoningEffortCeiling(
   siteId: number,
@@ -137,10 +169,21 @@ export function learnReasoningEffortCeilingFromFailure(input: {
   endpoint: string;
   errorText: string | null | undefined;
   body: Record<string, unknown> | null | undefined;
+  /** Explicit ceiling (e.g. parsed from a "valid levels" list); skips the one-rung step-down. */
+  taughtCeiling?: string | null;
   nowMs?: number;
 }): string | null {
   const effort = readReasoningEffortFromBody(input.body);
   if (!effort) return null;
+  if (input.taughtCeiling) {
+    return recordReasoningEffortCeiling({
+      siteId: input.siteId,
+      endpoint: input.endpoint,
+      maxEffort: input.taughtCeiling,
+      rejectedEffort: effort,
+      nowMs: input.nowMs,
+    });
+  }
   return recordReasoningEffortRejection({
     siteId: input.siteId,
     endpoint: input.endpoint,

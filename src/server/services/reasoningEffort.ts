@@ -160,6 +160,61 @@ export function isReasoningEffortRejection(errorText: string | null | undefined)
     .test(errorText);
 }
 
+/**
+ * Parse the accepted ladder out of a rejection that lists it verbatim
+ * (`level "max" not supported, valid levels: low, medium, high`). Upstreams
+ * that spell out their acceptance set let the in-place retry go straight to
+ * the top accepted rung instead of stepping down one rejection at a time.
+ * Returns null when no ladder is listed (or nothing in it is a known rung) —
+ * callers then fall back to the mechanical one-rung step-down.
+ */
+export function parseAcceptedEffortLadderFromError(
+  errorText: string | null | undefined,
+): string[] | null {
+  if (!errorText) return null;
+  const match = /valid\s+levels\s*:\s*([a-z0-9,\s_-]+)/i.exec(errorText);
+  if (!match) return null;
+  const parsed = match[1]
+    .split(',')
+    .map((entry) => canonicalReasoningEffort(entry))
+    .filter((entry): entry is string => !!entry);
+  return parsed.length > 0 ? parsed : null;
+}
+
+/**
+ * The effort ceiling an in-place retry against the SAME channel should use:
+ * the highest rung of the ladder the upstream itself listed, or — when the
+ * rejection does not spell one out — one rung below the rejected value.
+ * Null when the rejected value already sits at the floor and nothing lower
+ * can be tried.
+ */
+export function resolveInPlaceEffortRetryCeiling(input: {
+  rejectedEffort: string | null | undefined;
+  errorText: string | null | undefined;
+}): string | null {
+  const rejected = typeof input.rejectedEffort === 'string' ? input.rejectedEffort.trim() : '';
+  if (!rejected) return null;
+  const rejectedIndex = (REASONING_EFFORT_LADDER as readonly string[]).indexOf(
+    canonicalReasoningEffort(rejected) ?? rejected.toLowerCase(),
+  );
+  if (rejectedIndex <= 0) return null;
+
+  const accepted = parseAcceptedEffortLadderFromError(input.errorText);
+  if (accepted) {
+    // Highest listed rung that sits below the rejected value (a relay listing
+    // the rejected value itself in its ladder would be contradictory).
+    const belowRejected = accepted
+      .map((entry) => (REASONING_EFFORT_LADDER as readonly string[]).indexOf(entry))
+      .filter((index) => index >= 0 && index < rejectedIndex);
+    if (belowRejected.length > 0) {
+      return REASONING_EFFORT_LADDER[Math.max(...belowRejected)];
+    }
+    // The listed ladder contradicts the rejection (nothing below it): treat
+    // like an unparsable list rather than giving up.
+  }
+  return REASONING_EFFORT_LADDER[rejectedIndex - 1];
+}
+
 /** Every effort-bearing key of a request body, with the object that holds it. */
 export function collectReasoningEffortSlots(
   body: Record<string, unknown> | null | undefined,

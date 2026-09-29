@@ -85,6 +85,8 @@ export type ExecuteEndpointFlowInput = {
   tryRecover?: (ctx: EndpointAttemptContext) => Promise<EndpointRecoverResult>;
   shouldDowngrade?: (ctx: EndpointAttemptContext) => boolean;
   shouldAbortRemainingEndpoints?: (ctx: EndpointAttemptContext & { errText: string }) => boolean;
+  /** Same-endpoint redispach after an effort rejection (body already downgraded by onAttemptFailure). */
+  shouldRetryInPlace?: (ctx: EndpointAttemptContext & { errText: string }) => boolean;
   onDowngrade?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
   onAttemptFailure?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
   onAttemptSuccess?: (ctx: EndpointAttemptSuccessContext) => void | Promise<void>;
@@ -267,6 +269,57 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       ...baseContext,
       errText,
     }, 'onAttemptFailure');
+
+    // In-flow effort retry: a 400 that names the effort is a request-shape
+    // verdict from THIS relay — the channel answered instantly and is healthy.
+    // When the surface hook downgraded the body during onAttemptFailure
+    // (mutating the shared body object buildRequest reads), redispach the SAME
+    // endpoint on the SAME channel immediately instead of cascading to the
+    // next endpoint with a value the relay may refuse again. Bounded by the
+    // ladder: once the body sits at the floor the hook leaves it, and the
+    // retryRejection gate below only fires on a NEW ladder rejection.
+    if (
+      response.status === 400
+      && input.shouldRetryInPlace?.({
+        ...baseContext,
+        errText,
+      }) === true
+    ) {
+      const retryRequest = input.buildRequest(endpoint, endpointIndex);
+      if (input.requestOverrideRules) {
+        retryRequest.body = applyRequestOverrideRules(retryRequest.body, input.requestOverrideRules);
+      }
+      if (input.paramOverride) {
+        retryRequest.body = mergeParamOverrideIntoBody(retryRequest.body, input.paramOverride);
+      }
+      const retryTargetUrl = input.proxyUrl && !input.dispatchRequest
+        ? buildUpstreamUrl(input.proxyUrl, retryRequest.path)
+        : buildUpstreamUrl(input.siteUrl, retryRequest.path);
+      const retryResponse = await dispatchWithRemainingFirstByteBudget(retryRequest, retryTargetUrl);
+      if (retryResponse.ok) {
+        await runEndpointFlowHook(input.onAttemptSuccess, {
+          endpointIndex,
+          endpointCount,
+          request: retryRequest,
+          targetUrl: retryTargetUrl,
+          response: retryResponse,
+          recoverApplied: false,
+        }, 'onAttemptSuccess');
+        return {
+          ok: true,
+          upstream: retryResponse,
+          upstreamPath: retryRequest.path,
+        };
+      }
+      // Still rejected: keep the loop's failure bookkeeping on the retry
+      // response and let the normal cascade decide (next endpoint / channel).
+      rawErrText = await readRuntimeResponseText(retryResponse).catch(() => 'unknown error');
+      baseContext.request = retryRequest;
+      baseContext.targetUrl = retryTargetUrl;
+      baseContext.response = retryResponse;
+      baseContext.rawErrText = rawErrText;
+      response = retryResponse;
+    }
 
     if (input.disableCrossProtocolFallback && !isLastEndpoint) {
       finalStatus = response.status;

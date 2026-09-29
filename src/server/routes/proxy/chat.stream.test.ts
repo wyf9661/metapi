@@ -4757,4 +4757,128 @@ describe('chat proxy stream behavior', () => {
     expect(secondUrl).toContain('/v1/chat/completions');
   });
 
+  it('retries the SAME channel with a downgraded effort instead of failing over on an effort rejection', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'kapi-like', url: 'https://upstream.example.com', platform: 'new-api' },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'upstream-gpt',
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: 'level "max" not supported, valid levels: low, medium, high',
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'chatcmpl-effort-ok',
+        object: 'chat.completion',
+        created: 1_706_000_000,
+        model: 'upstream-gpt',
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: 'ok after effort downgrade' },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        reasoning_effort: 'max',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('ok after effort downgrade');
+    // Both upstream attempts hit the SAME channel/site (single selectChannel
+    // return value served both), and the in-place retry carried the ceiling
+    // parsed from the valid-levels rejection, not the next rung down.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(JSON.parse(firstOptions.body).reasoning.effort).toBe('max');
+    expect(JSON.parse(secondOptions.body).reasoning.effort).toBe('high');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/v1/responses');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/v1/responses');
+    // An effort rejection is a request-shape verdict, not a channel-health
+    // signal: no failure marks, no cooldowns, no failover bookkeeping.
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to normal failover after the effort floor is rejected in place', async () => {
+    selectChannelMock
+      .mockReturnValueOnce({
+        channel: { id: 11, routeId: 22 },
+        site: { name: 'floor-site', url: 'https://upstream.example.com', platform: 'new-api' },
+        account: { id: 33, username: 'demo-user' },
+        tokenName: 'default',
+        tokenValue: 'sk-demo',
+        actualModel: 'upstream-gpt',
+      })
+      .mockReturnValueOnce({
+        channel: { id: 12, routeId: 22 },
+        site: { name: 'other-site', url: 'https://fallback.example.com', platform: 'new-api' },
+        account: { id: 34, username: 'demo-user-2' },
+        tokenName: 'default',
+        tokenValue: 'sk-demo-2',
+        actualModel: 'upstream-gpt',
+      });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: 'level "low" not supported, valid levels: medium, high',
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: 'unknown effort',
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'chatcmpl-failover-ok',
+        object: 'chat.completion',
+        created: 1_706_000_000,
+        model: 'upstream-gpt',
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: 'ok from failover channel' },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        reasoning_effort: 'low',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('ok from failover channel');
+    // Site A: rejected low (its ladder starts at medium) — the in-place retry
+    // clamps to medium, which it also rejects (second 400), so the request
+    // moves on. Site B: succeeds with the clamped value.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(JSON.parse(firstOptions.body).reasoning.effort).toBe('low');
+    // The rejection listed no rung our ladder knows (its ladder starts at
+    // medium), so the fallback is ONE rung below the rejected value.
+    expect(JSON.parse(secondOptions.body).reasoning.effort).toBe('minimal');
+  });
+
 });

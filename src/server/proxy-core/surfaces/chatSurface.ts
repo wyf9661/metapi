@@ -25,6 +25,8 @@ import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import {
   downgradeReasoningEffortInBody,
   isReasoningEffortRejection,
+  readReasoningEffortFromBody,
+  resolveInPlaceEffortRetryCeiling,
 } from '../../services/reasoningEffort.js';
 import {
   clampRequestBodyToSiteEffortCeiling,
@@ -596,6 +598,13 @@ export async function handleChatSurfaceRequest(
           ctx.response.status,
           ctx.rawErrText || ctx.errText,
         ),
+        // An effort rejection is a request-shape verdict, not a channel-health
+        // signal: the relay answered instantly and told us which ladder it
+        // accepts. onAttemptFailure just downgraded the shared body, so
+        // redispach the SAME endpoint on this channel immediately instead of
+        // cascading elsewhere with a value other relays may also refuse.
+        shouldRetryInPlace: (ctx) => ctx.response.status === 400
+          && isReasoningEffortRejection(ctx.rawErrText || ctx.errText),
         onAttemptFailure: async (ctx) => {
           // A 400 that names the effort means the value we forwarded is not in
           // this upstream's accepted ladder: relays that only take
@@ -608,12 +617,20 @@ export async function handleChatSurfaceRequest(
           if (ctx.response.status === 400 && isReasoningEffortRejection(ctx.rawErrText || ctx.errText)) {
             // Remember the verdict for this site+protocol so later requests stop
             // opening with a value this relay refuses, and step this request's
-            // own body down one rung for the failover retry.
+            // own body down one rung for the failover retry. A rejection that
+            // spells out its accepted ladder ("valid levels: low, medium,
+            // high") teaches the top accepted rung directly instead of one
+            // mechanical step below the rejected value.
+            const taughtCeiling = resolveInPlaceEffortRetryCeiling({
+              rejectedEffort: readReasoningEffortFromBody(resolvedOpenAiBody),
+              errorText: ctx.rawErrText || ctx.errText,
+            });
             learnReasoningEffortCeilingFromFailure({
               siteId: selected.site.id,
               endpoint: ctx.request.endpoint,
               errorText: ctx.rawErrText || ctx.errText,
               body: resolvedOpenAiBody,
+              taughtCeiling,
             });
             downgradeReasoningEffortInBody(resolvedOpenAiBody);
           }
