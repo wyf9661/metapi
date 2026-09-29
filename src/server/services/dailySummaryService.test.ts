@@ -28,10 +28,27 @@ describe('dailySummaryService', () => {
 
     const { title, message } = buildDailySummaryNotification(metrics);
     expect(title).toBe('每日总结 2026-02-27');
-    expect(message).toContain('生成时间: 2026-02-27 23:58:00 (Asia/Shanghai)');
-    expect(message).toContain('**✅ 签到** 总计 7 · 成功 5 · 失败 2');
-    expect(message).toContain('**🔁 代理** 总计 120 · 成功 114 · 失败 6');
-    expect(message).toContain('**💰 费用** 支出 $12.345678 · 奖励 $3.210987 · 净值 $-9.134691');
+    // Narrow table under a plain-text lead line: DingTalk-safe layout.
+    const lines = message.split('\n');
+    expect(lines.slice(0, 4)).toEqual([
+      '全览',
+      '',
+      '| 分类 | 指标 | 数值 |',
+      '|---|---|---:|',
+    ]);
+    expect(lines).toContain('| 账号 | 总计 | 10 |');
+    expect(lines).toContain('| 账号 | 活跃 | 8 |');
+    expect(lines).toContain('| 账号 | 低余额(<$1) | 2 |');
+    expect(lines).toContain('| 签到 | 总计 | 7 |');
+    expect(lines).toContain('| 签到 | 成功 | 5 |');
+    expect(lines).toContain('| 签到 | 失败 | 2 |');
+    expect(lines).toContain('| 代理 | 总计 | 120 |');
+    expect(lines).toContain('| 代理 | 成功 | 114 |');
+    expect(lines).toContain('| 代理 | 失败 | 6 |');
+    expect(lines).toContain(`| 资源 | Tokens | ${metrics.proxyTotalTokens.toLocaleString()} |`);
+    expect(lines).toContain('| 费用 | 支出 | $12.345678 |');
+    expect(lines).toContain('| 费用 | 奖励 | $3.210987 |');
+    expect(lines).toContain('| 费用 | 净值 | $-9.134691 |');
   });
 
   it('counts checkins by site, not by attempt logs', () => {

@@ -239,7 +239,7 @@ describe('checkinScheduler', () => {
     expect(sendNotificationMock).toHaveBeenCalledTimes(1);
     expect(sendNotificationMock).toHaveBeenCalledWith(
       '签到完成（成功0）',
-      '成功 0 ｜ 跳过 0 ｜ 失败 0',
+      '签到汇总:成功 0 / 跳过 0 / 失败 0',
       'info',
       expect.objectContaining({ bypassThrottle: true }),
     );
@@ -262,15 +262,20 @@ describe('checkinScheduler', () => {
 
     expect(notification.title).toBe('签到完成（成功1/失败2）');
     expect(notification.level).toBe('warning');
-    expect(notification.message.split('\n')).toEqual([
-      '成功 1 ｜ 跳过 1 ｜ 失败 2',
-      '',
-      '**失败（2）**',
-      '- 咕嘎咕嘎公益站：Invalid URL (POST /api/user/sign_in)',
-      '- CoeeApi：fetch failed',
-      '',
-      '**跳过（1）**',
-      '- 大喵喵API：站点开启了 Turnstile 校验，需要人工签到',
+    const [p0, p1, p2, p3, p4, ...tableLines] = notification.message.split('\n');
+    // Counts + one reason line per non-success site (hard breaks = two trailing
+    // spaces before \n), then a narrow status/site table.
+    expect(p0).toBe('签到汇总:成功 1 / 跳过 1 / 失败 2  ');
+    expect(p1).toBe('失败:咕嘎咕嘎公益站(Invalid URL (POST /api/user/sign_in))  ');
+    expect(p2).toBe('失败:CoeeApi(fetch failed)  ');
+    expect(p3).toBe('跳过:大喵喵API(站点开启了 Turnstile 校验，需要人工签到)');
+    expect(p4).toBe('');
+    expect(tableLines).toEqual([
+      '| 状态 | 站点 |',
+      '|:----|:----|',
+      '| 失败 | 咕嘎咕嘎公益站 |',
+      '| 失败 | CoeeApi |',
+      '| 跳过 | 大喵喵API |',
     ]);
     // 成功账号只计数不列名（12 个成功账号曾经把消息刷成一屏）
     expect(notification.message).not.toContain('liWAN LAB');
@@ -286,7 +291,7 @@ describe('checkinScheduler', () => {
     ]);
     expect(clean.title).toBe('签到完成（成功1）');
     expect(clean.level).toBe('info');
-    expect(clean.message).toBe('成功 1 ｜ 跳过 1 ｜ 失败 0\n\n**跳过（1）**\n- site-b：Turnstile');
+    expect(clean.message).toBe('签到汇总:成功 1 / 跳过 1 / 失败 0  \n跳过:site-b(Turnstile)\n\n| 状态 | 站点 |\n|:----|:----|\n| 跳过 | site-b |');
 
     // 同名原因归并到一行，站点超过 3 个时折叠
     const manySites = Array.from({ length: 5 }, (_, index) => ({
@@ -296,7 +301,8 @@ describe('checkinScheduler', () => {
       result: { success: false, status: 'failed', message: 'boom' },
     }));
     const collapsed = scheduler.buildCheckinSummaryNotification(manySites);
-    expect(collapsed.message).toContain('- site-0、site-1、site-2等 5 个站点：boom');
+    expect(collapsed.message).toContain('失败:site-0、site-1、site-2等 5 个站点(boom)');
+    expect(collapsed.message).toContain('| 失败 | 等 5 个站点 |');
   });
 
   it('attempts a session re-login when a model refresh fails with an auth error', async () => {

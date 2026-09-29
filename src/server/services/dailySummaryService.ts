@@ -166,16 +166,26 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
 export function buildDailySummaryNotification(metrics: DailySummaryMetrics): { title: string; message: string } {
   const net = round6(metrics.todayReward - metrics.todaySpend);
   const title = `每日总结 ${metrics.localDay}`;
-  // Layout tuned for IM markdown cards (Feishu/WeCom): bold labels, one
-  // metric family per line, `·` instead of `|` so the lines stay scannable.
+  // Table format for readability. The first line is plain text (not a table)
+  // so DingTalk doesn't overlap the table header with the bot avatar area.
   const message = [
-    `**📊 账号** 总计 ${metrics.totalAccounts} · 活跃 ${metrics.activeAccounts} · 低余额(<$1) ${metrics.lowBalanceAccounts}`,
-    `**✅ 签到** 总计 ${metrics.checkinTotal} · 成功 ${metrics.checkinSuccess} · 失败 ${metrics.checkinFailed}`,
-    `**🔁 代理** 总计 ${metrics.proxyTotal} · 成功 ${metrics.proxySuccess} · 失败 ${metrics.proxyFailed}`,
-    `**🎟️ Tokens** ${metrics.proxyTotalTokens.toLocaleString()}`,
-    `**💰 费用** 支出 $${metrics.todaySpend.toFixed(6)} · 奖励 $${metrics.todayReward.toFixed(6)} · 净值 $${net.toFixed(6)}`,
+    '全览',
     '',
-    `生成时间: ${metrics.generatedAtLocal} (${metrics.timeZone})`,
+    '| 分类 | 指标 | 数值 |',
+    '|---|---|---:|',
+    `| 账号 | 总计 | ${metrics.totalAccounts} |`,
+    `| 账号 | 活跃 | ${metrics.activeAccounts} |`,
+    `| 账号 | 低余额(<$1) | ${metrics.lowBalanceAccounts} |`,
+    `| 签到 | 总计 | ${metrics.checkinTotal} |`,
+    `| 签到 | 成功 | ${metrics.checkinSuccess} |`,
+    `| 签到 | 失败 | ${metrics.checkinFailed} |`,
+    `| 代理 | 总计 | ${metrics.proxyTotal} |`,
+    `| 代理 | 成功 | ${metrics.proxySuccess} |`,
+    `| 代理 | 失败 | ${metrics.proxyFailed} |`,
+    `| 资源 | Tokens | ${metrics.proxyTotalTokens.toLocaleString()} |`,
+    `| 费用 | 支出 | $${metrics.todaySpend.toFixed(6)} |`,
+    `| 费用 | 奖励 | $${metrics.todayReward.toFixed(6)} |`,
+    `| 费用 | 净值 | $${net.toFixed(6)} |`,
   ].join('\n');
   return { title, message };
 }
