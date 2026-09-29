@@ -8,6 +8,7 @@ const validateMock = vi.fn(() => true);
 const allMock = vi.fn();
 const refreshAllBalancesMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
+const recoverAccountSessionMock = vi.fn();
 const startModelsDevPriceSyncMock = vi.fn();
 const stopModelsDevPriceSyncMock = vi.fn();
 const sendNotificationMock = vi.fn(async () => undefined);
@@ -55,6 +56,7 @@ vi.mock('./checkinService.js', async (importOriginal) => {
 
 vi.mock('./balanceService.js', () => ({
   refreshAllBalances: (...args: unknown[]) => refreshAllBalancesMock(...args),
+  recoverAccountSession: (...args: unknown[]) => recoverAccountSessionMock(...args),
 }));
 
 vi.mock('./routeRefreshWorkflow.js', () => ({
@@ -295,5 +297,21 @@ describe('checkinScheduler', () => {
     }));
     const collapsed = scheduler.buildCheckinSummaryNotification(manySites);
     expect(collapsed.message).toContain('- site-0、site-1、site-2等 5 个站点：boom');
+  });
+
+  it('attempts a session re-login when a model refresh fails with an auth error', async () => {
+    recoverAccountSessionMock.mockReset().mockResolvedValue(true);
+    refreshModelsAndRebuildRoutesMock.mockResolvedValue({
+      refresh: [{ accountId: 17, status: 'failed', errorCode: 'unauthorized', errorMessage: 'HTTP 401: invalid session' }],
+      rebuild: {},
+    });
+    refreshAllBalancesMock.mockResolvedValue(undefined);
+    const scheduler = await import('./checkinScheduler.js');
+    await scheduler.startScheduler();
+    const modelCall = (scheduleMock.mock.calls as unknown as Array<[string, () => Promise<void>]>)
+      .find((call) => call[0] === '*/30 * * * *');
+    expect(modelCall).toBeDefined();
+    await modelCall![1]();
+    expect(recoverAccountSessionMock).toHaveBeenCalledWith(17);
   });
 });

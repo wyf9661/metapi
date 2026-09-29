@@ -238,6 +238,24 @@ async function tryAutoRelogin(account: any, site: any): Promise<string | null> {
   return loginResult.accessToken;
 }
 
+/**
+ * Re-login one account with its stored login credential and persist the new
+ * access token. Session-mode accounts only recover when a login credential was
+ * saved for them; without one this returns false and the caller must surface
+ * the failure instead of retrying forever (2026-09-28: model discovery stayed
+ * dead for 18h because nothing ever attempted a re-login).
+ */
+export async function recoverAccountSession(accountId: number): Promise<boolean> {
+  const row = await db.select()
+    .from(schema.accounts)
+    .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
+    .where(eq(schema.accounts.id, accountId))
+    .get();
+  if (!row) return false;
+  const refreshed = await tryAutoRelogin(row.accounts, row.sites);
+  return typeof refreshed === 'string' && refreshed.length > 0;
+}
+
 export async function refreshBalance(accountId: number) {
   const rows = await db
     .select()

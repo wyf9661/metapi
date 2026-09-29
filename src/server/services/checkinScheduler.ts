@@ -3,7 +3,8 @@ import type { ScheduledTask } from 'node-cron';
 import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db, schema } from '../db/index.js';
-import { refreshAllBalances } from './balanceService.js';
+import { recoverAccountSession, refreshAllBalances } from './balanceService.js';
+import { formatUtcSqlDateTime } from './localTimeService.js';
 import { buildCheckinSummaryMessage, checkinAll } from './checkinService.js';
 import * as routeRefreshWorkflow from './routeRefreshWorkflow.js';
 import { sendNotification } from './notifyService.js';
@@ -289,6 +290,62 @@ function createBalanceTask(cronExpr: string) {
   });
 }
 
+
+/**
+ * Model discovery failing silently is how an 18h outage went unnoticed
+ * (2026-09-28). Two consecutive failed passes for the same account now trigger a
+ * session re-login attempt (when the failure was an auth failure) and, if the
+ * account still cannot refresh, one status event naming the reason. The event is
+ * rate-limited per account so a permanently broken account cannot flood the
+ * events table.
+ */
+const MODEL_REFRESH_FAILURE_EVENT_THRESHOLD = 2;
+const MODEL_REFRESH_FAILURE_EVENT_COOLDOWN_MS = 6 * 60 * 60_000;
+const modelRefreshFailureStreaks = new Map<number, number>();
+const modelRefreshFailureEventAtMs = new Map<number, number>();
+
+async function handleFailedModelRefreshes(refresh: Array<any>): Promise<void> {
+  const failures = refresh.filter((item) => item?.status === 'failed' && typeof item?.accountId === 'number');
+  const failedAccountIds = new Set(failures.map((item) => item.accountId));
+  for (const accountId of [...modelRefreshFailureStreaks.keys()]) {
+    if (!failedAccountIds.has(accountId)) modelRefreshFailureStreaks.delete(accountId);
+  }
+
+  for (const item of failures) {
+    const streak = (modelRefreshFailureStreaks.get(item.accountId) ?? 0) + 1;
+    modelRefreshFailureStreaks.set(item.accountId, streak);
+    const authFailure = item.errorCode === 'unauthorized';
+    let recovered = false;
+    if (authFailure) {
+      recovered = await recoverAccountSession(item.accountId).catch(() => false);
+      if (recovered) {
+        modelRefreshFailureStreaks.delete(item.accountId);
+        modelRefreshFailureEventAtMs.delete(item.accountId);
+        console.log(`[Scheduler] Recovered the session for account ${item.accountId} after ${streak} failed model refresh pass(es)`);
+        continue;
+      }
+    }
+    if (streak < MODEL_REFRESH_FAILURE_EVENT_THRESHOLD) continue;
+    const nowMs = Date.now();
+    const lastEventAtMs = modelRefreshFailureEventAtMs.get(item.accountId) ?? 0;
+    if (nowMs - lastEventAtMs < MODEL_REFRESH_FAILURE_EVENT_COOLDOWN_MS) continue;
+    modelRefreshFailureEventAtMs.set(item.accountId, nowMs);
+    const detail = String(item.errorMessage || item.errorCode || 'unknown').replace(/\s+/g, ' ').slice(0, 200);
+    const recoveryNote = authFailure
+      ? '；自动重登失败（该账号没有保存登录凭据，无法自动恢复）'
+      : '';
+    await db.insert(schema.events).values({
+      type: 'status',
+      title: '模型刷新连续失败',
+      message: `账号 #${item.accountId} 连续 ${streak} 次刷新模型失败：${detail}${recoveryNote}`,
+      level: 'error',
+      relatedType: 'account',
+      relatedId: item.accountId,
+      createdAt: formatUtcSqlDateTime(new Date()),
+    }).run();
+  }
+}
+
 function createModelRefreshTask(cronExpr: string) {
   return cron.schedule(cronExpr, async () => {
     if (modelRefreshPassInFlight && Date.now() - modelRefreshPassStartedAtMs < PASS_STALE_AFTER_MS) {
@@ -321,6 +378,7 @@ function createModelRefreshTask(cronExpr: string) {
           `createdChannels=${rebuild?.createdChannels ?? 0} removedChannels=${rebuild?.removedChannels ?? 0}`,
         ].join(' ');
         console.log(`[Scheduler] Model refresh complete: ${summary}${failureDetail ? ` failedReason=${failureDetail}` : ''}`);
+        await handleFailedModelRefreshes(refresh);
       } catch (err) {
         console.error('[Scheduler] Model refresh error:', err);
       }
