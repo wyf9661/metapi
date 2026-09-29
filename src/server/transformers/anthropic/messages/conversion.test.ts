@@ -447,6 +447,63 @@ describe('convertOpenAiBodyToAnthropicMessagesBody', () => {
     ]);
   });
 
+  it('carries unsigned thinking back for DeepSeek-family models (thinking pass-back contract)', () => {
+    const body = convertOpenAiBodyToAnthropicMessagesBody(
+      {
+        model: 'deepseek-v4-flash',
+        messages: [
+          {
+            role: 'assistant',
+            content: 'final answer',
+            reasoning_content: 'prior turn thinking',
+          },
+        ],
+      },
+      'deepseek-v4-flash',
+      false,
+    );
+
+    expect(body.messages).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'thinking',
+            thinking: 'prior turn thinking',
+          },
+          {
+            type: 'text',
+            text: 'final answer',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps dropping whitespace-only reasoning even for DeepSeek models', () => {
+    const body = convertOpenAiBodyToAnthropicMessagesBody(
+      {
+        model: 'deepseek-v4-flash',
+        messages: [
+          {
+            role: 'assistant',
+            content: 'final answer',
+            reasoning_content: ' ',
+          },
+        ],
+      },
+      'deepseek-v4-flash',
+      false,
+    );
+
+    expect(body.messages).toEqual([
+      {
+        role: 'assistant',
+        content: 'final answer',
+      },
+    ]);
+  });
+
   it('preserves top-level reasoning_signature when rebuilding assistant thinking blocks for messages fallback', () => {
     const body = convertOpenAiBodyToAnthropicMessagesBody(
       {

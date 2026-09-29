@@ -346,6 +346,15 @@ function resolveAnthropicThinkingSignature(item: Record<string, unknown>): strin
   return rawSignature;
 }
 
+/** DeepSeek's Anthropic-compatible surface (V4 thinking mode) mandates the
+ * prior turns' thinking back as `content[]` thinking blocks but does not issue
+ * Anthropic signatures for them; OpenAI-format clients can only supply an
+ * unsigned carrier, and comparable relays treat the model family — not a
+ * signature — as the switch. */
+function requiresUnsignedThinkingCarrier(modelName: string): boolean {
+  return /deepseek|ds-?v4/i.test(modelName);
+}
+
 function sanitizeAnthropicContentBlock(item: Record<string, unknown>): Record<string, unknown> | null {
   const type = asTrimmedString(item.type).toLowerCase();
   if (!type) {
@@ -916,13 +925,21 @@ export function convertOpenAiBodyToAnthropicMessagesBody(
       reasoning_signature: item.reasoning_signature,
       signature: item.signature,
     });
+    const reasoningText = asTrimmedString(item.reasoning_content ?? item.reasoning);
+    // DeepSeek's Anthropic-compatible surface enforces the thinking-mode
+    // pass-back contract (`content[].thinking must be passed back`) but never
+    // issues Anthropic signatures, so an OpenAI-format client can only ever
+    // supply an unsigned carrier. The signature gate below protects
+    // direct-Anthropic endpoints and stays for every other family.
     const reasoningCarrier = reasoningSignature
       ? sanitizeAnthropicContentBlock({
         type: 'thinking',
-        thinking: asTrimmedString(item.reasoning_content ?? item.reasoning),
+        thinking: reasoningText,
         signature: reasoningSignature,
       })
-      : null;
+      : reasoningText && requiresUnsignedThinkingCarrier(modelName)
+        ? sanitizeAnthropicContentBlock({ type: 'thinking', thinking: reasoningText })
+        : null;
     if (reasoningCarrier) {
       contentBlocks.unshift(reasoningCarrier);
     }
