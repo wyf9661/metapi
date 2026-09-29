@@ -160,6 +160,53 @@ export function isReasoningEffortRejection(errorText: string | null | undefined)
     .test(errorText);
 }
 
+/** True when the upstream rejected `none` specifically — this is not a ladder
+ * issue but a model that does not support disabling reasoning at all. We strip
+ * the field on retry instead of stepping down. */
+export function isNoneReasoningEffortRejection(errorText: string | null | undefined): boolean {
+  if (!errorText) return false;
+  return /does not support\s*[`'"]?\s*reasoning_effort\s*[`'"]?\s*value\s*[`'"]?\s*none\s*[`'"]?/i.test(errorText);
+}
+
+/** Remove every effort-bearing slot from a body (used when the upstream rejects
+ * `none` — the model does not accept disabling reasoning, so the field must
+ * simply not be sent). An emptied nested container (`reasoning`, `output_config`)
+ * is dropped too, so the rebuilt request carries no trace of the field.
+ * Returns true when anything was removed. */
+export function stripReasoningEffortFromBody(
+  body: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  let removed = false;
+
+  if (typeof body.reasoning_effort === 'string') {
+    delete body.reasoning_effort;
+    removed = true;
+  }
+
+  const reasoning = body.reasoning;
+  if (reasoning && typeof reasoning === 'object' && !Array.isArray(reasoning)) {
+    const holder = reasoning as Record<string, unknown>;
+    if (typeof holder.effort === 'string') {
+      delete holder.effort;
+      removed = true;
+    }
+    if (Object.keys(holder).length === 0) delete body.reasoning;
+  }
+
+  const outputConfig = body.output_config;
+  if (outputConfig && typeof outputConfig === 'object' && !Array.isArray(outputConfig)) {
+    const holder = outputConfig as Record<string, unknown>;
+    if (typeof holder.effort === 'string') {
+      delete holder.effort;
+      removed = true;
+    }
+    if (Object.keys(holder).length === 0) delete body.output_config;
+  }
+
+  return removed;
+}
+
 /**
  * Parse the accepted ladder out of a rejection that lists it verbatim
  * (`level "max" not supported, valid levels: low, medium, high`). Upstreams

@@ -4813,6 +4813,60 @@ describe('chat proxy stream behavior', () => {
     expect(recordFailureMock).not.toHaveBeenCalled();
   });
 
+  it('retries the SAME channel WITHOUT the effort field when the upstream rejects `none`', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'kapi-like', url: 'https://upstream.example.com', platform: 'new-api' },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'upstream-gpt',
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: 'This model does not support `reasoning_effort` value `none`.',
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'chatcmpl-none-stripped',
+        object: 'chat.completion',
+        created: 1_706_000_000,
+        model: 'upstream-gpt',
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: 'ok without the effort field' },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        reasoning_effort: 'none',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('ok without the effort field');
+    // Both attempts hit the SAME channel/site: the first carried the client's
+    // `none`, the in-place retry went out with no effort field at all.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(JSON.parse(firstOptions.body).reasoning.effort).toBe('none');
+    expect(JSON.parse(secondOptions.body).reasoning).toBeUndefined();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/v1/responses');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/v1/responses');
+    // Request-shape verdict: no failure marks, no cooldowns, no failover.
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
+
   it('falls back to normal failover after the effort floor is rejected in place', async () => {
     selectChannelMock
       .mockReturnValueOnce({

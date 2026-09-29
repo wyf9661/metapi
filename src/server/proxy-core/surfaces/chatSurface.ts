@@ -25,8 +25,10 @@ import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import {
   downgradeReasoningEffortInBody,
   isReasoningEffortRejection,
+  isNoneReasoningEffortRejection,
   readReasoningEffortFromBody,
   resolveInPlaceEffortRetryCeiling,
+  stripReasoningEffortFromBody,
 } from '../../services/reasoningEffort.js';
 import {
   clampRequestBodyToSiteEffortCeiling,
@@ -615,24 +617,33 @@ export async function handleChatSurfaceRequest(
           // rejection downgrades — the first attempt always sends exactly what
           // the client asked for.
           if (ctx.response.status === 400 && isReasoningEffortRejection(ctx.rawErrText || ctx.errText)) {
-            // Remember the verdict for this site+protocol so later requests stop
-            // opening with a value this relay refuses, and step this request's
-            // own body down one rung for the failover retry. A rejection that
-            // spells out its accepted ladder ("valid levels: low, medium,
-            // high") teaches the top accepted rung directly instead of one
-            // mechanical step below the rejected value.
-            const taughtCeiling = resolveInPlaceEffortRetryCeiling({
-              rejectedEffort: readReasoningEffortFromBody(resolvedOpenAiBody),
-              errorText: ctx.rawErrText || ctx.errText,
-            });
-            learnReasoningEffortCeilingFromFailure({
-              siteId: selected.site.id,
-              endpoint: ctx.request.endpoint,
-              errorText: ctx.rawErrText || ctx.errText,
-              body: resolvedOpenAiBody,
-              taughtCeiling,
-            });
-            downgradeReasoningEffortInBody(resolvedOpenAiBody);
+            // Two kinds of effort verdict:
+            // 1) `none` rejected outright — the model does not support
+            //    disabling reasoning and no ladder rung sits below `none`.
+            //    Strip the field so the in-place retry goes out without it.
+            // 2) A ladder rejection — remember the verdict for this
+            //    site+protocol so later requests stop opening with a value
+            //    this relay refuses, and step this request's own body down
+            //    one rung for the in-place retry. A rejection that spells
+            //    out its accepted ladder ("valid levels: low, medium,
+            //    high") teaches the top accepted rung directly instead of
+            //    one mechanical step below the rejected value.
+            if (isNoneReasoningEffortRejection(ctx.rawErrText || ctx.errText)) {
+              stripReasoningEffortFromBody(resolvedOpenAiBody);
+            } else {
+              const taughtCeiling = resolveInPlaceEffortRetryCeiling({
+                rejectedEffort: readReasoningEffortFromBody(resolvedOpenAiBody),
+                errorText: ctx.rawErrText || ctx.errText,
+              });
+              learnReasoningEffortCeilingFromFailure({
+                siteId: selected.site.id,
+                endpoint: ctx.request.endpoint,
+                errorText: ctx.rawErrText || ctx.errText,
+                body: resolvedOpenAiBody,
+                taughtCeiling,
+              });
+              downgradeReasoningEffortInBody(resolvedOpenAiBody);
+            }
           }
           const memoryWrite = recordUpstreamEndpointFailure({
             ...endpointRuntimeContext,

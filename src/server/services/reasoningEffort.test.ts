@@ -5,11 +5,13 @@ import {
   extractReasoningEffort,
   getCurrentReasoningEffort,
   inferReasoningEffortFromModelName,
+  isNoneReasoningEffortRejection,
   isReasoningEffortRejection,
   normalizeReasoningEffort,
   resolveRequestReasoningEffort,
   resolveWebsocketReasoningEffort,
   setCurrentReasoningEffort,
+  stripReasoningEffortFromBody,
 } from './reasoningEffort.js';
 
 describe('extractReasoningEffort', () => {
@@ -191,6 +193,58 @@ describe('isReasoningEffortRejection', () => {
     expect(isReasoningEffortRejection('Upstream returned HTTP 400: credit insufficient balance: balance=0')).toBe(false);
     expect(isReasoningEffortRejection('')).toBe(false);
     expect(isReasoningEffortRejection(null)).toBe(false);
+  });
+
+  it('matches reasoning effort references with space or hyphen variants', () => {
+    expect(isReasoningEffortRejection('reasoning effort value rejected')).toBe(true);
+    expect(isReasoningEffortRejection('reasoning-effort is unsupported')).toBe(true);
+  });
+});
+
+describe('isNoneReasoningEffortRejection', () => {
+  it('matches the model-specific `none` rejection', () => {
+    expect(isNoneReasoningEffortRejection(
+      'Upstream returned HTTP 400: This model does not support `reasoning_effort` value `none`.',
+    )).toBe(true);
+  });
+
+  it('does not match ladder rejections or unrelated text', () => {
+    expect(isNoneReasoningEffortRejection(
+      'level "max" not supported, valid levels: low, medium, high',
+    )).toBe(false);
+    expect(isNoneReasoningEffortRejection('invalid request body')).toBe(false);
+  });
+});
+
+describe('stripReasoningEffortFromBody', () => {
+  it('removes the flat chat/completions field', () => {
+    const body: Record<string, unknown> = { model: 'grok-4.7', reasoning_effort: 'none', temperature: 0.2 };
+    expect(stripReasoningEffortFromBody(body)).toBe(true);
+    expect(body).toEqual({ model: 'grok-4.7', temperature: 0.2 });
+  });
+
+  it('removes nested responses and anthropic slots and drops emptied containers', () => {
+    const responsesBody: Record<string, unknown> = { model: 'grok-4.7', reasoning: { effort: 'none' } };
+    expect(stripReasoningEffortFromBody(responsesBody)).toBe(true);
+    expect(responsesBody).toEqual({ model: 'grok-4.7' });
+
+    const anthropicBody: Record<string, unknown> = { model: 'claude-opus-5', output_config: { effort: 'none' } };
+    expect(stripReasoningEffortFromBody(anthropicBody)).toBe(true);
+    expect(anthropicBody).toEqual({ model: 'claude-opus-5' });
+  });
+
+  it('keeps a nested container that still has other keys', () => {
+    const body: Record<string, unknown> = { model: 'grok-4.7', reasoning: { effort: 'none', summary: 'auto' } };
+    expect(stripReasoningEffortFromBody(body)).toBe(true);
+    expect(body).toEqual({ model: 'grok-4.7', reasoning: { summary: 'auto' } });
+  });
+
+  it('returns false when there is nothing to strip', () => {
+    const body: Record<string, unknown> = { model: 'gpt-5', temperature: 0.2 };
+    expect(stripReasoningEffortFromBody(body)).toBe(false);
+    expect(body).toEqual({ model: 'gpt-5', temperature: 0.2 });
+    expect(stripReasoningEffortFromBody(null)).toBe(false);
+    expect(stripReasoningEffortFromBody(undefined)).toBe(false);
   });
 });
 
