@@ -454,15 +454,22 @@ describe('rebuildTokenRoutesFromAvailability', () => {
       },
     ]).run();
 
+    const patternChannelIdBefore = (await db.select().from(schema.routeChannels)
+      .where(eq(schema.routeChannels.routeId, patternRoute.id))
+      .get())!.id;
+
     const rebuild = await rebuildTokenRoutesFromAvailability();
 
     expect(rebuild.removedRoutes).toBe(1);
-    expect(rebuild.patternRouteRemovedChannels).toBeGreaterThan(0);
+    // The stale pattern channel is re-derived in place rather than deleted and
+    // re-inserted, so the row id (and any accumulated stats) survives.
+    expect(rebuild.patternRouteRemovedChannels + rebuild.patternRouteUpdatedChannels).toBeGreaterThan(0);
 
     const patternChannels = await db.select().from(schema.routeChannels)
       .where(eq(schema.routeChannels.routeId, patternRoute.id))
       .all();
     expect(patternChannels.map((channel: any) => channel.sourceModel)).toEqual(['gpt-5-current']);
+    expect(patternChannels[0].id).toBe(patternChannelIdBefore);
   });
 
   it('adds matching pattern-group channels when automatic rebuild creates exact routes', async () => {

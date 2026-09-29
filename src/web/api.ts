@@ -959,6 +959,8 @@ export const api = {
     }),
   deleteChannel: (id: number) =>
     request(`/api/channels/${id}`, { method: 'DELETE' }),
+  resetChannel: (id: number) =>
+    request(`/api/channels/${id}/reset`, { method: 'POST' }),
   rebuildRoutes: (refreshModels = true, wait = false) =>
     request('/api/routes/rebuild', {
       method: 'POST',

@@ -1841,11 +1841,15 @@ export async function rebuildTokenRoutesFromAvailability() {
       routeIds: [],
       removedChannels: 0,
       createdChannels: 0,
+      updatedChannels: 0,
     };
   createdChannels += patternRouteSync.createdChannels;
   removedChannels += patternRouteSync.removedChannels;
 
-  if (exactRouteTopologyChanged || patternRouteSync.createdChannels > 0 || patternRouteSync.removedChannels > 0) {
+  if (exactRouteTopologyChanged
+    || patternRouteSync.createdChannels > 0
+    || patternRouteSync.removedChannels > 0
+    || patternRouteSync.updatedChannels > 0) {
     await clearAllRouteDecisionSnapshots();
   }
 
@@ -1860,6 +1864,7 @@ export async function rebuildTokenRoutesFromAvailability() {
     rebuiltPatternRoutes: patternRouteSync.rebuiltRoutes,
     patternRouteCreatedChannels: patternRouteSync.createdChannels,
     patternRouteRemovedChannels: patternRouteSync.removedChannels,
+    patternRouteUpdatedChannels: patternRouteSync.updatedChannels,
   };
 }
 

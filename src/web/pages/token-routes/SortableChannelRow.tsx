@@ -41,6 +41,7 @@ export function SortableChannelRow({
   onTokenDraftChange,
   onSaveToken,
   onDeleteChannel,
+  onResetChannel,
   onToggleEnabled,
   onSiteBlockModel,
 }: SortableChannelRowProps) {
@@ -216,7 +217,7 @@ export function SortableChannelRow({
               {channel.manualOverride ? (
                 <StatusPill tone="warning"
                   style={{ fontSize: 10 }}
-                  data-tooltip={suppressTooltips ? undefined : '该通道由用户手动添加，而非系统自动生成'}
+                  data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
                 >
                   手动配置
                 </StatusPill>
@@ -355,6 +356,16 @@ export function SortableChannelRow({
                     </button>
                   ) : null}
 
+                  {channel.manualOverride && onResetChannel ? (
+                    <button
+                      onClick={onResetChannel}
+                      className="btn btn-link"
+                      data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
+                    >
+                      恢复默认
+                    </button>
+                  ) : null}
+
                   <button
                     onClick={onDeleteChannel}
                     className="btn btn-link btn-link-danger"
@@ -460,7 +471,7 @@ export function SortableChannelRow({
         {channel.manualOverride ? (
           <StatusPill tone="warning"
             style={{ fontSize: 10 }}
-            data-tooltip={suppressTooltips ? undefined : '该通道由用户手动添加，而非系统自动生成'}
+            data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
           >
             手动配置
           </StatusPill>
@@ -592,6 +603,16 @@ export function SortableChannelRow({
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            {channel.manualOverride && onResetChannel ? (
+              <button
+                onClick={onResetChannel}
+                className="btn btn-link"
+                data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
+              >
+                恢复默认
+              </button>
+            ) : null}
+
             {onSiteBlockModel && channel.accountId ? (
               <button
                 onClick={onSiteBlockModel}

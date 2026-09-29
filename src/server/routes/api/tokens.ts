@@ -46,6 +46,7 @@ import {
   rebuildAutomaticRouteChannelsByModelPattern,
   syncPatternRouteChannelsAfterAffectedRouteChanges,
 } from '../../services/patternRouteChannelSyncService.js';
+import { resetChannelToDerivedState } from '../../services/channelOverrideService.js';
 
 function createTokenRouteReadLimiter(keyPrefix: string, points = 60) {
   return new RateLimiterMemory({
@@ -1386,6 +1387,29 @@ export async function tokensRoutes(app: FastifyInstance) {
     }
     invalidateTokenRouterCache();
     return { success: true };
+  });
+
+  // Restore a manually configured channel back to the system-derived default.
+  // In place: the row keeps its id and its accumulated stats, so this never
+  // deletes or archives anything.
+  app.post<{ Params: { channelId: string } }>('/api/channels/:channelId/reset', async (request, reply) => {
+    const channelId = parsePositiveIntParam(request.params.channelId);
+    if (channelId === null) {
+      return reply.code(400).send({ success: false, message: '通道 ID 无效' });
+    }
+    const channel = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, channelId)).get();
+    if (!channel) {
+      return reply.code(404).send({ success: false, message: '通道不存在' });
+    }
+
+    const result = await resetChannelToDerivedState(channelId);
+    if (!result.reset) {
+      return reply.code(409).send({
+        success: false,
+        message: '该通道没有可恢复的默认来源（可能是手动添加的通道，或账号已不再提供该模型），已保持原样',
+      });
+    }
+    return { success: true, derived: result.derived, channel: result.channel };
   });
 
   // Rebuild routes/channels from model availability.

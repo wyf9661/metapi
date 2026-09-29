@@ -77,6 +77,7 @@ type RouteCardProps = {
   onTokenDraftChange: (channelId: number, tokenId: number) => void;
   onSaveToken: (routeId: number, channelId: number, accountId: number) => void;
   onDeleteChannel: (channelId: number, routeId: number) => void;
+  onResetChannel?: (channelId: number, routeId: number) => void;
   onToggleChannelEnabled: (channelId: number, routeId: number, enabled: boolean) => void;
   onChannelDragEnd: (routeId: number, event: DragEndEvent) => void;
   // Missing token hints
@@ -359,6 +360,7 @@ type SortableChannelShellProps = {
   onTokenDraftChange: (channelId: number, tokenId: number) => void;
   onSaveToken: (routeId: number, channelId: number, accountId: number) => void;
   onDeleteChannel: (channelId: number, routeId: number) => void;
+  onResetChannel?: (channelId: number, routeId: number) => void;
   onToggleChannelEnabled: (channelId: number, routeId: number, enabled: boolean) => void;
   onSiteBlockModel: (channelId: number, routeId: number) => void;
   railLabel: string;
@@ -389,6 +391,7 @@ function SortableChannelShell({
   onTokenDraftChange,
   onSaveToken,
   onDeleteChannel,
+  onResetChannel,
   onToggleChannelEnabled,
   onSiteBlockModel,
   railLabel,
@@ -513,6 +516,7 @@ function SortableChannelShell({
         onTokenDraftChange={onTokenDraftChange}
         onSaveToken={() => onSaveToken(routeId, channel.id, channel.accountId)}
         onDeleteChannel={() => onDeleteChannel(channel.id, routeId)}
+        onResetChannel={onResetChannel ? () => onResetChannel(channel.id, routeId) : undefined}
         onToggleEnabled={(enabled) => onToggleChannelEnabled(channel.id, routeId, enabled)}
         onSiteBlockModel={channelManagementDisabled ? undefined : () => onSiteBlockModel(channel.id, routeId)}
       />
@@ -544,6 +548,7 @@ function RouteCardInner({
   onTokenDraftChange,
   onSaveToken,
   onDeleteChannel,
+  onResetChannel,
   onToggleChannelEnabled,
   onChannelDragEnd,
   missingTokenSiteItems,
@@ -1201,6 +1206,7 @@ function RouteCardInner({
                             onTokenDraftChange={onTokenDraftChange}
                             onSaveToken={onSaveToken}
                             onDeleteChannel={onDeleteChannel}
+                            onResetChannel={onResetChannel}
                             onToggleChannelEnabled={onToggleChannelEnabled}
                             onSiteBlockModel={onSiteBlockModel}
                             railLabel={railSection ? `P${bucketIndex} · ${railSection.channelCount}` : railLabel}
@@ -1282,6 +1288,7 @@ function areRouteCardPropsEqual(prev: RouteCardProps, next: RouteCardProps): boo
     || prev.onTokenDraftChange !== next.onTokenDraftChange
     || prev.onSaveToken !== next.onSaveToken
     || prev.onDeleteChannel !== next.onDeleteChannel
+    || prev.onResetChannel !== next.onResetChannel
     || prev.onToggleChannelEnabled !== next.onToggleChannelEnabled
     || prev.onChannelDragEnd !== next.onChannelDragEnd
     || prev.onCreateTokenForMissing !== next.onCreateTokenForMissing

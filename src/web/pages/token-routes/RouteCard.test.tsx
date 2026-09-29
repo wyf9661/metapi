@@ -1020,4 +1020,70 @@ describe('RouteCard', () => {
 
     expect(modelPatternReadCount).toBe(initialReadCount);
   });
+
+  const renderResetCard = (onResetChannel: (channelId: number, routeId: number) => void, channel: RouteChannel) => (
+    <RouteCard
+      route={buildRoute({ channelCount: 1, enabledChannelCount: 1 })}
+      brand={null}
+      expanded
+      onToggleExpand={vi.fn()}
+      onEdit={vi.fn()}
+      onDelete={vi.fn()}
+      onToggleEnabled={vi.fn()}
+      onClearCooldown={vi.fn()}
+      clearingCooldown={false}
+      channels={[channel]}
+      loadingChannels={false}
+      routeDecision={null}
+      loadingDecision={false}
+      candidateView={{ routeCandidates: [], accountOptions: [], tokenOptionsByAccountId: {} }}
+      channelTokenDraft={{}}
+      updatingChannel={{}}
+      savingPriority={false}
+      onTokenDraftChange={vi.fn()}
+      onSaveToken={vi.fn()}
+      onDeleteChannel={vi.fn()}
+      onResetChannel={onResetChannel}
+      onToggleChannelEnabled={vi.fn()}
+      onChannelDragEnd={vi.fn()}
+      missingTokenSiteItems={[]}
+      missingTokenGroupItems={[]}
+      onCreateTokenForMissing={vi.fn()}
+      onAddChannel={vi.fn()}
+      onSiteBlockModel={vi.fn()}
+      expandedSourceGroupMap={{}}
+      onToggleSourceGroup={vi.fn()}
+    />
+  );
+
+  it('offers 恢复默认 for a manually configured channel and reports the channel/route ids', () => {
+    const onResetChannel = vi.fn();
+    const root = create(renderResetCard(
+      onResetChannel,
+      buildChannel({ id: 77, manualOverride: true, priority: 4, weight: 30 }),
+    ));
+
+    expect(collectText(root.root)).toContain('手动配置');
+
+    const button = root.root.find((node) => (
+      node.type === 'button'
+      && typeof node.props.onClick === 'function'
+      && collectText(node).trim() === '恢复默认'
+    ));
+
+    button.props.onClick();
+    expect(onResetChannel).toHaveBeenCalledWith(77, 42);
+  });
+
+  it('hides 恢复默认 for channels that were never manually configured', () => {
+    const root = create(renderResetCard(vi.fn(), buildChannel({ manualOverride: false })));
+
+    const buttons = root.root.findAll((node) => (
+      node.type === 'button'
+      && typeof node.props.onClick === 'function'
+      && collectText(node).trim() === '恢复默认'
+    ));
+
+    expect(buttons).toHaveLength(0);
+  });
 });

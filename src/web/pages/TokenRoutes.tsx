@@ -1055,8 +1055,9 @@ export default function TokenRoutes() {
         title: '确认移除通道',
         description: (
           <>
-            移除的通道会在定时模型刷新时被自动重建恢复。<br />
-            如果只是想临时停用通道，建议使用<strong>禁用开关</strong>。
+            移除的通道会在定时模型刷新时被自动重建恢复，但<strong>它的累计统计（成功/失败、成本、冷却）会丢失</strong>，
+            重建出来的是全新的一条。<br />
+            想恢复系统默认配置、又保留统计，请用<strong>「恢复默认」</strong>；只是临时停用则用<strong>禁用开关</strong>。
           </>
         ),
         confirmText: '确认移除',
@@ -1076,6 +1077,30 @@ export default function TokenRoutes() {
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       toast.error(eMessage || '移除通道失败');
+    }
+  };
+
+  const handleResetChannel = async (channelId: number, routeId: number) => {
+    const confirmed = await requestConfirmation({
+      title: '确认恢复默认',
+      description: (
+        <>
+          将清除该通道的手动配置（优先级、权重、启用状态、来源模型、绑定令牌、请求改写规则），
+          交回系统按当前账号与模型重新派生。<br />
+          <strong>累计统计（成功/失败、成本、延迟、冷却）会保留</strong>，通道也不会被移除。
+        </>
+      ),
+      confirmText: '恢复默认',
+      tone: 'warning',
+    });
+    if (!confirmed.confirmed) return;
+    try {
+      await api.resetChannel(channelId);
+      toast.success('已恢复为系统默认配置');
+      await loadChannels(routeId, true);
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      toast.error(eMessage || '恢复默认失败');
     }
   };
 
@@ -1473,6 +1498,12 @@ export default function TokenRoutes() {
   handleDeleteChannelRef.current = handleDeleteChannel;
   const stableDeleteChannel = useCallback(
     (channelId: number, routeId: number) => handleDeleteChannelRef.current(channelId, routeId),
+    [],
+  );
+  const handleResetChannelRef = useRef(handleResetChannel);
+  handleResetChannelRef.current = handleResetChannel;
+  const stableResetChannel = useCallback(
+    (channelId: number, routeId: number) => handleResetChannelRef.current(channelId, routeId),
     [],
   );
   const handleToggleChannelEnabledRef = useRef(handleToggleChannelEnabled);
@@ -1993,6 +2024,7 @@ export default function TokenRoutes() {
                     onTokenDraftChange={stableTokenDraftChange}
                     onSaveToken={stableChannelTokenSave}
                     onDeleteChannel={stableDeleteChannel}
+                    onResetChannel={stableResetChannel}
                     onToggleChannelEnabled={stableToggleChannelEnabled}
                     onChannelDragEnd={stableChannelDragEnd}
                     missingTokenSiteItems={getMissingTokenSiteItems(route.id)}
@@ -2031,6 +2063,7 @@ export default function TokenRoutes() {
               onTokenDraftChange={stableTokenDraftChange}
               onSaveToken={stableChannelTokenSave}
               onDeleteChannel={stableDeleteChannel}
+              onResetChannel={stableResetChannel}
               onToggleChannelEnabled={stableToggleChannelEnabled}
               onChannelDragEnd={stableChannelDragEnd}
               missingTokenSiteItems={EMPTY_MISSING_ITEMS}
@@ -2068,6 +2101,7 @@ export default function TokenRoutes() {
                   onTokenDraftChange={stableTokenDraftChange}
                   onSaveToken={stableChannelTokenSave}
                   onDeleteChannel={stableDeleteChannel}
+                  onResetChannel={stableResetChannel}
                   onToggleChannelEnabled={stableToggleChannelEnabled}
                   onChannelDragEnd={stableChannelDragEnd}
                   missingTokenSiteItems={getMissingTokenSiteItems(route.id)}

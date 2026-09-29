@@ -105,6 +105,7 @@ describe('syncPatternRouteChannelsAfterAffectedRouteChanges', () => {
       routeIds: [],
       removedChannels: 0,
       createdChannels: 0,
+      updatedChannels: 0,
     });
   });
 
