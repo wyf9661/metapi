@@ -58,6 +58,12 @@ vi.mock('./balanceService.js', () => ({
 }));
 
 vi.mock('./routeRefreshWorkflow.js', () => ({
+  // The scheduler pass goes through the bounded wrapper; keep delegating to the
+  // shared mock so the dedupe assertions below still observe one call per pass.
+  refreshModelsAndRebuildRoutesWithSchedulerBound: async (...args: any[]) => ({
+    completed: true,
+    result: await (refreshModelsAndRebuildRoutesMock as any)(...args),
+  }),
   refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
 }));
 

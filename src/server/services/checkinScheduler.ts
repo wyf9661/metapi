@@ -302,17 +302,25 @@ function createModelRefreshTask(cronExpr: string) {
     const pass = (async () => {
       console.log(`[Scheduler] Refreshing models at ${new Date().toISOString()}`);
       try {
-        const result = await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+        const outcome = await routeRefreshWorkflow.refreshModelsAndRebuildRoutesWithSchedulerBound();
+        if (!outcome.completed) {
+          console.warn('[Scheduler] Model refresh did not complete within the scheduler bound; keeping existing route state');
+          return;
+        }
+        const result = outcome.result;
         const refresh = Array.isArray(result?.refresh) ? result.refresh : [];
         const succeeded = refresh.filter((item: any) => item?.status === 'success').length;
         const failed = refresh.filter((item: any) => item?.status === 'failed').length;
         const rebuild = result?.rebuild;
+        const firstFailure = refresh.find((item: any) => item?.status === 'failed') as any;
+        const failureDetail = String(firstFailure?.message || firstFailure?.error || '')
+          .trim().replace(/\s+/g, ' ').slice(0, 200);
         const summary = [
           `accounts=${refresh.length} ok=${succeeded} failed=${failed}`,
           `createdRoutes=${rebuild?.createdRoutes ?? 0} removedRoutes=${rebuild?.removedRoutes ?? 0}`,
           `createdChannels=${rebuild?.createdChannels ?? 0} removedChannels=${rebuild?.removedChannels ?? 0}`,
         ].join(' ');
-        console.log(`[Scheduler] Model refresh complete: ${summary}`);
+        console.log(`[Scheduler] Model refresh complete: ${summary}${failureDetail ? ` failedReason=${failureDetail}` : ''}`);
       } catch (err) {
         console.error('[Scheduler] Model refresh error:', err);
       }
