@@ -925,7 +925,17 @@ export function convertOpenAiBodyToAnthropicMessagesBody(
       reasoning_signature: item.reasoning_signature,
       signature: item.signature,
     });
-    const reasoningText = asTrimmedString(item.reasoning_content ?? item.reasoning);
+    const rawReasoning = item.reasoning_content ?? item.reasoning;
+    const reasoningText = asTrimmedString(rawReasoning);
+    // DeepSeek family: when the upstream enforces thinking passback and the
+    // only reasoning present is a whitespace-only pad (Hermes sends " " for
+    // cross-provider tool-call turns), inject a non-empty placeholder so the
+    // block survives the conversion sanitizer.
+    const placeholderText = !reasoningText && requiresUnsignedThinkingCarrier(modelName)
+      && Array.isArray(item.tool_calls) && item.tool_calls.length > 0
+      && typeof rawReasoning === 'string' && rawReasoning.trim() === '' && rawReasoning.length > 0
+      ? '(thinking omitted)'
+      : '';
     // DeepSeek's Anthropic-compatible surface enforces the thinking-mode
     // pass-back contract (`content[].thinking must be passed back`) but never
     // issues Anthropic signatures, so an OpenAI-format client can only ever
@@ -937,8 +947,8 @@ export function convertOpenAiBodyToAnthropicMessagesBody(
         thinking: reasoningText,
         signature: reasoningSignature,
       })
-      : reasoningText && requiresUnsignedThinkingCarrier(modelName)
-        ? sanitizeAnthropicContentBlock({ type: 'thinking', thinking: reasoningText })
+      : (reasoningText || placeholderText) && requiresUnsignedThinkingCarrier(modelName)
+        ? sanitizeAnthropicContentBlock({ type: 'thinking', thinking: reasoningText || placeholderText })
         : null;
     if (reasoningCarrier) {
       contentBlocks.unshift(reasoningCarrier);

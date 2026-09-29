@@ -566,6 +566,10 @@ export function sanitizeResponsesBodyForProxy(
   return sanitized;
 }
 
+function isDeepseekModel(name: string): boolean {
+  return /deepseek|ds-?v4/i.test(name);
+}
+
 export function convertOpenAiBodyToResponsesBody(
   openaiBody: Record<string, unknown>,
   modelName: string,
@@ -587,11 +591,10 @@ export function convertOpenAiBodyToResponsesBody(
     }
 
     if (role === 'assistant') {
-      const reasoningContent = extractTextContent(
-        item.reasoning_content
+      const rawReasoning = item.reasoning_content
         ?? item.reasoning
-        ?? item.thinking,
-      ).trim();
+        ?? item.thinking;
+      const reasoningContent = extractTextContent(rawReasoning).trim();
       const reasoningSignature = asTrimmedString(item.reasoning_signature);
       if (reasoningContent || reasoningSignature) {
         const reasoningItem: Record<string, unknown> = {
@@ -607,6 +610,18 @@ export function convertOpenAiBodyToResponsesBody(
           reasoningItem.encrypted_content = reasoningSignature;
         }
         inputItems.push(reasoningItem);
+      } else if (
+        // DeepSeek thinking passback: a whitespace-only pad (Hermes " " for
+        // cross-provider tool-call turns) is stripped by trim but still needs
+        // a reasoning item to satisfy the upstream's presence check.
+        isDeepseekModel(modelName)
+        && Array.isArray(item.tool_calls) && item.tool_calls.length > 0
+        && typeof rawReasoning === 'string' && rawReasoning.trim() === '' && rawReasoning.length > 0
+      ) {
+        inputItems.push({
+          type: 'reasoning',
+          summary: [{ type: 'summary_text', text: '(thinking omitted)' }],
+        });
       }
 
       const normalizedContent = normalizeResponsesMessageContent('assistant', item.content);

@@ -504,6 +504,46 @@ describe('convertOpenAiBodyToAnthropicMessagesBody', () => {
     ]);
   });
 
+  it('injects a placeholder thinking block for DeepSeek models with whitespace-only reasoning and tool_calls', () => {
+    const body = convertOpenAiBodyToAnthropicMessagesBody(
+      {
+        model: 'deepseek-v4-flash',
+        messages: [
+          {
+            role: 'assistant',
+            content: 'final answer',
+            reasoning_content: ' ',
+            tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'test', arguments: '{}' } }],
+          },
+        ],
+      },
+      'deepseek-v4-flash',
+      false,
+    );
+
+    expect(body.messages).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'thinking',
+            thinking: '(thinking omitted)',
+          },
+          {
+            type: 'text',
+            text: 'final answer',
+          },
+          {
+            type: 'tool_use',
+            id: 'call_1',
+            name: 'test',
+            input: {},
+          },
+        ],
+      },
+    ]);
+  });
+
   it('preserves top-level reasoning_signature when rebuilding assistant thinking blocks for messages fallback', () => {
     const body = convertOpenAiBodyToAnthropicMessagesBody(
       {

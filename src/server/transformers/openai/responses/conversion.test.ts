@@ -2013,6 +2013,40 @@ describe('convertResponsesBodyToOpenAiBody', () => {
     ]);
   });
 
+  it('injects a placeholder reasoning item for DeepSeek models with whitespace-only reasoning and tool_calls', () => {
+    const result = convertOpenAiBodyToResponsesBody(
+      {
+        model: 'deepseek-v4-flash',
+        messages: [{
+          role: 'assistant',
+          content: 'final answer',
+          reasoning_content: ' ',
+          tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'test', arguments: '{}' } }],
+        }],
+      },
+      'deepseek-v4-flash',
+      false,
+    );
+
+    expect(result.input).toEqual([
+      {
+        type: 'reasoning',
+        summary: [{ type: 'summary_text', text: '(thinking omitted)' }],
+      },
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'final answer' }],
+      },
+      {
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'test',
+        arguments: '{}',
+      },
+    ]);
+  });
+
   it('preserves chat-native modalities and audio settings when converting to Responses bodies', () => {
     const result = convertOpenAiBodyToResponsesBody(
       {
