@@ -134,6 +134,10 @@ import {
   switchRuntimeDatabase,
   type RuntimeDbDialect,
 } from './db/index.js';
+import { installBoundedPlatformDispatcher } from './services/platforms/platformHttpDispatcher.js';
+
+// Bound upstream connection lifetime before any request path runs (see platformHttpDispatcher).
+installBoundedPlatformDispatcher();
 
 function toSettingsMap(rows: Array<{ key: string; value: string }>) {
   return new Map(rows.map((row) => [row.key, row.value]));
