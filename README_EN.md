@@ -225,15 +225,19 @@ Adapters cover shared capabilities such as model discovery, balance access, toke
 
 ### Alerts & Notifications
 
-Five notification channels supported:
+Push channels are a **list — configure as many as you need, all active at once**, each with its own
+URL, signing secret and enable flag:
 
 | Channel | Description |
 | --- | --- |
-| **Webhook** | Custom HTTP push |
-| **Bark** | iOS push notifications |
+| **Push channels** | DingTalk / Feishu / WeCom / custom webhook, any number of rows; the platform is auto-detected from the URL when left blank, and the signing placement follows the platform (DingTalk signs the URL, Feishu signs the body, WeCom has no signing) |
 | **ServerChan** | WeChat notifications |
-| **Telegram Bot** | Telegram message notifications |
+| **Telegram Bot** | Telegram message notifications (thread ID supported) |
 | **SMTP Email** | Standard email notifications |
+
+Push and bot messages render markdown as IM cards (titles, tables, bold), using the payload shape
+each platform can actually render. Bark is no longer a separate channel; a legacy single
+Webhook / Bark configuration is migrated once into the first push channel.
 
 Alert scenarios: low balance warning, site/account anomalies, check-in failures, proxy request failures, token expiry reminders, daily summary reports. Alert cooldown mechanism (default: 300 seconds) prevents duplicate notifications.
 
@@ -387,7 +391,7 @@ For Docker Compose, desktop installers, reverse proxy, upgrades, and database op
 <details>
 <summary><strong>Smart Routing, Notification & Security Configuration</strong></summary>
 
-See [docs/configuration.md](docs/configuration.md) for full details on smart routing parameters, notification channels (Webhook / Bark / ServerChan / Telegram / SMTP), and security settings (IP allowlist).
+See [docs/configuration.md](docs/configuration.md) for full details on smart routing parameters, notification channels (push channels / ServerChan / Telegram / SMTP), and security settings (IP allowlist).
 
 </details>
 
