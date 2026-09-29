@@ -5,6 +5,7 @@ import {
   inferRequiredEndpointFromProtocolError,
   inferSuggestedEndpointFromUpstreamError,
   isEndpointDowngradeError,
+  isThinkingModePassbackError,
   promoteRequiredEndpointCandidateAfterProtocolError,
   shouldPreferResponsesAfterLegacyChatError,
 } from './endpointCompatibility.js';
@@ -113,5 +114,27 @@ describe('codex-only gateway compatibility', () => {
 
   it('treats opaque nginx 403 HTML as endpoint downgrade', () => {
     expect(isEndpointDowngradeError(403, '<html><title>403 Forbidden</title></html>')).toBe(true);
+  });
+});
+
+describe('isThinkingModePassbackError', () => {
+  it('matches all three protocol wordings', () => {
+    expect(isThinkingModePassbackError(
+      'The `reasoning_content` in the thinking mode must be passed back to the API.',
+    )).toBe(true);
+    expect(isThinkingModePassbackError(
+      'The `reasoning_text` in the thinking mode must be passed back to the API.',
+    )).toBe(true);
+    expect(isThinkingModePassbackError(
+      'The `content[].thinking` in the thinking mode must be passed back to the API.',
+    )).toBe(true);
+  });
+
+  it('ignores unrelated errors and missing content', () => {
+    expect(isThinkingModePassbackError('invalid request body')).toBe(false);
+    expect(isThinkingModePassbackError('reasoning_content field is unknown')).toBe(false);
+    expect(isThinkingModePassbackError('')).toBe(false);
+    expect(isThinkingModePassbackError(null)).toBe(false);
+    expect(isThinkingModePassbackError(undefined)).toBe(false);
   });
 });

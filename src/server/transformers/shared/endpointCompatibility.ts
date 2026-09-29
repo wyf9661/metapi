@@ -286,6 +286,20 @@ export function promoteResponsesCandidateAfterLegacyChatError(
   endpointCandidates.splice(currentIndex + 1, 0, 'responses');
 }
 
+// DeepSeek V4 thinking-mode pass-back contract: in thinking mode, once the
+// conversation carries tools, every later request must include the prior
+// turns' thinking (OpenAI shape: assistant reasoning_content; Anthropic
+// shape: content[] thinking blocks; Responses shape: type:"reasoning" input
+// items) or the upstream answers 400. The verdict means THIS protocol face
+// cannot carry the thinking for this conversation — a sibling endpoint face
+// can — so it participates in endpoint downgrade decisions.
+export function isThinkingModePassbackError(upstreamErrorText?: string | null): boolean {
+  const text = String(upstreamErrorText || '');
+  if (!text) return false;
+  if (!/in the thinking mode must be passed back/i.test(text)) return false;
+  return /reasoning[_\s-]?content|reasoning[_\s-]?text|content\[\]\.thinking/i.test(text);
+}
+
 export function isEndpointDowngradeError(status: number, upstreamErrorText?: string | null): boolean {
   if (status < 400) return false;
   const parsed = parseEndpointErrorShape(upstreamErrorText);

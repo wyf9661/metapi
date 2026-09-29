@@ -12,6 +12,7 @@
  */
 import { config } from '../config.js';
 import { isContextOverflowError } from '../shared/upstreamContextSignals.js';
+import { isThinkingModePassbackError } from '../transformers/shared/endpointCompatibility.js';
 
 export type SiteRuntimeFailureContext = {
   status?: number | null;
@@ -643,6 +644,24 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       // same-site protocol cascade.
       cascadeEndpoint: !modelScoped,
       cooldownWeight: 1.0,
+      cooldownScope: 'endpoint',
+    };
+  }
+
+  // DeepSeek-family thinking pass-back verdict: the protocol face that
+  // returned it cannot carry the conversation's prior thinking (a relay-side
+  // conversion on that face rejects it) while a sibling face carries the
+  // blocks natively. This is a protocol-face problem, not a request-body
+  // defect — reclassifying it as request_validation would abort the same-site
+  // endpoint cascade before the sibling face ever gets its attempt. Must sit
+  // above isValidationRuntimeFailure: the verdict names a field and can
+  // otherwise trip the /validation/ pattern.
+  if (status === 400 && isThinkingModePassbackError(errorText)) {
+    return {
+      class: 'protocol_hint',
+      retryChannel: true,
+      cascadeEndpoint: true,
+      cooldownWeight: 0.8,
       cooldownScope: 'endpoint',
     };
   }

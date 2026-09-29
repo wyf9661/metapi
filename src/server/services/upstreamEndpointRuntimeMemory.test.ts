@@ -57,6 +57,29 @@ describe('responses endpoint 400 cooldown (endpoint-agnostic)', () => {
     expect(write).toBeNull();
   });
 
+  it('cools down the face that returns the thinking-mode pass-back verdict', () => {
+    // DeepSeek-family thinking pass-back: the face that returned it cannot
+    // carry the conversation's prior thinking (relay-side conversion on that
+    // face rejects it) while a sibling face carries the blocks natively, so
+    // the next request must lead with the sibling.
+    const write = recordUpstreamEndpointFailure({
+      ...baseInput,
+      endpoint: 'chat',
+      status: 400,
+      errorText: '{"error":{"message":"The `content[].thinking` in the thinking mode must be passed back to the API."}}',
+    });
+
+    expect(write).toMatchObject({
+      action: 'failure',
+      endpoint: 'chat',
+      blockedEndpoint: 'chat',
+    });
+
+    const next = reordered(['chat', 'messages', 'responses']);
+    expect(next).not.toContain('chat');
+    expect(next[0]).toBe('messages');
+  });
+
   it('leaves responses-only sites untouched when everything is blocked', () => {
     recordUpstreamEndpointFailure({
       ...baseInput,

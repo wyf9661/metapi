@@ -4,6 +4,7 @@ import {
   buildMinimalJsonHeadersForCompatibility,
   isEndpointDispatchDeniedError,
   isEndpointDowngradeError,
+  isThinkingModePassbackError,
   isUnsupportedMediaTypeError,
   promoteResponsesCandidateAfterLegacyChatError,
   type CompatibilityEndpoint,
@@ -125,6 +126,15 @@ export function createChatEndpointStrategy(input: CreateChatEndpointStrategyInpu
         requestedModelHint: input.requestedModelHint,
         currentEndpoint: ctx.request.endpoint,
       });
+      // DeepSeek-family thinking pass-back verdict: the relay's chat face
+      // cannot carry the prior turns' thinking as content[] blocks (its
+      // internal chat→anthropic conversion drops/rejects the pass-back even
+      // when the client sent reasoning_content), but the SAME request built
+      // for the messages face carries them natively. Downgrade to the next
+      // endpoint candidate on this channel instead of failing the channel.
+      if (isThinkingModePassbackError(ctx.rawErrText)) {
+        return true;
+      }
       return (
         ctx.response.status >= 500
         || isEndpointDowngradeError(ctx.response.status, ctx.rawErrText)

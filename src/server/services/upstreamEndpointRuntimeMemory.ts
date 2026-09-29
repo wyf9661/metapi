@@ -8,6 +8,7 @@ import {
   inferRequiredEndpointFromProtocolError,
   isEndpointDispatchDeniedError,
   isEndpointDowngradeError,
+  isThinkingModePassbackError,
   isUnsupportedMediaTypeError,
 } from '../transformers/shared/endpointCompatibility.js';
 
@@ -236,6 +237,14 @@ function shouldBlockEndpointByError(
   // Site-wide WAF/edge rejections are not endpoint protocol failures — do not
   // block the endpoint (would only cause a useless fallback that is also WAF'd).
   if (isWafBlockText(errorText)) return false;
+  // DeepSeek-family thinking pass-back verdict: the face that returned it
+  // cannot carry this conversation's prior thinking (a relay-side conversion
+  // on that face rejects it) while a sibling face carries the blocks
+  // natively — cool the face down for this site+model and let the candidate
+  // list lead with the sibling on the next request.
+  if (status === 400 && isThinkingModePassbackError(errorText)) {
+    return true;
+  }
   // A 400 from a responses endpoint is a content-level rejection of the
   // OpenAI-responses representation of this request. The chat/messages forms
   // of the same request may be accepted by the same upstream, so cool down

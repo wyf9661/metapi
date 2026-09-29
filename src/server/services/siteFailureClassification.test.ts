@@ -13,6 +13,7 @@ import {
   classifyProxyFailure,
   buildProxyFailureDisposition,
   isLowValueFailoverFailureClass,
+  shouldAbortSameSiteEndpointForFailure,
 } from './siteFailureClassification.js';
 import { config } from '../config.js';
 
@@ -285,6 +286,20 @@ describe('siteFailureClassification', () => {
     expect(isLowValueFailoverFailureClass('timeout')).toBe(true);
     expect(isLowValueFailoverFailureClass('transient_upstream')).toBe(true);
     expect(isLowValueFailoverFailureClass('protocol_hint')).toBe(false);
+  });
+
+  it('routes the thinking pass-back verdict into the same-site endpoint cascade', () => {
+    const chatVerdict = {
+      status: 400,
+      errorText: 'Upstream returned HTTP 400: The `content[].thinking` in the thinking mode must be passed back to the API.',
+    };
+    const decision = classifyProxyFailure(chatVerdict);
+    expect(decision.class).toBe('protocol_hint');
+    expect(decision.cascadeEndpoint).toBe(true);
+    expect(decision.retryChannel).toBe(true);
+    expect(decision.cooldownScope).toBe('endpoint');
+    expect(shouldAbortSameSiteEndpointForFailure(chatVerdict)).toBe(false);
+    expect(shouldAbortSameSiteEndpointForFailure({ status: 400, errorText: 'invalid request body' })).toBe(true);
   });
 
   it('shouldExcludeSiteForRequestFailure short-circuits operational site failures', async () => {
