@@ -8,17 +8,14 @@ import {
 } from './platformHttpDispatcher.js';
 
 describe('platform HTTP dispatcher', () => {
-  afterEach(() => __resetPlatformHttpDispatcherForTests());
+  const previous = getGlobalDispatcher();
 
-  it('keeps keep-alive and header/body timeouts bounded', () => {
-    expect(platformHttpDispatcherTimeouts.keepAliveMaxTimeout).toBeLessThanOrEqual(60_000);
-    expect(platformHttpDispatcherTimeouts.headersTimeout)
-      .toBeGreaterThan(platformHttpDispatcherTimeouts.keepAliveTimeout);
-    expect(platformHttpDispatcherTimeouts.bodyTimeout)
-      .toBeGreaterThan(platformHttpDispatcherTimeouts.headersTimeout);
-    // Must stay at or above the 30s management abort, otherwise undici would cut
-    // the request before the adapter's own bound reports a timeout.
-    expect(platformHttpDispatcherTimeouts.headersTimeout).toBeGreaterThanOrEqual(30_000);
+  afterEach(() => __resetPlatformHttpDispatcherForTests(previous));
+
+  it('bounds keep-alive lifetime without imposing a response header/body deadline', () => {
+    expect(platformHttpDispatcherTimeouts.keepAliveTimeout).toBeLessThanOrEqual(30_000);
+    expect(platformHttpDispatcherTimeouts.keepAliveMaxTimeout)
+      .toBeGreaterThanOrEqual(platformHttpDispatcherTimeouts.keepAliveTimeout);
   });
 
   it('installs one bounded agent globally and stays idempotent', () => {
