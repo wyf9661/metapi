@@ -1,5 +1,11 @@
 import { ApiTokenInfo, BasePlatformAdapter, CheckinResult, BalanceInfo, UserInfo, TokenVerifyResult, CreateApiTokenOptions, type DeleteApiTokenResult, type ModelDiscoveryOptions, type SiteAnnouncement } from './base.js';
 import type { RequestInit as UndiciRequestInit } from 'undici';
+import {
+  describeUnusableVariantResponse,
+  describeVariantError,
+  logAllVariantsFailed,
+  type PlatformVariantFailure,
+} from './platformVariantFailures.js';
 import { fetchJsonWithShieldCookieRetry, classifyShieldGateFailureText, NewApiShieldError } from './newApiShield.js';
 import { CODEX_CLI_USER_AGENT } from '../../shared/codexClientFamily.js';
 
@@ -680,7 +686,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     platformUserId?: number,
     onFailureMessage?: (message: string) => void,
   ): Promise<any | null> {
-    for (const cookie of this.buildCookieCandidates(token)) {
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
         Object.assign(headers, this.userIdHeaders(platformUserId));
@@ -689,33 +696,39 @@ export class NewApiAdapter extends BasePlatformAdapter {
         if (typeof res?.message === 'string' && res.message.trim()) {
           onFailureMessage?.(res.message.trim());
         }
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
       } catch (error) {
-      if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
-    }
+        if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeVariantError(error) });
+      }
     }
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] fetchUserSelfByCookie: all variants failed');
+    logAllVariantsFailed('fetchUserSelfByCookie', failures);
     return null;
   }
 
   private async probeUserIdByCookie(baseUrl: string, token: string): Promise<number | null> {
     const candidates = this.buildUserIdProbeCandidates(token);
-    for (const cookie of this.buildCookieCandidates(token)) {
+    const cookieCandidates = this.buildCookieCandidates(token);
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of cookieCandidates.entries()) {
       for (const id of candidates) {
         try {
           const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self`, {
             headers: { Cookie: cookie, ...this.userIdHeaders(id) },
           });
           if (res?.success && res?.data) return id;
+          failures.push({ variant: `cookie#${cookieIndex + 1}/uid${id}`, reason: describeUnusableVariantResponse() });
         } catch (error) {
           if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
+          failures.push({ variant: `cookie#${cookieIndex + 1}/uid${id}`, reason: describeVariantError(error) });
         }
       }
     }
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] probeUserIdByCookie: all variants failed');
+    logAllVariantsFailed('probeUserIdByCookie', failures);
     return null;
   }
 
@@ -733,23 +746,28 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   private async getApiTokensByCookie(baseUrl: string, token: string, userId?: number | null): Promise<ApiTokenInfo[]> {
-    for (const cookie of this.buildCookieCandidates(token)) {
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
         Object.assign(headers, this.userIdHeaders(userId));
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/token/?p=0&size=100`, { headers });
         const normalized = this.normalizeTokenItems(this.parseTokenItems(res));
         if (normalized.length > 0) return normalized;
-      } catch {}
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
+      } catch (error) {
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeVariantError(error) });
+      }
     }
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] getApiTokensByCookie: all variants failed');
+    logAllVariantsFailed('getApiTokensByCookie', failures);
     return [];
   }
 
   private async getSessionModelsByCookie(baseUrl: string, token: string, userId?: number | null): Promise<string[]> {
-    for (const cookie of this.buildCookieCandidates(token)) {
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
         Object.assign(headers, this.userIdHeaders(userId));
@@ -759,11 +777,14 @@ export class NewApiAdapter extends BasePlatformAdapter {
           const keys = Object.keys(res.data).filter(Boolean);
           if (keys.length > 0) return keys;
         }
-      } catch {}
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
+      } catch (error) {
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeVariantError(error) });
+      }
     }
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] getSessionModelsByCookie: all variants failed');
+    logAllVariantsFailed('getSessionModelsByCookie', failures);
     return [];
   }
 
@@ -1304,7 +1325,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] getModels: all variants failed');
+    logAllVariantsFailed('getModels', [
+      { variant: 'session-chain', reason: describeUnusableVariantResponse('bearer/cookie/alternate-user-id all returned nothing') },
+    ]);
     return [];
   }
 
@@ -1314,18 +1337,22 @@ export class NewApiAdapter extends BasePlatformAdapter {
     platformUserId?: number,
   ): Promise<string | null> {
     const resolvedUserId = platformUserId || await this.probeUserIdByCookie(baseUrl, sessionCredential);
-    for (const cookie of this.buildCookieCandidates(sessionCredential)) {
+    const failures: PlatformVariantFailure[] = [];
+    for (const [cookieIndex, cookie] of this.buildCookieCandidates(sessionCredential).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
         Object.assign(headers, this.userIdHeaders(resolvedUserId));
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/token`, { headers });
         const token = typeof res?.data === 'string' ? res.data.trim() : '';
         if (res?.success && token) return token;
-      } catch {}
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
+      } catch (error) {
+        failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeVariantError(error) });
+      }
     }
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] issueManagementToken: all variants failed');
+    logAllVariantsFailed('issueManagementToken', failures);
     return null;
   }
 
@@ -1540,6 +1567,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   private async getApiTokensWithUser(baseUrl: string, accessToken: string, userId: number | null): Promise<ApiTokenInfo[]> {
+    const failures: PlatformVariantFailure[] = [];
     try {
       const res = await this.fetchJson<any>(`${baseUrl}/api/token/?p=0&size=100`, {
         headers: this.authHeaders(accessToken, userId || undefined),
@@ -1547,7 +1575,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       const normalized = this.normalizeTokenItems(this.parseTokenItems(res));
       if (normalized.length > 0) return normalized;
       if (this.isTokenListResponse(res)) return [];
-    } catch {}
+    } catch (error) {
+      failures.push({ variant: 'bearer/user-id', reason: describeVariantError(error) });
+    }
 
     const cookieTokens = await this.getApiTokensByCookie(baseUrl, accessToken, userId);
     if (cookieTokens.length > 0) return cookieTokens;
@@ -1560,7 +1590,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     // Every credential/endpoint variant failed: leave a trace instead of a bare
     // null, otherwise the caller only sees "nothing worked".
-    console.warn('[new-api] getApiTokensWithUser: all variants failed');
+    logAllVariantsFailed('getApiTokensWithUser', failures);
     return [];
   }
 }
