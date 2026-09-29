@@ -288,9 +288,9 @@ export default function NotificationSettings() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
 
-                <div style={{ gridColumn: '1 / -1', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>告警策略</div>
+                <div style={{ order: isMobile ? undefined : 1, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>告警策略</div>
 
-                <div className="card animate-slide-up stagger-1" style={{ padding: 20 }}>
+                <div className="card animate-slide-up stagger-1" style={{ padding: 20, order: isMobile ? undefined : 3 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>告警去噪与冷静期</div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
                         相同告警在冷静期内不会重复推送；冷静期结束后会自动合并重复条数。
@@ -312,7 +312,7 @@ export default function NotificationSettings() {
                     </div>
                 </div>
 
-                <div style={{ gridColumn: '1 / -1', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>推送通道</div>
+                <div style={{ order: isMobile ? undefined : 2, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>推送通道</div>
 
                 {/* 卡片：机器人推送（列表，每行一条独立通道） */}
                 <div
@@ -320,6 +320,7 @@ export default function NotificationSettings() {
                     style={{
                         padding: 24,
                         gridColumn: '1 / -1',
+                        order: isMobile ? undefined : 5,
                         border: runtime.notifyChannels.some((row) => row.enabled)
                             ? '1px solid var(--color-primary)'
                             : '1px solid var(--color-border-light)',
@@ -418,7 +419,7 @@ export default function NotificationSettings() {
                 </div>
 
                 {/* 卡片：Server酱 */}
-                <div className="card animate-slide-up stagger-3" style={{ padding: 24, border: runtime.serverChanEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
+                <div className="card animate-slide-up stagger-3" style={{ padding: 24, order: isMobile ? undefined : 4, border: runtime.serverChanEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10, marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -457,7 +458,7 @@ export default function NotificationSettings() {
                 </div>
 
                 {/* 卡片：Telegram */} 
-                <div className="card animate-slide-up stagger-4" style={{ padding: 24, border: runtime.telegramEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
+                <div className="card animate-slide-up stagger-4" style={{ padding: 24, order: isMobile ? undefined : 6, border: runtime.telegramEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10, marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -534,7 +535,7 @@ export default function NotificationSettings() {
                 </div>
 
                 {/* 卡片：SMTP 邮件设置 */}
-                <div className="card animate-slide-up stagger-4" style={{ padding: 24, border: runtime.smtpEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
+                <div className="card animate-slide-up stagger-4" style={{ padding: 24, order: isMobile ? undefined : 7, border: runtime.smtpEnabled ? '1px solid var(--color-primary)' : '1px solid var(--color-border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10, marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
