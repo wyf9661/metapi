@@ -96,6 +96,10 @@ export interface EstimateProxyCostInput {
 
 interface ModelGroupPricing {
   quotaType: number;
+  /** Present when the upstream uses an expression rather than fixed ratios. */
+  billingMode?: string | null;
+  /** Catalog values are reference estimates, not fixed settlement prices. */
+  referenceOnly?: boolean;
   inputPerMillion?: number;
   outputPerMillion?: number;
   cacheReadPerMillion?: number;
@@ -797,6 +801,37 @@ export function calculateModelUsageCost(
   return calculateModelUsageBreakdown(model, usage, groupRatio, tokenGroup)?.breakdown.totalCost ?? 0;
 }
 
+function deriveTieredReferencePricing(
+  model: PricingModel,
+  multiplier: number,
+): Pick<ModelGroupPricing, 'inputPerMillion' | 'outputPerMillion' | 'cacheReadPerMillion' | 'cacheCreationPerMillion'> | null {
+  try {
+    // Evaluate the expression at one million tokens per component. This
+    // produces a useful linear reference without pretending it is the exact
+    // settlement price for every context/cache tier.
+    const evaluate = (values: Partial<TieredBillingParams>) => evaluateTieredExpr(model.billingExpr || '', {
+      p: values.p ?? 0,
+      c: values.c ?? 0,
+      len: values.len ?? 1_000_000,
+      cr: values.cr ?? 0,
+      cc: values.cc ?? 0,
+      cc1h: values.cc1h ?? 0,
+      img: values.img ?? 0,
+      img_o: values.img_o ?? 0,
+      ai: values.ai ?? 0,
+      ao: values.ao ?? 0,
+    }).cost;
+    return {
+      inputPerMillion: roundCost((evaluate({ p: 1_000_000 }) * multiplier) / 1_000_000),
+      outputPerMillion: roundCost((evaluate({ c: 1_000_000 }) * multiplier) / 1_000_000),
+      cacheReadPerMillion: roundCost((evaluate({ cr: 1_000_000 }) * multiplier) / 1_000_000),
+      cacheCreationPerMillion: roundCost((evaluate({ cc: 1_000_000 }) * multiplier) / 1_000_000),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function buildModelPricingCatalogFromData(pricingData: PricingData): ModelPricingCatalog {
   const groups = Array.from(new Set([DEFAULT_GROUP, ...Object.keys(pricingData.groupRatio)]));
   const defaultMultiplier = pricingData.groupRatio[DEFAULT_GROUP] !== undefined
@@ -822,6 +857,19 @@ function buildModelPricingCatalogFromData(pricingData: PricingData): ModelPricin
             perCallTotal: perCall.total,
           };
           return acc;
+        }
+
+        if (model.billingMode === 'tiered_expr' && model.billingExpr) {
+          const reference = deriveTieredReferencePricing(model, multiplier);
+          if (reference) {
+            acc[group] = {
+              quotaType: 0,
+              billingMode: 'tiered_expr',
+              referenceOnly: true,
+              ...reference,
+            };
+            return acc;
+          }
         }
 
         acc[group] = {

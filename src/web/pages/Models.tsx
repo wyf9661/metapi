@@ -28,6 +28,8 @@ interface ModelTokenInfo {
 
 interface ModelGroupPricing {
   quotaType: number;
+  billingMode?: string | null;
+  referenceOnly?: boolean;
   inputPerMillion?: number;
   outputPerMillion?: number;
   perCallInput?: number;
@@ -242,7 +244,11 @@ function resolveMarketplaceDescription(model: ModelRow, metadataHydrating: boole
 
 function renderGroupPricingValue(pricing: ModelGroupPricing): string {
   if (pricing.quotaType === 0) {
-    return `${pricing.inputPerMillion ?? 0}/${pricing.outputPerMillion ?? 0} USD / 1M`;
+    const value = `${pricing.inputPerMillion ?? 0}/${pricing.outputPerMillion ?? 0} USD / 1M`;
+    if (pricing.referenceOnly) {
+      return `${value} (${tr('参考价')})`;
+    }
+    return value;
   }
 
   if (pricing.perCallInput != null || pricing.perCallOutput != null) {
@@ -1356,6 +1362,7 @@ export default function Models() {
                                   {Object.entries(source.groupPricing).map(([group, pricing]) => (
                                     <span key={group} className="badge badge-muted">
                                       {group}: {renderGroupPricingValue(pricing)}
+                                      {pricing.referenceOnly ? ` · ${tr('上游分层计费')}` : ''}
                                     </span>
                                   ))}
                                 </div>
@@ -1626,6 +1633,7 @@ export default function Models() {
                                           {Object.entries(source.groupPricing).map(([group, pricing]) => (
                                             <span key={group} className="badge badge-muted">
                                               {group}: {renderGroupPricingValue(pricing)}
+                                              {pricing.referenceOnly ? ` · ${tr('上游分层计费')}` : ''}
                                             </span>
                                           ))}
                                         </div>

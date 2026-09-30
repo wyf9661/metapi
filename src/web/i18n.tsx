@@ -125,6 +125,8 @@ const zhToEn: Record<string, string> = {
   '未提供': 'Not Provided',
   '暂无价格元数据': 'No Pricing Metadata',
   '正在加载价格元数据...': 'Loading pricing metadata...',
+  '参考价': 'Reference price',
+  '上游分层计费': 'Tiered expression billing',
   '正在加载模型元数据...': 'Loading model metadata...',
   '请先检查站点与账号状态，然后点击刷新。': 'Check site and account status first, then refresh.',
   '模型名称': 'Model Name',
