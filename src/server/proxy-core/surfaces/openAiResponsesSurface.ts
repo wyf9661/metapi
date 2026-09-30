@@ -1061,6 +1061,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	                if (inPlaceRecoveringRetry) {
 	                  inPlaceRetryChannel = selected;
 	                  await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
+	                  retryCount += 1;
 	                  continue;
 	                }
 	                if (failureOutcome.action === 'retry') {
@@ -1384,6 +1385,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
 	            if (inPlaceRecoveringRetry) {
 	              inPlaceRetryChannel = selected;
 	              await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
+	              retryCount += 1;
 	              continue;
 	            }
 	            if (failureOutcome.action === 'retry') {
@@ -1515,6 +1517,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               if (inPlaceRecoveringRetry) {
                 inPlaceRetryChannel = selected;
                 await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
+                retryCount += 1;
                 continue;
               }
               if (failureOutcome.action === 'retry') {
@@ -1571,6 +1574,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             if (inPlaceRecoveringRetry) {
               inPlaceRetryChannel = selected;
               await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
+              retryCount += 1;
               continue;
             }
             if (failureOutcome.action === 'retry') {

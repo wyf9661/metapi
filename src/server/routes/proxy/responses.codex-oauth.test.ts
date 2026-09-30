@@ -12,6 +12,10 @@ const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
 const selectNextChannelMock = vi.fn();
 const selectPreferredChannelMock = vi.fn();
+const countEligibleChannelsMock = vi.fn();
+const inPlaceRecoveringRetryMock = vi.fn();
+const recoveringFailureMock = vi.fn();
+const graceRetryMock = vi.fn();
 const recordSuccessMock = vi.fn();
 const recordFailureMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
@@ -55,6 +59,7 @@ vi.mock('../../services/tokenRouter.js', () => ({
     selectChannel: (...args: unknown[]) => selectChannelMock(...args),
     selectNextChannel: (...args: unknown[]) => selectNextChannelMock(...args),
     selectPreferredChannel: (...args: unknown[]) => selectPreferredChannelMock(...args),
+    countEligibleChannels: (...args: unknown[]) => countEligibleChannelsMock(...args),
     recordSuccess: (...args: unknown[]) => recordSuccessMock(...args),
     recordFailure: (...args: unknown[]) => recordFailureMock(...args),
   },
@@ -83,9 +88,9 @@ vi.mock('../../services/modelPricingService.js', () => ({
 vi.mock('../../services/proxyRetryPolicy.js', () => ({
   resolveFailoverBackoffMs: () => 0,
   sleepMs: async () => undefined,
-  shouldGraceRetryInPlaceOnce: () => false,
-  canRetryInPlaceForRecoveringFailure: () => false,
-  isRecoveringTransientFailure: () => false,
+  shouldGraceRetryInPlaceOnce: (...args: unknown[]) => graceRetryMock(...args),
+  canRetryInPlaceForRecoveringFailure: (...args: unknown[]) => inPlaceRecoveringRetryMock(...args),
+  isRecoveringTransientFailure: (...args: unknown[]) => recoveringFailureMock(...args),
   shouldRetryProxyRequest: () => false,
   shouldAbortSameSiteEndpointFallback: () => false,
   RETRYABLE_TIMEOUT_PATTERNS: [/(request timed out|connection timed out|read timeout|\btimed out\b)/i],
@@ -208,6 +213,13 @@ describe('responses proxy codex oauth refresh', () => {
     selectChannelMock.mockReset();
     selectNextChannelMock.mockReset();
     selectPreferredChannelMock.mockReset();
+    countEligibleChannelsMock.mockReset();
+    inPlaceRecoveringRetryMock.mockReset();
+    inPlaceRecoveringRetryMock.mockReturnValue(false);
+    recoveringFailureMock.mockReset();
+    recoveringFailureMock.mockReturnValue(false);
+    graceRetryMock.mockReset();
+    graceRetryMock.mockReturnValue(false);
     mathRandomMock.mockReturnValue(0.99);
     recordSuccessMock.mockReset();
     recordFailureMock.mockReset();
@@ -1444,6 +1456,63 @@ describe('responses proxy codex oauth refresh', () => {
     expect(response.body).toContain('你好，来自 zstd responses SSE');
     expect(response.body).not.toContain('(�/�');
     expect(response.body).toContain('data: [DONE]');
+  });
+
+  it.each([
+    { stream: false, upstreamStatus: 403, detectedFailure: false, grace: false },
+    { stream: true, upstreamStatus: 403, detectedFailure: false, grace: false },
+    { stream: false, upstreamStatus: 429, detectedFailure: false, grace: false },
+    { stream: true, upstreamStatus: 503, detectedFailure: false, grace: false },
+    { stream: false, upstreamStatus: 200, detectedFailure: true, grace: false },
+    { stream: true, upstreamStatus: 200, detectedFailure: true, grace: false },
+    { stream: true, upstreamStatus: 403, detectedFailure: false, grace: true },
+  ])('bounds recovering responses retries: $upstreamStatus stream=$stream detected=$detectedFailure grace=$grace', async ({ stream, upstreamStatus, detectedFailure, grace }) => {
+    const policy = await vi.importActual<typeof import('../../services/proxyRetryPolicy.js')>('../../services/proxyRetryPolicy.js');
+    const originalKeywords = config.proxyErrorKeywords;
+    const originalBackoff = config.proxyFailoverBackoffMs;
+    const originalGrace = config.proxyRecoveringGraceMs;
+    config.proxyErrorKeywords = detectedFailure ? ['persistent_failure_marker'] : [];
+    config.proxyFailoverBackoffMs = 1_200;
+    config.proxyRecoveringGraceMs = grace ? 30_000 : 0;
+    countEligibleChannelsMock.mockResolvedValue(1);
+    inPlaceRecoveringRetryMock.mockImplementation(policy.canRetryInPlaceForRecoveringFailure);
+    recoveringFailureMock.mockImplementation(policy.isRecoveringTransientFailure);
+    graceRetryMock.mockImplementation(policy.shouldGraceRetryInPlaceOnce);
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { id: 44, name: 'blocked-relay', url: 'https://gateway.example.com', platform: 'new-api' },
+      account: { id: 33, username: 'blocked-relay-user' },
+      tokenName: 'default', tokenValue: 'fixture-token', actualModel: 'deepseek-v4-flash',
+    });
+    let upstreamCalls = 0;
+    fetchMock.mockImplementation(async () => {
+      upstreamCalls += 1;
+      // Bound the old-code reproduction: late fixture success exposes excess
+      // attempts without leaving an infinite test process behind.
+      if (upstreamCalls > 18) {
+        return new Response(JSON.stringify({ id: 'resp_late', output_text: 'too late' }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(detectedFailure ? JSON.stringify({ error: 'persistent_failure_marker' }) : `${upstreamStatus} Forbidden`, {
+        status: upstreamStatus, headers: { 'content-type': 'application/json' },
+      });
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST', url: '/v1/responses',
+        payload: { model: 'deepseek-v4-flash', input: 'a request that should fail promptly', stream },
+      });
+      expect(response.statusCode).toBe(detectedFailure ? 502 : upstreamStatus);
+      expect(upstreamCalls).toBeLessThanOrEqual(grace ? 9 : 6);
+      expect(insertedProxyLogs.some((row) => row.retryCount === 1)).toBe(true);
+      expect(new Set(insertedProxyLogs.map((row) => row.requestTraceId)).size).toBe(1);
+      expect(recordSuccessMock).not.toHaveBeenCalled();
+    } finally {
+      config.proxyErrorKeywords = originalKeywords;
+      config.proxyFailoverBackoffMs = originalBackoff;
+      config.proxyRecoveringGraceMs = originalGrace;
+    }
   });
 
   it('preserves codex-required instructions and store fields across responses compatibility retries', async () => {
