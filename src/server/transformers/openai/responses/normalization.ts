@@ -251,7 +251,7 @@ export function normalizeResponsesMessageItem(item: Record<string, unknown>): Re
     return withNormalizedResponsesInputStatus({
       ...item,
       role,
-      content: normalizedContent,
+      ...(normalizedContent !== undefined ? { content: normalizedContent } : {}),
     });
   }
 
@@ -260,7 +260,7 @@ export function normalizeResponsesMessageItem(item: Record<string, unknown>): Re
       ...item,
       type: 'message',
       role,
-      content: normalizedContent,
+      ...(normalizedContent !== undefined ? { content: normalizedContent } : {}),
     });
   }
 
