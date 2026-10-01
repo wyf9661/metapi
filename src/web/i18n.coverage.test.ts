@@ -47,6 +47,15 @@ describe('strict English mode coverage', () => {
       '回滚到更新前版本': 'Roll back to the previous version',
       '上次检查出错': 'Last check failed',
       '基于真实流量学习': 'Learned from real traffic',
+      '少样本': 'Small sample',
+      '连通': 'Reachable',
+      '均延迟': 'Avg latency',
+      '可用': 'Available',
+      '探测失败': 'Failed',
+      '探测中': 'Probing',
+      '不通': 'Unreachable',
+      '跳过': 'Skipped',
+      '已手动停止': 'Manually stopped',
     };
     for (const [zh, en] of Object.entries(expected)) {
       expect(translateText(zh, 'en')).toBe(en);
