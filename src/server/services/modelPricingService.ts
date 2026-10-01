@@ -431,6 +431,62 @@ async function fetchPricingData(input: EstimateProxyCostInput): Promise<PricingD
   return null;
 }
 
+// Single-flight for cache misses: concurrent readers on the same site:account
+// share one upstream fetch instead of stampeding /api/pricing N times.
+const pricingInFlight = new Map<string, Promise<PricingData | null>>();
+
+async function fetchPricingDataDeduped(key: string, input: EstimateProxyCostInput): Promise<PricingData | null> {
+  const existing = pricingInFlight.get(key);
+  if (existing) return existing;
+  const flight = (async () => {
+    try {
+      return await fetchPricingData(input);
+    } finally {
+      pricingInFlight.delete(key);
+    }
+  })();
+  pricingInFlight.set(key, flight);
+  return flight;
+}
+
+// Keep a failed background refresh from turning a once-cached price into a
+// permanent truth. The retry interval stays short, while stale data is only
+// served for a bounded window before a cold fetch is required again.
+const PRICE_CACHE_MAX_STALE_MS = 60 * 60 * 1000;
+const pricingRefreshInFlight = new Map<string, Promise<PricingData | null>>();
+
+async function refreshPricingDataCache(input: EstimateProxyCostInput): Promise<PricingData | null> {
+  const key = getCacheKey(input);
+  const existing = pricingRefreshInFlight.get(key);
+  if (existing) return existing;
+  const task = (async () => {
+    // Explicit refreshes and expired background refreshes share this flight.
+    const data = await fetchPricingDataDeduped(key, input);
+    const now = Date.now();
+    if (data) {
+      pricingCache.set(key, { fetchedAt: now, ttlMs: PRICE_CACHE_TTL_MS, data });
+      syncRoutingReferenceCostCache(key, now, PRICE_CACHE_TTL_MS, data);
+    } else {
+      const cached = pricingCache.get(key);
+      const stillUsable = cached?.data && now - cached.fetchedAt < PRICE_CACHE_MAX_STALE_MS;
+      if (stillUsable) {
+        // Schedule a retry shortly without losing the age of the old value.
+        cached.ttlMs = Math.max(cached.ttlMs, now - cached.fetchedAt + PRICE_CACHE_FAILURE_TTL_MS);
+      } else {
+        pricingCache.set(key, { fetchedAt: now, ttlMs: PRICE_CACHE_FAILURE_TTL_MS, data: null });
+        syncRoutingReferenceCostCache(key, now, PRICE_CACHE_FAILURE_TTL_MS, null);
+      }
+    }
+    return data;
+  })();
+  pricingRefreshInFlight.set(key, task);
+  try {
+    return await task;
+  } finally {
+    if (pricingRefreshInFlight.get(key) === task) pricingRefreshInFlight.delete(key);
+  }
+}
+
 async function getPricingDataCached(input: EstimateProxyCostInput): Promise<PricingData | null> {
   const key = getCacheKey(input);
   const now = Date.now();
@@ -441,30 +497,15 @@ async function getPricingDataCached(input: EstimateProxyCostInput): Promise<Pric
     }
     return cached.data;
   }
-
-  const data = await fetchPricingData(input);
-  const ttlMs = data ? PRICE_CACHE_TTL_MS : PRICE_CACHE_FAILURE_TTL_MS;
-  pricingCache.set(key, {
-    fetchedAt: now,
-    ttlMs,
-    data,
-  });
-  syncRoutingReferenceCostCache(key, now, ttlMs, data);
-  return data;
-}
-
-async function refreshPricingDataCache(input: EstimateProxyCostInput): Promise<PricingData | null> {
-  const key = getCacheKey(input);
-  const now = Date.now();
-  const data = await fetchPricingData(input);
-  const ttlMs = data ? PRICE_CACHE_TTL_MS : PRICE_CACHE_FAILURE_TTL_MS;
-  pricingCache.set(key, {
-    fetchedAt: now,
-    ttlMs,
-    data,
-  });
-  syncRoutingReferenceCostCache(key, now, ttlMs, data);
-  return data;
+  if (cached?.data && now - cached.fetchedAt < PRICE_CACHE_MAX_STALE_MS) {
+    // Stale-while-revalidate: don't hold a user request on a slow catalog.
+    // Keep routing's reference-cost view aligned with the stale catalog until
+    // the bounded stale window ends; the background refresh will replace it.
+    syncRoutingReferenceCostCache(key, cached.fetchedAt, PRICE_CACHE_MAX_STALE_MS, cached.data);
+    void refreshPricingDataCache(input).catch(() => {});
+    return cached.data;
+  }
+  return refreshPricingDataCache(input);
 }
 
 export function getCachedModelRoutingReferenceCost(input: {
