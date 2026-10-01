@@ -127,6 +127,16 @@ describe('buildConfig', () => {
     expect(config.codexResponsesWebsocketBeta).toBe('responses_websockets=2099-01-01');
   });
 
+  it('redacts credential query parameters from Fastify request logs', async () => {
+    const { redactSensitiveRequestUrl } = await import('./config.js');
+    expect(redactSensitiveRequestUrl('/v1/models?key=sk-secret&model=gpt-4o')).toBe(
+      '/v1/models?key=[REDACTED]&model=gpt-4o',
+    );
+    expect(redactSensitiveRequestUrl('/v1/models?TOKEN=secret-token')).toBe(
+      '/v1/models?TOKEN=[REDACTED]',
+    );
+  });
+
   it('accepts JSON request bodies larger than Fastify default 1 MiB', async () => {
     const app = Fastify(buildFastifyOptions(buildConfig({})));
     const largeText = 'a'.repeat(2 * 1024 * 1024);

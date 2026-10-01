@@ -334,11 +334,40 @@ export function resolveProxyStreamIdleTimeoutMs(): number {
   return firstByteMs > 0 ? firstByteMs : 0;
 }
 
+/**
+ * Remove credentials accepted through query parameters before Fastify/Pino
+ * serializes a request. Query-key authentication is legacy-compatible, but the
+ * credential must never become durable process/log-shipping data.
+ */
+export function redactSensitiveRequestUrl(rawUrl: string): string {
+  const hashIndex = rawUrl.indexOf('#');
+  const fragment = hashIndex >= 0 ? rawUrl.slice(hashIndex) : '';
+  const withoutFragment = hashIndex >= 0 ? rawUrl.slice(0, hashIndex) : rawUrl;
+  const queryIndex = withoutFragment.indexOf('?');
+  if (queryIndex < 0) return rawUrl;
+  const path = withoutFragment.slice(0, queryIndex);
+  const query = withoutFragment.slice(queryIndex + 1);
+  const redactedQuery = query.replace(
+    /(^|&)((?:key|x-api-key|api[_-]?key|token|access[_-]?token|auth[_-]?token|authorization|password|secret|credential))=([^&]*)/gi,
+    '$1$2=[REDACTED]',
+  );
+  return `${path}?${redactedQuery}${fragment}`;
+}
+
 export function buildFastifyOptions(
   appConfig: ReturnType<typeof buildConfig>,
 ): FastifyServerOptions {
   return {
-    logger: true,
+    logger: {
+      serializers: {
+        req: (request: { method?: string; url?: string; hostname?: string; ip?: string }) => ({
+          method: request.method,
+          url: redactSensitiveRequestUrl(request.url || ''),
+          hostname: request.hostname,
+          remoteAddress: request.ip,
+        }),
+      },
+    },
     // false | true | hop count — avoid unconditionally trusting client-supplied XFF.
     // Default preserves legacy trust-all (true); TRUST_PROXY=false disables; TRUST_PROXY_HOPS=N constrains.
     //
