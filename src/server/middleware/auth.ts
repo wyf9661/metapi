@@ -89,7 +89,10 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   }
 
   const auth = request.headers.authorization;
-  const token = auth ? auth.replace('Bearer ', '') : '';
+  // Case-insensitive scheme like the proxy surface (/^Bearer\s+/i): a client
+  // sending 'bearer <token>' is valid RFC 7235 usage, not a guessing attempt —
+  // counting it as a failure would let one malformed client lock its address.
+  const token = auth && /^bearer\s+/i.test(auth) ? auth.replace(/^bearer\s+/i, '') : (auth || '');
   if (auth && secretsEqual(token, config.authToken)) {
     // The credential is evaluated BEFORE the failure budget, so a valid token is
     // never refused. That matters here: every client arriving through the tunnel

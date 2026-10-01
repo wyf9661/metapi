@@ -107,6 +107,14 @@ function resolveSqliteDbPath(): string {
   if (raw.startsWith('sqlite://')) {
     return resolve(raw.slice('sqlite://'.length).trim());
   }
+  // mysql:// / postgres:// URLs belong to the runtime database picked by
+  // DB_TYPE in index.js. Treating one as a path used to create a junk SQLite
+  // file named after the URL (and crash on read-only rootfs) — refuse instead.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) {
+    throw new Error(
+      `DB_URL is not a sqlite database (${raw.split('://')[0]}://...). Set DB_TYPE=sqlite or remove DB_URL; non-sqlite runtimes are initialized by the server itself.`,
+    );
+  }
   return resolve(raw);
 }
 
@@ -701,6 +709,7 @@ export const __migrateTestUtils = {
   deduplicateLegacySitesForUniqueIndex,
   runSqliteMigrationRecoveryLoop,
   sqliteMigrationRecoveryRetryBudget: SQLITE_MIGRATION_RECOVERY_RETRY_BUDGET,
+  resolveSqliteDbPath,
 };
 
 function bootstrapLegacyDrizzleMigrations(sqlite: Database.Database, migrationsFolder: string): boolean {
@@ -757,4 +766,18 @@ export function runSqliteMigrations(): void {
   console.log('Migration complete.');
 }
 
-runSqliteMigrations();
+// Boot shim for the Dockerfile CMD (`node dist/server/db/migrate.js && node
+// dist/server/index.js`). When DB_URL points at a non-sqlite runtime the
+// migrator has nothing to do — the server initializes that database itself —
+// and resolveSqliteDbPath would otherwise refuse; skip instead of crashing.
+const rawDbUrl = (config.dbUrl || '').trim();
+const isNonSqliteDbUrl = rawDbUrl.length > 0
+  && !rawDbUrl.startsWith('file://')
+  && !rawDbUrl.startsWith('sqlite://')
+  && rawDbUrl !== ':memory:'
+  && /^[a-z][a-z0-9+.-]*:\/\//i.test(rawDbUrl);
+if (isNonSqliteDbUrl) {
+  console.log(`[db] DB_URL targets ${rawDbUrl.split('://')[0]} — sqlite migration skipped (runtime DB is initialized by the server).`);
+} else {
+  runSqliteMigrations();
+}

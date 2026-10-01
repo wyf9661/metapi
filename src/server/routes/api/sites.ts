@@ -1374,8 +1374,12 @@ export async function sitesRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'favicon not found' });
       }
 
+      const contentType = result.payload.contentType.toLowerCase().split(';', 1)[0]?.trim() || '';
+      if (!contentType.startsWith('image/')) {
+        return reply.code(415).send({ error: 'favicon content type is not an image' });
+      }
       reply
-        .header('Content-Type', result.payload.contentType)
+        .header('Content-Type', contentType)
         .header('Cache-Control', `public, max-age=${ICON_HTTP_MAX_AGE_SECONDS}`)
         .header('X-Favicon-Source', result.payload.source)
         .header('X-Favicon-Cache', result.cache);

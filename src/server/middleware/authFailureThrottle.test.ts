@@ -160,4 +160,39 @@ describe('authMiddleware failure throttling', () => {
     });
     expect(wrong.statusCode).toBe(403);
   });
+
+  it('accepts case-insensitive bearer scheme and does not spend throttle budget', async () => {
+    const { authMiddleware } = await import('./auth.js');
+    const { adminAuthThrottle } = await import('./authFailureThrottle.js');
+    const { config } = await import('../config.js');
+
+    app = Fastify();
+    app.addHook('onRequest', authMiddleware);
+    app.get('/api/guarded', async () => ({ ok: true }));
+
+    await adminAuthThrottle.clear('127.0.0.1');
+
+    // The proxy surface parses the scheme case-insensitively; a client that
+    // sends 'bearer' must not be treated as an invalid credential and burn
+    // the failure budget per request (10 in 5 min → lockout).
+    for (const scheme of ['bearer', 'BEARER', 'BeArEr']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/guarded',
+        headers: { Authorization: `${scheme} ${config.authToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    expect((await adminAuthThrottle.peek('127.0.0.1')).failures).toBe(0);
+
+    // A non-bearer scheme stays rejected.
+    const other = await app.inject({
+      method: 'GET',
+      url: '/api/guarded',
+      headers: { Authorization: `Token ${config.authToken}` },
+    });
+    expect(other.statusCode).toBe(403);
+
+    await adminAuthThrottle.clear('127.0.0.1');
+  });
 });

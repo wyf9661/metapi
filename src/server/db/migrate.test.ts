@@ -657,4 +657,30 @@ describe('sqlite migrate bootstrap', () => {
     expect(runMigrate).toHaveBeenCalledTimes((retryBudget ?? 0) + 1);
     expect(closeSqlite).toHaveBeenCalledTimes(1);
   });
+
+  it('refuses to treat a non-sqlite DB_URL as a sqlite file path', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'metapi-migrate-dbtype-'));
+    process.env.DATA_DIR = dataDir;
+    // docker/Dockerfile CMD runs this module before index.js for every boot.
+    // A mysql/postgres deployment sets DB_TYPE + DB_URL; the sqlite migrator
+    // must refuse (the runtime DB is initialized by index.js) instead of
+    // creating a junk file named after the URL in the CWD.
+    process.env.DB_URL = 'mysql://root:pw@127.0.0.1:3306/metapi';
+    vi.resetModules();
+    const migrateModule = await import('./migrate.js');
+    const { __migrateTestUtils } = migrateModule as {
+      __migrateTestUtils: { resolveSqliteDbPath: () => string };
+    };
+
+    expect(() => __migrateTestUtils.resolveSqliteDbPath()).toThrow(/DB_TYPE|non-sqlite/i);
+
+    delete process.env.DB_URL;
+    // sqlite-flavored URLs keep working.
+    process.env.DB_URL = 'sqlite:///tmp/some/hub.db';
+    vi.resetModules();
+    const sqliteModule = await import('./migrate.js');
+    expect(
+      (sqliteModule.__migrateTestUtils as { resolveSqliteDbPath: () => string }).resolveSqliteDbPath(),
+    ).toBe('/tmp/some/hub.db');
+  });
 });
