@@ -46,7 +46,7 @@ const CHANNEL_URL_PLACEHOLDER: Record<NotifyChannelKind, string> = {
 type RuntimeSettings = {
     notifyChannels: NotifyChannelRow[];
     webhookUrl: string;
-    webhookSecret: string;
+    webhookSecretMasked?: string;
     webhookEnabled: boolean;
     serverChanEnabled: boolean;
     telegramEnabled: boolean;
@@ -71,7 +71,7 @@ export default function NotificationSettings() {
     const [runtime, setRuntime] = useState<RuntimeSettings>({
         notifyChannels: [],
         webhookUrl: '',
-        webhookSecret: '',
+        webhookSecretMasked: '',
         webhookEnabled: true,
         serverChanEnabled: false,
         telegramEnabled: false,
@@ -139,14 +139,14 @@ export default function NotificationSettings() {
                             kind: detectChannelKind(runtimeInfo.webhookUrl),
                             url: runtimeInfo.webhookUrl,
                             secret: '',
-                            secretMasked: (runtimeInfo as any).webhookSecret || '',
+                            secretMasked: runtimeInfo.webhookSecretMasked || '',
                             enabled: runtimeInfo.webhookEnabled !== false,
                         }];
                     }
                     return [];
                 })(),
                 webhookUrl: runtimeInfo.webhookUrl || '',
-                webhookSecret: (runtimeInfo as any).webhookSecret || '',
+                webhookSecretMasked: runtimeInfo.webhookSecretMasked || '',
                 webhookEnabled: runtimeInfo.webhookEnabled ?? true,
                 serverChanEnabled: !!runtimeInfo.serverChanEnabled,
                 telegramEnabled: !!runtimeInfo.telegramEnabled,

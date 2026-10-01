@@ -636,7 +636,9 @@ async function getRuntimeSettingsResponse(currentAdminIp = '', tunnelClientView 
     routingWeights: config.routingWeights,
     defaultRoutingStrategy: config.defaultRoutingStrategy,
     webhookUrl: config.webhookUrl,
-    webhookSecret: config.webhookSecret || '',
+    // Masked like every other notification secret (serverChan/telegram/smtp):
+    // the runtime GET is read by the console and must not echo the raw secret.
+    webhookSecretMasked: maskSecret(config.webhookSecret),
     webhookEnabled: config.webhookEnabled,
     notifyChannels: config.notifyChannels.map((c) => ({
       id: c.id,

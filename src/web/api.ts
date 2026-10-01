@@ -328,6 +328,7 @@ export type RuntimeSettingsPayload = {
   logCleanupProgramLogsEnabled?: boolean;
   logCleanupRetentionDays?: number;
   webhookUrl?: string;
+  /** Only a newly typed secret is sent; GET runtime settings exposes a mask. */
   webhookSecret?: string;
   webhookEnabled?: boolean;
   notifyChannels?: Array<{
