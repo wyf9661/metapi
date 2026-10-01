@@ -342,6 +342,31 @@ export function wireStreamCancelOnClientDisconnect(
   };
 }
 
+/**
+ * Abort signal that fires when the downstream reply is gone mid-request.
+ *
+ * Non-stream body reads have no `wireStreamCancelOnClientDisconnect` wiring
+ * (that only fires for hijacked SSE replies). This closes the same gap for
+ * plain JSON bodies: if the client disconnects while the upstream body is
+ * still being read, the read is cancelled instead of running to completion
+ * (or hanging forever on a stalled upstream).
+ */
+export function wireReplyGoneAbortSignal(reply: FastifyReply): AbortSignal {
+  const controller = new AbortController();
+  const raw = reply?.raw as {
+    on?: (event: string, listener: () => void) => void;
+    writableEnded?: boolean;
+    destroyed?: boolean;
+  } | undefined;
+  if (!raw || typeof raw.on !== 'function') return controller.signal;
+  const onClose = (): void => {
+    if (raw.writableEnded) return;
+    controller.abort(new Error('client disconnected'));
+  };
+  raw.on('close', onClose);
+  return controller.signal;
+}
+
 export function createSurfaceDispatchRequest(input: {
   site: SiteProxyConfigLike & { url: string };
   accountExtraConfig?: string | null;

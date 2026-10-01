@@ -82,6 +82,7 @@ import {
   selectSurfaceChannelForAttempt,
   trySurfaceOauthRefreshRecovery,
   wireStreamCancelOnClientDisconnect,
+  wireReplyGoneAbortSignal,
 } from './sharedSurface.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
 import {
@@ -282,6 +283,15 @@ export async function handleChatSurfaceRequest(
     let graceRetriedOnce = false;
     const lastRetryFailure = {
       current: null as ReturnType<typeof finalizeRetryAsUpstreamFailure> | null,
+    };
+    // Non-SSE bodies are read whole. Without a deadline, an upstream that
+    // emits a partial body and stalls holds the request until the client's
+    // own patience runs out (the same stall the SSE idle guard already
+    // covers). Abort when the downstream is gone so nobody reads a dead
+    // request. Budgets follow the stream idle window (proxyFirstByteTimeoutSec).
+    const bodyReadGuards = {
+      idleTimeoutMs: resolveProxyStreamIdleTimeoutMs(),
+      signal: wireReplyGoneAbortSignal(reply),
     };
 
     /**
@@ -873,7 +883,7 @@ export async function handleChatSurfaceRequest(
         });
         let rawText = '';
         if (isGeminiNativeRuntimePath(successfulUpstreamPath)) {
-          rawText = await readRuntimeResponseText(upstream);
+          rawText = await readRuntimeResponseText(upstream, bodyReadGuards);
           const bridged = buildOpenAiStreamLinesFromGeminiNativeSse(
             rawText,
             modelName,
@@ -905,7 +915,7 @@ export async function handleChatSurfaceRequest(
           return;
         }
         if (!upstreamContentType.includes('text/event-stream')) {
-          const fallbackText = await readRuntimeResponseText(upstream);
+          const fallbackText = await readRuntimeResponseText(upstream, bodyReadGuards);
           rawText = fallbackText;
           if (looksLikeResponsesSseText(fallbackText)) {
             const streamResult = await streamSession.run(
@@ -1214,7 +1224,7 @@ export async function handleChatSurfaceRequest(
         rawText = collected.rawText;
         upstreamData = collected.payload;
       } else {
-        rawText = await readRuntimeResponseText(upstream);
+        rawText = await readRuntimeResponseText(upstream, bodyReadGuards);
         if (looksLikeResponsesSseText(rawText)) {
           upstreamData = collectResponsesFinalPayloadFromSseText(rawText, modelName).payload;
         } else {
@@ -1352,6 +1362,16 @@ export async function handleChatSurfaceRequest(
         console.warn(`[proxy/chat] client disconnected before completion: ${err?.message || 'client disconnect'}`);
         return;
       }
+      // Same failure-invalidates-last-success rule as the responses surface:
+      // an execution error (transport / site endpoint failure) that escapes the
+      // detected-failure branches must also drop the channel's preferred-hop
+      // status, or the model-level anchor re-prefers a channel whose last
+      // outcome was a crash once the cooldown expires.
+      proxyChannelCoordinator.clearLastSuccessChannel({
+        requestedModel,
+        downstreamApiKeyId,
+        channelId: selected.channel.id,
+      });
       const endpointFailureStatus = typeof err?.status === 'number' ? err.status : null;
       const isSiteApiEndpointFailure = (
         err instanceof SiteApiEndpointRequestError

@@ -47,13 +47,75 @@ describe('readRuntimeResponseText', () => {
   });
 
   it('passes through bodies within the cap unchanged', async () => {
-    const payload = JSON.stringify({ error: { message: 'small' } });
+    const payload = JSON.stringify({ ok: true, text: 'within cap' });
     const response = new Response(payload, {
       status: 500,
       headers: { 'content-type': 'application/json; charset=utf-8' },
     });
 
     await expect(readRuntimeResponseText(response)).resolves.toBe(payload);
+  });
+
+  it('cancels a non-stream body that goes idle after its first chunk', async () => {
+    let cancelled = false;
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"partial":true}'));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+
+    await expect(readRuntimeResponseText(response, { idleTimeoutMs: 30 }))
+      .rejects.toThrow('response body idle timeout');
+    expect(cancelled).toBe(true);
+  });
+
+  it('cancels a non-stream body when the caller aborts while waiting for more data', async () => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(streamController) {
+        streamController.enqueue(new TextEncoder().encode('{"partial":true}'));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+
+    const pending = readRuntimeResponseText(response, { signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(cancelled).toBe(true);
+  });
+
+  it('decompresses a gzip body while the idle guard is active', async () => {
+    const payload = JSON.stringify({ ok: true, text: 'gzipped with guard' });
+    const response = new Response(gzipSync(Buffer.from(payload)), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' },
+    });
+
+    await expect(readRuntimeResponseText(response, { idleTimeoutMs: 5_000 }))
+      .resolves.toBe(payload);
+  });
+
+  it('decompresses a zstd body exactly once while the idle guard is active', async () => {
+    const payload = JSON.stringify({ ok: true, text: 'zstd with guard' });
+    const response = new Response(zstdCompressSync(Buffer.from(payload)), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'content-encoding': 'zstd' },
+    });
+
+    await expect(readRuntimeResponseText(response, { idleTimeoutMs: 5_000 }))
+      .resolves.toBe(payload);
   });
 });
 

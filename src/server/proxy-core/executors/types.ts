@@ -291,9 +291,128 @@ function truncateRuntimeResponseText(text: string): string {
   return `${text.slice(0, MAX_RUNTIME_RESPONSE_TEXT_CHARS)}\n...[truncated ${text.length - MAX_RUNTIME_RESPONSE_TEXT_CHARS} chars]`;
 }
 
-export async function readRuntimeResponseText(
+export type ReadRuntimeResponseTextOptions = {
+  /** Maximum silence between body chunks. Zero/omitted disables this guard. */
+  idleTimeoutMs?: number;
+  /** Abort a pending body read when the downstream request is gone. */
+  signal?: AbortSignal;
+};
+
+function buildResponseBodyIdleTimeoutMessage(timeoutMs: number): string {
+  const seconds = Math.max(1, Math.round(timeoutMs / 1000));
+  return `response body idle timeout (${seconds}s)`;
+}
+
+function buildResponseBodyAbortError(): Error {
+  const error = new Error('response body read aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+async function readRuntimeResponseTextWithGuards(
   response: RuntimeResponse,
+  options: ReadRuntimeResponseTextOptions,
 ): Promise<string> {
+  const contentEncoding = typeof response.headers?.get === 'function'
+    ? response.headers.get('content-encoding')
+    : null;
+  const encodings = getContentEncodings(contentEncoding);
+
+  // Guards (idle deadline / abort) must apply to EVERY body, encoded or not:
+  // a plain JSON body that stops mid-flight is exactly the hang this guards.
+  // Chunks are collected raw; encoded bodies are decoded whole afterwards —
+  // these are bounded error/fallback payloads (1 MiB truncation), so the
+  // streaming decoder used for SSE relay is unnecessary here.
+  const body = response.body as globalThis.ReadableStream<Uint8Array> | null | undefined;
+  const reader = body?.getReader();
+  if (!reader) return '';
+
+  const timeoutMs = Math.max(0, Math.trunc(options.idleTimeoutMs ?? 0));
+  const signal = options.signal;
+  const chunks: Buffer[] = [];
+  let readerReleased = false;
+  let cancelled = false;
+
+  const cancelReader = async (reason: unknown): Promise<void> => {
+    if (cancelled) return;
+    cancelled = true;
+    try {
+      await reader.cancel(reason);
+    } catch {
+      // Ignore cancellation errors from already-closed/aborted bodies.
+    }
+  };
+
+  const releaseReader = (): void => {
+    if (readerReleased) return;
+    readerReleased = true;
+    try {
+      reader.releaseLock();
+    } catch {
+      // Ignore release errors from an already released reader.
+    }
+  };
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        const error = signal.reason instanceof Error ? signal.reason : buildResponseBodyAbortError();
+        await cancelReader(error);
+        throw error;
+      }
+
+      const next = await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+
+        const finish = (callback: () => void): void => {
+          if (settled) return;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
+          callback();
+        };
+        const onAbort = (): void => {
+          const error = signal?.reason instanceof Error ? signal.reason : buildResponseBodyAbortError();
+          finish(() => reject(error));
+          void cancelReader(error);
+        };
+
+        if (timeoutMs > 0) {
+          timer = setTimeout(() => {
+            const error = new Error(buildResponseBodyIdleTimeoutMessage(timeoutMs));
+            finish(() => reject(error));
+            void cancelReader(error);
+          }, timeoutMs);
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
+        reader.read().then(
+          (value) => finish(() => resolve(value)),
+          (error) => finish(() => reject(error)),
+        );
+      });
+
+      if (next.done) break;
+      if (next.value?.byteLength) chunks.push(Buffer.from(next.value));
+    }
+
+    const rawBuffer = Buffer.concat(chunks);
+    if (encodings.length === 0) {
+      return truncateRuntimeResponseText(rawBuffer.toString('utf8'));
+    }
+    try {
+      return truncateRuntimeResponseText(
+        (await decodeRuntimeResponseBuffer(rawBuffer, contentEncoding)).toString('utf8'),
+      );
+    } catch {
+      return looksLikeZstdFrame(rawBuffer) ? '' : truncateRuntimeResponseText(rawBuffer.toString('utf8'));
+    }
+  } finally {
+    releaseReader();
+  }
+}
+
+async function readUnguardedRuntimeResponseText(response: RuntimeResponse): Promise<string> {
   const contentEncoding = typeof response.headers?.get === 'function'
     ? response.headers.get('content-encoding')
     : null;
@@ -314,6 +433,16 @@ export async function readRuntimeResponseText(
   } catch {
     return looksLikeZstdFrame(rawBuffer) ? '' : truncateRuntimeResponseText(rawBuffer.toString('utf8'));
   }
+}
+
+export async function readRuntimeResponseText(
+  response: RuntimeResponse,
+  options: ReadRuntimeResponseTextOptions = {},
+): Promise<string> {
+  if (options.signal || options.idleTimeoutMs !== undefined) {
+    return readRuntimeResponseTextWithGuards(response, options);
+  }
+  return readUnguardedRuntimeResponseText(response);
 }
 
 function asNodeReadableStream(
