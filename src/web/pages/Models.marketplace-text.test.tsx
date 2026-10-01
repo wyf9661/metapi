@@ -876,4 +876,86 @@ describe('Models marketplace text', () => {
       root?.unmount();
     }
   });
+
+  it('keeps duplicate site names as separate filters when site ids differ', async () => {
+    apiMock.getModelsMarketplace.mockResolvedValue({
+      models: [{
+        name: 'gpt-duplicate-site',
+        accountCount: 2,
+        tokenCount: 2,
+        avgLatency: 300,
+        successRate: 99,
+        description: null,
+        tags: [],
+        supportedEndpointTypes: [],
+        pricingSources: [],
+        accounts: [
+          {
+            id: 11,
+            site: '同名站点',
+            siteId: 101,
+            siteUrl: 'https://one.example.com',
+            username: 'one',
+            latency: 200,
+            balance: 1,
+            tokens: [{ id: 11, name: 'one-token', isDefault: true }],
+          },
+          {
+            id: 12,
+            site: '同名站点',
+            siteId: 202,
+            siteUrl: 'https://two.example.com',
+            username: 'two',
+            latency: 400,
+            balance: 1,
+            tokens: [{ id: 12, name: 'two-token', isDefault: true }],
+          },
+        ],
+      }],
+    });
+
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/models']}>
+            <ToastProvider><Models /></ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const filters = root!.root.findAll((node) => (
+        node.type === 'div'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('filter-item')
+        && typeof node.props.onClick === 'function'
+        && collectText(node).includes('同名站点')
+      ));
+      expect(filters).toHaveLength(2);
+
+      // Selecting the second same-name entry must scope to siteId=202 only.
+      await act(async () => { filters[1]!.props.onClick(); });
+      await flushMicrotasks();
+      const cards = root!.root.findAll((node) => (
+        node.type === 'div'
+        && typeof node.props.className === 'string'
+        && node.props.className.split(' ').includes('model-card')
+        && typeof node.props.onClick === 'function'
+      ));
+      expect(cards).toHaveLength(1);
+      await act(async () => { cards[0]!.props.onClick(); });
+      await flushMicrotasks();
+      const expanded = root!.root.findAll((node) => (
+        node.type === 'div'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('model-card-expand')
+      ));
+      expect(expanded).toHaveLength(1);
+      expect(collectText(expanded[0]!)).toContain('two');
+      expect(collectText(expanded[0]!)).not.toContain('one');
+    } finally {
+      root?.unmount();
+    }
+  });
 });

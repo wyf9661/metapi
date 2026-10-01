@@ -104,6 +104,22 @@ function formatContextWindow(tokens: number | null | undefined): string {
   return String(tokens);
 }
 
+function siteFilterKey(siteName: string, siteId: number | null | undefined): string {
+  const normalizedId = Number(siteId);
+  if (Number.isFinite(normalizedId) && normalizedId > 0) return `id:${Math.trunc(normalizedId)}`;
+  return `name:${siteName.trim()}`;
+}
+
+function siteFilterId(filterKey: string | null): number | null {
+  if (!filterKey || !filterKey.startsWith('id:')) return null;
+  const id = Number(filterKey.slice(3));
+  return Number.isFinite(id) && id > 0 ? Math.trunc(id) : null;
+}
+
+function siteFilterLabel(filterKey: string | null, entries: Array<{ key: string; site: string }>): string | null {
+  return entries.find((entry) => entry.key === filterKey)?.site || null;
+}
+
 function renderCapabilityBadges(caps: ModelsDevCapabilities | null | undefined) {
   if (!caps) return null;
   const badges: string[] = [];
@@ -213,7 +229,7 @@ function formatThroughput(tps: number | null | undefined, sampleCount?: number |
   else if (tps >= 10) base = `${Math.round(tps * 10) / 10} t/s`;
   else base = `${Math.round(tps * 100) / 100} t/s`;
   if (typeof sampleCount === 'number' && sampleCount > 0 && sampleCount < 5) {
-    return `${base}·少样本`;
+    return `${base} · ${tr('少样本')}`;
   }
   return base;
 }
@@ -302,7 +318,7 @@ export default function Models() {
   const deferredSearch = useDeferredValue(search);
   const [sortBy, setSortBy] = useState<SortColumn>('accountCount');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [activeSite, setActiveSite] = useState<string | null>(null);
+  const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('card');
@@ -351,25 +367,6 @@ export default function Models() {
   const latestPrimaryRequestRef = useRef(0);
   const latestMetadataRequestRef = useRef(0);
   const location = useLocation();
-  const siteIdByName = useMemo(() => {
-    const index = new Map<string, number>();
-    for (const model of data.models) {
-      for (const account of model.accounts || []) {
-        const siteName = String(account.site || '').trim();
-        const siteId = Number(account.siteId);
-        if (!siteName || !Number.isFinite(siteId) || siteId <= 0 || index.has(siteName)) continue;
-        index.set(siteName, Math.trunc(siteId));
-      }
-      for (const source of model.pricingSources || []) {
-        const siteName = String(source.siteName || '').trim();
-        const siteId = Number(source.siteId);
-        if (!siteName || !Number.isFinite(siteId) || siteId <= 0 || index.has(siteName)) continue;
-        index.set(siteName, Math.trunc(siteId));
-      }
-    }
-    return index;
-  }, [data.models]);
-
   const loadBaseMarketplace = useCallback(async (refresh = false) => {
     const requestId = ++latestPrimaryRequestRef.current;
     latestMetadataRequestRef.current += 1;
@@ -378,7 +375,9 @@ export default function Models() {
     try {
       const res = await api.getModelsMarketplace({
         refresh,
-        includePricing: false,
+        // An explicit marketplace refresh must refresh metadata/pricing too;
+        // otherwise the follow-up hydration can read the old 90s pricing cache.
+        includePricing: refresh,
       });
       if (requestId !== latestPrimaryRequestRef.current) return null;
       const next = res as ModelsMarketplaceResponse;
@@ -412,6 +411,8 @@ export default function Models() {
     setMetadataHydrating(true);
     try {
       const res = await api.getModelsMarketplace({
+        // Base refresh already fetched fresh metadata; normal hydration keeps
+        // using the short-lived pricing cache and avoids a duplicate fan-out.
         includePricing: true,
       });
       if (metadataRequestId !== latestMetadataRequestRef.current) return;
@@ -516,22 +517,27 @@ export default function Models() {
 
   /* ---- derived: site list ---- */
   const siteMap = useMemo(() => {
-    const m = new Map<string, { count: number; siteUrl: string | null; siteId: number | null }>();
+    const m = new Map<string, { site: string; count: number; siteUrl: string | null; siteId: number | null }>();
     for (const model of data.models) {
-      for (const a of model.accounts) {
-        const existing = m.get(a.site);
+      for (const account of model.accounts) {
+        const key = siteFilterKey(account.site, account.siteId);
+        const existing = m.get(key);
         if (existing) {
           existing.count++;
-          if (!existing.siteUrl && a.siteUrl) existing.siteUrl = a.siteUrl;
-          if (!existing.siteId && a.siteId) existing.siteId = a.siteId;
+          if (!existing.siteUrl && account.siteUrl) existing.siteUrl = account.siteUrl;
         } else {
-          m.set(a.site, { count: 1, siteUrl: a.siteUrl || null, siteId: a.siteId || null });
+          m.set(key, {
+            site: account.site,
+            count: 1,
+            siteUrl: account.siteUrl || null,
+            siteId: account.siteId || null,
+          });
         }
       }
     }
     return [...m.entries()]
-      .map(([site, { count, siteUrl, siteId }]) => ({ site, count, siteUrl, siteId }))
-      .sort((a, b) => b.count - a.count);
+      .map(([key, value]) => ({ key, ...value }))
+      .sort((a, b) => b.count - a.count || a.site.localeCompare(b.site));
   }, [data.models]);
 
   /* ---- filtered ---- */
@@ -546,8 +552,10 @@ export default function Models() {
       }
     }
 
-    if (activeSite) {
-      list = list.filter(m => m.accounts.some(a => a.site === activeSite));
+    if (activeSiteId) {
+      list = list.filter(m => m.accounts.some((account) => (
+        siteFilterKey(account.site, account.siteId) === activeSiteId
+      )));
     }
 
     if (deferredSearch) {
@@ -556,15 +564,19 @@ export default function Models() {
     }
 
     return list;
-  }, [data.models, deferredSearch, activeSite, activeBrand]);
+  }, [data.models, deferredSearch, activeSiteId, activeBrand]);
 
   // Keep expanded detail consistent with filters (especially site filter).
   // The list-level filter uses "model has at least one account on this site" semantics;
   // once a model is shown, its detail should honor the active site as well.
   const detailModels = useMemo(() => {
-    const scopedModels = activeSite ? filteredModels.map((model) => {
-      const accounts = model.accounts.filter((account) => account.site === activeSite);
-      const pricingSources = model.pricingSources.filter((source) => source.siteName === activeSite);
+    const scopedModels = activeSiteId ? filteredModels.map((model) => {
+      const accounts = model.accounts.filter((account) => (
+        siteFilterKey(account.site, account.siteId) === activeSiteId
+      ));
+      const pricingSources = model.pricingSources.filter((source) => (
+        siteFilterKey(source.siteName, source.siteId) === activeSiteId
+      ));
       const latencyValues = accounts
         .map((account) => account.latency)
         .filter(isKnownLatency);
@@ -581,7 +593,7 @@ export default function Models() {
     }) : filteredModels;
 
     return [...scopedModels].sort((a, b) => compareModels(a, b, sortBy, sortDir));
-  }, [filteredModels, activeSite, sortBy, sortDir]);
+  }, [filteredModels, activeSiteId, sortBy, sortDir]);
 
   /* ---- pagination ---- */
   const totalPages = Math.max(1, Math.ceil(detailModels.length / pageSize));
@@ -608,7 +620,7 @@ export default function Models() {
     return index;
   }, [detailModels]);
 
-  useEffect(() => { setPage(1); }, [search, activeSite, activeBrand, pageSize]);
+  useEffect(() => { setPage(1); }, [search, activeSiteId, activeBrand, pageSize]);
 
   useEffect(() => {
     return () => {
@@ -645,14 +657,16 @@ export default function Models() {
   const probeModelScoped = async (model: ModelRow) => {
     // Expand so the connectivity column is visible while probing.
     setExpanded(model.name);
-    if (activeSite) {
-      const siteId = siteIdByName.get(activeSite) || null;
-      const scopedAccounts = model.accounts.filter((account) => account.site === activeSite);
+    if (activeSiteId) {
+      const siteId = siteFilterId(activeSiteId);
+      const scopedAccounts = model.accounts.filter((account) => (
+        siteFilterKey(account.site, account.siteId) === activeSiteId
+      ));
       if (siteId) {
         await probeModel(model.name, { siteId });
         return;
       }
-      // Fallback: probe only accounts currently shown for this supplier.
+      // Legacy rows without siteId: probe only accounts currently shown.
       for (const account of scopedAccounts) {
         await probeModel(model.name, {
           accountId: account.id,
@@ -843,16 +857,16 @@ export default function Models() {
               const s = aggregate.summary;
               toast.success(
                 s
-                  ? `${name} 连通 ${s.supported}/${s.total}` + (aggregate.latencyMs != null ? ` · 均延迟 ${formatLatency(aggregate.latencyMs)}` : '')
-                  : `${name} 可用`,
+                  ? `${name} ${tr('连通')} ${s.supported}/${s.total}` + (aggregate.latencyMs != null ? ` · ${tr('均延迟')} ${formatLatency(aggregate.latencyMs)}` : '')
+                  : `${name} ${tr('可用')}`,
               );
             } else {
-              toast.error(`${name} 探测失败：${aggregate.reason || aggregate.status}`);
+              toast.error(`${name} ${tr('探测失败')}：${aggregate.reason || aggregate.status}`);
             }
             resolve();
           },
           onError: (err: Error) => {
-            toast.error(`${name} 探测失败：${err.message}`);
+            toast.error(`${name} ${tr('探测失败')}：${err.message}`);
             reject(err);
           },
         });
@@ -860,7 +874,7 @@ export default function Models() {
       });
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      const reason = errMessage || '探测失败';
+      const reason = errMessage || tr('探测失败');
       setProbingAccountIds(new Set());
       setProbeResults((prev) => {
         const existing = prev[name];
@@ -1002,13 +1016,13 @@ export default function Models() {
       <div className="filter-panel-section">
         <div className="filter-panel-title">
           {tr('供应商')}
-          {activeSite && <button onClick={() => setActiveSite(null)}>{tr('重置')}</button>}
+          {activeSiteId && <button onClick={() => setActiveSiteId(null)}>{tr('重置')}</button>}
         </div>
-        {siteMap.map(({ site, count, siteUrl, siteId }) => (
+        {siteMap.map(({ key, site, count, siteUrl, siteId }) => (
           <div
-            key={site}
-            className={`filter-item ${activeSite === site ? 'active' : ''}`}
-            onClick={() => setActiveSite(activeSite === site ? null : site)}
+            key={key}
+            className={`filter-item ${activeSiteId === key ? 'active' : ''}`}
+            onClick={() => setActiveSiteId(activeSiteId === key ? null : key)}
           >
             <span className="filter-item-icon" style={{ background: 'var(--color-bg)', borderRadius: 6, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <SiteIcon name={site} size={14} url={siteUrl} siteId={siteId} />
@@ -1116,14 +1130,18 @@ export default function Models() {
         <div className="page-header" style={{ marginBottom: 16 }}>
           <div>
             <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {activeBrand || activeSite || tr('模型广场')}
+              {activeBrand || siteFilterLabel(activeSiteId, siteMap) || tr('模型广场')}
               <span className="badge badge-muted" style={{ fontSize: 12, fontWeight: 500 }}>
                 {tr('共')} {filteredModels.length} {tr('个模型')}
               </span>
             </h2>
-            {(activeBrand || activeSite) && (
+            {(activeBrand || activeSiteId) && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
-                {activeBrand && activeBrand !== '__other__' ? `${tr('查看')} ${activeBrand} ${tr('品牌的所有模型')}` : activeSite ? `${tr('来自供应商')} ${activeSite} ${tr('的模型')}` : tr('其他未归类的模型')}
+                {activeBrand && activeBrand !== '__other__'
+                  ? `${tr('查看')} ${activeBrand} ${tr('品牌的所有模型')}`
+                  : siteFilterLabel(activeSiteId, siteMap)
+                    ? `${tr('来自供应商')} ${siteFilterLabel(activeSiteId, siteMap)} ${tr('的模型')}`
+                    : tr('其他未归类的模型')}
               </p>
             )}
           </div>
@@ -1385,7 +1403,7 @@ export default function Models() {
                             style={{ padding: 10, display: 'grid', gap: 8 }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                              <SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeStyle={{ fontSize: 11 }} />
+                              <SiteBadgeLink siteId={a.siteId ?? undefined} siteName={a.site} siteUrl={a.siteUrl} badgeStyle={{ fontSize: 11 }} />
                               <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{a.username || `ID:${a.id}`}</span>
                             </div>
                             <div style={{ display: 'grid', gap: 6 }}>
@@ -1440,7 +1458,7 @@ export default function Models() {
                         <tbody>
                           {m.accounts.map(a => (
                             <tr key={a.id}>
-                              <td><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeStyle={{ fontSize: 11 }} /></td>
+                              <td><SiteBadgeLink siteId={a.siteId ?? undefined} siteName={a.site} siteUrl={a.siteUrl} badgeStyle={{ fontSize: 11 }} /></td>
                               <td style={{ fontSize: 12 }}>{a.username || `ID:${a.id}`}</td>
                               <td style={{ fontSize: 11 }}><code style={{ wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                               <td>{renderContextLimit(a)}</td>
@@ -1660,7 +1678,7 @@ export default function Models() {
                               <tbody>
                                 {m.accounts.map(a => (
                                   <tr key={a.id} style={{ borderTop: '1px solid var(--color-border-light)' }}>
-                                    <td style={{ padding: 8 }}><SiteBadgeLink siteId={siteIdByName.get(a.site)} siteName={a.site} siteUrl={a.siteUrl} badgeStyle={{ fontSize: 11 }} /></td>
+                                    <td style={{ padding: 8 }}><SiteBadgeLink siteId={a.siteId ?? undefined} siteName={a.site} siteUrl={a.siteUrl} badgeStyle={{ fontSize: 11 }} /></td>
                                     <td style={{ padding: 8 }}>{a.username || `ID:${a.id}`}</td>
                                     <td style={{ padding: 8 }}><code style={{ fontSize: 11, wordBreak: 'break-all' }}>{renderSourceModels(a, m.name)}</code></td>
                                     <td style={{ padding: 8 }}>{renderContextLimit(a)}</td>
