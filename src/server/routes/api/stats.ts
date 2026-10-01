@@ -79,6 +79,14 @@ const limitModelTokenCandidatesRead = createRateLimitGuard({
   max: 30,
   windowMs: 60_000,
 });
+// The marketplace is the most expensive read endpoint (availability joins +
+// 7-day log scans + optional upstream pricing fan-out). Bound it like its
+// sibling reads so a client loop cannot pin the DB / upstreams.
+const limitModelsMarketplaceRead = createRateLimitGuard({
+  bucket: 'models-marketplace-read',
+  max: 30,
+  windowMs: 60_000,
+});
 // Probe endpoints hit upstreams directly — bound them so a loop cannot
 // turn into an upstream probe storm.
 const limitModelProbe = createRateLimitGuard({
@@ -1206,6 +1214,7 @@ export async function statsRoutes(app: FastifyInstance) {
   // Models marketplace - refresh upstream models and aggregate.
   app.get<{ Querystring: { refresh?: string; includePricing?: string } }>(
     '/api/models/marketplace',
+    { preHandler: [limitModelsMarketplaceRead] },
     async (request) => {
       const refreshRequested = parseBooleanFlag(request.query.refresh);
       const includePricing = parseBooleanFlag(request.query.includePricing);
@@ -1230,7 +1239,17 @@ export async function statsRoutes(app: FastifyInstance) {
             failureMessage: (currentTask) =>
               `模型广场刷新失败：${currentTask.error || 'unknown error'}`,
           },
-          async () => routeRefreshWorkflow.refreshModelsAndRebuildRoutes(),
+          async () => {
+            try {
+              return await routeRefreshWorkflow.refreshModelsAndRebuildRoutes();
+            } finally {
+              // Availability/routes were rewritten under the running task: any
+              // marketplace payload cached mid-run is pre-refresh data. Drop it
+              // so the next GET rebuilds from the refreshed DB (success OR
+              // failure — a partial pass also leaves stale rows behind).
+              modelsMarketplaceCache.clear();
+            }
+          },
         );
         refreshQueued = !reused;
         refreshReused = reused;
@@ -1696,9 +1715,14 @@ export async function statsRoutes(app: FastifyInstance) {
           ...account,
           sourceModels: [...account.sourceModels].sort((a, b) => a.localeCompare(b)),
         }));
-        const avgLatency =
-          accounts.reduce((sum, a) => sum + (a.latency || 0), 0) /
-          (accounts.length || 1);
+        // Average only over accounts with a known probe: counting never-probed
+        // accounts as 0ms fabricated "fast" averages (680ms + null → 340ms).
+        const knownLatencies = accounts
+          .map((a) => a.latency)
+          .filter((latency): latency is number => Number.isFinite(latency) && latency != null);
+        const avgLatency = knownLatencies.length > 0
+          ? knownLatencies.reduce((sum, latency) => sum + latency, 0) / knownLatencies.length
+          : null;
         const metadata = modelMetadataMap.get(m.name.toLowerCase());
         const fallbackDescription = metadata?.description
           ? null
@@ -1719,7 +1743,7 @@ export async function statsRoutes(app: FastifyInstance) {
             (sum, account) => sum + account.tokens.length,
             0,
           ),
-          avgLatency: Math.round(avgLatency),
+          avgLatency: avgLatency == null ? null : Math.round(avgLatency),
           avgFirstByteMs,
           avgThroughputTps,
           throughputSampleCount,
@@ -1752,6 +1776,9 @@ export async function statsRoutes(app: FastifyInstance) {
           refreshRunning: !!runningRefreshTask,
           refreshJobId,
           includePricing,
+          // Explicit on both paths so clients can rely on its presence:
+          // true = served from cache, false = freshly computed.
+          cacheHit: false,
         },
       };
     },
