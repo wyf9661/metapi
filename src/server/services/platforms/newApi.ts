@@ -8,6 +8,7 @@ import {
 } from './platformVariantFailures.js';
 import { fetchJsonWithShieldCookieRetry, classifyShieldGateFailureText, NewApiShieldError } from './newApiShield.js';
 import { CODEX_CLI_USER_AGENT } from '../../shared/codexClientFamily.js';
+import { locateTokenInKeys } from '../../shared/tokenMask.js';
 
 // Codex CLI client fingerprint for model discovery calls on sites whose
 // protocol profile requires a Codex client ("Codex 兼容" site setting). Chat
@@ -1509,14 +1510,38 @@ export class NewApiAdapter extends BasePlatformAdapter {
     const resolvedUserId = platformUserId || await this.discoverUserId(baseUrl, accessToken);
 
     const pickTokenId = (items: any[]): number | null => {
-      for (const item of items) {
-        const key = this.normalizeTokenKeyForCompare(item?.key);
-        const id = Number.parseInt(String(item?.id), 10);
-        if (key && key === targetKey && Number.isFinite(id) && id > 0) {
-          return id;
-        }
+      // Mask-aware match: upstream lists often return masked keys (e.g.
+      // `lDon...gPZG`), so strict equality never finds the target.
+      // `locateTokenInKeys` also resolves the two failure modes:
+      //   present  → we hold the exact id to revoke;
+      //   absent   → the fully-enumerated list proves it is gone;
+      //   otherwise ambiguous → unconfirmed (fail closed).
+      const verdict = locateTokenInKeys(
+        targetKey,
+        items.map((item) => (typeof item?.key === 'string' ? item.key : null)),
+      );
+      if (verdict.present && verdict.index !== null) {
+        const id = Number.parseInt(String(items[verdict.index]?.id), 10);
+        return Number.isFinite(id) && id > 0 ? id : null;
       }
       return null;
+    };
+
+    const isTokenListVerified = (items: any[], list: any): boolean => {
+      const total = list.data?.total ?? list.total;
+      // A single page does not prove absence when more pages may hide the
+      // target. Fail closed rather than claiming revocation.
+      const complete = total !== undefined
+        ? Number.isFinite(Number(total)) && Number(total) >= 0 && Number(total) <= items.length
+        : items.length < 100;
+      if (!complete) return false;
+      // Only an absence verdict covers the whole list: if any key was
+      // ambiguous (short/unreadable mask), we cannot rule the target out.
+      const verdict = locateTokenInKeys(
+        targetKey,
+        items.map((item) => (typeof item?.key === 'string' ? item.key : null)),
+      );
+      return !verdict.present && verdict.absent;
     };
 
     let tokenId: number | null = null;
@@ -1527,14 +1552,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
         .find(Array.isArray) as any[] | undefined;
       if (!items) return;
       tokenId = pickTokenId(items);
-      const total = list.data?.total ?? list.total;
-      // A single page does not prove absence when more pages or masked keys
-      // may hide the target. Fail closed rather than claiming revocation.
-      const complete = total !== undefined
-        ? Number.isFinite(Number(total)) && Number(total) >= 0 && Number(total) <= items.length
-        : items.length < 100;
-      const keysVisible = items.every((item) => typeof item?.key === 'string' && !item.key.includes('*'));
-      if (complete && keysVisible) tokenListVerified = true;
+      if (isTokenListVerified(items, list)) tokenListVerified = true;
     };
 
     try {

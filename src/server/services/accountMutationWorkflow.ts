@@ -30,6 +30,7 @@ export async function convergeAccountMutation(input: {
   defaultTokenSource?: string;
   ensurePreferredTokenBeforeSync?: boolean;
   upstreamTokens?: UpstreamTokenLike[];
+  upstreamTokensComplete?: boolean;
   refreshBalance?: boolean;
   refreshModels?: boolean;
   allowInactiveModelRefresh?: boolean;
@@ -76,8 +77,9 @@ export async function convergeAccountMutation(input: {
     }
   }
 
+  // 完整上游枚举则剪枝，否则只 upsert（如单 token fallback）
   if ((input.upstreamTokens?.length || 0) > 0) {
-    const tokenSync = await runStep(() => syncTokensFromUpstream(input.accountId, input.upstreamTokens!));
+    const tokenSync = await runStep(() => syncTokensFromUpstream(input.accountId, input.upstreamTokens!, { prune: input.upstreamTokensComplete !== false }));
     if (tokenSync) {
       result.tokenSync = tokenSync;
       result.defaultTokenId = tokenSync.defaultTokenId ?? result.defaultTokenId;

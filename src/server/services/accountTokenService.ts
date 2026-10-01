@@ -2,6 +2,7 @@
 import { db, schema } from '../db/index.js';
 import { getInsertedRowId } from '../db/insertHelpers.js';
 import { getCredentialModeFromExtraConfig } from './accountExtraConfig.js';
+import { locateTokenInKeys } from '../shared/tokenMask.js';
 
 type UpstreamApiToken = {
   name?: string | null;
@@ -353,7 +354,7 @@ export async function repairDefaultToken(accountId: number) {
   return currentDefault;
 }
 
-export async function syncTokensFromUpstream(accountId: number, upstreamTokens: UpstreamApiToken[]) {
+export async function syncTokensFromUpstream(accountId: number, upstreamTokens: UpstreamApiToken[], options: { prune?: boolean } = {}) {
   const now = new Date().toISOString();
   const existing = await db.select()
     .from(schema.accountTokens)
@@ -550,6 +551,14 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
     }
   }
 
+  if (options.prune !== false) {
+    const pruned = await pruneAbsentUpstreamTokens(accountId, upstreamTokens);
+    for (const id of pruned.pruned) {
+      const idx = existing.findIndex((r: any) => r.id === id);
+      if (idx >= 0) existing.splice(idx, 1);
+    }
+  }
+
   const repaired = await repairDefaultToken(accountId);
 
   return {
@@ -560,6 +569,70 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
     total: existing.length,
     defaultTokenId: repaired?.id || null,
   };
+}
+
+/**
+ * Remove local rows that no longer exist upstream, mirroring the sync result:
+ * after `syncTokensFromUpstream` has upserted every upstream key, any
+ * remaining row is stale.  This is what makes "sync" actually converge after
+ * the user deletes keys on the site panel (previously the local list only
+ * ever grew).
+ *
+ * Safety rules — prune only when every remaining row is provably absent:
+ *   - the upstream list must be a trusted full enumeration (a non-empty list
+ *     of keys, each classifiable — a short/opaque mask disables pruning for
+ *     that row because it cannot be ruled in or out);
+ *   - ambiguous verdicts (`unknown`) leave the row alone (fail closed);
+ *   - only source='sync' rows are pruned; manual and legacy rows are
+ *     user-space data that may not be enumerable upstream.
+ *   - masked_pending placeholders are never pruned (the mask alone cannot
+ *     prove absence beyond the render format).
+ *
+ * Returns the ids of the pruned rows so callers can report/repair defaults.
+ */
+export async function pruneAbsentUpstreamTokens(
+  accountId: number,
+  upstreamTokens: UpstreamApiToken[],
+): Promise<{ pruned: number[] }> {
+  const upstreamKeys = upstreamTokens
+    .map((token) => normalizeTokenValue(token.key))
+    .filter((key): key is string => key !== null);
+  // An empty upstream list is not evidence of absence — it is what failed
+  // requests look like after filtering. Callers guard on this too.
+  if (upstreamKeys.length === 0) return { pruned: [] };
+
+  // The adapter reads a single page of `size=100` — a full page cannot be
+  // told apart from a truncated one, so stop pruning before it can delete
+  // rows whose tokens simply were not returned (a false "absent" verdict).
+  const PAGE_SIZE = 100;
+  if (upstreamKeys.length >= PAGE_SIZE) return { pruned: [] };
+
+  const rows = await db.select()
+    .from(schema.accountTokens)
+    .where(eq(schema.accountTokens.accountId, accountId))
+    .all();
+  if (rows.length === 0) return { pruned: [] };
+
+  const pruned: number[] = [];
+  for (const row of rows as AccountTokenRow[]) {
+    // Only prune rows sync created; manual/legacy rows are user-space data.
+    if (row.source !== 'sync') continue;
+    // Masked_pending placeholders use an opaque masked value; the mask
+    // alone cannot prove absence beyond the upstream render format.
+    if (isMaskedPendingAccountToken(row)) continue;
+    const verdict = locateTokenInKeys(row.token, upstreamKeys);
+    if (verdict.present || !verdict.absent) continue;
+
+    await db.delete(schema.accountTokens)
+      .where(eq(schema.accountTokens.id, row.id))
+      .run();
+    pruned.push(row.id);
+  }
+
+  if (pruned.length > 0) {
+    await repairDefaultToken(accountId);
+  }
+  return { pruned };
 }
 
 export async function listTokensWithRelations(accountId?: number) {

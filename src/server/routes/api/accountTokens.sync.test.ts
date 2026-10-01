@@ -31,6 +31,7 @@ describe('account tokens sync routes with site status', () => {
   let db: DbModule['db'];
   let schema: DbModule['schema'];
   let maskToken: AccountTokenServiceModule['maskToken'];
+  let syncTokensFromUpstream: AccountTokenServiceModule['syncTokensFromUpstream'];
   let dataDir = '';
   let previousDataDir: string | undefined;
   let seedId = 0;
@@ -75,6 +76,7 @@ describe('account tokens sync routes with site status', () => {
     db = dbModule.db;
     schema = dbModule.schema;
     maskToken = accountTokenServiceModule.maskToken;
+    syncTokensFromUpstream = accountTokenServiceModule.syncTokensFromUpstream;
 
     app = Fastify();
     await app.register(routesModule.accountTokensRoutes);
@@ -1170,5 +1172,65 @@ it('does not reuse a different ready token when another logical token shares the
     expect(deleteApiTokenMock).not.toHaveBeenCalled();
     const removed = await db.select().from(schema.accountTokens).where(eq(schema.accountTokens.id, token.id)).get();
     expect(removed).toBeUndefined();
+  });
+
+  it('does not prune when the upstream list reaches the page-size limit', async () => {
+    const { account } = await seedAccount({});
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id, name: 'row-1', token: 'sk-row1', source: 'sync',
+      enabled: true, isDefault: false, valueStatus: 'ready', createdAt: '2026-10-01', updatedAt: '2026-10-01',
+    });
+    const upstream = Array.from({ length: 100 }, (_, i) => ({ key: `sk-batch-${i}`, name: `t${i}` }));
+
+    await syncTokensFromUpstream(account.id, upstream);
+
+    const remaining = await db.select({ id: schema.accountTokens.id, token: schema.accountTokens.token })
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .all();
+    // The 100-key page could be a truncated enumeration; the lone local row
+    // is not provably absent, so it must survive.
+    expect(remaining.some((r) => r.token === 'sk-row1')).toBe(true);
+  });
+
+  it('syncTokensFromUpstream prunes stale rows not returned by upstream', async () => {
+    const { account } = await seedAccount({});
+    await db.insert(schema.accountTokens).values([
+      { accountId: account.id, name: 'token-aaa', token: 'sk-aaa', source: 'sync', enabled: true, isDefault: false, valueStatus: 'ready', createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+      { accountId: account.id, name: 'token-bbb', token: 'sk-bbb', source: 'sync', enabled: true, isDefault: false, valueStatus: 'ready', createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+    ]).run();
+
+    const result = await syncTokensFromUpstream(account.id, [
+      { key: 'sk-aaa', name: 'token-aaa' },
+    ]);
+
+    const remaining = await db.select({ id: schema.accountTokens.id, token: schema.accountTokens.token })
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .all();
+    expect(remaining.length).toBe(1);
+    expect(remaining[0].token).toBe('sk-aaa');
+  });
+
+  it('does not prune manual or masked-pending rows', async () => {
+    const { account } = await seedAccount({});
+    await db.insert(schema.accountTokens).values([
+      { accountId: account.id, name: 'manual-tok', token: 'sk-manual-val', source: 'manual', enabled: true, isDefault: false, valueStatus: 'ready', createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+      { accountId: account.id, name: 'mp-pending', token: 'sk-mask***tail', source: 'sync', enabled: true, isDefault: false, valueStatus: 'masked_pending', createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+    ]).run();
+
+    // upstream has keys that do not match either row
+    await syncTokensFromUpstream(account.id, [
+      { key: 'sk-other1', name: 'other1' },
+      { key: 'sk-other2', name: 'other2' },
+    ]);
+
+    const remaining = await db.select({ id: schema.accountTokens.id, token: schema.accountTokens.token, source: schema.accountTokens.source })
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .all();
+    // Both must survive the prune
+    expect(remaining.some((r) => r.source === 'manual')).toBe(true);
+    expect(remaining.some((r) => r.source === 'sync')).toBe(true);
   });
 });

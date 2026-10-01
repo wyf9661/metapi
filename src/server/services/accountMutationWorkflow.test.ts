@@ -53,7 +53,7 @@ describe('accountMutationWorkflow', () => {
       name: 'default',
       source: 'manual',
     });
-    expect(syncTokensFromUpstreamMock).toHaveBeenCalledWith(1, upstreamTokens);
+    expect(syncTokensFromUpstreamMock).toHaveBeenCalledWith(1, upstreamTokens, { prune: true });
     expect(refreshBalanceMock).toHaveBeenCalledWith(1);
     expect(refreshModelsForAccountMock).toHaveBeenCalledWith(1);
     expect(rebuildTokenRoutesFromAvailabilityMock).toHaveBeenCalledTimes(1);

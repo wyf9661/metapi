@@ -302,6 +302,7 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
   try {
     const platformUserId = resolvePlatformUserId(row.accounts.extraConfig, row.accounts.username);
     const accountProxyUrl = getProxyUrlFromExtraConfig(row.accounts.extraConfig);
+    let tokensAreComplete = true;
     let tokens = await withTimeout(
       () => withAccountProxyOverride(accountProxyUrl,
         () => adapter.getApiTokens(row.sites.url, row.accounts.accessToken, platformUserId)),
@@ -318,6 +319,7 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
       );
       if (fallback) {
         tokens = [{ name: 'default', key: fallback, enabled: true, tokenGroup: 'default' }];
+        tokensAreComplete = false;
       }
     }
 
@@ -338,6 +340,7 @@ async function executeAccountTokenSync(row: AccountWithSiteRow): Promise<SyncExe
     const convergence = await convergeAccountMutation({
       accountId,
       upstreamTokens: tokens,
+      upstreamTokensComplete: tokensAreComplete,
     });
     const synced = convergence.tokenSync!;
     if ((synced.maskedPending || 0) > 0) {
