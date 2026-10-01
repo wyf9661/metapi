@@ -91,7 +91,7 @@
     "minimatch": "^10.2.6",
     "mysql2": "^3.23.2",
     "node-cron": "^4.6.0",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.0.0",
     "pg": "^8.23.0",
     "rate-limiter-flexible": "^11.2.0",
     "socks": "^2.8.9",
