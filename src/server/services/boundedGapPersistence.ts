@@ -21,6 +21,7 @@ import type { BoundedGapState } from './boundedGapSelection.js';
 const BOUNDED_GAP_STATE_SETTING_KEY = 'routing.bounded_gap_states';
 const BOUNDED_GAP_STATE_VERSION = 1;
 const BOUNDED_GAP_PERSIST_DEBOUNCE_MS = 2_000;
+export const BOUNDED_GAP_STATE_MAX_ENTRIES = 2_000;
 
 type BoundedGapStatePersistencePayload = {
   version: number;
@@ -41,7 +42,16 @@ function shouldUnrefTimer(timer: ReturnType<typeof setTimeout>): void {
   }
 }
 
+export function enforceBoundedGapStateLimit(): void {
+  while (boundedGapStateMap.size > BOUNDED_GAP_STATE_MAX_ENTRIES) {
+    const oldestKey = boundedGapStateMap.keys().next().value;
+    if (oldestKey === undefined) break;
+    boundedGapStateMap.delete(oldestKey);
+  }
+}
+
 function serializeBoundedGapStates(nowMs = Date.now()): BoundedGapStatePersistencePayload {
+  enforceBoundedGapStateLimit();
   return {
     version: BOUNDED_GAP_STATE_VERSION,
     savedAtMs: nowMs,
@@ -95,6 +105,7 @@ export async function ensureBoundedGapStatesLoaded(): Promise<void> {
           sequence,
           lastSelectedSequence,
         });
+        enforceBoundedGapStateLimit();
       }
     } catch (error) {
       console.warn(
@@ -156,6 +167,7 @@ function scheduleBoundedGapStatesPersist(): void {
  */
 export function attachBoundedGapStateMap(map: Map<string, BoundedGapState>): void {
   boundedGapStateMap = map;
+  enforceBoundedGapStateLimit();
 }
 
 export function markBoundedGapStateDirty(): void {

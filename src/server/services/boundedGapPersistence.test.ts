@@ -50,6 +50,34 @@ describe('boundedGapPersistence', () => {
     expect(restoredMap.get('model-b\u0000456')).toEqual({ sequence: 42, lastSelectedSequence: null });
   });
 
+  it('bounds persisted and restored states to the configured maximum', async () => {
+    await persistence.__resetBoundedGapPersistenceForTests();
+    const map = new Map<string, BoundedGapState>();
+    for (let index = 0; index < 2_100; index += 1) {
+      map.set(`model-${index}\\u0000${index}`, {
+        sequence: index + 1,
+        lastSelectedSequence: index,
+      });
+    }
+    persistence.attachBoundedGapStateMap(map);
+
+    await persistence.persistBoundedGapStates();
+    const row = await db.select({ value: schema.settings.value })
+      .from(schema.settings)
+      .where(eq(schema.settings.key, BOUNDED_GAP_STATE_SETTING_KEY))
+      .get();
+    const payload = JSON.parse(row?.value || '{}') as { states?: Record<string, unknown> };
+    expect(Object.keys(payload.states || {})).toHaveLength(2_000);
+
+    await persistence.__resetBoundedGapPersistenceForTests();
+    const restoredMap = new Map<string, BoundedGapState>();
+    persistence.attachBoundedGapStateMap(restoredMap);
+    await persistence.ensureBoundedGapStatesLoaded();
+    expect(restoredMap.size).toBe(2_000);
+    expect(restoredMap.has('model-0\\u00000')).toBe(false);
+    expect(restoredMap.has('model-2099\\u00002099')).toBe(true);
+  });
+
   it('falls back to an empty map when no state was persisted', async () => {
     await persistence.__resetBoundedGapPersistenceForTests();
     await db.delete(schema.settings).where(eq(schema.settings.key, BOUNDED_GAP_STATE_SETTING_KEY)).run();
