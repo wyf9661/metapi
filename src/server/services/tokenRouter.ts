@@ -24,6 +24,7 @@ import {
 import { selectWithBoundedGap, type BoundedGapState } from './boundedGapSelection.js';
 import {
   attachBoundedGapStateMap,
+  enforceBoundedGapStateLimit,
   ensureBoundedGapStatesLoaded,
   markBoundedGapStateDirty,
 } from './boundedGapPersistence.js';
@@ -105,9 +106,16 @@ function getBoundedGapState(requestedModel: string, siteId: number, channelId?: 
     ? `${requestedModel}\u0000${siteId}\u0000ch:${channelId}`
     : `${requestedModel}\u0000${siteId}`;
   const existing = boundedGapStates.get(key);
-  if (existing) return existing;
+  if (existing) {
+    // Map order is the recency order used by persistence eviction. A state can
+    // be hit many times without being selected, so refresh it on every lookup.
+    boundedGapStates.delete(key);
+    boundedGapStates.set(key, existing);
+    return existing;
+  }
   const state = { sequence: 0, lastSelectedSequence: null };
   boundedGapStates.set(key, state);
+  enforceBoundedGapStateLimit();
   return state;
 }
 
@@ -123,6 +131,9 @@ export type ExplainSelectionOptions = {
   bypassSourceModelCheck?: boolean;
   useChannelSourceModelForCost?: boolean;
   downstreamPolicy?: DownstreamRoutingPolicy;
+  /** Request's estimated context requirement — mirrors the live selection
+   * filter so the decision snapshot and the real choice agree. */
+  requiredContextTokens?: number;
 };
 
 /**
@@ -314,8 +325,11 @@ export class TokenRouter {
   ): Promise<number[]> {
     const normalizedSiteId = Math.trunc(siteId || 0);
     if (normalizedSiteId <= 0) return [];
-    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return [];
-    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    // Same mapping the selection entry points apply: the site short-circuit must
+    // expand the same route the attempt actually dispatched through.
+    const effectiveModel = resolveDownstreamPolicyModel(requestedModel, downstreamPolicy);
+    if (!isModelAllowedByDownstreamPolicy(effectiveModel, downstreamPolicy)) return [];
+    const match = await this.findRoute(effectiveModel, downstreamPolicy);
     if (!match) return [];
     return match.channels
       .filter((candidate) => candidate.site.id === normalizedSiteId)
@@ -329,17 +343,18 @@ export class TokenRouter {
     excludeChannelIds: number[] = [],
     options?: PreferredChannelSelectionOptions,
   ): Promise<SelectedChannel | null> {
-    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
+    const effectiveModel = resolveDownstreamPolicyModel(requestedModel, downstreamPolicy);
+    if (!isModelAllowedByDownstreamPolicy(effectiveModel, downstreamPolicy)) return null;
     const normalizedPreferredChannelId = Math.trunc(preferredChannelId || 0);
     if (normalizedPreferredChannelId <= 0) return null;
     await ensureSiteRuntimeHealthStateLoaded();
     await ensureSiteContextCapabilityLoaded();
 
-    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    const match = await this.findRoute(effectiveModel, downstreamPolicy);
     if (!match) return null;
     return await this.selectPreferredFromMatch(
       match,
-      requestedModel,
+      effectiveModel,
       normalizedPreferredChannelId,
       downstreamPolicy,
       excludeChannelIds,
@@ -364,17 +379,18 @@ export class TokenRouter {
     downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
     options: ConcurrencySpreadOptions = {},
   ): Promise<SelectedChannel | null> {
-    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
+    const effectiveModel = resolveDownstreamPolicyModel(requestedModel, downstreamPolicy);
+    if (!isModelAllowedByDownstreamPolicy(effectiveModel, downstreamPolicy)) return null;
     const normalizedPreferredChannelId = Math.trunc(preferredChannelId || 0);
     if (normalizedPreferredChannelId <= 0) return null;
     await ensureSiteRuntimeHealthStateLoaded();
     await ensureSiteContextCapabilityLoaded();
 
-    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    const match = await this.findRoute(effectiveModel, downstreamPolicy);
     if (!match) return null;
     return await this.selectSpreadFromMatch(
       match,
-      requestedModel,
+      effectiveModel,
       normalizedPreferredChannelId,
       downstreamPolicy,
       options,
@@ -385,10 +401,16 @@ export class TokenRouter {
     requestedModel: string,
     excludeChannelIds: number[] = [],
     downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
+    options: Omit<ExplainSelectionOptions, 'excludeChannelIds' | 'downstreamPolicy'> = {},
   ): Promise<RouteDecisionExplanation> {
     await ensureSiteRuntimeHealthStateLoaded();
+    await ensureSiteContextCapabilityLoaded();
     const match = await this.findRoute(requestedModel, downstreamPolicy);
-    return await this.explainSelectionFromMatch(match, requestedModel, { excludeChannelIds, downstreamPolicy });
+    return await this.explainSelectionFromMatch(match, requestedModel, {
+      excludeChannelIds,
+      downstreamPolicy,
+      ...options,
+    });
   }
 
   async explainSelectionForRoute(

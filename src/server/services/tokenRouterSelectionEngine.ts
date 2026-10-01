@@ -98,6 +98,7 @@ export async function explainSelectionFromMatch(
       excludeChannelIds,
       nowIso,
       downstreamPolicy,
+      requiredContextTokens: options.requiredContextTokens,
     });
 
     const recentlyFailed = routeStrategy !== 'round_robin'
@@ -134,34 +135,92 @@ export async function explainSelectionFromMatch(
     }
   }
 
-  if (available.length === 0) {
-    // Availability-first: a cooldown written by a HEALTH PROBE is a prediction,
-    // not an observation — don't let it be the only reason the pool is empty
-    // (mirrors the context-filter pattern in selectFromMatch so the decision
-    // snapshot stays consistent with what the live path will choose).
-    // Cooldowns from real traffic failures and credential-scoped (usage limit)
-    // exclusions are deliberately NOT relaxed here: see
-    // isProbeAttributableCooldown.
-    const relaxed = match.channels.filter((row) => (
+  if (
+    available.length === 0
+    && (options.requiredContextTokens ?? 0) > 0
+    && config.contextAwareRouting !== 'off'
+  ) {
+    // Mirror live selectFromMatch pass 1: relax only the context filter first;
+    // probe cooldowns remain hard exclusions at this stage.
+    const contextRelaxed = match.channels.filter((row) => (
       getCandidateEligibilityReasons(row, {
         requestedModel,
         bypassSourceModelCheck,
         excludeChannelIds,
         nowIso,
         downstreamPolicy,
+        requiredContextTokens: undefined,
+        ignoreProbeCooldown: false,
+      }).length === 0
+    ));
+    if (contextRelaxed.length > 0) {
+      for (const row of contextRelaxed) {
+        const candidate = candidateMap.get(row.channel.id);
+        if (!candidate) continue;
+        candidate.eligible = true;
+        candidate.reason = '可用（上下文过滤放行 — 过滤不得单凭它清空候选池）';
+        candidate.reasonCodes = ['eligible'];
+      }
+      summary.push(`上下文过滤放行：${contextRelaxed.length} 个候选仅因上下文窗口被排除，已放行给路由选择`);
+      available.push(...contextRelaxed);
+    }
+  }
+
+  if (
+    available.length === 0
+    && (options.requiredContextTokens ?? 0) > 0
+    && config.contextAwareRouting !== 'off'
+  ) {
+    // Mirror live selectFromMatch pass 2: only after the context-only pass
+    // fails, relax probe-written cooldowns as the final availability fallback.
+    const fullRelaxed = match.channels.filter((row) => (
+      getCandidateEligibilityReasons(row, {
+        requestedModel,
+        bypassSourceModelCheck,
+        excludeChannelIds,
+        nowIso,
+        downstreamPolicy,
+        requiredContextTokens: undefined,
         ignoreProbeCooldown: true,
       }).length === 0
     ));
-    if (relaxed.length > 0) {
-      for (const row of relaxed) {
+    if (fullRelaxed.length > 0) {
+      for (const row of fullRelaxed) {
+        const candidate = candidateMap.get(row.channel.id);
+        if (!candidate) continue;
+        candidate.eligible = true;
+        candidate.reason = '可用（探测冷却 + 上下文过滤联合放行 — 与实时选择的兜底一致）';
+        candidate.reasonCodes = ['eligible'];
+      }
+      summary.push(`探测冷却 + 上下文过滤放行：${fullRelaxed.length} 个候选被两类过滤器同时排除，已按实时路径的兜底放行`);
+      available.push(...fullRelaxed);
+    }
+  }
+
+  if (available.length === 0) {
+    // Live selection also relaxes probe-written cooldowns when there is no
+    // context requirement. Keep that path visible in the decision snapshot.
+    const probeRelaxed = match.channels.filter((row) => (
+      getCandidateEligibilityReasons(row, {
+        requestedModel,
+        bypassSourceModelCheck,
+        excludeChannelIds,
+        nowIso,
+        downstreamPolicy,
+        requiredContextTokens: undefined,
+        ignoreProbeCooldown: true,
+      }).length === 0
+    ));
+    if (probeRelaxed.length > 0) {
+      for (const row of probeRelaxed) {
         const candidate = candidateMap.get(row.channel.id);
         if (!candidate) continue;
         candidate.eligible = true;
         candidate.reason = '可用（探测冷却放行 — 探测是预测，不得单凭它清空候选池）';
         candidate.reasonCodes = ['eligible'];
       }
-      summary.push(`探测冷却放行：${relaxed.length} 个候选仅有健康探测写入的冷却，已放行给路由选择`);
-      available.push(...relaxed);
+      summary.push(`探测冷却放行：${probeRelaxed.length} 个候选仅有健康探测写入的冷却，已放行给路由选择`);
+      available.push(...probeRelaxed);
     }
   }
 
