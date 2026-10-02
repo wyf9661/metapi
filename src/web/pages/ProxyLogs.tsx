@@ -1790,7 +1790,7 @@ export default function ProxyLogs() {
                         </div>
                       )}
                       {detail && pathMeta.errorMessage.trim().length > 0 && (
-                        <div style={{ color: 'var(--color-danger)' }}>
+                        <div style={{ color: 'var(--color-danger)', overflowWrap: 'anywhere' }}>
                           {pathMeta.errorMessage}
                         </div>
                       )}
@@ -2546,6 +2546,7 @@ export default function ProxyLogs() {
                                         style={{
                                           color: 'var(--color-danger)',
                                           whiteSpace: 'pre-wrap',
+                                          overflowWrap: 'anywhere',
                                         }}
                                       >
                                         {pathMeta.errorMessage}
