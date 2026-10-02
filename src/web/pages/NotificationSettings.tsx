@@ -413,7 +413,7 @@ export default function NotificationSettings() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
                         <button type="button" onClick={addChannel} className="btn btn-soft-primary">添加通道</button>
                         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                            加签密钥：钉钉「加签」与飞书「签名校验」都填这里，留空表示不需要。
+                            {tr('加签密钥：钉钉「加签」与飞书「签名校验」都填这里，留空表示不需要。')}
                         </span>
                     </div>
                 </div>
@@ -444,7 +444,7 @@ export default function NotificationSettings() {
 
                     <div style={{ opacity: runtime.serverChanEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
                         <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 10 }}>
-                            当前配置: {runtime.serverChanKeyMasked || '未设置'}
+                            {tr('当前配置')}: {runtime.serverChanKeyMasked || tr('未设置')}
                         </code>
                         <input
                             type="password"
@@ -543,7 +543,7 @@ export default function NotificationSettings() {
                             </div>
                             <div>
                                 <div style={{ fontWeight: 600, fontSize: 15 }}>邮件服务 (SMTP)</div>
-                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>通过电子邮件推送提醒</div>
+                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('通过电子邮件推送提醒')}</div>
                             </div>
                         </div>
 
