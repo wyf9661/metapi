@@ -4747,6 +4747,32 @@ textarea {
   color: #c6bfb8;
 }
 
+/* Dark brand panel: the light gradient is hardcoded below, so dark mode needs its
+   own background — otherwise the left panel stays a big light block in the dark
+   page and its (already lightened) text sits on light ground unreadably. */
+[data-theme="dark"] .login-brand-panel-light {
+  background:
+    radial-gradient(circle at top left, rgba(45,212,191, 0.14), transparent 26%),
+    radial-gradient(circle at right 20%, rgba(45,212,191, 0.09), transparent 22%),
+    linear-gradient(160deg, #1b2624 0%, #17211f 52%, #141d1b 100%);
+}
+
+/* The footer chips keep white backgrounds from their light rules; on the dark
+   panel they read as two bright spots. Darken them with the icon text color. */
+[data-theme="dark"] .login-icon-link,
+[data-theme="dark"] .login-doc-link {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(45,212,191, 0.22);
+}
+
+[data-theme="dark"] .login-icon-link {
+  color: #d9d2cb;
+}
+
+[data-theme="dark"] .login-doc-link {
+  color: #5eead4;
+}
+
 [data-theme="dark"] .login-capability-title {
   color: #f7f3ee;
 }
