@@ -7176,7 +7176,11 @@ textarea {
 }
 
 .site-availability-cell-empty {
-  background: transparent !important;
+  /* A faint track instead of full transparency: fully invisible empties make the
+     24h strip fragment into floating dots on the dark card — the timeline stops
+     reading as a 24-hour axis. Faint-but-visible keeps the "no traffic" semantics
+     in both themes without shouting. */
+  background: color-mix(in srgb, var(--color-border-light) 45%, transparent) !important;
   border: none !important;
   box-shadow: none !important;
   pointer-events: none;
