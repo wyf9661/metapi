@@ -258,7 +258,7 @@ export default function Settings() {
     borderRadius: 'var(--radius-sm)',
     fontSize: 13,
     outline: 'none',
-    background: 'var(--color-bg)',
+    background: 'var(--color-bg-inset)',
     color: 'var(--color-text-primary)',
   };
   const settingsModernCardStyle: React.CSSProperties = {
@@ -985,7 +985,7 @@ export default function Settings() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: 16 }}>
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>管理员登录令牌</div>
-          <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 12 }}>
+          <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 12 }}>
             {maskedToken || '****'}
           </code>
           <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? '公网隧道访问时不可修改' : undefined}>修改登录令牌</button>
@@ -1012,7 +1012,7 @@ export default function Settings() {
             padding: '12px 14px',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-border-light)',
-            background: 'var(--color-bg)',
+            background: 'var(--color-bg-inset)',
             cursor: isTunnelClientView ? 'not-allowed' : 'pointer',
             opacity: isTunnelClientView ? 0.55 : 1,
           }}>
@@ -2044,7 +2044,7 @@ export default function Settings() {
                   />
                 </div>
               )}
-              <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)' }}>
+              <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)' }}>
                 {generatedConnectionString || 'Fill host/user/password to generate connection string'}
               </code>
             </div>
@@ -2163,7 +2163,7 @@ export default function Settings() {
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
             当前识别到的管理端 IP（由服务端判定）：
           </div>
-          <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 10 }}>
+          <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 10 }}>
             {runtime.currentAdminIp || '未知'}
           </code>
           <textarea

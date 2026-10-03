@@ -441,7 +441,7 @@ export default function Sites() {
     borderRadius: 'var(--radius-sm)',
     fontSize: 13,
     outline: 'none',
-    background: 'var(--color-bg)',
+    background: 'var(--color-bg-inset)',
     color: 'var(--color-text-primary)',
   } as const;
 
@@ -1506,7 +1506,7 @@ export default function Sites() {
               style={{
                 border: `1px solid ${normalizedFormPlatform ? 'color-mix(in srgb, var(--color-primary) 28%, var(--color-border))' : 'var(--color-border)'}`,
                 borderRadius: 'var(--radius-sm)',
-                background: 'var(--color-bg)',
+                background: 'var(--color-bg-inset)',
                 boxShadow: normalizedFormPlatform ? '0 0 0 2px color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'none',
                 transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
               }}
@@ -1633,7 +1633,7 @@ export default function Sites() {
                   padding: 10,
                   border: '1px solid var(--color-border-light)',
                   borderRadius: 'var(--radius-sm)',
-                  background: 'var(--color-bg)',
+                  background: 'var(--color-bg-inset)',
                 }}
               >
                 <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center' }}>
@@ -1752,7 +1752,7 @@ export default function Sites() {
               padding: '10px 12px',
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-bg)',
+              background: 'var(--color-bg-inset)',
               color: 'var(--color-text-primary)',
               fontSize: 13,
             }}>
@@ -1834,7 +1834,7 @@ export default function Sites() {
           </div>
 
           {isEditing && (
-            <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
+            <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)' }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>刷新后自动测试请求</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
                 开启后，每次自动获取模型列表成功后，会对指定模型发送一次真实测试请求。若判定不可用，自动加入该 key 的禁用列表并重建路由。
@@ -1884,7 +1884,7 @@ export default function Sites() {
                   style={{
                     width: '100%', padding: '6px 10px', border: '1px solid var(--color-border)',
                     borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
-                    background: 'var(--color-bg)', color: 'var(--color-text-primary)',
+                    background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)',
                     marginBottom: 10, opacity: probeEnabled ? 1 : 0.5,
                     fontFamily: 'var(--font-mono)',
                   }}
@@ -1902,7 +1902,7 @@ export default function Sites() {
                   style={{
                     width: 90, padding: '5px 8px', border: '1px solid var(--color-border)',
                     borderRadius: 'var(--radius-sm)', fontSize: 12, outline: 'none',
-                    background: 'var(--color-bg)', color: 'var(--color-text-primary)',
+                    background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)',
                   }}
                 />
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>ms（响应超过该时间则自动禁用，0=不限）</span>
@@ -1940,7 +1940,7 @@ export default function Sites() {
               {probeLog.length > 0 && (
                 <div style={{
                   marginTop: 10, padding: '8px 10px',
-                  background: 'var(--color-bg)', border: '1px solid var(--color-border-light)',
+                  background: 'var(--color-bg-inset)', border: '1px solid var(--color-border-light)',
                   borderRadius: 'var(--radius-sm)', fontSize: 11,
                   fontFamily: 'var(--font-mono)', maxHeight: 200, overflowY: 'auto',
                   lineHeight: 1.8,
@@ -1965,7 +1965,7 @@ export default function Sites() {
                   <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px 0' }}>
                     {brandGroups.map(([brandName, models]) => (
                       <div key={brandName}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 12px', background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border-light)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 12px', background: 'var(--color-bg-inset)', borderBottom: '1px solid var(--color-border-light)' }}>
                           {brandName} ({models.length})
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '6px 12px' }}>

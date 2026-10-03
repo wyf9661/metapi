@@ -474,7 +474,7 @@ describe('ImportExport', () => {
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-sm)',
         fontSize: 13,
-        background: 'var(--color-bg)',
+        background: 'var(--color-bg-inset)',
         color: 'var(--color-text-primary)',
       }));
       expect(root!.root.findAll((node) => node.type === 'select')).toHaveLength(0);

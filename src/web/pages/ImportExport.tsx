@@ -100,7 +100,7 @@ const settingsInputStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   fontSize: 13,
   outline: 'none',
-  background: 'var(--color-bg)',
+  background: 'var(--color-bg-inset)',
   color: 'var(--color-text-primary)',
   boxSizing: 'border-box',
   transition: 'border-color 0.2s',
@@ -662,7 +662,7 @@ export default function ImportExport() {
                   padding: '10px 12px',
                   border: '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-sm)',
-                  background: 'var(--color-bg)',
+                  background: 'var(--color-bg-inset)',
                   color: 'var(--color-text-primary)',
                 }}
               />

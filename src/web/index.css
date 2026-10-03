@@ -7,6 +7,9 @@
   /* Warm neutral base (hue ~90) + teal brand accent (hue ~208) */
   --color-bg: oklch(0.962 0.006 90);
   --color-bg-card: oklch(0.992 0.003 90);
+  /* Inset surfaces (inputs, code wells): identical to the page bg in light mode
+     (the approved look); dark mode lifts it toward the card layer. */
+  --color-bg-inset: var(--color-bg);
   --color-bg-sidebar: oklch(0.992 0.003 90);
   --color-bg-topbar: oklch(0.992 0.003 90);
   --color-border: oklch(0.905 0.008 90);
@@ -46,6 +49,11 @@
   /* Deep teal-tinted charcoal, layered by lightness */
   --color-bg: oklch(0.235 0.018 190);
   --color-bg-card: oklch(0.285 0.020 190);
+  /* Inset surfaces (inputs, code wells, small wells on cards): in dark mode the
+     page background is far below the card layer, so an inset that uses the raw
+     page bg reads as a black hole on the card. Lift it most of the way to the
+     card so the step stays visible but soft. */
+  --color-bg-inset: color-mix(in srgb, var(--color-bg-card) 80%, var(--color-bg));
   --color-bg-sidebar: oklch(0.265 0.019 190);
   --color-bg-topbar: oklch(0.265 0.019 190);
   --color-border: oklch(0.355 0.020 190);
@@ -71,6 +79,17 @@
 }
 
 /* ===== Base ===== */
+html {
+  /* Managed dark theme: with color-scheme declared, browser force-dark engines
+     (Chrome/Edge auto-dark, Android WebView) leave our palette alone instead of
+     re-darkening the dark theme into flat neutral gray. */
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -651,7 +670,7 @@ html[data-layout="desktop"] .main-content {
   font-weight: 700;
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   border-radius: var(--radius-md);
   padding: 5px 8px;
 }
@@ -2810,7 +2829,7 @@ body.site-drag-active * {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   cursor: pointer;
   min-height: 42px;
 }
@@ -2856,7 +2875,7 @@ body.site-drag-active * {
   padding: 10px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-primary);
   cursor: pointer;
   font-size: 13px;
@@ -3493,7 +3512,7 @@ textarea {
   width: 220px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   box-shadow: var(--shadow-lg);
   padding: 10px;
   display: grid;
@@ -3918,7 +3937,7 @@ textarea {
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-primary);
   font-size: 13px;
   line-height: 1.5;
@@ -3951,7 +3970,7 @@ textarea {
   padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   font-size: 13px;
   color: var(--color-text-primary);
 }
@@ -4157,7 +4176,7 @@ textarea {
   padding: 16px;
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
@@ -4215,7 +4234,7 @@ textarea {
   padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border-light);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
 }
 
 .oauth-models-summary-title {
@@ -4237,7 +4256,7 @@ textarea {
   overflow: auto;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
 }
 
 .oauth-models-item {
@@ -4321,7 +4340,7 @@ textarea {
   padding: 10px 12px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
 }
 
 .oauth-import-result-file {
@@ -5023,7 +5042,7 @@ textarea {
   min-height: 40px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-primary);
   padding: 0 12px;
   display: flex;
@@ -5148,7 +5167,7 @@ textarea {
   min-height: 34px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-primary);
   padding: 0 10px;
   font-size: 12px;
@@ -5774,7 +5793,7 @@ textarea {
   height: 30px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
@@ -6999,7 +7018,7 @@ textarea {
   padding: 4px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-secondary);
   font-size: 11px;
   font-weight: 500;
@@ -7133,7 +7152,7 @@ textarea {
   height: 28px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-light);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-muted);
   text-decoration: none;
   transition: all 0.15s ease;
@@ -7168,7 +7187,11 @@ textarea {
 }
 
 .site-availability-cell-empty {
-  background: transparent !important;
+  /* A faint track instead of full transparency: fully invisible empties make the
+     24h strip fragment into floating dots on the dark card — the timeline stops
+     reading as a 24-hour axis. Faint-but-visible keeps the "no traffic" semantics
+     in both themes without shouting. */
+  background: color-mix(in srgb, var(--color-border-light) 45%, transparent) !important;
   border: none !important;
   box-shadow: none !important;
   pointer-events: none;
@@ -7787,7 +7810,7 @@ textarea {
   padding: 0 10px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-muted);
   font-size: 12px;
   font-family: var(--font-mono);
@@ -7809,7 +7832,7 @@ textarea {
   overflow: hidden;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: var(--color-bg-inset);
   color: var(--color-text-primary);
   font-size: 13px;
   font-family: var(--font-mono);
@@ -7987,4 +8010,13 @@ textarea {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+[data-theme="dark"] .login-auth-input {
+  background: var(--color-bg-inset);
+  border-color: color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
+}
+
+[data-theme="dark"] .login-auth-input:focus {
+  background: var(--color-bg-card);
 }

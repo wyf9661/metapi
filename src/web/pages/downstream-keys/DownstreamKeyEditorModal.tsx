@@ -192,7 +192,7 @@ export function TagInput({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {tags.map((tag) => (
             <button
@@ -344,7 +344,7 @@ export default function DownstreamKeyEditorModal({
     padding: '10px 12px',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)',
-    background: 'var(--color-bg)',
+    background: 'var(--color-bg-inset)',
     color: 'var(--color-text-primary)',
     fontSize: 13,
     lineHeight: 1.45,

@@ -137,7 +137,7 @@ export const formInputStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   fontSize: 13,
   outline: 'none',
-  background: 'var(--color-bg)',
+  background: 'var(--color-bg-inset)',
   color: 'var(--color-text-primary)',
 };
 
@@ -178,7 +178,7 @@ export const debugCodeBlockStyle: React.CSSProperties = {
   padding: 12,
   borderRadius: 'var(--radius-sm)',
   border: '1px solid var(--color-border-light)',
-  background: 'var(--color-bg)',
+  background: 'var(--color-bg-inset)',
   fontFamily: 'var(--font-mono)',
   fontSize: 12,
   lineHeight: 1.5,

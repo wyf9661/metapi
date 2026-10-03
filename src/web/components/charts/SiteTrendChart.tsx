@@ -500,7 +500,7 @@ const focusChipStyle: React.CSSProperties = {
   padding: '4px 10px',
   borderRadius: 999,
   border: '1px solid var(--color-border)',
-  background: 'var(--color-bg)',
+  background: 'var(--color-bg-inset)',
   fontSize: 12,
   color: 'var(--color-text-secondary)',
 };

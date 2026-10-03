@@ -262,7 +262,7 @@ export default function AccountModelsModal({
             </>
           )}
 
-          <div style={{ marginTop: 16, padding: '12px', background: 'var(--color-bg)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)' }}>
+          <div style={{ marginTop: 16, padding: '12px', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)' }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-primary)' }}>手动添加可用模型</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
               如果您的账号支持某些未在上方列表中显示的模型，可以在此手动添加（多个以英文逗号分隔）。

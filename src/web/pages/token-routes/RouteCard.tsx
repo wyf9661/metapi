@@ -842,7 +842,7 @@ function RouteCardInner({
       {!compact ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <code style={{ fontWeight: 600, fontSize: 13, background: 'var(--color-bg)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <code style={{ fontWeight: 600, fontSize: 13, background: 'var(--color-bg-inset)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               {routeIcon.kind === 'brand' ? (
                 <BrandGlyph icon={routeIcon.value} alt={title} size={20} fallbackText={title} />
               ) : routeIcon.kind === 'text' ? (
@@ -971,7 +971,7 @@ function RouteCardInner({
                 style={{
                   fontWeight: 600,
                   fontSize: 12.5,
-                  background: 'var(--color-bg)',
+                  background: 'var(--color-bg-inset)',
                   padding: '3px 8px',
                   borderRadius: 'var(--radius-sm)',
                   color: 'var(--color-text-primary)',

@@ -1559,7 +1559,7 @@ export default function TokenRoutes() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'var(--color-bg)',
+          background: 'var(--color-bg-inset)',
         }}>
           <div style={{
             width: 48,
@@ -1888,7 +1888,7 @@ export default function TokenRoutes() {
                     lineHeight: 1.5,
                     padding: '6px 8px',
                     borderRadius: 'var(--radius-sm)',
-                    background: 'var(--color-bg)',
+                    background: 'var(--color-bg-inset)',
                     border: '1px solid var(--color-border)',
                     fontVariantNumeric: 'tabular-nums',
                   }}

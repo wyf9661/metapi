@@ -42,7 +42,7 @@ export default function PageJumpInput({ totalPages, onJump }: PageJumpInputProps
           borderRadius: 'var(--radius-sm)',
           fontSize: 12,
           textAlign: 'center',
-          background: 'var(--color-bg)',
+          background: 'var(--color-bg-inset)',
           color: 'var(--color-text-primary)',
           outline: 'none',
           appearance: 'textfield',
