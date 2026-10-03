@@ -103,7 +103,7 @@ export default function NotificationSettings() {
         borderRadius: 'var(--radius-sm)',
         fontSize: 13,
         outline: 'none',
-        background: 'var(--color-bg)',
+        background: 'var(--color-bg-inset)',
         color: 'var(--color-text-primary)',
         transition: 'border-color 0.2s',
     };
@@ -443,7 +443,7 @@ export default function NotificationSettings() {
                     </div>
 
                     <div style={{ opacity: runtime.serverChanEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
-                        <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 10 }}>
+                        <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 10 }}>
                             {tr('当前配置')}: {runtime.serverChanKeyMasked || tr('未设置')}
                         </code>
                         <input

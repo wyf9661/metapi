@@ -1339,7 +1339,7 @@ export default function DownstreamKeys() {
               disabled={batchMetadataForm.groupOperation !== 'set'}
               placeholder="例如：VIP / 内部项目"
               list="downstream-group-suggestions"
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)', color: 'var(--color-text-primary)' }}
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)' }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

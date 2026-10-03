@@ -1281,7 +1281,7 @@ export default function ProxyLogs() {
                   padding: 14,
                   borderRadius: 'var(--radius-sm)',
                   border: '1px solid var(--color-border-light)',
-                  background: 'var(--color-bg)',
+                  background: 'var(--color-bg-inset)',
                   color: 'var(--color-text-muted)',
                   fontSize: 12,
                   lineHeight: 1.6,
@@ -2126,8 +2126,8 @@ export default function ProxyLogs() {
                       </td>
                     </tr>
                     {expanded === log.id && (
-                      <tr style={{ background: 'var(--color-bg)' }}>
-                        <td colSpan={PROXY_LOG_TABLE_COLUMN_COUNT} style={{ padding: 0, background: 'var(--color-bg)' }}>
+                      <tr style={{ background: 'var(--color-bg-inset)' }}>
+                        <td colSpan={PROXY_LOG_TABLE_COLUMN_COUNT} style={{ padding: 0, background: 'var(--color-bg-inset)' }}>
                           <div className="anim-collapse is-open">
                             <div className="anim-collapse-inner">
                               <div

@@ -479,7 +479,7 @@ export default function ManualRoutePanel({
                       borderRadius: 'var(--radius-sm)',
                       fontSize: 13,
                       outline: 'none',
-                      background: 'var(--color-bg)',
+                      background: 'var(--color-bg-inset)',
                       color: 'var(--color-text-primary)',
                     }}
                   />
@@ -641,7 +641,7 @@ export default function ManualRoutePanel({
                       borderRadius: 'var(--radius-sm)',
                       fontSize: 13,
                       outline: 'none',
-                      background: 'var(--color-bg)',
+                      background: 'var(--color-bg-inset)',
                       color: 'var(--color-text-primary)',
                     }}
                   />
@@ -672,7 +672,7 @@ export default function ManualRoutePanel({
                     borderRadius: 'var(--radius-sm)',
                     fontSize: 13,
                     outline: 'none',
-                    background: 'var(--color-bg)',
+                    background: 'var(--color-bg-inset)',
                     color: 'var(--color-text-primary)',
                     fontFamily: 'var(--font-mono)',
                   }}
@@ -697,7 +697,7 @@ export default function ManualRoutePanel({
                     border: '1px solid var(--color-border)',
                     borderRadius: 'var(--radius-sm)',
                     padding: '10px 12px',
-                    background: 'var(--color-bg)',
+                    background: 'var(--color-bg-inset)',
                   }}
                 >
                   <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>

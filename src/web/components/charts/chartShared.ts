@@ -44,9 +44,28 @@ export function barHeadroom(isMobile: boolean): number {
 
 // Availability palette (red → amber → teal-green), shared with the dashboard
 // "24h availability" strip and deliberately muted against the brand accent.
+// LIGHT values are the approved look and never change. The dark variants are
+// materially brighter: the muted dark-green (#268f4f) has ~1.05:1 luminance
+// against the dark card (oklch 0.285), so 24h availability cells and their
+// % labels vanish into the card. hue semantics stay identical.
 const LOW = { r: 203, g: 70, b: 68 };
 const MID = { r: 215, g: 150, b: 40 };
 const HIGH = { r: 38, g: 143, b: 79 };  // healthy = green, not the brand accent
+const LOW_DARK = { r: 248, g: 113, b: 113 };
+const MID_DARK = { r: 251, g: 191, b: 36 };
+const HIGH_DARK = { r: 74, g: 222, b: 128 };
+
+/** Effective theme for inline-color callers: the resolved data-theme attribute
+ *  that I18nProvider/theme code writes on <html>. Callers re-render on theme
+ *  switch (the themeMode state lives in App), so the value re-evaluates.
+ *  Defensive on document: test harnesses stub globalThis.document without a
+ *  documentElement — a throw here would unmount the whole tree. */
+export function getEffectiveTheme(): 'light' | 'dark' {
+  const attr = typeof document !== 'undefined'
+    ? document.documentElement?.getAttribute('data-theme')
+    : null;
+  return attr === 'dark' ? 'dark' : 'light';
+}
 
 function lerpChannel(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
@@ -55,19 +74,23 @@ function lerpChannel(a: number, b: number, t: number): number {
 /** 0..100 → {r, g, b}. Throws if value is NaN or out-of-range. */
 export function availabilityRgb(value: number): { r: number; g: number; b: number } {
   const clamped = Math.max(0, Math.min(100, value));
+  const dark = getEffectiveTheme() === 'dark';
+  const low = dark ? LOW_DARK : LOW;
+  const mid = dark ? MID_DARK : MID;
+  const high = dark ? HIGH_DARK : HIGH;
   if (clamped <= 50) {
     const t = clamped / 50;
     return {
-      r: lerpChannel(LOW.r, MID.r, t),
-      g: lerpChannel(LOW.g, MID.g, t),
-      b: lerpChannel(LOW.b, MID.b, t),
+      r: lerpChannel(low.r, mid.r, t),
+      g: lerpChannel(low.g, mid.g, t),
+      b: lerpChannel(low.b, mid.b, t),
     };
   }
   const t = (clamped - 50) / 50;
   return {
-    r: lerpChannel(MID.r, HIGH.r, t),
-    g: lerpChannel(MID.g, HIGH.g, t),
-    b: lerpChannel(MID.b, HIGH.b, t),
+    r: lerpChannel(mid.r, high.r, t),
+    g: lerpChannel(mid.g, high.g, t),
+    b: lerpChannel(mid.b, high.b, t),
   };
 }
 

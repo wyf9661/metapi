@@ -64,7 +64,7 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 14px', border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)', fontSize: 13, outline: 'none',
-    background: 'var(--color-bg)', color: 'var(--color-text-primary)',
+    background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)',
   };
 
   const modal = (

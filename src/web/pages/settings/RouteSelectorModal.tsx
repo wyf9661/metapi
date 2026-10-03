@@ -131,7 +131,7 @@ export default function RouteSelectorModal({
                             style={{
                               fontWeight: 600,
                               fontSize: 12,
-                              background: 'var(--color-bg)',
+                              background: 'var(--color-bg-inset)',
                               padding: '4px 10px',
                               borderRadius: 'var(--radius-md)',
                               color: 'var(--color-text-primary)',
@@ -227,7 +227,7 @@ export default function RouteSelectorModal({
                             style={{
                               fontWeight: 600,
                               fontSize: 12,
-                              background: 'var(--color-bg)',
+                              background: 'var(--color-bg-inset)',
                               padding: '4px 10px',
                               borderRadius: 'var(--radius-md)',
                               color: 'var(--color-text-primary)',

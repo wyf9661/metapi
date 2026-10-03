@@ -275,7 +275,7 @@ export default function AddChannelModal({
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '6px 10px', borderRadius: 'var(--radius-sm)',
-                        border: '1px dashed var(--color-border)', background: 'var(--color-bg)',
+                        border: '1px dashed var(--color-border)', background: 'var(--color-bg-inset)',
                       }}
                     >
                       <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{item.label}</span>

@@ -86,7 +86,7 @@ export default function DebugPanel({
         </button>
       </div>
 
-      <div style={{ flex: 1, overflow: 'hidden', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
+      <div style={{ flex: 1, overflow: 'hidden', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)' }}>
         <pre style={{
           margin: 0,
           padding: 12,
@@ -111,7 +111,7 @@ export default function DebugPanel({
         minHeight: 120,
         maxHeight: 170,
         overflowY: 'auto',
-        background: 'var(--color-bg)',
+        background: 'var(--color-bg-inset)',
       }}>
         {debugTimeline.length === 0 ? (
           <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>暂无事件。</div>
