@@ -104,6 +104,17 @@ export function availabilityColor(value: number | null | undefined): string {
   return `rgb(${c.r}, ${c.g}, ${c.b})`;
 }
 
+/** Returns an SVG data-URI background-image value from an availability RGB
+ *  triplet. System dark-mode transforms (e.g. Honor MagicOS force-dark) that
+ *  dim CSS background-color often leave background-image (embedded "image")
+ *  content alone, preserving the intended palette. Used for availability cells
+ *  and legend chips — surface visual elements that vanish under an external
+ *  dark filter. */
+export function availabilityColorDataUri(c: { r: number; g: number; b: number }): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="rgb(${c.r},${c.g},${c.b})"/></svg>`;
+  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+}
+
 // Category palette (pie / trend series). One harmonised wheel — equal lightness
 // and chroma, hues stepping from the brand accent — so no series shouts louder.
 export const CHART_CATEGORY_PALETTE = [

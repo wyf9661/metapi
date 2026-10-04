@@ -7187,11 +7187,12 @@ textarea {
 }
 
 .site-availability-cell-empty {
-  /* A faint track instead of full transparency: fully invisible empties make the
-     24h strip fragment into floating dots on the dark card — the timeline stops
-     reading as a 24-hour axis. Faint-but-visible keeps the "no traffic" semantics
-     in both themes without shouting. */
-  background: color-mix(in srgb, var(--color-border-light) 45%, transparent) !important;
+  /* Faint track via SVG data-URI paint: system dark filters (Honor MagicOS
+     force-dark) transform CSS colors but pass image paint through, so the
+     24h strip stays a continuous, readable timeline on those phones.
+     rgba gray ≈ border-light at 45% in both themes. */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect width='1' height='1' fill='rgba(128,128,128,0.35)'/%3E%3C/svg%3E") !important;
+  background-size: 100% 100% !important;
   border: none !important;
   box-shadow: none !important;
   pointer-events: none;

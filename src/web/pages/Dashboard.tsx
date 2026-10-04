@@ -5,7 +5,7 @@ import { useToast } from '../components/Toast.js';
 import { copyText } from '../clipboard.js';
 import { useTunnelClientView } from './helpers/useTunnelClientView.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
-import { availabilityColor } from '../components/charts/chartShared.js';
+import { availabilityColor, availabilityRgb, availabilityColorDataUri } from '../components/charts/chartShared.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 
 const ModelAnalysisPanel = lazy(
@@ -129,9 +129,9 @@ function AvailabilityLegend() {
   return (
     <div className="site-observability-legend">
       <span className="site-observability-legend-text">低</span>
-      <span className="site-observability-legend-chip" style={{ background: availabilityColor(0) }} />
-      <span className="site-observability-legend-chip" style={{ background: availabilityColor(50) }} />
-      <span className="site-observability-legend-chip" style={{ background: availabilityColor(100) }} />
+      <span className="site-observability-legend-chip" style={{ backgroundImage: availabilityColorDataUri(availabilityRgb(0)), backgroundSize: '100% 100%' }} />
+      <span className="site-observability-legend-chip" style={{ backgroundImage: availabilityColorDataUri(availabilityRgb(50)), backgroundSize: '100% 100%' }} />
+      <span className="site-observability-legend-chip" style={{ backgroundImage: availabilityColorDataUri(availabilityRgb(100)), backgroundSize: '100% 100%' }} />
       <span className="site-observability-legend-text">高</span>
     </div>
   );
@@ -1285,7 +1285,8 @@ export default function Dashboard({
                         to={buildAvailabilityBucketLogsRoute(site.siteId, bucket)}
                         className="site-availability-cell site-availability-cell-link site-availability-cell-pill"
                         style={{
-                          background: availabilityColor(bucket.availabilityPercent),
+                          backgroundImage: availabilityColorDataUri(availabilityRgb(bucket.availabilityPercent ?? 0)),
+                          backgroundSize: '100% 100%',
                         }}
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,
@@ -1471,7 +1472,8 @@ export default function Dashboard({
                         to={buildModelAvailabilityBucketLogsRoute(modelRow.model, bucket)}
                         className="site-availability-cell site-availability-cell-link site-availability-cell-pill"
                         style={{
-                          background: availabilityColor(bucket.availabilityPercent),
+                          backgroundImage: availabilityColorDataUri(availabilityRgb(bucket.availabilityPercent ?? 0)),
+                          backgroundSize: '100% 100%',
                         }}
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,
