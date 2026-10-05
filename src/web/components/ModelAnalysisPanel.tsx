@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { InlineBrandIcon } from './BrandIcon.js';
+import { PillTabBg } from './PillTabBg.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { useThemeLabelColor } from './useThemeLabelColor.js';
 import { useIsMobile } from './useIsMobile.js';
@@ -123,6 +124,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
               className={`pill-tab ${activeTab === tab.key ? 'active' : ''}`}
               onClick={() => setActiveTab(tab.key)}
             >
+              {activeTab === tab.key && <PillTabBg />}
               {tab.icon} {tab.label}
             </button>
           ))}

@@ -6,7 +6,8 @@ import React, {
   useState,
   useCallback,
 } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import {PillTabBg} from '../components/PillTabBg.js';
+import {useLocation, useNavigate} from 'react-router-dom';
 import {api, type ProxyDebugTraceListItem, type ProxyLogDetail, type ProxyLogListItem, type ProxyLogsSummary, type ProxyLogStatusFilter} from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { ModelBadge } from '../components/BrandIcon.js';
@@ -826,6 +827,7 @@ export default function ProxyLogs() {
               setPage(1);
             }}
           >
+            {statusFilter === tab.key && <PillTabBg />}
             {tab.label}{' '}
             <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>
               {tab.count}

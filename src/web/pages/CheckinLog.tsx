@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useToast } from '../components/Toast.js';
+import { PillTabBg } from '../components/PillTabBg.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import {
   formatCheckinLogTime,
@@ -246,6 +247,7 @@ export default function CheckinLog() {
           className={`pill-tab ${filter === tab.key ? 'active' : ''}`}
           onClick={() => setFilter(tab.key)}
         >
+          {filter === tab.key && <PillTabBg />}
           {tab.label}{' '}
           <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>
             {tab.count}

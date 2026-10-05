@@ -58,13 +58,14 @@ const HIGH_DARK = { r: 74, g: 222, b: 128 };
 /** Effective theme for inline-color callers: the resolved data-theme attribute
  *  that I18nProvider/theme code writes on <html>. Callers re-render on theme
  *  switch (the themeMode state lives in App), so the value re-evaluates.
- *  Defensive on document: test harnesses stub globalThis.document without a
- *  documentElement — a throw here would unmount the whole tree. */
+ *  Defensive on document: test harnesses stub globalThis.document with a
+ *  documentElement that lacks getAttribute — a throw here would unmount
+ *  the whole render tree (ModelAnalysisPanel test was hitting this). */
 export function getEffectiveTheme(): 'light' | 'dark' {
-  const attr = typeof document !== 'undefined'
-    ? document.documentElement?.getAttribute('data-theme')
-    : null;
-  return attr === 'dark' ? 'dark' : 'light';
+  if (typeof document === 'undefined') return 'light';
+  const root = document.documentElement;
+  if (!root || typeof root.getAttribute !== 'function') return 'light';
+  return root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
 
 function lerpChannel(a: number, b: number, t: number): number {

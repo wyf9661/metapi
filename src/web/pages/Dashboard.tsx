@@ -6,6 +6,7 @@ import { copyText } from '../clipboard.js';
 import { useTunnelClientView } from './helpers/useTunnelClientView.js';
 import { formatCompactTokenMetric } from '../numberFormat.js';
 import { availabilityColor, availabilityRgb, availabilityColorDataUri } from '../components/charts/chartShared.js';
+import { PillTabBg } from '../components/PillTabBg.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 
 const ModelAnalysisPanel = lazy(
@@ -1067,6 +1068,7 @@ export default function Dashboard({
                 className={`pill-tab ${observabilityTab === 'sites' ? 'active' : ''}`}
                 onClick={() => setObservabilityTab('sites')}
               >
+                {observabilityTab === 'sites' && <PillTabBg />}
                 站点
               </button>
               <button
@@ -1074,6 +1076,7 @@ export default function Dashboard({
                 className={`pill-tab ${observabilityTab === 'models' ? 'active' : ''}`}
                 onClick={() => setObservabilityTab('models')}
               >
+                {observabilityTab === 'models' && <PillTabBg />}
                 模型
               </button>
             </div>
@@ -1110,6 +1113,7 @@ export default function Dashboard({
                   className={`pill-tab ${siteChartTab === 'distribution' ? 'active' : ''}`}
                   onClick={() => setSiteChartTab('distribution')}
                 >
+                  {siteChartTab === 'distribution' && <PillTabBg />}
                   站点分布
                 </button>
                 <button
@@ -1120,6 +1124,7 @@ export default function Dashboard({
                     setSiteChartTab('trend');
                   }}
                 >
+                  {siteChartTab === 'trend' && <PillTabBg />}
                   站点趋势
                 </button>
               </div>

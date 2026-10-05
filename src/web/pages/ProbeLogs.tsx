@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
+import { PillTabBg } from '../components/PillTabBg.js';
 import { marked } from 'marked';
 import katex from 'katex';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
@@ -488,6 +489,7 @@ export default function ProbeLogs() {
                     className={`pill-tab ${status === tab.key ? 'active' : ''}`}
                     onClick={() => { setStatus(tab.key); setPage(1); updateSearchParams('status', tab.key); }}
                   >
+                    {status === tab.key && <PillTabBg />}
                     {tab.label}
                   </button>
                 ))}
@@ -549,6 +551,7 @@ export default function ProbeLogs() {
                   className={`pill-tab ${status === tab.key ? 'active' : ''}`}
                   onClick={() => { setStatus(tab.key); setPage(1); updateSearchParams('status', tab.key); }}
                 >
+                  {status === tab.key && <PillTabBg />}
                   {tab.label}
                 </button>
               ))}
