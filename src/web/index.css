@@ -6336,12 +6336,14 @@ textarea {
   font-weight: 600;
 }
 
-/* Dark mode: the PillTabBg <img> paints a bright cyan fill (CSS paint is
-   flattened to neutral gray by a system force-dark filter, <img> is not),
-   so the active tab stays a clearly lighter block; the label must then be
-   dark for contrast. */
+/* Dark mode active pill: the PillTabBg <img> paints a neutral raised-grey
+   (#5d6564) — CSS paint gets flattened to neutral gray by a system
+   force-dark engine, <img> content does not, so the active tab remains a
+   clearly lighter block there too.  Text switches from brand teal to the
+   near-white foreground for readable contrast on the raised surface. */
 [data-theme="dark"] .pill-tab.active {
-  color: #142120;
+  background: #5d6564;
+  color: var(--color-text-primary);
 }
 
 /* ===== Stat Summary Card (Gradient) ===== */

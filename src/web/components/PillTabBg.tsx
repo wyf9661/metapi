@@ -1,7 +1,7 @@
 import { getEffectiveTheme } from './charts/chartShared.js';
 
 const LIGHT_HEX = '#fdfcfa';
-const DARK_HEX = '#00bace';
+const DARK_HEX = '#5d6564';
 
 /** Absolutely-positioned &lt;img&gt; that paints the active pill's bg fill.
  *  Honor MagicOS force-dark flattens CSS background-image (even data-URI

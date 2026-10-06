@@ -497,8 +497,16 @@ function AppShell() {
     return () => media.removeListener(sync);
   }, []);
 
-  useEffect(() => {
+  // Sync the theme attribute DURING render (not in an effect) so components
+  // that read data-theme during the same render pass — PillTabBg and
+  // SegmentedToggle img fills, chart palettes (getEffectiveTheme) — see the
+  // new value immediately. A post-render effect would leave them one render
+  // behind (the reported "tab background doesn't adapt on theme switch" bug).
+  if (typeof document !== 'undefined' && document.documentElement) {
     document.documentElement.setAttribute('data-theme', resolvedTheme);
+  }
+
+  useEffect(() => {
     localStorage.setItem(THEME_MODE_STORAGE_KEY, themeMode);
     if (themeMode === 'system') {
       localStorage.removeItem('theme');

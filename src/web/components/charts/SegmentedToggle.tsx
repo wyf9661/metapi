@@ -6,31 +6,18 @@ import { getEffectiveTheme } from './chartShared.js';
 // we proved that with the user's phone (toggle regions stayed pure card bg
 // even with the SVG background-image fix).  What DOES pass through unchanged
 // is <img> element content (the logo <img> keeps its teal hue under
-// force-dark) and canvas.  So segment backgrounds are painted as
-// absolutely-positioned <img> elements instead.
+// force-dark) and canvas.  So the active segment's fill is painted as an
+// absolutely-positioned <img>, exactly like the pill-tab active chip.
 
-const LIGHT_PRIMARY_HEX = '#00727f';
-const DARK_PRIMARY_HEX = '#00bace';
-const LIGHT_CARD_HEX = '#fdfcfa';
-const DARK_CARD_HEX = '#1f2d2c';
-// Dark active text — near-black for strong contrast on bright cyan fill
-// under ANY system force-dark filter (Honor flattens to gray but lightness
-// differences survive).  Contrast = ~7:1.
-const ACTIVE_TEXT_DARK = '#142120';
+// Active chip fill — same values as PillTabBg, so a segmented control and a
+// pill-tab group sitting in the same card look identical in both themes.
+const ACTIVE_FILL_LIGHT = '#fdfcfa';
+const ACTIVE_FILL_DARK = '#5d6564';
 
 function segmentImgUri(hex: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><rect width="100%" height="100%" fill="${hex}"/></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
-
-const groupStyle: CSSProperties = {
-  display: 'inline-flex',
-  gap: 0,
-  borderRadius: 'var(--radius-sm)',
-  border: '1px solid var(--color-border)',
-  overflow: 'hidden',
-  maxWidth: '100%',
-};
 
 const buttonBaseStyle: CSSProperties = {
   position: 'relative',
@@ -39,10 +26,12 @@ const buttonBaseStyle: CSSProperties = {
   padding: '6px 12px',
   fontSize: 12,
   fontWeight: 500,
+  color: 'var(--color-text-muted)',
+  borderRadius: 'var(--radius-sm)',
   cursor: 'pointer',
   border: 'none',
-  background: 'transparent',
-  transition: 'all 0.2s ease',
+  background: 'none',
+  transition: 'color 0.2s ease, opacity 0.2s ease',
   fontFamily: 'inherit',
   whiteSpace: 'nowrap',
   display: 'inline-flex',
@@ -78,8 +67,19 @@ export function SegmentedToggle<T extends string>({
   style?: CSSProperties;
 }) {
   const dark = getEffectiveTheme() === 'dark';
-  const primaryHex = dark ? DARK_PRIMARY_HEX : LIGHT_PRIMARY_HEX;
-  const cardHex = dark ? DARK_CARD_HEX : LIGHT_CARD_HEX;
+
+  // Same track treatment as .pill-tabs: a light-grey (dark: translucent
+  // white) well holding a raised chip for the selected segment.
+  const groupStyle: CSSProperties = {
+    display: 'inline-flex',
+    gap: 2,
+    padding: 3,
+    borderRadius: 'var(--radius-md)',
+    background: dark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
+    maxWidth: '100%',
+    overflowX: 'auto',
+  };
+
   return (
     <div style={{ ...groupStyle, ...style }}>
       {options.map((option) => {
@@ -91,16 +91,23 @@ export function SegmentedToggle<T extends string>({
             onClick={() => onChange(option.key)}
             style={{
               ...buttonBaseStyle,
+              fontWeight: isActive ? 600 : 500,
               ...(isActive
-                ? { color: dark ? ACTIVE_TEXT_DARK : '#ffffff' }
-                : { color: 'var(--color-text-secondary)' }),
+                ? {
+                    color: dark
+                      ? 'var(--color-text-primary)'
+                      : 'var(--color-primary)',
+                  }
+                : null),
             }}
           >
-            <img
-              src={segmentImgUri(isActive ? primaryHex : cardHex)}
-              alt=""
-              style={bgImgStyle}
-            />
+            {isActive && (
+              <img
+                src={segmentImgUri(dark ? ACTIVE_FILL_DARK : ACTIVE_FILL_LIGHT)}
+                alt=""
+                style={bgImgStyle}
+              />
+            )}
             {option.icon}
             {option.label}
           </button>
