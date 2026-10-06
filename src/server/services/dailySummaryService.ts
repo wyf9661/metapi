@@ -166,26 +166,18 @@ export async function collectDailySummaryMetrics(now = new Date()): Promise<Dail
 export function buildDailySummaryNotification(metrics: DailySummaryMetrics): { title: string; message: string } {
   const net = round6(metrics.todayReward - metrics.todaySpend);
   const title = `每日总结 ${metrics.localDay}`;
-  // Table format for readability. The first line is plain text (not a table)
-  // so DingTalk doesn't overlap the table header with the bot avatar area.
+  const fmtMoney = (value: number) => (value < 0
+    ? `-$${Math.abs(value).toFixed(6)}`
+    : `$${value.toFixed(6)}`);
+  // One line per dimension, joined with hard breaks (two trailing spaces):
+  // DingTalk ignores bare \n. The earlier 14-row narrow table was accurate but
+  // too tall for IM cards (user feedback); counts stay grouped per dimension.
   const message = [
-    '全览',
-    '',
-    '| 分类 | 指标 | 数值 |',
-    '|---|---|---:|',
-    `| 账号 | 总计 | ${metrics.totalAccounts} |`,
-    `| 账号 | 活跃 | ${metrics.activeAccounts} |`,
-    `| 账号 | 低余额(<$1) | ${metrics.lowBalanceAccounts} |`,
-    `| 签到 | 总计 | ${metrics.checkinTotal} |`,
-    `| 签到 | 成功 | ${metrics.checkinSuccess} |`,
-    `| 签到 | 失败 | ${metrics.checkinFailed} |`,
-    `| 代理 | 总计 | ${metrics.proxyTotal} |`,
-    `| 代理 | 成功 | ${metrics.proxySuccess} |`,
-    `| 代理 | 失败 | ${metrics.proxyFailed} |`,
-    `| 资源 | Tokens | ${metrics.proxyTotalTokens.toLocaleString()} |`,
-    `| 费用 | 支出 | $${metrics.todaySpend.toFixed(6)} |`,
-    `| 费用 | 奖励 | $${metrics.todayReward.toFixed(6)} |`,
-    `| 费用 | 净值 | $${net.toFixed(6)} |`,
-  ].join('\n');
+    `账号 ${metrics.totalAccounts} · 活跃 ${metrics.activeAccounts} · 低余额 ${metrics.lowBalanceAccounts}`,
+    `签到 ${metrics.checkinTotal} · 成功 ${metrics.checkinSuccess} · 失败 ${metrics.checkinFailed}`,
+    `代理 ${metrics.proxyTotal} · 成功 ${metrics.proxySuccess} · 失败 ${metrics.proxyFailed}`,
+    `资源 ${metrics.proxyTotalTokens.toLocaleString()} tokens`,
+    `费用 支出 ${fmtMoney(metrics.todaySpend)} · 奖励 ${fmtMoney(metrics.todayReward)} · 净值 ${fmtMoney(net)}`,
+  ].join('  \n');
   return { title, message };
 }

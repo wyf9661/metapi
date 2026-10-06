@@ -97,6 +97,8 @@ function inferRewardFromBalanceDelta(previousBalance: unknown, latestBalance: un
  * the manual "check in all" task): one counts line, then the non-success rows
  * grouped by reason. Successful accounts are counted, never listed — a wall of
  * names is the noise this replaced, and the panel already shows the full log.
+ * No trailing table: it duplicated the site names already present in the
+ * reason lines and doubled the message height (user feedback: too long).
  */
 export function buildCheckinSummaryMessage(
   results: Array<{ accountId?: number; username?: string | null; site?: string; result?: any }>,
@@ -124,15 +126,11 @@ export function buildCheckinSummaryMessage(
   const skipped = [...grouped.skipped.values()].reduce((total, sites) => total + sites.length, 0);
   const failed = [...grouped.failed.values()].reduce((total, sites) => total + sites.length, 0);
 
-  // Layout rule: counts live in one plain-text line, reasons in a plain-text
-  // line, and the table (kept narrow — two columns, no counts) comes LAST.
-  // DingTalk renders only narrow tables correctly; a wide table or one that is
-  // the first block gets its header drawn over the bot avatar/name area.
-  // The leading lines must not contain pipe characters: DingTalk folds such
-  // lines into the following table block.
+  // Layout rule: counts in one plain-text line, then one plain-text line per
+  // (label, reason) pair listing its sites (collapsed beyond three). Lines are
+  // joined with hard breaks (two trailing spaces) because DingTalk ignores
+  // bare \n but respects markdown hard breaks.
   const reasonParts: string[] = [];
-  const tableRows: Array<[string, string]> = [];
-  const lines: string[] = [];
   const header = `签到汇总:成功 ${success} / 跳过 ${skipped} / 失败 ${failed}`;
   const renderGroup = (label: string, reasons: Map<string, string[]>) => {
     if (reasons.size === 0) return;
@@ -141,8 +139,6 @@ export function buildCheckinSummaryMessage(
       const shown = sites.slice(0, 3).join('、');
       const rest = sites.length > 3 ? `等 ${sites.length} 个站点` : '';
       reasonParts.push(`${label}:${shown}${rest}(${reason})`);
-      for (const site of sites.slice(0, 3)) tableRows.push([label, site]);
-      if (sites.length > 3) tableRows.push([label, `等 ${sites.length} 个站点`]);
     }
     if (reasons.size > entries.length) reasonParts.push(`${label}:另有 ${reasons.size - entries.length} 类原因,详见签到日志`);
   };
@@ -150,19 +146,7 @@ export function buildCheckinSummaryMessage(
   renderGroup('失败', grouped.failed);
   renderGroup('跳过', grouped.skipped);
 
-  // DingTalk ignores single \n but respects markdown hard breaks
-  // (two trailing spaces before \n) or blank-line paragraph separators.
-  // Use hard breaks for compactness: lines joined with two-space + \n.
-  const textParts = [header, ...reasonParts];
-  if (textParts.length > 0) lines.push(textParts.join('  \n'));
-  // All-good runs get no table at all — a header-only table would be noise.
-  if (tableRows.length > 0) {
-    lines.push('');
-    lines.push('| 状态 | 站点 |');
-    lines.push('|:----|:----|');
-    for (const [label, site] of tableRows) lines.push(`| ${label} | ${site} |`);
-  }
-  return lines.join('\n');
+  return [header, ...reasonParts].join('  \n');
 }
 
 async function tryAutoRelogin(account: any, site: any): Promise<string | null> {

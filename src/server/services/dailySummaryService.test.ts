@@ -28,27 +28,14 @@ describe('dailySummaryService', () => {
 
     const { title, message } = buildDailySummaryNotification(metrics);
     expect(title).toBe('每日总结 2026-02-27');
-    // Narrow table under a plain-text lead line: DingTalk-safe layout.
-    const lines = message.split('\n');
-    expect(lines.slice(0, 4)).toEqual([
-      '全览',
-      '',
-      '| 分类 | 指标 | 数值 |',
-      '|---|---|---:|',
-    ]);
-    expect(lines).toContain('| 账号 | 总计 | 10 |');
-    expect(lines).toContain('| 账号 | 活跃 | 8 |');
-    expect(lines).toContain('| 账号 | 低余额(<$1) | 2 |');
-    expect(lines).toContain('| 签到 | 总计 | 7 |');
-    expect(lines).toContain('| 签到 | 成功 | 5 |');
-    expect(lines).toContain('| 签到 | 失败 | 2 |');
-    expect(lines).toContain('| 代理 | 总计 | 120 |');
-    expect(lines).toContain('| 代理 | 成功 | 114 |');
-    expect(lines).toContain('| 代理 | 失败 | 6 |');
-    expect(lines).toContain(`| 资源 | Tokens | ${metrics.proxyTotalTokens.toLocaleString()} |`);
-    expect(lines).toContain('| 费用 | 支出 | $12.345678 |');
-    expect(lines).toContain('| 费用 | 奖励 | $3.210987 |');
-    expect(lines).toContain('| 费用 | 净值 | $-9.134691 |');
+    // Compact layout: one dimension per line, with hard breaks for DingTalk.
+    // Replaces the earlier 14-row table that users found too long for IM.
+    const lines = message.split('  \n');
+    expect(lines[0]).toBe('账号 10 · 活跃 8 · 低余额 2');
+    expect(lines[1]).toBe('签到 7 · 成功 5 · 失败 2');
+    expect(lines[2]).toBe('代理 120 · 成功 114 · 失败 6');
+    expect(lines[3]).toBe('资源 987,654 tokens');
+    expect(lines[4]).toBe('费用 支出 $12.345678 · 奖励 $3.210987 · 净值 -$9.134691');
   });
 
   it('counts checkins by site, not by attempt logs', () => {
