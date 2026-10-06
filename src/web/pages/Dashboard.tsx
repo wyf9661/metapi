@@ -1025,7 +1025,21 @@ export default function Dashboard({
             ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
           </div>
           {tunnel?.tunnelUrl && tunnel?.publicUrl && tunnel.tunnelUrl !== tunnel.publicUrl ? (
-            <div className="dashboard-endpoint-secondary-url">直连：{tunnel.tunnelUrl}</div>
+            <div className="dashboard-endpoint-row">
+              <span className="dashboard-endpoint-label">直连</span>
+              <code className="dashboard-endpoint-value">{tunnel.tunnelUrl}</code>
+              <button
+                type="button"
+                className="btn btn-ghost dashboard-endpoint-copy"
+                onClick={() => {
+                  copyText(tunnel.tunnelUrl as string)
+                    .then(() => { toast.success('已复制直连地址'); })
+                    .catch(() => { toast.error('复制失败'); });
+                }}
+              >
+                复制
+              </button>
+            </div>
           ) : null}
         </div>
       </div>

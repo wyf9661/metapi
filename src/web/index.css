@@ -7815,6 +7815,9 @@ textarea {
 .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(2) { grid-column: 2; grid-row: 2; }
 .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(3) { grid-column: 3; grid-row: 2; }
 .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(4) { grid-column: 4; grid-row: 2; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(1) { grid-column: 1; grid-row: 3; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(2) { grid-column: 2; grid-row: 3; }
+.dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(3) { grid-column: 3; grid-row: 3; }
 
 .dashboard-endpoint-label {
   display: inline-flex;
@@ -7883,29 +7886,51 @@ textarea {
   width: 56px;
 }
 
-.dashboard-endpoint-secondary-url {
-  grid-column: 2 / -1;
-  margin: -2px 0 0 0;
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 768px) {
+@media (max-width: 900px) {
+  /* Mobile/narrow: each address becomes a stacked block — label + action on
+     the first line, the full-width URL underneath (wraps instead of
+     clipping). 900px so iPad-portrait widths (769–900) are covered too,
+     where the two-column layout clips long tunnel URLs. */
   .dashboard-endpoint-rows {
-    grid-template-columns: 64px minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
   }
 
   .dashboard-endpoint-label {
-    padding: 0 6px;
+    justify-self: start;
   }
 
-  .dashboard-endpoint-secondary-url {
-    grid-column: 2 / -1;
-    margin-left: 0;
+  /* 本地 */
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(1) > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(1) > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(1) > :nth-child(3) { grid-column: 2; grid-row: 1; justify-self: end; }
+
+  /* 隧道 */
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(1) { grid-column: 1; grid-row: 3; }
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(2) { grid-column: 1 / -1; grid-row: 4; }
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(3) { grid-column: 2; grid-row: 3; justify-self: end; }
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(4) { grid-column: 2; grid-row: 3; justify-self: end; }
+
+  /* 直连 */
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(1) { grid-column: 1; grid-row: 5; }
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(2) { grid-column: 1 / -1; grid-row: 6; }
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(3) { grid-column: 2; grid-row: 5; justify-self: end; }
+
+  /* Extra breathing room between address blocks (the label/action lines of
+     the 2nd and 3rd block sit 12px lower than a plain grid gap would put
+     them, so blocks read as "8px inside / 20px between"). */
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(1),
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(2) > :nth-child(3),
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(1),
+  .dashboard-endpoint-rows > .dashboard-endpoint-row:nth-child(3) > :nth-child(3) {
+    margin-top: 12px;
+  }
+
+  .dashboard-endpoint-value {
+    white-space: normal;
+    word-break: break-all;
+    height: auto;
+    padding: 10px 12px;
   }
 }
 
