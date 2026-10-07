@@ -431,6 +431,9 @@ html[data-layout="desktop"] .main-content {
 }
 
 .animate-slide-up {
+  /* Pre-promote to its own layer: mobile GPUs drop transform/opacity
+     composite frames under memory pressure, which showed as a page flash. */
+  will-change: transform, opacity;
   animation: slide-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -5325,6 +5328,8 @@ textarea {
 
 /* ===== Page Transition ===== */
 .page-enter {
+  /* Own layer so the fade never competes with card-level compositing. */
+  will-change: opacity;
   animation: fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
