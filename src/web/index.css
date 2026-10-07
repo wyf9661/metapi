@@ -193,6 +193,17 @@ html[data-layout="desktop"] .main-content {
   }
 }
 
+/* Mirror+spin combined so rotation stays on one transform channel —
+   used by the dashboard refresh icon (scaleX(-1) baked into each frame). */
+@keyframes spin-mirrored {
+  from {
+    transform: scaleX(-1) rotate(0deg);
+  }
+  to {
+    transform: scaleX(-1) rotate(360deg);
+  }
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

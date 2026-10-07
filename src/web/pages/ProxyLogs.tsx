@@ -983,8 +983,8 @@ export default function ProxyLogs() {
               viewBox="0 0 24 24"
               stroke="currentColor"
               style={{
-                scale: '-1 1',
-                animation: autoRefresh ? 'spin 1s linear infinite reverse' : 'none',
+                transform: 'scaleX(-1)',
+                animation: autoRefresh ? 'spin-mirrored 1s linear infinite' : 'none',
               }}
             >
               <path
@@ -1015,8 +1015,8 @@ export default function ProxyLogs() {
               viewBox="0 0 24 24"
               stroke="currentColor"
               style={{
-                scale: '-1 1',
-                animation: loading ? 'spin 1s linear infinite reverse' : 'none',
+                transform: 'scaleX(-1)',
+                animation: loading ? 'spin-mirrored 1s linear infinite' : 'none',
               }}
             >
               <path

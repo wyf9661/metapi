@@ -705,8 +705,12 @@ export default function Dashboard({
               viewBox="0 0 24 24"
               stroke="currentColor"
               style={{
-                scale: '-1 1',
-                animation: refreshing ? 'spin 1s linear infinite reverse' : 'none',
+                // Mirror + spin must live on ONE transform channel: combining
+                // the independent `scale` property with a `transform` rotate
+                // animation shifts the rotation origin on desktop browsers
+                // (icon wobbles instead of spinning in place).
+                transform: 'scaleX(-1)',
+                animation: refreshing ? 'spin-mirrored 1s linear infinite' : 'none',
               }}
             >
               <path
