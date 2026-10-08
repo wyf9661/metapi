@@ -72,6 +72,7 @@ export default function CheckinLog() {
   const [triggering, setTriggering] = useState(false);
   const [filter, setFilter] = useState<LogFilter>('all');
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
+  const [expandedMessageId, setExpandedMessageId] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const isMobile = useIsMobile();
   const toast = useToast();
@@ -515,12 +516,26 @@ export default function CheckinLog() {
                       )}
                     </td>
                     <td style={{ maxWidth: 360 }}>
+                      {/* Ellipsis has no escape hatch on desktop — clicking the
+                          cell toggles full wrap for that row (message text can
+                          be a full upstream error page excerpt). */}
                       <span
+                        role="button"
+                        tabIndex={0}
+                        title={log.checkin_logs?.message || log.message}
+                        onClick={() => setExpandedMessageId((current) => (current === log.id ? null : log.id))}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setExpandedMessageId((current) => (current === log.id ? null : log.id));
+                          }
+                        }}
                         style={{
                           display: 'block',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          whiteSpace: expandedMessageId === log.id ? 'normal' : 'nowrap',
+                          cursor: 'pointer',
                         }}
                       >
                         {log.checkin_logs?.message || log.message}
