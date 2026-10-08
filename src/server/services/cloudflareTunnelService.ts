@@ -185,7 +185,8 @@ export async function registerStableTunnelMapping(shortId: string, tunnelUrl: st
       return;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.warn(`[Tunnel] stable mapping register attempt ${attempt}/${REGISTER_MAPPING_ATTEMPTS} failed: ${lastError.message}`);
+      // Callers log the exhausted failure once (and throttle repeated repairs).
+      // Per-attempt warnings would multiply one failed repair into three lines.
     }
   }
   throw lastError ?? new Error('持久化公网地址注册失败');
@@ -515,9 +516,38 @@ async function probeTunnelPublicUrl(): Promise<boolean> {
 }
 
 const STABLE_MAPPING_REPAIR_INTERVAL_MS = 5 * 60 * 1000;
-const PROBE_WARN_INTERVAL_MS = 2 * 60 * 1000;
+const PROBE_WARN_MIN_INTERVAL_MS = 2 * 60 * 1000;
+const PROBE_WARN_MAX_INTERVAL_MS = 60 * 60 * 1000;
 let lastStableMappingRepairAtMs = 0;
-let lastProbeWarnAtMs = 0;
+
+/** Log only the first and exponentially spaced repeats; keep health probes unchanged. */
+export function createTunnelWarningThrottle() {
+  let lastWarnAtMs: number | null = null;
+  let intervalMs = PROBE_WARN_MIN_INTERVAL_MS;
+  let lastCategory: string | null = null;
+  return {
+    shouldWarn(nowMs = Date.now(), category = 'default'): boolean {
+      if (category !== lastCategory) {
+        lastCategory = category;
+        lastWarnAtMs = nowMs;
+        intervalMs = PROBE_WARN_MIN_INTERVAL_MS;
+        return true;
+      }
+      if (lastWarnAtMs !== null) {
+        if (nowMs - lastWarnAtMs < intervalMs) return false;
+        intervalMs = Math.min(intervalMs * 2, PROBE_WARN_MAX_INTERVAL_MS);
+      }
+      lastWarnAtMs = nowMs;
+      return true;
+    },
+    reset(): void {
+      lastWarnAtMs = null;
+      lastCategory = null;
+      intervalMs = PROBE_WARN_MIN_INTERVAL_MS;
+    },
+  };
+}
+const tunnelWarningThrottle = createTunnelWarningThrottle();
 
 function currentStablePublicUrl(): string | null {
   return buildStablePublicUrl(currentShortId);
@@ -541,7 +571,9 @@ async function attemptStableMappingRepair(options?: { directKnownHealthy?: boole
   try {
     await registerStableTunnelMapping(currentShortId, currentTunnelUrl);
   } catch (error) {
-    console.warn(`[Tunnel] stable mapping repair failed: ${error instanceof Error ? error.message : String(error)}`);
+    if (tunnelWarningThrottle.shouldWarn(Date.now(), 'mapping')) {
+      console.warn(`[Tunnel] stable mapping repair failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return false;
   }
   if (!(await waitForPublicUrlHealthy(stableUrl, 15_000))) {
@@ -560,6 +592,7 @@ async function attemptStableMappingRepair(options?: { directKnownHealthy?: boole
       lastError: null,
     });
   }
+  tunnelWarningThrottle.reset();
   console.log(`[Tunnel] stable mapping repaired: ${stableUrl} -> ${currentTunnelUrl}`);
   return true;
 }
@@ -573,6 +606,7 @@ function startTunnelHealthProbe() {
       const stableUrl = currentStablePublicUrl();
       if (healthy) {
         healthProbeFailures = 0;
+        tunnelWarningThrottle.reset();
         // 运行正常但公网地址还是降级后的临时地址：尝试把稳定地址修回来。
         if (stableUrl && currentPublicUrl !== stableUrl) {
           await attemptStableMappingRepair({ directKnownHealthy: true });
@@ -588,16 +622,14 @@ function startTunnelHealthProbe() {
       if (connectorAlive) {
         healthProbeFailures = 0;
         if (stableUrl && (await attemptStableMappingRepair({ directKnownHealthy: true }))) return;
-        if (Date.now() - lastProbeWarnAtMs > PROBE_WARN_INTERVAL_MS) {
-          lastProbeWarnAtMs = Date.now();
+        if (tunnelWarningThrottle.shouldWarn(Date.now(), 'mapping')) {
           console.warn(`[Tunnel] stable URL probe failed while connector is alive (mapping-side issue): ${currentPublicUrl}`);
         }
         return;
       }
       // 刚重建隧道或刚注册映射时，给公网映射收敛留出缓冲期，避免抖动引发重启循环。
       if (Date.now() - stableMappingFreshAtMs < STABLE_MAPPING_RECOVERY_GRACE_MS) {
-        if (Date.now() - lastProbeWarnAtMs > PROBE_WARN_INTERVAL_MS) {
-          lastProbeWarnAtMs = Date.now();
+        if (tunnelWarningThrottle.shouldWarn(Date.now(), 'connector-grace')) {
           console.warn('[Tunnel] connector unreachable during recovery grace window; restart deferred');
         }
         return;
@@ -605,8 +637,7 @@ function startTunnelHealthProbe() {
       // 本机到 Cloudflare 整体不可达（网络侧问题）时，重启 cloudflared 也救不了，等网络恢复再说。
       const cloudflareReachable = await probeUrlAlive(tunnelWorkerBaseUrl(), TUNNEL_HEALTH_PROBE_TIMEOUT_MS);
       if (!cloudflareReachable) {
-        if (Date.now() - lastProbeWarnAtMs > PROBE_WARN_INTERVAL_MS) {
-          lastProbeWarnAtMs = Date.now();
+        if (tunnelWarningThrottle.shouldWarn(Date.now(), 'cloudflare-network')) {
           console.warn('[Tunnel] connector unreachable and Cloudflare unreachable from this host; restart deferred until network recovers');
         }
         return;

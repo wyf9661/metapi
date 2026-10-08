@@ -15,6 +15,7 @@ vi.mock('undici', async (importOriginal) => {
 process.env.TUNNEL_WORKER_URL = 'http://127.0.0.1:9';
 import {
   buildCloudflaredDownloadUrl,
+  createTunnelWarningThrottle,
   isTunnelApiPath,
   isTunnelBrandAssetPath,
   isTunnelDashboardPath,
@@ -121,6 +122,22 @@ describe('stable tunnel mapping registration', () => {
     expect(undiciFetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('leaves failure logging to its caller after registration exhausts retries', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      undiciFetchMock.mockRejectedValue(new Error('fetch failed'));
+      const promise = registerStableTunnelMapping('q4gbtu', 'https://demo.trycloudflare.com');
+      const rejection = expect(promise).rejects.toThrow('fetch failed');
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejection;
+      expect(undiciFetchMock).toHaveBeenCalledTimes(3);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('throws after exhausting registration retries', async () => {
     vi.useFakeTimers();
     undiciFetchMock.mockImplementation(async () => {
@@ -131,6 +148,44 @@ describe('stable tunnel mapping registration', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await rejection;
     expect(undiciFetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('tunnel warning throttle', () => {
+  it('emits the first warning and backs off exponentially with a one-hour cap', () => {
+    const warning = createTunnelWarningThrottle();
+    const t0 = 1_000_000;
+    expect(warning.shouldWarn(t0)).toBe(true);
+    expect(warning.shouldWarn(t0 + 119_999)).toBe(false);
+    expect(warning.shouldWarn(t0 + 120_000)).toBe(true);
+    expect(warning.shouldWarn(t0 + 359_999)).toBe(false);
+    expect(warning.shouldWarn(t0 + 360_000)).toBe(true);
+    // 2m, 4m, 8m, 16m, 32m then cap at 1h.
+    let at = t0 + 360_000;
+    for (const interval of [480_000, 960_000, 1_920_000, 3_600_000, 3_600_000]) {
+      expect(warning.shouldWarn(at + interval - 1)).toBe(false);
+      at += interval;
+      expect(warning.shouldWarn(at)).toBe(true);
+    }
+  });
+
+  it('logs the first warning when failure category changes and restarts its backoff', () => {
+    const warning = createTunnelWarningThrottle();
+    expect(warning.shouldWarn(100_000, 'mapping')).toBe(true);
+    expect(warning.shouldWarn(101_000, 'mapping')).toBe(false);
+    expect(warning.shouldWarn(102_000, 'connector')).toBe(true);
+    expect(warning.shouldWarn(103_000, 'connector')).toBe(false);
+    expect(warning.shouldWarn(222_000, 'connector')).toBe(true);
+  });
+
+  it('resets after a successful public URL probe, including the first-warning state', () => {
+    const warning = createTunnelWarningThrottle();
+    expect(warning.shouldWarn(100_000)).toBe(true);
+    expect(warning.shouldWarn(220_000)).toBe(true);
+    warning.reset();
+    expect(warning.shouldWarn(221_000)).toBe(true);
+    expect(warning.shouldWarn(340_999)).toBe(false);
+    expect(warning.shouldWarn(341_000)).toBe(true);
   });
 });
 
