@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { formatDateTimeMinuteLocal } from '../../pages/helpers/checkinLogTime.js';
 import { useIsMobile } from '../useIsMobile.js';
+import { useThemeVar } from '../useThemeLabelColor.js';
 
 type Metric = 'tokens' | 'requests' | 'cost';
 
@@ -45,6 +46,11 @@ export default function DownstreamKeyTrendChart({
 }) {
   const [metric, setMetric] = useState<Metric>('tokens');
   const isMobile = useIsMobile();
+  // VChart cannot resolve CSS var() spec colors — pass computed values
+  // (re-read on theme switch) or the chart draws white/invisible lines.
+  const labelColor = useThemeVar('--color-text-muted', '#9ca3af');
+  const axisColor = useThemeVar('--color-border-light', '#e5e7eb');
+  const seriesColor = useThemeVar('--color-primary', '#14b8a6');
 
   const flatData = useMemo(() => {
     if (!Array.isArray(buckets) || buckets.length === 0) return [];
@@ -112,16 +118,16 @@ export default function DownstreamKeyTrendChart({
       {
         orient: 'bottom',
         label: {
-          style: { fontSize: 11, fill: 'var(--color-text-muted)' },
+          style: { fontSize: 11, fill: labelColor },
           formatMethod: (value: string) => formatTrendAxisLabel(String(value || ''), bucketSeconds),
         },
-        domainLine: { style: { stroke: 'var(--color-border-light)' } },
-        tick: { style: { stroke: 'var(--color-border-light)' } },
+        domainLine: { style: { stroke: axisColor } },
+        tick: { style: { stroke: axisColor } },
       },
       {
         orient: 'left',
-        label: { style: { fontSize: 11, fill: 'var(--color-text-muted)' } },
-        grid: { style: { stroke: 'var(--color-border-light)', lineDash: [4, 4] } },
+        label: { style: { fontSize: 11, fill: labelColor } },
+        grid: { style: { stroke: axisColor, lineDash: [4, 4] } },
         domainLine: { visible: false },
       },
     ],
@@ -145,7 +151,7 @@ export default function DownstreamKeyTrendChart({
       triggerOff: (isMobile ? 'click' : 'hover') as 'click' | 'hover',
       lockAfterClick: isMobile,
     },
-    color: ['var(--color-primary)'],
+    color: [seriesColor],
     background: 'transparent',
     animationAppear: {
       area: { type: 'fadeIn', duration: 500, easing: 'cubicOut' },

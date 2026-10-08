@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { api } from '../../api.js';
-import { useThemeLabelColor } from '../useThemeLabelColor.js';
+import { useThemeLabelColor, useThemeVar } from '../useThemeLabelColor.js';
 import { useIsMobile } from '../useIsMobile.js';
 import {
   CHART_CATEGORY_PALETTE,
@@ -63,6 +63,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
     }
   });
   const labelColor = useThemeLabelColor();
+  const axisColor = useThemeVar('--color-border-light', '#e5e7eb');
   const isMobile = useIsMobile();
   // Shared header height so both chart views keep the plot areas aligned.
   const headerStyleWithMinHeight: React.CSSProperties = isMobile
@@ -265,8 +266,8 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
           style: { fontSize: 11, fill: labelColor },
           formatMethod: (value: string | number) => formatTrendBucketLabel(String(value)),
         },
-        domainLine: { style: { stroke: 'var(--color-border-light)' } },
-        tick: { style: { stroke: 'var(--color-border-light)' } },
+        domainLine: { style: { stroke: axisColor } },
+        tick: { style: { stroke: axisColor } },
       },
       {
         orient: 'left',
@@ -278,7 +279,7 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
           },
           style: { fontSize: 11, fill: labelColor },
         },
-        grid: { style: { stroke: 'var(--color-border-light)', lineDash: [4, 4] } },
+        grid: { style: { stroke: axisColor, lineDash: [4, 4] } },
         domainLine: { visible: false },
       },
     ],
