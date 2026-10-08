@@ -7,6 +7,10 @@ import { mergeAccountExtraConfig } from './accountExtraConfig.js';
 import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { PLATFORM_ALIASES, detectPlatformByUrlHint } from '../../shared/platformIdentity.js';
 import { fanoutSiteWideDisabledModels } from './siteDisabledModels.js';
+import {
+  decryptAccountPassword,
+  encryptAccountPassword,
+} from './accountCredentialService.js';
 
 const BACKUP_VERSION = '2.1';
 
@@ -1169,6 +1173,65 @@ function normalizeBackupWebdavConfig(raw: unknown): BackupWebdavConfig {
   };
 }
 
+/** The stored password is an AES-GCM envelope (`v1:iv:tag:data`) written by encryptAccountPassword. */
+function isWebdavPasswordCipher(value: string): boolean {
+  return /^v1:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/.test(value);
+}
+
+/** In-memory marker for a cipher-shaped password that failed to decrypt (e.g. key changed). */
+const WEBDAV_PASSWORD_DECRYPT_FAILED = '__webdav_password_decrypt_failed__';
+
+function isWebdavPasswordDecryptFailed(value: string): boolean {
+  return value === WEBDAV_PASSWORD_DECRYPT_FAILED;
+}
+
+/** Detect that a config's stored cipher fails to decrypt (cheap re-check on the raw config). */
+function isWebdavDecryptFailedConfig(config: BackupWebdavConfig): boolean {
+  if (!isWebdavPasswordCipher(config.password)) return false;
+  return isWebdavPasswordDecryptFailed(decryptWebdavPassword(config).password);
+}
+
+/**
+ * The config row holds the WebDAV password ENCRYPTED (same AES-256-GCM pair as
+ * account relogin credentials). Legacy rows written by the old code carry
+ * plaintext; migration is data-driven on load — decrypt/keep is decided per
+ * value shape, plaintext is re-encrypted and persisted back, so restoring an
+ * old backup re-runs the same migration with no permanent marker. The caller
+ * only ever sees plaintext in memory; nothing plaintext reaches the settings
+ * row or the exported backup file.
+ */
+async function loadBackupWebdavConfig(): Promise<BackupWebdavConfig> {
+  const config = normalizeBackupWebdavConfig(await readSettingValue(BACKUP_WEBDAV_CONFIG_SETTING_KEY));
+
+  if (config.password && !isWebdavPasswordCipher(config.password)) {
+    // Legacy plaintext: encrypt and write back so the row no longer carries it.
+    const encrypted = encryptAccountPassword(config.password);
+    const stored = await readSettingValue(BACKUP_WEBDAV_CONFIG_SETTING_KEY);
+    if (isRecord(stored)) {
+      await upsertSetting(BACKUP_WEBDAV_CONFIG_SETTING_KEY, { ...stored, password: encrypted });
+    }
+    return { ...config, password: encrypted };
+  }
+
+  return config;
+}
+
+/**
+ * Decrypt the stored cipher for in-memory use (auth header, validation).
+ *
+ * FAIL-CLOSED: when the cipher cannot be decrypted (corrupt value, or it was
+ * written under a different key/config), the config must NOT treat the stored
+ * ciphertext as a usable credential. The password is replaced by an in-memory
+ * sentinel so the auth header builder throws instead of sending the ciphertext
+ * to the remote host as the Basic auth password.
+ */
+function decryptWebdavPassword(config: BackupWebdavConfig): BackupWebdavConfig {
+  if (!config.password) return config;
+  if (!isWebdavPasswordCipher(config.password)) return config;
+  const plain = decryptAccountPassword(config.password);
+  return plain === null ? { ...config, password: WEBDAV_PASSWORD_DECRYPT_FAILED } : { ...config, password: plain };
+}
+
 function normalizeBackupWebdavState(raw: unknown): BackupWebdavState {
   const source = isRecord(raw) ? raw : {};
   return {
@@ -1177,7 +1240,16 @@ function normalizeBackupWebdavState(raw: unknown): BackupWebdavState {
   };
 }
 
-function toBackupWebdavConfigView(config: BackupWebdavConfig): BackupWebdavConfigView {
+function toBackupWebdavConfigView(encryptedConfig: BackupWebdavConfig): BackupWebdavConfigView {
+  // The view masks what the USER typed, so unmask the stored cipher first.
+  const config = decryptWebdavPassword(encryptedConfig);
+  // A cipher that failed to decrypt stays fail-closed in the view too: report
+  // hasPassword so the user can re-enter a password, but never surface the
+  // raw ciphertext or a masked fragment of it (the view must not leak cipher
+  // material the auth path refuses to use).
+  const maskedView = isWebdavPasswordDecryptFailed(config.password)
+    ? { hasPassword: true, passwordMasked: '' }
+    : { hasPassword: config.password.length > 0, passwordMasked: maskSecret(config.password) };
   return {
     enabled: config.enabled,
     fileUrl: config.fileUrl,
@@ -1185,18 +1257,13 @@ function toBackupWebdavConfigView(config: BackupWebdavConfig): BackupWebdavConfi
     exportType: config.exportType,
     autoSyncEnabled: config.autoSyncEnabled,
     autoSyncCron: config.autoSyncCron,
-    hasPassword: config.password.length > 0,
-    passwordMasked: maskSecret(config.password),
+    ...maskedView,
   };
 }
 
 async function readSettingValue(key: string): Promise<unknown> {
   const row = await db.select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, key)).get();
   return parseSettingValue(row?.value ?? null);
-}
-
-async function loadBackupWebdavConfig(): Promise<BackupWebdavConfig> {
-  return normalizeBackupWebdavConfig(await readSettingValue(BACKUP_WEBDAV_CONFIG_SETTING_KEY));
 }
 
 async function loadBackupWebdavState(): Promise<BackupWebdavState> {
@@ -1207,8 +1274,17 @@ async function writeBackupWebdavState(next: BackupWebdavState) {
   await upsertSetting(BACKUP_WEBDAV_STATE_SETTING_KEY, next);
 }
 
-function resolveBackupWebdavAuthHeader(config: BackupWebdavConfig): string | null {
+function resolveBackupWebdavAuthHeader(encryptedConfig: BackupWebdavConfig): string | null {
+  // The stored password is a cipher; the auth header needs the plaintext.
+  const config = decryptWebdavPassword(encryptedConfig);
   if (!config.username && !config.password) return null;
+  if (isWebdavPasswordDecryptFailed(config.password)) {
+    // Fail closed: a cipher-shaped password that cannot be decrypted must
+    // never reach the wire as a credential (the ciphertext is not the real
+    // password and sending it to the remote host leaks it). Ask the user to
+    // re-enter the WebDAV password; the message carries no credential value.
+    throw new Error('WebDAV 密码无法解密（加密密钥已变化或密文损坏），请在设置中重新输入 WebDAV 密码');
+  }
   return `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`;
 }
 
@@ -1930,15 +2006,19 @@ export async function getBackupWebdavConfig() {
 
 export async function saveBackupWebdavConfig(input: Partial<BackupWebdavConfig> & { password?: string; clearPassword?: boolean }) {
   const existing = await loadBackupWebdavConfig();
+  // A NEW plaintext password is encrypted before it reaches the settings row;
+  // an unchanged password keeps its existing cipher as-is (never re-encrypt a
+  // cipher, which would make it undecryptable).
+  const passwordToStore = input.clearPassword
+    ? ''
+    : (input.password !== undefined
+      ? encryptAccountPassword(String(input.password))
+      : existing.password);
   const next: BackupWebdavConfig = {
     enabled: input.enabled !== undefined ? input.enabled === true : existing.enabled,
     fileUrl: input.fileUrl !== undefined ? asString(input.fileUrl) : existing.fileUrl,
     username: input.username !== undefined ? asString(input.username) : existing.username,
-    password: input.clearPassword
-      ? ''
-      : (input.password !== undefined
-        ? String(input.password)
-        : existing.password),
+    password: passwordToStore,
     exportType: isValidBackupExportType(input.exportType) ? input.exportType : existing.exportType,
     autoSyncEnabled: input.autoSyncEnabled !== undefined ? input.autoSyncEnabled === true : existing.autoSyncEnabled,
     autoSyncCron: typeof input.autoSyncCron === 'string' && input.autoSyncCron.trim()
@@ -1967,6 +2047,18 @@ export async function exportBackupToWebdav(type?: BackupExportType) {
   }
 
   const exportType = type && isValidBackupExportType(type) ? type : config.exportType;
+  // Fail-closed decryption is a hard stop BEFORE any payload assembly or fetch:
+  // the error is written to lastError (same shape as a network failure) and the
+  // exact "re-enter password" message propagates to the caller.
+  if (isWebdavDecryptFailedConfig(config)) {
+    const decryptError = new Error('WebDAV 密码无法解密（加密密钥已变化或密文损坏），请在设置中重新输入 WebDAV 密码');
+    const previousState = await loadBackupWebdavState();
+    await writeBackupWebdavState({
+      lastSyncAt: previousState.lastSyncAt,
+      lastError: decryptError.message,
+    });
+    throw decryptError;
+  }
   const payload = await exportBackup(exportType);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -2017,6 +2109,18 @@ export async function importBackupFromWebdav() {
   }
   if (!config.fileUrl) {
     throw new Error('WebDAV 文件地址不能为空');
+  }
+
+  // Fail-closed decryption is a hard stop BEFORE any fetch: the error is
+  // written to lastError and the exact "re-enter password" message propagates.
+  if (isWebdavDecryptFailedConfig(config)) {
+    const decryptError = new Error('WebDAV 密码无法解密（加密密钥已变化或密文损坏），请在设置中重新输入 WebDAV 密码');
+    const previousState = await loadBackupWebdavState();
+    await writeBackupWebdavState({
+      lastSyncAt: previousState.lastSyncAt,
+      lastError: decryptError.message,
+    });
+    throw decryptError;
   }
 
   const headers: Record<string, string> = {};

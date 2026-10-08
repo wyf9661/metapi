@@ -78,7 +78,9 @@ describe('settings backup webdav api', () => {
 
     const saved = await db.select().from(schema.settings).where(eq(schema.settings.key, 'backup_webdav_config_v1')).get();
     expect(saved?.value).toContain('"fileUrl":"https://dav.example.com/backups/metapi.json"');
-    expect(saved?.value).toContain('"password":"secret-pass"');
+    // The password is stored encrypted (v1 AES-GCM envelope), never plaintext.
+    expect(saved?.value).not.toContain('"password":"secret-pass"');
+    expect(saved?.value).toMatch(/"password":"v1:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+"/);
   });
 
   it('exports current backup to webdav through settings route', async () => {
