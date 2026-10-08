@@ -178,6 +178,39 @@ describe('TokenRoutes mobile actions', () => {
     }
   });
 
+  it('limits select-all to the rendered page instead of including unseen routes', async () => {
+    apiMock.getRoutesSummary.mockResolvedValue(Array.from({ length: 7 }, (_, index) => ({
+      id: index + 1,
+      modelPattern: `model-${String(index + 1).padStart(2, '0')}`,
+      enabled: true,
+      channelCount: 1,
+      enabledChannelCount: 1,
+      siteNames: ['site-a'],
+      decisionSnapshot: null,
+      decisionRefreshedAt: null,
+    })));
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(<MemoryRouter initialEntries={['/routes']}><ToastProvider><TokenRoutes /></ToastProvider></MemoryRouter>);
+      });
+      await flushMicrotasks();
+      await act(async () => { findButtonByText(root.root, '批量操作').props.onClick(); });
+      const checkboxes = root.root.findAll((node) => node.type === 'input' && String(node.props['data-testid'] || '').startsWith('route-select-'));
+      const visibleIds = checkboxes.map((node) => Number(String(node.props['data-testid']).replace('route-select-', '')));
+      expect(visibleIds).toHaveLength(5);
+      expect(visibleIds.length).toBeLessThan(7);
+      await act(async () => {
+        root.root.find((node) => node.type === 'button' && ['全选', '全选本页'].includes(collectText(node))).props.onClick();
+      });
+      await act(async () => { findButtonByText(root.root, '批量禁用').props.onClick(); });
+      expect(apiMock.batchUpdateRoutes).toHaveBeenCalledWith({ ids: visibleIds, action: 'disable' });
+      expect(globalThis.window.confirm).toHaveBeenCalledWith(`确认批量禁用 ${visibleIds.length} 条路由？`);
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('lets mobile users select a route and batch disable it', async () => {
     let root!: WebTestRenderer;
 

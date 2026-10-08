@@ -57,6 +57,9 @@ import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
 import TokenRouteConfirmModal, { type TokenRouteConfirmState } from './token-routes/TokenRouteConfirmModal.js';
 import { StatusText, StatusPill } from '../components/StatusText.js';
+import PaginationControls from '../components/PaginationControls.js';
+import { useClientPagination } from '../components/useClientPagination.js';
+import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 
 const EMPTY_ROUTE_CANDIDATE_VIEW: RouteCandidateView = {
   routeCandidates: [],
@@ -894,13 +897,32 @@ export default function TokenRoutes() {
     });
   }, [baseFilteredRoutes, enabledFilter]);
 
+  // Render and batch-select the same page so select-all cannot affect hidden
+  // routes. Expansion state remains keyed by route id across page switches.
+  const [exactRoutePageSize, setExactRoutePageSize] = usePersistedPageSize('routes');
+  const {
+    page: routePage,
+    setPage: setRoutePage,
+    totalPages: routeTotalPages,
+    pageSize: routePageSize,
+    pagedItems: pagedRoutes,
+    showControls: showRoutePagination,
+  } = useClientPagination(filteredRoutes, `${routePatternsKey}:${filteredRoutes.length}`, exactRoutePageSize);
+
   const selectableRouteIds = useMemo(() => {
     return new Set(
-      filteredRoutes
+      pagedRoutes
         .filter((route) => route.kind !== 'zero_channel' && route.readOnly !== true && route.isVirtual !== true)
         .map((route) => route.id),
     );
-  }, [filteredRoutes]);
+  }, [pagedRoutes]);
+
+  useEffect(() => {
+    setSelectedRouteIds((current) => {
+      const next = new Set([...current].filter((id) => selectableRouteIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [selectableRouteIds]);
 
   const toggleBatchSelectMode = () => {
     setBatchSelectMode((prev) => {
@@ -950,11 +972,6 @@ export default function TokenRoutes() {
       setBatchUpdatingRoutes(false);
     }
   };
-
-  const visibleRoutes = useMemo(
-    () => filteredRoutes,
-    [filteredRoutes],
-  );
 
   // Lazy per-route candidate index — only computes for routes actually accessed
   const candidateIndexCacheRef = useRef<{ key: string; cache: Map<number, RouteCandidateView> }>({ key: '', cache: new Map() });
@@ -1830,8 +1847,8 @@ export default function TokenRoutes() {
           <span style={{ fontSize: 13, fontWeight: 500 }}>
             {tr('已选择')} <b>{selectedRouteIds.size}</b> / {selectableRouteIds.size} {tr('条路由')}
           </span>
-          <button className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={selectAllRoutes}>{tr('全选')}</button>
-          <button className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={deselectAllRoutes}>{tr('取消全选')}</button>
+          <button className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={selectAllRoutes}>{tr('全选本页')}</button>
+          <button className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={deselectAllRoutes}>{tr('清空本页')}</button>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button
               className="btn btn-warning"
@@ -1913,7 +1930,7 @@ export default function TokenRoutes() {
           )}
         </div>
       )}
-{visibleRoutes.map((route) => {
+{pagedRoutes.map((route) => {
           const isExpanded = expandedRouteIds.includes(route.id);
           const isDesktopDetailClosing = closingDesktopDetailRouteIds.includes(route.id);
           const isReadOnlyRoute = route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true;
@@ -2159,6 +2176,16 @@ export default function TokenRoutes() {
           );
         })}
       </div>
+
+      <PaginationControls
+        page={routePage}
+        totalPages={routeTotalPages}
+        onPageChange={setRoutePage}
+        visible={showRoutePagination}
+        pageSize={routePageSize}
+        onPageSizeChange={setExactRoutePageSize}
+        rangeLabel={`${tr('查看')} ${tr('共')} ${filteredRoutes.length} ${tr('条路由')}`}
+      />
 
       {filteredRoutes.length === 0 && (
         <div className="card">
