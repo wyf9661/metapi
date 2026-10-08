@@ -76,6 +76,27 @@ describe('logCleanupService', () => {
   it('cleans usage logs and program logs older than retention days', async () => {
     const account = await seedAccount();
 
+    await db.insert(schema.probeLogs).values([
+      {
+        accountId: account.id,
+        siteId: account.siteId,
+        modelName: 'gpt-4.1-mini',
+        questionCategory: 'math',
+        questionText: '1+1?',
+        status: 'failed',
+        createdAt: '2026-02-01 08:00:00',
+      },
+      {
+        accountId: account.id,
+        siteId: account.siteId,
+        modelName: 'gpt-4.1-mini',
+        questionCategory: 'math',
+        questionText: '2+2?',
+        status: 'success',
+        createdAt: '2026-03-10 08:00:00',
+      },
+    ]).run();
+
     await db.insert(schema.proxyLogs).values([
       {
         accountId: account.id,
@@ -114,16 +135,21 @@ describe('logCleanupService', () => {
     });
 
     expect(result.enabled).toBe(true);
-    expect(result.usageLogsDeleted).toBe(1);
+    // 1 proxy log + 1 probe log (probe rides usage retention)
+    expect(result.usageLogsDeleted).toBe(2);
     expect(result.programLogsDeleted).toBe(1);
-    expect(result.totalDeleted).toBe(2);
+    expect(result.totalDeleted).toBe(3);
 
     const remainingProxyLogs = await db.select().from(schema.proxyLogs).all();
     const remainingEvents = await db.select().from(schema.events).all();
+    const remainingProbeLogs = await db.select().from(schema.probeLogs).all();
     expect(remainingProxyLogs).toHaveLength(1);
     expect(remainingProxyLogs[0]?.createdAt).toBe('2026-03-10 08:00:00');
     expect(remainingEvents).toHaveLength(1);
     expect(remainingEvents[0]?.title).toBe('new event');
+    // Probe logs ride the usage-log retention (no separate setting).
+    expect(remainingProbeLogs).toHaveLength(1);
+    expect(remainingProbeLogs[0]?.createdAt).toBe('2026-03-10 08:00:00');
   });
 
   it('skips cleanup when no target is enabled', async () => {

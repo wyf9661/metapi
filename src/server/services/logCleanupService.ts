@@ -50,10 +50,19 @@ export async function cleanupUsageLogs(retentionDays: number, nowMs = Date.now()
       .run()
   ).changes;
 
+  // Probe logs share the usage-log retention: they are operational history
+  // with no separate setting, and leaving them unbounded grows the DB forever
+  // (6613 rows / 28 days observed 2026-10-08).
+  const probeDeleted = (
+    await db.delete(schema.probeLogs)
+      .where(lt(schema.probeLogs.createdAt, cutoffUtc))
+      .run()
+  ).changes;
+
   return {
     retentionDays: normalizedDays,
     cutoffUtc,
-    deleted,
+    deleted: deleted + probeDeleted,
   };
 }
 
