@@ -2486,7 +2486,17 @@ export default function Sites() {
           visible={showSitePagination}
           rangeLabel={`显示第 ${(safePage - 1) * pageSize + 1} - ${Math.min(safePage * pageSize, sortedSites.length)} 条，共 ${sortedSites.length} 条`}
           pageSize={exactPageSize}
-          onPageSizeChange={setExactPageSize}
+          onPageSizeChange={(next) => {
+            setExactPageSize(next);
+            // The pagination hook resets to page 1 when the size changes; clear
+            // the stale ?page=N or the page-sync effect will use it to drag the
+            // state right back to the old page.
+            const params = new URLSearchParams(location.search);
+            if (params.get('page') !== null) {
+              params.delete('page');
+              navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+            }
+          }}
         />
       </div>
     </div>
