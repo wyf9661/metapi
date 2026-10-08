@@ -4970,4 +4970,50 @@ describe('chat proxy stream behavior', () => {
     }
   });
 
+  it('replies 502 through the loop-guard failsafe instead of dropping the request silently', async () => {
+    const originalAttempts = config.proxyMaxChannelAttempts;
+    config.proxyMaxChannelAttempts = 30;
+    const controller = new AbortController();
+    const replyDeadline = setTimeout(() => controller.abort(), 500);
+    try {
+      const selected = {
+        channel: { id: 11, routeId: 22 },
+        site: { name: 'demo-site', url: 'https://upstream.example.com' },
+        account: { id: 33, username: 'demo-user' },
+        tokenName: 'default',
+        tokenValue: 'sk-demo',
+        actualModel: 'upstream-gpt',
+      };
+      // Keep supplying candidates so the safety cap, not empty selection or
+      // the low-value streak stop, owns termination. Rate limiting is retryable
+      // but is not one of the low-value failure classes.
+      selectChannelMock.mockReturnValue(selected);
+      selectNextChannelMock.mockReturnValue(selected);
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify({
+        error: { message: 'rate limit exceeded', type: 'rate_limit_error' },
+      }), { status: 429, headers: { 'content-type': 'application/json' } }));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/chat/completions',
+        signal: controller.signal,
+        payload: {
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'hi' }],
+        },
+      }).catch(() => ({ statusCode: 0, body: 'Request left without a reply at the safety cap' }));
+
+      expect(selectChannelMock.mock.calls.length + selectNextChannelMock.mock.calls.length).toBe(16);
+      expect(response.statusCode, response.body).toBe(502);
+      expect(response.body).toContain('safety cap');
+      expect(reportProxyAllFailedMock).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'Attempt loop exceeded the safety cap',
+        outcome: 'request_failed',
+      }));
+    } finally {
+      clearTimeout(replyDeadline);
+      config.proxyMaxChannelAttempts = originalAttempts;
+    }
+  });
+
 });

@@ -358,7 +358,22 @@ export async function handleChatSurfaceRequest(
     };
 
   while (true) {
-    if (++loopGuard > LOOP_GUARD_MAX) break;
+    if (++loopGuard > LOOP_GUARD_MAX) {
+      console.error(`[proxy/chat] attempt loop exceeded LOOP_GUARD_MAX (${LOOP_GUARD_MAX}); failing request.`);
+      await reportProxyAllFailed({
+        model: requestedModel,
+        reason: 'Attempt loop exceeded the safety cap',
+        outcome: 'request_failed',
+        attemptedChannels: excludeChannelIds.length,
+        configuredAttempts: maxRetries + 1,
+      });
+      const guardPayload = {
+        error: { message: 'Upstream attempt loop exceeded the safety cap', type: 'server_error' as const },
+      };
+      await finalizeDebugFailure(502, guardPayload, null);
+      sendReplyIfWritable(reply, 502, guardPayload);
+      return;
+    }
     if (retryCount > maxRetries && !recoveryPass) {
       if (allFailuresRecovering && config.proxyFailoverBackoffMs > 0) {
         recoveryPass = true;
