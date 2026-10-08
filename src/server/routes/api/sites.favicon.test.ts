@@ -282,6 +282,25 @@ describe('site favicon proxy routing', () => {
     expect(fetchMock).toHaveBeenCalledTimes(8);
   });
 
+  it('rejects an icon download that exceeds the byte cap while streaming', async () => {
+    await db.insert(schema.sites).values({
+      name: 'huge-icon', url: 'https://huge.example.com', platform: 'new-api',
+      proxyUrl: 'http://127.0.0.1:9876',
+    }).run();
+    // No content-length: the cap must be enforced while reading the stream,
+    // not from headers. 700KB crosses the 512KB MAX_ICON_BYTES cap.
+    const huge = Buffer.alloc(700 * 1024, 0x61);
+    fetchMock.mockImplementation(async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(huge));
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'image/svg+xml' } }));
+
+    const response = await app.inject('/api/site-favicon?url=https%3A%2F%2Fhuge.example.com');
+    expect(response.statusCode).toBe(404);
+  });
+
   it('rejects a private redirect target even for a configured public site', async () => {
     await db.insert(schema.sites).values({
       name: 'redirect-guard', url: 'https://site.example.com', platform: 'new-api',

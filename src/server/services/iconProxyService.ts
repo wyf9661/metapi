@@ -44,6 +44,8 @@ const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const NEGATIVE_CACHE_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8_000;
 const MAX_HTML_BYTES = 512 * 1024;
+/** Cap any single downloaded icon; a legit favicon is a few KB, not hundreds of MB. */
+const MAX_ICON_BYTES = 512 * 1024;
 const MAX_ICON_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
@@ -453,7 +455,28 @@ async function fetchImage(
       await response.body?.cancel();
       return null;
     }
-    const buffer = Buffer.from(await response.arrayBuffer());
+    // Enforce the byte cap while streaming: aborting the read as soon as the
+    // cap is crossed stops a huge or infinite body from filling memory.
+    const declaredLength = Number(response.headers.get('content-length') || '');
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_ICON_BYTES) {
+      await response.body?.cancel();
+      return null;
+    }
+    const reader = response.body?.getReader();
+    if (!reader) return null;
+    const chunks: Buffer[] = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > MAX_ICON_BYTES) {
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      chunks.push(Buffer.from(value));
+    }
+    const buffer = Buffer.concat(chunks);
     if (buffer.length === 0) return null;
     return { buffer, contentType, source: String(target) };
   } catch {
