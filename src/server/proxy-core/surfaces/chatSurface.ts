@@ -23,17 +23,10 @@ import {
 import {executeEndpointFlow} from '../orchestration/endpointFlow.js';
 import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import {
-  downgradeReasoningEffortInBody,
-  isReasoningEffortRejection,
-  isNoneReasoningEffortRejection,
-  readReasoningEffortFromBody,
-  resolveInPlaceEffortRetryCeiling,
-  stripReasoningEffortFromBody,
-} from '../../services/reasoningEffort.js';
-import {
-  clampRequestBodyToSiteEffortCeiling,
-  learnReasoningEffortCeilingFromFailure,
-} from '../../services/siteReasoningEffortCapabilityService.js';
+  clampBuiltBodyToEffortCeiling,
+  isEffortRejectionRetryable,
+  recoverForEffortRejection,
+} from './effortRecovery.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
 import { anthropicMessagesTransformer } from '../../transformers/anthropic/messages/index.js';
 import { shouldPreferResponsesForAnthropicContinuation } from '../../transformers/anthropic/messages/compatibility.js';
@@ -555,7 +548,7 @@ export async function handleChatSurfaceRequest(
         // A relay that already told us a value is not in its ladder must not be
         // sent that value again — clamp the built body to the ceiling learned
         // for this site + protocol (see siteReasoningEffortCapabilityService).
-        clampRequestBodyToSiteEffortCeiling(builtBody, selected.site.id, endpoint);
+        clampBuiltBodyToEffortCeiling(builtBody, selected.site.id, endpoint);
         return {
           endpoint,
           path: endpointRequest.path,
@@ -606,6 +599,12 @@ export async function handleChatSurfaceRequest(
         buildRequest: (endpoint) => buildEndpointRequest(endpoint),
         dispatchRequest,
         tryRecover,
+        // Overrides (paramOverride/requestOverrideRules) merge AFTER the
+        // build-time clamp, so clamp the FINAL body too — a configured
+        // override must not resurrect a value this relay already rejected.
+        enforceEffortCeiling: (body, endpoint) => {
+          clampBuiltBodyToEffortCeiling(body, selected.site.id, endpoint);
+        },
         shouldAbortRemainingEndpoints: (ctx) => shouldAbortSameSiteEndpointFallback(
           ctx.response.status,
           ctx.rawErrText || ctx.errText,
@@ -615,46 +614,30 @@ export async function handleChatSurfaceRequest(
         // accepts. onAttemptFailure just downgraded the shared body, so
         // redispach the SAME endpoint on this channel immediately instead of
         // cascading elsewhere with a value other relays may also refuse.
-        shouldRetryInPlace: (ctx) => ctx.response.status === 400
-          && isReasoningEffortRejection(ctx.rawErrText || ctx.errText),
+        shouldRetryInPlace: (ctx) => isEffortRejectionRetryable(
+          ctx.response.status,
+          ctx.rawErrText || ctx.errText,
+        ),
         onAttemptFailure: async (ctx) => {
           // A 400 that names the effort means the value we forwarded is not in
           // this upstream's accepted ladder: relays that only take
           // low/medium/high reject `max`, and the Anthropic messages conversion
           // rejects `xhigh`. Step the value down one rung so the NEXT attempt
-          // (the failover retry) can actually complete, instead of replaying the
-          // same rejected body against every channel on the route. Only a
+          // (the in-place retry, or the failover retry) can complete, instead
+          // of replaying the same rejected body against every channel. Only a
           // rejection downgrades — the first attempt always sends exactly what
-          // the client asked for.
-          if (ctx.response.status === 400 && isReasoningEffortRejection(ctx.rawErrText || ctx.errText)) {
-            // Two kinds of effort verdict:
-            // 1) `none` rejected outright — the model does not support
-            //    disabling reasoning and no ladder rung sits below `none`.
-            //    Strip the field so the in-place retry goes out without it.
-            // 2) A ladder rejection — remember the verdict for this
-            //    site+protocol so later requests stop opening with a value
-            //    this relay refuses, and step this request's own body down
-            //    one rung for the in-place retry. A rejection that spells
-            //    out its accepted ladder ("valid levels: low, medium,
-            //    high") teaches the top accepted rung directly instead of
-            //    one mechanical step below the rejected value.
-            if (isNoneReasoningEffortRejection(ctx.rawErrText || ctx.errText)) {
-              stripReasoningEffortFromBody(resolvedOpenAiBody);
-            } else {
-              const taughtCeiling = resolveInPlaceEffortRetryCeiling({
-                rejectedEffort: readReasoningEffortFromBody(resolvedOpenAiBody),
-                errorText: ctx.rawErrText || ctx.errText,
-              });
-              learnReasoningEffortCeilingFromFailure({
-                siteId: selected.site.id,
-                endpoint: ctx.request.endpoint,
-                errorText: ctx.rawErrText || ctx.errText,
-                body: resolvedOpenAiBody,
-                taughtCeiling,
-              });
-              downgradeReasoningEffortInBody(resolvedOpenAiBody);
-            }
-          }
+          // the client asked for. Shared logic lives in effortRecovery.ts so
+          // the chat/messages/responses surfaces behave identically.
+          recoverForEffortRejection({
+            status: ctx.response.status,
+            errText: ctx.rawErrText || ctx.errText,
+            siteId: selected.site.id,
+            endpoint: ctx.request.endpoint,
+            bodies: [resolvedOpenAiBody],
+            // The relay judged the FINAL outbound body (overrides merged);
+            // learning must use its effort, not the source's client value.
+            rejectedBody: ctx.request.body,
+          });
           const memoryWrite = recordUpstreamEndpointFailure({
             ...endpointRuntimeContext,
             endpoint: ctx.request.endpoint,

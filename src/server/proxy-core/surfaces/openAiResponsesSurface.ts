@@ -22,6 +22,11 @@ import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration
 import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import { getProxyAuthContext, getProxyResourceOwner } from '../../middleware/auth.js';
 import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transformers/shared/endpointCompatibility.js';
+import {
+  clampBuiltBodyToEffortCeiling,
+  isEffortRejectionRetryable,
+  recoverForEffortRejection,
+} from './effortRecovery.js';
 
 import {
   ProxyInputFileResolutionError,
@@ -565,6 +570,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
               })
               : endpointRequest.body as Record<string, unknown>
           );
+          // A relay that already told us a value is not in its ladder must not
+          // be sent that value again — clamp the built body to the ceiling
+          // learned for this site+protocol (see siteReasoningEffortCapabilityService).
+          clampBuiltBodyToEffortCeiling(requestBody, selected.site.id, endpoint);
           const requestHeaders = (
             isCompactRequest && endpoint === 'responses'
               ? ensureCompactResponsesJsonAcceptHeader(endpointRequest.headers, {
@@ -616,7 +625,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               selected,
             siteUrl: siteApiBaseUrl,
               buildRequest: (endpoint) => buildEndpointRequest(endpoint),
-            });
+              });
             if (recovered?.upstream?.ok) {
               return recovered;
             }
@@ -703,6 +712,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
             ctx.response = recoveredResponse;
             ctx.rawErrText = await readRuntimeResponseText(recoveredResponse).catch(() => 'unknown error');
           }
+          // An effort rejection is a request-shape verdict about the effort
+          // VALUE, not about the body/header shape: the compatibility replay
+          // below rebuilds bodies for protocol-shape mismatches (it would
+          // preserve an unaccepted `max` or drop `reasoning` entirely), so it
+          // cannot help and must not swallow the verdict before the shared
+          // effort recovery (onAttemptFailure + in-place retry) handles it.
+          if (isEffortRejectionRetryable(ctx.response.status, ctx.rawErrText)) {
+            return null;
+          }
           return endpointStrategy.tryRecover(ctx);
         };
 
@@ -717,11 +735,46 @@ export async function handleOpenAiResponsesSurfaceRequest(
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),
           dispatchRequest,
           tryRecover,
+          // Overrides (paramOverride/requestOverrideRules) merge AFTER the
+          // build-time clamp, so clamp the FINAL body too — a configured
+          // override must not resurrect a value this relay already rejected.
+          enforceEffortCeiling: (body, endpoint) => {
+            clampBuiltBodyToEffortCeiling(body, selected.site.id, endpoint);
+          },
           shouldAbortRemainingEndpoints: (ctx) => shouldAbortSameSiteEndpointFallback(
             ctx.response.status,
             ctx.rawErrText || ctx.errText,
           ),
+          // An effort rejection is a request-shape verdict, not a channel-health
+          // signal: the relay answered instantly and told us which ladder it
+          // accepts. onAttemptFailure just downgraded the shared bodies, so
+          // redispatch the SAME endpoint on this channel immediately instead of
+          // cascading elsewhere with a value other relays may also refuse
+          // (same contract as the chat surface — see effortRecovery.ts).
+          shouldRetryInPlace: (ctx) => isEffortRejectionRetryable(
+            ctx.response.status,
+            ctx.rawErrText || ctx.errText,
+          ),
           onAttemptFailure: async (ctx) => {
+            // A 400 that names the effort means the value we forwarded is not in
+            // this upstream's accepted ladder (low/medium/high relays reject
+            // `max`; Anthropic message conversions reject `xhigh`). Step the
+            // value(s) in the shared source bodies down one rung so the
+            // in-place retry (and the failover retry) carry an accepted value.
+            // Applies to every source body the endpoint builder reads:
+            // responses-format (normalizedResponsesBody) and the openai-format
+            // body used for chat/messages upstream endpoints. Only a rejection
+            // downgrades — the first attempt always sends what the client asked.
+            recoverForEffortRejection({
+              status: ctx.response.status,
+              errText: ctx.rawErrText || ctx.errText,
+              siteId: selected.site.id,
+              endpoint: ctx.request.endpoint,
+              bodies: [normalizedResponsesBody, openAiBody],
+              // The relay judged the FINAL outbound body (overrides merged);
+              // learning must use its effort, not the source's client value.
+              rejectedBody: ctx.request.body,
+            });
             const memoryWrite = isCompactRequest
               ? null
               : recordUpstreamEndpointFailure({

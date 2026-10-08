@@ -1822,4 +1822,157 @@ describe('responses proxy codex oauth refresh', () => {
     expect(recordFailureMock).not.toHaveBeenCalled();
     expect(recordSuccessMock).toHaveBeenCalledTimes(1);
   });
+
+  it('retries the SAME channel with a downgraded effort on /v1/responses when the upstream rejects a value', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'openai-site', url: 'https://gateway.example.com/v1/', platform: 'openai' },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'upstream-gpt',
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: 'level "max" not supported, valid levels: low, medium, high',
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_effort_ok',
+        object: 'response',
+        model: 'upstream-gpt',
+        status: 'completed',
+        output_text: 'ok after effort downgrade',
+        usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-4.1-mini',
+        input: 'hi',
+        reasoning: { effort: 'max' },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()?.output_text).toBe('ok after effort downgrade');
+    // Same channel/site served both attempts: the first carried the client's
+    // `max`, the in-place retry carried the ceiling parsed from the rejection.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [firstUrl, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [secondUrl, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(firstUrl).toBe('https://gateway.example.com/v1/responses');
+    expect(secondUrl).toBe('https://gateway.example.com/v1/responses');
+    const firstSent = JSON.parse(firstOptions.body);
+    const secondSent = JSON.parse(secondOptions.body);
+    expect(firstSent.reasoning?.effort ?? firstSent.reasoning_effort).toBe('max');
+    expect(secondSent.reasoning?.effort ?? secondSent.reasoning_effort).toBe('high');
+    // Request-shape verdict: no failure marks, no cooldowns, no failover.
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('retries the SAME channel WITHOUT the effort field on /v1/responses when the upstream rejects `none`', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'openai-site', url: 'https://gateway.example.com/v1/', platform: 'openai' },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'upstream-gpt',
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: 'This model does not support `reasoning_effort` value `none`.',
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_none_ok',
+        object: 'response',
+        model: 'upstream-gpt',
+        status: 'completed',
+        output_text: 'ok without the effort field',
+        usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-4.1-mini',
+        input: 'hi',
+        reasoning: { effort: 'none' },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()?.output_text).toBe('ok without the effort field');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    expect(JSON.parse(firstOptions.body).reasoning?.effort).toBe('none');
+    expect(JSON.parse(secondOptions.body).reasoning).toBeUndefined();
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('clamps an overridden effort on the FINAL outbound body so a param_override cannot resurrect a rejected value', async () => {
+    // The site's param_override forces reasoning.effort=max on every request.
+    // The client asks for `high`; the upstream still rejects `max` (its ladder
+    // tops out at high). The in-place retry must clamp the OVERRIDE, not just
+    // the source body — otherwise the override resurrects the rejected value.
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: {
+        id: 44,
+        name: 'override-site',
+        url: 'https://gateway.example.com/v1/',
+        platform: 'openai',
+        paramOverride: JSON.stringify({ reasoning: { effort: 'max' } }),
+      },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'upstream-gpt',
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: 'level "max" not supported, valid levels: low, medium, high',
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'resp_override_ok',
+        object: 'response',
+        model: 'upstream-gpt',
+        status: 'completed',
+        output_text: 'ok after override clamp',
+        usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'gpt-4.1-mini',
+        input: 'hi',
+        reasoning: { effort: 'high' },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    // The override applies on BOTH attempts, but the retry's final body is
+    // clamped to the learned ceiling instead of replaying the rejected `max`.
+    expect(JSON.parse(firstOptions.body).reasoning?.effort).toBe('max');
+    expect(JSON.parse(secondOptions.body).reasoning?.effort).toBe('high');
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
 });

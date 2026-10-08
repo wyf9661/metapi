@@ -87,6 +87,14 @@ export type ExecuteEndpointFlowInput = {
   shouldAbortRemainingEndpoints?: (ctx: EndpointAttemptContext & { errText: string }) => boolean;
   /** Same-endpoint redispach after an effort rejection (body already downgraded by onAttemptFailure). */
   shouldRetryInPlace?: (ctx: EndpointAttemptContext & { errText: string }) => boolean;
+  /**
+   * Clamp the FINAL outbound body (after paramOverride/requestOverrideRules)
+   * to the site's learned effort ceiling. Overrides merge AFTER the surface's
+   * build-time clamp, so without this hook a configured override could
+   * resurrect a value the relay already rejected — including on the in-place
+   * retry, which would burn the only bounded redispach on the same 400.
+   */
+  enforceEffortCeiling?: (body: Record<string, unknown>, endpoint: UpstreamEndpoint) => void;
   onDowngrade?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
   onAttemptFailure?: (ctx: EndpointAttemptContext & { errText: string }) => void | Promise<void>;
   onAttemptSuccess?: (ctx: EndpointAttemptSuccessContext) => void | Promise<void>;
@@ -132,6 +140,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     if (input.paramOverride) {
       request.body = mergeParamOverrideIntoBody(request.body, input.paramOverride);
     }
+    // Last gate before dispatch: clamp the FINAL body (overrides included) to
+    // the site's learned effort ceiling.
+    input.enforceEffortCeiling?.(request.body, endpoint);
     const defaultTarget = buildUpstreamUrl(input.siteUrl, request.path);
     // proxyUrl doubles as an upstream-base override ONLY on the default fetch
     // path (no dispatch hook). Flows that supply dispatchRequest already apply
@@ -292,6 +303,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       if (input.paramOverride) {
         retryRequest.body = mergeParamOverrideIntoBody(retryRequest.body, input.paramOverride);
       }
+      // Same final-body clamp on the in-place retry: an override would
+      // otherwise resurrect the exact value the relay just rejected.
+      input.enforceEffortCeiling?.(retryRequest.body, endpoint);
       const retryTargetUrl = input.proxyUrl && !input.dispatchRequest
         ? buildUpstreamUrl(input.proxyUrl, retryRequest.path)
         : buildUpstreamUrl(input.siteUrl, retryRequest.path);
