@@ -38,6 +38,34 @@ describe('strict English mode coverage', () => {
     expect(untranslated).toEqual([]);
   });
 
+  it('translates data-tooltip attributes (included in TRANSLATABLE_ATTRS)', () => {
+    expect(translateText('当前有 3 个通道冷却中，点击立即解除', 'en'))
+      .toBe('Currently 3  channels cooling down — click to clear now');
+    expect(translateText('单通道路由：无冗余，该通道冷却即整路由不可用', 'en'))
+      .toBe('Single-channel route: no redundancy; when this channel cools down the whole route is unavailable');
+    expect(translateText('该通道连续失败多次，已被暂时冷却。冷却结束后会自动恢复。可点击"清除路由冷却"提前解除。', 'en'))
+      .not.toMatch(/[\u3400-\u9fff，。：；！？（）、]/);
+  });
+
+  it('translates server failure-reason copy surfaced in the web UI', () => {
+    // failureReasonService strings pass through the DOM walker in English mode.
+    // If the server copy changes, the web supplement must be updated in lockstep.
+    const serverCopy = [
+      '站点已禁用',
+      '需要人工验证',
+      '触发 Cloudflare 验证',
+      '今日已签到',
+      '该账号所属站点处于禁用状态，任务会自动跳过。',
+      '站点开启了 Turnstile 人机验证，自动签到无法直接通过。',
+      '请求触发了防护挑战，建议稍后再试或更换稳定站点。',
+    ];
+    for (const key of serverCopy) {
+      const translated = translateText(key, 'en');
+      expect(translated).not.toBe('Untranslated');
+      expect(translated).not.toMatch(/[\u3400-\u9fff]/);
+    }
+  });
+
   it('translates the update-center strings that previously regressed', () => {
     const expected: Record<string, string> = {
       '从未检查': 'Never checked',

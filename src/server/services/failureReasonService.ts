@@ -28,6 +28,10 @@ type FailureReason = {
   detailHint: string;
 };
 
+// Status text stays Chinese (zh is the primary product language); the web side
+// maps these known strings through its i18n table for strict-English mode.
+// Keep them stable: the web i18n supplement keys off the exact text.
+
 function includesAny(text: string, keywords: string[]): boolean {
   return keywords.some((keyword) => text.includes(keyword));
 }
