@@ -251,6 +251,55 @@ describe('checkinScheduler', () => {
     expect(allMock).toHaveBeenCalledTimes(2);
   });
 
+  it('starts a fresh interval pass after a wedged one expires without letting the old pass clear the new lock', async () => {
+    const releases: Array<(results: unknown[]) => void> = [];
+    allMock.mockImplementation(() => new Promise<unknown[]>((resolve) => {
+      releases.push(resolve);
+    }));
+    const scheduler = await import('./checkinScheduler.js');
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+    setIntervalSpy.mockClear();
+    selectAllMock.mockReturnValue(intervalAccounts);
+    scheduler.updateCheckinSchedule({ mode: 'interval', intervalHours: 6 });
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    // The installed timer callback intentionally returns void; flush its work
+    // instead of pretending it returns the underlying pass promise.
+    const pollCallback = setIntervalSpy.mock.calls[0]![0] as () => void;
+
+    try {
+      pollCallback();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(selectAllMock).toHaveBeenCalledTimes(1);
+      expect(allMock).toHaveBeenCalledTimes(1);
+      expect(allMock).toHaveBeenCalledWith({ accountIds: [201], scheduleMode: 'interval' });
+
+      // Polls during the first 20min share the wedged pass (fires at 60s..1140s).
+      await vi.advanceTimersByTimeAsync(20 * 60_000 - 60_000);
+      expect(allMock).toHaveBeenCalledTimes(1);
+
+      // Crossing PASS_STALE_AFTER_MS the next poll starts a FRESH pass.
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(allMock).toHaveBeenCalledTimes(2);
+
+      // A late completion of the stale pass must not unlock its successor.
+      releases[0]!([]);
+      await vi.advanceTimersByTimeAsync(0);
+      pollCallback();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(allMock).toHaveBeenCalledTimes(2);
+
+      releases[1]!([]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sendNotificationMock).toHaveBeenCalledTimes(2);
+      // Self-recovery across the 6h due window is covered by
+      // selectDueIntervalCheckinAccountIds unit tests; this test ends after
+      // proving the stale takeover and the successor lock.
+    } finally {
+      for (const release of releases) release([]);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+  });
+
   it('renders one counts line plus non-success rows grouped by reason', async () => {
     const scheduler = await import('./checkinScheduler.js');
     const notification = scheduler.buildCheckinSummaryNotification([

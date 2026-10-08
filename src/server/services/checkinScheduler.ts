@@ -23,6 +23,7 @@ let dailySummaryTask: ScheduledTask | null = null;
 let logCleanupTask: ScheduledTask | null = null;
 const intervalAttemptByAccount = new Map<number, number>();
 let checkinPassInFlight: Promise<void> | null = null;
+let checkinPassStartedAtMs = 0;
 let balancePassInFlight: Promise<void> | null = null;
 let modelRefreshPassInFlight: Promise<void> | null = null;
 let balancePassStartedAtMs = 0;
@@ -190,11 +191,24 @@ export function selectDueIntervalCheckinAccountIds(
 }
 
 async function runIntervalCheckinPass(now = new Date()) {
-  if (checkinPassInFlight) return checkinPassInFlight;
-  checkinPassInFlight = executeIntervalCheckinPass(now).finally(() => {
-    checkinPassInFlight = null;
+  // Same single-flight + stale-unlock contract as the cron pass: overlapping
+  // polls share the in-flight pass, but past PASS_STALE_AFTER_MS a wedged pass
+  // stops counting as running and the next poll starts a fresh one (the wedged
+  // pass keeps draining in the background). Without this, one hung checkinAll
+  // silently disabled interval check-ins forever.
+  if (checkinPassInFlight && Date.now() - checkinPassStartedAtMs < PASS_STALE_AFTER_MS) {
+    return checkinPassInFlight;
+  }
+  if (checkinPassInFlight) {
+    console.log('[Scheduler] Interval check-in stale (previous pass wedged); starting a fresh pass');
+  }
+  checkinPassStartedAtMs = Date.now();
+  const pass = executeIntervalCheckinPass(now);
+  const tracked = pass.finally(() => {
+    if (checkinPassInFlight === tracked) checkinPassInFlight = null;
   });
-  return checkinPassInFlight;
+  checkinPassInFlight = tracked;
+  return tracked;
 }
 
 async function executeIntervalCheckinPass(now = new Date()) {
@@ -579,6 +593,7 @@ export function __resetCheckinSchedulerForTests() {
   logCleanupTask = null;
   intervalAttemptByAccount.clear();
   checkinPassInFlight = null;
+  checkinPassStartedAtMs = 0;
   balancePassInFlight = null;
   modelRefreshPassInFlight = null;
 }
