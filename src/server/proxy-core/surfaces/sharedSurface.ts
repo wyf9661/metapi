@@ -398,6 +398,7 @@ export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpo
   siteUrl: string;
   buildRequest: (endpoint: TRequest['endpoint']) => TRequest;
   captureFailureBody?: boolean;
+  bodyReadOptions?: import('../executors/types.js').ReadRuntimeResponseTextOptions;
 }): Promise<{
   upstream: Awaited<ReturnType<typeof dispatchRuntimeRequest>>;
   upstreamPath: string;
@@ -428,7 +429,7 @@ export async function trySurfaceOauthRefreshRecovery<TRequest extends BuiltEndpo
     input.ctx.request = refreshedRequest;
     input.ctx.response = refreshedResponse;
     if (input.captureFailureBody !== false) {
-      const failureBody = await readRuntimeResponseText(refreshedResponse).catch(() => '');
+      const failureBody = await readRuntimeResponseText(refreshedResponse, input.bodyReadOptions).catch(() => '');
       input.ctx.rawErrText = failureBody.trim() || 'unknown error';
     }
   } catch {

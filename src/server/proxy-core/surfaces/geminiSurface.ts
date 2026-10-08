@@ -44,7 +44,7 @@ import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/con
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
 import { fetchWithObservedFirstByte, getObservedResponseMeta } from '../firstByteTimeout.js';
 import { createIdleGuardedStreamReader } from '../streamIdleTimeout.js';
-import { wireStreamCancelOnClientDisconnect } from './sharedSurface.js';
+import { wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal } from './sharedSurface.js';
 import {
   getProxyMaxChannelRetries,
   resolveProxyChannelFirstByteTimeoutMs,
@@ -367,6 +367,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     let maxRetries = getProxyMaxChannelRetries();
     let failoverBudgetMs = 0;
 
+    const bodyReadGuards = { idleTimeoutMs: resolveProxyStreamIdleTimeoutMs(), signal: wireReplyGoneAbortSignal(reply) };
     let retryCount = 0;
     let lastStatus = 503;
     let lastText = 'No available channels for Gemini models';
@@ -434,7 +435,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           targetUrl,
           { method: 'GET' },
         );
-        const text = await readRuntimeResponseText(upstream);
+        const text = await readRuntimeResponseText(upstream, bodyReadGuards);
         await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
           attemptIndex: retryCount,
           endpoint: 'gemini-models',
@@ -594,6 +595,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
       // keep static maxRetries fallback
     }
 
+    const bodyReadGuards = { idleTimeoutMs: resolveProxyStreamIdleTimeoutMs(), signal: wireReplyGoneAbortSignal(reply) };
     let retryCount = 0;
     let lastStatus = 503;
     let lastText = 'No available channels for this model';
@@ -811,7 +813,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           if (!upstream.ok) {
             lastStatus = upstream.status;
             lastContentType = contentType;
-            lastText = await readRuntimeResponseText(upstream);
+            lastText = await readRuntimeResponseText(upstream, bodyReadGuards);
             await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
               attemptIndex: retryCount,
               endpoint: isInternalGemini ? 'gemini-internal' : 'gemini-native',
@@ -1080,7 +1082,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             }
           }
 
-          const text = await readRuntimeResponseText(upstream);
+          const text = await readRuntimeResponseText(upstream, bodyReadGuards);
           const aggregateState = geminiGenerateContentTransformer.stream.createAggregateState();
           let parsedUsage = EMPTY_PROXY_USAGE;
           try {
@@ -1313,6 +1315,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         });
         const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
         const endpointResult = await executeEndpointFlow({
+        bodyReadOptions: bodyReadGuards,
           siteUrl: selected.site.url,
           requestOverrideRules: selected.channel.requestOverrideRules ?? null,
           paramOverride: selected.site.paramOverride ?? null,
@@ -1427,7 +1430,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         upstreamPath = endpointResult.upstreamPath;
         const upstream = endpointResult.upstream;
         const firstByteLatencyMs = getObservedResponseMeta(upstream)?.firstByteLatencyMs ?? null;
-        const rawText = await readRuntimeResponseText(upstream);
+        const rawText = await readRuntimeResponseText(upstream, bodyReadGuards);
         let upstreamData: unknown = rawText;
         try {
           upstreamData = JSON.parse(rawText);

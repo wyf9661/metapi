@@ -1,10 +1,34 @@
 import { zstdCompressSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Response } from 'undici';
 
 import { collectResponsesFinalPayloadFromSse } from './responsesSseFinal.js';
 
 describe('collectResponsesFinalPayloadFromSse', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('cancels a stalled SSE collection before waiting forever for its terminal event', async () => {
+    vi.useFakeTimers();
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const cancel = vi.fn();
+    const upstream = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        controller.enqueue(new TextEncoder().encode('event: response.created\ndata: {"type":"response.created","response":{"output":[]}}\n\n'));
+      },
+      cancel,
+    }), { headers: { 'content-type': 'text/event-stream' } });
+    const settled = collectResponsesFinalPayloadFromSse(upstream, 'gpt-5.4', { idleTimeoutMs: 30 })
+      .then(() => 'resolved', (error: Error) => error.message);
+    await vi.advanceTimersByTimeAsync(31);
+    // Release the fixture if the old implementation ignored the guard, so
+    // RED is a bounded assertion failure rather than a test-runner timeout.
+    if (!cancel.mock.calls.length) streamController.close();
+    const outcome = await settled;
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(outcome).toContain('response body idle timeout');
+  });
+
   it('treats event:error payloads as upstream failures', async () => {
     const upstream = {
       async text() {

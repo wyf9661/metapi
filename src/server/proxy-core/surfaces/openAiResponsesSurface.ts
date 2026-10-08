@@ -625,6 +625,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               selected,
             siteUrl: siteApiBaseUrl,
               buildRequest: (endpoint) => buildEndpointRequest(endpoint),
+              bodyReadOptions: bodyReadGuards,
               });
             if (recovered?.upstream?.ok) {
               return recovered;
@@ -656,7 +657,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               }
               ctx.request = recoveredRequest;
               ctx.response = recoveredResponse;
-              ctx.rawErrText = await readRuntimeResponseText(recoveredResponse).catch(() => 'unknown error');
+              ctx.rawErrText = await readRuntimeResponseText(recoveredResponse, bodyReadGuards).catch(() => 'unknown error');
             }
           }
           const compactFallbackEnabled = config.responsesCompactFallbackToResponsesEnabled;
@@ -710,7 +711,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             }
             ctx.request = recoveredRequest;
             ctx.response = recoveredResponse;
-            ctx.rawErrText = await readRuntimeResponseText(recoveredResponse).catch(() => 'unknown error');
+            ctx.rawErrText = await readRuntimeResponseText(recoveredResponse, bodyReadGuards).catch(() => 'unknown error');
           }
           // An effort rejection is a request-shape verdict about the effort
           // VALUE, not about the body/header shape: the compatibility replay
@@ -731,6 +732,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
           paramOverride: selected.site.paramOverride ?? null,
           disableCrossProtocolFallback: isCompactRequest || config.disableCrossProtocolFallback,
           firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
+          bodyReadOptions: bodyReadGuards,
           endpointCandidates,
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),
           dispatchRequest,
@@ -1390,7 +1392,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             || successfulUpstreamPath.endsWith('/responses/compact')
           )
         ) {
-          const collected = await collectResponsesFinalPayloadFromSse(upstream, modelName);
+          const collected = await collectResponsesFinalPayloadFromSse(upstream, modelName, bodyReadGuards);
           rawText = collected.rawText;
           upstreamData = collected.payload;
         } else {

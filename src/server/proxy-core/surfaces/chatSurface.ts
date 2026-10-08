@@ -581,6 +581,7 @@ export async function handleChatSurfaceRequest(
             selected,
             siteUrl: siteApiBaseUrl,
             buildRequest: (endpoint) => buildEndpointRequest(endpoint),
+            bodyReadOptions: bodyReadGuards,
           });
           if (recovered?.upstream?.ok) {
             return recovered;
@@ -595,6 +596,7 @@ export async function handleChatSurfaceRequest(
         paramOverride: selected.site.paramOverride ?? null,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
         firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
+        bodyReadOptions: bodyReadGuards,
         endpointCandidates,
         buildRequest: (endpoint) => buildEndpointRequest(endpoint),
         dispatchRequest,
@@ -1203,7 +1205,7 @@ export async function handleChatSurfaceRequest(
       let rawText = '';
       let upstreamData: unknown;
       if (upstreamContentType.includes('text/event-stream') && successfulUpstreamPath.endsWith('/responses')) {
-        const collected = await collectResponsesFinalPayloadFromSse(upstream, modelName);
+        const collected = await collectResponsesFinalPayloadFromSse(upstream, modelName, bodyReadGuards);
         rawText = collected.rawText;
         upstreamData = collected.payload;
       } else {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetch } from 'undici';
 import type { BuiltEndpointRequest } from './endpointFlow.js';
 
@@ -40,6 +40,74 @@ describe('executeEndpointFlow', () => {
 
   beforeEach(() => {
     fetchMock.mockReset();
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it.each(['initial', 'recovered', 'in-place'] as const)('bounds the %s failure-body read without blocking endpoint fallback', async (phase) => {
+    vi.useFakeTimers();
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const cancel = vi.fn();
+    const stalled = toUndiciResponse(new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        controller.enqueue(new TextEncoder().encode('{"error":'));
+      },
+      cancel,
+    }), { status: 400, headers: { 'content-type': 'application/json' } }));
+    const firstFailure = toUndiciResponse(new Response('{"error":{"message":"try compatibility recovery"}}', {
+      status: 400, headers: { 'content-type': 'application/json' },
+    }));
+    fetchMock.mockResolvedValueOnce(phase === 'initial' ? stalled : firstFailure);
+    if (phase === 'in-place') fetchMock.mockResolvedValueOnce(stalled);
+    fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response('{"ok":true}')));
+    const onAttemptFailure = vi.fn();
+    const running = executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: ['responses', 'chat'],
+      bodyReadOptions: { idleTimeoutMs: 30 },
+      buildRequest: (endpoint: any) => ({ ...requestFor(endpoint === 'responses' ? '/v1/responses' : '/v1/chat/completions'), endpoint }),
+      tryRecover: phase === 'recovered' ? async () => ({ upstream: stalled, upstreamPath: '/v1/responses' }) : undefined,
+      shouldRetryInPlace: phase === 'in-place' ? () => true : undefined,
+      shouldDowngrade: () => true,
+      onAttemptFailure,
+    });
+    await vi.advanceTimersByTimeAsync(31);
+    if (!cancel.mock.calls.length) streamController.close();
+    const result = await running;
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    expect(result.upstreamPath).toBe('/v1/chat/completions');
+  });
+
+  it('stops dispatching endpoints when the caller aborts a failure-body read', async () => {
+    vi.useFakeTimers();
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const cancel = vi.fn();
+    const controller = new AbortController();
+    fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response(new ReadableStream<Uint8Array>({
+      start(stream) {
+        streamController = stream;
+        stream.enqueue(new TextEncoder().encode('{"error":'));
+      },
+      cancel,
+    }), { status: 400 })));
+    fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response('{"ok":true}')));
+    const running = executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: ['responses', 'chat'],
+      bodyReadOptions: { signal: controller.signal },
+      buildRequest: () => requestFor('/v1/responses'),
+      shouldDowngrade: () => true,
+    }).then(() => null, (error: Error) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort(new Error('downstream disconnected'));
+    await vi.advanceTimersByTimeAsync(0);
+    if (!cancel.mock.calls.length) streamController.close();
+    const error = await running;
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(error?.message).toBe('downstream disconnected');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('returns the first successful upstream response', async () => {

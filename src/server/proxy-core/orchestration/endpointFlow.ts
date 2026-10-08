@@ -1,6 +1,6 @@
 import { fetch } from 'undici';
 import { applyRequestOverrideRules } from '../../services/requestOverride.js';
-import { readRuntimeResponseText } from '../executors/types.js';
+import { readRuntimeResponseText, type ReadRuntimeResponseTextOptions } from '../executors/types.js';
 import { fetchWithObservedFirstByte, isObservedFirstByteTimeoutResponse } from '../firstByteTimeout.js';
 import { withSiteProxyRequestInit } from '../../services/siteProxy.js';
 import { mergeParamOverrideIntoBody } from '../../services/siteParamOverride.js';
@@ -82,6 +82,8 @@ export type ExecuteEndpointFlowInput = {
     signal?: AbortSignal,
   ) => Promise<Awaited<ReturnType<typeof fetch>>>;
   firstByteTimeoutMs?: number;
+  /** Guard every failure-body read and stop fallback when the caller is gone. */
+  bodyReadOptions?: ReadRuntimeResponseTextOptions;
   tryRecover?: (ctx: EndpointAttemptContext) => Promise<EndpointRecoverResult>;
   shouldDowngrade?: (ctx: EndpointAttemptContext) => boolean;
   shouldAbortRemainingEndpoints?: (ctx: EndpointAttemptContext & { errText: string }) => boolean;
@@ -119,6 +121,7 @@ async function runEndpointFlowHook<T>(
 
 export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Promise<EndpointFlowResult> {
   const endpointCount = input.endpointCandidates.length;
+  input.bodyReadOptions?.signal?.throwIfAborted();
   if (endpointCount <= 0) {
     return {
       ok: false,
@@ -130,8 +133,17 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
   let finalStatus = 0;
   let finalErrText = 'unknown error';
   let finalRawErrText: string | undefined;
+  const readFailureBody = (response: Awaited<ReturnType<typeof fetch>>) => (
+    readRuntimeResponseText(response, input.bodyReadOptions).catch((error) => {
+      // An idle upstream error body may still fall back; a disconnected caller
+      // must not silently turn into "unknown error" and dispatch another hop.
+      if (input.bodyReadOptions?.signal?.aborted) throw error;
+      return 'unknown error';
+    })
+  );
 
   for (let endpointIndex = 0; endpointIndex < endpointCount; endpointIndex += 1) {
+    input.bodyReadOptions?.signal?.throwIfAborted();
     const endpoint = input.endpointCandidates[endpointIndex] as UpstreamEndpoint;
     const request = input.buildRequest(endpoint, endpointIndex);
     if (input.requestOverrideRules) {
@@ -157,6 +169,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       requestToDispatch: BuiltEndpointRequest,
       targetUrlToDispatch = targetUrl,
     ) => {
+      input.bodyReadOptions?.signal?.throwIfAborted();
       const configuredTimeoutMs = Math.max(0, Math.trunc(input.firstByteTimeoutMs ?? 0));
       const elapsedMs = Math.max(0, Date.now() - attemptStartedAtMs);
       const remainingTimeoutMs = configuredTimeoutMs > 0
@@ -197,7 +210,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       };
     }
 
-    let rawErrText = await readRuntimeResponseText(response).catch(() => 'unknown error');
+    let rawErrText = await readFailureBody(response);
     const baseContext: EndpointAttemptContext = {
       endpointIndex,
       endpointCount,
@@ -266,10 +279,11 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
         baseContext.request = recovered.request ?? baseContext.request;
         baseContext.targetUrl = recovered.targetUrl ?? baseContext.targetUrl;
         baseContext.response = recovered.upstream;
-        baseContext.rawErrText = await readRuntimeResponseText(recovered.upstream).catch(() => 'unknown error');
+        baseContext.rawErrText = await readFailureBody(recovered.upstream);
       }
     }
 
+    input.bodyReadOptions?.signal?.throwIfAborted();
     rawErrText = baseContext.rawErrText;
     response = baseContext.response;
     const errText = withUpstreamPath(
@@ -327,7 +341,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       }
       // Still rejected: keep the loop's failure bookkeeping on the retry
       // response and let the normal cascade decide (next endpoint / channel).
-      rawErrText = await readRuntimeResponseText(retryResponse).catch(() => 'unknown error');
+      rawErrText = await readFailureBody(retryResponse);
       baseContext.request = retryRequest;
       baseContext.targetUrl = retryTargetUrl;
       baseContext.response = retryResponse;

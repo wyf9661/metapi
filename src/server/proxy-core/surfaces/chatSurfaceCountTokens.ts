@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { config } from '../../config.js';
+import { config, resolveProxyStreamIdleTimeoutMs } from '../../config.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
 import { reportProxyAllFailed } from '../../services/alertService.js';
 import {
@@ -15,6 +15,7 @@ import {
 import { getProxyAuthContext } from '../../middleware/auth.js';
 import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
 import { readRuntimeResponseText } from '../executors/types.js';
+import { wireReplyGoneAbortSignal } from './sharedSurface.js';
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
 import { getProxyMaxChannelRetries } from '../../services/proxyChannelRetry.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
@@ -101,6 +102,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
   }
 
   const requestTraceId = createRequestTraceId();
+  const bodyReadGuards = { idleTimeoutMs: resolveProxyStreamIdleTimeoutMs(), signal: wireReplyGoneAbortSignal(reply) };
   const failureToolkit = createSurfaceFailureToolkit({
     warningScope: 'chat',
     downstreamPath,
@@ -351,7 +353,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
 
         const latency = Date.now() - startTime;
         const contentType = upstream.headers.get('content-type') || 'application/json';
-        const text = await readRuntimeResponseText(upstream);
+        const text = await readRuntimeResponseText(upstream, bodyReadGuards);
         let payload: unknown = text;
         try {
           payload = JSON.parse(text);

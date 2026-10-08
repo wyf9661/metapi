@@ -4935,4 +4935,39 @@ describe('chat proxy stream behavior', () => {
     expect(JSON.parse(secondOptions.body).reasoning.effort).toBe('minimal');
   });
 
+  it.each([
+    ['/v1/chat/completions', { messages: [{ role: 'user', content: 'collect this response' }] }],
+    ['/v1/messages', { max_tokens: 128, messages: [{ role: 'user', content: 'collect this response' }] }],
+    ['/v1/responses', { input: 'collect this response' }],
+  ])('guards SSE terminal collection through the %s surface', async (url, body) => {
+    const originalTimeout = config.proxyFirstByteTimeoutSec;
+    const originalAttempts = config.proxyMaxChannelAttempts;
+    config.proxyFirstByteTimeoutSec = 0.03;
+    config.proxyMaxChannelAttempts = 1;
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const cancel = vi.fn();
+    fetchMock.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        controller.enqueue(new TextEncoder().encode('event: response.created\ndata: {"type":"response.created","response":{"output":[]}}\n\n'));
+      },
+      cancel,
+    }), { headers: { 'content-type': 'text/event-stream' } }));
+    // Bound the old, unguarded path without cancelling it: that path closes
+    // normally and exposes a missing cancel/timeout assertion, not a hang.
+    const fixtureDeadline = setTimeout(() => {
+      if (!cancel.mock.calls.length) streamController.close();
+    }, 200);
+    try {
+      const response = await app.inject({ method: 'POST', url, payload: { model: 'gpt-4o-mini', ...body } });
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(response.statusCode, response.body).toBe(502);
+      expect(response.body).toContain('response body idle timeout');
+    } finally {
+      clearTimeout(fixtureDeadline);
+      config.proxyFirstByteTimeoutSec = originalTimeout;
+      config.proxyMaxChannelAttempts = originalAttempts;
+    }
+  });
+
 });

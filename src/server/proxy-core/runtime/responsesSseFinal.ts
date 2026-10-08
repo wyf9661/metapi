@@ -1,6 +1,6 @@
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import { mergeProxyUsage, parseProxyUsage } from '../../services/proxyUsageParser.js';
-import { readRuntimeResponseText } from '../executors/types.js';
+import { readRuntimeResponseText, type ReadRuntimeResponseTextOptions } from '../executors/types.js';
 import { asTrimmedString } from '../../shared/trimString.js';
 
 
@@ -421,9 +421,10 @@ export function collectResponsesFinalPayloadFromSseText(
 export async function collectResponsesFinalPayloadFromSse(
   upstream: { text(): Promise<string>; headers?: { get(name: string): string | null } },
   modelName: string,
+  options: ReadRuntimeResponseTextOptions = {},
 ): Promise<{ payload: Record<string, unknown>; rawText: string }> {
   const rawText = typeof upstream.headers?.get === 'function'
-    ? await readRuntimeResponseText(upstream as Parameters<typeof readRuntimeResponseText>[0])
+    ? await readRuntimeResponseText(upstream as Parameters<typeof readRuntimeResponseText>[0], options)
     : await upstream.text();
   return collectResponsesFinalPayloadFromSseText(rawText, modelName);
 }
