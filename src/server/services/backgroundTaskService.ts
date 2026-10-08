@@ -222,6 +222,11 @@ async function runTask(taskId: string, options: BackgroundTaskStartOptions, runn
 function cleanupExpiredTasks() {
   const now = Date.now();
   for (const [taskId, task] of tasks.entries()) {
+    // Only retire TERMINAL tasks on schedule. A pending/running task that
+    // crosses its TTL must survive: its runner is still executing and
+    // evicting it would silently drop waitForBackgroundTaskCompletion
+    // waiters and the live log stream.
+    if (task.status === 'pending' || task.status === 'running') continue;
     if (task.expiresAtMs <= now) {
       tasks.delete(taskId);
       if (task.dedupeKey && dedupeTaskIds.get(task.dedupeKey) === taskId) {
