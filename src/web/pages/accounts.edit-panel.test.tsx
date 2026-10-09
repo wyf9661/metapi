@@ -317,5 +317,115 @@ describe('Accounts edit panel', () => {
       root?.unmount();
     }
   });
+
+  it('omits sub2api-only auth keys from the save payload on non-sub2api sites', async () => {
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/accounts']}>
+            <ToastProvider>
+              <Accounts />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const editButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '编辑'
+      ));
+
+      await act(async () => {
+        editButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const saveButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '保存修改'
+      ));
+
+      await act(async () => {
+        await saveButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.updateAccount).toHaveBeenCalledTimes(1);
+      const payload = apiMock.updateAccount.mock.calls[0]![1] as Record<string, unknown>;
+      // Sending null refreshToken/tokenExpiresAt used to force a slow upstream
+      // model refresh on every save; these keys must not leave the client
+      // for non-sub2api sites.
+      expect(payload).not.toHaveProperty('refreshToken');
+      expect(payload).not.toHaveProperty('tokenExpiresAt');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('still sends managed auth keys when saving a sub2api account', async () => {
+    apiMock.getSites.mockResolvedValue([
+      { id: 2, name: 'Site B', platform: 'sub2api', status: 'active' },
+    ]);
+    apiMock.getAccounts.mockResolvedValue([
+      {
+        id: 2,
+        siteId: 2,
+        username: 'beta',
+        accessToken: 'session-beta',
+        status: 'active',
+        extraConfig: JSON.stringify({
+          sub2apiAuth: { refreshToken: 'rt-beta', tokenExpiresAt: 1700000000 },
+        }),
+        site: { id: 2, name: 'Site B', status: 'active', platform: 'sub2api' },
+      },
+    ]);
+
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/accounts']}>
+            <ToastProvider>
+              <Accounts />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const editButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '编辑'
+      ));
+
+      await act(async () => {
+        editButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const saveButton = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.onClick === 'function'
+        && collectText(node).trim() === '保存修改'
+      ));
+
+      await act(async () => {
+        await saveButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.updateAccount).toHaveBeenCalledTimes(1);
+      const payload = apiMock.updateAccount.mock.calls[0]![1] as Record<string, unknown>;
+      expect(payload.refreshToken).toBe('rt-beta');
+      expect(payload.tokenExpiresAt).toBe(1700000000);
+    } finally {
+      root?.unmount();
+    }
+  });
 });
 

@@ -132,6 +132,8 @@ export default function EditAccountModal({
         });
         toast.success('账号已重新绑定');
       } else {
+        const isSub2ApiAccount =
+          (account?.site?.platform || '').toLowerCase() === 'sub2api';
         await api.updateAccount(account.id, {
           username: editForm.username.trim() || undefined,
           status: editForm.status,
@@ -142,10 +144,17 @@ export default function EditAccountModal({
           accessToken: undefined,
           apiToken: editForm.apiToken.trim() || undefined,
           isPinned: editForm.isPinned,
-          refreshToken: editForm.refreshToken.trim() || null,
-          tokenExpiresAt: editForm.tokenExpiresAt.trim()
-            ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
-            : null,
+          // These keys are only meaningful for sub2api sites; sending them as
+          // null on other platforms previously tripped the server's
+          // "managed auth patch" path and forced a slow model refresh.
+          ...(isSub2ApiAccount
+            ? {
+                refreshToken: editForm.refreshToken.trim() || null,
+                tokenExpiresAt: editForm.tokenExpiresAt.trim()
+                  ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
+                  : null,
+              }
+            : {}),
           platformUserId: editForm.platformUserId.trim()
             ? Number.parseInt(editForm.platformUserId.trim(), 10)
             : null,

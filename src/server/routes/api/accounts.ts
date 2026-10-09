@@ -1467,9 +1467,10 @@ export async function accountsRoutes(app: FastifyInstance) {
       const wantsManagedSub2ApiAuthPatch =
         Object.prototype.hasOwnProperty.call(body, 'refreshToken') ||
         Object.prototype.hasOwnProperty.call(body, 'tokenExpiresAt');
+      const isSub2ApiSite = (site.platform || '').toLowerCase() === 'sub2api';
       if (
         wantsManagedSub2ApiAuthPatch &&
-        (site.platform || '').toLowerCase() === 'sub2api'
+        isSub2ApiSite
       ) {
         const baseExtraConfig =
           typeof updates.extraConfig === 'string'
@@ -1581,15 +1582,47 @@ export async function accountsRoutes(app: FastifyInstance) {
         typeof updates.status === 'string' && updates.status.trim()
           ? updates.status.trim()
           : account.status || 'active';
-      const needsModelRefresh =
-        Object.prototype.hasOwnProperty.call(body, 'accessToken') ||
-        Object.prototype.hasOwnProperty.call(body, 'apiToken') ||
-        Object.prototype.hasOwnProperty.call(body, 'extraConfig') ||
-        wantsManagedSub2ApiAuthPatch;
+      // Only a REAL credential change should trigger upstream model discovery:
+      // the edit panel always sends accessToken/apiToken/refreshToken/
+      // tokenExpiresAt keys (null when untouched), so key presence alone turned
+      // every metadata save into a 10-16s model refresh + route rebuild. Compare
+      // values against the stored account instead.
+      const credentialValueChanged =
+        (typeof updates.accessToken === 'string'
+          && updates.accessToken.trim().length > 0
+          && updates.accessToken.trim() !== (account.accessToken || '').trim())
+        || (Object.prototype.hasOwnProperty.call(updates, 'apiToken')
+          && String(updates.apiToken ?? '').trim() !== String(account.apiToken ?? '').trim())
+        || (isSub2ApiSite
+          && wantsManagedSub2ApiAuthPatch
+          && (
+            String(normalizeManagedRefreshToken(body.refreshToken) ?? '').trim()
+              !== String(getSub2ApiAuthFromExtraConfig(account.extraConfig)?.refreshToken ?? '').trim()
+            || (normalizeManagedTokenExpiresAt(body.tokenExpiresAt) ?? null)
+              !== (getSub2ApiAuthFromExtraConfig(account.extraConfig)?.tokenExpiresAt ?? null)
+          ));
       const isExpiredApiKeyAccount =
         account.status === 'expired' &&
         nextCredentialMode === 'apikey' &&
         nextStatus !== 'disabled';
+      // Re-submitting a credential for an already-expired account is an explicit
+      // retry signal even when the value is unchanged (e.g. the user pastes the
+      // same key again to force a re-check), so keep the old synchronous
+      // recovery behaviour for that case.
+      const isExpiredCredentialRetry =
+        account.status === 'expired' &&
+        nextStatus !== 'disabled' &&
+        (
+          (Object.prototype.hasOwnProperty.call(body, 'apiToken')
+            && typeof body.apiToken === 'string'
+            && body.apiToken.trim().length > 0)
+          || (typeof updates.accessToken === 'string'
+            && updates.accessToken.trim().length > 0)
+        );
+      const needsModelRefresh =
+        credentialValueChanged ||
+        isExpiredCredentialRetry ||
+        Object.prototype.hasOwnProperty.call(body, 'extraConfig');
       const shouldAttemptExpiredApiKeyRecovery =
         isExpiredApiKeyAccount && needsModelRefresh;
 
@@ -1604,6 +1637,9 @@ export async function accountsRoutes(app: FastifyInstance) {
         reactivateAfterSuccessfulModelRefresh:
           shouldAttemptExpiredApiKeyRecovery,
         continueOnError: true,
+        // Metadata edits converge in the background; recovery flows stay
+        // synchronous so the caller learns whether the new key works.
+        deferConvergence: needsModelRefresh && !shouldAttemptExpiredApiKeyRecovery,
       });
 
       return updatedAccount;
