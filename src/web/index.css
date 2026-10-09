@@ -194,13 +194,16 @@ html[data-layout="desktop"] .main-content {
 }
 
 /* Mirror+spin combined so rotation stays on one transform channel —
-   used by the dashboard refresh icon (scaleX(-1) baked into each frame). */
+   used by the dashboard refresh icon (scaleX(-1) baked into each frame).
+   Angles run negative: scaleX(-1) reverses visual handedness, so a negative
+   rotation reads as CLOCKWISE on screen (matching the old scale:'-1 1' +
+   `spin ... reverse` behaviour). Positive angles here spin counter-clockwise. */
 @keyframes spin-mirrored {
   from {
     transform: scaleX(-1) rotate(0deg);
   }
   to {
-    transform: scaleX(-1) rotate(360deg);
+    transform: scaleX(-1) rotate(-360deg);
   }
 }
 
