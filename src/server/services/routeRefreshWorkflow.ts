@@ -2,6 +2,8 @@ import {
   rebuildTokenRoutesFromAvailability,
   refreshModelsAndRebuildRoutes as refreshModelsAndRebuildRoutesViaModelService,
 } from './modelService.js';
+import { sql } from 'drizzle-orm';
+import { db, schema } from '../db/index.js';
 
 export async function rebuildRoutesOnly() {
   return rebuildTokenRoutesFromAvailability();
@@ -66,19 +68,49 @@ export async function refreshModelsAndRebuildRoutesBounded(
  */
 export const SCHEDULER_REFRESH_TIMEOUT_MS = 120_000;
 
+// The scheduled pass processes accounts serially: each account can spend up
+// to its 10 s upstream timeout plus pacing, so a fixed bound stops fitting
+// once the deployment grows (2026-10-10: 249 accounts, every scheduled pass
+// reported "did not complete" although the pass was healthy). Scale the bound
+// with the account count instead: 12 s per account, floor 120 s, ceiling 1 h.
+const SCHEDULER_REFRESH_MS_PER_ACCOUNT = 12_000;
+const SCHEDULER_REFRESH_MAX_TIMEOUT_MS = 3_600_000;
+
+export function computeSchedulerRefreshTimeoutMs(accountCount: number): number {
+  const scaled = accountCount * SCHEDULER_REFRESH_MS_PER_ACCOUNT;
+  return Math.max(
+    SCHEDULER_REFRESH_TIMEOUT_MS,
+    Math.min(SCHEDULER_REFRESH_MAX_TIMEOUT_MS, Math.floor(scaled)),
+  );
+}
+
+async function resolveSchedulerRefreshTimeoutMs(): Promise<number> {
+  try {
+    const rows = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(schema.accounts)
+      .all();
+    const count = Number((rows?.[0] as { total?: unknown } | undefined)?.total ?? 0) || 0;
+    return computeSchedulerRefreshTimeoutMs(count);
+  } catch {
+    return SCHEDULER_REFRESH_TIMEOUT_MS;
+  }
+}
+
 export type ScheduledRefreshOutcome = {
   completed: boolean;
   result?: Awaited<ReturnType<typeof refreshModelsAndRebuildRoutes>>;
 };
 
 export async function refreshModelsAndRebuildRoutesWithSchedulerBound(
-  timeoutMs: number = SCHEDULER_REFRESH_TIMEOUT_MS,
+  timeoutMs?: number,
 ): Promise<ScheduledRefreshOutcome> {
+  const boundMs = timeoutMs ?? (await resolveSchedulerRefreshTimeoutMs());
   try {
     const result = await raceWithTimeout(
       refreshModelsAndRebuildRoutes(),
-      timeoutMs,
-      `route refresh exceeded ${timeoutMs}ms (scheduler pass)`,
+      boundMs,
+      `route refresh exceeded ${boundMs}ms (scheduler pass)`,
     );
     return { completed: true, result };
   } catch (error) {

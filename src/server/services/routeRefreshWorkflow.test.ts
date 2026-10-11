@@ -9,9 +9,28 @@ vi.mock('./modelService.js', () => ({
 
 import { refreshModelsAndRebuildRoutes } from './modelService.js';
 import {
+  computeSchedulerRefreshTimeoutMs,
   refreshModelsAndRebuildRoutesBounded,
   refreshModelsAndRebuildRoutesWithSchedulerBound,
 } from './routeRefreshWorkflow.js';
+
+describe('computeSchedulerRefreshTimeoutMs', () => {
+  it('keeps the 120 s floor for small deployments', () => {
+    expect(computeSchedulerRefreshTimeoutMs(0)).toBe(120_000);
+    expect(computeSchedulerRefreshTimeoutMs(1)).toBe(120_000);
+    expect(computeSchedulerRefreshTimeoutMs(10)).toBe(120_000);
+  });
+
+  it('scales the bound with account count', () => {
+    expect(computeSchedulerRefreshTimeoutMs(100)).toBe(1_200_000);
+    expect(computeSchedulerRefreshTimeoutMs(250)).toBe(3_000_000);
+  });
+
+  it('caps the bound at one hour', () => {
+    expect(computeSchedulerRefreshTimeoutMs(400)).toBe(3_600_000);
+    expect(computeSchedulerRefreshTimeoutMs(1_000)).toBe(3_600_000);
+  });
+});
 
 describe('scheduler-bound route refresh', () => {
   it('reports completion together with the underlying result', async () => {
