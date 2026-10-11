@@ -11,8 +11,10 @@ import { parseSiteParamOverrideInput } from '../../services/siteParamOverride.js
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
 import { getCredentialModeFromExtraConfig, getSub2ApiSubscriptionFromExtraConfig } from '../../services/accountExtraConfig.js';
 import {
+  aggregateSiteRuntimeHealth,
   extractRuntimeHealth,
   type RuntimeHealthInfo,
+  type SiteAccountHealthInput,
 } from '../../services/accountHealthService.js';
 import {
   parseSiteBatchPayload,
@@ -630,21 +632,18 @@ export async function sitesRoutes(app: FastifyInstance) {
       }
     }
 
-    // 按站点汇总健康状态
-    const siteHealthState: Record<number, RuntimeHealthInfo> = {};
+    // 按站点汇总健康状态：只统计 active 账号、顺序无关、按严重度取最优。
+    // （禁用账号不参与判定；全禁用才显示禁用；无快照显示未检测。）
+    const accountsBySiteId: Record<number, SiteAccountHealthInput[]> = {};
     for (const row of accountRows) {
-      const health = extractRuntimeHealth(row.extraConfig);
-      const existing = siteHealthState[row.siteId];
-      if (!existing) {
-        siteHealthState[row.siteId] = health ?? {
-          state: 'unknown', reason: '尚未检测', source: 'none', checkedAt: null,
-        };
-      } else if (health && health.state === 'unhealthy' && existing.state !== 'unhealthy') {
-        // 任一账号 unhealthy 则站点标记 unhealthy
-        siteHealthState[row.siteId] = health;
-      } else if (health && health.state === 'degraded' && existing.state === 'healthy') {
-        siteHealthState[row.siteId] = health;
-      }
+      (accountsBySiteId[row.siteId] ??= []).push({
+        status: row.status,
+        health: extractRuntimeHealth(row.extraConfig),
+      });
+    }
+    const siteHealthState: Record<number, RuntimeHealthInfo> = {};
+    for (const [siteIdKey, accounts] of Object.entries(accountsBySiteId)) {
+      siteHealthState[Number(siteIdKey)] = aggregateSiteRuntimeHealth(accounts);
     }
 
     // Per-key disabled models: shown in the site list so a customized list is

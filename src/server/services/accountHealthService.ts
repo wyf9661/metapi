@@ -218,3 +218,85 @@ export async function setAccountRuntimeHealth(
     return null;
   }
 }
+
+export type SiteAccountHealthInput = {
+  /** Account lifecycle status ('active' | 'disabled' | ...; null treated as active). */
+  status?: string | null;
+  /** Persisted runtime-health snapshot of the account (null = never checked). */
+  health: RuntimeHealthInfo | null | undefined;
+};
+
+// 严重度越高数字越大；聚合时取全组最严重状态（顺序无关）。
+const SITE_HEALTH_SEVERITY: Record<RuntimeHealthState, number> = {
+  unknown: 0,
+  disabled: 1,
+  healthy: 2,
+  degraded: 3,
+  unhealthy: 4,
+};
+
+function newerCheckedAt(a: string | null, b: string | null): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return a >= b ? a : b;
+}
+
+/**
+ * Aggregate per-account runtime-health snapshots into the site-level label.
+ *
+ * Rules (order-independent, unlike the previous first-row-wins loop):
+ * - Only ACTIVE accounts participate in the health verdict. Disabled accounts
+ *   are ignored unless every account is disabled (then the site shows disabled).
+ * - Among active accounts the most severe snapshot wins
+ *   (unhealthy > degraded > healthy > unknown).
+ * - Ties keep the most recently checked snapshot so the label reflects the
+ *   freshest evidence.
+ * - No active account (or no snapshots at all) -> unknown ("尚未检测").
+ */
+export function aggregateSiteRuntimeHealth(
+  accounts: SiteAccountHealthInput[],
+): RuntimeHealthInfo {
+  const active = accounts.filter(
+    (row) => (row.status || 'active').trim().toLowerCase() !== 'disabled',
+  );
+
+  if (active.length === 0) {
+    // 全部禁用（或无账号）：显示禁用/未检测，遗留快照不参与判定。
+    const anyAccount = accounts.length > 0;
+    return {
+      state: anyAccount ? 'disabled' : 'unknown',
+      reason: anyAccount ? '账号或站点已禁用' : '尚未检测',
+      source: 'aggregate',
+      checkedAt: null,
+    };
+  }
+
+  let winner: RuntimeHealthInfo | null = null;
+  let winnerSeverity = -1;
+  for (const row of active) {
+    const health = row.health ?? null;
+    if (!health) continue;
+    const severity = SITE_HEALTH_SEVERITY[health.state] ?? 0;
+    if (
+      severity > winnerSeverity ||
+      (severity === winnerSeverity &&
+        winner &&
+        newerCheckedAt(health.checkedAt, winner.checkedAt) === health.checkedAt &&
+        health.checkedAt !== winner.checkedAt)
+    ) {
+      winner = health;
+      winnerSeverity = severity;
+    }
+  }
+
+  if (!winner) {
+    return {
+      state: 'unknown',
+      reason: '尚未检测',
+      source: 'aggregate',
+      checkedAt: null,
+    };
+  }
+
+  return { ...winner };
+}

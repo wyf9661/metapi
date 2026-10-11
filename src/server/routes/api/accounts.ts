@@ -394,11 +394,9 @@ async function refreshRuntimeHealthForRow(
     (row.accounts.status || 'active') === 'disabled' ||
     (row.sites.status || 'active') === 'disabled'
   ) {
-    setAccountRuntimeHealth(accountId, {
-      state: 'disabled',
-      reason: '账号或站点已禁用',
-      source: 'health-refresh',
-    });
+    // Disabled accounts or sites are skipped without stamping their runtime
+    // health snapshot, so the last genuine health observation prevails and
+    // the disabled account is excluded from site aggregation.
     return {
       accountId,
       username,
