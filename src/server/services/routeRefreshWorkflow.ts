@@ -84,7 +84,7 @@ export function computeSchedulerRefreshTimeoutMs(accountCount: number): number {
   );
 }
 
-async function resolveSchedulerRefreshTimeoutMs(): Promise<number> {
+export async function resolveSchedulerRefreshTimeoutMs(): Promise<number> {
   try {
     const rows = await db
       .select({ total: sql<number>`count(*)` })
