@@ -842,9 +842,18 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
     return getCloudflareTunnelStatus();
   }
 
-  // already running with URL
+  // already running with URL — 复用前先校验公网入口真的在服务（对齐 9router 的
+  // “启动复用前双探活”）：进程活着 / metrics 显示有连接都可能是陈旧值（公司网会静默
+  // 丢弃已建立的连接），唯一可信的判据是稳定地址实际能出 2xx/3xx/4xx。
   if (child && isProcessRunning(child.pid) && currentTunnelUrl) {
-    return getCloudflareTunnelStatus();
+    const probeTarget = currentStablePublicUrl() || currentTunnelUrl;
+    if (await probeUrlAlive(probeTarget, TUNNEL_HEALTH_PROBE_TIMEOUT_MS)) {
+      return getCloudflareTunnelStatus();
+    }
+    console.warn(
+      `[Tunnel] connector process alive but public entry not serving (${probeTarget}); respawning connector`,
+    );
+    await stopCloudflareTunnel({ persistDisabled: false });
   }
 
   spawnInProgress = true;
