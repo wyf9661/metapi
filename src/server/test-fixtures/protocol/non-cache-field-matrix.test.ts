@@ -50,7 +50,10 @@ describe('non-cache cross-protocol field matrix', () => {
       tools: [{ type: 'web_search_20250305' }],
       messages: [{ role: 'user', content: 'search' }],
     });
-    expect(claudeToChat.payload.tools).toEqual([{ type: 'web_search', name: 'web_search' }]);
+    // Provider-executed web search has no Chat Completions equivalent: the
+    // claude→chat conversion drops it rather than emitting {"type":"web_search"},
+    // which strict upstreams reject with "Input should be 'function'".
+    expect(claudeToChat.payload.tools).toBeUndefined();
 
     const openAiToClaude = convertOpenAiBodyToAnthropicMessagesBody(
       {

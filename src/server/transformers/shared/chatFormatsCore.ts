@@ -912,32 +912,48 @@ function pickPositiveInteger(value: unknown): number | undefined {
 function convertClaudeToolsToOpenAiChat(rawTools: unknown): unknown {
   if (!Array.isArray(rawTools)) return rawTools;
 
-  return rawTools.map((item) => {
-    if (!isRecord(item)) return item;
+  const converted = rawTools.flatMap((item): unknown[] => {
+    if (!isRecord(item)) return [item];
 
     const type = asTrimmedString(item.type).toLowerCase();
     const name = asTrimmedString(item.name);
-    if (
+    const isFunctionTool = type === 'function' || type === 'custom';
+    // Provider-executed web search ({"type":"web_search_20250305"}) has no Chat
+    // Completions equivalent. Forwarding it as {"type":"web_search"} makes strict
+    // upstreams reject the whole request ("Input should be 'function'"), so drop
+    // it instead. A client-defined *function* named web_search is not a server
+    // tool and must be preserved.
+    const isServerWebSearch = !isFunctionTool && (
       type === 'web_search'
       || type === 'web_search_20250305'
       || type === 'google_search'
-      || name === 'web_search'
-      || name === 'google_search'
-    ) {
-      return {
-        ...item,
-        type: 'web_search',
-        name: 'web_search',
-      };
+      || (!type && !item.input_schema && (name === 'web_search' || name === 'google_search'))
+    );
+    if (isServerWebSearch) return [];
+
+    if (isFunctionTool) {
+      // Flat function tools are normalized into the nested chat shape; an entry
+      // that already carries `function` is passed through untouched.
+      if (type === 'function' && !isRecord(item.function) && name) {
+        return [{
+          type: 'function',
+          function: {
+            name,
+            ...(asTrimmedString(item.description)
+              ? { description: asTrimmedString(item.description) }
+              : {}),
+            parameters: isRecord(item.parameters) ? item.parameters : { type: 'object' },
+          },
+        }];
+      }
+      return [item];
     }
 
-    if (type === 'function' || type === 'custom' || type === 'image_generation') {
-      return item;
-    }
+    if (type === 'image_generation') return [item];
 
-    if (!name) return item;
+    if (!name) return [item];
 
-    return {
+    return [{
       type: 'function',
       function: {
         name,
@@ -948,8 +964,10 @@ function convertClaudeToolsToOpenAiChat(rawTools: unknown): unknown {
           ? item.input_schema
           : (isRecord(item.parameters) ? item.parameters : { type: 'object' }),
       },
-    };
+    }];
   });
+
+  return converted;
 }
 
 function convertClaudeToolChoiceToOpenAiChat(rawToolChoice: unknown): unknown {
@@ -1205,7 +1223,15 @@ export function convertClaudeRequestToOpenAiBody(body: Record<string, unknown>):
   if (reasoningRequest.reasoningEffort) payload.reasoning_effort = reasoningRequest.reasoningEffort;
   if (reasoningRequest.reasoningBudget !== undefined) payload.reasoning_budget = reasoningRequest.reasoningBudget;
 
-  if (body.tools !== undefined) payload.tools = convertClaudeToolsToOpenAiChat(body.tools);
+  if (body.tools !== undefined) {
+    const convertedTools = convertClaudeToolsToOpenAiChat(body.tools);
+    // Provider-executed tools (web_search) are dropped because Chat Completions
+    // has no equivalent; do not send an empty array in that case — strict
+    // upstreams reject `tools: []`.
+    if (!Array.isArray(convertedTools) || convertedTools.length > 0) {
+      payload.tools = convertedTools;
+    }
+  }
   if (body.tool_choice !== undefined) payload.tool_choice = convertClaudeToolChoiceToOpenAiChat(body.tool_choice);
 
   const promptCacheKey = asTrimmedString(body.prompt_cache_key);

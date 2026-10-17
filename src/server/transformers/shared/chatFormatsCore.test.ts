@@ -696,3 +696,39 @@ describe('convertClaudeRequestToOpenAiBody', () => {
     expect((toolMessage?.content as any[])?.some((part: any) => part?.type === 'image_url')).toBe(true);
   });
 });
+
+describe('chatFormatsCore claude→chat tool conversion', () => {
+  const baseBody = (tools: unknown) => ({
+    model: 'deepseek-v4.1-flash',
+    max_tokens: 64,
+    messages: [{ role: 'user', content: 'hi' }],
+    tools,
+  });
+
+  it('drops provider-executed web search and keeps the client function of the same name', () => {
+    const out = convertClaudeRequestToOpenAiBody(baseBody([
+      { type: 'web_search_20250305', name: 'web_search' },
+      { name: 'web_search', description: 'client search', input_schema: { type: 'object', properties: { q: { type: 'string' } } } },
+      { type: 'function', name: 'terminal', description: 'flat', parameters: { type: 'object' } },
+    ]));
+
+    expect(out.payload.tools).toEqual([
+      {
+        type: 'function',
+        function: {
+          name: 'web_search',
+          description: 'client search',
+          parameters: { type: 'object', properties: { q: { type: 'string' } } },
+        },
+      },
+      { type: 'function', function: { name: 'terminal', description: 'flat', parameters: { type: 'object' } } },
+    ]);
+  });
+
+  it('omits the tools field when every tool was provider-executed', () => {
+    const out = convertClaudeRequestToOpenAiBody(baseBody([
+      { type: 'web_search_20250305', name: 'web_search' },
+    ]));
+    expect(out.payload.tools).toBeUndefined();
+  });
+});

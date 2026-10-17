@@ -49,6 +49,25 @@ describe('sanitizeAnthropicMessagesBody', () => {
     ]);
   });
 
+  it('keeps client functions named web_search as function tools (nested and flat shapes)', () => {
+    // Nested OpenAI shape: the function name must not be mistaken for the
+    // provider-executed web_search server tool.
+    expect(convertOpenAiToolsToAnthropic([
+      { type: 'function', function: { name: 'web_search', description: 'look it up', parameters: { type: 'object' } } },
+    ])).toEqual([
+      { name: 'web_search', description: 'look it up', input_schema: { type: 'object' } },
+    ]);
+
+    // Flat shape (some agents put name/parameters at the top level).
+    expect(convertOpenAiToolsToAnthropic([
+      { type: 'function', name: 'web_search', description: 'flat', parameters: { type: 'object', properties: {} } },
+      { type: 'function', name: 'terminal', parameters: { type: 'object' } },
+    ])).toEqual([
+      { name: 'web_search', description: 'flat', input_schema: { type: 'object', properties: {} } },
+      { name: 'terminal', input_schema: { type: 'object' } },
+    ]);
+  });
+
   it('normalizes string system and message content before rebuilding cache anchors', () => {
     const result = sanitizeAnthropicMessagesBody({
       model: 'claude-opus-4-6',

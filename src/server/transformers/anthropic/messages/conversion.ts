@@ -178,6 +178,12 @@ function sanitizeAnthropicThinkingConfig(
 
 function isAnthropicWebSearchTool(value: Record<string, unknown>): boolean {
   const type = asTrimmedString(value.type).toLowerCase();
+  // A client-defined function may legitimately be named "web_search" (Hermes and
+  // other agents ship one). Only provider-executed server tools are web search
+  // tools: rewriting a `type: "function"` entry into {"type":"web_search_20250305"}
+  // makes downstream chat-completions upstreams reject the request with
+  // "Invalid value for 'type': Input should be 'function'".
+  if (type === 'function' || type === 'custom') return false;
   const name = asTrimmedString(value.name).toLowerCase();
   return ANTHROPIC_WEB_SEARCH_TOOL_TYPES.has(type) || name === 'web_search' || name === 'google_search';
 }
@@ -839,8 +845,11 @@ export function convertOpenAiToolsToAnthropic(rawTools: unknown): unknown {
         };
       }
 
-      if (type === 'function' && isRecord(item.function)) {
-        const fn = item.function;
+      if (type === 'function') {
+        // Accept both the OpenAI nested shape ({"type":"function","function":{...}})
+        // and the flat shape some agents emit on the wire
+        // ({"type":"function","name":...,"parameters":...}).
+        const fn = isRecord(item.function) ? item.function : item;
         const name = asTrimmedString(fn.name);
         if (!name) return null;
 
@@ -848,6 +857,7 @@ export function convertOpenAiToolsToAnthropic(rawTools: unknown): unknown {
         const description = asTrimmedString(fn.description);
         if (description) mapped.description = description;
         if (fn.parameters !== undefined) mapped.input_schema = fn.parameters;
+        else if (fn.input_schema !== undefined) mapped.input_schema = fn.input_schema;
         if (item.cache_control !== undefined) mapped.cache_control = item.cache_control;
         return mapped;
       }
