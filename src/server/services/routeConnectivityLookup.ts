@@ -28,10 +28,11 @@ export const CONNECTIVITY_FACTOR_FALSE = 0.12;
 /**
  * Stale false should not permanently black-hole a channel. A supported probe
  * now writes connectivity=true and clears it immediately; this TTL is the
- * fallback for when no probe runs at all, so keep it short enough that a
- * recovered upstream is retried within the hour.
+ * fallback for when no probe runs at all. Ten minutes is the compromise: a
+ * flapping relay is retried soon enough to keep its share, while a genuinely
+ * dead channel still only costs one failed request per window.
  */
-const CONNECTIVITY_FALSE_TTL_MS = 60 * 60 * 1000;
+const CONNECTIVITY_FALSE_TTL_MS = 10 * 60 * 1000;
 /** Positive proofs stay trusted longer. */
 const CONNECTIVITY_TRUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -70,6 +71,26 @@ export function connectivityScoreFactor(connectivity: ConnectivitySignal): numbe
   if (connectivity === true) return CONNECTIVITY_FACTOR_TRUE;
   if (connectivity === false) return CONNECTIVITY_FACTOR_FALSE;
   return CONNECTIVITY_FACTOR_NULL;
+}
+
+/**
+ * Whether a failed attempt is evidence that the upstream is unreachable.
+ *
+ * Only transport-level failures count: network errors (no HTTP status), first-byte
+ * timeouts (408) and upstream 5xx. A 4xx is a request-shape or policy rejection
+ * (classifyProxyFailure gives it cooldownScope 'none' or 'credential') and a 429
+ * is a rate limit handled by the channel cooldown — treating those as "the site is
+ * down" used to exclude healthy channels for an hour.
+ */
+export function isHardConnectivityFailure(
+  status: string | null | undefined,
+  httpStatus: number | null | undefined,
+): boolean {
+  if (String(status || '').toLowerCase() !== 'failed') return false;
+  const code = typeof httpStatus === 'number' && Number.isFinite(httpStatus)
+    ? Math.trunc(httpStatus)
+    : 0;
+  return code === 0 || code === 408 || code >= 500;
 }
 
 export function connectivityReasonText(connectivity: ConnectivitySignal): string | null {

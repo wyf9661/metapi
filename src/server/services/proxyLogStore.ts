@@ -14,6 +14,7 @@ import {
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { emitProxyLogCreated } from './proxyLogEventBus.js';
 import { getCurrentReasoningEffort } from './reasoningEffort.js';
+import { isHardConnectivityFailure } from './routeConnectivityLookup.js';
 
 export type ProxyLogInsertInput = {
   routeId?: number | null;
@@ -450,6 +451,10 @@ async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): 
 
   const status = String(input.status || '').toLowerCase();
   if (status !== 'success' && status !== 'failed') return;
+
+  // Only transport-level failures say anything about reachability; 4xx/429 are
+  // request-shape or policy rejections already handled by the channel cooldown.
+  if (status === 'failed' && !isHardConnectivityFailure(status, input.httpStatus)) return;
 
   const modelName = String(input.modelActual || input.modelRequested || '').trim();
   if (!modelName) return;

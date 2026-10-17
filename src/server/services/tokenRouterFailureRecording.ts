@@ -169,6 +169,27 @@ export async function recordProbeSuccess(
 
   const ch = row.route_channels;
   const account = row.accounts;
+
+  // A successful probe is positive proof that the upstream is reachable again.
+  // Live-traffic failures write model_availability.connectivity=false, which
+  // soft-avoids the channel before scoring; without clearing it here a probe
+  // restores the channel cooldown but the channel stays out of the pool until
+  // the connectivity TTL expires.
+  const connectivityModel = (modelName || ch.sourceModel || '').trim();
+  if (connectivityModel) {
+    const probeAccountId = Number.isFinite(actualAccountId) && (actualAccountId ?? 0) > 0
+      ? Math.trunc(actualAccountId!)
+      : account.id;
+    await db.update(schema.modelAvailability)
+      .set({ connectivity: null })
+      .where(and(
+        eq(schema.modelAvailability.accountId, probeAccountId),
+        eq(sql`lower(trim(${schema.modelAvailability.modelName}))`, connectivityModel.toLowerCase()),
+        eq(schema.modelAvailability.connectivity, false),
+      ))
+      .run();
+  }
+
   if (typeof ch.oauthRouteUnitId === 'number' && ch.oauthRouteUnitId > 0) {
     const targetAccountId = Number.isFinite(actualAccountId) && (actualAccountId ?? 0) > 0
       ? Math.trunc(actualAccountId!)

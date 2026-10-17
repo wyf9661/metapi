@@ -6,6 +6,7 @@ import {
   connectivityLookupKey,
   connectivityScoreFactor,
   freshnessForConnectivity,
+  isHardConnectivityFailure,
   softAvoidDisconnectedCandidates,
 } from './routeConnectivityLookup.js';
 
@@ -26,10 +27,30 @@ describe('routeConnectivityLookup', () => {
     expect(recentFalse).toBe(false);
     expect(staleFalse).toBeNull();
     expect(recentTrue).toBe(true);
-    // Negative marks expire within the hour: a recovered upstream must not stay
-    // soft-avoided for a whole day.
+    // Negative marks expire after the 10-minute TTL: a flapping relay is retried
+    // quickly, a recovered upstream never stays soft-avoided for an hour.
     expect(freshnessForConnectivity(false, now - 2 * 60 * 60 * 1000, now)).toBeNull();
-    expect(freshnessForConnectivity(false, now - 30 * 60 * 1000, now)).toBe(false);
+    expect(freshnessForConnectivity(false, now - 30 * 60 * 1000, now)).toBeNull();
+    expect(freshnessForConnectivity(false, now - 5 * 60 * 1000, now)).toBe(false);
+  });
+
+  it('treats only transport-level failures as connectivity evidence', () => {
+    // 4xx and rate limits must not mark a channel unreachable — they are
+    // request-shape / policy / credential-scope issues handled by cooldowns.
+    expect(isHardConnectivityFailure('failed', 400)).toBe(false);
+    expect(isHardConnectivityFailure('failed', 403)).toBe(false);
+    expect(isHardConnectivityFailure('failed', 404)).toBe(false);
+    expect(isHardConnectivityFailure('failed', 402)).toBe(false);
+    expect(isHardConnectivityFailure('failed', 429)).toBe(false);
+    // Network errors, first-byte timeouts and upstream 5xx are reachability proof.
+    expect(isHardConnectivityFailure('failed', 0)).toBe(true);
+    expect(isHardConnectivityFailure('failed', 408)).toBe(true);
+    expect(isHardConnectivityFailure('failed', 500)).toBe(true);
+    expect(isHardConnectivityFailure('failed', 502)).toBe(true);
+    expect(isHardConnectivityFailure('failed', 504)).toBe(true);
+    // Successes (and non-failed statuses) never touch the flag.
+    expect(isHardConnectivityFailure('success', 200)).toBe(false);
+    expect(isHardConnectivityFailure(null, 0)).toBe(false);
   });
 
   it('soft-avoids disconnected candidates only when alternatives exist', () => {
