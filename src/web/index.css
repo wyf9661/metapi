@@ -6443,3 +6443,42 @@ textarea {
 [data-theme="dark"] .login-auth-input:focus {
   background: var(--color-bg-card);
 }
+
+/* 移动端使用日志详情：计费过程是辅助信息，字号必须小于字段值（12px），
+   否则会出现"非核心内容比核心字段还大"的观感。 */
+.mobile-billing-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mobile-billing-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.mobile-path-code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* 移动端详情里的辅助文字（加载中/提示等）：与字段标签同级，不随卡片基础字号放大。 */
+.mobile-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.mobile-note.is-error {
+  color: var(--color-danger);
+}

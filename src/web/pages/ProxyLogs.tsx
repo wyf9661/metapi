@@ -1722,6 +1722,17 @@ export default function ProxyLogs() {
                           />
                         }
                       />
+                      {detailLog.username ? (
+                        <MobileField label="账号" value={detailLog.username} />
+                      ) : null}
+                      {detailLog.tokenName ? (
+                        <MobileField
+                          label="令牌"
+                          value={detailLog.tokenGroup
+                            ? `${detailLog.tokenName}（${detailLog.tokenGroup}）`
+                            : detailLog.tokenName}
+                        />
+                      ) : null}
                       {streamModeLabel ? (
                         <MobileField label="模式" value={streamModeLabel} />
                       ) : null}
@@ -1749,6 +1760,18 @@ export default function ProxyLogs() {
                           ) || '--'
                         }
                       />
+                      {(detailLog.cacheReadTokens ?? 0) > 0 ? (
+                        <MobileField
+                          label="缓存 Tokens"
+                          value={detailLog.cacheReadTokens!.toLocaleString()}
+                        />
+                      ) : null}
+                      {(detailLog.cacheCreationTokens ?? 0) > 0 ? (
+                        <MobileField
+                          label="缓存创建 Tokens"
+                          value={detailLog.cacheCreationTokens!.toLocaleString()}
+                        />
+                      ) : null}
                       {/* Locator tokens `[site:]` / `[status:]`, rendered like
                           every other token field in this card: they are the only
                           place a failed row's answering site and upstream status
@@ -1765,18 +1788,30 @@ export default function ProxyLogs() {
                           value={pathMeta.upstreamStatus}
                         />
                       ) : null}
+                      {pathMeta.downstreamPath ? (
+                        <MobileField
+                          label="下游路径"
+                          stacked
+                          value={<code className="mobile-path-code">{pathMeta.downstreamPath}</code>}
+                        />
+                      ) : null}
+                      {pathMeta.upstreamPath ? (
+                        <MobileField
+                          label="上游路径"
+                          stacked
+                          value={<code className="mobile-path-code">{pathMeta.upstreamPath}</code>}
+                        />
+                      ) : null}
                       {detailState?.loading && (
-                        <div style={{ color: 'var(--color-text-muted)' }}>
-                          加载详情中...
-                        </div>
+                        <div className="mobile-note">加载详情中...</div>
                       )}
                       {detailState?.error && (
-                        <div style={{ color: 'var(--color-danger)' }}>
+                        <div className="mobile-note is-error">
                           {detailState.error}
                         </div>
                       )}
                       {billingDetailSummary && (
-                        <div style={{ color: 'var(--color-text-muted)' }}>
+                        <div className="mobile-billing-lines">
                           {billingDetailSummary}
                         </div>
                       )}
@@ -1792,21 +1827,30 @@ export default function ProxyLogs() {
                           value={downstreamKeySummary.replace(/^密钥:\s*/, '')}
                         />
                       ) : null}
-                      {billingProcessLines.length > 0 && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 4,
-                          }}
-                        >
-                          {billingProcessLines.map((line, index) => (
-                            <span key={`${log.id}-billing-mobile-${index}`}>
-                              {line}
-                            </span>
-                          ))}
+                      <div className="mobile-billing-block">
+                        <div className="mobile-field-label" style={{ marginBottom: 2 }}>
+                          计费过程
                         </div>
-                      )}
+                        {billingProcessLines.length > 0 ? (
+                          <div className="mobile-billing-lines">
+                            {billingProcessLines.map((line, index) => (
+                              <span key={`${log.id}-billing-mobile-${index}`}>
+                                {line}
+                              </span>
+                            ))}
+                            <span>仅供参考，以实际扣费为准</span>
+                          </div>
+                        ) : (
+                          <div className="mobile-billing-lines">
+                            输入 {formatProxyLogTokenValue(detailLog.promptTokens)} tokens
+                            {' + '}输出 {formatProxyLogTokenValue(detailLog.completionTokens)} tokens
+                            {' = '}总计 {formatProxyLogTokenValue(detailLog.totalTokens)} tokens
+                            {typeof detailLog.estimatedCost === 'number'
+                              ? `，预估费用 $${detailLog.estimatedCost.toFixed(6)}`
+                              : ''}
+                          </div>
+                        )}
+                      </div>
                       {detail && pathMeta.errorMessage.trim().length > 0 && (
                         <div style={{ color: 'var(--color-danger)', overflowWrap: 'anywhere' }}>
                           {pathMeta.errorMessage}
