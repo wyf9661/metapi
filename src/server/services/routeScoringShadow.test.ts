@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { config } from '../config.js';
 import {
+  COST_FACTOR_MIN,
   computeBalanceCoverage,
   computeBalanceFactor,
+  computeCostFactor,
   formatShadowSelectionLog,
   rankShadowCandidates,
   type ShadowCandidateInput,
@@ -315,5 +318,48 @@ describe('routeScoringShadow', () => {
     expect(proven.probability).toBeGreaterThanOrEqual(0.5);
     expect(fresh.probability).toBeGreaterThan(0.05);
     expect(proven.factors.minShare).toBeGreaterThan(0);
+  });
+});
+
+
+describe('routeScoringShadow cost policy', () => {
+  it('ranks cost against the pool median instead of saturating the raw ratio', () => {
+    // median of [0.01, 0.02, 0.05] is 0.02
+    expect(computeCostFactor(0.01, 'observed', [0.01, 0.02, 0.05])).toBeCloseTo(1.25, 2);
+    expect(computeCostFactor(0.02, 'observed', [0.01, 0.02, 0.05])).toBeCloseTo(1, 5);
+    expect(computeCostFactor(0.05, 'observed', [0.01, 0.02, 0.05])).toBeLessThan(0.8);
+    // A 100x site reaches the floor rather than a saturated ratio.
+    expect(computeCostFactor(1, 'observed', [0.01, 0.02])).toBe(COST_FACTOR_MIN);
+    // Unknown cost is a mild penalty (0.9), no longer the old 0.75.
+    expect(computeCostFactor(0.01, 'unknown', [0.01])).toBeCloseTo(0.9, 5);
+    expect(computeCostFactor(0.01, 'fallback', [0.01])).toBeCloseTo(0.9, 5);
+    expect(computeCostFactor(0.01, 'observed', [])).toBe(1);
+  });
+
+  it('uses the routing profile cost weight as an exponent on the live path', () => {
+    const original = { ...config.routingWeights };
+    try {
+      const inputs = [
+        base({ channelId: 1, siteId: 1, accountId: 1, unitCost: 0.01 }),
+        base({ channelId: 2, siteId: 2, accountId: 2, unitCost: 0.04 }),
+      ];
+      const active = (result: ReturnType<typeof rankShadowCandidates>) => result.candidates
+        .filter((candidate) => !candidate.factors.exclusion);
+
+      config.routingWeights = { ...original, costWeight: 0.2 };
+      const stable = active(rankShadowCandidates(inputs));
+      const stableRatio = stable.find((c) => c.channelId === 1)!.probability
+        / stable.find((c) => c.channelId === 2)!.probability;
+
+      config.routingWeights = { ...original, costWeight: 0.75 };
+      const costFirst = active(rankShadowCandidates(inputs));
+      const costRatio = costFirst.find((c) => c.channelId === 1)!.probability
+        / costFirst.find((c) => c.channelId === 2)!.probability;
+
+      // The cheap channel's share advantage grows when the cost-first profile is selected.
+      expect(costRatio).toBeGreaterThan(stableRatio);
+    } finally {
+      config.routingWeights = original;
+    }
   });
 });

@@ -7,6 +7,7 @@
  */
 
 import { clampNumber } from './tokenRouterMath.js';
+import { config } from '../config.js';
 import {
   CONNECTIVITY_FACTOR_NULL,
   type ConnectivitySignal,
@@ -165,16 +166,29 @@ export function computeReliabilityFactor(
   return clampNumber(reliability ** 3, 0.02, 1);
 }
 
+/** Cost factor range: cheapest candidate vs most expensive one in the same pool. */
+export const COST_FACTOR_MIN = 0.35;
+export const COST_FACTOR_MAX = 1.25;
+
+/**
+ * Cost factor from the price ratio to the pool median, square-root damped.
+ *
+ * `minCost / cost` saturated: with a 300x spread almost every non-cheapest site
+ * landed on the same 0.15 floor, so the factor could not tell a 2x site from a
+ * 50x site. Anchoring on the median keeps small differences small (2x -> ~0.87)
+ * while still letting a 10x/100x site fall to 0.56/0.35:
+ *   half the median -> 1.25 (capped), median -> 1.0, 10x median -> ~0.32 -> 0.35.
+ * Unknown cost is a mild 0.9 rather than the old 0.75: it should not rank a
+ * free/un-priced site below a known-expensive one, but a known-cheap site still wins.
+ */
 export function computeCostFactor(unitCost: number, costSource: ShadowCostSource, peerCosts: number[]): number {
-  if (costSource === 'fallback' || costSource === 'unknown') {
-    return 0.75;
-  }
+  if (costSource === 'fallback' || costSource === 'unknown') return 0.9;
   const cost = Math.max(MIN_REQUEST_COST, unitCost);
   const peers = peerCosts.filter((c) => Number.isFinite(c) && c > 0);
   if (peers.length === 0) return 1;
-  const minCost = Math.min(...peers);
-  // Cheaper is better: minCost/cost in (0, 1]
-  return clampNumber(minCost / cost, 0.15, 1.25);
+  const sorted = [...peers].sort((left, right) => left - right);
+  const median = sorted[Math.floor(sorted.length / 2)]!;
+  return clampNumber(Math.sqrt(median / cost), COST_FACTOR_MIN, COST_FACTOR_MAX);
 }
 
 /** TTFT baseline: first tokens faster than this get a boost, slower get a penalty. */
@@ -265,14 +279,23 @@ export function scoreShadowCandidate(
   const ttft = computeTtftFactor(input.ttftEwmaMs);
   const throughput = computeThroughputFactor(input.tpsEwma);
 
+  // Routing-profile weights (均衡 / 稳定优先 / 成本优先) are applied as exponents on
+  // the live balanced-v2 path, so the preset buttons finally change selection.
+  // The balanced preset (0.4 / 0.3) reproduces the historical 1.1 / 0.9 exactly;
+  // cost-first raises the cost exponent to ~1.5 and lowers the balance exponent,
+  // stability-first does the opposite.
+  const routingWeights = config.routingWeights;
+  const costExponent = clampNumber(1.1 + (routingWeights.costWeight - 0.4) * 1.2, 0.5, 2);
+  const balanceExponent = clampNumber(0.9 + (routingWeights.balanceWeight - 0.3) * 1.0, 0.3, 1.5);
+
   let exclusion = balance.exclusion;
   let score = 0;
   if (!exclusion) {
     score = manualWeight
       * health
       * (reliability ** 1.5)
-      * (cost ** 1.1)
-      * (Math.min(balance.factor, 2.0) ** 0.9)
+      * (cost ** costExponent)
+      * (Math.min(balance.factor, 2.0) ** balanceExponent)
       * credential
       * (load ** 0.8)
       * connectivity

@@ -1156,13 +1156,42 @@ export function calculateWeightedSelection(
     })
   ));
 
-  const valueScores = candidates.map((c, i) => {
-    const unitCost = effectiveCosts[i]?.unitCost || 1;
-    const balance = c.account.balance || 0;
-    const totalUsed = (c.channel.successCount ?? 0) + (c.channel.failCount ?? 0);
-    const recentUsage = Math.max(totalUsed, 1);
-    return costWeight * (1 / unitCost) + balanceWeight * balance + usageWeight * (1 / recentUsage);
+  // Normalize each dimension to [0,1] before applying the profile weights. Raw
+  // balance (USD) used to outrank 1/unitCost and 1/usage by orders of magnitude,
+  // so "cost first" still ranked by balance and the preset weights never mattered.
+  // Both money dimensions are log-scaled so a large balance cannot flatten the rest.
+  const knownCosts = effectiveCosts
+    .map((cost) => cost?.unitCost)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0)
+    .sort((left, right) => left - right);
+  const medianCost = knownCosts.length > 0 ? knownCosts[Math.floor(knownCosts.length / 2)]! : 1;
+  const costSignals = candidates.map((_, i) => {
+    const unitCost = effectiveCosts[i]?.unitCost;
+    const value = typeof unitCost === 'number' && Number.isFinite(unitCost) && unitCost > 0
+      ? unitCost
+      : medianCost;
+    return -Math.log(Math.max(value, 1e-9));
   });
+  const balanceSignals = candidates.map((c) => Math.log1p(Math.max(0, c.account.balance || 0)));
+  const usageSignals = candidates.map((c) => -Math.log1p(Math.max(
+    1,
+    (c.channel.successCount ?? 0) + (c.channel.failCount ?? 0),
+  )));
+  const normalizeDimension = (values: number[]): number[] => {
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const range = max - min;
+    if (!Number.isFinite(range) || range <= 0) return values.map(() => 0.5);
+    return values.map((value) => (value - min) / range);
+  };
+  const normalizedCost = normalizeDimension(costSignals);
+  const normalizedBalance = normalizeDimension(balanceSignals);
+  const normalizedUsage = normalizeDimension(usageSignals);
+  const valueScores = candidates.map((_, i) => (
+    costWeight * normalizedCost[i]!
+    + balanceWeight * normalizedBalance[i]!
+    + usageWeight * normalizedUsage[i]!
+  ));
 
   const normalizedVS = normalizeValueScores(valueScores);
 
