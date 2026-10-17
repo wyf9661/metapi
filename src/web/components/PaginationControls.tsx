@@ -18,6 +18,8 @@ type PaginationControlsProps = {
   onPageSizeChange?: (next: number) => void;
   /** Optional range summary pinned to the left side of the pagination row. */
   rangeLabel?: string;
+  /** Override the rows-per-page choices (e.g. a page with a denser default grid). */
+  pageSizeOptions?: readonly number[];
 };
 
 export default function PaginationControls({
@@ -30,9 +32,16 @@ export default function PaginationControls({
   pageSize,
   onPageSizeChange,
   rangeLabel,
+  pageSizeOptions: pageSizeOptionsProp,
 }: PaginationControlsProps) {
   const isMobile = useIsMobile();
-  const pageSizeOptions = isMobile ? MOBILE_PAGE_SIZE_OPTIONS : PAGE_SIZE_OPTIONS;
+  // 769–1200 的窄桌面同样放不下一整行（信息/跳转/下一页会被挤到第二行），
+  // 用同一套紧凑布局：上一页 / 页码 / 下一页 同行对称，其余居中换行。
+  const isCompact = isMobile || useIsMobile(1200);
+  const defaultPageSizeOptions = isMobile ? MOBILE_PAGE_SIZE_OPTIONS : PAGE_SIZE_OPTIONS;
+  const pageSizeOptions = pageSizeOptionsProp && pageSizeOptionsProp.length > 0
+    ? pageSizeOptionsProp
+    : defaultPageSizeOptions;
   const pageNumbers = useMemo(() => {
     if (totalPages <= 1) return [];
     const windowSize = Math.min(totalPages, 7);
@@ -51,6 +60,90 @@ export default function PaginationControls({
   // first page otherwise means clicking "上一页" repeatedly. Offer it only
   // when it is not already a numbered button — never duplicate a page.
   const firstPageOutsideWindow = pageNumbers.length > 0 && !pageNumbers.includes(1);
+
+  const pageSizeControl = typeof pageSize === 'number' && onPageSizeChange ? (
+    <div className="pagination-size">
+      每页条数:
+      <div style={{ minWidth: 86 }}>
+        <ModernSelect
+          size="sm"
+          dropDirection="up"
+          value={String(pageSize)}
+          onChange={(nextValue) => onPageSizeChange(Number(nextValue))}
+          options={pageSizeOptions.map((s) => ({
+            value: String(s),
+            label: String(s),
+          }))}
+          placeholder={String(pageSize)}
+        />
+      </div>
+    </div>
+  ) : null;
+
+  // Mobile: 上一页 / 页码信息 / 下一页 必须同行、左右等宽对称；页码单独一行居中，
+  // 跳转与每页条数放最后一行居中。此前全部平铺 + flex-wrap，导致「下一页」跑到
+  // 跳转输入框右侧、页码信息整行贴左（inline-flex 下 text-align 不生效）。
+  if (isCompact) {
+    return (
+      <div className={`${className} pagination-compact`} style={style}>
+        {rangeLabel && <div className="pagination-range">{rangeLabel}</div>}
+        {showPageNavigation && (
+          <>
+            <div className="pagination-compact-nav">
+              <button
+                type="button"
+                className="pagination-btn"
+                disabled={page <= 1}
+                onClick={() => goTo(page - 1)}
+              >
+                上一页
+              </button>
+              <span className="pagination-info">
+                第 {page} / {totalPages} 页
+              </span>
+              <button
+                type="button"
+                className="pagination-btn"
+                disabled={page >= totalPages}
+                onClick={() => goTo(page + 1)}
+              >
+                下一页
+              </button>
+            </div>
+            <div className="pagination-compact-numbers">
+              {firstPageOutsideWindow && (
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  onClick={() => goTo(1)}
+                  aria-label="回到第一页"
+                  title="回到第一页"
+                >
+                  首页
+                </button>
+              )}
+              {pageNumbers.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`pagination-btn ${page === n ? 'active' : ''}`}
+                  onClick={() => goTo(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {(showPageNavigation || pageSizeControl) && (
+          <div className="pagination-compact-extra">
+            {showPageNavigation && <PageJumpInput totalPages={totalPages} onJump={goTo} />}
+            {pageSizeControl}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={className} style={style}>
@@ -100,24 +193,7 @@ export default function PaginationControls({
           </button>
         </>
       )}
-      {typeof pageSize === 'number' && onPageSizeChange && (
-        <div className="pagination-size">
-          每页条数:
-          <div style={{ minWidth: 86 }}>
-            <ModernSelect
-              size="sm"
-              dropDirection="up"
-              value={String(pageSize)}
-              onChange={(nextValue) => onPageSizeChange(Number(nextValue))}
-              options={pageSizeOptions.map((s) => ({
-                value: String(s),
-                label: String(s),
-              }))}
-              placeholder={String(pageSize)}
-            />
-          </div>
-        </div>
-      )}
+      {pageSizeControl}
     </div>
   );
 }

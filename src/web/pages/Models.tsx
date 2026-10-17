@@ -6,12 +6,11 @@ import { api } from '../api.js';
 import { BrandGlyph, getBrand, BrandIcon, type BrandInfo } from '../components/BrandIcon.js';
 import SiteBadgeLink, { SiteIcon } from '../components/SiteBadgeLink.js';
 import { useToast } from '../components/Toast.js';
-import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { FILTER_PANEL_BREAKPOINT } from '../components/mobileLayout.js';
-import PageJumpInput from '../components/PageJumpInput.js';
+import PaginationControls from '../components/PaginationControls.js';
 import { mergeMarketplaceMetadata, shouldHydrateMarketplaceMetadata } from './helpers/modelsMarketplaceMetadata.js';
 import { tr } from '../i18n.js';
 import { TOKEN_COVERAGE_CHANGED_EVENT } from '../dataEvents.js';
@@ -1714,44 +1713,18 @@ export default function Models() {
 
         {/* Pagination */}
         {filteredModels.length > 0 && (
-          <div className="pagination">
-            <button className="pagination-btn" disabled={safePageVal <= 1} onClick={() => setPage(p => p - 1)}>
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-              let pageNum: number;
-              if (totalPages <= 7) {
-                pageNum = i + 1;
-              } else if (safePageVal <= 4) {
-                pageNum = i + 1;
-              } else if (safePageVal >= totalPages - 3) {
-                pageNum = totalPages - 6 + i;
-              } else {
-                pageNum = safePageVal - 3 + i;
-              }
-              return (
-                <button key={pageNum} className={`pagination-btn ${safePageVal === pageNum ? 'active' : ''}`} onClick={() => setPage(pageNum)}>
-                  {pageNum}
-                </button>
-              );
-            })}
-            <button className="pagination-btn" disabled={safePageVal >= totalPages} onClick={() => setPage(p => p + 1)}>
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-            </button>
-            <PageJumpInput totalPages={totalPages} onJump={setPage} />
-            <div className="pagination-size">
-              {tr('每页条数')}:
-              <div style={{ minWidth: 86 }}>
-                <ModernSelect
-                  size="sm"
-                  value={String(pageSize)}
-                  onChange={(nextValue) => setPageSize(Number(nextValue))}
-                  options={PAGE_SIZES.map((s) => ({ value: String(s), label: String(s) }))}
-                  placeholder={String(pageSize)}
-                />
-              </div>
-            </div>
-          </div>
+          <PaginationControls
+            page={safePageVal}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            visible
+            pageSize={pageSize}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+            pageSizeOptions={PAGE_SIZES}
+          />
         )}
       </div>
     </div>

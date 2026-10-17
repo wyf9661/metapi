@@ -5411,6 +5411,70 @@ textarea {
   }
 }
 
+@media (max-width: 1200px) {
+  /* 移动端分页：上一页 / 第 x / y 页 / 下一页 必须同一行且左右按钮等宽对称；
+     页码单独一行居中；跳转 + 每页条数最后一行居中。 */
+  .pagination-compact {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .pagination-compact .pagination-range {
+    margin: 0;
+    text-align: center;
+  }
+
+  .pagination-compact-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .pagination-compact-nav .pagination-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 180px;
+    height: 36px;
+  }
+
+  .pagination-compact-nav .pagination-info {
+    flex: 0 0 auto;
+    width: auto;
+    margin: 0;
+    min-width: 104px;
+    height: 36px;
+    padding-bottom: 0;
+    justify-content: center;
+  }
+
+  .pagination-compact-numbers {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .pagination-compact-extra {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .pagination-compact .pagination-size {
+    width: auto;
+    margin-left: 0;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 768px) {
 
   /* --- Layout --- */
@@ -5622,22 +5686,6 @@ textarea {
 
   .pagination {
     flex-wrap: wrap;
-  }
-
-  .pagination {
-    flex-wrap: wrap;
-  }
-
-  .pagination-info {
-    width: 100%;
-    margin: 0;
-    text-align: center;
-  }
-
-  .pagination-size {
-    width: 100%;
-    margin-left: 0;
-    justify-content: center;
   }
 
   .responsive-form-grid-2,
