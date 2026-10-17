@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSy
 import { join } from 'node:path';
 import { platform, arch } from 'node:os';
 import { eq } from 'drizzle-orm';
-import { fetch } from 'undici';
+import { Agent, fetch } from 'undici';
 import { config } from '../config.js';
 import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
@@ -57,6 +57,15 @@ const CLOUDFLARED_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 const TUNNEL_HEALTH_PROBE_INTERVAL_MS = 30_000;
 const TUNNEL_HEALTH_PROBE_TIMEOUT_MS = 15_000;
 const TUNNEL_HEALTH_PROBE_MAX_FAILURES = 3;
+// cloudflared reports `cloudflared_tunnel_ha_connections` on its local metrics
+// endpoint: how many edge connections the connector currently holds. Reading it
+// is the authoritative connector-liveness signal, and — unlike an HTTP probe of
+// the quick-tunnel URL — it never travels over the host's own network path. On
+// networks that black-hole the tunnel's Cloudflare IPs (CN corporate networks
+// drop 104.16.x/104.17.x), a URL probe reports a healthy connector as dead and
+// drives a restart loop that keeps breaking the stable public address.
+const TUNNEL_DEFAULT_METRICS_PORT = 20249;
+const TUNNEL_METRICS_TIMEOUT_MS = 3_000;
 
 let child: ChildProcessWithoutNullStreams | null = null;
 let currentTunnelUrl: string | null = null;
@@ -84,6 +93,28 @@ export function resolveQuickTunnelTransportProtocol(env: NodeJS.ProcessEnv = pro
     .trim()
     .toLowerCase();
   return QUICK_TUNNEL_PROTOCOL_OPTIONS.has(requested) ? requested : DEFAULT_QUICK_TUNNEL_PROTOCOL;
+}
+
+/**
+ * Local cloudflared metrics port. Passed to the connector via `--metrics` so the
+ * port never depends on which ports are already taken (a second cloudflared on
+ * the host otherwise pushes this one onto a random port).
+ */
+export function resolveTunnelMetricsPort(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number(String(env.TUNNEL_METRICS_PORT ?? '').trim());
+  return Number.isInteger(parsed) && parsed > 0 && parsed < 65536 ? parsed : TUNNEL_DEFAULT_METRICS_PORT;
+}
+
+/**
+ * Optional IPv4 Cloudflare anycast edge IP to pin tunnel HTTP probes to.
+ * Cloudflare's edge answers any of its hostnames on any edge IP (SNI/Host
+ * routing), so pinning keeps the probe truthful on networks that resolve a
+ * tunnel hostname to an IP range they then black-hole. Unset = resolve
+ * normally.
+ */
+export function resolveTunnelProbeConnectIp(env: NodeJS.ProcessEnv = process.env): string | null {
+  const raw = String(env.TUNNEL_PROBE_CONNECT_IP ?? '').trim();
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(raw) ? raw : null;
 }
 
 export function getQuickTunnelRetryDelay(attempt: number): number {
@@ -543,12 +574,32 @@ function stopTunnelHealthProbe() {
   healthProbeFailures = 0;
 }
 
+let probeAgentCache: { ip: string; agent: Agent } | null = null;
+
+/** undici dispatcher that resolves every probed hostname to the pinned edge IP. */
+function probeAgentFor(ip: string): Agent {
+  if (probeAgentCache?.ip === ip) return probeAgentCache.agent;
+  const agent = new Agent({
+    connect: {
+      lookup: (_hostname, options, callback) => {
+        const wantsAll = typeof options === 'object' && options !== null && (options as { all?: boolean }).all;
+        if (wantsAll) callback(null, [{ address: ip, family: 4 }] as never);
+        else callback(null, ip as never, 4 as never);
+      },
+    },
+  });
+  probeAgentCache = { ip, agent };
+  return agent;
+}
+
 async function probeUrlAlive(url: string, timeoutMs: number): Promise<boolean> {
+  const pinnedIp = resolveTunnelProbeConnectIp();
   try {
     const response = await fetch(url, {
       method: 'GET',
       redirect: 'follow',
       signal: AbortSignal.timeout(timeoutMs),
+      ...(pinnedIp ? { dispatcher: probeAgentFor(pinnedIp) } : {}),
     });
     dropUnreadResponseBody(response);
     // Any response below 5xx means the edge → connector path is serving
@@ -557,6 +608,41 @@ async function probeUrlAlive(url: string, timeoutMs: number): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * `cloudflared_tunnel_ha_connections` from the connector's local metrics
+ * endpoint: the number of edge connections cloudflared currently holds.
+ * Returns null when the endpoint cannot be read, so callers can fall back.
+ */
+async function readTunnelHaConnections(): Promise<number | null> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${resolveTunnelMetricsPort()}/metrics`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(TUNNEL_METRICS_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      dropUnreadResponseBody(response);
+      return null;
+    }
+    const text = await response.text();
+    const match = text.match(/^cloudflared_tunnel_ha_connections(?:\{[^}]*\})?\s+(\d+)/m);
+    return match ? Number(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Connector liveness for the health probe. The metric is authoritative: it is
+ * cloudflared's own view of the edge connections, independent of whether this
+ * host can still reach the tunnel's Cloudflare IPs. Only when metrics are
+ * unavailable do we fall back to probing the quick-tunnel URL.
+ */
+async function probeTunnelConnectorAlive(): Promise<boolean> {
+  const connections = await readTunnelHaConnections();
+  if (connections !== null) return connections > 0;
+  return currentTunnelUrl ? probeUrlAlive(currentTunnelUrl, TUNNEL_HEALTH_PROBE_TIMEOUT_MS) : false;
 }
 
 async function probeTunnelPublicUrl(): Promise<boolean> {
@@ -666,9 +752,7 @@ function startTunnelHealthProbe() {
       if (!config.tunnelEnabled || !child || !isProcessRunning(child.pid)) return;
       // 连接器还活着时，探活失败只可能是映射/边缘侧问题——重启 cloudflared 毫无帮助，
       // 先尝试重新注册映射即可。
-      const connectorAlive = currentTunnelUrl
-        ? await probeUrlAlive(currentTunnelUrl, TUNNEL_HEALTH_PROBE_TIMEOUT_MS)
-        : false;
+      const connectorAlive = await probeTunnelConnectorAlive();
       if (connectorAlive) {
         healthProbeFailures = 0;
         if (stableUrl && (await attemptStableMappingRepair({ directKnownHealthy: true }))) return;
@@ -796,6 +880,12 @@ export async function startCloudflareTunnel(): Promise<TunnelStatus> {
       '--no-autoupdate',
       '--retries',
       QUICK_TUNNEL_RETRIES,
+      // Pin the metrics port: the health probe reads
+      // `cloudflared_tunnel_ha_connections` from here, and without an explicit
+      // port a second cloudflared (named tunnel) on 20241 pushes this one to a
+      // random port the probe cannot find.
+      '--metrics',
+      `127.0.0.1:${resolveTunnelMetricsPort()}`,
     ];
 
     const localTmp = join(tunnelDir(), 'tmp');

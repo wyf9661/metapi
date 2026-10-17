@@ -23,8 +23,27 @@ import {
   registerStableTunnelMapping,
   resolveCloudflaredDownloadProxyUrl,
   resolveQuickTunnelTransportProtocol,
+  resolveTunnelMetricsPort,
+  resolveTunnelProbeConnectIp,
   waitForPublicUrlHealthy,
 } from './cloudflareTunnelService.js';
+
+describe('tunnel metrics port + probe pin', () => {
+  it('defaults the metrics port and honors a valid override', () => {
+    expect(resolveTunnelMetricsPort({})).toBe(20249);
+    expect(resolveTunnelMetricsPort({ TUNNEL_METRICS_PORT: '20300' })).toBe(20300);
+    for (const bad of ['', '   ', '0', '-1', '70000', 'abc']) {
+      expect(resolveTunnelMetricsPort({ TUNNEL_METRICS_PORT: bad })).toBe(20249);
+    }
+  });
+
+  it('only accepts a plain IPv4 address as the probe pin', () => {
+    expect(resolveTunnelProbeConnectIp({ TUNNEL_PROBE_CONNECT_IP: '172.64.155.1' })).toBe('172.64.155.1');
+    for (const bad of ['', '  ', 'trycloudflare.com', '2606:4700::1', '172.64.155.1:443', '1.2.3']) {
+      expect(resolveTunnelProbeConnectIp({ TUNNEL_PROBE_CONNECT_IP: bad })).toBeNull();
+    }
+  });
+});
 
 describe('cloudflare tunnel access helpers', () => {
   it('treats /v1 paths as API', () => {
