@@ -15,6 +15,7 @@ import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { emitProxyLogCreated } from './proxyLogEventBus.js';
 import { getCurrentReasoningEffort } from './reasoningEffort.js';
 import { isHardConnectivityFailure } from './routeConnectivityLookup.js';
+import { emptyConnectivityHealth, recordConnectivityAttempt, shouldMarkDisconnected } from './routeConnectivityPolicy.js';
 
 export type ProxyLogInsertInput = {
   routeId?: number | null;
@@ -466,7 +467,14 @@ async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): 
   const checkedAt = input.createdAt || new Date().toISOString();
 
   try {
-    const existing = await db.select({ id: schema.modelAvailability.id })
+    const existing = await db.select({
+      id: schema.modelAvailability.id,
+      connectivity: schema.modelAvailability.connectivity,
+      consecutiveHardFailures: schema.modelAvailability.consecutiveHardFailures,
+      consecutiveSuccesses: schema.modelAvailability.consecutiveSuccesses,
+      hardFailureBits: schema.modelAvailability.hardFailureBits,
+      hardFailureSamples: schema.modelAvailability.hardFailureSamples,
+    })
       .from(schema.modelAvailability)
       .where(and(
         eq(schema.modelAvailability.accountId, accountId),
@@ -475,9 +483,24 @@ async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): 
       .get();
 
     if (existing?.id) {
+      const nextHealth = recordConnectivityAttempt({
+        consecutiveHardFailures: existing.consecutiveHardFailures ?? 0,
+        consecutiveSuccesses: existing.consecutiveSuccesses ?? 0,
+        hardFailureBits: existing.hardFailureBits ?? 0,
+        hardFailureSamples: existing.hardFailureSamples ?? 0,
+      }, available ? 'success' : 'hard_failure');
+      // A success is positive proof. A hard failure only flips the flag once the
+      // streak/window policy says the channel is actually unreachable; a single
+      // hiccup must not take a healthy channel out for the whole TTL.
+      const nextConnectivity = available
+        ? true
+        : (shouldMarkDisconnected(nextHealth)
+          ? false
+          : (existing.connectivity === false ? false : (existing.connectivity ?? null)));
       await db.update(schema.modelAvailability)
         .set({
-          connectivity: available,
+          connectivity: nextConnectivity,
+          ...nextHealth,
           ...(latencyMs != null ? { latencyMs } : {}),
           checkedAt,
         })
@@ -495,6 +518,7 @@ async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): 
         connectivity: true,
         latencyMs,
         checkedAt,
+        ...recordConnectivityAttempt(emptyConnectivityHealth(), 'success'),
       }).run();
     }
   } catch {

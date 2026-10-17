@@ -113,11 +113,32 @@ export function canRetryProxyChannelWithBudget(
  * - full<=0 (disabled): returns 0 so explicit opt-out is respected
  *   end-to-end.
  */
-export function resolveProxyChannelFirstByteTimeoutMs(_retryCount: number): number {
+export function resolveProxyChannelFirstByteTimeoutMs(
+  _retryCount: number,
+  observedTtftMs?: number | null,
+): number {
   const fullMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
   if (fullMs <= 0) return 0;
+  // Adaptive try: a site whose own first bytes usually arrive within
+  // PROXY_FIRST_BYTE_FAST_TTFT_MS should not hold a request for the full
+  // ceiling when it stalls — failing over at 30s instead of 90s is the
+  // difference between a 30s and a 90s tail. Sites that are legitimately slow
+  // (mean above the fast threshold) keep the full window, so the old
+  // "shortened timeout kills slow-but-alive relays" trap is avoided.
+  if (typeof observedTtftMs === 'number' && Number.isFinite(observedTtftMs)
+    && observedTtftMs > 0 && observedTtftMs <= PROXY_FIRST_BYTE_FAST_TTFT_MS) {
+    const adaptiveMs = Math.trunc(observedTtftMs * 3);
+    return Math.min(fullMs, Math.max(PROXY_FIRST_BYTE_ADAPTIVE_FLOOR_MS, adaptiveMs));
+  }
   return fullMs;
 }
+
+/** Fast sites are those whose mean TTFT stays under this. */
+export const PROXY_FIRST_BYTE_FAST_TTFT_MS = 6_000;
+/** Never shrink the first-byte window below this, even for fast sites. */
+export const PROXY_FIRST_BYTE_ADAPTIVE_FLOOR_MS = 30_000;
+/** Samples required before a site's TTFT profile is trusted. */
+export const PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES = 5;
 
 /**
  * Derived failover budget when env does not pin an explicit value:

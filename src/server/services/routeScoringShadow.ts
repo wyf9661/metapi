@@ -191,11 +191,21 @@ export function computeCostFactor(unitCost: number, costSource: ShadowCostSource
   return clampNumber(Math.sqrt(median / cost), COST_FACTOR_MIN, COST_FACTOR_MAX);
 }
 
-/** TTFT baseline: first tokens faster than this get a boost, slower get a penalty. */
-const TTFT_BASELINE_MS = 2_000;
-/** How far a TTFT difference can push the score (0.6x .. 1.35x). */
-const TTFT_MAX_FACTOR = 1.35;
-const TTFT_MIN_FACTOR = 0.6;
+/**
+ * First-token curve (ms -> factor). A piecewise map instead of a clamped
+ * `baseline / ttft`: with 91% of production first bytes arriving after 3.3s the
+ * old curve sat on its 0.6 floor for almost everyone, so TTFT carried no
+ * signal. This keeps 2s neutral (1.0), rewards sub-second starts (1.35) and
+ * keeps falling through 10s/30s/90s (0.6/0.25/0.2).
+ */
+const TTFT_CURVE: ReadonlyArray<readonly [number, number]> = [
+  [500, 1.35],
+  [2_000, 1],
+  [5_000, 0.8],
+  [10_000, 0.6],
+  [30_000, 0.25],
+  [90_000, 0.2],
+];
 
 /** Throughput baseline (tokens/s) — calibrated on live samples, whose median is
  *  ~120 t/s. Streams faster than this are rewarded, slower ones penalized. */
@@ -225,14 +235,23 @@ const MAX_PROBABILITY_FLOOR = 0.15;
 const DEFAULT_PROBABILITY_FLOOR = 0.05;
 
 /**
- * Time-to-first-token factor. No sample = neutral 1. Faster first tokens
- * (streaming) raise the score; slow ones lower it. Clamped so a single slow
- * site cannot be crushed and a fast site cannot dominate purely on latency.
+ * Time-to-first-token factor. No sample = neutral 1. Interpolates the piecewise
+ * curve above so a 5s site clearly beats a 15s one instead of both hitting a
+ * common floor.
  */
 export function computeTtftFactor(ttftEwmaMs: number | null | undefined): number {
   if (ttftEwmaMs == null || !Number.isFinite(ttftEwmaMs) || ttftEwmaMs <= 0) return 1;
-  const ratio = TTFT_BASELINE_MS / ttftEwmaMs;
-  return clampNumber(ratio, TTFT_MIN_FACTOR, TTFT_MAX_FACTOR);
+  const first = TTFT_CURVE[0]!;
+  if (ttftEwmaMs <= first[0]) return first[1];
+  for (let index = 1; index < TTFT_CURVE.length; index += 1) {
+    const [x1, y1] = TTFT_CURVE[index]!;
+    if (ttftEwmaMs <= x1) {
+      const [x0, y0] = TTFT_CURVE[index - 1]!;
+      const ratio = (ttftEwmaMs - x0) / (x1 - x0);
+      return y0 + (y1 - y0) * ratio;
+    }
+  }
+  return TTFT_CURVE[TTFT_CURVE.length - 1]![1];
 }
 
 export function scoreShadowCandidate(

@@ -707,6 +707,30 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "consecutive_hard_failures": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "consecutive_successes": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "hard_failure_bits": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
+        },
+        "hard_failure_samples": {
+          "logicalType": "integer",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false
         }
       }
     },

@@ -55,9 +55,11 @@ import { createIdleGuardedStreamReader } from '../streamIdleTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
 import {
+  PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES,
   getProxyMaxChannelRetries,
   resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
+import { getPerformanceShadowMetrics } from '../../services/performanceShadow.js';
 import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce, shouldInPlaceRetryEmptyContentOnce } from '../../services/proxyRetryPolicy.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
@@ -613,12 +615,25 @@ export async function handleChatSurfaceRequest(
         return endpointStrategy.tryRecover(ctx);
       };
       const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
+      // Per-site first-byte window: fast sites (trusted TTFT profile) get a 30s
+      // floor so a stalled attempt fails over quickly; slow sites keep the
+      // configured ceiling. No sample / too few samples = full window.
+      const siteTtftSample = getPerformanceShadowMetrics({
+        routeId: selected.channel.routeId,
+        siteId: selected.site.id,
+        modelName: requestedModel,
+        isStream: true,
+      });
+      const adaptiveTtftMs = siteTtftSample
+        && siteTtftSample.sampleCount >= PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES
+        ? siteTtftSample.ttftEwmaMs
+        : null;
       return executeEndpointFlow({
         siteUrl: siteApiBaseUrl,
         requestOverrideRules: selected.channel.requestOverrideRules ?? null,
         paramOverride: selected.site.paramOverride ?? null,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
-        firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount),
+        firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount, adaptiveTtftMs),
         bodyReadOptions: bodyReadGuards,
         endpointCandidates,
         buildRequest: (endpoint) => buildEndpointRequest(endpoint),

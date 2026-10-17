@@ -152,6 +152,12 @@ export const modelAvailability = sqliteTable('model_availability', {
   isManual: integer('is_manual', { mode: 'boolean' }).default(false),
   latencyMs: integer('latency_ms'),
   checkedAt: text('checked_at').default(sql`(datetime('now'))`),
+  // Connectivity health window: a single failed request is no longer enough to
+  // soft-avoid a channel (see routeConnectivityPolicy).
+  consecutiveHardFailures: integer('consecutive_hard_failures').notNull().default(0),
+  consecutiveSuccesses: integer('consecutive_successes').notNull().default(0),
+  hardFailureBits: integer('hard_failure_bits').notNull().default(0),
+  hardFailureSamples: integer('hard_failure_samples').notNull().default(0),
 }, (table) => ({
   accountModelUnique: uniqueIndex('model_availability_account_model_unique').on(table.accountId, table.modelName),
   accountAvailableIdx: index('model_availability_account_available_idx').on(table.accountId, table.available),

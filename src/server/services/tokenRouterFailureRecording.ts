@@ -181,11 +181,16 @@ export async function recordProbeSuccess(
       ? Math.trunc(actualAccountId!)
       : account.id;
     await db.update(schema.modelAvailability)
-      .set({ connectivity: null })
+      .set({
+        connectivity: null,
+        consecutiveHardFailures: 0,
+        consecutiveSuccesses: 0,
+        hardFailureBits: 0,
+        hardFailureSamples: 0,
+      })
       .where(and(
         eq(schema.modelAvailability.accountId, probeAccountId),
         eq(sql`lower(trim(${schema.modelAvailability.modelName}))`, connectivityModel.toLowerCase()),
-        eq(schema.modelAvailability.connectivity, false),
       ))
       .run();
   }
