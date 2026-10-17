@@ -766,10 +766,14 @@ export const api = {
       ),
     }),
   // Per-key disabled models: only this account's rows are replaced.
-  updateAccountDisabledModels: (accountId: number, models: string[]) =>
+  updateAccountDisabledModels: (
+    accountId: number,
+    models: string[],
+    newModelPolicy?: 'auto' | 'disable',
+  ) =>
     request(`/api/accounts/${accountId}/models/disabled`, {
       method: 'PUT',
-      body: JSON.stringify({ models }),
+      body: JSON.stringify(newModelPolicy ? { models, newModelPolicy } : { models }),
     }),
   getSiteAvailableModels: (siteId: number) =>
     request(`/api/sites/${siteId}/available-models`),

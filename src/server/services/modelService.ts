@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
+import { applyNewModelPolicyForAccount } from './accountNewModelPolicy.js';
 import { getInsertedRowId } from '../db/insertHelpers.js';
 import { getAdapter } from './platforms/index.js';
 import {
@@ -695,7 +696,22 @@ export function refreshModelsForAccount(
   const existing = modelRefreshInFlight.get(key);
   if (existing) return existing;
 
-  const run = doRefreshModelsForAccount(accountId, options);
+  const run = doRefreshModelsForAccount(accountId, options).then(async (result) => {
+    // Apply the account's new-model policy only after a successful refresh: the
+    // baseline is compared with what discovery actually found.
+    if (result?.refreshed === true) {
+      try {
+        await applyNewModelPolicyForAccount(accountId);
+      } catch (err) {
+        console.warn(
+          '[new-model-policy] apply failed',
+          accountId,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+    return result;
+  });
   modelRefreshInFlight.set(key, run);
   run.finally(() => {
     modelRefreshInFlight.delete(key);

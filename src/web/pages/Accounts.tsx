@@ -197,6 +197,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       isManual?: boolean;
     }>;
     pendingDisabled: Set<string>;
+    newModelPolicy: 'auto' | 'disable';
     loading: boolean;
     saving: boolean;
     siteName: string;
@@ -208,6 +209,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     account: null,
     models: [],
     pendingDisabled: new Set(),
+    newModelPolicy: 'auto',
     loading: false,
     saving: false,
     siteName: '',
@@ -667,6 +669,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       loading: false,
       models,
       pendingDisabled: disabledSet,
+      newModelPolicy: result?.newModelPolicy === 'disable' ? 'disable' : 'auto',
       siteName: result?.siteName || account.site?.name || s.siteName,
     }));
   };
@@ -754,6 +757,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       await api.updateAccountDisabledModels(
         accountId,
         Array.from(modelModal.pendingDisabled),
+        modelModal.newModelPolicy,
       );
       try {
         await api.rebuildRoutes(false, false);
@@ -2986,6 +2990,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           });
         }}
         onToggleModelDisabled={toggleModelDisabled}
+        onNewModelPolicyChange={(policy) =>
+          setModelModal((state) => ({ ...state, newModelPolicy: policy }))
+        }
         onSetPendingDisabled={(pendingDisabled) =>
           setModelModal((state) => ({ ...state, pendingDisabled }))
         }

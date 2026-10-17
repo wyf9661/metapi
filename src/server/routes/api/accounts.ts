@@ -6,6 +6,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { parseSiteDisabledModelsPayload } from '../../contracts/siteRoutePayloads.js';
 import { invalidateSiteProxyCache } from '../../services/siteProxy.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
+import { setAccountNewModelPolicy } from '../../services/accountNewModelPolicy.js';
 import { rebuildTokenRoutesFromAvailability } from '../../services/modelService.js';
 import { clearModelsMarketplaceCache } from './stats.js';
 import { refreshBalance } from '../../services/balanceService.js';
@@ -16,6 +17,8 @@ import {
 } from '../../services/accountMutationWorkflow.js';
 import {
   getCredentialModeFromExtraConfig,
+  getNewModelPolicyFromExtraConfig,
+  normalizeNewModelPolicy,
   getProxyUrlFromExtraConfig,
   guessPlatformUserIdFromUsername,
   hasOauthProvider,
@@ -1902,6 +1905,7 @@ export async function accountsRoutes(app: FastifyInstance) {
         models,
         totalCount: models.length,
         disabledCount: models.filter((m: any) => m.disabled).length,
+        newModelPolicy: getNewModelPolicyFromExtraConfig(account.accounts.extraConfig),
       };
     },
   );
@@ -1953,6 +1957,12 @@ export async function accountsRoutes(app: FastifyInstance) {
           ).run();
         }
       });
+
+      const rawPolicy = (request.body as { newModelPolicy?: unknown } | null | undefined)?.newModelPolicy;
+      const nextPolicy = normalizeNewModelPolicy(rawPolicy);
+      if (nextPolicy) {
+        await setAccountNewModelPolicy(accountId, nextPolicy);
+      }
 
       invalidateSiteProxyCache();
       invalidateTokenRouterCache();

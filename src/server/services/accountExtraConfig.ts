@@ -161,6 +161,24 @@ export function getCredentialModeFromExtraConfig(extraConfig?: ExtraConfigInput)
   return normalizeCredentialMode(parsed.credentialMode);
 }
 
+/**
+ * Policy for models that appear upstream after the user curated this key's model
+ * list. `auto` (default) enables them like before; `disable` keeps them off
+ * until the user enables them manually.
+ */
+export type AccountNewModelPolicy = 'auto' | 'disable';
+
+export function normalizeNewModelPolicy(raw: unknown): AccountNewModelPolicy | undefined {
+  const value = String(raw ?? '').trim().toLowerCase();
+  if (value === 'auto' || value === 'disable') return value;
+  return undefined;
+}
+
+export function getNewModelPolicyFromExtraConfig(extraConfig?: ExtraConfigInput): AccountNewModelPolicy {
+  const parsed = parseExtraConfig(extraConfig);
+  return normalizeNewModelPolicy(parsed.newModelPolicy) ?? 'auto';
+}
+
 export function getOauthProviderFromExtraConfig(extraConfig?: ExtraConfigInput): string | undefined {
   const parsed = parseExtraConfig(extraConfig);
   return normalizeNonEmptyString(parsed.oauth?.provider);

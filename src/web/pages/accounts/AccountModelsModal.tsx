@@ -12,6 +12,7 @@ type AccountModelRow = {
 
 type AccountModelModalState = {
   open: boolean;
+  newModelPolicy?: 'auto' | 'disable';
   account: any | null;
   models: AccountModelRow[];
   pendingDisabled: Set<string>;
@@ -29,6 +30,7 @@ type AccountModelsModalProps = {
   onSave: () => void;
   onRefresh: () => Promise<void> | void;
   onToggleModelDisabled: (modelName: string) => void;
+  onNewModelPolicyChange: (policy: 'auto' | 'disable') => void;
   onSetPendingDisabled: (pendingDisabled: Set<string>) => void;
   onManualInputChange: (value: string) => void;
   onAddManualModels: () => Promise<void> | void;
@@ -43,6 +45,7 @@ export default function AccountModelsModal({
   onSave,
   onRefresh,
   onToggleModelDisabled,
+  onNewModelPolicyChange,
   onSetPendingDisabled,
   onManualInputChange,
   onAddManualModels,
@@ -81,6 +84,39 @@ export default function AccountModelsModal({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+              padding: '6px 8px',
+              border: '1px solid var(--color-border-light)',
+              borderRadius: 8,
+            }}
+          >
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>上游新增模型：</span>
+            {(['auto', 'disable'] as const).map((policy) => (
+              <button
+                key={policy}
+                className="btn btn-ghost"
+                style={{
+                  fontSize: 12,
+                  padding: '2px 10px',
+                  border: `1px solid ${modelModal.newModelPolicy === policy ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  color: modelModal.newModelPolicy === policy ? 'var(--color-primary)' : undefined,
+                }}
+                onClick={() => onNewModelPolicyChange(policy)}
+              >
+                {policy === 'auto' ? '自动启用' : '自动禁用'}
+              </button>
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+              {modelModal.newModelPolicy === 'disable'
+                ? '刷新发现新模型时自动保持禁用，直到你手动启用'
+                : '刷新发现的新模型立即启用（默认）'}
+            </span>
+          </div>
           {modelModal.models.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>🤖</div>
