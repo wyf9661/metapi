@@ -172,6 +172,13 @@ async function tryAsyncSolve(
 ): Promise<SolveResult | null> {
   const undici = await import('undici');
   const deadline = Date.now() + timeoutMs;
+  // Bound every outbound call: a solver that accepts TCP but never answers
+  // would otherwise hang the whole check-in pass (and the scheduler's stale
+  // unlock would keep stacking new passes on top of it).
+  const requestSignal = (): AbortSignal => {
+    const timeoutSignal = AbortSignal.timeout(Math.max(1000, timeoutMs));
+    return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+  };
 
   // createTask
   const taskReq = await undici.fetch(`${baseUrl}/createTask`, {
@@ -186,7 +193,7 @@ async function tryAsyncSolve(
         ...(params.action ? { metadata: { action: params.action } } : {}),
       },
     }),
-    signal,
+    signal: requestSignal(),
   });
   if (taskReq.status !== 200) return null;
   const taskData: any = await taskReq.json();
@@ -203,7 +210,7 @@ async function tryAsyncSolve(
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'User-Agent': DEFAULT_UA },
         body: JSON.stringify({ clientKey: apiKey, taskId }),
-        signal,
+        signal: requestSignal(),
       });
       if (pollRes.status !== 200) continue;
       const pollData: any = await pollRes.json();
