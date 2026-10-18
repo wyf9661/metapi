@@ -84,13 +84,20 @@ export function composeProxyLogMessage({
 }: ComposeProxyLogMessageArgs): string | null {
   const rawMessage = typeof errorMessage === 'string' ? errorMessage.trim() : '';
   const parsed = parseProxyLogMessageMeta(rawMessage);
-  const finalClientKind = (clientKind || parsed.clientKind || '').trim();
-  const finalSessionId = (sessionId || traceHint || parsed.sessionId || '').trim();
-  const finalTraceId = (traceId || parsed.traceId || '').trim();
-  const finalDownstreamPath = (downstreamPath || parsed.downstreamPath || '').trim();
-  const finalUpstreamPath = (upstreamPath || parsed.upstreamPath || '').trim();
-  const finalUsageSource = (usageSource || parsed.usageSource || '').trim();
-  const finalErrorCode = (errorCode || parsed.errorCode || '').trim();
+  // Every token value is attacker-influenced (session ids, paths, codes come
+  // from the downstream request): strip brackets and newlines so a value can
+  // never smuggle extra `[site:...]`/`[status:...]` tokens into the row.
+  const sanitizeTokenValue = (value: string): string => value
+    .replace(/[[\]\r\n\t]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const finalClientKind = sanitizeTokenValue(clientKind || parsed.clientKind || '');
+  const finalSessionId = sanitizeTokenValue(sessionId || traceHint || parsed.sessionId || '');
+  const finalTraceId = sanitizeTokenValue(traceId || parsed.traceId || '');
+  const finalDownstreamPath = sanitizeTokenValue(downstreamPath || parsed.downstreamPath || '');
+  const finalUpstreamPath = sanitizeTokenValue(upstreamPath || parsed.upstreamPath || '');
+  const finalUsageSource = sanitizeTokenValue(usageSource || parsed.usageSource || '');
+  const finalErrorCode = sanitizeTokenValue(errorCode || parsed.errorCode || '');
   const finalMessageText = parsed.messageText.trim();
   const locatorSiteLabel = normalizeSiteLabel(siteLabel);
   const locatorUpstreamStatus = normalizeUpstreamStatus(upstreamStatus);

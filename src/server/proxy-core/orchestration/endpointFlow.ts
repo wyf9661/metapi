@@ -303,7 +303,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     input.bodyReadOptions?.signal?.throwIfAborted();
     rawErrText = baseContext.rawErrText;
     response = baseContext.response;
-    const errText = withUpstreamPath(
+    let errText = withUpstreamPath(
       baseContext.request.path,
       summarizeUpstreamError(response.status, rawErrText),
     );
@@ -364,6 +364,13 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       baseContext.response = retryResponse;
       baseContext.rawErrText = rawErrText;
       response = retryResponse;
+      // The retry answered differently from the first attempt: recompute the
+      // summary so the cascade classifies (and logs) the response it is
+      // actually looking at, not the first attempt's 400.
+      errText = withUpstreamPath(
+        baseContext.request.path,
+        summarizeUpstreamError(response.status, rawErrText),
+      );
     }
 
     if (input.disableCrossProtocolFallback && !isLastEndpoint) {
