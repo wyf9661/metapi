@@ -1445,8 +1445,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '图像生成': 'image generation',
   '上下文': 'context',
   // 路由设置：首字超时与探测率
-  '首字超时（无首包 / 首 token）': 'First-token timeout (no first packet / first token)',
-  '默认 15 秒；`0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换渠道，已经开始输出的请求不会被这项超时打断。': 'Default 15s; `0` disables. Only switches channels when no first packet / first token arrives within the window; requests that already started streaming are not interrupted by this timeout.',
+  '首字超时上限（无首包 / 首 token）': 'First-token timeout ceiling (no first packet / first token)',
+  '这是上限，不是固定等待：实际窗口按站点近期首字速度自适应（最快 30 秒），不会超过该值；无历史样本时按该值等待。`0` 表示关闭。': 'This is a ceiling, not a fixed wait: the effective window adapts to each site\'s recent first-byte latency (minimum 30s) and never exceeds this value; sites without samples use it as-is. `0` disables.',
   '路由探测率（跳过亲和性，直接走加权随机）': 'Probe rate (skip affinity, go straight to weighted random)',
   '路由策略已保存': 'Routing strategy saved',
   '默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。': 'Default 0.15 (15%). Each first hop has a chance to skip session stickiness and last-success affinity and go straight to weighted balancing. Set to 0 to disable probing, 1 to probe every time.',

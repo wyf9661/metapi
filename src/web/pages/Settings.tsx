@@ -1890,7 +1890,7 @@ export default function Settings() {
           <div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              首字超时（无首包 / 首 token）
+              首字超时上限（无首包 / 首 token）
             </div>
             <input
               type="number"
@@ -1910,7 +1910,7 @@ export default function Settings() {
               style={inputStyle}
             />
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
-              默认 15 秒；`0` 表示关闭。只有在指定时间内完全没有任何首包 / 首 token 返回时才切换渠道，已经开始输出的请求不会被这项超时打断。
+              这是上限，不是固定等待：实际窗口按站点近期首字速度自适应（最快 30 秒），不会超过该值；无历史样本时按该值等待。`0` 表示关闭。
             </div>
           </div>
           </div>
