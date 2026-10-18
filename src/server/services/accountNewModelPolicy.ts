@@ -50,7 +50,14 @@ function readKnownModels(extraConfig: string | null | undefined): Set<string> | 
   const names = raw
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     .map((item) => item.trim().toLowerCase());
+  // An empty array means "never seeded", not "no models exist": treating it as
+  // a valid baseline would auto-disable every model on the next refresh.
+  if (names.length === 0) return null;
   return new Set(names);
+}
+
+function isKnownModelsTruncated(extraConfig: string | null | undefined): boolean {
+  return parseExtraConfig(extraConfig).knownModelsTruncated === true;
 }
 
 function buildExtraConfigWithUpdates(
@@ -68,7 +75,13 @@ async function writeKnownModels(
   const snapshot = modelNames.slice(0, KNOWN_MODELS_LIMIT);
   await db.update(schema.accounts)
     .set({
-      extraConfig: buildExtraConfigWithUpdates(extraConfig, { knownModels: snapshot }),
+      extraConfig: buildExtraConfigWithUpdates(extraConfig, {
+        knownModels: snapshot,
+        // Remember that the baseline is incomplete. Re-seeding the same
+        // truncated slice each pass would otherwise make the tail look "new"
+        // forever and re-disable models the user turned back on.
+        knownModelsTruncated: modelNames.length > KNOWN_MODELS_LIMIT,
+      }),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(schema.accounts.id, accountId))
@@ -114,6 +127,13 @@ export async function applyNewModelPolicyForAccount(
 
   let disabled: string[] = [];
   if (policy === 'disable') {
+    // Oversized keys cannot keep a complete baseline in extra_config. Treat
+    // every currently listed model as known instead of disabling the tail on
+    // every refresh (and re-disabling models the user re-enabled manually).
+    if (isKnownModelsTruncated(account.extraConfig)) {
+      await writeKnownModels(accountId, account.extraConfig, currentNames);
+      return { policy, disabled: [], seeded: false };
+    }
     const fresh = currentNames.filter((name) => !known.has(name.toLowerCase()));
     if (fresh.length > 0) {
       await db.insert(schema.siteDisabledModels)
@@ -157,6 +177,7 @@ export async function setAccountNewModelPolicy(
   // auto-disable on for an account that never had a snapshot).
   if (policy === 'disable' && !known) {
     patch.knownModels = currentNames.slice(0, KNOWN_MODELS_LIMIT);
+    patch.knownModelsTruncated = currentNames.length > KNOWN_MODELS_LIMIT;
   }
 
   await db.update(schema.accounts)
