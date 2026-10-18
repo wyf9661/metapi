@@ -1567,6 +1567,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "token_id": {
+          "logicalType": "integer",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },
@@ -3004,6 +3010,15 @@
       "table": "proxy_logs",
       "columns": [
         "status",
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "proxy_logs_token_id_created_at_idx",
+      "table": "proxy_logs",
+      "columns": [
+        "token_id",
         "created_at"
       ],
       "unique": false

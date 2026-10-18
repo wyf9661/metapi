@@ -1,4 +1,2 @@
-ALTER TABLE `model_availability` ADD COLUMN `consecutive_hard_failures` INT NOT NULL DEFAULT 0;
-ALTER TABLE `model_availability` ADD COLUMN `consecutive_successes` INT NOT NULL DEFAULT 0;
-ALTER TABLE `model_availability` ADD COLUMN `hard_failure_bits` INT NOT NULL DEFAULT 0;
-ALTER TABLE `model_availability` ADD COLUMN `hard_failure_samples` INT NOT NULL DEFAULT 0;
+ALTER TABLE `proxy_logs` ADD COLUMN `token_id` INT;
+CREATE INDEX `proxy_logs_token_id_created_at_idx` ON `proxy_logs` (`token_id`, `created_at`);
