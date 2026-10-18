@@ -121,9 +121,15 @@ function normalizeNonNegativeInt(value: unknown): number {
   return Math.round(numeric);
 }
 
-function normalizeNonNegativeFloat(value: unknown): number {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+/**
+ * Distinguish "unknown cost" (null) from "known free" (0). The old helper
+ * collapsed both to 0, so every free model was re-priced from its token count
+ * and site/model spend rankings were systematically inflated.
+ */
+function normalizeExplicitSpend(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
   return numeric;
 }
 
@@ -132,8 +138,8 @@ function resolveSummarySpend(params: {
   totalTokens: number | null;
   platform: string | null;
 }) {
-  const explicit = normalizeNonNegativeFloat(params.estimatedCost);
-  if (explicit > 0) return explicit;
+  const explicit = normalizeExplicitSpend(params.estimatedCost);
+  if (explicit !== null) return explicit;
   const tokens = normalizeNonNegativeInt(params.totalTokens);
   if (tokens <= 0) return 0;
   return tokens / 500_000;
@@ -144,8 +150,8 @@ function resolveSiteSpend(params: {
   totalTokens: number | null;
   platform: string | null;
 }) {
-  const explicit = normalizeNonNegativeFloat(params.estimatedCost);
-  if (explicit > 0) return explicit;
+  const explicit = normalizeExplicitSpend(params.estimatedCost);
+  if (explicit !== null) return explicit;
   const tokens = normalizeNonNegativeInt(params.totalTokens);
   if (tokens <= 0) return 0;
   return fallbackTokenCost(tokens, params.platform || 'new-api');
@@ -155,8 +161,8 @@ function resolveModelSpend(params: {
   estimatedCost: number | null;
   totalTokens: number | null;
 }) {
-  const explicit = normalizeNonNegativeFloat(params.estimatedCost);
-  if (explicit > 0) return explicit;
+  const explicit = normalizeExplicitSpend(params.estimatedCost);
+  if (explicit !== null) return explicit;
   const tokens = normalizeNonNegativeInt(params.totalTokens);
   if (tokens <= 0) return 0;
   return tokens / 500_000;

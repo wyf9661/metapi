@@ -446,7 +446,38 @@ export function isMissingProxyLogTokenIdColumnError(error: unknown): boolean {
 }
 
 
-async function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): Promise<void> {
+/**
+ * Serialize the read-modify-write per (account, model). Concurrent proxy
+ * requests for the same model used to race — each read the same window and
+ * overwrote the other's update, so failure evidence was systematically lost
+ * and a hard-broken channel could keep its connectivity bonus forever.
+ */
+const connectivityUpdateChains = new Map<string, Promise<void>>();
+
+function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): void {
+  const accountId = Number(input.accountId);
+  if (!Number.isFinite(accountId) || accountId <= 0) return;
+
+  const status = String(input.status || '').toLowerCase();
+  if (status !== 'success' && status !== 'failed') return;
+  if (status === 'failed' && !isHardConnectivityFailure(status, input.httpStatus)) return;
+
+  const modelName = String(input.modelActual || input.modelRequested || '').trim();
+  if (!modelName) return;
+
+  const key = `${accountId}\u0000${modelName}`;
+  const previous = connectivityUpdateChains.get(key) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => applyModelConnectivityUpdate(input))
+    .catch(() => undefined)
+    .finally(() => {
+      if (connectivityUpdateChains.get(key) === next) connectivityUpdateChains.delete(key);
+    });
+  connectivityUpdateChains.set(key, next);
+}
+
+async function applyModelConnectivityUpdate(input: ProxyLogInsertInput): Promise<void> {
   const accountId = Number(input.accountId);
   if (!Number.isFinite(accountId) || accountId <= 0) return;
 
@@ -546,7 +577,7 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
     promptTokens: input.promptTokens ?? null,
     completionTokens: input.completionTokens ?? null,
     totalTokens: input.totalTokens ?? null,
-    estimatedCost: input.estimatedCost ?? 0,
+    estimatedCost: input.estimatedCost ?? null,
     errorMessage: input.errorMessage ?? null,
     retryCount: input.retryCount ?? 0,
     createdAt: input.createdAt ?? null,

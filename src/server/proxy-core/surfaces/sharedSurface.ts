@@ -291,7 +291,9 @@ export async function writeSurfaceProxyLog(input: {
       promptTokens: input.promptTokens ?? null,
       completionTokens: input.completionTokens ?? null,
       totalTokens: input.totalTokens ?? null,
-      estimatedCost: input.estimatedCost ?? 0,
+      // Preserve "unknown" as null: aggregation must not re-price it from
+      // tokens, and 0 is a legitimate free-model value.
+      estimatedCost: input.estimatedCost ?? null,
       billingDetails: input.billingDetails ?? null,
       clientFamily: input.clientContext?.clientKind || null,
       clientAppId: input.clientContext?.clientAppId || null,

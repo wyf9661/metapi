@@ -802,7 +802,9 @@ describe('selectSurfaceChannelForAttempt', () => {
     expect(resolveProxyLogBillingMock).not.toHaveBeenCalled();
     expect(insertProxyLogMock).toHaveBeenCalledWith(expect.objectContaining({
       status: 'failed',
-      estimatedCost: 0,
+      // Unknown cost stays NULL: 0 is a legitimate "known free" value and the
+      // usage aggregator must not re-price an unknown row from its tokens.
+      estimatedCost: null,
     }));
   });
 
