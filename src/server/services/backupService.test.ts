@@ -67,7 +67,9 @@ describe('backupService', () => {
       customHeaders: JSON.stringify({
         'cf-access-client-id': 'roundtrip-client',
       }),
+      paramOverride: JSON.stringify({ tags: ['roundtrip'] }),
       customHeadersOverrideRequestHeaders: true,
+      protocolProfile: JSON.stringify({ preferMessages: true }),
       status: 'active',
       isPinned: true,
       sortOrder: 9,
@@ -141,11 +143,13 @@ describe('backupService', () => {
       routeId: route.id,
       accountId: account.id,
       tokenId: accountToken.id,
+      oauthRouteUnitId: 42,
       sourceModel: 'gpt-4o',
       priority: 3,
       weight: 5,
       enabled: true,
       manualOverride: false,
+      requestOverrideRules: JSON.stringify({ temperature: 0.2 }),
       successCount: 10,
       failCount: 1,
       totalLatencyMs: 2500,
@@ -205,7 +209,16 @@ describe('backupService', () => {
       usedCost: 11.5,
       maxRequests: 500,
       usedRequests: 33,
+      maxRpm: 60,
+      maxInflight: 4,
+      maxDailyRequests: 1000,
+      maxDailyCost: 5.5,
+      dailyUsedRequests: 7,
+      dailyUsedCost: 1.25,
+      dailyWindowDate: '2026-10-18',
+      sensitiveWordDetection: true,
       supportedModels: '["gpt-4o-mini"]',
+      modelMappings: JSON.stringify([{ from: 'gpt-4o', to: 'gpt-4o-mini' }]),
       allowedRouteIds: `[${route.id}]`,
       siteWeightMultipliers: `{"${site.id}":1.5}`,
       allowedSiteIds: `[${site.id}]`,
@@ -261,6 +274,9 @@ describe('backupService', () => {
     expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('usedCost');
     expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('usedRequests');
     expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('lastUsedAt');
+    expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('dailyUsedRequests');
+    expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('dailyUsedCost');
+    expect(exported.accounts.downstreamApiKeys[0]).not.toHaveProperty('dailyWindowDate');
 
     const result = await backupService.importBackup(exported as Record<string, unknown>);
 
@@ -283,6 +299,8 @@ describe('backupService', () => {
     expect(restoredSite?.customHeadersOverrideRequestHeaders).toBe(true);
     expect(restoredSite?.isPinned).toBe(true);
     expect(restoredSite?.sortOrder).toBe(9);
+    expect(restoredSite?.paramOverride).toBe('{"tags":["roundtrip"]}');
+    expect(restoredSite?.protocolProfile).toBe('{"preferMessages":true}');
 
     expect(restoredAccount?.isPinned).toBe(true);
     expect(restoredAccount?.sortOrder).toBe(7);
@@ -299,6 +317,8 @@ describe('backupService', () => {
     expect(restoredGroupSource?.sourceRouteId).toBe(sourceRoute.id);
 
     expect(restoredChannel?.sourceModel).toBe('gpt-4o');
+    expect(restoredChannel?.oauthRouteUnitId).toBe(42);
+    expect(restoredChannel?.requestOverrideRules).toBe('{"temperature":0.2}');
     expect(restoredDisabledModels).toEqual([
       expect.objectContaining({ siteId: site.id, modelName: 'gpt-hidden' }),
     ]);
@@ -316,7 +336,16 @@ describe('backupService', () => {
         usedCost: 11.5,
         maxRequests: 500,
         usedRequests: 33,
+        maxRpm: 60,
+        maxInflight: 4,
+        maxDailyRequests: 1000,
+        maxDailyCost: 5.5,
+        dailyUsedRequests: 7,
+        dailyUsedCost: 1.25,
+        dailyWindowDate: '2026-10-18',
+        sensitiveWordDetection: true,
         supportedModels: '["gpt-4o-mini"]',
+        modelMappings: '[{"from":"gpt-4o","to":"gpt-4o-mini"}]',
         allowedRouteIds: `[${route.id}]`,
         siteWeightMultipliers: `{"${site.id}":1.5}`,
         allowedSiteIds: `[${site.id}]`,

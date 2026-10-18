@@ -447,6 +447,46 @@ describe('databaseMigrationService', () => {
     })).toBe('[object Object]');
   });
 
+  it('covers every contract column for the core tables (no silent drops)', () => {
+    const statements = __databaseMigrationServiceTestUtils.buildStatements({
+      version: 'test',
+      timestamp: 1,
+      accounts: {
+        sites: [{ id: 1, name: 's', url: 'https://example.com', platform: 'openai', status: 'active', paramOverride: {}, protocolProfile: {} }],
+        siteApiEndpoints: [],
+        siteAnnouncements: [],
+        siteDisabledModels: [],
+        accounts: [{ id: 1, siteId: 1, status: 'active', oauthProvider: 'claude', oauthAccountKey: 'k', oauthProjectId: 'p' }],
+        accountTokens: [],
+        checkinLogs: [],
+        modelAvailability: [{ id: 1, accountId: 1, modelName: 'm', available: true, connectivity: true, isManual: false, checkedAt: '2026-01-01T00:00:00Z' }],
+        tokenModelAvailability: [{ id: 1, tokenId: 1, modelName: 'm', available: true, connectivity: true, latencyMs: 1, checkedAt: '2026-01-01T00:00:00Z' }],
+        tokenRoutes: [],
+        routeChannels: [{ id: 1, routeId: 1, accountId: 1, tokenId: null, oauthRouteUnitId: null, priority: 0, weight: 10, enabled: true, manualOverride: false, requestOverrideRules: {} }],
+        routeGroupSources: [],
+        proxyLogs: [{ id: 1, tokenId: 1, isStream: true }],
+        proxyVideoTasks: [],
+        proxyFiles: [],
+        downstreamApiKeys: [{ id: 1, name: 'k', key: 'sk-x', enabled: true }],
+        events: [],
+      },
+      preferences: { settings: [] },
+    } as never);
+
+    const exclusions: Record<string, string[]> = {
+      // Legacy blacklist columns superseded by allowed_* — deliberately not migrated.
+      downstream_api_keys: ['excluded_site_ids', 'excluded_credential_refs'],
+    };
+    for (const table of ['sites', 'accounts', 'model_availability', 'token_model_availability', 'route_channels', 'proxy_logs', 'downstream_api_keys']) {
+      const statement = statements.find((item) => item.table === table);
+      expect(statement, `missing migration statement for ${table}`).toBeTruthy();
+      const expected = Object.keys(currentContract.tables[table].columns)
+        .filter((column) => !(exclusions[table] || []).includes(column))
+        .sort();
+      expect([...(statement?.columns ?? [])].sort(), `column drift in ${table}`).toEqual(expected);
+    }
+  });
+
   it('serializes object-backed JSON columns when building migration statements', () => {
     const statements = __databaseMigrationServiceTestUtils.buildStatements({
       version: 'test',

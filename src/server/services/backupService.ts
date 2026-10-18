@@ -103,12 +103,25 @@ type BackupDownstreamApiKeyRow = Pick<DownstreamApiKeyRow,
   | 'expiresAt'
   | 'maxCost'
   | 'maxRequests'
+  | 'maxRpm'
+  | 'maxInflight'
+  | 'maxDailyRequests'
+  | 'maxDailyCost'
+  | 'sensitiveWordDetection'
   | 'supportedModels'
+  | 'modelMappings'
   | 'allowedRouteIds'
   | 'siteWeightMultipliers'
   | 'allowedSiteIds'
   | 'allowedCredentialRefs'
-> & Partial<Pick<DownstreamApiKeyRow, 'usedCost' | 'usedRequests' | 'lastUsedAt'>>;
+> & Partial<Pick<DownstreamApiKeyRow,
+  'usedCost'
+  | 'usedRequests'
+  | 'lastUsedAt'
+  | 'dailyUsedRequests'
+  | 'dailyUsedCost'
+  | 'dailyWindowDate'
+>>;
 
 interface AccountsBackupSection {
   sites: SiteRow[];
@@ -194,7 +207,14 @@ type TokenModelAvailabilitySnapshot = TokenModelAvailabilityRow & {
   tokenKey: string | null;
 };
 
-type DownstreamApiKeyRuntimeSnapshot = Pick<DownstreamApiKeyRow, 'usedCost' | 'usedRequests' | 'lastUsedAt'>;
+type DownstreamApiKeyRuntimeSnapshot = Pick<DownstreamApiKeyRow,
+  'usedCost'
+  | 'usedRequests'
+  | 'lastUsedAt'
+  | 'dailyUsedRequests'
+  | 'dailyUsedCost'
+  | 'dailyWindowDate'
+>;
 
 interface RuntimeIdentityIndexes {
   siteKeyById: Map<number, string>;
@@ -565,6 +585,9 @@ async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapsho
       usedCost: row.usedCost ?? 0,
       usedRequests: row.usedRequests ?? 0,
       lastUsedAt: row.lastUsedAt ?? null,
+      dailyUsedRequests: row.dailyUsedRequests ?? 0,
+      dailyUsedCost: row.dailyUsedCost ?? 0,
+      dailyWindowDate: row.dailyWindowDate ?? null,
     });
   }
 
@@ -1434,6 +1457,11 @@ async function exportAccountsSection(): Promise<AccountsBackupSection> {
       usedCost: _usedCost,
       usedRequests: _usedRequests,
       lastUsedAt: _lastUsedAt,
+      // Daily usage is runtime state, like usedCost: never restore it from a
+      // backup, or importing another instance's backup rewrites local history.
+      dailyUsedRequests: _dailyUsedRequests,
+      dailyUsedCost: _dailyUsedCost,
+      dailyWindowDate: _dailyWindowDate,
       createdAt: _createdAt,
       updatedAt: _updatedAt,
       ...row
@@ -1622,7 +1650,9 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         platform: row.platform,
         proxyUrl: row.proxyUrl ?? null,
         customHeaders: row.customHeaders ?? null,
+        paramOverride: row.paramOverride ?? null,
         customHeadersOverrideRequestHeaders: row.customHeadersOverrideRequestHeaders ?? false,
+        protocolProfile: row.protocolProfile ?? null,
         status: row.status || 'active',
         isPinned: row.isPinned ?? false,
         sortOrder: row.sortOrder ?? 0,
@@ -1731,11 +1761,13 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         routeId: row.routeId,
         accountId: row.accountId,
         tokenId: row.tokenId,
+        oauthRouteUnitId: row.oauthRouteUnitId ?? null,
         sourceModel: row.sourceModel ?? null,
         priority: row.priority,
         weight: row.weight,
         enabled: row.enabled,
         manualOverride: row.manualOverride,
+        requestOverrideRules: row.requestOverrideRules ?? null,
         successCount: runtimeChannel?.successCount ?? row.successCount,
         failCount: runtimeChannel?.failCount ?? row.failCount,
         totalLatencyMs: runtimeChannel?.totalLatencyMs ?? row.totalLatencyMs,
@@ -1789,9 +1821,14 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         accountId,
         modelName: row.modelName,
         available: row.available,
+        connectivity: row.connectivity ?? null,
         isManual: false,
         latencyMs: row.latencyMs ?? null,
         checkedAt: row.checkedAt,
+        consecutiveHardFailures: row.consecutiveHardFailures ?? 0,
+        consecutiveSuccesses: row.consecutiveSuccesses ?? 0,
+        hardFailureBits: row.hardFailureBits ?? 0,
+        hardFailureSamples: row.hardFailureSamples ?? 0,
       }).run();
     }
 
@@ -1804,6 +1841,7 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         tokenId,
         modelName: row.modelName,
         available: row.available,
+        connectivity: row.connectivity ?? null,
         latencyMs: row.latencyMs ?? null,
         checkedAt: row.checkedAt,
       }).run();
@@ -1854,7 +1892,16 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
           usedCost: runtimeDownstream?.usedCost ?? row.usedCost ?? 0,
           maxRequests: row.maxRequests ?? null,
           usedRequests: runtimeDownstream?.usedRequests ?? row.usedRequests ?? 0,
+          maxRpm: row.maxRpm ?? null,
+          maxInflight: row.maxInflight ?? null,
+          maxDailyRequests: row.maxDailyRequests ?? null,
+          maxDailyCost: row.maxDailyCost ?? null,
+          dailyUsedRequests: runtimeDownstream?.dailyUsedRequests ?? row.dailyUsedRequests ?? 0,
+          dailyUsedCost: runtimeDownstream?.dailyUsedCost ?? row.dailyUsedCost ?? 0,
+          dailyWindowDate: runtimeDownstream?.dailyWindowDate ?? row.dailyWindowDate ?? null,
+          sensitiveWordDetection: row.sensitiveWordDetection ?? null,
           supportedModels: row.supportedModels ?? null,
+          modelMappings: row.modelMappings ?? null,
           allowedRouteIds: row.allowedRouteIds ?? null,
           siteWeightMultipliers: row.siteWeightMultipliers ?? null,
           allowedSiteIds: row.allowedSiteIds ?? null,
@@ -1883,14 +1930,20 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         channelId,
         accountId,
         downstreamApiKeyId,
+        tokenId: row.tokenId ?? null,
         modelRequested: row.modelRequested ?? null,
         modelActual: row.modelActual ?? null,
         status: row.status ?? null,
         httpStatus: row.httpStatus ?? null,
+        isStream: row.isStream ?? null,
+        firstByteLatencyMs: row.firstByteLatencyMs ?? null,
         latencyMs: row.latencyMs ?? null,
         promptTokens: row.promptTokens ?? null,
         completionTokens: row.completionTokens ?? null,
         totalTokens: row.totalTokens ?? null,
+        cacheReadTokens: row.cacheReadTokens ?? null,
+        cacheCreationTokens: row.cacheCreationTokens ?? null,
+        reasoningEffort: row.reasoningEffort ?? null,
         estimatedCost: row.estimatedCost ?? null,
         billingDetails: row.billingDetails ?? null,
         clientFamily: row.clientFamily ?? null,
@@ -1898,6 +1951,7 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         clientAppName: row.clientAppName ?? null,
         clientConfidence: row.clientConfidence ?? null,
         errorMessage: row.errorMessage ?? null,
+        requestTraceId: row.requestTraceId ?? null,
         retryCount: row.retryCount ?? 0,
         createdAt: row.createdAt,
       }).run();

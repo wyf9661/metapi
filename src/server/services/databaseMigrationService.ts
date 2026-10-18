@@ -125,6 +125,19 @@ function asNullableString(value: unknown): string | null {
   return String(value);
 }
 
+/** Ternary boolean for nullable flag columns (connectivity: null = never tested). */
+function asNullableBoolean(value: unknown): boolean | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  }
+  return null;
+}
+
 function getColumnLogicalType(
   table: string,
   column: string,
@@ -296,6 +309,17 @@ async function ensureTargetState(client: SqlClient, overwrite: boolean): Promise
 
 async function clearTargetData(client: SqlClient): Promise<void> {
   const tables = [
+    // Non-cascading tables first: they carry no FK to sites/accounts, so
+    // nothing else would clear them. A stale analytics checkpoint left behind
+    // makes the projector skip the freshly imported logs entirely.
+    'analytics_projection_checkpoints',
+    'admin_snapshots',
+    'proxy_debug_attempts',
+    'proxy_debug_traces',
+    'site_hour_usage',
+    'site_day_usage',
+    'model_day_usage',
+    'site_model_context',
     'route_channels',
     'route_group_sources',
     'token_model_availability',
@@ -329,7 +353,7 @@ function buildStatements(
   for (const row of snapshot.accounts.sites) {
     statements.push({
       table: 'sites',
-      columns: ['id', 'name', 'url', 'external_checkin_url', 'platform', 'proxy_url', 'custom_headers', 'custom_headers_override_request_headers', 'status', 'is_pinned', 'sort_order', 'global_weight', 'api_key', 'post_refresh_probe_enabled', 'post_refresh_probe_model', 'post_refresh_probe_scope', 'post_refresh_probe_latency_threshold_ms', 'created_at', 'updated_at'],
+      columns: ['id', 'name', 'url', 'external_checkin_url', 'platform', 'proxy_url', 'custom_headers', 'param_override', 'custom_headers_override_request_headers', 'protocol_profile', 'status', 'is_pinned', 'sort_order', 'global_weight', 'api_key', 'post_refresh_probe_enabled', 'post_refresh_probe_model', 'post_refresh_probe_scope', 'post_refresh_probe_latency_threshold_ms', 'created_at', 'updated_at'],
       values: [
         asNumber(row.id, 0),
         asNullableString(row.name),
@@ -338,7 +362,9 @@ function buildStatements(
         asNullableString(row.platform),
         asNullableString(row.proxyUrl),
         serializeColumnValue('sites', 'custom_headers', row.customHeaders, contract),
+        serializeColumnValue('sites', 'param_override', row.paramOverride, contract),
         asBoolean(row.customHeadersOverrideRequestHeaders, false),
+        serializeColumnValue('sites', 'protocol_profile', row.protocolProfile, contract),
         asNullableString(row.status) ?? 'active',
         asBoolean(row.isPinned, false),
         asNumber(row.sortOrder, 0),
@@ -447,13 +473,16 @@ function buildStatements(
   for (const row of snapshot.accounts.accounts) {
     statements.push({
       table: 'accounts',
-      columns: ['id', 'site_id', 'username', 'access_token', 'api_token', 'balance', 'balance_used', 'quota', 'unit_cost', 'value_score', 'status', 'is_pinned', 'sort_order', 'checkin_enabled', 'last_checkin_at', 'last_balance_refresh', 'extra_config', 'created_at', 'updated_at'],
+      columns: ['id', 'site_id', 'username', 'access_token', 'api_token', 'oauth_provider', 'oauth_account_key', 'oauth_project_id', 'balance', 'balance_used', 'quota', 'unit_cost', 'value_score', 'status', 'is_pinned', 'sort_order', 'checkin_enabled', 'last_checkin_at', 'last_balance_refresh', 'extra_config', 'created_at', 'updated_at'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.siteId, 0),
         asNullableString(row.username),
         asNullableString(row.accessToken),
         asNullableString(row.apiToken),
+        asNullableString(row.oauthProvider),
+        asNullableString(row.oauthAccountKey),
+        asNullableString(row.oauthProjectId),
         asNumber(row.balance, 0),
         asNumber(row.balanceUsed, 0),
         asNumber(row.quota, 0),
@@ -510,14 +539,20 @@ function buildStatements(
   for (const row of snapshot.accounts.modelAvailability) {
     statements.push({
       table: 'model_availability',
-      columns: ['id', 'account_id', 'model_name', 'available', 'latency_ms', 'checked_at'],
+      columns: ['id', 'account_id', 'model_name', 'available', 'connectivity', 'is_manual', 'latency_ms', 'checked_at', 'consecutive_hard_failures', 'consecutive_successes', 'hard_failure_bits', 'hard_failure_samples'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.accountId, 0),
         asNullableString(row.modelName),
         asBoolean(row.available, false),
+        asNullableBoolean(row.connectivity),
+        asBoolean(row.isManual, false),
         asNumber(row.latencyMs, null),
         asNullableString(row.checkedAt),
+        asNumber(row.consecutiveHardFailures, 0),
+        asNumber(row.consecutiveSuccesses, 0),
+        asNumber(row.hardFailureBits, 0),
+        asNumber(row.hardFailureSamples, 0),
       ],
     });
   }
@@ -525,12 +560,13 @@ function buildStatements(
   for (const row of snapshot.accounts.tokenModelAvailability) {
     statements.push({
       table: 'token_model_availability',
-      columns: ['id', 'token_id', 'model_name', 'available', 'latency_ms', 'checked_at'],
+      columns: ['id', 'token_id', 'model_name', 'available', 'connectivity', 'latency_ms', 'checked_at'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.tokenId, 0),
         asNullableString(row.modelName),
         asBoolean(row.available, false),
+        asNullableBoolean(row.connectivity),
         asNumber(row.latencyMs, null),
         asNullableString(row.checkedAt),
       ],
@@ -560,17 +596,19 @@ function buildStatements(
   for (const row of snapshot.accounts.routeChannels) {
     statements.push({
       table: 'route_channels',
-      columns: ['id', 'route_id', 'account_id', 'token_id', 'source_model', 'priority', 'weight', 'enabled', 'manual_override', 'success_count', 'fail_count', 'total_latency_ms', 'total_cost', 'last_used_at', 'last_selected_at', 'last_fail_at', 'consecutive_fail_count', 'cooldown_level', 'cooldown_until'],
+      columns: ['id', 'route_id', 'account_id', 'token_id', 'oauth_route_unit_id', 'source_model', 'priority', 'weight', 'enabled', 'manual_override', 'request_override_rules', 'success_count', 'fail_count', 'total_latency_ms', 'total_cost', 'last_used_at', 'last_selected_at', 'last_fail_at', 'consecutive_fail_count', 'cooldown_level', 'cooldown_until'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.routeId, 0),
         asNumber(row.accountId, 0),
         asNumber(row.tokenId, null),
+        asNumber(row.oauthRouteUnitId, null),
         asNullableString(row.sourceModel),
         asNumber(row.priority, 0),
         asNumber(row.weight, 10),
         asBoolean(row.enabled, true),
         asBoolean(row.manualOverride, false),
+        serializeColumnValue('route_channels', 'request_override_rules', row.requestOverrideRules, contract),
         asNumber(row.successCount, 0),
         asNumber(row.failCount, 0),
         asNumber(row.totalLatencyMs, 0),
@@ -600,24 +638,35 @@ function buildStatements(
   for (const row of snapshot.accounts.proxyLogs) {
     statements.push({
       table: 'proxy_logs',
-      columns: ['id', 'route_id', 'channel_id', 'account_id', 'downstream_api_key_id', 'model_requested', 'model_actual', 'status', 'http_status', 'latency_ms', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'estimated_cost', 'billing_details', 'error_message', 'retry_count', 'created_at'],
+      columns: ['id', 'route_id', 'channel_id', 'account_id', 'downstream_api_key_id', 'token_id', 'model_requested', 'model_actual', 'status', 'http_status', 'is_stream', 'first_byte_latency_ms', 'latency_ms', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'cache_read_tokens', 'cache_creation_tokens', 'reasoning_effort', 'estimated_cost', 'billing_details', 'client_family', 'client_app_id', 'client_app_name', 'client_confidence', 'error_message', 'request_trace_id', 'retry_count', 'created_at'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.routeId, null),
         asNumber(row.channelId, null),
         asNumber(row.accountId, null),
         asNumber((row as any).downstreamApiKeyId ?? (row as any).downstream_api_key_id, null),
+        asNumber(row.tokenId, null),
         asNullableString(row.modelRequested),
         asNullableString(row.modelActual),
         asNullableString(row.status),
         asNumber(row.httpStatus, null),
+        asNullableBoolean(row.isStream),
+        asNumber(row.firstByteLatencyMs, null),
         asNumber(row.latencyMs, null),
         asNumber(row.promptTokens, null),
         asNumber(row.completionTokens, null),
         asNumber(row.totalTokens, null),
+        asNumber(row.cacheReadTokens, null),
+        asNumber(row.cacheCreationTokens, null),
+        asNullableString(row.reasoningEffort),
         asNumber(row.estimatedCost, null),
         serializeColumnValue('proxy_logs', 'billing_details', row.billingDetails, contract),
+        asNullableString(row.clientFamily),
+        asNullableString(row.clientAppId),
+        asNullableString(row.clientAppName),
+        asNullableString(row.clientConfidence),
         asNullableString(row.errorMessage),
+        asNullableString(row.requestTraceId),
         asNumber(row.retryCount, 0),
         asNullableString(row.createdAt),
       ],
@@ -673,19 +722,30 @@ function buildStatements(
   for (const row of snapshot.accounts.downstreamApiKeys) {
     statements.push({
       table: 'downstream_api_keys',
-      columns: ['id', 'name', 'key', 'description', 'enabled', 'expires_at', 'max_cost', 'used_cost', 'max_requests', 'used_requests', 'supported_models', 'allowed_route_ids', 'site_weight_multipliers', 'allowed_site_ids', 'allowed_credential_refs', 'last_used_at', 'created_at', 'updated_at'],
+      columns: ['id', 'name', 'key', 'description', 'group_name', 'tags', 'enabled', 'expires_at', 'max_cost', 'used_cost', 'max_requests', 'used_requests', 'max_rpm', 'max_inflight', 'max_daily_requests', 'max_daily_cost', 'daily_used_requests', 'daily_used_cost', 'daily_window_date', 'sensitive_word_detection', 'supported_models', 'model_mappings', 'allowed_route_ids', 'site_weight_multipliers', 'allowed_site_ids', 'allowed_credential_refs', 'last_used_at', 'created_at', 'updated_at'],
       values: [
         asNumber(row.id, 0),
         asNullableString(row.name),
         asNullableString(row.key),
         asNullableString(row.description),
+        asNullableString(row.groupName),
+        serializeColumnValue('downstream_api_keys', 'tags', row.tags, contract),
         asBoolean(row.enabled, true),
         asNullableString(row.expiresAt),
         asNumber(row.maxCost, null),
         asNumber(row.usedCost, 0),
         asNumber(row.maxRequests, null),
         asNumber(row.usedRequests, 0),
+        asNumber(row.maxRpm, null),
+        asNumber(row.maxInflight, null),
+        asNumber(row.maxDailyRequests, null),
+        asNumber(row.maxDailyCost, null),
+        asNumber(row.dailyUsedRequests, 0),
+        asNumber(row.dailyUsedCost, 0),
+        asNullableString(row.dailyWindowDate),
+        asNullableBoolean(row.sensitiveWordDetection),
         serializeColumnValue('downstream_api_keys', 'supported_models', row.supportedModels, contract),
+        serializeColumnValue('downstream_api_keys', 'model_mappings', row.modelMappings, contract),
         serializeColumnValue('downstream_api_keys', 'allowed_route_ids', row.allowedRouteIds, contract),
         serializeColumnValue('downstream_api_keys', 'site_weight_multipliers', row.siteWeightMultipliers, contract),
         serializeColumnValue('downstream_api_keys', 'allowed_site_ids', row.allowedSiteIds, contract),
