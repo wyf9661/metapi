@@ -266,7 +266,26 @@ export async function waitForPublicUrlHealthy(publicUrl: string, timeoutMs = 600
   return false;
 }
 
+/**
+ * readStateFile runs on every request (isLikelyTunnelRequest → status): the
+ * readFileSync + JSON.parse + existsSync pair per request was pure event-loop
+ * tax. Memoize it for a couple of seconds and invalidate on writes from this
+ * process, so the status page still reflects start/stop immediately.
+ */
+const STATE_CACHE_TTL_MS = 2_000;
+let stateFileCache: { at: number; value: TunnelStateFile } | null = null;
+
 function readStateFile(): TunnelStateFile {
+  const now = Date.now();
+  if (stateFileCache && now - stateFileCache.at < STATE_CACHE_TTL_MS) {
+    return stateFileCache.value;
+  }
+  const value = readStateFileUncached();
+  stateFileCache = { at: now, value };
+  return value;
+}
+
+function readStateFileUncached(): TunnelStateFile {
   try {
     if (!existsSync(statePath())) {
       return {
@@ -305,6 +324,7 @@ function readStateFile(): TunnelStateFile {
 function writeStateFile(next: TunnelStateFile) {
   ensureDirs();
   writeFileSync(statePath(), JSON.stringify(next, null, 2), 'utf8');
+  stateFileCache = { at: Date.now(), value: next };
 }
 
 function writePid(pid: number | null) {
@@ -1038,8 +1058,18 @@ export function getCloudflareTunnelStatus(): TunnelStatus {
     downloading: downloadInProgress,
     downloadProgress,
     lastError: lastError || state.lastError,
-    binaryPath: existsSync(binaryPath()) ? binaryPath() : null,
+    binaryPath: resolveBinaryPathCached(),
   };
+}
+
+/** The binary path only changes on (re)download; one stat per request is waste. */
+let binaryPathCache: { at: number; value: string | null } | null = null;
+function resolveBinaryPathCached(): string | null {
+  const now = Date.now();
+  if (binaryPathCache && now - binaryPathCache.at < 30_000) return binaryPathCache.value;
+  const value = existsSync(binaryPath()) ? binaryPath() : null;
+  binaryPathCache = { at: now, value };
+  return value;
 }
 
 export async function setTunnelDashboardAccess(enabled: boolean): Promise<void> {
