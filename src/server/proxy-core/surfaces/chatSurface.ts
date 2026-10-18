@@ -615,14 +615,18 @@ export async function handleChatSurfaceRequest(
         return endpointStrategy.tryRecover(ctx);
       };
       const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
-      // Per-site first-byte window: fast sites (trusted TTFT profile) get a 30s
-      // floor so a stalled attempt fails over quickly; slow sites keep the
-      // configured ceiling. No sample / too few samples = full window.
+      // Per-site first-byte window: 5x the site's own streaming TTFT EWMA,
+      // clamped to [30s, configured ceiling]. No sample / too few samples =
+      // full window.
       const siteTtftSample = getPerformanceShadowMetrics({
         routeId: selected.channel.routeId,
         siteId: selected.site.id,
         modelName: requestedModel,
-        isStream: true,
+        // 性能档案按 stream/nonstream 分桶记录（写入侧 sharedSurface 用
+        // `isStream === true`），非流式桶从不写 TTFT 样本。这里必须用真实
+        // 请求形态查询，否则非流式请求会读到流式桶的 EWMA、被 30s 地板
+        // 截断（慢而健康的非流式补全被误判超时）。
+        isStream: isStream === true,
       });
       const adaptiveTtftMs = siteTtftSample
         && siteTtftSample.sampleCount >= PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES

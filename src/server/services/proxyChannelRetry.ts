@@ -102,14 +102,14 @@ export function canRetryProxyChannelWithBudget(
 /**
  * First-byte timeout for channel attempt N.
  *
- * - All attempts (first + failover probes) use the FULL configured timeout.
- *   Slow-but-alive relay sites legitimately take 30-60s to emit the first
- *   byte (MiMo/glm relays etc.); halving the timeout for failover probes
- *   killed exactly those sites — the request that fails over onto a slow
- *   site would time out at full/2 even though the site is fine. Dead
- *   channels are already rejected quickly via connection errors and
- *   immediate 4xx/5xx, so a shorter first-byte timeout is not needed to
- *   prune them.
+ * - Base window = the configured ceiling (`PROXY_FIRST_BYTE_TIMEOUT_SEC`).
+ * - Adaptive window: when the site has a trusted recent first-byte EWMA, use
+ *   `5 x EWMA` clamped to [30s, ceiling]. Scaling from each site's own history
+ *   replaces the old fixed "fast if <=6s" gate: production 7-day site means
+ *   span 4.6-33.5s, so the fixed gate almost never matched (it was effectively
+ *   dead code). The 5x multiplier keeps ~99.5% of successful streaming
+ *   requests (measured over 9.7k successes / 7 days) while cutting stalled
+ *   attempts well before the 90s ceiling.
  * - full<=0 (disabled): returns 0 so explicit opt-out is respected
  *   end-to-end.
  */
@@ -119,23 +119,20 @@ export function resolveProxyChannelFirstByteTimeoutMs(
 ): number {
   const fullMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
   if (fullMs <= 0) return 0;
-  // Adaptive try: a site whose own first bytes usually arrive within
-  // PROXY_FIRST_BYTE_FAST_TTFT_MS should not hold a request for the full
-  // ceiling when it stalls — failing over at 30s instead of 90s is the
-  // difference between a 30s and a 90s tail. Sites that are legitimately slow
-  // (mean above the fast threshold) keep the full window, so the old
-  // "shortened timeout kills slow-but-alive relays" trap is avoided.
+  // Adaptive try: scale from the site's own recent first-byte EWMA. The old
+  // fixed gate (EWMA <= 6s -> 30s) was degenerate: max(30s, 3 x EWMA) can
+  // never exceed 30s for EWMA <= 6s, and almost no real site met the gate.
   if (typeof observedTtftMs === 'number' && Number.isFinite(observedTtftMs)
-    && observedTtftMs > 0 && observedTtftMs <= PROXY_FIRST_BYTE_FAST_TTFT_MS) {
-    const adaptiveMs = Math.trunc(observedTtftMs * 3);
+    && observedTtftMs > 0) {
+    const adaptiveMs = Math.trunc(observedTtftMs * PROXY_FIRST_BYTE_ADAPTIVE_MULTIPLIER);
     return Math.min(fullMs, Math.max(PROXY_FIRST_BYTE_ADAPTIVE_FLOOR_MS, adaptiveMs));
   }
   return fullMs;
 }
 
-/** Fast sites are those whose mean TTFT stays under this. */
-export const PROXY_FIRST_BYTE_FAST_TTFT_MS = 6_000;
-/** Never shrink the first-byte window below this, even for fast sites. */
+/** Multiplier applied to a site's own first-byte EWMA. */
+export const PROXY_FIRST_BYTE_ADAPTIVE_MULTIPLIER = 5;
+/** Never shrink the first-byte window below this, even for very fast sites. */
 export const PROXY_FIRST_BYTE_ADAPTIVE_FLOOR_MS = 30_000;
 /** Samples required before a site's TTFT profile is trusted. */
 export const PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES = 5;

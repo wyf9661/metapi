@@ -134,16 +134,22 @@ describe('proxyChannelRetry', () => {
 
 
 describe('proxyChannelRetry adaptive first-byte window', () => {
-  it('shrinks the window for trusted fast sites but never below the floor', () => {
+  it('scales the window from the site EWMA but never below the floor', () => {
     (config as any).proxyFirstByteTimeoutSec = 60;
-    // Fast site: mean TTFT 1.2s -> floor applies (30s), not the 60s ceiling.
+    // Very fast site (1.2s) -> 5x = 6s, floor applies.
     expect(resolveProxyChannelFirstByteTimeoutMs(0, 1_200)).toBe(30_000);
+    // Mid site (8s) -> 40s, below the 60s ceiling.
+    expect(resolveProxyChannelFirstByteTimeoutMs(0, 8_000)).toBe(40_000);
+    // 10s -> 50s.
+    expect(resolveProxyChannelFirstByteTimeoutMs(0, 10_000)).toBe(50_000);
   });
 
-  it('keeps the full window for slow or unknown sites', () => {
+  it('caps at the configured ceiling and keeps it for unknown sites', () => {
     (config as any).proxyFirstByteTimeoutSec = 60;
-    // Slow site (mean 12s) keeps the configured ceiling.
+    // 12s x 5 = 60s: exactly the ceiling.
     expect(resolveProxyChannelFirstByteTimeoutMs(0, 12_000)).toBe(60_000);
+    // Slower site -> capped at the ceiling, never extended.
+    expect(resolveProxyChannelFirstByteTimeoutMs(0, 20_000)).toBe(60_000);
     // No sample -> unchanged behaviour.
     expect(resolveProxyChannelFirstByteTimeoutMs(0, null)).toBe(60_000);
   });
