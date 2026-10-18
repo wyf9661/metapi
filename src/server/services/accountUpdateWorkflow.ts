@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { startBackgroundTask } from './backgroundTaskService.js';
+import { invalidateModelPricingCache } from './modelPricingService.js';
 import {
   convergeAccountMutation,
   rebuildRoutesBestEffort,
@@ -41,6 +42,11 @@ export async function applyAccountUpdateWorkflow(input: AccountUpdateWorkflowInp
     .set(persistedUpdates)
     .where(eq(schema.accounts.id, input.accountId))
     .run();
+
+  // Credential or endpoint edits change what the site's pricing API returns for
+  // this account: drop its cached catalog instead of pricing from stale data
+  // for up to the cache TTL (10 min, or an hour while SWR serves the old copy).
+  invalidateModelPricingCache({ accountId: input.accountId });
 
   if (input.deferConvergence) {
     // A credential edit used to run model discovery (up to ~30 upstream

@@ -82,7 +82,7 @@ export function resolveEffectiveUnitCost(
     modelName,
     tokenGroup: candidate.token?.tokenGroup ?? null,
   });
-  if (catalogCost != null && catalogCost > 0) {
+  if (catalogCost != null) {
     return {
       unitCost: Math.max(catalogCost, MIN_EFFECTIVE_UNIT_COST),
       source: 'catalog',

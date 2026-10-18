@@ -238,8 +238,10 @@ function normalizePricingModels(rawModels: unknown[]): Map<string, PricingModel>
     if (!modelName) continue;
 
     const quotaType = toPositiveInt((raw as any).quota_type);
-    const modelRatio = toNumber((raw as any).model_ratio, 1);
-    const completionRatio = toNumber((raw as any).completion_ratio, 1);
+    // Keep an explicit 0: free models/groups bill at 0× and must not be
+    // inflated to 1× (the fallback path already preserves 0 the same way).
+    const modelRatio = normalizeRatio((raw as any).model_ratio, 1);
+    const completionRatio = normalizeRatio((raw as any).completion_ratio, 1);
     const cacheRatio = normalizeRatio(
       (raw as any).cache_ratio ?? (raw as any).cacheRatio,
       1,
@@ -271,8 +273,8 @@ function normalizePricingModels(rawModels: unknown[]): Map<string, PricingModel>
     models.set(modelName, {
       modelName,
       quotaType,
-      modelRatio: modelRatio > 0 ? modelRatio : 1,
-      completionRatio: completionRatio > 0 ? completionRatio : 1,
+      modelRatio,
+      completionRatio,
       cacheRatio,
       cacheCreationRatio,
       modelPrice: normalizeModelPrice((raw as any).model_price),
@@ -384,6 +386,35 @@ async function fetchCommonPricing(baseUrl: string, token?: string, _sitePlatform
 
 function getCacheKey(input: EstimateProxyCostInput): string {
   return `${input.site.id}:${input.account.id}`;
+}
+
+/**
+ * Drop cached price catalogs for a site and/or account. The cache key carries
+ * only (siteId, accountId), so after editing a site URL/platform or rotating
+ * credentials the old catalog would otherwise keep pricing requests for up to
+ * the TTL (10 min, or 1 h while stale-while-revalidate keeps serving it).
+ */
+export function invalidateModelPricingCache(
+  filter: { siteId?: number | null; accountId?: number | null } = {},
+): void {
+  const { siteId, accountId } = filter;
+  if (siteId == null && accountId == null) {
+    pricingCache.clear();
+    routingReferenceCostCache.clear();
+    return;
+  }
+  const matches = (key: string): boolean => {
+    const [rawSiteId, rawAccountId] = key.split(':');
+    if (siteId != null && Number(rawSiteId) !== Number(siteId)) return false;
+    if (accountId != null && Number(rawAccountId) !== Number(accountId)) return false;
+    return true;
+  };
+  for (const key of Array.from(pricingCache.keys())) {
+    if (matches(key)) pricingCache.delete(key);
+  }
+  for (const key of Array.from(routingReferenceCostCache.keys())) {
+    if (matches(key)) routingReferenceCostCache.delete(key);
+  }
 }
 
 function normalizeModelKey(modelName: string): string {
@@ -522,7 +553,7 @@ export function getCachedModelRoutingReferenceCost(input: {
     return null;
   }
 
-  const model = cached.models.get(normalizeModelKey(input.modelName));
+  const model = resolveModelInMap(cached.models, input.modelName);
   if (!model) return null;
 
   // Bill the routing reference at the token's bound group ratio, mirroring
@@ -534,11 +565,25 @@ export function getCachedModelRoutingReferenceCost(input: {
     cached.groupRatio,
     input.tokenGroup ?? null,
   );
-  if (!Number.isFinite(cost) || cost <= 0) {
+  // Keep an exact 0 (free group) as a valid reference cost; only a negative
+  // or non-finite value counts as "no price".
+  if (!Number.isFinite(cost) || cost < 0) {
     return null;
   }
 
   return cost;
+}
+
+/** Case-insensitive model lookup: catalog keys keep their original casing
+ * (GPT-4o, Claude-3.5-Sonnet), so a lowercased key alone must not be trusted. */
+function resolveModelInMap(models: Map<string, PricingModel>, modelName: string): PricingModel | null {
+  const exact = models.get(modelName);
+  if (exact) return exact;
+  const normalized = normalizeModelKey(modelName);
+  for (const [name, model] of models.entries()) {
+    if (normalizeModelKey(name) === normalized) return model;
+  }
+  return null;
 }
 
 function resolveModel(modelName: string, data: PricingData): PricingModel | null {

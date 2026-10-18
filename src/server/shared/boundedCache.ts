@@ -17,6 +17,8 @@ export interface BoundedCache<K, V> {
   set(key: K, value: V): void;
   delete(key: K): boolean;
   clear(): void;
+  /** Live keys, in recency order (for targeted invalidation). */
+  keys(): IterableIterator<K>;
 }
 
 export function createBoundedCache<K, V>(maxEntries: number): BoundedCache<K, V> {
@@ -53,6 +55,9 @@ export function createBoundedCache<K, V>(maxEntries: number): BoundedCache<K, V>
     },
     clear() {
       store.clear();
+    },
+    keys() {
+      return store.keys();
     },
   };
 }

@@ -7,6 +7,7 @@ import { invalidateSiteProxyCache, parseSiteProxyUrlInput } from '../../services
 import { formatUtcSqlDateTime, getLocalDayRangeUtc } from '../../services/localTimeService.js';
 import { getTodayIncomeValue } from '../../services/todayIncomeRewardService.js';
 import { invalidateTokenRouterCache } from '../../services/tokenRouter.js';
+import { invalidateModelPricingCache } from '../../services/modelPricingService.js';
 import { scheduleRouteDecisionRefresh } from '../../services/routeDecisionRefreshScheduler.js';
 import { parseSiteParamOverrideInput } from '../../services/siteParamOverride.js';
 import { parseSiteCustomHeadersInput } from '../../services/siteCustomHeaders.js';
@@ -418,9 +419,12 @@ function aggregateSiteSubscription(
 }
 
 export async function sitesRoutes(app: FastifyInstance) {
-  function invalidateSiteCaches() {
+  function invalidateSiteCaches(siteId?: number) {
     invalidateSiteProxyCache();
     invalidateTokenRouterCache();
+    // Site URL/platform edits change the pricing source; without this the old
+    // catalog keeps pricing requests for up to the cache TTL.
+    if (siteId != null) invalidateModelPricingCache({ siteId });
   }
 
   async function applySiteStatusSideEffects(
@@ -1077,7 +1081,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       await applySiteStatusSideEffects(id, existingSite.name, normalizedStatus);
     }
 
-    invalidateSiteCaches();
+    invalidateSiteCaches(id);
     await invalidateAccountsSnapshot();
     // Global weight change affects routing probabilities; schedule a lightweight refresh.
     if (weightChanged) scheduleRouteDecisionRefresh();
@@ -1157,7 +1161,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Site not found' });
     }
     await deleteSiteAndRelatedData(id);
-    invalidateSiteCaches();
+    invalidateSiteCaches(id);
     return { success: true };
   });
 
@@ -1196,6 +1200,7 @@ export async function sitesRoutes(app: FastifyInstance) {
         if (action === 'delete') {
           // deleteSiteAndRelatedData has cascade deletion — keep sequential.
           await deleteSiteAndRelatedData(id);
+          invalidateModelPricingCache({ siteId: id });
         } else {
           const nextStatus = action === 'enable' ? 'active' : 'disabled';
           await db.update(schema.sites)
