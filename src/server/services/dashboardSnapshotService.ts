@@ -8,6 +8,7 @@ import {
   getLocalHourAnchor,
   getLocalHourRangeStartUtc,
   getLocalRangeStartDayKey,
+  toLocalDayKeyFromStoredUtc,
 } from './localTimeService.js';
 import {
   readSnapshotCache,
@@ -287,14 +288,11 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       .all(),
     db
       .select({
-        day: sql<string>`substr(${schema.checkinLogs.createdAt}, 1, 10)`,
-        success: sql<number>`coalesce(sum(case when ${schema.checkinLogs.status} = 'success' then 1 else 0 end), 0)`,
-        failed: sql<number>`coalesce(sum(case when ${schema.checkinLogs.status} = 'failed' then 1 else 0 end), 0)`,
+        createdAt: schema.checkinLogs.createdAt,
+        status: schema.checkinLogs.status,
       })
       .from(schema.checkinLogs)
       .where(gte(schema.checkinLogs.createdAt, trendSinceUtc))
-      .groupBy(sql`substr(${schema.checkinLogs.createdAt}, 1, 10)`)
-      .orderBy(sql`substr(${schema.checkinLogs.createdAt}, 1, 10)`)
       .all(),
   ]);
 
@@ -316,11 +314,24 @@ async function loadDashboardSummaryPayload(): Promise<DashboardSummaryPayload> {
       calls: Math.round(Number(row.calls || 0)),
       tokens: Math.round(Number(row.tokens || 0)),
     })),
-    dailyCheckin: dailyCheckinRows.map((row: any) => ({
-      day: String(row.day || ''),
-      success: Math.round(Number(row.success || 0)),
-      failed: Math.round(Number(row.failed || 0)),
-    })),
+    dailyCheckin: (() => {
+      // checkin_logs.created_at is stored UTC; dailyTrend uses local-day keys.
+      // Bucketing the check-ins by the UTC date string shifted every check-in
+      // made between 00:00 and 08:00 Asia/Shanghai into the previous day, so
+      // the two series on the same chart disagreed. Aggregate in local time.
+      const byDay = new Map<string, { success: number; failed: number }>();
+      for (const row of dailyCheckinRows as Array<{ createdAt: string | null; status: string | null }>) {
+        const day = toLocalDayKeyFromStoredUtc(row.createdAt);
+        if (!day) continue;
+        const bucket = byDay.get(day) ?? { success: 0, failed: 0 };
+        if (row.status === 'success') bucket.success += 1;
+        else if (row.status === 'failed') bucket.failed += 1;
+        byDay.set(day, bucket);
+      }
+      return Array.from(byDay.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([day, counts]) => ({ day, ...counts }));
+    })(),
     proxy24h: {
       success: proxySuccess,
       failed: proxyFailed,
