@@ -37,7 +37,10 @@ export default function PaginationControls({
   const isMobile = useIsMobile();
   // 769–1200 的窄桌面同样放不下一整行（信息/跳转/下一页会被挤到第二行），
   // 用同一套紧凑布局：上一页 / 页码 / 下一页 同行对称，其余居中换行。
-  const isCompact = isMobile || useIsMobile(1200);
+  // 两个 Hook 都必须无条件调用：在 `||` 右侧短路会让跨 768px 缩放时
+  // Hook 数量在两次渲染间变化（"Rendered more/fewer hooks"）。
+  const isNarrowViewport = useIsMobile(1200);
+  const isCompact = isMobile || isNarrowViewport;
   const defaultPageSizeOptions = isMobile ? MOBILE_PAGE_SIZE_OPTIONS : PAGE_SIZE_OPTIONS;
   const pageSizeOptions = pageSizeOptionsProp && pageSizeOptionsProp.length > 0
     ? pageSizeOptionsProp
