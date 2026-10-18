@@ -797,8 +797,6 @@ async function doRefreshModelsForAccount(
     }
   };
 
-  await clearExistingAvailability();
-
   // Collect manual model names so discovered models that collide are skipped (unique index).
   const manualModelNames = new Set(
     (await db.select({ modelName: schema.modelAvailability.modelName })
@@ -818,6 +816,11 @@ async function doRefreshModelsForAccount(
   if (account.status !== 'active' && !options?.allowInactive) {
     return buildSkippedRefreshResult(accountId, 'adapter_or_status', '平台不可用或账号未激活');
   }
+
+  // Only wipe the previous availability once we know this refresh will run:
+  // the skip paths above must not leave the account with zero models (and
+  // therefore zero routes) until the next full pass.
+  await clearExistingAvailability();
 
   if (oauth?.provider === 'codex') {
     const checkedAt = new Date().toISOString();
@@ -1744,6 +1747,24 @@ export async function rebuildTokenRoutesFromAvailability() {
   let removedChannels = 0;
   let removedRoutes = 0;
 
+  // accountId -> siteId for disabled-model force removal: one query for the
+  // whole rebuild. It used to run inside the per-model loop, turning a rebuild
+  // over 1000 models into 1000 full accounts scans.
+  const accountSiteIds = new Map<number, number>();
+  const allAccounts = await db.select({
+    id: schema.accounts.id,
+    siteId: schema.accounts.siteId,
+  }).from(schema.accounts).all();
+  for (const row of allAccounts) {
+    accountSiteIds.set(row.id, row.siteId);
+  }
+  const channelsByRouteId = new Map<number, typeof channels>();
+  for (const channel of channels) {
+    const list = channelsByRouteId.get(channel.routeId);
+    if (list) list.push(channel);
+    else channelsByRouteId.set(channel.routeId, [channel]);
+  }
+
   for (const [modelName, candidateMap] of modelCandidates.entries()) {
     let route = routes.find((r: any) => (r.routeMode || 'pattern') !== 'explicit_group' && r.modelPattern === modelName);
     if (!route) {
@@ -1760,7 +1781,7 @@ export async function rebuildTokenRoutesFromAvailability() {
       createdRoutes++;
     }
 
-    const routeChannels = channels.filter((channel: any) => channel.routeId === route.id);
+    const routeChannels = channelsByRouteId.get(route.id) ?? [];
     const desiredKeys = new Set(Array.from(candidateMap.keys()));
 
     for (const [candidateKey, candidate] of candidateMap.entries()) {
@@ -1783,18 +1804,11 @@ export async function rebuildTokenRoutesFromAvailability() {
       const created = await db.select().from(schema.routeChannels).where(eq(schema.routeChannels.id, insertedId)).get();
       if (!created) continue;
       channels.push(created);
+      const routeChannelList = channelsByRouteId.get(route.id);
+      if (routeChannelList) routeChannelList.push(created);
+      else channelsByRouteId.set(route.id, [created]);
       createdChannels++;
       desiredKeys.add(candidateKey);
-    }
-
-    // accountId -> siteId for disabled-model force removal (include all active accounts)
-    const accountSiteIds = new Map<number, number>();
-    const allAccounts = await db.select({
-      id: schema.accounts.id,
-      siteId: schema.accounts.siteId,
-    }).from(schema.accounts).all();
-    for (const row of allAccounts) {
-      accountSiteIds.set(row.id, row.siteId);
     }
 
     for (const channel of routeChannels) {
@@ -1812,7 +1826,10 @@ export async function rebuildTokenRoutesFromAvailability() {
 
       if (!forceRemoveDisabled && !channel.tokenId) {
         const preferred = await getPreferredAccountToken(channel.accountId);
-        if (preferred && desiredKeys.has(`${channel.accountId}:${preferred.id}`)) {
+        // Reuse the one channel-key builder: a hand-built key that omitted the
+        // `::sourceModel` suffix was always false, so this branch never ran and
+        // every rebuild deleted + recreated the channel (resetting its stats).
+        if (preferred && desiredKeys.has(buildChannelKey({ ...channel, tokenId: preferred.id }))) {
           await db.update(schema.routeChannels)
             .set({ tokenId: preferred.id })
             .where(eq(schema.routeChannels.id, channel.id))
@@ -1838,7 +1855,7 @@ export async function rebuildTokenRoutesFromAvailability() {
       continue;
     }
 
-    const routeChannelCount = channels.filter((channel: any) => channel.routeId === route.id).length;
+    const routeChannelCount = (channelsByRouteId.get(route.id) ?? []).length;
     if (routeChannelCount > 0) {
       removedChannels += routeChannelCount;
     }
