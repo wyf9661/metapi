@@ -1947,6 +1947,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.put<{ Body: BackupWebdavConfigBody }>('/api/settings/backup/webdav', async (request, reply) => {
+    if (rejectTunnelAdminAction(request, reply, '修改 WebDAV 备份配置')) return reply;
     try {
       const parsedBody = parseBackupWebdavConfigPayload(request.body);
       if (!parsedBody.success) {
@@ -1978,6 +1979,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: { type?: string } }>('/api/settings/backup/webdav/export', async (request, reply) => {
+    if (rejectTunnelAdminAction(request, reply, '从 WebDAV 导出备份')) return reply;
     try {
       const parsedBody = parseBackupWebdavExportPayload(request.body);
       if (!parsedBody.success) {
