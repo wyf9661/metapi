@@ -8,6 +8,7 @@ import {
   REQUEST_BODY_UPLOAD_ENCODING_HEADER,
   REQUEST_BODY_UPLOAD_ID_HEADER,
   REQUEST_BODY_UPLOAD_MAX_TOTAL_BYTES,
+  REQUEST_BODY_UPLOAD_MAX_PENDING_UPLOADS,
   REQUEST_BODY_UPLOAD_MIN_BYTES,
   REQUEST_BODY_UPLOAD_PART_COUNT_HEADER,
   REQUEST_BODY_UPLOAD_PART_INDEX_HEADER,
@@ -136,6 +137,57 @@ describe('striped request body upload', () => {
       expect(rejected.ok).toBe(false);
       expect(rejected.ok === false && rejected.statusCode).toBe(413);
       expect(__getChunkedBodyUploadStatsForTests()).toEqual({ pendingUploads: 0, bufferedBytes: 0 });
+    });
+
+    it('applies the buffered-bytes cap to newly created uploads too', () => {
+      // Regression: the cap used to be checked only when appending to an
+      // existing upload, so every fresh uploadId started its own 32MB budget
+      // and a single downstream key could exhaust process memory.
+      const partSize = Math.floor(REQUEST_BODY_UPLOAD_MAX_TOTAL_BYTES * 0.6);
+      const first = storeUploadedBodyPart({
+        uploadId: 'u-global-1',
+        index: 0,
+        partCount: 2,
+        sha256: 'a'.repeat(64),
+        encoding: 'gzip',
+        bytes: Buffer.allocUnsafe(partSize),
+      });
+      expect(first).toEqual({ ok: true });
+
+      const second = storeUploadedBodyPart({
+        uploadId: 'u-global-2',
+        index: 0,
+        partCount: 2,
+        sha256: 'b'.repeat(64),
+        encoding: 'gzip',
+        bytes: Buffer.allocUnsafe(partSize),
+      });
+      expect(second.ok).toBe(false);
+      expect(second.ok === false && second.statusCode).toBe(413);
+    });
+
+    it('caps the number of concurrently pending uploads', () => {
+      for (let i = 0; i < REQUEST_BODY_UPLOAD_MAX_PENDING_UPLOADS; i += 1) {
+        expect(storeUploadedBodyPart({
+          uploadId: `u-many-${i}`,
+          index: 0,
+          partCount: 2,
+          sha256: 'c'.repeat(64),
+          encoding: 'gzip',
+          bytes: Buffer.from([i % 256]),
+        })).toEqual({ ok: true });
+      }
+
+      const overflow = storeUploadedBodyPart({
+        uploadId: 'u-many-overflow',
+        index: 0,
+        partCount: 2,
+        sha256: 'd'.repeat(64),
+        encoding: 'gzip',
+        bytes: Buffer.from([0]),
+      });
+      expect(overflow.ok).toBe(false);
+      expect(overflow.ok === false && overflow.statusCode).toBe(429);
     });
 
     it('drops an upload whose digest does not match the assembled body', () => {

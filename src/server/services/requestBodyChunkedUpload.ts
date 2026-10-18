@@ -53,6 +53,14 @@ export const REQUEST_BODY_UPLOAD_MAX_PARTS = 4;
 export const REQUEST_BODY_UPLOAD_MAX_TOTAL_BYTES = 32 * 1024 * 1024;
 
 /**
+ * Bound on concurrently pending uploads. The byte cap alone is not enough —
+ * a client can open many tiny uploads (one entry object each), so without
+ * this any authenticated downstream key could grow the registry without
+ * limit. Combined caps: entries × per-part + buffered ≤ bounded.
+ */
+export const REQUEST_BODY_UPLOAD_MAX_PENDING_UPLOADS = 64;
+
+/**
  * How long a partly uploaded body is kept. The sender waits for every part
  * before it dispatches the request that consumes the upload, so an upload that
  * is still incomplete this long after its first part is debris.
@@ -335,6 +343,14 @@ export function storeUploadedBodyPart(input: {
   if (!entry) {
     if (bytes.length > REQUEST_BODY_UPLOAD_MAX_TOTAL_BYTES) {
       return rejectPart(413, 'Uploaded body exceeds the accepted size');
+    }
+    // The global byte cap must also gate upload creation: otherwise every new
+    // uploadId starts a fresh 32MB budget and the "global" guard never fires.
+    if (bufferedUploadBytes + bytes.length > REQUEST_BODY_UPLOAD_MAX_TOTAL_BYTES) {
+      return rejectPart(413, 'Uploaded body exceeds the accepted size');
+    }
+    if (pendingBodyUploads.size >= REQUEST_BODY_UPLOAD_MAX_PENDING_UPLOADS) {
+      return rejectPart(429, 'Too many pending uploads');
     }
     ensureSweepTimer();
     pendingBodyUploads.set(uploadId, {
