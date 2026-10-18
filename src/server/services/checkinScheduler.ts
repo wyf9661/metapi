@@ -38,6 +38,36 @@ let checkinCronPassStartedAtMs = 0;
 // wedged pass silently disabled refreshes for 15h+ (2026-09-12).
 const PASS_STALE_AFTER_MS = 20 * 60_000;
 
+/**
+ * A wedged pass cannot be cancelled, so the stale unlock may orphan at most
+ * this many full sweeps per task kind before it starts refusing new ones. A
+ * permanently unreachable upstream (e.g. a hung solver fetch) would otherwise
+ * stack one additional full scan every 20 minutes, forever.
+ */
+const MAX_ORPHANED_PASSES_PER_KIND = 2;
+const orphanedPassesByKind = new Map<string, number>();
+
+/** True when the wedged pass may be replaced; false past the orphan cap. */
+function shouldOrphanStalePass(kind: string): boolean {
+  const count = orphanedPassesByKind.get(kind) ?? 0;
+  if (count >= MAX_ORPHANED_PASSES_PER_KIND) {
+    console.warn(`[Scheduler] ${kind}: stale pass not replaced (${count} orphaned passes still draining)`);
+    return false;
+  }
+  orphanedPassesByKind.set(kind, count + 1);
+  return true;
+}
+
+function releaseOrphanedPass(kind: string): void {
+  const count = orphanedPassesByKind.get(kind) ?? 0;
+  orphanedPassesByKind.set(kind, Math.max(0, count - 1));
+}
+
+/** Track a replaced pass so the orphan counter drops when it eventually ends. */
+function trackOrphanedPass(kind: string, pass: Promise<unknown>): void {
+  void pass.catch(() => undefined).finally(() => releaseOrphanedPass(kind));
+}
+
 const DAILY_SUMMARY_DEFAULT_CRON = '58 23 * * *';
 const LOG_CLEANUP_DEFAULT_CRON = '0 6 * * *';
 const CHECKIN_INTERVAL_POLL_MS = 60_000;
@@ -129,6 +159,8 @@ function createCheckinTask(cronExpr: string) {
       return checkinCronPassInFlight;
     }
     if (checkinCronPassInFlight) {
+      if (!shouldOrphanStalePass('check-in (cron)')) return checkinCronPassInFlight;
+      trackOrphanedPass('check-in (cron)', checkinCronPassInFlight);
       console.log('[Scheduler] Check-in stale (previous pass wedged); starting a fresh pass');
     }
     checkinCronPassStartedAtMs = Date.now();
@@ -201,6 +233,8 @@ async function runIntervalCheckinPass(now = new Date()) {
     return checkinPassInFlight;
   }
   if (checkinPassInFlight) {
+    if (!shouldOrphanStalePass('check-in (interval)')) return checkinPassInFlight;
+    trackOrphanedPass('check-in (interval)', checkinPassInFlight);
     console.log('[Scheduler] Interval check-in stale (previous pass wedged); starting a fresh pass');
   }
   checkinPassStartedAtMs = Date.now();
@@ -302,6 +336,8 @@ function createBalanceTask(cronExpr: string) {
       return balancePassInFlight;
     }
     if (balancePassInFlight) {
+      if (!shouldOrphanStalePass('balance refresh')) return balancePassInFlight;
+      trackOrphanedPass('balance refresh', balancePassInFlight);
       console.log('[Scheduler] Balance refresh stale (previous pass wedged); starting a fresh pass');
     }
     balancePassStartedAtMs = Date.now();
@@ -428,6 +464,8 @@ function createModelRefreshTask(cronExpr: string) {
       return modelRefreshPassInFlight;
     }
     if (modelRefreshPassInFlight) {
+      if (!shouldOrphanStalePass('model refresh')) return modelRefreshPassInFlight;
+      trackOrphanedPass('model refresh', modelRefreshPassInFlight);
       console.log('[Scheduler] Model refresh stale (previous pass wedged); starting a fresh pass');
     }
     modelRefreshPassStartedAtMs = Date.now();
