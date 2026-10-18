@@ -22,6 +22,7 @@ import { config } from '../../config.js';
 import { applyOpenAiServiceTierPolicy } from '../../proxy-core/serviceTierPolicy.js';
 import { asTrimmedString } from '../../shared/trimString.js';
 import { resolveWebsocketReasoningEffort, setCurrentReasoningEffort } from '../../services/reasoningEffort.js';
+import { INTERNAL_TRANSPORT_NONCE, INTERNAL_TRANSPORT_NONCE_HEADER } from '../../proxy-core/internalTransportMarker.js';
 
 
 const installedApps = new WeakSet<FastifyInstance>();
@@ -417,6 +418,7 @@ async function forwardResponsesRequestViaHttp(input: {
   const injectHeaders: Record<string, string | string[]> = {
     ...buildInjectHeaders(input.request),
     [RESPONSES_WEBSOCKET_TRANSPORT_HEADER]: '1',
+    [INTERNAL_TRANSPORT_NONCE_HEADER]: INTERNAL_TRANSPORT_NONCE,
     ...(input.preserveIncrementalMode ? { [RESPONSES_WEBSOCKET_MODE_HEADER]: 'incremental' } : {}),
   };
   if (
@@ -827,7 +829,14 @@ export function ensureResponsesWebsocketTransport(app: FastifyInstance) {
   app.server.on('upgrade', (request, socket, head) => {
     void (async () => {
       const url = new URL(request.url || '/', 'http://localhost');
-      if (url.pathname !== '/v1/responses') return;
+      if (url.pathname !== '/v1/responses') {
+        // Nothing else installs an 'upgrade' listener, so Node will not destroy
+        // the socket for us: an unauthenticated client could pin sockets forever
+        // by upgrading any other path.
+        writeUpgradeHttpError(socket, 404, 'not found');
+        socket.destroy();
+        return;
+      }
       const token = extractWebsocketAuthToken(request, url);
       if (!token) {
         writeUpgradeHttpError(socket, 401, 'Missing Authorization, x-api-key, x-goog-api-key, or key query parameter');

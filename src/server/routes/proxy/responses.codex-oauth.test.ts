@@ -2,6 +2,7 @@ import { zstdCompressSync } from 'node:zlib';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../config.js';
+import { INTERNAL_TRANSPORT_NONCE, INTERNAL_TRANSPORT_NONCE_HEADER } from '../../proxy-core/internalTransportMarker.js';
 import { resetCodexHttpSessionQueue } from '../../proxy-core/runtime/codexHttpSessionQueue.js';
 import { resetCodexSessionResponseStore } from '../../proxy-core/runtime/codexSessionResponseStore.js';
 import { resetProxyChannelCoordinatorState } from '../../services/proxyChannelCoordinator.js';
@@ -1386,6 +1387,7 @@ describe('responses proxy codex oauth refresh', () => {
 
     const stickyHeaders = {
       'x-metapi-responses-websocket-transport': '1',
+      [INTERNAL_TRANSPORT_NONCE_HEADER]: INTERNAL_TRANSPORT_NONCE,
       session_id: 'session-sticky-fast-path-1',
     };
     const ssePayload = createSseResponse([

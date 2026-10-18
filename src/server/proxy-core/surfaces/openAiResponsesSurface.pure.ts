@@ -9,6 +9,7 @@
 import { extractResponsesTerminalResponseId } from '../../transformers/openai/responses/continuation.js';
 import { setCodexSessionResponseId } from '../runtime/codexSessionResponseStore.js';
 import { normalizeInputFileBlock } from '../../transformers/shared/inputFile.js';
+import { INTERNAL_TRANSPORT_NONCE, INTERNAL_TRANSPORT_NONCE_HEADER } from '../internalTransportMarker.js';
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -31,9 +32,17 @@ export function getCodexSessionHeaderValue(headers: Record<string, string>): str
 }
 
 export function isResponsesWebsocketTransportRequest(headers: Record<string, unknown>): boolean {
-  return Object.entries(headers)
-    .some(([rawKey, rawValue]) => rawKey.trim().toLowerCase() === 'x-metapi-responses-websocket-transport'
-      && String(rawValue).trim() === '1');
+  // The marker alone is client-writable — require the per-process nonce the
+  // transport route injects, so downstream callers cannot skip pre-flight
+  // validation or force whole-stream buffering by faking the header.
+  const read = (name: string): string => {
+    for (const [rawKey, rawValue] of Object.entries(headers)) {
+      if (rawKey.trim().toLowerCase() === name) return String(rawValue).trim();
+    }
+    return '';
+  };
+  if (read('x-metapi-responses-websocket-transport') !== '1') return false;
+  return read(INTERNAL_TRANSPORT_NONCE_HEADER) === INTERNAL_TRANSPORT_NONCE;
 }
 
 export function rememberCodexSessionResponseId(sessionId: string, payload: unknown): void {

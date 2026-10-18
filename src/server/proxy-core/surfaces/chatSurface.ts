@@ -1181,7 +1181,12 @@ export async function handleChatSurfaceRequest(
           rawText += decoder.decode();
 
           const latency = Date.now() - startTime;
-          if (streamResult.status === 'failed') {
+          // A 200 + text/event-stream whose events were all unforwardable
+          // (empty body, keepalive-only) leaves the reply uncommitted — the
+          // lazy SSE start never ran. Treat it as a failed stream: otherwise
+          // the client hangs on an empty 200 while the log claims success.
+          const streamCommitted = isFastifyReplyCommitted(reply);
+          if (streamResult.status === 'failed' || !streamCommitted) {
             clearSurfaceStickyChannel({
             stickySessionKey,
             selected,
@@ -1195,7 +1200,9 @@ export async function handleChatSurfaceRequest(
               downstreamApiKeyId,
               channelId: selected.channel.id,
             });
-            const failureReason = streamResult.errorMessage || 'stream processing failed';
+            const failureReason = streamResult.status === 'failed'
+              ? (streamResult.errorMessage || 'stream processing failed')
+              : 'upstream returned an empty event stream';
             const failureOutcome = await failureToolkit.handleDetectedFailure({
               selected,
             requestedModel,

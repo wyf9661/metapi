@@ -2,6 +2,7 @@ import { zstdCompressSync } from 'node:zlib';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../config.js';
+import { INTERNAL_TRANSPORT_NONCE, INTERNAL_TRANSPORT_NONCE_HEADER } from '../../proxy-core/internalTransportMarker.js';
 import { resetUpstreamEndpointRuntimeState } from '../../services/upstreamEndpointRuntimeMemory.js';
 
 const fetchMock = vi.fn();
@@ -1739,6 +1740,7 @@ describe('chat proxy stream behavior', () => {
       url: '/v1/responses',
       headers: {
         'x-metapi-responses-websocket-transport': '1',
+        [INTERNAL_TRANSPORT_NONCE_HEADER]: INTERNAL_TRANSPORT_NONCE,
       },
       payload: {
         model: 'gpt-5.2',

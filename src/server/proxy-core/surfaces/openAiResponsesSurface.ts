@@ -109,7 +109,7 @@ import {
   getTesterForcedChannelId,
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
-import { canFailoverToNextChannel, isClientDisconnectError, isDownstreamReplyGone, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
+import { canFailoverToNextChannel, endRawReplyQuietly, isClientDisconnectError, isDownstreamReplyGone, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
 import {carriesResponsesFileUrlInput, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, getCodexSessionHeaderValue, isRecord, isResponsesWebsocketTransportRequest, rememberCodexSessionResponseId, shouldRefreshOauthResponsesRequest, wantsNativeResponsesReasoning} from './openAiResponsesSurface.pure.js';
 type UsageSummary = ReturnType<typeof parseProxyUsage>;
 
@@ -1703,6 +1703,14 @@ export async function handleOpenAiResponsesSurfaceRequest(
 		        return reply;
 	      } finally {
 	        channelLease.release();
+	        // A hijacked SSE response that fails before any terminal write (idle
+	        // timeout, parse error, upstream abort) would otherwise never end:
+	        // real clients hang on the open 200 and app.inject() callers (the
+	        // websocket transport) never resolve. Only touch a reply that is
+	        // already committed — an untouched one is still Fastify's to send.
+	        if (isFastifyReplyCommitted(reply)) {
+	          endRawReplyQuietly(reply);
+	        }
 	      }
 	    }
 }
