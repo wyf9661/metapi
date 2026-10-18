@@ -54,7 +54,10 @@ const SENSITIVE_KEYWORDS: string[] = [
   // ── 常见问候 / 探活词 ──
   '你好', '您好', '在吗', '在不在', '有人吗', '在么', '在不',
   'hello', 'hi', 'hey', 'yo', 'hola', 'bonjour', 'hallo', 'ciao',
-  'test', 'testing', 'ping', 'pong', 'probe', 'check', 'alive',
+  // Generic engineering verbs are NOT probe markers on their own: "check the
+  // syntax", "test the parser" and "ping the service" are normal short
+  // requests. Keep only words that are meaningless outside a liveness test.
+  'pong', 'probe', 'alive',
   'ok', 'okay', '123', '1+1', '2+2', '111', '222', '333',
   '收到请回复', '看到请回复', '能听到吗', '听得见吗', '看得到吗',
   '喂', '哈喽', '嗨', '嘿', '在吗在吗', '在吗？', '在吗?', '在吗？',
