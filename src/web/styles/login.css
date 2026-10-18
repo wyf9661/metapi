@@ -359,6 +359,18 @@
   box-shadow: 0 16px 24px rgba(13,148,136, 0.2);
 }
 
+/* The global "uniform control height" rule (.btn-primary { height: 34px })
+   and the mobile .btn rule (min-height: 38px) are sized for toolbars, not for
+   the login hero CTA: they left it 17px shorter than the 51px token input and
+   turned the 16px radius into a thin capsule. Scope the login form's own
+   height so both breakpoints match the input and stay touch-friendly. */
+.login-auth-panel .login-auth-submit {
+  height: 48px;
+  min-height: 48px;
+  padding: 0 16px;
+  font-size: 15px;
+}
+
 .login-auth-note {
   margin-top: 16px;
   font-size: 12px;
