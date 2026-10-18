@@ -18,6 +18,7 @@ import {
   setCodexSessionResponseId,
 } from './codexSessionResponseStore.js';
 import { createCodexWebsocketSessionStore } from './codexWebsocketSessionStore.js';
+import { resolveProxyStreamIdleTimeoutMs } from '../../config.js';
 import { asTrimmedString } from '../../shared/trimString.js';
 import type {
 
@@ -117,18 +118,52 @@ function tryParseJson(raw: string): unknown {
   }
 }
 
+/** Cap on a non-101 upgrade response body: enough for an error page, not a DoS. */
+const UNEXPECTED_RESPONSE_MAX_BYTES = 64 * 1024;
+/** Give up on a stalled non-101 response body after this much silence. */
+const UNEXPECTED_RESPONSE_IDLE_MS = 10_000;
+/** Cap on the websocket upgrade handshake. */
+const SOCKET_OPEN_TIMEOUT_MS = 30_000;
+/** Upper bound on closeSession waiting for an in-flight send to settle. */
+const CLOSE_SESSION_DRAIN_MS = 2_000;
+
 async function readUnexpectedResponseBody(response: IncomingMessage): Promise<string> {
   return await new Promise<string>((resolve) => {
     const chunks: Buffer[] = [];
-    response.on('data', (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    response.once('end', () => {
-      resolve(Buffer.concat(chunks).toString('utf8'));
-    });
-    response.once('error', () => {
-      resolve('');
-    });
+    let bytes = 0;
+    let settled = false;
+    let timer: NodeJS.Timeout | null = null;
+    const finish = (body: string) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      response.off('data', onData);
+      response.off('end', onEnd);
+      response.off('error', onError);
+      response.destroy();
+      resolve(body);
+    };
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => finish(Buffer.concat(chunks).toString('utf8')), UNEXPECTED_RESPONSE_IDLE_MS);
+      timer.unref?.();
+    };
+    const onData = (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      bytes += buffer.length;
+      if (bytes <= UNEXPECTED_RESPONSE_MAX_BYTES) chunks.push(buffer);
+      if (bytes >= UNEXPECTED_RESPONSE_MAX_BYTES) {
+        finish(Buffer.concat(chunks).toString('utf8'));
+        return;
+      }
+      arm();
+    };
+    const onEnd = () => finish(Buffer.concat(chunks).toString('utf8'));
+    const onError = () => finish('');
+    response.on('data', onData);
+    response.once('end', onEnd);
+    response.once('error', onError);
+    arm();
   });
 }
 
@@ -138,7 +173,9 @@ async function waitForSocketOpen(socket: WebSocket): Promise<void> {
     throw new Error('upstream websocket is not open');
   }
   await new Promise<void>((resolve, reject) => {
+    let timer: NodeJS.Timeout | null = null;
     const cleanup = () => {
+      if (timer) clearTimeout(timer);
       socket.off('open', onOpen);
       socket.off('error', onError);
       socket.off('close', onClose);
@@ -168,6 +205,12 @@ async function waitForSocketOpen(socket: WebSocket): Promise<void> {
         ));
       });
     };
+    timer = setTimeout(() => {
+      cleanup();
+      try { socket.terminate(); } catch { /* already closing */ }
+      reject(new Error(`upstream websocket handshake timed out (${SOCKET_OPEN_TIMEOUT_MS / 1000}s)`));
+    }, SOCKET_OPEN_TIMEOUT_MS);
+    timer.unref?.();
     socket.once('open', onOpen);
     socket.once('error', onError);
     socket.once('close', onClose);
@@ -267,14 +310,31 @@ async function sendSessionRequestAttempt(
 ): Promise<CodexWebsocketRuntimeResult> {
   const { socket, reusedSession } = await ensureSessionSocket(session, input);
   const events: Array<Record<string, unknown>> = [];
+  const idleMs = resolveProxyStreamIdleTimeoutMs();
 
   return new Promise<CodexWebsocketRuntimeResult>((resolve, reject) => {
     let settled = false;
+    let idleTimer: NodeJS.Timeout | null = null;
 
     const cleanup = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
       socket.off('message', onMessage);
       socket.off('error', onError);
       socket.off('close', onClose);
+    };
+
+    const armIdleTimer = () => {
+      if (idleMs <= 0) return;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        clearSessionSocket(session, socket);
+        void closeSocket(socket);
+        rejectWith(`upstream websocket idle timeout (${Math.round(idleMs / 1000)}s)`);
+      }, idleMs);
+      idleTimer.unref?.();
     };
 
     const rejectWith = (message: string) => {
@@ -285,6 +345,8 @@ async function sendSessionRequestAttempt(
     };
 
     const onMessage = (payload: WebSocket.RawData) => {
+      // Any frame — including keepalives — proves the upstream is alive.
+      armIdleTimer();
       try {
         const parsed = JSON.parse(String(payload));
         if (!isRecord(parsed)) return;
@@ -334,6 +396,7 @@ async function sendSessionRequestAttempt(
     socket.on('message', onMessage);
     socket.once('error', onError);
     socket.once('close', onClose);
+    armIdleTimer();
 
     socket.send(JSON.stringify(buildCodexWebsocketRequestBody(input.body)), (error?: Error) => {
       if (!error) return;
@@ -412,7 +475,15 @@ export function createCodexWebsocketRuntime(input?: {
     async closeSession(sessionId: string): Promise<void> {
       const session = sessionStore.take(sessionId);
       if (!session) return;
-      await session.queue.catch(() => undefined);
+      // Never block on a send that may never settle — the whole point of this
+      // call is to reclaim the upstream socket once the downstream is gone.
+      await Promise.race([
+        session.queue.catch(() => undefined),
+        new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, CLOSE_SESSION_DRAIN_MS);
+          timer.unref?.();
+        }),
+      ]);
       await closeSocket(session.socket);
       session.socket = null;
       session.socketUrl = null;
