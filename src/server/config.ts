@@ -369,7 +369,8 @@ export function buildFastifyOptions(
       },
     },
     // false | true | hop count — avoid unconditionally trusting client-supplied XFF.
-    // Default preserves legacy trust-all (true); TRUST_PROXY=false disables; TRUST_PROXY_HOPS=N constrains.
+    // Default is false: X-Forwarded-For is ignored unless TRUST_PROXY=true is set
+    // explicitly; TRUST_PROXY_HOPS=N then constrains how many hops are trusted.
     //
     // fastify >= 5.12 no longer accepts a bare number here: it types `trustProxy`
     // as boolean | string | string[] | function and compiles a numeric value to
