@@ -87,10 +87,18 @@ export async function cleanupProgramLogs(retentionDays: number, nowMs = Date.now
       .run()
   ).changes;
 
+  // Check-in history is program-operational too: one row per account per day,
+  // and nothing else ever prunes it.
+  const checkinDeleted = (
+    await db.delete(schema.checkinLogs)
+      .where(lt(schema.checkinLogs.createdAt, cutoffUtc))
+      .run()
+  ).changes;
+
   return {
     retentionDays: normalizedDays,
     cutoffUtc,
-    deleted,
+    deleted: deleted + checkinDeleted,
   };
 }
 
