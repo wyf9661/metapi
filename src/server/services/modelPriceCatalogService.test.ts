@@ -3,6 +3,7 @@ import {
   __setModelsDevPricesForTests,
   lookupModelsDevPrice,
   modelsDevCostToPricingModel,
+  normalizeModelName,
   parseModelsDevPrices,
   syncModelsDevPrices,
   type ModelsDevCost,
@@ -53,6 +54,14 @@ const SAMPLE_PAYLOAD = JSON.stringify({
       },
     },
   },
+  deepseek: {
+    id: 'deepseek',
+    models: {
+      // Dated snapshot listed with its own price: an exact lookup must hit
+      // this entry, not the base model's.
+      'deepseek-v4-flash-0731': { id: 'deepseek-v4-flash-0731', cost: { input: 0.55, output: 2.19 } },
+    },
+  },
   'thirdparty-reseller': {
     id: 'thirdparty-reseller',
     models: {
@@ -60,6 +69,13 @@ const SAMPLE_PAYLOAD = JSON.stringify({
       'gpt-4o': { id: 'gpt-4o', cost: { input: 20, output: 80 } },
       // Third-party-only models still enter the table.
       'unique-thirdparty-model': { id: 'unique-thirdparty-model', cost: { input: 1, output: 2 } },
+      // Relay-style prefixed ids: the model name lives AFTER the slash, so
+      // keying must keep the base name (old rule keyed these under junk
+      // prefixes like `@cf` and lost the model entirely).
+      '@cf/meta/llama-3.1-8b-instruct-fp8': { id: '@cf/meta/llama-3.1-8b-instruct-fp8', cost: { input: 0.05, output: 0.13 } },
+      'stepfun/step-5-preview:free': { id: 'stepfun/step-5-preview:free', cost: { input: 0.1, output: 0.4 } },
+      // Base model of the dated deepseek snapshot above.
+      'deepseek-v4-flash': { id: 'deepseek-v4-flash', cost: { input: 0.2, output: 0.8 } },
     },
   },
 });
@@ -110,6 +126,29 @@ describe('modelPriceCatalogService', () => {
       const prices = parseModelsDevPrices(payload)!;
       expect(prices.has('gpt-4o')).toBe(true);
     });
+
+    it('keys relay-prefixed ids by the base model name, not the prefix', () => {
+      const prices = parseModelsDevPrices(SAMPLE_PAYLOAD)!;
+      // '@cf/meta/llama-3.1-8b-instruct-fp8' must be findable by its name
+      // (the old rule cut at the first '/', keying it under junk '@cf').
+      expect(prices.get('llama-3.1-8b-instruct-fp8')).toEqual({ input: 0.05, output: 0.13 });
+      expect(prices.has('@cf')).toBe(false);
+      // 'stepfun/step-5-preview:free' → base name after the slash, tag dropped.
+      expect(prices.get('step-5-preview')).toEqual({ input: 0.1, output: 0.4 });
+      expect(prices.has('stepfun')).toBe(false);
+    });
+  });
+
+  describe('normalizeModelName', () => {
+    it('takes the last slash segment and drops variant tags', () => {
+      expect(normalizeModelName('cline-free/step-5-preview')).toBe('step-5-preview');
+      expect(normalizeModelName('@cf/deepseek-ai/deepseek-v4-flash-0731')).toBe('deepseek-v4-flash-0731');
+      expect(normalizeModelName('gpt-4o:free')).toBe('gpt-4o');
+      expect(normalizeModelName('qwen3.5:2b')).toBe('qwen3.5');
+      expect(normalizeModelName('NousResearch/hermes-4-405b:thinking')).toBe('hermes-4-405b');
+      expect(normalizeModelName('DeepSeek-V4-Flash-0731')).toBe('deepseek-v4-flash-0731');
+      expect(normalizeModelName('  ')).toBe('');
+    });
   });
 
   describe('lookupModelsDevPrice', () => {
@@ -148,6 +187,39 @@ describe('modelPriceCatalogService', () => {
         cacheRead: 0.3,
       });
       expect(lookupModelsDevPrice('gpt-4o-20250101')).not.toBeNull();
+    });
+
+    it('finds relay-prefixed and tagged requests by their base model name', () => {
+      // Real 14-day flat-fallback population: `cline-free/step-5-preview`
+      // was cut to the junk key `cline-free` and missed the table entirely.
+      __setModelsDevPricesForTests(
+        new Map<string, ModelsDevCost>([
+          ['step-5-preview', { input: 1, output: 2.7 }],
+          ['mimo-v2.6-flash', { input: 0.12, output: 0.25 }],
+        ]),
+      );
+      expect(lookupModelsDevPrice('cline-free/step-5-preview')).toEqual({ input: 1, output: 2.7 });
+      expect(lookupModelsDevPrice('cline-free/mimo-v2.6-flash')).toEqual({ input: 0.12, output: 0.25 });
+      expect(lookupModelsDevPrice('stepfun/step-5-preview:free')).toEqual({ input: 1, output: 2.7 });
+    });
+
+    it('prefers an exact dated table entry, else falls back to the base snapshot price', () => {
+      __setModelsDevPricesForTests(
+        new Map<string, ModelsDevCost>([
+          ['deepseek-v4-flash', { input: 0.2, output: 0.8 }],
+          ['deepseek-v4-flash-0731', { input: 0.55, output: 2.19 }],
+        ]),
+      );
+      // The table lists the snapshot with its own price: exact must win.
+      expect(lookupModelsDevPrice('deepseek-v4-flash-0731')).toEqual({ input: 0.55, output: 2.19 });
+      // MMDD/YYMMDD snapshots with no exact entry fall back to the base price
+      // (the old stripDateSuffix missed MMDD and billed these flat fallback).
+      expect(lookupModelsDevPrice('deepseek-ai/deepseek-v4-flash-0731')).toEqual({ input: 0.55, output: 2.19 });
+      __setModelsDevPricesForTests(
+        new Map<string, ModelsDevCost>([['deepseek-v4-flash', { input: 0.2, output: 0.8 }]]),
+      );
+      expect(lookupModelsDevPrice('DeepSeek-V4-Flash-0731')).toEqual({ input: 0.2, output: 0.8 });
+      expect(lookupModelsDevPrice('deepseek-v4-flash-260731')).toEqual({ input: 0.2, output: 0.8 });
     });
 
     it('returns null for unknown models', () => {

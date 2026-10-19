@@ -21,6 +21,7 @@ import cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
 import { fetch } from 'undici';
 import { db, schema } from '../db/index.js';
+import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { formatUtcSqlDateTime } from './localTimeService.js';
 import type { PricingModel } from './modelPricingService.js';
 import {
@@ -72,18 +73,37 @@ let modelsDevPrices = new Map<string, ModelsDevCost>();
 let syncTask: ScheduledTask | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Lowercase and strip `:free` / `:reasoning` style variant suffixes. */
+/**
+ * Lowercase and reduce a model id to its base name: take the LAST `/`
+ * segment (provider/reseller prefixes like `cline-free/…` or `@cf/meta/…`
+ * are listing noise in the catalog and on relays) and drop the first `:`
+ * variant tag (`:free`, `:reasoning`, `qwen3.5:2b`'s size tag). The old
+ * rule cut at the FIRST `:` or `/`, which threw the model name away and
+ * keyed hundreds of catalog entries under junk prefix keys (`@cf`, `openai`).
+ */
 export function normalizeModelName(modelName: string): string {
-  // Lowercase and strip `:free` / `:reasoning` style variant suffixes.
-  return modelName.trim().replace(/[:/].*$/, '').toLowerCase();
+  const value = String(modelName || '').trim().toLowerCase();
+  if (!value) return '';
+  const slashParts = value.split('/');
+  const last = slashParts[slashParts.length - 1]!;
+  return last.split(':')[0]!.trim();
 }
 
-/** Vendor date/version suffixes: `gpt-4o-2024-08-06`, `claude-3-7-sonnet-20250219`. */
+/**
+ * Vendor date/version snapshots: `gpt-4o-2024-08-06` (ISO),
+ * `claude-3-7-sonnet-20250219` (YYYYMMDD), `deepseek-v4-flash-0731` (MMDD),
+ * `-260731` (YYMMDD). For pricing, a dated id is a snapshot of the base
+ * model and the undated entry's price applies, so the ISO/MM-YYYY forms
+ * come off first, then the shared condition-based snapshot rule (same one
+ * canonicalizeModelName uses) peels the rest. Exact table hits always beat
+ * this fallback, so widening it only changes lookups that used to miss.
+ */
 export function stripDateSuffix(modelName: string): string {
-  // Vendor date/version suffixes: `gpt-4o-2024-08-06`, `claude-3-7-sonnet-20250219`.
-  return modelName
-    .replace(/-\d{4}-\d{2}-\d{2}$/, '')
+  const isoStripped = modelName
+    .replace(/-\d{4}-\d{1,2}-\d{1,2}$/, '')
+    .replace(/-\d{1,2}-\d{4}$/, '')
     .replace(/-\d{8}$/, '');
+  return canonicalizeModelName(isoStripped);
 }
 
 function toNonNegativeNumber(value: unknown, fallback = 0): number {
