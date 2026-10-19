@@ -130,8 +130,10 @@ describe('rebuildTokenRoutesFromAvailability with site disabled models', () => {
 
         expect(rebuild.models).toBe(1);
 
+        // The dated official snapshot normalizes onto its official undated
+        // alias, so the route/pattern name is the canonical base name.
         const route = await db.select().from(schema.tokenRoutes)
-            .where(eq(schema.tokenRoutes.modelPattern, 'claude-sonnet-4-5-20250929'))
+            .where(eq(schema.tokenRoutes.modelPattern, 'claude-sonnet-4-5'))
             .get();
         expect(route).toBeDefined();
 

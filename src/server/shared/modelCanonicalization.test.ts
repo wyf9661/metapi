@@ -34,6 +34,26 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('deepseek-v4-pro-0813')).toBe('deepseek-v4-pro');
     expect(canonicalizeModelName('deepseek-v4-pro-20260731')).toBe('deepseek-v4-pro');
     expect(canonicalizeModelName('glm-5.2-0715')).toBe('glm-5.2');
+    // A new family version must normalize with no code change: 0731, 0813 and
+    // 1017 each needed their own whitelist entry before the rule went generic.
+    expect(canonicalizeModelName('deepseek-v4.1-flash-1017')).toBe('deepseek-v4.1-flash');
+    expect(canonicalizeModelName('DeepSeek-V4.1-Flash-1017')).toBe('deepseek-v4.1-flash');
+    expect(canonicalizeModelName('deepseek-ai/deepseek-v4.1-flash-1017')).toBe('deepseek-v4.1-flash');
+    expect(canonicalizeModelName('deepseek/deepseek-v4.1-flash-1017')).toBe('deepseek-v4.1-flash');
+    expect(canonicalizeModelName('deepseek-v4.1-flash-1017-think')).toBe('deepseek-v4.1-flash-think');
+  });
+
+  it('normalizes date snapshots for every family, not an enumerated list', () => {
+    // Same condition, families that were never on any list.
+    expect(canonicalizeModelName('qwen3.5-plus-20260420')).toBe('qwen3.5-plus');
+    expect(canonicalizeModelName('kimi-k2-0905')).toBe('kimi-k2');
+    expect(canonicalizeModelName('step-3.5-flash-2603')).toBe('step-3.5-flash');
+    expect(canonicalizeModelName('mistral-large-2407')).toBe('mistral-large');
+    expect(canonicalizeModelName('glm-4-9b-0414')).toBe('glm-4-9b');
+    expect(canonicalizeModelName('deepseek-chat-v3-0324')).toBe('deepseek-chat-v3');
+    // Dated official snapshots collapse onto their official undated alias.
+    expect(canonicalizeModelName('claude-sonnet-4-5-20250929')).toBe('claude-sonnet-4-5');
+    expect(canonicalizeModelName('claude-haiku-4-5-20251001')).toBe('claude-haiku-4-5');
   });
 
   it('keeps ollama owner namespaces intact but still merges relay prefixes', () => {
@@ -48,7 +68,7 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('z-ai/glm-5.2:free')).toBe('glm-5.2');
   });
 
-  it('strips stacked decorations iteratively for known families', () => {
+  it('strips stacked decorations iteratively', () => {
     // Channel-ordinal free label after a date snapshot (WeChat 2026-09-09
     // case): deepseek-v4-flash-0731-free-3 used to fail every anchored strip.
     expect(canonicalizeModelName('deepseek-v4-flash-0731-free-3')).toBe('deepseek-v4-flash');
@@ -92,7 +112,17 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('deepseek-v4-flash-fast')).toBe('deepseek-v4-flash-fast');
     // Full ISO date ends in 2-digit day; must not be stripped.
     expect(canonicalizeModelName('gpt-4o-2024-05-13')).toBe('gpt-4o-2024-05-13');
-    // Official snapshot names of other families must stay intact.
-    expect(canonicalizeModelName('claude-sonnet-4-5-20250929')).toBe('claude-sonnet-4-5-20250929');
+  });
+
+  it('keeps dashed calendar dates and MM-YYYY version names intact', () => {
+    // YYYY-MM-DD snapshot dates (openai naming) are the model identity.
+    expect(canonicalizeModelName('gpt-4o-2024-05-13')).toBe('gpt-4o-2024-05-13');
+    expect(canonicalizeModelName('openai/gpt-4o-2024-11-20')).toBe('gpt-4o-2024-11-20');
+    expect(canonicalizeModelName('o3-mini-2025-01-31')).toBe('o3-mini-2025-01-31');
+    // MM-YYYY version labels (command-r-08-2024) are versions, not snapshots.
+    expect(canonicalizeModelName('cohere/command-r-08-2024')).toBe('command-r-08-2024');
+    expect(canonicalizeModelName('cohere/command-r7b-12-2024')).toBe('command-r7b-12-2024');
+    // A name that is nothing but a date has no base to normalize onto.
+    expect(canonicalizeModelName('20260731')).toBe('20260731');
   });
 });

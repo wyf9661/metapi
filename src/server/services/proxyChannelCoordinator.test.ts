@@ -220,7 +220,7 @@ describe('proxyChannelCoordinator', () => {
     const firstStickyKey = proxyChannelCoordinator.buildStickySessionKey({
       clientKind: 'generic',
       sessionId: 'session-0',
-      requestedModel: 'model-0',
+      requestedModel: 'model-x0',
       downstreamPath: '/v1/chat/completions',
       downstreamApiKeyId: 1,
     });
@@ -228,13 +228,16 @@ describe('proxyChannelCoordinator', () => {
       const stickyKey = proxyChannelCoordinator.buildStickySessionKey({
         clientKind: 'generic',
         sessionId: `session-${index}`,
-        requestedModel: `model-${index}`,
+        // `model-x${index}` keeps the trailing segment non-numeric: a bare
+        // `model-1000` would canonicalize to `model` (date-snapshot rule) and
+        // collapse 1001 fixture keys into one, breaking LRU eviction.
+        requestedModel: `model-x${index}`,
         downstreamPath: '/v1/chat/completions',
         downstreamApiKeyId: 1,
       });
       proxyChannelCoordinator.bindStickyChannel(stickyKey, index + 1);
       proxyChannelCoordinator.rememberLastSuccessChannel({
-        requestedModel: `model-${index}`,
+        requestedModel: `model-x${index}`,
         downstreamApiKeyId: 1,
         channelId: index + 1,
       });
@@ -242,11 +245,11 @@ describe('proxyChannelCoordinator', () => {
 
     expect(proxyChannelCoordinator.getStickyChannelId(firstStickyKey)).toBeNull();
     expect(proxyChannelCoordinator.getLastSuccessChannelId({
-      requestedModel: 'model-0',
+      requestedModel: 'model-x0',
       downstreamApiKeyId: 1,
     })).toBeNull();
     expect(proxyChannelCoordinator.getLastSuccessChannelId({
-      requestedModel: 'model-2000',
+      requestedModel: 'model-x2000',
       downstreamApiKeyId: 1,
     })).toBe(2_001);
   });

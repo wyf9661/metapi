@@ -27,66 +27,77 @@ export function canonicalizeModelName(modelName: string): string {
   const value = normalizeBaseModelName(modelName);
   if (!value) return '';
 
-  return stripKnownFamilyDecorations(value) || value;
+  return stripPackagingLabels(value) || value;
 }
 
-// Real model families whose date-snapshot / free-label aliases may be merged.
-// True capability variants (think/fast/highspeed/fast-preview) are kept
-// intact; context-window decorations (1m/262k) are treated as unreliable
-// packaging labels — channels claiming them are not guaranteed to serve the
-// full window and clients never request them (2026-09-09 analysis), so they
-// are stripped wherever they appear inside a family name.
-const KNOWN_FAMILY_BASE = [
-  'deepseek-v4-flash',
-  'deepseek-v4-pro',
-  'glm-5\\.2',
-  'glm-5\\.3',
-  'minimax-m2\\.1',
-  'minimax-m2\\.5',
-  'minimax-m2\\.7',
-  'minimax-m3',
-].join('|');
-const KNOWN_FAMILY_ACTION_VARIANTS =
-  '(?:-(?:fast|think|fast-think|highspeed|fast-preview))*';
-const KNOWN_FAMILY_RE = new RegExp(`^(${KNOWN_FAMILY_BASE})${KNOWN_FAMILY_ACTION_VARIANTS}$`);
-const FAMILY_PREFIX_RE = new RegExp(`^(${KNOWN_FAMILY_BASE})(?=-|$)`);
-
+// Free labels are packaging noise, not model capability differences,
+// including the channel-ordinal forms some relays append (…-free-3).
 const FREE_LABEL_RE = /-(?:free(?:-\d+)?|:free)$/i;
-// Decorations that may sit at the tail (deepseek-v4-flash-0731, glm-5.3-1M)
-// or between the base and a kept variant (deepseek-v4-flash-0731-think,
-// glm-5.2-1m-think): date snapshots and context-window labels. Stripped
-// segment-wise inside a family name.
-const DECORATION_SEGMENT_RE = /-(?:\d{4}|\d{6}|\d{8}|1m|262k)(?=-|$)/gi;
+
+// A maximal run of dash-separated digit-only segments that spells a calendar
+// date is part of the official model identity and stays intact:
+// gpt-4o-2024-05-13 (YYYY-MM-DD) and command-r-08-2024 (MM-YYYY) keep every
+// segment. A LONE digit segment of 4/6/8 length is a snapshot label instead —
+// deepseek-v4-flash-0731 (MMDD), -260731 (YYMMDD), -20260731 (YYYYMMDD) —
+// packaging noise wherever it sits in the name.
+const CALENDAR_DATE_RUN_RE = /^(?:\d{4}-\d{1,2}-\d{1,2}|\d{4}-\d{1,2}|\d{1,2}-\d{4})$/;
+const SNAPSHOT_SEGMENT_RE = /^\d{4}$|^\d{6}$|^\d{8}$/;
+// Context-window labels are the same class of noise: channels claiming a
+// window are not guaranteed to serve it and clients never request the suffix.
+const CONTEXT_WINDOW_SEGMENT_RE = /^(?:1m|262k)$/i;
+const DIGIT_SEGMENT_RE = /^\d+$/;
 
 /**
- * Strips stacked decorations from a known-family model name, one layer at a
- * time, until the remainder is a clean family name (true action variants
- * intact). Handles compound aliases such as deepseek-v4-flash-0731-free-3
- * (date snapshot + free channel ordinal), deepseek-v4-pro-0813-think (date
- * snapshot before a think variant) and glm-5.2-1m-think (context-window
- * label between the base and a think variant) — a single anchored replace
- * never matched these because each layer hides the previous one's anchor.
- * Names of other families (claude/gpt/grok date snapshots) never match
- * KNOWN_FAMILY_RE after stripping, so they fall through untouched.
+ * Drops snapshot/context-window segments from anywhere in the name in one
+ * pass. Digit runs that spell a calendar date are skipped as a whole, and a
+ * strip that would erase the entire name (a bare "20260731") is refused.
  */
-function stripKnownFamilyDecorations(name: string): string | null {
+function stripDecorationSegments(name: string): string {
+  const segments = name.split('-');
+  const drop = segments.map(() => false);
+  let index = 0;
+  while (index < segments.length) {
+    const segment = segments[index]!;
+    if (!DIGIT_SEGMENT_RE.test(segment)) {
+      if (CONTEXT_WINDOW_SEGMENT_RE.test(segment)) drop[index] = true;
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end + 1 < segments.length && DIGIT_SEGMENT_RE.test(segments[end + 1]!)) {
+      end += 1;
+    }
+    const run = segments.slice(index, end + 1).join('-');
+    if (!CALENDAR_DATE_RUN_RE.test(run)) {
+      for (let cursor = index; cursor <= end; cursor += 1) {
+        if (SNAPSHOT_SEGMENT_RE.test(segments[cursor]!)) drop[cursor] = true;
+      }
+    }
+    index = end + 1;
+  }
+  if (!drop.some(Boolean)) return name;
+  const rebuilt = segments.filter((_, position) => !drop[position]).join('-');
+  return rebuilt.trim() ? rebuilt : name;
+}
+
+/**
+ * Normalization is condition-based for EVERY family, never an enumerated
+ * list: the 0731 / 0813 / 1017 deepseek snapshots each needed their own
+ * whitelist entry before this. Free labels and date snapshots stack
+ * (deepseek-v4-flash-0731-free-3, deepseek-v4.1-flash-1017-think), so peel
+ * one layer at a time until the name stops changing.
+ */
+function stripPackagingLabels(name: string): string {
   let current = name;
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (KNOWN_FAMILY_RE.test(current)) return current;
-
     const freeStripped = current.replace(FREE_LABEL_RE, '');
     let next = freeStripped !== current ? freeStripped : current;
-
-    // Segment-level stripping only inside a family name, so other families'
-    // date-bearing names (gpt-4o-2024-05-13, grok-4.20-0309-*) never lose
-    // their segments.
-    if (next === current && FAMILY_PREFIX_RE.test(current)) {
-      const segmentStripped = current.replace(DECORATION_SEGMENT_RE, '');
-      if (segmentStripped !== current) next = segmentStripped;
+    if (next === current) {
+      const decorationStripped = stripDecorationSegments(current);
+      if (decorationStripped !== current) next = decorationStripped;
     }
-
-    if (next === current) return null;
+    if (next === current) return current;
     current = next;
   }
-  return null;
+  return current;
 }

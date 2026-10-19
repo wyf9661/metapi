@@ -105,7 +105,9 @@ describe('/api/models/marketplace', () => {
         }>;
       }>;
     };
-    const model = body.models.find((item) => item.name === 'claude-sonnet-4-5-20250929');
+    // The dated official snapshot normalizes onto its official undated alias
+    // (date-snapshot suffixes are packaging labels for every family).
+    const model = body.models.find((item) => item.name === 'claude-sonnet-4-5');
     expect(model).toBeDefined();
     expect(model?.accountCount).toBe(1);
     expect(model?.tokenCount).toBe(0);
