@@ -11,6 +11,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { config } from '../config.js';
 import type { ChannelRow, RouteMatch, RouteRow } from './tokenRouterTypes.js';
+import { invalidateModelsSurfaceCache } from './modelsSurfaceCache.js';
 import {
   isExplicitGroupRoute,
   normalizeChannelSourceModel,
@@ -239,6 +240,10 @@ export function invalidateTokenRouterCache(): void {
     loadedAt: 0,
     routes: [],
   };
+  // /v1/models listings are derived from route availability: any invalidation
+  // that can add/remove models or flip channel availability must also drop the
+  // response cache.
+  invalidateModelsSurfaceCache();
   routeMatchCache.clear();
   getStableFirstLastSelectedSiteByKey().clear();
   getStableFirstObservationProgressByKey().clear();

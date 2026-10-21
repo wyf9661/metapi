@@ -1,3 +1,10 @@
+import {
+  buildModelsSurfaceCacheKey,
+  readModelsSurfaceCache,
+  runModelsSurfaceCompute,
+  writeModelsSurfaceCache,
+} from '../../services/modelsSurfaceCache.js';
+
 function isSearchPseudoModel(modelName: string): boolean {
   const normalized = (modelName || '').trim().toLowerCase();
   if (!normalized) return false;
@@ -35,11 +42,25 @@ async function readVisibleModels(input: ModelsSurfaceInput): Promise<string[]> {
   return allowed;
 }
 
+// The visible-model list re-decides routing for every exposed model — per-request
+// work that clients poll on short fuses (listing probes with 5s timeouts). Cache
+// the model-id list per (response format, downstream policy) with a short TTL and
+// single-flight compute; the response envelope (including `created` timestamps)
+// is still rendered fresh from `now` on every call. Empty lists are never cached,
+// so the refresh-and-reread recovery below keeps running on that path.
 export async function listModelsSurface(input: ModelsSurfaceInput) {
-  let models = await readVisibleModels(input);
-  if (models.length === 0) {
-    await input.refreshModelsAndRebuildRoutes();
-    models = await readVisibleModels(input);
+  const cacheKey = buildModelsSurfaceCacheKey(input.responseFormat, input.downstreamPolicy);
+  let models = readModelsSurfaceCache(cacheKey, Date.now());
+  if (!models) {
+    models = await runModelsSurfaceCompute(cacheKey, async () => {
+      let computed = await readVisibleModels(input);
+      if (computed.length === 0) {
+        await input.refreshModelsAndRebuildRoutes();
+        computed = await readVisibleModels(input);
+      }
+      writeModelsSurfaceCache(cacheKey, computed, Date.now());
+      return computed;
+    });
   }
 
   const now = input.now?.() ?? new Date();
