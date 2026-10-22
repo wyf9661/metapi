@@ -17,7 +17,7 @@ function entryFrom(models: string[]) {
     const slash = lower.split('/').filter(Boolean);
     const base = slash.length > 1 ? slash[slash.length - 1]! : lower;
     const free = /:free$/i.test(model) || /-free$/i.test(model);
-    const canonical = base.replace(/:free$/i, '').replace(/-free$/i, '');
+    const canonical = base.replace(/:latest$/i, '').replace(/:free$/i, '').replace(/-free$/i, '');
     if (canonical) {
       (free ? canonicalFree : canonicalNonFree).add(canonical);
     }
@@ -127,6 +127,19 @@ describe('isModelDisabledForSite', () => {
     expect(canonicalLookupKeyPreservingFree('stepfun/step-5-preview:free')).toBe('step-5-preview:free');
     // provider prefix still collapses (the point of the second key)
     expect(canonicalLookupKeyPreservingFree('qwen/qwen3.8-max-preview')).toBe('qwen3.8-max-preview');
+  });
+
+  it('free-preserving key strips relay prefixes and the default :latest tag', () => {
+    // 9router ids arrive as <provider alias>/<upstream id>; a disable on the
+    // discovered name has to keep matching after canonicalization drops the
+    // alias and ollama's default tag.
+    const index = indexFrom([[316, ['caic/linux6200/bge-reranker-v2-m3:latest']]]);
+    expect(canonicalLookupKeyPreservingFree('caic/linux6200/bge-reranker-v2-m3:latest')).toBe('bge-reranker-v2-m3');
+    expect(isModelDisabledForSite(index, 316, 'bge-reranker-v2-m3', 380)).toBe(true);
+    expect(isModelDisabledForSite(index, 316, 'caic/linux6200/bge-reranker-v2-m3:latest', 380)).toBe(true);
+    // Real tags are not the default tag and must keep separating artifacts.
+    expect(canonicalLookupKeyPreservingFree('caic/hy-mt2:7b')).toBe('hy-mt2:7b');
+    expect(isModelDisabledForSite(index, 316, 'hy-mt2:7b', 380)).toBe(false);
   });
 
   it('free-preserving key keeps a non-free disable off the free sibling', () => {

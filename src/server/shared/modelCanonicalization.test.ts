@@ -56,11 +56,28 @@ describe('model canonicalization', () => {
     expect(canonicalizeModelName('claude-haiku-4-5-20251001')).toBe('claude-haiku-4-5');
   });
 
-  it('keeps ollama owner namespaces intact but still merges relay prefixes', () => {
-    // owner/model:tag — the owner is part of the model identity, keep it.
-    expect(canonicalizeModelName('linux6200/bge-reranker-v2-m3:latest')).toBe('linux6200/bge-reranker-v2-m3:latest');
-    expect(canonicalizeModelName('quentinz/bge-large-zh-v1.5:latest')).toBe('quentinz/bge-large-zh-v1.5:latest');
-    expect(canonicalizeModelName('Quentinz/Bge-Large-Zh-V1.5:Latest')).toBe('quentinz/bge-large-zh-v1.5:latest');
+  it('drops relay and vendor prefixes on tagged ids, keeping only real tags', () => {
+    // 9router composes ids as <provider alias>/<upstream id>. The alias is
+    // packaging noise even when the upstream id carries an ollama tag; the old
+    // tag guard treated the whole string as an owner namespace and kept it
+    // (2026-10-22: caic/linux6200/bge-reranker-v2-m3:latest).
+    expect(canonicalizeModelName('caic/linux6200/bge-reranker-v2-m3:latest')).toBe('bge-reranker-v2-m3');
+    expect(canonicalizeModelName('caic/quentinz/bge-large-zh-v1.5:latest')).toBe('bge-large-zh-v1.5');
+    expect(canonicalizeModelName('Quentinz/Bge-Large-Zh-V1.5:Latest')).toBe('bge-large-zh-v1.5');
+    expect(canonicalizeModelName('caic/hy-mt2:7b')).toBe('hy-mt2:7b');
+    expect(canonicalizeModelName('caic/qwen2.5:3b')).toBe('qwen2.5:3b');
+    expect(canonicalizeModelName('caic/mxbai-embed-large:335m')).toBe('mxbai-embed-large:335m');
+    expect(canonicalizeModelName('caic/qwen3-vl:8b')).toBe('qwen3-vl:8b');
+    // Vendor prefixes on service-class tags are the same class of noise.
+    expect(canonicalizeModelName('openai/gpt-5:batch')).toBe('gpt-5:batch');
+    expect(canonicalizeModelName('anthropic/claude-opus-5:batch')).toBe('claude-opus-5:batch');
+    expect(canonicalizeModelName('deepseek/deepseek-v4.1-flash:US')).toBe('deepseek-v4.1-flash:us');
+    // Ollama's default tag names the same artifact as the untagged model.
+    expect(canonicalizeModelName('linux6200/bge-reranker-v2-m3:latest')).toBe('bge-reranker-v2-m3');
+    expect(canonicalizeModelName('bge-reranker-v2-m3:latest')).toBe('bge-reranker-v2-m3');
+    // Real tags still separate artifacts.
+    expect(canonicalizeModelName('qwen2.5:7b')).toBe('qwen2.5:7b');
+    expect(canonicalizeModelName('qwen2.5:3b')).toBe('qwen2.5:3b');
     // A bare relay prefix (no tag) still merges to the base model.
     expect(canonicalizeModelName('z-ai/glm-5.2')).toBe('glm-5.2');
     expect(canonicalizeModelName('deepseek-ai/deepseek-v4-flash')).toBe('deepseek-v4-flash');
