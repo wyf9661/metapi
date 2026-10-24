@@ -35,7 +35,7 @@ export const RETRYABLE_TIMEOUT_PATTERNS: RegExp[] = [
  * routing-health classification read the same definition.
  */
 export function isEmptyContentFailureText(upstreamErrorText?: string | null): boolean {
-  return /empty content/i.test(upstreamErrorText || '');
+  return /empty content|exhausted the output budget/i.test(upstreamErrorText || '');
 }
 
 /**

@@ -29,7 +29,7 @@ import { buildUpstreamUrl } from '../orchestration/upstreamRequest.js';
 import { recordOauthQuotaHeadersSnapshot, recordOauthQuotaResetHint } from '../../services/oauth/quota.js';
 import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
-import { recordPerformanceShadowSample } from '../../services/performanceShadow.js';
+import { recordPerformanceShadowSample, recordPerformanceShadowAttempt } from '../../services/performanceShadow.js';
 import { observeContextOverflowFailure, observeSuccessfulPromptUsage } from '../../services/siteContextCapabilityService.js';
 import { readRuntimeResponseText } from '../executors/types.js';
 import { selectProxyChannelForAttempt } from '../channelSelection.js';
@@ -571,6 +571,19 @@ export async function recordSurfaceSuccess(input: {
     firstByteLatencyMs: input.firstByteLatencyMs,
     completionTokens: resolvedUsage.completionTokens,
   });
+  // Keep the raw attempt too: the EWMA above cannot describe a relay that fans
+  // out to several internal upstreams (mixture distribution), while the window
+  // estimator reads the survival curve built from these attempts.
+  recordPerformanceShadowAttempt({
+    key: {
+      routeId: input.selected.channel.routeId,
+      siteId: input.selected.site.id,
+      modelName: input.modelName,
+      isStream: input.isStream === true,
+    },
+    outcome: 'success',
+    firstByteLatencyMs: input.firstByteLatencyMs,
+  });
   // A successful upstream call proves the credential works; clear any
   // pending token-expiry sightings for this account.
   if (input.selected.account?.id != null) {
@@ -692,6 +705,32 @@ export function createSurfaceFailureToolkit(input: {
       downstreamApiKeyId: input.downstreamApiKeyId,
       traceId: input.traceId,
     });
+    // Feed the attempt back into the window estimator. A timeout is a CENSORED
+    // observation (`T >= window`), and censoring is exactly what the survival
+    // curve needs — without it the estimator never learns that the current
+    // window is too tight, which is how a site got stuck at 30s while its real
+    // first byte had drifted to 40s at peak load.
+    const key = {
+      routeId: args.selected.channel.routeId,
+      siteId: args.selected.site?.id ?? null,
+      modelName: args.modelRequested,
+      isStream: args.isStream === true,
+    };
+    if (key.siteId != null && key.siteId > 0) {
+      const timeoutMatch = /first byte timeout \((\d+)s\)/i.exec(args.errorMessage || '');
+      if (timeoutMatch) {
+        recordPerformanceShadowAttempt({
+          key: { ...key, siteId: key.siteId },
+          outcome: 'timeout',
+          budgetMs: Number(timeoutMatch[1]) * 1000,
+        });
+      } else {
+        recordPerformanceShadowAttempt({
+          key: { ...key, siteId: key.siteId },
+          outcome: 'error',
+        });
+      }
+    }
   };
 
   /**

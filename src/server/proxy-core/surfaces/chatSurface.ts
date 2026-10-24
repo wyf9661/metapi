@@ -56,10 +56,11 @@ import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
 import {
   PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES,
+  PROXY_FIRST_BYTE_WINDOW_FLOOR_MS,
   getProxyMaxChannelRetries,
   resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
-import { getPerformanceShadowMetrics } from '../../services/performanceShadow.js';
+import { estimateFirstByteWindowMs, getPerformanceShadowMetrics } from '../../services/performanceShadow.js';
 import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce, shouldInPlaceRetryEmptyContentOnce } from '../../services/proxyRetryPolicy.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
@@ -615,19 +616,30 @@ export async function handleChatSurfaceRequest(
         return endpointStrategy.tryRecover(ctx);
       };
       const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);
-      // Per-site first-byte window: 5x the site's own streaming TTFT EWMA,
-      // clamped to [30s, configured ceiling]. No sample / too few samples =
-      // full window.
-      const siteTtftSample = getPerformanceShadowMetrics({
+      // Per-site first-byte window. The estimator reads the survival curve of
+      // raw attempts (successes + censored timeouts) and minimises time per
+      // usable answer, so it tracks peak-hour drift without a multiplier guess
+      // and can never exceed the configured ceiling. Fewer than
+      // FIRST_BYTE_WINDOW_MIN_SAMPLES attempts -> fall back to the EWMA rule.
+      const shadowKey = {
         routeId: selected.channel.routeId,
         siteId: selected.site.id,
         modelName: requestedModel,
         // 性能档案按 stream/nonstream 分桶记录（写入侧 sharedSurface 用
         // `isStream === true`），非流式桶从不写 TTFT 样本。这里必须用真实
-        // 请求形态查询，否则非流式请求会读到流式桶的 EWMA、被 30s 地板
-        // 截断（慢而健康的非流式补全被误判超时）。
+        // 请求形态查询，否则非流式请求会读到流式桶的 EWMA、被地板截断
+        // （慢而健康的非流式补全被误判超时）。
         isStream: isStream === true,
-      });
+      };
+      const configuredCeilingMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
+      const estimatedWindowMs = isStream === true && configuredCeilingMs > 0
+        ? estimateFirstByteWindowMs({
+          key: shadowKey,
+          floorMs: PROXY_FIRST_BYTE_WINDOW_FLOOR_MS,
+          ceilingMs: configuredCeilingMs,
+        })
+        : null;
+      const siteTtftSample = getPerformanceShadowMetrics(shadowKey);
       const adaptiveTtftMs = siteTtftSample
         && siteTtftSample.sampleCount >= PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES
         ? siteTtftSample.ttftEwmaMs
@@ -637,7 +649,8 @@ export async function handleChatSurfaceRequest(
         requestOverrideRules: selected.channel.requestOverrideRules ?? null,
         paramOverride: selected.site.paramOverride ?? null,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
-        firstByteTimeoutMs: resolveProxyChannelFirstByteTimeoutMs(retryCount, adaptiveTtftMs),
+        firstByteTimeoutMs: estimatedWindowMs
+          ?? resolveProxyChannelFirstByteTimeoutMs(retryCount, adaptiveTtftMs),
         bodyReadOptions: bodyReadGuards,
         endpointCandidates,
         buildRequest: (endpoint) => buildEndpointRequest(endpoint),

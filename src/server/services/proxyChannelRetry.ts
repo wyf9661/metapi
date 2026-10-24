@@ -134,6 +134,19 @@ export function resolveProxyChannelFirstByteTimeoutMs(
 export const PROXY_FIRST_BYTE_ADAPTIVE_MULTIPLIER = 5;
 /** Never shrink the first-byte window below this, even for very fast sites. */
 export const PROXY_FIRST_BYTE_ADAPTIVE_FLOOR_MS = 30_000;
+/**
+ * Floor for the survival-curve estimator. Deliberately lower than the legacy
+ * EWMA floor: when a relay fans out to several internal upstreams, the fast
+ * mode is what the user actually experiences, and cutting at the fast mode
+ * then retrying beats waiting for the slow mode. Measured over 5 days of
+ * production logs the per-site optimum was 5-20s for every site except one
+ * (45s), never 30s+.
+ */
+export const PROXY_FIRST_BYTE_WINDOW_FLOOR_MS = 5_000;
+/** Consecutive TIMEOUT failures tolerated before abandoning channel failover.
+ *  Timeouts are the failure class that failover helps most; the 2-strike rule
+ *  used for credential/model errors killed healthy candidates at peak load. */
+export const PROXY_TIMEOUT_FAILOVER_STREAK_STOP_DEFAULT = 4;
 /** Samples required before a site's TTFT profile is trusted. */
 export const PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES = 5;
 
@@ -177,5 +190,10 @@ export function noteFailoverFailureAndShouldStop(
   } else {
     state.lowValueStreak = 0;
   }
-  return state.lowValueStreak >= Math.max(1, Math.trunc(stopAfter));
+  // Timeouts get a looser limit: a slow relay at peak load is exactly the case
+  // channel failover fixes, so two of them must not end the request.
+  const limit = decision.class === 'timeout'
+    ? Math.max(1, Math.trunc(PROXY_TIMEOUT_FAILOVER_STREAK_STOP_DEFAULT))
+    : Math.max(1, Math.trunc(stopAfter));
+  return state.lowValueStreak >= limit;
 }

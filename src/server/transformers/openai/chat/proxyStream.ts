@@ -233,9 +233,17 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     finalized = true;
 
     if (shouldFailEmptyChatCompletion()) {
-      const message = hasReasoningChatOutput()
-        ? 'Upstream returned empty content (reasoning only)'
-        : 'Upstream returned empty content';
+      // Reasoning-only + finish_reason=length means the thinking chain ate the
+      // whole max_tokens budget: the channel is healthy and the fix is a larger
+      // output budget (or a smaller reasoning effort), not a different channel.
+      // Keep it distinct from a relay that answers with nothing at all.
+      const hitOutputBudget = hasReasoningChatOutput() && [...chatAggregateState?.choices.values() ?? []]
+        .some((choice) => choice.finishReason === 'length');
+      const message = hitOutputBudget
+        ? 'Upstream reasoning exhausted the output budget (finish_reason=length)'
+        : (hasReasoningChatOutput()
+          ? 'Upstream returned empty content (reasoning only)'
+          : 'Upstream returned empty content');
       markFailed({
         error: {
           message,
