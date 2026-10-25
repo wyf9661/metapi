@@ -23,12 +23,6 @@ vi.mock('undici', () => ({
   Agent: class {},
 }));
 
-vi.mock('./oauth/refreshSingleflight.js', () => ({
-  refreshOauthAccessTokenSingleflight: async () => {
-    throw new Error('unexpected oauth refresh in singleflight test');
-  },
-}));
-
 type DbModule = typeof import('../db/index.js');
 type ModelServiceModule = typeof import('./modelService.js');
 

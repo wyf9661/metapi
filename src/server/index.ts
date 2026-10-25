@@ -31,7 +31,6 @@ import { testRoutes } from './routes/api/test.js';
 
 import { downstreamApiKeysRoutes } from './routes/api/downstreamApiKeys.js';
 import { peerRoutes } from './routes/api/peer.js';
-import { oauthRoutes } from './routes/api/oauth.js';
 import { siteAnnouncementsRoutes } from './routes/api/siteAnnouncements.js';
 import { updateCenterRoutes } from './routes/api/updateCenter.js';
 import { registerProbeLogsRoutes } from './routes/api/probeLogs.js';
@@ -72,8 +71,6 @@ function installProcessCrashHandlers(): void {
 
 installProcessCrashHandlers();
 import { ensureDefaultSitesSeeded } from './services/defaultSiteSeedService.js';
-import { ensureOauthIdentityBackfill } from './services/oauth/oauthIdentityBackfill.js';
-import { startOAuthLoopbackCallbackServers, stopOAuthLoopbackCallbackServers } from './services/oauth/localCallbackServer.js';
 import { startSiteAnnouncementPolling, stopSiteAnnouncementPolling } from './services/siteAnnouncementPollingService.js';
 import {
   startChannelProbeScheduler,
@@ -100,10 +97,6 @@ import {
 } from './services/routeDecisionRefreshScheduler.js';
 import { fanoutSiteWideDisabledModels } from './services/siteDisabledModels.js';
 import { migrateLegacyNotifyChannels } from './services/notifyService.js';
-import {
-  startOauthTokenRefreshScheduler,
-  stopOauthTokenRefreshScheduler,
-} from './services/oauth/oauthRefreshScheduler.js';
 import {
   ensureProxyChannelAffinityLoaded,
 } from './services/proxyChannelCoordinator.js';
@@ -264,7 +257,6 @@ try {
   // converted on the next boot instead of staying on the old semantics.
   await migrateDownstreamKeyExclusionsToAllowLists();
   await ensureDefaultSitesSeeded();
-  await ensureOauthIdentityBackfill();
   await routeRefreshWorkflow.rebuildRoutesOnly();
 
   await ensureProxyChannelAffinityLoaded();
@@ -385,7 +377,6 @@ await app.register(testRoutes);
 
 await app.register(downstreamApiKeysRoutes);
 await app.register(peerRoutes);
-await app.register(oauthRoutes);
 
 // Register probe logs routes
 await app.register(registerProbeLogsRoutes);
@@ -440,12 +431,6 @@ void finalizeOtaOnBoot();
 startUsageAggregationProjectorScheduler();
 startAdminSnapshotWarmScheduler();
 startRouteDecisionRefreshScheduler();
-startOauthTokenRefreshScheduler();
-try {
-  await startOAuthLoopbackCallbackServers();
-} catch (error) {
-  console.warn(`Failed to start OAuth callback listeners: ${(error as Error)?.message || 'unknown error'}`);
-}
 setLegacyProxyLogRetentionFallbackEnabled(!config.logCleanupConfigured || config.proxyLogRetentionDays > 0);
 startProxyFileRetentionService();
 app.addHook('onClose', async () => {
@@ -460,8 +445,6 @@ app.addHook('onClose', async () => {
   await stopAdminSnapshotWarmScheduler();
   stopRouteDecisionRefreshScheduler();
   await stopSub2ApiManagedRefreshScheduler();
-  await stopOauthTokenRefreshScheduler();
-  await stopOAuthLoopbackCallbackServers();
   stopDispatcherCacheSweep();
 });
 

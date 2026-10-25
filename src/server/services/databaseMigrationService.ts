@@ -473,16 +473,13 @@ function buildStatements(
   for (const row of snapshot.accounts.accounts) {
     statements.push({
       table: 'accounts',
-      columns: ['id', 'site_id', 'username', 'access_token', 'api_token', 'oauth_provider', 'oauth_account_key', 'oauth_project_id', 'balance', 'balance_used', 'quota', 'unit_cost', 'value_score', 'status', 'is_pinned', 'sort_order', 'checkin_enabled', 'last_checkin_at', 'last_balance_refresh', 'extra_config', 'created_at', 'updated_at'],
+      columns: ['id', 'site_id', 'username', 'access_token', 'api_token', 'balance', 'balance_used', 'quota', 'unit_cost', 'value_score', 'status', 'is_pinned', 'sort_order', 'checkin_enabled', 'last_checkin_at', 'last_balance_refresh', 'extra_config', 'created_at', 'updated_at'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.siteId, 0),
         asNullableString(row.username),
         asNullableString(row.accessToken),
         asNullableString(row.apiToken),
-        asNullableString(row.oauthProvider),
-        asNullableString(row.oauthAccountKey),
-        asNullableString(row.oauthProjectId),
         asNumber(row.balance, 0),
         asNumber(row.balanceUsed, 0),
         asNumber(row.quota, 0),
@@ -596,13 +593,12 @@ function buildStatements(
   for (const row of snapshot.accounts.routeChannels) {
     statements.push({
       table: 'route_channels',
-      columns: ['id', 'route_id', 'account_id', 'token_id', 'oauth_route_unit_id', 'source_model', 'priority', 'weight', 'enabled', 'manual_override', 'request_override_rules', 'success_count', 'fail_count', 'total_latency_ms', 'total_cost', 'last_used_at', 'last_selected_at', 'last_fail_at', 'consecutive_fail_count', 'cooldown_level', 'cooldown_until'],
+      columns: ['id', 'route_id', 'account_id', 'token_id', 'source_model', 'priority', 'weight', 'enabled', 'manual_override', 'request_override_rules', 'success_count', 'fail_count', 'total_latency_ms', 'total_cost', 'last_used_at', 'last_selected_at', 'last_fail_at', 'consecutive_fail_count', 'cooldown_level', 'cooldown_until'],
       values: [
         asNumber(row.id, 0),
         asNumber(row.routeId, 0),
         asNumber(row.accountId, 0),
         asNumber(row.tokenId, null),
-        asNumber(row.oauthRouteUnitId, null),
         asNullableString(row.sourceModel),
         asNumber(row.priority, 0),
         asNumber(row.weight, 10),

@@ -91,11 +91,6 @@ vi.mock('../../services/proxyDebugTraceRuntime.js', () => ({
   parseSurfaceProxyDebugTextPayload: (raw: string) => raw,
 }));
 
-vi.mock('../../services/oauth/quota.js', () => ({
-  recordOauthQuotaHeadersSnapshot: async () => undefined,
-  recordOauthQuotaResetHint: async () => undefined,
-}));
-
 vi.mock('../../db/index.js', () => ({
   runtimeDbDialect: 'sqlite',
   hasProxyLogRequestTraceIdColumn: async () => true,

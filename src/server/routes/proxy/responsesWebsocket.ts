@@ -14,8 +14,6 @@ import {
 } from '../../services/downstreamApiKeyService.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
-import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
 import { openAiResponsesTransformer } from '../../transformers/openai/responses/index.js';
 import { buildUpstreamEndpointRequest } from './upstreamEndpoint.js';
 import { config } from '../../config.js';
@@ -114,15 +112,10 @@ function selectedChannelSupportsCodexWebsocketTransport(
   if (!config.codexUpstreamWebsocketEnabled) return false;
 
   const extraConfig = parseExtraConfigRecord(selectedChannel.account.extraConfig);
-  const oauth = readNestedRecord(extraConfig, 'oauth');
-  const providerData = readNestedRecord(oauth, 'providerData');
   const candidateFlags = [
     extraConfig?.websockets,
     readNestedRecord(extraConfig, 'attributes')?.websockets,
     readNestedRecord(extraConfig, 'metadata')?.websockets,
-    providerData?.websockets,
-    readNestedRecord(providerData, 'attributes')?.websockets,
-    readNestedRecord(providerData, 'metadata')?.websockets,
   ];
   for (const candidate of candidateFlags) {
     const parsed = toBooleanLike(candidate);
@@ -672,7 +665,6 @@ async function handleResponsesWebsocketConnection(
               requestedModel: requestModel,
               actualModel: asTrimmedString(selectedChannel?.actualModel),
               sitePlatform: asTrimmedString(selectedChannel?.site?.platform),
-              accountType: getOauthInfoFromAccount(selectedChannel?.account)?.planType,
             },
             rules: getServiceTierPolicyRules(),
           });
@@ -705,11 +697,6 @@ async function handleResponsesWebsocketConnection(
               [RESPONSES_WEBSOCKET_TRANSPORT_HEADER]: '1',
               ...(supportsIncrementalInput ? { [RESPONSES_WEBSOCKET_MODE_HEADER]: 'incremental' } : {}),
             };
-            const providerHeaders = buildOauthProviderHeaders({
-              account: codexWebsocketChannel.account,
-              downstreamHeaders,
-            });
-
             const websocketRuntimeSessionKey = buildCodexSessionResponseStoreKey({
               sessionId: websocketSessionId,
               siteId: codexWebsocketChannel.site.id,
@@ -733,7 +720,6 @@ async function handleResponsesWebsocketConnection(
                     downstreamFormat: 'responses',
                     responsesOriginalBody: normalized.request,
                     downstreamHeaders,
-                    providerHeaders,
                     codexExplicitSessionId: deriveCodexExplicitSessionId(normalized.request, websocketSessionId),
                   });
                   const requestUrl = `${target.baseUrl.replace(/\/+$/, '')}${prepared.path}`;

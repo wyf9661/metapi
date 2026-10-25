@@ -21,9 +21,7 @@ import { getCredentialModeFromExtraConfig } from './accountExtraConfig.js';
 import { lookupSiteContextLimitForNames } from './siteContextCapabilityService.js';
 import { filterRecentlyFailedCandidates, formatContextTokens, isChannelRecentlyFailed, isSiteDisabled } from './tokenRouterFailurePolicy.js';
 import { isProbeAttributableCooldown } from './tokenRouterFailureRecording.js';
-import { formatChannelRuntimeLoad, isExplicitTokenChannel, isOauthRouteUnitCandidate, isOauthRouteUnitMemberCoolingDown, resolveChannelRuntimeLoadMultiplier, resolveRouteStrategy, setCandidateDecisionReason } from './tokenRouterCandidateHelpers.js';
-import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
-import { getOauthRouteUnitStrategyLabel } from './oauth/routeUnitService.js';
+import { formatChannelRuntimeLoad, isExplicitTokenChannel, resolveChannelRuntimeLoadMultiplier, resolveRouteStrategy, setCandidateDecisionReason } from './tokenRouterCandidateHelpers.js';
 import { channelSupportsRequestedModel, isRouteDisplayNameMatch, normalizeChannelSourceModel, normalizeModelAlias, normalizeRouteDisplayName, resolveMappedModel, resolveModelResolution } from './tokenRouterModelMatching.js';
 import { ShadowCandidateInput, rankShadowCandidates } from './routeScoringShadow.js';
 import { getPerformanceShadowMetrics } from './performanceShadow.js';
@@ -726,7 +724,6 @@ export function buildShadowCandidateInputs(
     const load = proxyChannelCoordinator.getChannelLoadSnapshot({
       channelId: candidate.channel.id,
       accountExtraConfig: candidate.account.extraConfig,
-      accountOauthProvider: candidate.account.oauthProvider,
     });
     const historical = historicalBySite.get(candidate.site.id);
     const downstreamSiteMultiplier = downstreamPolicy.siteWeightMultipliers[candidate.site.id] ?? 1;
@@ -802,85 +799,12 @@ export function buildShadowCandidateInputs(
   });
 }
 
-export function resolveRouteUnitMemberTokenValue(candidate: {
-  account: typeof schema.accounts.$inferSelect;
-}): string | null {
-  const oauthAccessToken = candidate.account.accessToken?.trim();
-  if (oauthAccessToken) return oauthAccessToken;
-  const apiToken = candidate.account.apiToken?.trim();
-  return apiToken || null;
-}
-
-export function buildRouteUnitMemberDispatchCandidate(
-  outerCandidate: RouteChannelCandidate,
-  memberCandidate: RouteChannelCandidate['routeUnitMembers'][number],
-): RouteChannelCandidate {
-  return {
-    ...outerCandidate,
-    account: memberCandidate.account,
-    site: memberCandidate.site,
-    token: null,
-  };
-}
-
-export function getRouteUnitMemberEligibilityReasons(
-  outerCandidate: RouteChannelCandidate,
-  memberCandidate: RouteChannelCandidate['routeUnitMembers'][number],
-  options: CandidateEligibilityOptions,
-): string[] {
-  const reasonParts: string[] = [];
-  const bypassSourceModelCheck = options.bypassSourceModelCheck ?? false;
-  const nowIso = options.nowIso ?? new Date().toISOString();
-
-  if (!bypassSourceModelCheck && !channelSupportsRequestedModel(outerCandidate.channel.sourceModel, options.requestedModel)) {
-    reasonParts.push(`来源模型不匹配=${outerCandidate.channel.sourceModel || ''}`);
-  }
-
-  if (!outerCandidate.channel.enabled) reasonParts.push('通道禁用');
-
-  if (memberCandidate.account.status !== 'active') {
-    reasonParts.push(`账号状态=${memberCandidate.account.status}`);
-  }
-
-  if (isSiteDisabled(memberCandidate.site.status)) {
-    reasonParts.push(`站点状态=${memberCandidate.site.status || 'disabled'}`);
-  }
-
-  const downstreamExclusionReason = resolveDownstreamExclusionReason(
-    buildRouteUnitMemberDispatchCandidate(outerCandidate, memberCandidate),
-    options.downstreamPolicy,
-  );
-  if (downstreamExclusionReason) {
-    reasonParts.push(downstreamExclusionReason);
-  }
-
-  const tokenValue = resolveRouteUnitMemberTokenValue(memberCandidate);
-  if (!tokenValue) reasonParts.push('令牌不可用');
-
-  if (isOauthRouteUnitMemberCoolingDown(memberCandidate.member, nowIso)) {
-    reasonParts.push('冷却中');
-  }
-
-  return reasonParts;
-}
-
-export function getEligibleRouteUnitMembers(
-  candidate: RouteChannelCandidate,
-  options: CandidateEligibilityOptions,
-): RouteChannelCandidate['routeUnitMembers'] {
-  if (!isOauthRouteUnitCandidate(candidate)) return [];
-  return candidate.routeUnitMembers.filter((memberCandidate) => (
-    getRouteUnitMemberEligibilityReasons(candidate, memberCandidate, options).length === 0
-  ));
-}
-
 export function isKeylessApiConnection(candidate: {
   channel: typeof schema.routeChannels.$inferSelect;
   account: typeof schema.accounts.$inferSelect;
   token: typeof schema.accountTokens.$inferSelect | null;
 }): boolean {
   if (candidate.channel.tokenId || candidate.token) return false;
-  if (getOauthInfoFromAccount(candidate.account)) return false;
   let authenticationMode = '';
   try {
     const parsed = JSON.parse(candidate.account.extraConfig || '{}') as Record<string, unknown>;
@@ -907,12 +831,6 @@ export function resolveChannelTokenValue(candidate: {
     if (!isUsableAccountToken(candidate.token)) return null;
     const token = candidate.token.token?.trim();
     return token ? token : null;
-  }
-
-  if (getOauthInfoFromAccount(candidate.account)) {
-    const accessToken = candidate.account.accessToken?.trim();
-    if (accessToken) return accessToken;
-    return null;
   }
 
   const fallback = candidate.account.apiToken?.trim();
@@ -1019,22 +937,6 @@ export function getCandidateEligibilityReasons(
   }
 
   if (!candidate.channel.enabled) addReason('channel_disabled', '通道禁用');
-
-  if (isOauthRouteUnitCandidate(candidate)) {
-    if (excludeChannelIds.includes(candidate.channel.id)) {
-      // Route-unit failover should stay inside the same outer channel and switch members instead of
-      // excluding the entire pool after one member fails.
-    }
-
-    if (getEligibleRouteUnitMembers(candidate, options).length === 0) {
-      addReason(
-        'route_unit_unavailable',
-        `路由池成员不可用（${candidate.routeUnit?.name || getOauthRouteUnitStrategyLabel(candidate.routeUnit?.strategy || 'round_robin')}）`,
-        { routeUnitId: candidate.routeUnit?.id ?? null },
-      );
-    }
-    return reasons;
-  }
 
   if (isExplicitTokenChannel(candidate)) {
     if (candidate.account.status === 'disabled') {
@@ -1152,7 +1054,6 @@ export function calculateWeightedSelection(
     proxyChannelCoordinator.getChannelLoadSnapshot({
       channelId: candidate.channel.id,
       accountExtraConfig: candidate.account.extraConfig,
-      accountOauthProvider: candidate.account.oauthProvider,
     })
   ));
 

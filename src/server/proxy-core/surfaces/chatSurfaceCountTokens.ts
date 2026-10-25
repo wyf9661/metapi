@@ -13,7 +13,6 @@ import {
   recordDownstreamCostUsage,
 } from '../../services/downstreamPolicyRequest.js';
 import { getProxyAuthContext } from '../../middleware/auth.js';
-import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
 import { readRuntimeResponseText } from '../executors/types.js';
 import { wireReplyGoneAbortSignal } from './sharedSurface.js';
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
@@ -29,7 +28,6 @@ import {
   createSurfaceDispatchRequest,
   getSurfaceStickyPreferredChannelId,
   selectSurfaceChannelForAttempt,
-  trySurfaceOauthRefreshRecovery,
 } from './sharedSurface.js';
 import { runWithSiteApiEndpointPool, SiteApiEndpointRequestError } from '../../services/siteApiEndpointService.js';
 import {
@@ -245,7 +243,6 @@ export async function handleClaudeCountTokensSurfaceRequest(
         },
       });
     }
-    const oauth = getOauthInfoFromAccount(selected.account);
     const startTime = Date.now();
     const leaseResult = await acquireSurfaceChannelLease({
       stickySessionKey,
@@ -299,7 +296,6 @@ export async function handleClaudeCountTokensSurfaceRequest(
       const upstreamRequest = buildClaudeCountTokensUpstreamRequest({
         modelName,
         tokenValue: selected.tokenValue,
-        oauthProvider: oauth?.provider,
         sitePlatform: selected.site.platform,
         claudeBody: rawBody,
         downstreamHeaders: request.headers as Record<string, unknown>,
@@ -323,33 +319,6 @@ export async function handleClaudeCountTokensSurfaceRequest(
         });
         let upstream = await dispatchRequest(upstreamRequest);
         let recoverApplied = false;
-
-        if ((upstream.status === 401 || upstream.status === 403) && oauth) {
-          const recoverContext = {
-            request: upstreamRequest,
-            response: upstream,
-            rawErrText: '',
-            dispatchRecoveryRequest: (
-              recoveryRequest: typeof upstreamRequest,
-              targetUrl?: string,
-            ) => dispatchRequest(recoveryRequest, targetUrl),
-          };
-          const recovered = await trySurfaceOauthRefreshRecovery({
-            ctx: recoverContext,
-            selected,
-            siteUrl: target.baseUrl,
-            buildRequest: () => buildRequest(),
-            captureFailureBody: false,
-          });
-          if (recovered?.upstream?.ok) {
-            upstreamRequest = buildRequest();
-            upstream = recovered.upstream;
-            recoverApplied = true;
-          } else {
-            upstreamRequest = recoverContext.request;
-            upstream = recoverContext.response;
-          }
-        }
 
         const latency = Date.now() - startTime;
         const contentType = upstream.headers.get('content-type') || 'application/json';

@@ -23,14 +23,6 @@ vi.mock('./siteProxy.js', () => ({
   withSiteRecordProxyRequestInit: (...args: unknown[]) => withSiteRecordProxyRequestInitMock(...args),
 }));
 
-vi.mock('./oauth/oauthAccount.js', () => ({
-  getOauthInfoFromAccount: (...args: unknown[]) => getOauthInfoFromAccountMock(...args),
-}));
-
-vi.mock('./oauth/service.js', () => ({
-  buildOauthProviderHeaders: (...args: unknown[]) => buildOauthProviderHeadersMock(...args),
-}));
-
 vi.mock('./siteApiEndpointService.js', () => ({
   requireSiteApiBaseUrl: (...args: unknown[]) => requireSiteApiBaseUrlMock(...args),
 }));

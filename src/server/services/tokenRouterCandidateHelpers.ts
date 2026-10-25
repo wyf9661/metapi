@@ -7,7 +7,6 @@
  * channel. Every function here takes a candidate or a load snapshot and returns a
  * value; none of them touch router state.
  */
-import { schema } from '../db/index.js';
 import { config } from '../config.js';
 import type { RouteDecisionCandidate, RouteDecisionReasonCode } from '../../shared/tokenRouteContract.js';
 import type { RouteChannelCandidate, RouteRow } from './tokenRouterTypes.js';
@@ -28,17 +27,6 @@ export function setCandidateDecisionReason(
 
 export function resolveRouteStrategy(_route: RouteRow): RouteRoutingStrategy {
   return config.defaultRoutingStrategy;
-}
-
-export function isOauthRouteUnitCandidate(candidate: RouteChannelCandidate): boolean {
-  return !!candidate.routeUnit || !!candidate.channel.oauthRouteUnitId;
-}
-
-export function isOauthRouteUnitMemberCoolingDown(
-  member: typeof schema.oauthRouteUnitMembers.$inferSelect,
-  nowIso: string,
-): boolean {
-  return !!member.cooldownUntil && member.cooldownUntil > nowIso;
 }
 
 export function resolveChannelRuntimeLoadMultiplier(snapshot: ProxyChannelLoadSnapshot): number {

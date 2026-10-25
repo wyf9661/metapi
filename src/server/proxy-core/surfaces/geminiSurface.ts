@@ -8,9 +8,6 @@ import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { parseProxyUsage } from '../../services/proxyUsageParser.js';
 import { isModelAllowedByPolicyOrAllowedRoutes } from '../../services/downstreamApiKeyService.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { buildOauthProviderHeaders } from '../../services/oauth/service.js';
-import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
-import { refreshOauthAccessTokenSingleflight } from '../../services/oauth/refreshSingleflight.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { getDownstreamRoutingPolicy } from '../../services/downstreamPolicyRequest.js';
@@ -645,7 +642,6 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         isGeminiCliDownstream ? omitGeminiCliModelField(request.body) : (request.body || {}),
         actualModel,
       );
-      let oauth = getOauthInfoFromAccount(selected.account);
       const isGeminiCli = isGeminiCliPlatform(selected.site.platform);
       const isInternalGemini = isInternalGeminiPlatform(selected.site.platform);
       const isDirectGeminiFamily = isDirectGeminiFamilyPlatform(selected.site.platform);
@@ -665,27 +661,6 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               isStreamAction,
             },
           });
-          if (isGeminiCli && !oauth?.projectId) {
-            lastStatus = 500;
-            lastContentType = 'application/json';
-            lastText = JSON.stringify({
-              error: {
-                message: 'Gemini CLI OAuth project is missing',
-                type: 'server_error',
-              },
-            });
-            await tokenRouter.recordFailure?.(selected.channel.id, {
-              status: 500,
-              errorText: 'Gemini CLI OAuth project is missing',
-            });
-            if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
-              retryCount += 1;
-              continue;
-            }
-            await finalizeDebugFailure(lastStatus, parseSurfaceProxyDebugTextPayload(lastText), upstreamPath || null);
-            return reply.code(lastStatus).type(lastContentType).send(lastText);
-          }
-
           const actualModelAction = modelActionPath.replace(
             /^models\/[^:]+/,
             `models/${actualModel}`,
@@ -713,7 +688,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                   ? { request: normalizedBody }
                   : wrapGeminiCliRequest({
                     modelName: actualModel,
-                    projectId: oauth?.projectId || '',
+                    projectId: '',
                     request: normalizedBody as Record<string, unknown>,
                   })
               )
@@ -723,10 +698,6 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 'Content-Type': 'application/json',
                 ...(internalGeminiAction === 'streamGenerateContent' ? { Accept: 'text/event-stream' } : {}),
                 Authorization: `Bearer ${selected.tokenValue}`,
-                ...buildOauthProviderHeaders({
-                  account: selected.account,
-                  downstreamHeaders: request.headers as Record<string, unknown>,
-                }),
               }
               : {
                 'Content-Type': 'application/json',
@@ -764,7 +735,6 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                         executor: isGeminiCli ? 'gemini-cli' : 'antigravity',
                         modelName: actualModel,
                         stream: isStreamAction,
-                        oauthProjectId: oauth?.projectId || null,
                         action: internalGeminiAction,
                       },
                     },
@@ -795,26 +765,7 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           let upstream = await dispatchWithObservedFirstByte();
           let firstByteLatencyMs = getObservedResponseMeta(upstream)?.firstByteLatencyMs ?? null;
           let contentType = upstream.headers.get('content-type') || 'application/json';
-          let recoverApplied = false;
-          if (upstream.status === 401 && oauth) {
-            try {
-              const refreshed = await refreshOauthAccessTokenSingleflight(selected.account.id);
-              selected.tokenValue = refreshed.accessToken;
-              selected.account = {
-                ...selected.account,
-                accessToken: refreshed.accessToken,
-                extraConfig: refreshed.extraConfig ?? selected.account.extraConfig,
-              };
-              oauth = getOauthInfoFromAccount(selected.account);
-              directDispatchState = buildDirectDispatchState();
-              upstream = await dispatchWithObservedFirstByte();
-              firstByteLatencyMs = getObservedResponseMeta(upstream)?.firstByteLatencyMs ?? null;
-              contentType = upstream.headers.get('content-type') || 'application/json';
-              recoverApplied = true;
-            } catch {
-              // Preserve the original 401 response when refresh fails.
-            }
-          }
+          const recoverApplied = false;
           if (!upstream.ok) {
             lastStatus = upstream.status;
             lastContentType = contentType;
@@ -1267,18 +1218,12 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             modelName: actualModel,
             stream: isStreamAction,
             tokenValue: selected.tokenValue,
-            oauthProvider: oauth?.provider,
-            oauthProjectId: oauth?.projectId,
             sitePlatform: selected.site.platform,
             siteUrl: selected.site.url,
             openaiBody: openAiBody,
             downstreamFormat: 'openai',
             forceNormalizeClaudeBody: requestOptions.forceNormalizeClaudeBody,
             downstreamHeaders: request.headers as Record<string, unknown>,
-            providerHeaders: buildOauthProviderHeaders({
-              account: selected.account,
-              downstreamHeaders: request.headers as Record<string, unknown>,
-            }),
           });
           return {
             endpoint,

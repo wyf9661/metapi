@@ -33,10 +33,6 @@ import {
   resolveResponsesBodyInputFiles,
 } from '../../services/proxyInputFileResolver.js';
 import {
-  buildOauthProviderHeaders,
-} from '../../services/oauth/service.js';
-import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
-import {
   collectResponsesFinalPayloadFromSse,
   collectResponsesFinalPayloadFromSseText,
   createSingleChunkStreamReader,
@@ -87,7 +83,6 @@ import {
   getSurfaceStickyPreferredChannelId,
   recordSurfaceSuccess,
   selectSurfaceChannelForAttempt,
-  trySurfaceOauthRefreshRecovery,
   wireStreamCancelOnClientDisconnect,
   wireReplyGoneAbortSignal,
 } from './sharedSurface.js';
@@ -112,7 +107,7 @@ import {
   resolveProxyFailoverLimits,
 } from '../channelSelection.js';
 import { canFailoverToNextChannel, endRawReplyQuietly, isClientDisconnectError, isDownstreamReplyGone, isFastifyReplyCommitted, sendReplyIfWritable } from '../replySafety.js';
-import {carriesResponsesFileUrlInput, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, getCodexSessionHeaderValue, isRecord, isResponsesWebsocketTransportRequest, rememberCodexSessionResponseId, shouldRefreshOauthResponsesRequest, wantsNativeResponsesReasoning} from './openAiResponsesSurface.pure.js';
+import {carriesResponsesFileUrlInput, finalizeRetryAsExecutionFailure, finalizeRetryAsUpstreamFailure, getCodexSessionHeaderValue, isRecord, isResponsesWebsocketTransportRequest, rememberCodexSessionResponseId, wantsNativeResponsesReasoning} from './openAiResponsesSurface.pure.js';
 type UsageSummary = ReturnType<typeof parseProxyUsage>;
 
 export async function handleOpenAiResponsesSurfaceRequest(
@@ -396,7 +391,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
       });
 
       const modelName = selected.actualModel || requestedModel;
-      const oauth = getOauthInfoFromAccount(selected.account);
       const isCodexSite = String(selected.site.platform || '').trim().toLowerCase() === 'codex';
       const codexSessionId = isCodexSite
         ? getCodexSessionHeaderValue(request.headers as Record<string, string>)
@@ -424,7 +418,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
           requestedModel,
           actualModel: modelName,
           sitePlatform: selected.site.platform,
-          accountType: oauth?.planType,
         },
         rules: config.openAiServiceTierRules,
       });
@@ -513,18 +506,11 @@ export async function handleOpenAiResponsesSurfaceRequest(
           downstreamFormat: 'responses',
           stickySessionKey,
           stickyPreferredChannelId,
-          oauthProvider: oauth?.provider || null,
           isCodexSite,
           requiresNativeResponsesFileUrl,
           isCompactRequest,
         },
       });
-      const buildProviderHeaders = () => (
-        buildOauthProviderHeaders({
-          account: selected.account,
-          downstreamHeaders: request.headers as Record<string, unknown>,
-        })
-      );
       const executeEndpointResultForSiteApiBaseUrl = async (siteApiBaseUrl: string) => {
         const forceResponsesUpstreamStream = shouldForceResponsesUpstreamStream({
           sitePlatform: selected.site.platform,
@@ -551,15 +537,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             modelName,
             stream: upstreamStream,
             tokenValue: selected.tokenValue,
-            oauthProvider: oauth?.provider,
-            oauthProjectId: oauth?.projectId,
             sitePlatform: selected.site.platform,
             siteUrl: siteApiBaseUrl,
             openaiBody: openAiBody,
             downstreamFormat: 'responses',
             responsesOriginalBody,
             downstreamHeaders: request.headers as Record<string, unknown>,
-            providerHeaders: buildProviderHeaders(),
             codexExplicitSessionId: codexSessionId || null,
           });
           const upstreamPath = (
@@ -618,23 +601,6 @@ export async function handleOpenAiResponsesSurfaceRequest(
           sitePlatform: selected.site.platform,
         });
         const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
-          if (oauth && shouldRefreshOauthResponsesRequest({
-            oauthProvider: oauth.provider,
-            status: ctx.response.status,
-            response: ctx.response,
-            rawErrText: ctx.rawErrText || '',
-          })) {
-            const recovered = await trySurfaceOauthRefreshRecovery({
-              ctx,
-              selected,
-            siteUrl: siteApiBaseUrl,
-              buildRequest: (endpoint) => buildEndpointRequest(endpoint),
-              bodyReadOptions: bodyReadGuards,
-              });
-            if (recovered?.upstream?.ok) {
-              return recovered;
-            }
-          }
           if (
             ctx.request.endpoint === 'responses'
             && isResponsesPreviousResponseNotFoundError({

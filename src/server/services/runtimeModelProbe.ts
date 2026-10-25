@@ -1,5 +1,3 @@
-import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
-import { buildOauthProviderHeaders } from './oauth/service.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from './siteProxy.js';
 import { dispatchRuntimeRequest } from './runtimeDispatch.js';
 import { requireSiteApiBaseUrl } from './siteApiEndpointService.js';
@@ -594,16 +592,13 @@ export async function probeRuntimeModel(input: {
     };
   }
 
-  const oauth = getOauthInfoFromAccount(input.account);
-  // Prefer explicit tokenValue, then:
-  // - OAuth accounts: accessToken (session/oauth token)
-  // - API-key style: apiToken, fallback accessToken (many new-api session imports only fill accessToken)
-  // Never treat empty apiToken as "no credential" when accessToken is present.
+  // Prefer explicit tokenValue, then apiToken, then accessToken (many new-api
+  // session imports only fill accessToken). Never treat an empty apiToken as
+  // "no credential" when accessToken is present.
   const tokenValue = String(
     input.tokenValue
-    || (oauth
-      ? (input.account.accessToken || input.account.apiToken)
-      : (input.account.apiToken || input.account.accessToken))
+    || input.account.apiToken
+    || input.account.accessToken
     || '',
   ).trim();
   // 空凭据不拦截测活：公开站（/v1/chat/completions 无鉴权，如 free.empero.org）
@@ -653,10 +648,7 @@ export async function probeRuntimeModel(input: {
       };
     }
 
-    const providerHeaders = buildOauthProviderHeaders({
-      account: input.account,
-      downstreamHeaders: {},
-    });
+    const providerHeaders: Record<string, string> = {};
     // 统一流式测活：所有平台 stream=true，首包即判定可用，且能拿到
     // 真实生成内容。Codex /responses 与 OpenAI 兼容 SSE 分别折叠。
     const probeStream = true;
@@ -672,8 +664,6 @@ export async function probeRuntimeModel(input: {
         modelName: input.modelName,
         stream: probeStream,
         tokenValue,
-        oauthProvider: oauth?.provider,
-        oauthProjectId: oauth?.projectId,
         sitePlatform: input.site.platform,
         siteUrl: endpointBaseUrl,
         openaiBody,

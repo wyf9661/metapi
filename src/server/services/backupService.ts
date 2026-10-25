@@ -4,7 +4,6 @@ import { db, schema } from '../db/index.js';
 import { requireInsertedRowId } from '../db/insertHelpers.js';
 import { upsertSetting } from '../db/upsertSetting.js';
 import { mergeAccountExtraConfig } from './accountExtraConfig.js';
-import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { PLATFORM_ALIASES, detectPlatformByUrlHint } from '../../shared/platformIdentity.js';
 import { fanoutSiteWideDisabledModels } from './siteDisabledModels.js';
 import {
@@ -324,18 +323,6 @@ function normalizeLegacyQuota(raw: unknown): number {
   return value;
 }
 
-function resolveImportedOauthColumns(row: Pick<AccountRow, 'oauthProvider' | 'oauthAccountKey' | 'oauthProjectId' | 'extraConfig'>) {
-  const oauth = getOauthInfoFromAccount(row);
-  const oauthProvider = row.oauthProvider || oauth?.provider || null;
-  const oauthAccountKey = row.oauthAccountKey || oauth?.accountKey || oauth?.accountId || null;
-  const oauthProjectId = row.oauthProjectId || oauth?.projectId || null;
-  return {
-    oauthProvider,
-    oauthAccountKey,
-    oauthProjectId,
-  };
-}
-
 function buildSiteIdentityKey(row: Pick<SiteRow, 'platform' | 'url'>): string {
   return `${asString(row.platform).toLowerCase()}::${normalizeOriginUrl(asString(row.url))}`;
 }
@@ -345,17 +332,7 @@ function buildAccountIdentityKey(input: {
   username?: string | null;
   accessToken?: string | null;
   apiToken?: string | null;
-  oauthProvider?: string | null;
-  oauthAccountKey?: string | null;
-  oauthProjectId?: string | null;
 }): string {
-  const oauthProvider = asString(input.oauthProvider).toLowerCase();
-  const oauthAccountKey = asString(input.oauthAccountKey);
-  const oauthProjectId = asString(input.oauthProjectId);
-  if (oauthProvider || oauthAccountKey || oauthProjectId) {
-    return `oauth::${input.siteKey}::${oauthProvider}::${oauthAccountKey}::${oauthProjectId}`;
-  }
-
   const apiToken = asString(input.apiToken);
   if (apiToken) {
     return `api::${input.siteKey}::${apiToken}`;
@@ -429,15 +406,11 @@ function buildRuntimeIdentityIndexesFromSection(section: AccountsBackupSection):
   for (const row of section.accounts) {
     const siteKey = siteKeyById.get(row.siteId);
     if (!siteKey) continue;
-    const oauthColumns = resolveImportedOauthColumns(row);
     const accountKey = buildAccountIdentityKey({
       siteKey,
       username: row.username,
       accessToken: row.accessToken,
       apiToken: row.apiToken,
-      oauthProvider: oauthColumns.oauthProvider,
-      oauthAccountKey: oauthColumns.oauthAccountKey,
-      oauthProjectId: oauthColumns.oauthProjectId,
     });
     accountKeyById.set(row.id, accountKey);
     accountIdByKey.set(accountKey, row.id);
@@ -519,15 +492,11 @@ async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapsho
   for (const row of accounts) {
     const siteKey = siteKeyById.get(row.siteId);
     if (!siteKey) continue;
-    const oauthColumns = resolveImportedOauthColumns(row);
     const accountKey = buildAccountIdentityKey({
       siteKey,
       username: row.username,
       accessToken: row.accessToken,
       apiToken: row.apiToken,
-      oauthProvider: oauthColumns.oauthProvider,
-      oauthAccountKey: oauthColumns.oauthAccountKey,
-      oauthProjectId: oauthColumns.oauthProjectId,
     });
     accountKeyById.set(row.id, accountKey);
     accountRuntimeByKey.set(accountKey, {
@@ -895,9 +864,6 @@ function buildAllApiHubV2AccountsSection(data: RawBackupData): {
       username,
       accessToken,
       apiToken,
-      oauthProvider: null,
-      oauthAccountKey: null,
-      oauthProjectId: null,
       balance: importedBalance,
       balanceUsed: importedUsed,
       quota: importedQuota > 0 ? importedQuota : importedBalance,
@@ -949,9 +915,6 @@ function buildAllApiHubV2AccountsSection(data: RawBackupData): {
       username: asString(profile.name) || asString(profile.id) || baseUrl,
       accessToken: '',
       apiToken: apiKey,
-      oauthProvider: null,
-      oauthAccountKey: null,
-      oauthProjectId: null,
       balance: 0,
       balanceUsed: 0,
       quota: 0,
@@ -1085,9 +1048,6 @@ function buildAccountsSectionFromRefBackup(data: RawBackupData): AccountsBackupS
       username,
       accessToken: accountAccessToken,
       apiToken,
-      oauthProvider: null,
-      oauthAccountKey: null,
-      oauthProjectId: null,
       balance: importedBalance,
       balanceUsed: importedUsed,
       quota: importedQuota > 0 ? importedQuota : importedBalance,
@@ -1684,7 +1644,6 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
     }
 
     for (const row of section.accounts) {
-      const oauthColumns = resolveImportedOauthColumns(row);
       const accountKey = importedIndexes.accountKeyById.get(row.id);
       const runtimeAccount = accountKey ? runtimeState.accountRuntimeByKey.get(accountKey) : undefined;
       await tx.insert(schema.accounts).values({
@@ -1693,9 +1652,6 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         username: row.username,
         accessToken: row.accessToken,
         apiToken: row.apiToken,
-        oauthProvider: oauthColumns.oauthProvider,
-        oauthAccountKey: oauthColumns.oauthAccountKey,
-        oauthProjectId: oauthColumns.oauthProjectId,
         balance: row.balance,
         balanceUsed: runtimeAccount?.balanceUsed ?? row.balanceUsed,
         quota: row.quota,
@@ -1761,7 +1717,6 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         routeId: row.routeId,
         accountId: row.accountId,
         tokenId: row.tokenId,
-        oauthRouteUnitId: row.oauthRouteUnitId ?? null,
         sourceModel: row.sourceModel ?? null,
         priority: row.priority,
         weight: row.weight,

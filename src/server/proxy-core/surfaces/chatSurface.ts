@@ -36,10 +36,6 @@ import {
   resolveOpenAiBodyInputFiles,
 } from '../../services/proxyInputFileResolver.js';
 import {
-  buildOauthProviderHeaders,
-} from '../../services/oauth/service.js';
-import { getOauthInfoFromAccount } from '../../services/oauth/oauthAccount.js';
-import {
   collectResponsesFinalPayloadFromSse,
   collectResponsesFinalPayloadFromSseText,
   createSingleChunkStreamReader,
@@ -76,7 +72,6 @@ import {
   getSurfaceStickyPreferredChannelId,
   recordSurfaceSuccess,
   selectSurfaceChannelForAttempt,
-  trySurfaceOauthRefreshRecovery,
   wireStreamCancelOnClientDisconnect,
   wireReplyGoneAbortSignal,
 } from './sharedSurface.js';
@@ -469,7 +464,6 @@ export async function handleChatSurfaceRequest(
     });
 
     const modelName = selected.actualModel || requestedModel;
-    const oauth = getOauthInfoFromAccount(selected.account);
     const isCodexSite = String(selected.site.platform || '').trim().toLowerCase() === 'codex';
     let endpointCandidates = [
       ...await resolveUpstreamEndpointCandidates(
@@ -484,9 +478,6 @@ export async function handleChatSurfaceRequest(
           hasNonImageFileInput,
           conversationFileSummary,
           wantsContinuationAwareResponses,
-        },
-        {
-          oauthProvider: oauth?.provider,
         },
       ),
     ];
@@ -509,17 +500,10 @@ export async function handleChatSurfaceRequest(
         downstreamFormat,
         stickySessionKey,
         stickyPreferredChannelId,
-        oauthProvider: oauth?.provider || null,
         isCodexSite,
         wantsContinuationAwareResponses,
       },
     });
-    const buildProviderHeaders = () => (
-      buildOauthProviderHeaders({
-        account: selected.account,
-        downstreamHeaders: request.headers as Record<string, unknown>,
-      })
-    );
     const executeEndpointResultForSiteApiBaseUrl = async (siteApiBaseUrl: string) => {
       const forceResponsesUpstreamStream = shouldForceResponsesUpstreamStream({
         sitePlatform: selected.site.platform,
@@ -538,7 +522,6 @@ export async function handleChatSurfaceRequest(
                 requestedModel,
                 actualModel: modelName,
                 sitePlatform: selected.site.platform,
-                accountType: oauth?.planType,
               },
               rules: config.openAiServiceTierRules,
             });
@@ -558,8 +541,6 @@ export async function handleChatSurfaceRequest(
           modelName,
           stream: upstreamStream,
           tokenValue: selected.tokenValue,
-          oauthProvider: oauth?.provider,
-          oauthProjectId: oauth?.projectId,
           sitePlatform: selected.site.platform,
           siteUrl: siteApiBaseUrl,
           openaiBody: bodyForEndpoint,
@@ -567,7 +548,6 @@ export async function handleChatSurfaceRequest(
           claudeOriginalBody,
           forceNormalizeClaudeBody: options.forceNormalizeClaudeBody,
           downstreamHeaders: request.headers as Record<string, unknown>,
-          providerHeaders: buildProviderHeaders(),
           codexSessionCacheKey,
         });
         const builtBody = endpointRequest.body as Record<string, unknown>;
@@ -601,18 +581,6 @@ export async function handleChatSurfaceRequest(
         ),
       });
       const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
-        if ((ctx.response.status === 401 || ctx.response.status === 403) && oauth) {
-          const recovered = await trySurfaceOauthRefreshRecovery({
-            ctx,
-            selected,
-            siteUrl: siteApiBaseUrl,
-            buildRequest: (endpoint) => buildEndpointRequest(endpoint),
-            bodyReadOptions: bodyReadGuards,
-          });
-          if (recovered?.upstream?.ok) {
-            return recovered;
-          }
-        }
         return endpointStrategy.tryRecover(ctx);
       };
       const debugAttemptBase = reserveSurfaceProxyDebugAttemptBase(debugTrace, endpointCandidates.length);

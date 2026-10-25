@@ -249,64 +249,6 @@ describe('TokenRouter runtime cache', () => {
     }, recentFailureCheckAt)).toBe(false);
   });
 
-  it('uses codex oauth reset hints for usage-limit cooldowns', async () => {
-    const site = await db.insert(schema.sites).values({
-      name: 'codex-oauth-site',
-      url: 'https://codex-oauth.example.com',
-      platform: 'codex',
-      status: 'active',
-    }).returning().get();
-
-    const account = await db.insert(schema.accounts).values({
-      siteId: site.id,
-      username: 'codex-oauth-user',
-      accessToken: 'codex-access-token',
-      status: 'active',
-      oauthProvider: 'codex',
-      extraConfig: JSON.stringify({
-        credentialMode: 'session',
-        oauth: {
-          provider: 'codex',
-        },
-      }),
-    }).returning().get();
-
-    const route = await db.insert(schema.tokenRoutes).values({
-      modelPattern: 'gpt-5.4',
-      enabled: true,
-    }).returning().get();
-
-    const channel = await db.insert(schema.routeChannels).values({
-      routeId: route.id,
-      accountId: account.id,
-      priority: 0,
-      weight: 10,
-      enabled: true,
-    }).returning().get();
-
-    const router = new TokenRouter();
-    const startedAt = Date.now();
-    await router.recordFailure(channel.id, {
-      status: 429,
-      errorText: JSON.stringify({
-        error: {
-          type: 'usage_limit_reached',
-          resets_in_seconds: 600,
-          message: 'quota exceeded',
-        },
-      }),
-      modelName: 'gpt-5.4',
-    });
-
-    const record = await db.select().from(schema.routeChannels)
-      .where(eq(schema.routeChannels.id, channel.id))
-      .get();
-    const cooldownMs = Date.parse(String(record?.cooldownUntil || '')) - startedAt;
-
-    expect(cooldownMs).toBeGreaterThanOrEqual(9 * 60 * 1000);
-    expect(cooldownMs).toBeLessThanOrEqual(11 * 60 * 1000);
-  });
-
   it('falls back to a short cooldown for codex oauth usage-limit failures without reset hints', async () => {
     const site = await db.insert(schema.sites).values({
       name: 'codex-oauth-fallback-site',
@@ -320,7 +262,6 @@ describe('TokenRouter runtime cache', () => {
       username: 'codex-oauth-fallback-user',
       accessToken: 'codex-fallback-access-token',
       status: 'active',
-      oauthProvider: 'codex',
       extraConfig: JSON.stringify({
         credentialMode: 'session',
         oauth: {
@@ -362,77 +303,6 @@ describe('TokenRouter runtime cache', () => {
 
     expect(cooldownMs).toBeGreaterThanOrEqual(4 * 60 * 1000);
     expect(cooldownMs).toBeLessThanOrEqual(6 * 60 * 1000);
-  });
-
-  it('reuses stored codex oauth reset hints when the latest 429 omits reset timing', async () => {
-    const site = await db.insert(schema.sites).values({
-      name: 'codex-oauth-stored-reset-site',
-      url: 'https://codex-oauth-stored-reset.example.com',
-      platform: 'codex',
-      status: 'active',
-    }).returning().get();
-
-    const resetAt = new Date(Date.now() + 8 * 60 * 1000).toISOString();
-    const account = await db.insert(schema.accounts).values({
-      siteId: site.id,
-      username: 'codex-oauth-stored-reset-user',
-      accessToken: 'codex-stored-reset-access-token',
-      status: 'active',
-      oauthProvider: 'codex',
-      extraConfig: JSON.stringify({
-        credentialMode: 'session',
-        oauth: {
-          provider: 'codex',
-          quota: {
-            status: 'supported',
-            source: 'reverse_engineered',
-            lastLimitResetAt: resetAt,
-            providerMessage: 'current codex oauth signals do not expose stable 5h/7d remaining values',
-            windows: {
-              fiveHour: {
-                supported: false,
-                message: 'official 5h quota window is not exposed by current codex oauth artifacts',
-              },
-              sevenDay: {
-                supported: false,
-                message: 'official 7d quota window is not exposed by current codex oauth artifacts',
-              },
-            },
-          },
-        },
-      }),
-    }).returning().get();
-
-    const route = await db.insert(schema.tokenRoutes).values({
-      modelPattern: 'gpt-5.4',
-      enabled: true,
-    }).returning().get();
-
-    const channel = await db.insert(schema.routeChannels).values({
-      routeId: route.id,
-      accountId: account.id,
-      priority: 0,
-      weight: 10,
-      enabled: true,
-    }).returning().get();
-
-    const router = new TokenRouter();
-    await router.recordFailure(channel.id, {
-      status: 429,
-      errorText: JSON.stringify({
-        error: {
-          type: 'usage_limit_reached',
-          message: 'The usage limit has been reached',
-        },
-      }),
-      modelName: 'gpt-5.4',
-    });
-
-    const record = await db.select().from(schema.routeChannels)
-      .where(eq(schema.routeChannels.id, channel.id))
-      .get();
-
-    expect(record?.cooldownUntil).toBe(resetAt);
   });
 
   it('treats non-oauth 429 limit failures as short-window cooldowns', async () => {
@@ -541,21 +411,18 @@ describe('TokenRouter runtime cache', () => {
     const site = await db.insert(schema.sites).values({
       name: 'shared-credential-site',
       url: 'https://shared-credential.example.com',
-      platform: 'codex',
+      platform: 'openai',
       status: 'active',
     }).returning().get();
 
     const account = await db.insert(schema.accounts).values({
       siteId: site.id,
       username: 'shared-credential-user',
-      accessToken: 'shared-credential-access-token',
+      accessToken: '',
+      apiToken: 'shared-credential-api-token',
       status: 'active',
-      oauthProvider: 'codex',
       extraConfig: JSON.stringify({
-        credentialMode: 'session',
-        oauth: {
-          provider: 'codex',
-        },
+        credentialMode: 'apikey',
       }),
     }).returning().get();
 
@@ -613,21 +480,18 @@ describe('TokenRouter runtime cache', () => {
     const site = await db.insert(schema.sites).values({
       name: 'shared-credential-recovery-site',
       url: 'https://shared-credential-recovery.example.com',
-      platform: 'codex',
+      platform: 'openai',
       status: 'active',
     }).returning().get();
 
     const account = await db.insert(schema.accounts).values({
       siteId: site.id,
       username: 'shared-credential-recovery-user',
-      accessToken: 'shared-credential-recovery-access-token',
+      accessToken: '',
+      apiToken: 'shared-credential-recovery-api-token',
       status: 'active',
-      oauthProvider: 'codex',
       extraConfig: JSON.stringify({
-        credentialMode: 'session',
-        oauth: {
-          provider: 'codex',
-        },
+        credentialMode: 'apikey',
       }),
     }).returning().get();
 

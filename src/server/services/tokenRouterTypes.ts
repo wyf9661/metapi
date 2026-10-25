@@ -10,7 +10,6 @@
  * contract, both of which are leaves.
  */
 import { schema } from '../db/index.js';
-import type { OAuthRouteUnitSummary } from './oauth/routeUnitService.js';
 import type { RouteMode } from '../../shared/tokenRouteContract.js';
 
 export interface RouteMatch {
@@ -20,13 +19,6 @@ export interface RouteMatch {
     account: typeof schema.accounts.$inferSelect;
     site: typeof schema.sites.$inferSelect;
     token: typeof schema.accountTokens.$inferSelect | null;
-    routeUnit: OAuthRouteUnitSummary | null;
-    routeUnitMembers: Array<{
-      member: typeof schema.oauthRouteUnitMembers.$inferSelect;
-      account: typeof schema.accounts.$inferSelect;
-      site: typeof schema.sites.$inferSelect;
-      token: null;
-    }>;
   }>;
 }
 

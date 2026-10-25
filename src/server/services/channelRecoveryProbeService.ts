@@ -2,7 +2,6 @@ import {and, eq, gt, inArray, isNotNull, sql} from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { config, resolveProbeHeartbeatTimeoutMs } from '../config.js';
 import { isUsableAccountToken } from './accountTokenService.js';
-import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
 import { proxyChannelCoordinator } from './proxyChannelCoordinator.js';
 import { probeRuntimeModel } from './runtimeModelProbe.js';
 import { isQuotaOrCreditFailureText } from './siteFailureClassification.js';
@@ -119,10 +118,8 @@ function resolveProbeTokenValue(row: {
     return tokenValue || null;
   }
 
-  if (getOauthInfoFromAccount(row.accounts)) {
-    const accessToken = String(row.accounts.accessToken || '').trim();
-    return accessToken || null;
-  }
+  const accessToken = String(row.accounts.accessToken || '').trim();
+  if (accessToken) return accessToken;
 
   const fallbackApiToken = String(row.accounts.apiToken || '').trim();
   return fallbackApiToken || null;

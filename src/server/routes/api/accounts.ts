@@ -21,7 +21,6 @@ import {
   normalizeNewModelPolicy,
   getProxyUrlFromExtraConfig,
   guessPlatformUserIdFromUsername,
-  hasOauthProvider,
   getSub2ApiAuthFromExtraConfig,
   mergeAccountExtraConfig,
   normalizeCredentialMode as normalizeCredentialModeInput,
@@ -131,21 +130,7 @@ function resolveStoredCredentialMode(
 function buildCapabilitiesFromCredentialMode(
   credentialMode: AccountCredentialMode,
   hasSessionToken: boolean,
-  oauthIdentity?:
-    | string
-    | null
-    | Pick<
-        typeof schema.accounts.$inferSelect,
-        'extraConfig' | 'oauthProvider'
-      >,
 ): AccountCapabilities {
-  if (hasOauthProvider(oauthIdentity)) {
-    return {
-      canCheckin: false,
-      canRefreshBalance: false,
-      proxyOnly: true,
-    };
-  }
   const sessionCapable =
     credentialMode === 'session'
       ? hasSessionToken
@@ -166,7 +151,6 @@ function buildCapabilitiesForAccount(
   return buildCapabilitiesFromCredentialMode(
     credentialMode,
     hasSessionTokenValue(account.accessToken),
-    account,
   );
 }
 
@@ -1270,7 +1254,7 @@ export async function accountsRoutes(app: FastifyInstance) {
         credentialMode: 'session',
         capabilities: latest
           ? buildCapabilitiesForAccount(latest)
-          : buildCapabilitiesFromCredentialMode('session', true, null),
+          : buildCapabilitiesFromCredentialMode('session', true),
         apiTokenFound: !!nextApiToken,
       };
     },

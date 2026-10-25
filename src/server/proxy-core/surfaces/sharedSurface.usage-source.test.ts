@@ -65,15 +65,6 @@ vi.mock('../orchestration/upstreamRequest.js', () => ({
   buildUpstreamUrl: vi.fn(),
 }));
 
-vi.mock('../../services/oauth/quota.js', () => ({
-  recordOauthQuotaHeadersSnapshot: vi.fn(),
-  recordOauthQuotaResetHint: vi.fn(),
-}));
-
-vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
-  refreshOauthAccessTokenSingleflight: vi.fn(),
-}));
-
 vi.mock('../../services/proxyChannelCoordinator.js', () => ({
   ensureProxyChannelAffinityLoaded: vi.fn(async () => {}),
   proxyChannelCoordinator: {

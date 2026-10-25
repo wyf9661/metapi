@@ -73,7 +73,6 @@ export async function recordSuccess(
   latencyMs: number,
   cost: number,
   modelName?: string | null,
-  actualAccountId?: number,
 ) {
   await ensureSiteRuntimeHealthStateLoaded();
   const row = await db.select()
@@ -88,45 +87,7 @@ export async function recordSuccess(
   const nextSuccessCount = (ch.successCount ?? 0) + 1;
   const nextTotalLatencyMs = (ch.totalLatencyMs ?? 0) + latencyMs;
   const nextTotalCost = (ch.totalCost ?? 0) + cost;
-  if (typeof ch.oauthRouteUnitId === 'number' && ch.oauthRouteUnitId > 0) {
-    const targetAccountId = Number.isFinite(actualAccountId) && (actualAccountId ?? 0) > 0
-      ? Math.trunc(actualAccountId!)
-      : account.id;
-    const memberRow = await db.select({
-      member: schema.oauthRouteUnitMembers,
-      account: schema.accounts,
-    }).from(schema.oauthRouteUnitMembers)
-      .innerJoin(schema.accounts, eq(schema.oauthRouteUnitMembers.accountId, schema.accounts.id))
-      .where(and(
-        eq(schema.oauthRouteUnitMembers.unitId, ch.oauthRouteUnitId),
-        eq(schema.oauthRouteUnitMembers.accountId, targetAccountId),
-      ))
-      .get();
-
-    if (memberRow) {
-      const memberSuccessCount = (memberRow.member.successCount ?? 0) + 1;
-      const memberTotalLatencyMs = (memberRow.member.totalLatencyMs ?? 0) + latencyMs;
-      const memberTotalCost = (memberRow.member.totalCost ?? 0) + cost;
-      await db.update(schema.oauthRouteUnitMembers).set({
-        successCount: memberSuccessCount,
-        totalLatencyMs: memberTotalLatencyMs,
-        totalCost: memberTotalCost,
-        lastUsedAt: nowIso,
-        failCount: 0,
-        cooldownUntil: null,
-        lastFailAt: null,
-        consecutiveFailCount: 0,
-        cooldownLevel: 0,
-        updatedAt: nowIso,
-      }).where(eq(schema.oauthRouteUnitMembers.id, memberRow.member.id)).run();
-      recordSiteRuntimeSuccess(memberRow.account.siteId, latencyMs, modelName);
-    } else {
-      recordSiteRuntimeSuccess(account.siteId, latencyMs, modelName);
-    }
-    invalidateRouteScopedCache(ch.routeId);
-  } else {
-    recordSiteRuntimeSuccess(account.siteId, latencyMs, modelName);
-  }
+  recordSiteRuntimeSuccess(account.siteId, latencyMs, modelName);
 
   await db.update(schema.routeChannels).set({
     successCount: nextSuccessCount,
@@ -193,51 +154,6 @@ export async function recordProbeSuccess(
         eq(sql`lower(trim(${schema.modelAvailability.modelName}))`, connectivityModel.toLowerCase()),
       ))
       .run();
-  }
-
-  if (typeof ch.oauthRouteUnitId === 'number' && ch.oauthRouteUnitId > 0) {
-    const targetAccountId = Number.isFinite(actualAccountId) && (actualAccountId ?? 0) > 0
-      ? Math.trunc(actualAccountId!)
-      : account.id;
-    const nowIso = new Date().toISOString();
-    const memberRow = await db.select({
-      member: schema.oauthRouteUnitMembers,
-      account: schema.accounts,
-    }).from(schema.oauthRouteUnitMembers)
-      .innerJoin(schema.accounts, eq(schema.oauthRouteUnitMembers.accountId, schema.accounts.id))
-      .where(and(
-        eq(schema.oauthRouteUnitMembers.unitId, ch.oauthRouteUnitId),
-        eq(schema.oauthRouteUnitMembers.accountId, targetAccountId),
-      ))
-      .get();
-
-    if (memberRow) {
-      await db.update(schema.oauthRouteUnitMembers).set({
-        cooldownUntil: null,
-        lastFailAt: null,
-        consecutiveFailCount: 0,
-        cooldownLevel: 0,
-        updatedAt: nowIso,
-      }).where(eq(schema.oauthRouteUnitMembers.id, memberRow.member.id)).run();
-      recordSiteRuntimeSuccess(memberRow.account.siteId, latencyMs, modelName);
-    } else {
-      recordSiteRuntimeSuccess(account.siteId, latencyMs, modelName);
-    }
-
-    await db.update(schema.routeChannels).set({
-      cooldownUntil: null,
-      lastFailAt: null,
-      consecutiveFailCount: 0,
-      cooldownLevel: 0,
-    }).where(eq(schema.routeChannels.id, channelId)).run();
-    patchCachedChannel(channelId, (channel) => {
-      channel.cooldownUntil = null;
-      channel.lastFailAt = null;
-      channel.consecutiveFailCount = 0;
-      channel.cooldownLevel = 0;
-    });
-    invalidateRouteScopedCache(ch.routeId);
-    return;
   }
 
   const affectedChannelIds = await loadCredentialScopedChannelIds(ch, account.id);
@@ -524,7 +440,6 @@ export async function clearChannelFailureState(channelIds: number[]): Promise<nu
 export async function recordFailure(
   channelId: number,
   context: SiteRuntimeFailureContext | string | null = {},
-  actualAccountId?: number,
 ) {
   await ensureSiteRuntimeHealthStateLoaded();
   const row = await db.select()
@@ -543,76 +458,6 @@ export async function recordFailure(
   const normalizedContext: SiteRuntimeFailureContext = typeof context === 'string'
     ? { modelName: context }
     : (context ?? {});
-  if (typeof ch.oauthRouteUnitId === 'number' && ch.oauthRouteUnitId > 0) {
-    const targetAccountId = Number.isFinite(actualAccountId) && (actualAccountId ?? 0) > 0
-      ? Math.trunc(actualAccountId!)
-      : account.id;
-    const memberRow = await db.select({
-      member: schema.oauthRouteUnitMembers,
-      account: schema.accounts,
-      unit: schema.oauthRouteUnits,
-    }).from(schema.oauthRouteUnitMembers)
-      .innerJoin(schema.accounts, eq(schema.oauthRouteUnitMembers.accountId, schema.accounts.id))
-      .innerJoin(schema.oauthRouteUnits, eq(schema.oauthRouteUnitMembers.unitId, schema.oauthRouteUnits.id))
-      .where(and(
-        eq(schema.oauthRouteUnitMembers.unitId, ch.oauthRouteUnitId),
-        eq(schema.oauthRouteUnitMembers.accountId, targetAccountId),
-      ))
-      .get();
-    if (memberRow) {
-      const shortWindowLimitCooldownUntil = resolveShortWindowLimitCooldown(memberRow.account, normalizedContext, nowMs);
-      const failCount = shortWindowLimitCooldownUntil ? 0 : ((memberRow.member.failCount ?? 0) + 1);
-      const routeUnitStrategy = memberRow.unit.strategy === 'stick_until_unavailable'
-        ? 'stick_until_unavailable'
-        : 'round_robin';
-      let cooldownUntil: string | null = null;
-      let consecutiveFailCount = Math.max(0, memberRow.member.consecutiveFailCount ?? 0) + 1;
-      let cooldownLevel = Math.max(0, memberRow.member.cooldownLevel ?? 0);
-
-      const cooldownPolicy = resolveFailureCooldownWeight(normalizedContext);
-      if (shortWindowLimitCooldownUntil) {
-        cooldownUntil = shortWindowLimitCooldownUntil;
-        consecutiveFailCount = 0;
-        cooldownLevel = 0;
-      } else if (cooldownPolicy.skipCooldown) {
-        cooldownUntil = null;
-        consecutiveFailCount = 0;
-        cooldownLevel = 0;
-      } else if (routeUnitStrategy === 'round_robin') {
-        if (consecutiveFailCount >= ROUND_ROBIN_FAILURE_THRESHOLD) {
-          cooldownLevel = Math.min(cooldownLevel + 1, ROUND_ROBIN_COOLDOWN_LEVELS_SEC.length - 1);
-          const cooldownSec = resolveRoundRobinCooldownSec(cooldownLevel);
-          cooldownUntil = cooldownSec > 0
-            ? new Date(nowMs + clampFailureCooldownMs(cooldownSec * 1000 * cooldownPolicy.weight)).toISOString()
-            : null;
-          consecutiveFailCount = 0;
-        }
-      } else {
-        const failureDecision = classifyProxyFailure(normalizedContext);
-        if (failureDecision.class === 'endpoint_pool_down') {
-          // Align with the endpoint pool cooldown (see the non-oauth branch).
-          cooldownUntil = new Date(nowMs + SITE_API_ENDPOINT_COOLDOWN_MS).toISOString();
-        } else {
-          cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
-        }
-        consecutiveFailCount = 0;
-        cooldownLevel = 0;
-      }
-
-      await db.update(schema.oauthRouteUnitMembers).set({
-        failCount,
-        lastFailAt: nowIso,
-        consecutiveFailCount,
-        cooldownLevel,
-        cooldownUntil,
-        updatedAt: nowIso,
-      }).where(eq(schema.oauthRouteUnitMembers.id, memberRow.member.id)).run();
-      recordSiteRuntimeFailure(memberRow.account.siteId, normalizedContext, nowMs);
-      invalidateRouteScopedCache(route.id);
-      return;
-    }
-  }
-
   const shortWindowLimitCooldownUntil = resolveShortWindowLimitCooldown(account, normalizedContext, nowMs);
   const failCount = shortWindowLimitCooldownUntil ? 0 : ((ch.failCount ?? 0) + 1);
   const routeStrategy = resolveRouteStrategy(route);
@@ -742,7 +587,6 @@ export async function clearFailureCooldown(channelId: number): Promise<void> {
 
   const channelRow = await db.select({
     routeId: schema.routeChannels.routeId,
-    oauthRouteUnitId: schema.routeChannels.oauthRouteUnitId,
   }).from(schema.routeChannels)
     .where(eq(schema.routeChannels.id, normalizedChannelId))
     .get();
@@ -757,13 +601,6 @@ export async function clearFailureCooldown(channelId: number): Promise<void> {
   };
   await db.update(schema.routeChannels).set(clearedState)
     .where(eq(schema.routeChannels.id, normalizedChannelId)).run();
-
-  if (typeof channelRow.oauthRouteUnitId === 'number' && channelRow.oauthRouteUnitId > 0) {
-    await db.update(schema.oauthRouteUnitMembers).set({
-      ...clearedState,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(schema.oauthRouteUnitMembers.unitId, channelRow.oauthRouteUnitId)).run();
-  }
 
   patchCachedChannel(normalizedChannelId, (channel) => {
     Object.assign(channel, clearedState);

@@ -337,6 +337,13 @@
       "when": 1792288409215,
       "tag": "0048_proxy_logs_token_id",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1792902123858,
+      "tag": "0049_drop_oauth_objects",
+      "breakpoints": true
     }
   ]
 }

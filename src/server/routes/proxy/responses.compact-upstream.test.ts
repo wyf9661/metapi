@@ -83,11 +83,6 @@ vi.mock('../../services/proxyUsageFallbackService.js', () => ({
   resolveProxyUsageWithSelfLogFallback: (arg: any) => resolveProxyUsageWithSelfLogFallbackMock(arg),
 }));
 
-vi.mock('../../services/oauth/quota.js', () => ({
-  recordOauthQuotaHeadersSnapshot: async (input: unknown) => recordOauthQuotaHeadersSnapshotMock(input),
-  recordOauthQuotaResetHint: async (input: unknown) => recordOauthQuotaResetHintMock(input),
-}));
-
 vi.mock('../../db/index.js', () => ({
   runtimeDbDialect: 'sqlite',
   hasProxyLogRequestTraceIdColumn: async () => true,

@@ -33,7 +33,6 @@ export async function resetChannelToDerivedState(channelId: number): Promise<Res
   const candidate = await findDerivedChannelCandidateForRoute(route.modelPattern, {
     accountId: channel.accountId,
     tokenId: channel.tokenId ?? null,
-    oauthRouteUnitId: channel.oauthRouteUnitId ?? null,
     sourceModel: channel.sourceModel,
   });
   if (!candidate) return { reset: false, derived: false };
@@ -41,7 +40,6 @@ export async function resetChannelToDerivedState(channelId: number): Promise<Res
   await db.update(schema.routeChannels)
     .set({
       tokenId: candidate.tokenId,
-      oauthRouteUnitId: candidate.oauthRouteUnitId ?? null,
       sourceModel: candidate.sourceModel,
       priority: candidate.priority,
       weight: candidate.weight,

@@ -23,6 +23,17 @@ type Dialect = 'mysql' | 'postgres';
 type SqlDialect = 'sqlite' | Dialect;
 type SqlGenerationOptions = {
   mysqlIndexPrefixRequirements?: MysqlIndexPrefixRequirementMap;
+  /**
+   * Emit DROP statements for tables and columns that exist in the previous
+   * contract but not in the current one.
+   *
+   * Off by default: a schema generator is normally a ratchet, and silently
+   * accepting a dropped column means a typo in `schema.ts` becomes data loss
+   * on every upgraded database. Turn it on only for a reviewed migration whose
+   * destructive intent is deliberate, and only with the matching drizzle
+   * migration in the same commit.
+   */
+  allowDestructive?: boolean;
 };
 
 function resolveDbDir(): string {
@@ -261,20 +272,25 @@ function serializeForeignKey(foreignKey: SchemaContractForeignKey): string {
   ].join('|');
 }
 
-function assertAdditiveSchemaDiff(currentContract: SchemaContract, previousContract: SchemaContract): void {
+function assertAdditiveSchemaDiff(
+  currentContract: SchemaContract,
+  previousContract: SchemaContract,
+  options?: SqlGenerationOptions,
+): void {
   const violations: string[] = [];
+  const allowDestructive = options?.allowDestructive === true;
 
   for (const [tableName, previousTable] of Object.entries(previousContract.tables)) {
     const currentTable = currentContract.tables[tableName];
     if (!currentTable) {
-      violations.push(`removed table ${tableName}`);
+      if (!allowDestructive) violations.push(`removed table ${tableName}`);
       continue;
     }
 
     for (const [columnName, previousColumn] of Object.entries(previousTable.columns)) {
       const currentColumn = currentTable.columns[columnName];
       if (!currentColumn) {
-        violations.push(`removed column ${tableName}.${columnName}`);
+        if (!allowDestructive) violations.push(`removed column ${tableName}.${columnName}`);
         continue;
       }
 
@@ -312,7 +328,11 @@ function assertAdditiveSchemaDiff(currentContract: SchemaContract, previousContr
   const currentForeignKeys = new Set(currentContract.foreignKeys.map(serializeForeignKey));
   for (const previousForeignKey of previousContract.foreignKeys) {
     if (!currentForeignKeys.has(serializeForeignKey(previousForeignKey))) {
-      violations.push(`removed foreign key ${previousForeignKey.table}(${previousForeignKey.columns.join(',')})`);
+      // A foreign key only disappears on its own when its table or column is
+      // dropped, which the removal checks above already covered.
+      if (!allowDestructive) {
+        violations.push(`removed foreign key ${previousForeignKey.table}(${previousForeignKey.columns.join(',')})`);
+      }
     }
   }
 
@@ -384,6 +404,16 @@ function buildDropIndexStatement(dialect: SqlDialect, indexName: string, tableNa
   return `DROP INDEX IF EXISTS ${quotedIndex}`;
 }
 
+function buildDropColumnStatement(dialect: SqlDialect, tableName: string, columnName: string): string {
+  // SQLite supports DROP COLUMN since 3.35 and the runtime bundles a newer
+  // engine; the drizzle migration for this change uses the same statement.
+  return `ALTER TABLE ${quoteIdentifier(dialect, tableName)} DROP COLUMN ${quoteIdentifier(dialect, columnName)}`;
+}
+
+function buildDropTableStatement(dialect: SqlDialect, tableName: string): string {
+  return `DROP TABLE IF EXISTS ${quoteIdentifier(dialect, tableName)}`;
+}
+
 export function generateUpgradeSql(
   dialect: SqlDialect,
   currentContract: SchemaContract,
@@ -394,7 +424,27 @@ export function generateUpgradeSql(
     return `-- no previous schema contract available for ${dialect} additive upgrade generation\n`;
   }
 
-  assertAdditiveSchemaDiff(currentContract, previousContract);
+  assertAdditiveSchemaDiff(currentContract, previousContract, options);
+
+  const keepTableNames = new Set(Object.keys(currentContract.tables));
+  // Tables and columns that exist only in the previous contract. Emitted only
+  // when the caller opted into destructive output, so the generated upgrade
+  // script can never diverge from the contract it was produced from.
+  const droppedTableNames = options?.allowDestructive === true
+    ? Object.keys(previousContract.tables).filter((tableName) => !keepTableNames.has(tableName)).sort()
+    : [];
+  const droppedColumnStatements: string[] = [];
+  if (options?.allowDestructive === true) {
+    for (const tableName of Object.keys(currentContract.tables).sort()) {
+      const previousColumns = previousContract.tables[tableName]?.columns;
+      if (!previousColumns) continue;
+      const currentColumns = currentContract.tables[tableName]?.columns ?? {};
+      for (const columnName of Object.keys(previousColumns)) {
+        if (currentColumns[columnName]) continue;
+        droppedColumnStatements.push(buildDropColumnStatement(dialect, tableName, columnName));
+      }
+    }
+  }
 
   const previousTableNames = new Set(Object.keys(previousContract.tables));
   const currentTableNames = Object.keys(currentContract.tables).sort((left, right) => left.localeCompare(right, 'en'));
@@ -474,6 +524,8 @@ export function generateUpgradeSql(
 
   const statements = [
     ...droppedIndexStatements,
+    ...droppedColumnStatements,
+    ...droppedTableNames.map((tableName) => buildDropTableStatement(dialect, tableName)),
     ...addedTableStatements,
     ...addColumnStatements,
     ...addForeignKeyStatements,
@@ -490,20 +542,22 @@ export function generateUpgradeSql(
 export function generateDialectArtifacts(
   contract: SchemaContract,
   previousContract?: SchemaContract | null,
+  options?: SqlGenerationOptions,
 ): GeneratedDialectArtifacts {
   return {
     mysqlBootstrap: generateBootstrapSql('mysql', contract),
     postgresBootstrap: generateBootstrapSql('postgres', contract),
-    mysqlUpgrade: generateUpgradeSql('mysql', contract, previousContract),
-    postgresUpgrade: generateUpgradeSql('postgres', contract, previousContract),
+    mysqlUpgrade: generateUpgradeSql('mysql', contract, previousContract, options),
+    postgresUpgrade: generateUpgradeSql('postgres', contract, previousContract, options),
   };
 }
 
 export function writeDialectArtifactFiles(
   contract: SchemaContract,
   previousContract?: SchemaContract | null,
+  options?: SqlGenerationOptions,
 ): GeneratedDialectArtifacts {
-  const artifacts = generateDialectArtifacts(contract, previousContract);
+  const artifacts = generateDialectArtifacts(contract, previousContract, options);
   const artifactEntries = [
     ['mysql.bootstrap.sql', artifacts.mysqlBootstrap],
     ['postgres.bootstrap.sql', artifacts.postgresBootstrap],

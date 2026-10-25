@@ -12,7 +12,6 @@ import { normalizeTokenRouteMode } from '../../shared/tokenRouteContract.js';
 type PatternRouteChannelCandidate = {
   tokenId: number | null;
   accountId: number;
-  oauthRouteUnitId: number | null;
   sourceModel: string;
   priority: number;
   weight: number;
@@ -104,13 +103,9 @@ function normalizeModelKey(modelName: string): string {
 function buildChannelPairKey(input: {
   accountId: number;
   tokenId: number | null;
-  oauthRouteUnitId?: number | null;
   sourceModel: string | null;
 }): string {
   const sourceModel = (input.sourceModel || '').trim().toLowerCase();
-  if (typeof input.oauthRouteUnitId === 'number' && Number.isFinite(input.oauthRouteUnitId) && input.oauthRouteUnitId > 0) {
-    return `route-unit:${input.oauthRouteUnitId}::${sourceModel}`;
-  }
   const tokenId = typeof input.tokenId === 'number' && Number.isFinite(input.tokenId) ? input.tokenId : 0;
   return `account:${input.accountId}::${tokenId}::${sourceModel}`;
 }
@@ -144,7 +139,6 @@ async function getPatternTokenCandidates(
     candidates.push({
       tokenId: row.account_tokens.id,
       accountId: row.accounts.id,
-      oauthRouteUnitId: null,
       sourceModel: modelName,
       priority: 0,
       weight: 10,
@@ -191,7 +185,6 @@ async function getMatchedExactRouteChannelCandidates(
     candidates: channels.map((channel: any) => ({
       tokenId: channel.tokenId ?? null,
       accountId: channel.accountId,
-      oauthRouteUnitId: channel.oauthRouteUnitId ?? null,
       sourceModel: (channel.sourceModel || routeMap.get(channel.routeId)?.modelPattern || '').trim(),
       priority: channel.priority ?? 0,
       weight: channel.weight ?? 10,
@@ -245,7 +238,6 @@ async function insertRouteChannelCandidates(
     routeId,
     accountId: candidate.accountId,
     tokenId: candidate.tokenId,
-    oauthRouteUnitId: candidate.oauthRouteUnitId ?? null,
     sourceModel: candidate.sourceModel,
     priority: candidate.priority,
     weight: candidate.weight,
@@ -269,7 +261,6 @@ export async function populateRouteChannelsByModelPattern(
   const existingPairs = new Set(existingChannels.map((channel: any) => buildChannelPairKey({
     accountId: channel.accountId,
     tokenId: channel.tokenId ?? null,
-    oauthRouteUnitId: channel.oauthRouteUnitId ?? null,
     sourceModel: channel.sourceModel,
   })));
 
@@ -285,7 +276,6 @@ function channelPairKeyInput(channel: typeof schema.routeChannels.$inferSelect) 
   return {
     accountId: channel.accountId,
     tokenId: channel.tokenId ?? null,
-    oauthRouteUnitId: channel.oauthRouteUnitId ?? null,
     sourceModel: channel.sourceModel,
   };
 }
@@ -302,12 +292,6 @@ function scoreChannelCandidateMatch(
   if (buildChannelPairKey(channelPairKeyInput(channel)) === buildChannelPairKey(candidate)) {
     return MATCH_EXACT_PAIR;
   }
-
-  const channelUnit = channel.oauthRouteUnitId ?? null;
-  const candidateUnit = candidate.oauthRouteUnitId ?? null;
-  // Route-unit channels key on the unit, meaning an account identity is not
-  // enough to treat two of them as the same channel.
-  if (channelUnit !== null || candidateUnit !== null) return 0;
 
   if (channel.accountId !== candidate.accountId) return 0;
   return normalizeModelKey(channel.sourceModel || '') === normalizeModelKey(candidate.sourceModel || '')
@@ -364,14 +348,12 @@ export async function rebuildAutomaticRouteChannelsByModelPattern(
   for (const { candidate, channel } of assignments) {
     const derived = {
       tokenId: candidate.tokenId,
-      oauthRouteUnitId: candidate.oauthRouteUnitId ?? null,
       sourceModel: candidate.sourceModel,
       priority: candidate.priority,
       weight: candidate.weight,
       enabled: candidate.enabled,
     };
     const changed = channel.tokenId !== derived.tokenId
-      || (channel.oauthRouteUnitId ?? null) !== derived.oauthRouteUnitId
       || (channel.sourceModel || '') !== derived.sourceModel
       || (channel.priority ?? 0) !== derived.priority
       || (channel.weight ?? 10) !== derived.weight
@@ -450,7 +432,6 @@ export async function findDerivedChannelCandidateForRoute(
   channel: {
     accountId: number;
     tokenId: number | null;
-    oauthRouteUnitId: number | null;
     sourceModel: string | null;
   },
 ): Promise<PatternRouteChannelCandidate | null> {
@@ -470,12 +451,6 @@ export async function findDerivedChannelCandidateForRoute(
   const availabilityCandidates = await getPatternTokenCandidates(pattern, availabilityExclusions);
   const candidates = dedupeRouteChannelCandidates([...exactRouteCandidates, ...availabilityCandidates]);
   if (candidates.length === 0) return null;
-
-  const channelUnit = channel.oauthRouteUnitId ?? null;
-  if (channelUnit !== null) {
-    // Route-unit channels key on the unit; only the exact pair counts.
-    return candidates.find((candidate) => buildChannelPairKey(candidate) === buildChannelPairKey(channel)) ?? null;
-  }
 
   const sameAccountAndModel = (candidate: PatternRouteChannelCandidate) => (
     candidate.accountId === channel.accountId

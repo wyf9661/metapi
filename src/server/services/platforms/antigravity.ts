@@ -1,10 +1,9 @@
 import { BasePlatformAdapter, type BalanceInfo, type CheckinResult, type UserInfo } from './base.js';
-import {
-  ANTIGRAVITY_CLIENT_METADATA,
-  ANTIGRAVITY_GOOGLE_API_CLIENT,
-  ANTIGRAVITY_UPSTREAM_BASE_URL,
-  ANTIGRAVITY_USER_AGENT,
-} from '../oauth/antigravityProvider.js';
+
+const ANTIGRAVITY_UPSTREAM_BASE_URL = 'https://cloudcode-pa.googleapis.com';
+const ANTIGRAVITY_GOOGLE_API_CLIENT = 'google-cloud-sdk vscode_cloudshelleditor/0.1';
+const ANTIGRAVITY_USER_AGENT = 'google-api-nodejs-client/9.15.1';
+const ANTIGRAVITY_CLIENT_METADATA = '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}';
 
 function normalizeBaseUrl(baseUrl: string): string {
   return (baseUrl || '').replace(/\/+$/, '');

@@ -64,10 +64,6 @@ vi.mock('../../services/modelService.js', () => ({
   refreshModelsAndRebuildRoutes: (...args: unknown[]) => refreshModelsAndRebuildRoutesMock(...args),
 }));
 
-vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
-  refreshOauthAccessTokenSingleflight: (...args: unknown[]) => refreshOauthAccessTokenSingleflightMock(...args),
-}));
-
 vi.mock('../../services/tokenRouter.js', () => ({
   tokenRouter: {
     selectChannel: (...args: unknown[]) => selectChannelMock(...args),

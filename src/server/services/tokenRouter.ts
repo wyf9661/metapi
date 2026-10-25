@@ -1,4 +1,4 @@
-﻿import { and, eq } from 'drizzle-orm';
+﻿import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { config } from '../config.js';
 import { refreshModelPricingCatalog } from './modelPricingService.js';
@@ -6,7 +6,6 @@ import { refreshModelPricingCatalog } from './modelPricingService.js';
 import { type SiteRuntimeFailureContext } from './siteFailureClassification.js';
 
 import type { RouteChannelCandidate, RouteMatch, RouteRow } from './tokenRouterTypes.js';
-import { compareNullableTimeAsc, compareNullableTimeDesc } from './tokenRouterMath.js';
 import {
   buildStableFirstPoolPlan,
   shouldUseStableFirstObservationCandidate,
@@ -38,9 +37,8 @@ import { filterRecentlyFailedCandidates, isChannelRecentlyFailed } from './token
 // Kept on this module's public surface: both were exported from here before the
 // failure policy moved out, and callers (and their tests) import them from here.
 export { filterRecentlyFailedCandidates, isChannelRecentlyFailed } from './tokenRouterFailurePolicy.js';
-import { isOauthRouteUnitCandidate, resolveRouteStrategy } from './tokenRouterCandidateHelpers.js';
+import { resolveRouteStrategy } from './tokenRouterCandidateHelpers.js';
 import {
-  invalidateRouteScopedCache,
   loadEnabledRoutes,
   loadRouteMatch,
   patchCachedChannel,
@@ -194,17 +192,14 @@ import {
 } from './tokenRouterFailureRecording.js';
 import {
   DEFAULT_DOWNSTREAM_POLICY,
-  buildRouteUnitMemberDispatchCandidate,
   buildShadowCandidateInputs,
   buildStableFirstRotationKey,
   calculateWeightedSelection,
   explainSelectionFromMatch,
   getCandidateEligibilityReasons,
-  getEligibleRouteUnitMembers,
   getRoundRobinCandidates,
   isKeylessApiConnection,
   resolveChannelTokenValue,
-  resolveRouteUnitMemberTokenValue,
 } from './tokenRouterSelectionEngine.js';
 
 export {
@@ -510,12 +505,12 @@ export class TokenRouter {
     }));
   }
 
-  async recordSuccess(channelId: number, latencyMs: number, cost: number, modelName?: string | null, actualAccountId?: number) {
-    return recordSuccess(channelId, latencyMs, cost, modelName, actualAccountId);
+  async recordSuccess(channelId: number, latencyMs: number, cost: number, modelName?: string | null) {
+    return recordSuccess(channelId, latencyMs, cost, modelName);
   }
 
-    async recordProbeSuccess(channelId: number, latencyMs: number, modelName?: string | null, actualAccountId?: number) {
-    return recordProbeSuccess(channelId, latencyMs, modelName, actualAccountId);
+  async recordProbeSuccess(channelId: number, latencyMs: number, modelName?: string | null) {
+    return recordProbeSuccess(channelId, latencyMs, modelName);
   }
 
   async recordProbeFailure(channelId: number, options: { inconclusive?: boolean; quotaExhausted?: boolean } = {}, nowMs: number = Date.now()) {
@@ -526,8 +521,8 @@ export class TokenRouter {
     return clearChannelFailureState(channelIds);
   }
 
-  async recordFailure(channelId: number, context: SiteRuntimeFailureContext | string | null = {}, actualAccountId?: number) {
-    return recordFailure(channelId, context, actualAccountId);
+  async recordFailure(channelId: number, context: SiteRuntimeFailureContext | string | null = {}) {
+    return recordFailure(channelId, context);
   }
 
   async clearFailureCooldown(channelId: number) : Promise<void> {
@@ -1048,7 +1043,7 @@ export class TokenRouter {
 
     const selected = breakerFiltered.candidates.find((candidate) => candidate.channel.id === preferredChannelId);
     if (!selected) return null;
-    if (!isOauthRouteUnitCandidate(selected) && routeStrategy !== 'round_robin' && isChannelRecentlyFailed(selected.channel, nowMs)) {
+    if (routeStrategy !== 'round_robin' && isChannelRecentlyFailed(selected.channel, nowMs)) {
       return null;
     }
     return await this.finalizeSelectedCandidateForDispatch(
@@ -1198,126 +1193,6 @@ export class TokenRouter {
     return await loadRouteMatch(route);
   }
 
-    private resolveRouteUnitMemberTokenValue(candidate: {
-    account: typeof schema.accounts.$inferSelect;
-  }) : string | null {
-    return resolveRouteUnitMemberTokenValue(candidate);
-  }
-
-    private buildRouteUnitMemberDispatchCandidate(outerCandidate: RouteChannelCandidate, memberCandidate: RouteChannelCandidate['routeUnitMembers'][number]) : RouteChannelCandidate {
-    return buildRouteUnitMemberDispatchCandidate(outerCandidate, memberCandidate);
-  }
-
-  
-
-    private getEligibleRouteUnitMembers(candidate: RouteChannelCandidate, options: CandidateEligibilityOptions) : RouteChannelCandidate['routeUnitMembers'] {
-    return getEligibleRouteUnitMembers(candidate, options);
-  }
-
-  private getRoundRobinRouteUnitMembers(
-    members: RouteChannelCandidate['routeUnitMembers'],
-  ): RouteChannelCandidate['routeUnitMembers'] {
-    return [...members].sort((left, right) => {
-      const selectionOrder = compareNullableTimeAsc(
-        left.member.lastSelectedAt || left.member.lastUsedAt,
-        right.member.lastSelectedAt || right.member.lastUsedAt,
-      );
-      if (selectionOrder !== 0) return selectionOrder;
-
-      const usedOrder = compareNullableTimeAsc(left.member.lastUsedAt, right.member.lastUsedAt);
-      if (usedOrder !== 0) return usedOrder;
-
-      const sortOrder = (left.member.sortOrder ?? 0) - (right.member.sortOrder ?? 0);
-      if (sortOrder !== 0) return sortOrder;
-
-      return left.account.id - right.account.id;
-    });
-  }
-
-  private getStickyPreferredRouteUnitMember(
-    members: RouteChannelCandidate['routeUnitMembers'],
-  ): RouteChannelCandidate['routeUnitMembers'][number] | null {
-    return [...members].sort((left, right) => {
-      const selectionOrder = compareNullableTimeDesc(
-        left.member.lastSelectedAt || left.member.lastUsedAt,
-        right.member.lastSelectedAt || right.member.lastUsedAt,
-      );
-      if (selectionOrder !== 0) return selectionOrder;
-
-      const sortOrder = (left.member.sortOrder ?? 0) - (right.member.sortOrder ?? 0);
-      if (sortOrder !== 0) return sortOrder;
-
-      return left.account.id - right.account.id;
-    })[0] ?? null;
-  }
-
-  private selectRouteUnitMember(
-    candidate: RouteChannelCandidate,
-    requestedModel: string,
-    downstreamPolicy: DownstreamRoutingPolicy,
-    nowIso: string,
-    nowMs: number,
-    excludeChannelIds: number[] = [],
-  ): RouteChannelCandidate['routeUnitMembers'][number] | null {
-    if (!isOauthRouteUnitCandidate(candidate)) return null;
-    const eligibleMembers = this.getEligibleRouteUnitMembers(candidate, {
-      requestedModel,
-      bypassSourceModelCheck: true,
-      excludeChannelIds: [],
-      nowIso,
-      downstreamPolicy,
-    });
-    if (eligibleMembers.length === 0) return null;
-
-    const isRouteUnitFailover = excludeChannelIds.includes(candidate.channel.id);
-    const healthyMembers = isRouteUnitFailover
-      ? eligibleMembers.filter((memberCandidate) => !isChannelRecentlyFailed(memberCandidate.member, nowMs))
-      : filterRecentlyFailedCandidates(
-        eligibleMembers.map((memberCandidate) => ({
-          memberCandidate,
-          channel: memberCandidate.member,
-        })),
-        nowMs,
-      ).map((item) => item.memberCandidate);
-    const candidateMembers = healthyMembers.length > 0
-      ? healthyMembers
-      : (isRouteUnitFailover ? [] : eligibleMembers);
-    if (candidate.routeUnit?.strategy === 'stick_until_unavailable') {
-      const sticky = this.getStickyPreferredRouteUnitMember(candidateMembers);
-      if (sticky) return sticky;
-      return this.getRoundRobinRouteUnitMembers(candidateMembers)[0] ?? null;
-    }
-
-    return this.getRoundRobinRouteUnitMembers(candidateMembers)[0] ?? null;
-  }
-
-  private async recordRouteUnitMemberSelection(
-    routeUnitId: number,
-    accountId: number,
-  ): Promise<void> {
-    const nowIso = new Date().toISOString();
-    await db.update(schema.oauthRouteUnitMembers).set({
-      lastSelectedAt: nowIso,
-      updatedAt: nowIso,
-    }).where(and(
-      eq(schema.oauthRouteUnitMembers.unitId, routeUnitId),
-      eq(schema.oauthRouteUnitMembers.accountId, accountId),
-    )).run();
-    const routeRows = await db.select({
-      routeId: schema.routeChannels.routeId,
-    }).from(schema.routeChannels)
-      .where(eq(schema.routeChannels.oauthRouteUnitId, routeUnitId))
-      .all();
-    const routeIds: number[] = Array.from(new Set<number>(
-      routeRows
-        .map((row: any) => Number(row.routeId))
-        .filter((routeId: any): routeId is number => Number.isFinite(routeId) && routeId > 0),
-    ));
-    for (const routeId of routeIds) {
-      invalidateRouteScopedCache(routeId);
-    }
-  }
-
     private isKeylessApiConnection(candidate: {
     channel: typeof schema.routeChannels.$inferSelect;
     account: typeof schema.accounts.$inferSelect;
@@ -1375,35 +1250,17 @@ export class TokenRouter {
     match: RouteMatch,
     requestedModel: string,
     _mappedModel: string,
-    downstreamPolicy: DownstreamRoutingPolicy,
+    _downstreamPolicy: DownstreamRoutingPolicy,
     recordSelection: boolean,
-    nowIso: string,
+    _nowIso: string,
     nowMs: number,
     stableFirstRotationKey?: string,
     stableFirstObservationKey?: string,
     usedObservation = false,
-    excludeChannelIds: number[] = [],
+    _excludeChannelIds: number[] = [],
   ): Promise<SelectedChannel | null> {
-    let dispatchCandidate = selected;
-    let resolvedRouteUnitMemberTokenValue: string | null = null;
-    if (isOauthRouteUnitCandidate(selected)) {
-      const member = this.selectRouteUnitMember(
-        selected,
-        requestedModel,
-        downstreamPolicy,
-        nowIso,
-        nowMs,
-        excludeChannelIds,
-      );
-      if (!member || !selected.routeUnit) return null;
-      resolvedRouteUnitMemberTokenValue = this.resolveRouteUnitMemberTokenValue(member);
-      dispatchCandidate = this.buildRouteUnitMemberDispatchCandidate(selected, member);
-      if (recordSelection) {
-        await this.recordRouteUnitMemberSelection(selected.routeUnit.id, member.account.id);
-      }
-    }
-
-    const tokenValue = resolvedRouteUnitMemberTokenValue ?? this.resolveChannelTokenValue(dispatchCandidate);
+    const dispatchCandidate = selected;
+    const tokenValue = this.resolveChannelTokenValue(dispatchCandidate);
     if (!tokenValue && !this.isKeylessApiConnection(dispatchCandidate)) return null;
     const dispatchTokenValue = tokenValue || '';
 

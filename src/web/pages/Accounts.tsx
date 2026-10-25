@@ -41,7 +41,6 @@ import {
 import {
   formatSub2ApiUsageInline,
   isTruthyFlag,
-  parseOauthAccountInfo,
   parsePositiveInt,
   parseSub2ApiAccountUsage,
   resolveAccountCredentialMode,
@@ -2518,43 +2517,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               }
                               return null;
                             })()}
-                            {(() => {
-                              const oauthInfo = parseOauthAccountInfo(a);
-                              if (!oauthInfo) return null;
-                              const fiveHour = oauthInfo.quota?.fiveHour;
-                              const sevenDay = oauthInfo.quota?.sevenDay;
-                              return (
-                                <>
-                                  {oauthInfo.email && (
-                                    <MobileField
-                                      label="邮箱"
-                                      value={oauthInfo.email}
-                                    />
-                                  )}
-                                  {oauthInfo.planType && (
-                                    <MobileField
-                                      label="套餐"
-                                      value={oauthInfo.planType}
-                                    />
-                                  )}
-                                  {(fiveHour || sevenDay) && (
-                                    <MobileField
-                                      label="配额窗口"
-                                      value={[
-                                        fiveHour
-                                          ? `5h ${fiveHour.used ?? '-'}%`
-                                          : null,
-                                        sevenDay
-                                          ? `7d ${sevenDay.used ?? '-'}%`
-                                          : null,
-                                      ]
-                                        .filter(Boolean)
-                                        .join(' / ')}
-                                    />
-                                  )}
-                                </>
-                              );
-                            })()}
                             <MobileField
                               label="提示"
                               stacked
@@ -2753,37 +2715,6 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     >
                                       {sub2ApiLabel}
                                     </span>
-                                  );
-                                }
-                                const oauthInfo = parseOauthAccountInfo(a);
-                                if (oauthInfo) {
-                                  // OAuth 账号：显示 planType + 配额窗口
-                                  const supportedWindows = [
-                                    oauthInfo.quota?.fiveHour?.supported ? `5h ${oauthInfo.quota.fiveHour.used ?? '-'}%` : null,
-                                    oauthInfo.quota?.sevenDay?.supported ? `7d ${oauthInfo.quota.sevenDay.used ?? '-'}%` : null,
-                                  ].filter(Boolean);
-                                  // 非窗口型 provider（按模型桶 / 积分池）回落到额度明细首行
-                                  const windowLabel = supportedWindows.length
-                                    ? supportedWindows.join(' / ')
-                                    : (() => {
-                                      const firstEntry = oauthInfo.entries[0];
-                                      if (!firstEntry) return null;
-                                      const value = typeof firstEntry.remaining === 'number' && typeof firstEntry.limit === 'number'
-                                        ? `${firstEntry.remaining}/${firstEntry.limit}`
-                                        : firstEntry.label;
-                                      return `${firstEntry.label} ${value}`;
-                                    })();
-                                  return (
-                                    <>
-                                      <StatusPill tone="info" style={{ fontSize: 10 }}>
-                                        {oauthInfo.planType || oauthInfo.provider}
-                                      </StatusPill>
-                                      {windowLabel && (
-                                        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                                          {windowLabel}
-                                        </span>
-                                      )}
-                                    </>
                                   );
                                 }
                                 // 普通账号：显示余额

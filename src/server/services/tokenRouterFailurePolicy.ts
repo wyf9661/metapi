@@ -15,8 +15,6 @@ import {
   isUsageLimitRateLimitFailure,
   type SiteRuntimeFailureContext,
 } from './siteFailureClassification.js';
-import { getOauthInfoFromAccount } from './oauth/oauthAccount.js';
-import { parseCodexQuotaResetHint } from './oauth/quota.js';
 import {
   clampFailureCooldownMs as clampFailureCooldownMsMath,
   resolveEffectiveFailureCooldownMs as resolveEffectiveFailureCooldownMsMath,
@@ -65,30 +63,13 @@ export function resolveFailureCooldownWeight(context: SiteRuntimeFailureContext 
 
 
 export function resolveShortWindowLimitCooldown(
-  account: typeof schema.accounts.$inferSelect,
+  _account: typeof schema.accounts.$inferSelect,
   context: SiteRuntimeFailureContext = {},
   nowMs = Date.now(),
 ): string | null {
   const status = typeof context.status === 'number' ? context.status : 0;
   const errorText = (context.errorText || '').trim();
   if (!isUsageLimitRateLimitFailure({ status, errorText })) return null;
-
-  const resetHint = parseCodexQuotaResetHint(status, errorText, nowMs);
-  if (resetHint) {
-    const hintMs = Date.parse(resetHint.resetAt);
-    if (Number.isFinite(hintMs) && hintMs > nowMs) {
-      return new Date(hintMs).toISOString();
-    }
-  }
-
-  const oauth = getOauthInfoFromAccount(account);
-  const storedResetAt = oauth?.quota?.lastLimitResetAt;
-  if (oauth?.provider === 'codex' && storedResetAt) {
-    const storedMs = Date.parse(storedResetAt);
-    if (Number.isFinite(storedMs) && storedMs > nowMs) {
-      return new Date(storedMs).toISOString();
-    }
-  }
 
   return new Date(nowMs + SHORT_WINDOW_LIMIT_COOLDOWN_MS).toISOString();
 }

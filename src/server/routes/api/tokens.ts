@@ -27,10 +27,6 @@ import {
   ROUTE_DECISION_REFRESH_DEDUPE_KEY,
   ROUTE_DECISION_REFRESH_TASK_TYPE,
 } from '../../services/routeDecisionRefreshService.js';
-import {
-  listOauthRouteUnitMembersByUnitIds,
-  loadOauthRouteUnitSummariesByIds,
-} from '../../services/oauth/routeUnitService.js';
 import { normalizeTokenRouteMode, type RouteMode } from '../../../shared/tokenRouteContract.js';
 import {
   parseRouteChannelBatchCreatePayload,
@@ -461,12 +457,8 @@ type RouteChannelSummary = {
 
 async function fetchChannelsForRouteRows(
   routes: RouteRow[],
-  options: {
-    includeRouteUnitDetails?: boolean;
-  } = {},
 ): Promise<Map<number, any[]>> {
   if (routes.length === 0) return new Map();
-  const includeRouteUnitDetails = options.includeRouteUnitDetails !== false;
 
   const explicitSourceRouteIds = Array.from(new Set(routes
     .filter((route) => isExplicitGroupRoute(route))
@@ -507,18 +499,6 @@ async function fetchChannelsForRouteRows(
     .where(inArray(schema.routeChannels.routeId, actualRouteIds))
     .all();
 
-  const oauthRouteUnitIds: number[] = Array.from(new Set<number>(
-    channelRows
-      .map((row: any) => Number(row.route_channels.oauthRouteUnitId))
-      .filter((id: any): id is number => Number.isFinite(id) && id > 0),
-  ));
-  const routeUnitSummaries = includeRouteUnitDetails
-    ? await loadOauthRouteUnitSummariesByIds(oauthRouteUnitIds)
-    : new Map();
-  const routeUnitMembersByUnitId = includeRouteUnitDetails
-    ? await listOauthRouteUnitMembersByUnitIds(oauthRouteUnitIds)
-    : new Map();
-
   const channelsByActualRouteId = new Map<number, any[]>();
 
   for (const row of channelRows) {
@@ -529,9 +509,6 @@ async function fetchChannelsForRouteRows(
       : null;
     const resolvedSourceModel = (row.route_channels.sourceModel || fallbackSourceModel || '').trim();
     if (!channelsByActualRouteId.has(routeId)) channelsByActualRouteId.set(routeId, []);
-    const routeUnit = row.route_channels.oauthRouteUnitId
-      ? routeUnitSummaries.get(row.route_channels.oauthRouteUnitId) || null
-      : null;
     channelsByActualRouteId.get(routeId)!.push({
       ...row.route_channels,
       sourceModel: resolvedSourceModel || null,
@@ -544,19 +521,6 @@ async function fetchChannelsForRouteRows(
           accountId: row.account_tokens.accountId,
           enabled: row.account_tokens.enabled,
           isDefault: row.account_tokens.isDefault,
-        }
-        : null,
-      routeUnit: includeRouteUnitDetails && routeUnit
-        ? {
-          id: routeUnit.id,
-          name: routeUnit.name,
-          strategy: routeUnit.strategy,
-          memberCount: routeUnit.memberCount,
-          members: (routeUnitMembersByUnitId.get(routeUnit.id) || []).map((member: any) => ({
-            accountId: member.account.id,
-            username: member.account.username,
-            siteName: member.site.name,
-          })),
         }
         : null,
     });
@@ -576,7 +540,7 @@ async function fetchChannelsForRouteRows(
 
 
 async function buildRouteChannelSummaryMap(routes: RouteRow[]): Promise<Map<number, RouteChannelSummary>> {
-  const channelsByRoute = await fetchChannelsForRouteRows(routes, { includeRouteUnitDetails: false });
+  const channelsByRoute = await fetchChannelsForRouteRows(routes);
   const summaryByRoute = new Map<number, RouteChannelSummary>();
   for (const route of routes) {
     const channels = channelsByRoute.get(route.id) || [];

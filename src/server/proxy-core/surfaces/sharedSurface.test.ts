@@ -126,21 +126,12 @@ vi.mock('../../services/proxyRetryPolicy.js', () => ({
   shouldInPlaceRetryEmptyContentOnce: () => false,
 }));
 
-vi.mock('../../services/oauth/quota.js', () => ({
-  recordOauthQuotaHeadersSnapshot: (...args: unknown[]) => recordOauthQuotaHeadersSnapshotMock(...args),
-  recordOauthQuotaResetHint: (...args: unknown[]) => recordOauthQuotaResetHintMock(...args),
-}));
-
 vi.mock('../../services/proxyUsageFallbackService.js', () => ({
   resolveProxyUsageWithSelfLogFallback: (...args: unknown[]) => resolveProxyUsageWithSelfLogFallbackMock(...args),
 }));
 
 vi.mock('../../services/proxyBilling.js', () => ({
   resolveProxyLogBilling: (...args: unknown[]) => resolveProxyLogBillingMock(...args),
-}));
-
-vi.mock('../../services/oauth/refreshSingleflight.js', () => ({
-  refreshOauthAccessTokenSingleflight: (...args: unknown[]) => refreshOauthAccessTokenSingleflightMock(...args),
 }));
 
 describe('selectSurfaceChannelForAttempt', () => {

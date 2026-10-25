@@ -42,7 +42,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { api, type OAuthProviderInfo } from '../api.js';
+import { api } from '../api.js';
 import { getAuthToken } from '../authSession.js';
 import { getBrand } from '../components/BrandIcon.js';
 import CenteredModal from '../components/CenteredModal.js';
@@ -60,7 +60,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { buildSiteFocusSearch, clearFocusParams, readFocusSiteId } from './helpers/navigationFocus.js';
-import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, SiteConnectionStats, SiteOutboundFlags, buildSiteConnectionSearchParams, findOauthProviderForPlatform, getConfiguredSiteApiEndpoints, platformBadgeClass, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
+import {SITE_PLATFORM_OPTIONS, SiteBalanceDisplay, SiteConnectionStats, SiteOutboundFlags, buildSiteConnectionSearchParams, getConfiguredSiteApiEndpoints, platformBadgeClass, resolveSiteCreatedSessionLabel} from './sites/sitePresentation.js';
 import { tr } from '../i18n.js';
 import { buildCustomDragReorderUpdates, buildCrossPageDropUpdates, buildUnpinMoveToFrontUpdates, canCrossPageDrop, sortItemsForDisplay, type SortMode } from './helpers/listSorting.js';
 import { resolveInitialConnectionSegment } from './helpers/defaultConnectionSegment.js';
@@ -328,7 +328,6 @@ export default function Sites() {
     initializationPresetId?: string | null;
   } | null>(null);
   const [selectedInitializationPresetId, setSelectedInitializationPresetId] = useState<string | null>(null);
-  const [oauthProviders, setOauthProviders] = useState<OAuthProviderInfo[]>([]);
   const isMobile = useIsMobile();
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<null | {
@@ -386,12 +385,6 @@ export default function Sites() {
   const autoDetectSignatureRef = useRef<string | null>(null);
   const handleDetectRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => {});
   const latestInitializationPresetIdRef = useRef(selectedInitializationPresetId);
-
-  useEffect(() => {
-    void api.getOAuthProviders()
-      .then((response) => setOauthProviders(Array.isArray(response?.providers) ? response.providers : []))
-      .catch(() => setOauthProviders([]));
-  }, []);
 
   useEffect(() => {
     latestPrimarySiteUrlRef.current = form.url;
@@ -566,10 +559,7 @@ export default function Sites() {
         { value: current, label: `${current}（当前值）` },
       ];
   }, [normalizedFormPlatform]);
-  const selectedOauthProvider = useMemo(
-    () => findOauthProviderForPlatform(normalizedFormPlatform, oauthProviders),
-    [normalizedFormPlatform, oauthProviders],
-  );
+  const selectedOauthProvider = null;
   const platformSelectValue = form.platform;
 
   useEffect(() => {
@@ -1008,18 +998,12 @@ export default function Sites() {
     initializationPresetId?: string | null;
     choice: 'session' | 'apikey' | 'later';
   }) => {
-    const platform = String(input.platform ?? '').trim().toLowerCase();
     const params = buildSiteConnectionSearchParams({
       siteId: input.siteId,
       initializationPresetId: input.initializationPresetId,
     });
 
     if (input.choice === 'session') {
-      if (platform === 'codex' || platform === 'gemini-cli' || platform === 'antigravity') {
-        params.set('provider', platform);
-        navigate(`/oauth?${params.toString()}`);
-        return;
-      }
       navigate(`/sites/${input.siteId}?${params.toString()}`, { state: { fromSearch: location.search } });
       return;
     }
@@ -1558,21 +1542,6 @@ export default function Sites() {
                 data-testid="site-platform-select"
                 value={platformSelectValue}
                 onChange={(value) => {
-                  const oauthProvider = findOauthProviderForPlatform(value, oauthProviders);
-                  if (oauthProvider) {
-                    setSelectedInitializationPresetId(null);
-                    setForm((prev) => ({
-                      ...prev,
-                      platform: oauthProvider.platform,
-                      url: oauthProvider.siteUrl,
-                      apiEndpoints: [],
-                      customHeaders: [],
-                      customHeadersOverrideRequestHeaders: false,
-                      paramOverride: '',
-                      protocolProfile: { preferResponses: false, preferMessages: false, requireCodexClient: false, credentialMode: 'auto' },
-                    }));
-                    return;
-                  }
                   if (value.startsWith('preset:')) {
                     const preset = getSiteInitializationPreset(value.slice('preset:'.length));
                     if (!preset) return;
@@ -1592,16 +1561,6 @@ export default function Sites() {
                   setForm((prev) => ({
                     ...prev,
                     platform: value,
-                    ...(findOauthProviderForPlatform(value, oauthProviders)
-                      ? {
-                        url: findOauthProviderForPlatform(value, oauthProviders)?.siteUrl || prev.url,
-                        apiEndpoints: [],
-                        customHeaders: [],
-                        customHeadersOverrideRequestHeaders: false,
-                        paramOverride: '',
-                        protocolProfile: { preferResponses: false, preferMessages: false, requireCodexClient: false, credentialMode: 'auto' },
-                      }
-                      : {}),
                   }));
                   setSelectedInitializationPresetId(null);
                 }}
