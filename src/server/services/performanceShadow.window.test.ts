@@ -111,6 +111,45 @@ describe('performanceShadow survival-curve window', () => {
     expect(estimate()).toBeNull();
   });
 
+
+  // Regression: production 2026-10-25. Antigravity's gemini-3.8-flash is a
+  // reasoning model whose healthy first byte lands at 5.0-6.7s. A 5s floor plus
+  // "candidates only come from observed successes" censored every slower answer,
+  // so the window could never grow past the fastest mode it had already seen.
+  it('widens when every success sits above the current floor', () => {
+    seedSuccesses([5_063, 6_275, 5_900, 6_100, 5_400, 6_000, 5_700, 6_200]);
+    const window = estimate();
+    expect(window).not.toBeNull();
+    // The window must not sit inside the observed success band: the slowest
+    // healthy answer has to fit with headroom, otherwise it gets censored next.
+    expect(window!).toBeGreaterThanOrEqual(6_275);
+  });
+
+  it('escalates past the slowest success after consecutive trailing timeouts', () => {
+    seedSuccesses([5_000, 5_200, 5_400, 5_600, 5_800, 6_000, 6_100, 6_275]);
+    // Two attempts expired at the incumbent window: the window is the suspect,
+    // not the upstream, so it must widen instead of optimising itself smaller.
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: 6_300, nowMs: BASE_NOW - 30 });
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: 6_300, nowMs: BASE_NOW - 20 });
+
+    const window = estimate();
+    expect(window).not.toBeNull();
+    expect(window!).toBeGreaterThan(6_275);
+    expect(window!).toBeLessThanOrEqual(CEILING);
+  });
+
+  it('does not let error attempts drag the TTFT window down', () => {
+    seedSuccesses([6_000, 6_100, 6_200, 6_300, 6_400, 6_500, 6_600, 6_700]);
+    // A burst of 4xx/5xx says nothing about first-byte latency.
+    for (let i = 0; i < 12; i += 1) {
+      recordPerformanceShadowAttempt({ key: KEY, outcome: 'error', nowMs: BASE_NOW - 500 + i });
+    }
+
+    const window = estimate();
+    expect(window).not.toBeNull();
+    expect(window!).toBeGreaterThanOrEqual(6_700);
+  });
+
   it('ignores attempts outside the 6h window', () => {
     seedSuccesses(Array.from({ length: 10 }, () => 2_000), BASE_NOW - 7 * 60 * 60 * 1000);
     expect(estimate()).toBeNull();

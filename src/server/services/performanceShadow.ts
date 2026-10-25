@@ -53,6 +53,16 @@ const ATTEMPT_WINDOW_MAX = 60;
 const ATTEMPT_TTL_MS = 6 * 60 * 60 * 1000;
 /** Samples required before the window estimator is allowed to override. */
 export const FIRST_BYTE_WINDOW_MIN_SAMPLES = 8;
+/**
+ * Headroom above an observed fast-byte sample, added as a candidate window.
+ * Without it the candidate set can never exceed the slowest success ever seen,
+ * so the first answer slower than that gets censored and the window is stuck.
+ */
+export const FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER = 1.35;
+/** Escalation target after a run of timeouts (relative to the slowest success). */
+export const FIRST_BYTE_WINDOW_RETRY_MULTIPLIER = 2;
+/** Trailing consecutive timeouts that force the window to widen. */
+export const FIRST_BYTE_WINDOW_TIMEOUT_STREAK_ESCALATE = 2;
 
 function sweepAttempts(nowMs = Date.now()): void {
   const cutoff = nowMs - ATTEMPT_TTL_MS;
@@ -111,6 +121,12 @@ export function listPerformanceShadowAttempts(
  * SHORTER window than a mean-based heuristic — and it needs no multiplier
  * guess, so it can never overshoot the configured ceiling by construction.
  *
+ * Two corrections keep that preference from degenerating into a ratchet:
+ * censored attempts are charged their own expiry point (not the candidate
+ * window), and candidates include headroom above every observed success so the
+ * window can widen again after a shrink. A trailing run of timeouts escalates
+ * instead of optimising, because at that point the window is the suspect.
+ *
  * `currentMs` adds hysteresis: keep the incumbent unless the alternative is
  * measurably better, so the window does not oscillate request to request.
  */
@@ -129,33 +145,79 @@ export function estimateFirstByteWindowMs(input: {
   const attempts = listPerformanceShadowAttempts(input.key, input.nowMs);
   if (attempts.length < minSamples) return null;
 
-  const n = attempts.length;
-  const points = new Set<number>([floorMs, ceilingMs]);
-  for (const attempt of attempts) {
+  // Errors (bad key, model removed, 4xx/5xx) say nothing about first-byte
+  // latency. Folding them into the ratio made a busy site look "slow to answer"
+  // and pushed the window down for a reason that had nothing to do with TTFT.
+  const ttftAttempts = attempts.filter(
+    (attempt) => attempt.outcome === 'success' || attempt.outcome === 'timeout',
+  );
+  if (ttftAttempts.length < minSamples) return null;
+  const n = ttftAttempts.length;
+
+  let maxSuccessMs = 0;
+  for (const attempt of ttftAttempts) {
     if (attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null) {
-      points.add(Math.min(ceilingMs, Math.max(floorMs, Math.round(attempt.firstByteLatencyMs))));
+      maxSuccessMs = Math.max(maxSuccessMs, attempt.firstByteLatencyMs);
     }
+  }
+
+  // Candidate windows. Headroom points above every observed success are what
+  // let the window ever grow again: without them the candidate set tops out at
+  // "the slowest answer we have ever seen", so the next slow answer is censored
+  // before it can become a sample, and the ceiling silently becomes the largest
+  // success instead of the configured one.
+  const points = new Set<number>([floorMs, ceilingMs]);
+  const clampWindow = (value: number) => Math.min(ceilingMs, Math.max(floorMs, Math.round(value)));
+  for (const attempt of ttftAttempts) {
+    if (attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null) {
+      points.add(clampWindow(attempt.firstByteLatencyMs));
+      points.add(clampWindow(attempt.firstByteLatencyMs * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER));
+    }
+  }
+  if (maxSuccessMs > 0) {
+    points.add(clampWindow(maxSuccessMs * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER));
+    points.add(clampWindow(maxSuccessMs * FIRST_BYTE_WINDOW_RETRY_MULTIPLIER));
   }
   const candidates = [...points].sort((a, b) => a - b);
 
   const score = (windowMs: number): number => {
     let successes = 0;
     let totalCost = 0;
-    for (const attempt of attempts) {
+    for (const attempt of ttftAttempts) {
       if (attempt.outcome === 'success'
         && attempt.firstByteLatencyMs !== null
         && attempt.firstByteLatencyMs <= windowMs) {
         successes += 1;
         totalCost += attempt.firstByteLatencyMs;
-      } else {
-        // Timed out inside this window, or failed/was censored: the attempt
-        // still costs the whole window in wall-clock terms.
-        totalCost += windowMs;
+        continue;
       }
+      // Censored attempt. We only know it outlived its own expiry point, so a
+      // wider candidate window must NOT be charged more than that expiry:
+      // otherwise every past timeout grows more expensive the further we widen,
+      // which is a permanent mathematical bias toward shrinking the window.
+      totalCost += attempt.outcome === 'timeout' && attempt.budgetMs !== null
+        ? Math.min(windowMs, attempt.budgetMs)
+        : windowMs;
     }
     if (successes <= 0) return Number.POSITIVE_INFINITY;
     return (totalCost / n) / (successes / n);
   };
+
+  // Consecutive timeouts at the tail mean the incumbent window is what is
+  // failing — not the upstream. Cost optimisation cannot see this on its own
+  // (each timeout looks like "waiting longer is not worth it"), so escalate
+  // explicitly: give the site one attempt wide enough to prove itself.
+  let trailingTimeouts = 0;
+  for (let i = ttftAttempts.length - 1; i >= 0; i -= 1) {
+    if (ttftAttempts[i].outcome === 'timeout') trailingTimeouts += 1;
+    else break;
+  }
+  if (trailingTimeouts >= FIRST_BYTE_WINDOW_TIMEOUT_STREAK_ESCALATE) {
+    const escalationBase = maxSuccessMs > 0
+      ? maxSuccessMs * FIRST_BYTE_WINDOW_RETRY_MULTIPLIER
+      : floorMs * FIRST_BYTE_WINDOW_RETRY_MULTIPLIER;
+    return clampWindow(Math.max(escalationBase, floorMs));
+  }
 
   let bestMs = candidates[0];
   let bestScore = Number.POSITIVE_INFINITY;

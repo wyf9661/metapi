@@ -135,14 +135,15 @@ export const PROXY_FIRST_BYTE_ADAPTIVE_MULTIPLIER = 5;
 /** Never shrink the first-byte window below this, even for very fast sites. */
 export const PROXY_FIRST_BYTE_ADAPTIVE_FLOOR_MS = 30_000;
 /**
- * Floor for the survival-curve estimator. Deliberately lower than the legacy
- * EWMA floor: when a relay fans out to several internal upstreams, the fast
- * mode is what the user actually experiences, and cutting at the fast mode
- * then retrying beats waiting for the slow mode. Measured over 5 days of
- * production logs the per-site optimum was 5-20s for every site except one
- * (45s), never 30s+.
+ * Floor for the survival-curve estimator.
+ *
+ * Raised from 5s to 8s after production evidence that 5s sat inside the normal
+ * first-byte distribution of reasoning models: Antigravity's gemini-3.8-flash
+ * succeeds at 5.0-6.7s, so a 5-6.5s window censored half of its attempts, and
+ * every censored attempt was then read as "waiting is not worth it". A floor
+ * below the healthy mode of a site is not a cost optimisation, it is an outage.
  */
-export const PROXY_FIRST_BYTE_WINDOW_FLOOR_MS = 5_000;
+export const PROXY_FIRST_BYTE_WINDOW_FLOOR_MS = 8_000;
 /** Consecutive TIMEOUT failures tolerated before abandoning channel failover.
  *  Timeouts are the failure class that failover helps most; the 2-strike rule
  *  used for credential/model errors killed healthy candidates at peak load. */
