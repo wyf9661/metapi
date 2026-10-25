@@ -6,7 +6,6 @@ type Props = {
   siteName: string;
   initialSegment?: 'session' | 'apikey';
   sessionLabel?: string;
-  oauthOnly?: boolean;
   onChoice: (choice: NextStepChoice) => void;
   onClose: () => void;
 };
@@ -15,16 +14,13 @@ export default function SiteCreatedModal({
   siteName,
   initialSegment = 'session',
   sessionLabel = '添加账号（用户名密码登录）',
-  oauthOnly = false,
   onChoice,
   onClose,
 }: Props) {
-  const apiKeyFirst = initialSegment === 'apikey' && !oauthOnly;
-  const helperText = oauthOnly
-    ? '该平台使用 OAuth 授权登录，点击下方按钮开始授权流程。'
-    : apiKeyFirst
-      ? '该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。'
-      : '接下来您可以继续补充登录连接或 API Key。';
+  const apiKeyFirst = initialSegment === 'apikey';
+  const helperText = apiKeyFirst
+    ? '该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。'
+    : '接下来您可以继续补充登录连接或 API Key。';
   const primaryAction = apiKeyFirst
     ? {
       choice: 'apikey' as const,
@@ -58,15 +54,13 @@ export default function SiteCreatedModal({
           <button onClick={() => onChoice('later')} className="btn btn-ghost">
             稍后配置
           </button>
-          {!oauthOnly && (
-            <button
-              onClick={() => onChoice(secondaryAction.choice)}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
-            >
-              {secondaryAction.label}
-            </button>
-          )}
+          <button
+            onClick={() => onChoice(secondaryAction.choice)}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            {secondaryAction.label}
+          </button>
           <button
             onClick={() => onChoice(primaryAction.choice)}
             className="btn btn-primary"

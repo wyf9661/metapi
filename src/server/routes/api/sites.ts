@@ -708,7 +708,6 @@ export async function sitesRoutes(app: FastifyInstance) {
         sessions: sessionCountBySiteId[site.id] || 0,
         apiKeys: apiKeyCountBySiteId[site.id] || 0,
         tokens: tokenCountBySiteId[site.id] || 0,
-        oauth: 0,
       },
       disabledModels: disabledModelsBySiteId[site.id] || null,
     }));
@@ -778,7 +777,6 @@ export async function sitesRoutes(app: FastifyInstance) {
         sessions: sessionCount,
         apiKeys: apiKeyCount,
         tokens: tokenCount,
-        oauth: 0,
       },
     };
   });

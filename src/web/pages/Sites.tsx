@@ -123,7 +123,6 @@ type SiteRow = {
     sessions: number;
     apiKeys: number;
     tokens: number;
-    oauth: number;
   } | null;
   disabledModels?: {
     total: number;
@@ -1454,7 +1453,6 @@ export default function Sites() {
           siteName={createdSiteForChoice.name}
           initialSegment={resolveInitialConnectionSegment(createdSiteForChoice.platform)}
           sessionLabel={resolveSiteCreatedSessionLabel(createdSiteForChoice.platform)}
-          oauthOnly={false}
           onChoice={handleSiteCreatedChoice}
           onClose={() => {
             setCreatedSiteForChoice(null);

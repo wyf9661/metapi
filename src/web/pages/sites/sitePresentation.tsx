@@ -4,7 +4,7 @@
  * format a SiteRow/SubscriptionSummary or render a label.
  */
 
-import { BanIcon, FileTextIcon, GlobeIcon, KeyIcon, SlidersIcon, UnlockIcon, UserIcon } from '../../components/MiniIcons.js';
+import { BanIcon, FileTextIcon, GlobeIcon, KeyIcon, SlidersIcon, UserIcon } from '../../components/MiniIcons.js';
 import HoverPopover from '../../components/HoverPopover.js';
 
 export type SiteSubscriptionSummary = {
@@ -97,7 +97,6 @@ export type SiteConnectionStatsLike = {
   sessions: number;
   apiKeys: number;
   tokens: number;
-  oauth: number;
 };
 
 /** Per-key disabled-model summary carried by the sites list payload. */
@@ -132,7 +131,6 @@ export function SiteConnectionStats(props: {
     { key: 'sessions', label: 'Session 账号', count: stats?.sessions || 0, Icon: UserIcon },
     { key: 'apiKeys', label: 'API Key', count: stats?.apiKeys || 0, Icon: KeyIcon },
     { key: 'tokens', label: '令牌', count: stats?.tokens || 0, Icon: FileTextIcon },
-    { key: 'oauth', label: 'OAuth', count: stats?.oauth || 0, Icon: UnlockIcon },
     { key: 'disabledModels', label: disabledLabel, count: disabled?.total || 0, Icon: BanIcon },
   ].filter((marker) => marker.count > 0);
 
@@ -300,36 +298,6 @@ export function SiteBalanceDisplay(props: {
 export function platformBadgeClass(platform?: string | null): string {
   const key = String(platform || '').trim();
   return platformColors[key] || 'badge-muted';
-}
-
-export type OAuthProviderSiteInfo = {
-  platform: string;
-  siteUrl?: string | null;
-};
-
-/**
- * Whether a platform reaches the form via auto-detect or the OAuth flow rather
- * than the manual dropdown. Manual-entry platforms must never resolve to an
- * OAuth provider — that prefills the editor with the provider's own upstream URL.
- */
-export function isOauthFlowPlatform(platform?: string | null): boolean {
-  const normalized = String(platform || '').trim().toLowerCase();
-  if (!normalized) return false;
-  return !SITE_PLATFORM_OPTIONS.some((option) => option.value === normalized);
-}
-
-/**
- * The OAuth provider a platform maps to, or null for manual-entry platforms.
- * One source of truth for the editor's selected-provider lookup and the
- * platform-select prefill guard, so the two cannot drift apart again.
- */
-export function findOauthProviderForPlatform<T extends OAuthProviderSiteInfo>(
-  platform: string | null | undefined,
-  providers: ReadonlyArray<T>,
-): T | null {
-  if (!isOauthFlowPlatform(platform)) return null;
-  const normalized = String(platform || '').trim().toLowerCase();
-  return providers.find((provider) => provider.platform === normalized) || null;
 }
 
 export const platformColors: Record<string, string> = {

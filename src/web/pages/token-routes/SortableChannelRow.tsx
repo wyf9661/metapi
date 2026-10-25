@@ -10,16 +10,6 @@ import {
 import { getChannelDecisionState, getPriorityTagStyle, getProbabilityColor } from './utils.js';
 import { StatusPill } from '../../components/StatusText.js';
 
-function getRouteUnitStrategyLabel(strategy: string | null | undefined): string {
-  return strategy === 'stick_until_unavailable' ? '单个用到不可用再切' : '轮询';
-}
-
-function formatRouteUnitMemberLabel(member: { accountId: number; username: string | null; siteName: string | null }): string {
-  const accountLabel = member.username?.trim() || `account-${member.accountId}`;
-  const siteLabel = member.siteName?.trim();
-  return siteLabel ? `${accountLabel} @ ${siteLabel}` : accountLabel;
-}
-
 export function SortableChannelRow({
   channel,
   displayPriority,
@@ -95,14 +85,6 @@ export function SortableChannelRow({
       accountName: channel.account?.username || `account-${channel.accountId}`,
     },
   );
-  const routeUnit = channel.routeUnit ?? null;
-  const routeUnitName = routeUnit?.name?.trim() || 'OAuth 路由池';
-  const routeUnitStrategyLabel = routeUnit ? getRouteUnitStrategyLabel(routeUnit.strategy) : '';
-  const routeUnitMemberSummary = routeUnit?.members?.length
-    ? routeUnit.members.map((member) => formatRouteUnitMemberLabel(member)).join('、')
-    : null;
-  const routeUnitMemberSummaryText = routeUnitMemberSummary ? `成员：${routeUnitMemberSummary}` : null;
-
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
 
   if (mobile) {
@@ -223,34 +205,7 @@ export function SortableChannelRow({
                 </StatusPill>
               ) : null}
 
-              {routeUnit ? (
-                <>
-                  <span className="badge badge-muted" style={{ fontSize: 10 }}>
-                    OAuth 路由池
-                  </span>
-                  <span className="badge badge-muted" style={{ fontSize: 10 }}>
-                    {routeUnitName}
-                  </span>
-                  <span className="badge badge-muted" style={{ fontSize: 10 }}>
-                    {routeUnit.memberCount} 成员
-                  </span>
-                  <span className="badge badge-muted" style={{ fontSize: 10 }}>
-                    {routeUnitStrategyLabel}
-                  </span>
-                </>
-              ) : null}
             </div>
-
-            {routeUnitMemberSummaryText ? (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-                  成员摘要（{routeUnit?.memberCount || 0} 个成员 · {routeUnitStrategyLabel}）
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-                  {routeUnitMemberSummaryText}
-                </span>
-              </div>
-            ) : null}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>选中概率</span>
@@ -479,34 +434,6 @@ export function SortableChannelRow({
 
         {channel.enabled === false ? (
           <span className="badge badge-muted" style={{ fontSize: 10 }}>已禁用</span>
-        ) : null}
-
-        {routeUnit ? (
-          <>
-            <span className="badge badge-muted" style={{ fontSize: 10 }}>
-              OAuth 路由池
-            </span>
-            <span className="badge badge-muted" style={{ fontSize: 10 }}>
-              {routeUnitName}
-            </span>
-            <span className="badge badge-muted" style={{ fontSize: 10 }}>
-              {routeUnit.memberCount} 成员
-            </span>
-            <span className="badge badge-muted" style={{ fontSize: 10 }}>
-              {routeUnitStrategyLabel}
-            </span>
-          </>
-        ) : null}
-
-        {routeUnitMemberSummaryText ? (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, width: '100%', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-              成员摘要（{routeUnit?.memberCount || 0} 个成员 · {routeUnitStrategyLabel}）
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-              {routeUnitMemberSummaryText}
-            </span>
-          </div>
         ) : null}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginTop: mobile ? 0 : 1, flexWrap: 'wrap' }}>

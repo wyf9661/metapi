@@ -8,10 +8,7 @@ import {
   SiteConnectionStats,
   SiteOutboundFlags,
   countSiteCustomHeaders,
-  findOauthProviderForPlatform,
   hasSiteOutboundProxy,
-  isOauthFlowPlatform,
-  SITE_PLATFORM_OPTIONS,
 } from './sites/sitePresentation.js';
 
 function renderOnce(element: ReactElement): ReactTestRenderer {
@@ -86,7 +83,7 @@ describe('site outbound markers', () => {
 
   it('renders connection counts as stroke icons instead of emoji', () => {
     const root = renderOnce(
-      <SiteConnectionStats stats={{ sessions: 2, apiKeys: 1, tokens: 3, oauth: 0 }} />,
+      <SiteConnectionStats stats={{ sessions: 2, apiKeys: 1, tokens: 3 }} />,
     );
 
     // Hidden counts stay hidden: only the three non-zero markers render.
@@ -97,7 +94,7 @@ describe('site outbound markers', () => {
 
   it('falls back to a dash when every count is zero', () => {
     const root = renderOnce(
-      <SiteConnectionStats stats={{ sessions: 0, apiKeys: 0, tokens: 0, oauth: 0 }} />,
+      <SiteConnectionStats stats={{ sessions: 0, apiKeys: 0, tokens: 0 }} />,
     );
     expect(collectText(root.root)).toBe('-');
     expect(root.root.findAllByType('svg')).toHaveLength(0);
@@ -109,26 +106,6 @@ describe('site outbound markers', () => {
     // Both surfaces render the shared marker components.
     expect(source.match(/<SiteConnectionStats/g)).toHaveLength(2);
     expect(source.match(/<SiteOutboundFlags/g)).toHaveLength(2);
-  });
-
-  it('never maps a manual-entry platform to an OAuth provider prefill', () => {
-    // SITE_PLATFORM_OPTIONS values are manual-entry: claude must not resolve to
-    // the Claude OAuth provider (which would prefill the official upstream URL).
-    for (const option of SITE_PLATFORM_OPTIONS) {
-      expect(isOauthFlowPlatform(option.value)).toBe(false);
-    }
-    // OAuth-only platforms still resolve through the OAuth flow.
-    expect(isOauthFlowPlatform('codex')).toBe(true);
-    expect(isOauthFlowPlatform('')).toBe(false);
-    expect(isOauthFlowPlatform(null)).toBe(false);
-  });
-
-  it('finds no OAuth provider for the manual claude platform', () => {
-    const providers = [{ platform: 'claude', siteUrl: 'https://api.anthropic.com' }];
-    expect(findOauthProviderForPlatform('claude', providers)).toBeNull();
-    expect(findOauthProviderForPlatform('codex', providers)).toBeNull();
-    const codexProviders = [{ platform: 'codex', siteUrl: 'https://chatgpt.com' }];
-    expect(findOauthProviderForPlatform('codex', codexProviders)?.siteUrl).toBe('https://chatgpt.com');
   });
 
   it('keeps every MiniIcon geometry unique across the set', () => {
