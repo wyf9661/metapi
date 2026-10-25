@@ -1036,7 +1036,7 @@ export const zhToEnSupplemental: Record<string, string> = {
   '；模型已刷新': '; models refreshed',
   '模型管理': 'Model Management',
   '正常': 'Normal',
-  '添加 OAuth 连接': 'Add OAuth Connection',
+  '添加 Session 凭据': 'Add Session Credential',
   '添加账号（用户名密码登录）': 'Add Account (username/password login)',
   '清空主分组': 'Clear Main Group',
   '清空公告': 'Clear Announcements',

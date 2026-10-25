@@ -87,7 +87,7 @@ describe('SiteCreatedModal', () => {
       <SiteCreatedModal
         siteName="Codex Site"
         initialSegment="session"
-        sessionLabel="添加 OAuth 连接"
+        sessionLabel="添加 Session 凭据"
         onChoice={() => {}}
         onClose={() => {}}
       />,
@@ -99,6 +99,6 @@ describe('SiteCreatedModal', () => {
       && node.props['aria-label'] !== '关闭弹框'
     ));
 
-    expect(buttons.some((button) => collectText(button) === '添加 OAuth 连接')).toBe(true);
+    expect(buttons.some((button) => collectText(button) === '添加 Session 凭据')).toBe(true);
   });
 });

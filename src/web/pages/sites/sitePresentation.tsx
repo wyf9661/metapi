@@ -158,7 +158,7 @@ export function formatUsd(value?: number | null): string {
 
 export function resolveSiteCreatedSessionLabel(platform?: string | null): string {
   const normalized = String(platform || '').trim().toLowerCase();
-  if (normalized === 'codex' || normalized === 'gemini-cli' || normalized === 'antigravity') return '添加 OAuth 连接';
+  if (normalized === 'codex' || normalized === 'gemini-cli' || normalized === 'antigravity') return '添加 Session 凭据';
   return '添加账号（用户名密码登录）';
 }
 
