@@ -57,12 +57,11 @@ describe('route refresh workflow architecture boundaries', () => {
     const searchSource = readSource('../proxy/search.ts');
     const videosSource = readSource('../proxy/videos.ts');
     const schedulerSource = readSource('../../services/checkinScheduler.ts');
-    const oauthServiceSource = readSource('../../services/oauth/service.ts');
     const sharedSurfaceSource = readSource('../../proxy-core/surfaces/sharedSurface.ts');
     const geminiSurfaceSource = readSource('../../proxy-core/surfaces/geminiSurface.ts');
     const channelSelectionSource = readSource('../../proxy-core/channelSelection.ts');
 
-    for (const source of [schedulerSource, oauthServiceSource, channelSelectionSource]) {
+    for (const source of [schedulerSource, channelSelectionSource]) {
       expectImportsRouteRefreshWorkflow(source);
       expectNoDirectModelServiceRouteRefresh(source);
     }

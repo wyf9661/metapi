@@ -683,6 +683,7 @@ describe('PUT /api/routes/:id route rebuild', () => {
     expect(patternChannels.some((channel: any) => channel.id === manualPatternChannel.id)).toBe(true);
   });
 
+  it('removes exact source channels from pattern groups when deleting an exact route', async () => {
     const source = await seedAccountWithToken('gpt-5-delete-me');
     const exactRoute = await db.insert(schema.tokenRoutes).values({
       modelPattern: 'gpt-5-delete-me',

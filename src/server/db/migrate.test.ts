@@ -41,6 +41,13 @@ function applyMigrationSql(sqlite: Database.Database, sqlText: string) {
         && String((error as Error)?.message || error).includes('no such column')) {
         continue;
       }
+      // Retired OAuth objects: 0049 must stay replayable for databases that
+      // still carry them, while fixtures built from the current contract no
+      // longer define them at all.
+      if ((statement.includes('DROP COLUMN `oauth_') || statement.includes('DROP TABLE IF EXISTS `oauth_'))
+        && /no such (column|table)/.test(String((error as Error)?.message || error))) {
+        continue;
+      }
       throw error;
     }
   }

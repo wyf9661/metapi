@@ -167,24 +167,6 @@ describe('proxy route architecture boundaries', () => {
     expect(surfaceSource).toContain('openAiResponsesTransformer.proxyStream.createSession(');
   });
 
-  it('keeps oauth refresh recovery and success bookkeeping behind shared surface helpers', () => {
-    const chatSurfaceSource = readSource('../../proxy-core/surfaces/chatSurface.ts');
-    const responsesSurfaceSource = readSource('../../proxy-core/surfaces/openAiResponsesSurface.ts');
-
-    expect(chatSurfaceSource).toContain('trySurfaceOauthRefreshRecovery(');
-    expect(chatSurfaceSource).toContain('recordSurfaceSuccess(');
-    expect(chatSurfaceSource).not.toContain('refreshOauthAccessTokenSingleflight(');
-    expect(chatSurfaceSource).not.toContain('resolveProxyUsageWithSelfLogFallback(');
-    expect(chatSurfaceSource).not.toContain('resolveProxyLogBilling(');
-    expect((chatSurfaceSource.match(/bestEffortMetrics:/g) || []).length).toBeGreaterThanOrEqual(2);
-
-    expect(responsesSurfaceSource).toContain('trySurfaceOauthRefreshRecovery(');
-    expect(responsesSurfaceSource).toContain('recordSurfaceSuccess(');
-    expect(responsesSurfaceSource).not.toContain('refreshOauthAccessTokenSingleflight(');
-    expect(responsesSurfaceSource).not.toContain('resolveProxyUsageWithSelfLogFallback(');
-    expect(responsesSurfaceSource).not.toContain('resolveProxyLogBilling(');
-  });
-
   it('keeps canonical transformer contracts imported from the transformer boundary only', () => {
     const chatSource = readSource('./chat.ts');
     const responsesSource = readSource('./responses.ts');
