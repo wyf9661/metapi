@@ -870,7 +870,7 @@ export class TokenRouter {
       );
       // A fully cooling-down layer must not block lower-priority layers: the
       // fallback in filterRecentlyFailedCandidates would otherwise return the
-      // whole pool and weightedRandomSelect would burn a hop on a channel that
+      // whole pool and selectByBalancedV2 would burn a hop on a channel that
       // just failed. Only the last layer keeps the least-bad fallback when
       // nothing fresh exists anywhere in the route.
       if (layerCandidates.length > 0
@@ -879,12 +879,13 @@ export class TokenRouter {
         continue;
       }
       const candidates = filterRecentlyFailedCandidates(layerCandidates, nowMs);
-      const selected = this.weightedRandomSelect(
+      const selectionModelName = requestedByDisplayName ? runtimeModelResolver : mappedModel;
+      const selected = this.selectByBalancedV2(
         candidates,
-        requestedByDisplayName ? runtimeModelResolver : mappedModel,
+        selectionModelName,
         downstreamPolicy,
         nowMs,
-        requestedModel,
+        requestedModel || (typeof selectionModelName === 'string' ? selectionModelName : ''),
         connectivityLookup,
       );
       if (!selected) continue;
@@ -1091,7 +1092,7 @@ export class TokenRouter {
 
     const picked = finalPool.length === 1
       ? finalPool[0]
-      : this.weightedRandomSelect(finalPool, runtimeModelResolver, downstreamPolicy, nowMs, requestedModel);
+      : this.selectByBalancedV2(finalPool, runtimeModelResolver, downstreamPolicy, nowMs, requestedModel);
     if (!picked) return null;
 
     // Resolve the picked channel exactly like a sticky hop (eligibility,
@@ -1210,25 +1211,6 @@ export class TokenRouter {
       tokenName: dispatchCandidate.token?.name || 'default',
       actualModel,
     };
-  }
-
-  private weightedRandomSelect(
-    candidates: RouteChannelCandidate[],
-    modelName: string | ((candidate: RouteChannelCandidate) => string),
-    downstreamPolicy: DownstreamRoutingPolicy,
-    nowMs = Date.now(),
-    requestedModel = '',
-    connectivityLookup?: ConnectivityLookup | null,
-  ) {
-    // Production selection now uses balanced-v2 (API-key boost + soft balance drain + connectivity).
-    return this.selectByBalancedV2(
-      candidates,
-      modelName,
-      downstreamPolicy,
-      nowMs,
-      requestedModel || (typeof modelName === 'string' ? modelName : ''),
-      connectivityLookup,
-    );
   }
 
 }
