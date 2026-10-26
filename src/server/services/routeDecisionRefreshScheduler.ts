@@ -16,7 +16,8 @@ export async function refreshRouteDecisionSnapshotsOnce(): Promise<void> {
     refreshPricingCatalog: false,
   }).then((result) => {
     console.info(
-      `[RouteDecisionScheduler] refreshed exact=${result.exactModelCount} wildcard=${result.wildcardRouteCount}`,
+      `[RouteDecisionScheduler] refreshed exact=${result.exactModelCount} wildcard=${result.wildcardRouteCount}`
+      + (result.failureCount > 0 ? ` skipped=${result.failureCount}` : ''),
     );
   }).catch((error) => {
     console.warn(

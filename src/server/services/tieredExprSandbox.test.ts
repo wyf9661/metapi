@@ -6,6 +6,7 @@ import {
 
 const ZERO = {
   p: 0, c: 0, len: 0, cr: 0, cc: 0, cc1h: 0, img: 0, img_cr: 0, img_o: 0, ai: 0, ao: 0,
+  cc12h: 0, image_count: 1,
 };
 
 function evalExpr(expr: string, params: Partial<typeof ZERO> = {}) {
@@ -57,10 +58,33 @@ describe('tiered expression sandbox', () => {
     it('keeps every documented variable in scope', () => {
       // Each name is referenced on its own so a missing declaration fails loudly
       // instead of being masked by short-circuiting.
-      const names = ['p', 'c', 'len', 'cr', 'cc', 'cc1h', 'img', 'img_cr', 'img_o', 'ai', 'ao'];
+      const names = ['p', 'c', 'len', 'cr', 'cc', 'cc1h', 'cc12h', 'img', 'img_cr', 'img_o', 'ai', 'ao'];
       for (const name of names) {
         expect(() => evalExpr(`tier("scope", ${name} * 1)`)).not.toThrow();
       }
+    });
+
+    it('prices 12-hour cache writes (cc12h)', () => {
+      expect(evalExpr('tier("long", cc12h * 4)', { cc12h: 5 }).cost).toBe(20);
+    });
+
+    it('defaults image_count to 1 so per-image prices never collapse to zero', () => {
+      // Upstream initializes imageCount to 1; a missing quantity must not make
+      // tier("image", fixed(x)) * image_count free.
+      const result = evaluateTieredExprInSandbox('tier("image", fixed(0.04)) * image_count', {
+        p: 0, c: 0, len: 0, cr: 0, cc: 0, cc1h: 0, img: 0, img_cr: 0, img_o: 0, ai: 0, ao: 0,
+      });
+      expect(result.cost).toBeCloseTo(40_000, 6);
+      expect(result.tier).toBe('image');
+
+      expect(evalExpr('tier("n", image_count * 3)', { image_count: 4 }).cost).toBe(12);
+    });
+
+    it('exposes u() as a nil-like usage probe', () => {
+      // No usage-facts map at estimate time: `?? 0` still works, and a bogus
+      // arithmetic use surfaces as non-finite instead of a silent zero.
+      expect(evalExpr('tier("u", (u("image_count") ?? 0) + 7)').cost).toBe(7);
+      expect(() => evalExpr('tier("u", u("missing") * 2)')).toThrow(/non-finite/);
     });
 
     it('supports the math helpers', () => {
@@ -72,10 +96,25 @@ describe('tiered expression sandbox', () => {
       expect(evalExpr('tier("h", has("abcdef", "cde") ? 1 : 0)').cost).toBe(1);
     });
 
+    it('matches upstream has() on nil source and empty needle', () => {
+      // String(undefined).includes('') is true in JS, upstream returns false.
+      expect(evalExpr('tier("h", has(u("nope"), "x") ? 1 : 0)').cost).toBe(0);
+      expect(evalExpr('tier("h", has("abc", "") ? 1 : 0)').cost).toBe(0);
+      expect(evalExpr('tier("h", has("", "x") ? 1 : 0)').cost).toBe(0);
+    });
+
     it('supports the time helpers with an IANA zone', () => {
       const result = evalExpr('hour("UTC") >= 0 ? tier("time", p + c) : tier("fallback", 0)', { p: 5, c: 6 });
       expect(result.cost).toBe(11);
       expect(result.tier).toBe('time');
+    });
+
+    it('falls back to UTC for an unparseable timezone instead of throwing', () => {
+      // Upstream's timeInZone() degrades to UTC when LoadLocation fails; Intl
+      // would otherwise raise RangeError and escape the pricing layer.
+      expect(() => evalExpr('tier("tz", hour("NOT_A_ZONE") + minute("CST") + 1)')).not.toThrow();
+      const value = evalExpr('tier("tz", hour("Mars/Olympus") >= 0 ? 1 : 0)').cost;
+      expect(value).toBe(1);
     });
 
     it('resolves request-context probes to neutral values', () => {
@@ -90,6 +129,32 @@ describe('tiered expression sandbox', () => {
 
     it('reports a malformed expression as an error instead of billing zero', () => {
       expect(() => evalExpr('this is not an expression')).toThrow();
+    });
+  });
+
+  // Upstream does not store plain JS: it stores a version tag and, for
+  // request-conditional multipliers, a `|||` suffix. Both must be normalized
+  // before compiling or every such model throws out of the pricing layer.
+  describe('upstream expression syntax is normalized', () => {
+    it('strips the v1: version tag', () => {
+      expect(evalExpr('v1:tier("base", p * 2)', { p: 3 }).cost).toBe(6);
+    });
+
+    it('rejects an unknown expression version instead of guessing', () => {
+      expect(() => evalExpr('v2:tier("base", p * 2)', { p: 3 })).toThrow(/unsupported.*v2/i);
+    });
+
+    it('drops request-rule multipliers, which fall back to 1 without a request', () => {
+      const expr = 'tier("base", p * 5 + c * 25)|||when(header("anthropic-beta") has "fast-mode") * 6';
+      expect(evalExpr(expr, { p: 2, c: 2 }).cost).toBe(60);
+    });
+
+    it('combines a version tag with request rules', () => {
+      expect(evalExpr('v1:tier("base", p * 3)|||when(header("x") has "y") * 2', { p: 4 }).cost).toBe(12);
+    });
+
+    it('treats an empty expression as an error rather than a silent zero', () => {
+      expect(() => evalExpr('   ')).toThrow(/empty/i);
     });
   });
 

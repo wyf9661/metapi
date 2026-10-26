@@ -268,7 +268,15 @@ function normalizePricingModels(rawModels: unknown[]): Map<string, PricingModel>
 
     // NewAPI tiered_expr billing (billing_mode, billing_expr)
     const billingMode = (raw as any).billing_mode ?? null;
-    const billingExpr = billingMode === 'tiered_expr' ? ((raw as any).billing_expr ?? null) : null;
+    const rawBillingExpr = (raw as any).billing_expr;
+    // An empty/whitespace expression is not a pricing contract — treat it as
+    // absent so the catalog falls back to ratio pricing instead of compiling
+    // an empty string on every evaluation.
+    const billingExpr = billingMode === 'tiered_expr'
+      && typeof rawBillingExpr === 'string'
+      && rawBillingExpr.trim().length > 0
+      ? rawBillingExpr.trim()
+      : null;
 
     models.set(modelName, {
       modelName,
@@ -828,11 +836,13 @@ interface TieredBillingParams {
   cr: number;   // cache read tokens
   cc: number;   // cache creation tokens
   cc1h: number; // one-hour cache creation tokens
+  cc12h: number; // twelve-hour cache creation tokens (OpenAI long-lived)
   img: number;  // image input tokens
   img_cr: number; // image cache read tokens (split out of cr/img by NewAPI)
   img_o: number; // image output tokens
   ai: number;   // audio input tokens
   ao: number;   // audio output tokens
+  imageCount: number; // billing quantity for per-image prices (upstream default 1)
 }
 
 interface TieredBillingResult {
@@ -844,7 +854,12 @@ function evaluateTieredExpr(expr: string, params: TieredBillingParams): TieredBi
   // Evaluated in a `node:vm` realm, not with `new Function`: the expression is
   // third-party input from the upstream `/api/pricing` response, and `new
   // Function` would run it with `process`/`require`/`fetch` in scope.
-  const { cost, tier } = evaluateTieredExprInSandbox(expr, params);
+  // The sandbox speaks the upstream names (snake_case `image_count`), so map the
+  // internal camelCase field explicitly — spreading params would silently drop it.
+  const { cost, tier } = evaluateTieredExprInSandbox(expr, {
+    ...params,
+    image_count: params.imageCount,
+  });
   return { cost, tier };
 }
 
@@ -862,11 +877,13 @@ function buildTieredParams(usage: {
     cr: usage.cacheReadTokens ?? 0,
     cc: usage.cacheCreationTokens ?? 0,
     cc1h: 0,
+    cc12h: 0,
     img: 0,
     img_cr: 0,
     img_o: 0,
     ai: 0,
     ao: 0,
+    imageCount: 1,
   };
 }
 
@@ -917,11 +934,13 @@ function deriveTieredReferencePricing(
       cr: values.cr ?? 0,
       cc: values.cc ?? 0,
       cc1h: values.cc1h ?? 0,
+      cc12h: values.cc12h ?? 0,
       img: values.img ?? 0,
       img_cr: values.img_cr ?? 0,
       img_o: values.img_o ?? 0,
       ai: values.ai ?? 0,
       ao: values.ao ?? 0,
+      imageCount: values.imageCount ?? 1,
     }).cost;
     return {
       inputPerMillion: roundCost((evaluate({ p: 1_000_000 }) * multiplier) / 1_000_000),

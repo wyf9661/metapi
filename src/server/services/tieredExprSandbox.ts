@@ -43,11 +43,22 @@ type CompiledTierExpr = {
  * contract exposes. It is compiled by the host (allowed) and may only reference
  * realm intrinsics — never a host function.
  *
- * The variable list must track NewAPI's `pkg/billingexpr/expr.md`: input-side
- * `p`, `len`, `cr`, `cc`, `cc1h`, `img`, `img_cr`, `ai` and output-side `c`,
- * `img_o`, `ao`. A variable that exists upstream but not here is not a neutral
- * omission — it is a hard `ReferenceError` that propagates out of the pricing
- * layer and aborts whatever called it (route snapshot refresh, `/v1/models`).
+ * The environment must track NewAPI's authoritative definition, not its prose
+ * docs: `pkg/billingexpr/compile.go` (`compileEnvPrototypeV1`) and
+ * `pkg/billingexpr/run.go` (`runProgram`'s env literal). Those two carry:
+ *
+ *   variables — image_count, p, c, len, cr, cc, cc1h, cc12h, img, img_cr,
+ *               img_o, ai, ao
+ *   functions — tier, fixed, header, param, u, has, hour, minute, weekday,
+ *               month, day, max, min, abs, ceil, floor
+ *
+ * (`_trace`/`_trace_int` are injected by upstream's own AST patcher into the
+ * program it compiles; they never appear in a stored expression, so they are
+ * deliberately absent here.)
+ *
+ * A name that exists upstream but not here is not a neutral omission — it is a
+ * hard `ReferenceError` that propagates out of the pricing layer and aborts
+ * whatever called it (route snapshot refresh, `/v1/models`).
  *
  * `__tieredEval` returns both the value and the matched tier name so nothing has
  * to be read back off the sandbox global (top-level `let` bindings are not
@@ -64,9 +75,16 @@ function __zonedPart(__timezone, __part) {
   } else {
     __options[__part] = 'numeric';
   }
-  const __value = new Intl.DateTimeFormat('en-US', __options)
-    .formatToParts(new Date())
-    .find((__item) => __item.type === __part)?.value;
+  let __parts;
+  try {
+    __parts = new Intl.DateTimeFormat('en-US', __options).formatToParts(new Date());
+  } catch (__error) {
+    // Upstream's timeInZone() falls back to UTC when LoadLocation fails, so an
+    // unknown/abbreviated zone must not throw out of the sandbox either.
+    delete __options.timeZone;
+    __parts = new Intl.DateTimeFormat('en-US', __options).formatToParts(new Date());
+  }
+  const __value = __parts.find((__item) => __item.type === __part)?.value;
   if (__part === 'weekday') {
     return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(__value || 'Sun');
   }
@@ -85,6 +103,11 @@ function __tieredEval(__a) {
   const img_o = __a[8];
   const ai = __a[9];
   const ao = __a[10];
+  const cc12h = __a[11];
+  // Upstream initializes imageCount to 1 and only overrides it from a validated
+  // request quantity, so a missing value must stay 1 (not 0) to keep
+  // tier("image", fixed(x)) * image_count priced per image.
+  const image_count = __a[12];
   const tier = (name, value) => { __tierName = String(name); return value; };
   const hour = (timezone) => __zonedPart(timezone, 'hour');
   const minute = (timezone) => __zonedPart(timezone, 'minute');
@@ -99,17 +122,65 @@ function __tieredEval(__a) {
   // fixed(amount): USD per request — NewAPI scales it by 1_000_000 to its
   // internal quota unit, and our formula divides back by 1_000_000.
   const fixed = (amount) => Number(amount) * 1_000_000;
-  const has = (source, substr) => String(source).includes(String(substr));
-  // Request-context probes. The evaluator runs without a request body, so these
-  // resolve to neutral values and request rules take their fallback branch.
+  // has(source, substr): upstream returns false for a nil source or an empty
+  // needle. String(undefined).includes('') would return true, so guard both.
+  const has = (source, substr) => {
+    if (source === undefined || source === null) return false;
+    const needle = String(substr ?? '');
+    if (needle === '') return false;
+    return String(source).includes(needle);
+  };
+  // Request-context probes. The evaluator runs without a request body or a
+  // usage-facts map, so these resolve to neutral values and request rules take
+  // their fallback branch.
   const header = (_key) => '';
   const param = (_path) => '';
+  // u(name) reads a usage fact (upstream returns nil when the map is absent).
+  // Undefined is the faithful nil here: u("x") ?? 0 yields 0, while arithmetic
+  // on a genuinely unknown fact becomes NaN and surfaces as a non-finite error
+  // instead of silently billing zero.
+  const u = (_name) => undefined;
   return { value: (${expr}), tier: __tierName };
 }
 `;
 }
 
-function compileTierExpr(expr: string): CompiledTierExpr {
+/**
+ * Normalize an upstream expression into something this realm can compile.
+ *
+ * Two upstream syntaxes are not plain JS:
+ *  - a version tag: `v1:tier(...)`. Upstream strips the literal `v1:` in
+ *    `ParseExprVersion` and defaults an unprefixed string to v1. Any other
+ *    version is rejected instead of being evaluated with v1 semantics — a
+ *    future `v2:` changes token normalization, so guessing would misprice.
+ *  - request rules after `|||`: `tier(...)|||when(header("x") has "y") * 6`.
+ *    Those multipliers depend on the live request. This evaluator has no request
+ *    context (header()/param() resolve neutral), so every such rule takes its
+ *    `: 1` fallback; dropping the suffix is therefore equivalent to evaluating
+ *    it, and keeps the token cost intact.
+ */
+export function normalizeTieredExpr(expr: string): string {
+  let body = String(expr ?? '').trim();
+  const ruleSeparator = body.indexOf('|||');
+  if (ruleSeparator >= 0) body = body.slice(0, ruleSeparator).trim();
+
+  if (body.startsWith('v1:')) {
+    body = body.slice(3).trim();
+  } else {
+    const versioned = /^v(\d+):/.exec(body);
+    if (versioned) {
+      throw new Error(`unsupported tiered billing expression version: v${versioned[1]}`);
+    }
+  }
+
+  if (!body) {
+    throw new Error('tiered billing expression is empty');
+  }
+  return body;
+}
+
+function compileTierExpr(rawExpr: string): CompiledTierExpr {
+  const expr = normalizeTieredExpr(rawExpr);
   const context = createContext(Object.create(null), {
     // No host objects cross into this realm.
     codeGeneration: { strings: false, wasm: false },
@@ -164,12 +235,17 @@ export function evaluateTieredExprInSandbox(
   params: {
     p: number; c: number; len: number; cr: number; cc: number;
     cc1h: number; img: number; img_cr: number; img_o: number; ai: number; ao: number;
+    cc12h?: number; image_count?: number;
   },
 ): TieredExprEvaluation {
   const compiled = getCompiled(expr);
   const { value, tier } = compiled.evaluate([
     params.p, params.c, params.len, params.cr, params.cc,
     params.cc1h, params.img, params.img_cr, params.img_o, params.ai, params.ao,
+    params.cc12h ?? 0,
+    // Upstream defaults the image quantity to 1, so an absent value must not
+    // collapse a per-image price to zero.
+    params.image_count ?? 1,
   ]);
   const cost = Number(value);
   if (!Number.isFinite(cost)) {

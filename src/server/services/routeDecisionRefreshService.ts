@@ -21,6 +21,7 @@ function isExactModelPattern(modelPattern: string): boolean {
 let refreshInFlight: Promise<{
   exactModelCount: number;
   wildcardRouteCount: number;
+  failureCount: number;
 }> | null = null;
 
 function normalizeModels(models: string[]): string[] {
@@ -51,6 +52,7 @@ type RefreshOptions = {
 export async function refreshAllRouteDecisionSnapshots(options: RefreshOptions = {}): Promise<{
   exactModelCount: number;
   wildcardRouteCount: number;
+  failureCount: number;
 }> {
   const previous = refreshInFlight;
   if (previous) {
@@ -61,8 +63,11 @@ export async function refreshAllRouteDecisionSnapshots(options: RefreshOptions =
     }
   }
 
-  let run: Promise<{ exactModelCount: number; wildcardRouteCount: number }>;
+  let run: Promise<{ exactModelCount: number; wildcardRouteCount: number; failureCount: number }>;
   run = (async () => {
+    // Per-unit failures are collected rather than thrown: a single unevaluable
+    // upstream expression used to abort the entire refresh run.
+    const failures: Array<{ scope: string; message: string }> = [];
     const routes = await db.select({
       id: schema.tokenRoutes.id,
       modelPattern: schema.tokenRoutes.modelPattern,
@@ -91,14 +96,24 @@ export async function refreshAllRouteDecisionSnapshots(options: RefreshOptions =
       ));
       const snapshotWrites: Array<{ routeId: number; snapshot: unknown }> = [];
       for (const route of matchingRoutes) {
-        if (options.refreshPricingCatalog) {
-          await tokenRouter.refreshPricingReferenceCostsForRoute(route.id, model, { refreshedKeys });
+        try {
+          if (options.refreshPricingCatalog) {
+            await tokenRouter.refreshPricingReferenceCostsForRoute(route.id, model, { refreshedKeys });
+          }
+          const decision = await tokenRouter.explainSelectionForRoute(route.id, model);
+          snapshotWrites.push({
+            routeId: route.id,
+            snapshot: decision,
+          });
+        } catch (error) {
+          // One model whose upstream pricing expression this build cannot
+          // evaluate must not abort the whole refresh: the previous run lost
+          // snapshots for all 276 models because of a single ReferenceError.
+          failures.push({
+            scope: `model:${model}#route:${route.id}`,
+            message: error instanceof Error ? error.message : String(error),
+          });
         }
-        const decision = await tokenRouter.explainSelectionForRoute(route.id, model);
-        snapshotWrites.push({
-          routeId: route.id,
-          snapshot: decision,
-        });
       }
       if (snapshotWrites.length > 0) {
         await saveRouteDecisionSnapshots(snapshotWrites);
@@ -107,22 +122,42 @@ export async function refreshAllRouteDecisionSnapshots(options: RefreshOptions =
 
     for (const [index, routeId] of wildcardRouteIds.entries()) {
       options.onProgress?.(`刷新通配符路由概率 ${index + 1}/${wildcardRouteIds.length}：#${routeId}`);
-      if (options.refreshPricingCatalog) {
-        await tokenRouter.refreshRouteWidePricingReferenceCosts(routeId, { refreshedKeys });
-      }
+      try {
+        if (options.refreshPricingCatalog) {
+          await tokenRouter.refreshRouteWidePricingReferenceCosts(routeId, { refreshedKeys });
+        }
 
-      const decision = await tokenRouter.explainSelectionRouteWide(routeId);
-      await saveRouteDecisionSnapshots([
-        {
-          routeId,
-          snapshot: decision,
-        },
-      ]);
+        const decision = await tokenRouter.explainSelectionRouteWide(routeId);
+        await saveRouteDecisionSnapshots([
+          {
+            routeId,
+            snapshot: decision,
+          },
+        ]);
+      } catch (error) {
+        failures.push({
+          scope: `wildcard-route:${routeId}`,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (failures.length > 0) {
+      // Surface every skipped unit so a silent regression (one broken upstream
+      // expression quietly stopping part of the refresh) stays visible.
+      for (const failure of failures) {
+        options.onProgress?.(`跳过 ${failure.scope}：${failure.message}`);
+      }
+      console.warn(
+        `[RouteDecisionRefresh] ${failures.length} unit(s) skipped: `
+        + failures.map((failure) => `${failure.scope} -> ${failure.message}`).join('; '),
+      );
     }
 
     return {
       exactModelCount: exactModels.length,
       wildcardRouteCount: wildcardRouteIds.length,
+      failureCount: failures.length,
     };
   })().finally(() => {
     if (refreshInFlight === run) refreshInFlight = null;
