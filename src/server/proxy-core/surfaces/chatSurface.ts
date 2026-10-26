@@ -51,12 +51,9 @@ import { createIdleGuardedStreamReader } from '../streamIdleTimeout.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
 import { detectDownstreamClientContext } from '../downstreamClientContext.js';
 import {
-  PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES,
-  PROXY_FIRST_BYTE_WINDOW_FLOOR_MS,
   getProxyMaxChannelRetries,
-  resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
-import { estimateFirstByteWindowMs, getPerformanceShadowMetrics } from '../../services/performanceShadow.js';
+import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
 import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce, shouldInPlaceRetryEmptyContentOnce } from '../../services/proxyRetryPolicy.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
@@ -589,36 +586,21 @@ export async function handleChatSurfaceRequest(
       // usable answer, so it tracks peak-hour drift without a multiplier guess
       // and can never exceed the configured ceiling. Fewer than
       // FIRST_BYTE_WINDOW_MIN_SAMPLES attempts -> fall back to the EWMA rule.
-      const shadowKey = {
+      // One decision for every surface: the window belongs to the upstream
+      // (site + model + stream shape), not to the protocol the client spoke.
+      const firstByteTimeoutMs = resolveSurfaceFirstByteWindowMs({
         routeId: selected.channel.routeId,
         siteId: selected.site.id,
         modelName: requestedModel,
-        // 性能档案按 stream/nonstream 分桶记录（写入侧 sharedSurface 用
-        // `isStream === true`），非流式桶从不写 TTFT 样本。这里必须用真实
-        // 请求形态查询，否则非流式请求会读到流式桶的 EWMA、被地板截断
-        // （慢而健康的非流式补全被误判超时）。
-        isStream: isStream === true,
-      };
-      const configuredCeilingMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
-      const estimatedWindowMs = isStream === true && configuredCeilingMs > 0
-        ? estimateFirstByteWindowMs({
-          key: shadowKey,
-          floorMs: PROXY_FIRST_BYTE_WINDOW_FLOOR_MS,
-          ceilingMs: configuredCeilingMs,
-        })
-        : null;
-      const siteTtftSample = getPerformanceShadowMetrics(shadowKey);
-      const adaptiveTtftMs = siteTtftSample
-        && siteTtftSample.sampleCount >= PROXY_FIRST_BYTE_ADAPTIVE_MIN_SAMPLES
-        ? siteTtftSample.ttftEwmaMs
-        : null;
+        isStream,
+        retryCount,
+      });
       return executeEndpointFlow({
         siteUrl: siteApiBaseUrl,
         requestOverrideRules: selected.channel.requestOverrideRules ?? null,
         paramOverride: selected.site.paramOverride ?? null,
         disableCrossProtocolFallback: config.disableCrossProtocolFallback,
-        firstByteTimeoutMs: estimatedWindowMs
-          ?? resolveProxyChannelFirstByteTimeoutMs(retryCount, adaptiveTtftMs),
+        firstByteTimeoutMs,
         bodyReadOptions: bodyReadGuards,
         endpointCandidates,
         buildRequest: (endpoint) => buildEndpointRequest(endpoint),

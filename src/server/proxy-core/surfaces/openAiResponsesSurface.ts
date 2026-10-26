@@ -64,10 +64,8 @@ import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
 import { maybeHandleWebSearchOnlySimulation } from '../webSearchSimulation.js';
 import {
   getProxyMaxChannelRetries,
-  PROXY_FIRST_BYTE_WINDOW_FLOOR_MS,
-  resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
-import { estimateFirstByteWindowMs } from '../../services/performanceShadow.js';
+import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { mapUpstreamErrorForClient } from '../../shared/siteProtocolProfile.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
@@ -699,27 +697,22 @@ export async function handleOpenAiResponsesSurfaceRequest(
         // Same survival-curve window as the chat surface: responses and chat
         // hit the same relay fleet, so they must not disagree on how long a
         // silent upstream may stay silent.
-        const responsesShadowKey = {
+        // Same decision as every other surface: responses and chat hit the same
+        // relay fleet, so they must not disagree on how long a silent upstream
+        // may stay silent — and neither may the gemini-native door.
+        const firstByteTimeoutMs = resolveSurfaceFirstByteWindowMs({
           routeId: selected.channel.routeId,
           siteId: selected.site.id,
           modelName: requestedModel,
-          isStream: isStream === true,
-        };
-        const responsesCeilingMs = Math.max(0, Math.trunc((config.proxyFirstByteTimeoutSec || 0) * 1000));
-        const responsesWindowMs = isStream === true && responsesCeilingMs > 0
-          ? estimateFirstByteWindowMs({
-            key: responsesShadowKey,
-            floorMs: PROXY_FIRST_BYTE_WINDOW_FLOOR_MS,
-            ceilingMs: responsesCeilingMs,
-          })
-          : null;
+          isStream,
+          retryCount,
+        });
         return executeEndpointFlow({
           siteUrl: siteApiBaseUrl,
           requestOverrideRules: selected.channel.requestOverrideRules ?? null,
           paramOverride: selected.site.paramOverride ?? null,
           disableCrossProtocolFallback: isCompactRequest || config.disableCrossProtocolFallback,
-          firstByteTimeoutMs: responsesWindowMs
-            ?? resolveProxyChannelFirstByteTimeoutMs(retryCount),
+          firstByteTimeoutMs,
           bodyReadOptions: bodyReadGuards,
           endpointCandidates,
           buildRequest: (endpoint) => buildEndpointRequest(endpoint),

@@ -39,12 +39,13 @@ import { detectDownstreamClientContext, type DownstreamClientContext } from '../
 import { insertProxyLog } from '../../services/proxyLogStore.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
-import { fetchWithObservedFirstByte, getObservedResponseMeta } from '../firstByteTimeout.js';
+import { fetchWithObservedFirstByte, getObservedResponseMeta, parseLocalFirstByteTimeoutBudgetMs } from '../firstByteTimeout.js';
+import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
+import { recordPerformanceShadowAttempt, recordPerformanceShadowSample } from '../../services/performanceShadow.js';
 import { createIdleGuardedStreamReader } from '../streamIdleTimeout.js';
 import { wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal } from './sharedSurface.js';
 import {
   getProxyMaxChannelRetries,
-  resolveProxyChannelFirstByteTimeoutMs,
 } from '../../services/proxyChannelRetry.js';
 import { shouldAbortSameSiteEndpointFallback } from '../../services/proxyRetryPolicy.js';
 import {
@@ -304,6 +305,39 @@ async function logProxy(
       retryCount,
       createdAt,
     });
+    // Feed the SAME window samples the chat/responses surfaces write. Without
+    // this the gemini-native door only ever reads from a bucket nothing fills,
+    // so it keeps running on the static ceiling — silently, since the estimator
+    // just returns null when samples are short.
+    const shadowSiteId = Math.trunc(Number(selected?.site?.id ?? 0));
+    if (shadowSiteId > 0) {
+      const shadowKey = {
+        routeId: selected?.channel?.routeId ?? null,
+        siteId: shadowSiteId,
+        modelName: modelRequested,
+        isStream: isStream === true,
+      };
+      if (status === 'success') {
+        recordPerformanceShadowSample({
+          key: shadowKey,
+          latencyMs,
+          firstByteLatencyMs,
+          completionTokens,
+        });
+        recordPerformanceShadowAttempt({
+          key: shadowKey,
+          outcome: 'success',
+          firstByteLatencyMs,
+        });
+      } else {
+        const budgetMs = parseLocalFirstByteTimeoutBudgetMs(normalizedErrorMessage);
+        if (budgetMs === null) {
+          recordPerformanceShadowAttempt({ key: shadowKey, outcome: 'error' });
+        } else {
+          recordPerformanceShadowAttempt({ key: shadowKey, outcome: 'timeout', budgetMs });
+        }
+      }
+    }
   } catch (error) {
     console.warn('[proxy/gemini] failed to write proxy log', error);
   }
@@ -646,7 +680,15 @@ export async function geminiProxyRoute(app: FastifyInstance) {
       const isInternalGemini = isInternalGeminiPlatform(selected.site.platform);
       const isDirectGeminiFamily = isDirectGeminiFamilyPlatform(selected.site.platform);
       const startTime = Date.now();
-      const firstByteTimeoutMs = resolveProxyChannelFirstByteTimeoutMs(retryCount);
+      // Same window decision as the chat/responses doors: the budget belongs to
+      // the upstream bucket, not to the protocol this client spoke.
+      const firstByteTimeoutMs = resolveSurfaceFirstByteWindowMs({
+        routeId: selected.channel.routeId,
+        siteId: selected.site.id,
+        modelName: requestedModel,
+        isStream: isStreamAction,
+        retryCount,
+      });
       let upstreamPath = '';
 
       try {
