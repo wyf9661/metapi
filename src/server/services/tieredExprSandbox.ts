@@ -43,6 +43,12 @@ type CompiledTierExpr = {
  * contract exposes. It is compiled by the host (allowed) and may only reference
  * realm intrinsics — never a host function.
  *
+ * The variable list must track NewAPI's `pkg/billingexpr/expr.md`: input-side
+ * `p`, `len`, `cr`, `cc`, `cc1h`, `img`, `img_cr`, `ai` and output-side `c`,
+ * `img_o`, `ao`. A variable that exists upstream but not here is not a neutral
+ * omission — it is a hard `ReferenceError` that propagates out of the pricing
+ * layer and aborts whatever called it (route snapshot refresh, `/v1/models`).
+ *
  * `__tieredEval` returns both the value and the matched tier name so nothing has
  * to be read back off the sandbox global (top-level `let` bindings are not
  * global properties, and shared mutable state would leak between calls).
@@ -75,9 +81,10 @@ function __tieredEval(__a) {
   const cc = __a[4];
   const cc1h = __a[5];
   const img = __a[6];
-  const img_o = __a[7];
-  const ai = __a[8];
-  const ao = __a[9];
+  const img_cr = __a[7];
+  const img_o = __a[8];
+  const ai = __a[9];
+  const ao = __a[10];
   const tier = (name, value) => { __tierName = String(name); return value; };
   const hour = (timezone) => __zonedPart(timezone, 'hour');
   const minute = (timezone) => __zonedPart(timezone, 'minute');
@@ -156,13 +163,13 @@ export function evaluateTieredExprInSandbox(
   expr: string,
   params: {
     p: number; c: number; len: number; cr: number; cc: number;
-    cc1h: number; img: number; img_o: number; ai: number; ao: number;
+    cc1h: number; img: number; img_cr: number; img_o: number; ai: number; ao: number;
   },
 ): TieredExprEvaluation {
   const compiled = getCompiled(expr);
   const { value, tier } = compiled.evaluate([
     params.p, params.c, params.len, params.cr, params.cc,
-    params.cc1h, params.img, params.img_o, params.ai, params.ao,
+    params.cc1h, params.img, params.img_cr, params.img_o, params.ai, params.ao,
   ]);
   const cost = Number(value);
   if (!Number.isFinite(cost)) {

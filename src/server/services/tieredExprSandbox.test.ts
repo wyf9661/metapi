@@ -4,7 +4,9 @@ import {
   evaluateTieredExprInSandbox,
 } from './tieredExprSandbox.js';
 
-const ZERO = { p: 0, c: 0, len: 0, cr: 0, cc: 0, cc1h: 0, img: 0, img_o: 0, ai: 0, ao: 0 };
+const ZERO = {
+  p: 0, c: 0, len: 0, cr: 0, cc: 0, cc1h: 0, img: 0, img_cr: 0, img_o: 0, ai: 0, ao: 0,
+};
 
 function evalExpr(expr: string, params: Partial<typeof ZERO> = {}) {
   return evaluateTieredExprInSandbox(expr, { ...ZERO, ...params });
@@ -37,6 +39,28 @@ describe('tiered expression sandbox', () => {
         p: 1, c: 2, cc: 3, cc1h: 4, img: 5, img_o: 6, ai: 7, ao: 8,
       });
       expect(result.cost).toBe(36);
+    });
+
+    // Regression: an upstream site shipped `img_cr` in its tiered expression and
+    // the sandbox preamble did not declare it. The ReferenceError escaped the
+    // pricing layer, failed every route-snapshot refresh and 500'd /v1/models.
+    it('supports img_cr (image cache read) from the upstream contract', () => {
+      const result = evalExpr(
+        'tier("standard", p * 5 + cr * 1.25 + img * 8 + img_cr * 2 + c * 30)',
+        { p: 10, cr: 4, img: 2, img_cr: 5, c: 1 },
+      );
+      // 50 + 5 + 16 + 10 + 30
+      expect(result.cost).toBe(111);
+      expect(result.tier).toBe('standard');
+    });
+
+    it('keeps every documented variable in scope', () => {
+      // Each name is referenced on its own so a missing declaration fails loudly
+      // instead of being masked by short-circuiting.
+      const names = ['p', 'c', 'len', 'cr', 'cc', 'cc1h', 'img', 'img_cr', 'img_o', 'ai', 'ao'];
+      for (const name of names) {
+        expect(() => evalExpr(`tier("scope", ${name} * 1)`)).not.toThrow();
+      }
     });
 
     it('supports the math helpers', () => {

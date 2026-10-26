@@ -559,12 +559,25 @@ export function getCachedModelRoutingReferenceCost(input: {
   // Bill the routing reference at the token's bound group ratio, mirroring
   // real billing. A 0× free group must yield a (near-)zero reference cost —
   // never test the ratio truthiness, check key presence.
-  const cost = calculateModelUsageCost(
-    model,
-    ROUTING_REFERENCE_USAGE,
-    cached.groupRatio,
-    input.tokenGroup ?? null,
-  );
+  let cost: number;
+  try {
+    cost = calculateModelUsageCost(
+      model,
+      ROUTING_REFERENCE_USAGE,
+      cached.groupRatio,
+      input.tokenGroup ?? null,
+    );
+  } catch (error) {
+    // A single upstream model with an expression this build cannot evaluate
+    // (unknown variable, syntax below our grammar) must not take down the whole
+    // caller: this is a reference cost used for routing/balance estimates, not
+    // settlement. Callers already treat null as "no price known" and fall back.
+    console.warn(
+      `[modelPricingService] routing reference cost unavailable for ${input.modelName} (site ${input.siteId}):`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return null;
+  }
   // Keep an exact 0 (free group) as a valid reference cost; only a negative
   // or non-finite value counts as "no price".
   if (!Number.isFinite(cost) || cost < 0) {
@@ -816,6 +829,7 @@ interface TieredBillingParams {
   cc: number;   // cache creation tokens
   cc1h: number; // one-hour cache creation tokens
   img: number;  // image input tokens
+  img_cr: number; // image cache read tokens (split out of cr/img by NewAPI)
   img_o: number; // image output tokens
   ai: number;   // audio input tokens
   ao: number;   // audio output tokens
@@ -849,6 +863,7 @@ function buildTieredParams(usage: {
     cc: usage.cacheCreationTokens ?? 0,
     cc1h: 0,
     img: 0,
+    img_cr: 0,
     img_o: 0,
     ai: 0,
     ao: 0,
@@ -903,6 +918,7 @@ function deriveTieredReferencePricing(
       cc: values.cc ?? 0,
       cc1h: values.cc1h ?? 0,
       img: values.img ?? 0,
+      img_cr: values.img_cr ?? 0,
       img_o: values.img_o ?? 0,
       ai: values.ai ?? 0,
       ao: values.ao ?? 0,
