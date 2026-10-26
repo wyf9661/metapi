@@ -281,6 +281,83 @@ export async function handleOpenAiResponsesSurfaceRequest(
         },
       };
     };
+    /**
+     * Single arbitration point for a failed attempt: decide whether the request
+     * may be retried (same channel in place, or another channel) and, when it
+     * may not, send the terminal response. The four call sites below used to
+     * carry byte-for-byte copies of this state machine; keeping one copy is
+     * what makes chat and responses agree on retry/grace/empty-content rules.
+     *
+     * `reason` is the value fed to the retry policy (may be null on the catch
+     * paths); `retryFailureReason` is the text memoised for the terminal
+     * fallback and defaults to `reason`.
+     */
+    type AttemptFailureOutcome =
+      | Awaited<ReturnType<typeof failureToolkit.handleDetectedFailure>>
+      | Awaited<ReturnType<typeof failureToolkit.handleUpstreamFailure>>
+      | Awaited<ReturnType<typeof failureToolkit.handleExecutionError>>;
+    const continueAttemptOrTerminate = async (args: {
+      selected: NonNullable<Awaited<ReturnType<typeof tokenRouter.selectChannel>>>;
+      failureOutcome: AttemptFailureOutcome;
+      status: number;
+      reason: string | null;
+      retryFailureReason?: string;
+      finalizeTerminalRetry: () =>
+        | ReturnType<typeof finalizeRetryAsUpstreamFailure>
+        | ReturnType<typeof finalizeRetryAsExecutionFailure>;
+      upstreamPath: string | null;
+      /** The generic catch path never memoised its retry failure; keep that. */
+      rememberFailure?: boolean;
+    }): Promise<'retried' | 'terminal'> => {
+      const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+        && canRetryInPlaceForRecoveringFailure(retryCount, args.status, args.reason, config.proxyFailoverBackoffMs);
+      const terminalFailureOutcome = args.failureOutcome.action === 'retry'
+        ? (
+          canFailoverToNextChannel(reply)
+          && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, args.reason))
+            ? null
+            : args.finalizeTerminalRetry()
+        )
+        : args.failureOutcome;
+      if (!terminalFailureOutcome) {
+        if (!isRecoveringTransientFailure(args.status, args.reason)) {
+          allFailuresRecovering = false;
+        }
+        // Grace window: stay on the same channel for a configurable grace
+        // period on transient-recovering failures (WAF/429/5xx) before
+        // failing over, so the upstream gets a chance to self-heal.
+        if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, args.status, args.reason)) {
+          graceRetriedOnce = true;
+          inPlaceRetryChannel = args.selected;
+          await sleepMs(resolveFailoverBackoffMs(args.status, args.reason, config.proxyFailoverBackoffMs));
+          return 'retried';
+        }
+        // 空内容（含 pure-thinking 截断）失败：同站同账号原地重试一次，失败才切站。
+        if (shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, args.reason)) {
+          emptyContentRetriedOnce = true;
+          inPlaceRetryChannel = args.selected;
+          return 'retried';
+        }
+        if (inPlaceRecoveringRetry) {
+          inPlaceRetryChannel = args.selected;
+          await sleepMs(resolveFailoverBackoffMs(args.status, args.reason, config.proxyFailoverBackoffMs));
+          retryCount += 1;
+          return 'retried';
+        }
+        if (args.failureOutcome.action === 'retry') {
+          if (args.rememberFailure !== false) {
+            rememberRetryFailure(args.status, args.retryFailureReason ?? args.reason ?? 'unknown error');
+          }
+          await appendExcludedSiteChannels(args.failureOutcome.excludeSiteId);
+        }
+        await sleepMs(resolveFailoverBackoffMs(args.status, args.reason, config.proxyFailoverBackoffMs));
+        retryCount += 1;
+        return 'retried';
+      }
+      await finalizeDebugFailure(terminalFailureOutcome.status, terminalFailureOutcome.payload, args.upstreamPath);
+      sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+      return 'terminal';
+    };
     // Hard cap on loop iterations (attempts + recovery pass), same failsafe as
     // chatSurface: every continue path is currently bounded, but a future gate
     // regression must hit a terminal 502 instead of a hot loop.
@@ -1084,55 +1161,14 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 upstreamPath: successfulUpstreamPath,
                 upstreamHeaders: upstream.headers,
 	              });
-	              const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-	                && canRetryInPlaceForRecoveringFailure(retryCount, failure.status, failure.reason, config.proxyFailoverBackoffMs);
-	              const terminalFailureOutcome = failureOutcome.action === 'retry'
-	                ? (
-	                  canFailoverToNextChannel(reply)
-	                  && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, failure.reason))
-	                    ? null
-	                    : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
-	                )
-	                : failureOutcome;
-	              if (!terminalFailureOutcome) {
-	                if (!isRecoveringTransientFailure(failure.status, failure.reason)) {
-	                  allFailuresRecovering = false;
-	                }
-	                // Grace window: stay on the same channel for a configurable grace
-	                // period on transient-recovering failures (WAF/429/5xx) before
-	                // failing over, so the upstream gets a chance to self-heal.
-	                if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
-                graceRetriedOnce = true;
-	                  inPlaceRetryChannel = selected;
-	                  await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
-	                  continue;
-	                }
-	                // 空内容（含 pure-thinking 截断）失败：同站同账号原地重试一次，失败才切站。
-	                if (shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, failure.reason)) {
-	                  emptyContentRetriedOnce = true;
-	                  inPlaceRetryChannel = selected;
-	                  continue;
-	                }
-	                if (inPlaceRecoveringRetry) {
-	                  inPlaceRetryChannel = selected;
-	                  await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
-	                  retryCount += 1;
-	                  continue;
-	                }
-	                if (failureOutcome.action === 'retry') {
-                  rememberRetryFailure(failure.status, failure.reason);
-	                  await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
-	                }
-	                await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
-	                retryCount += 1;
-	                continue;
-	              }
-	              await finalizeDebugFailure(
-	                terminalFailureOutcome.status,
-	                terminalFailureOutcome.payload,
-	                successfulUpstreamPath,
-	              );
-	              sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+	              if (await continueAttemptOrTerminate({
+	                selected,
+	                failureOutcome,
+	                status: failure.status,
+	                reason: failure.reason,
+	                finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, failure.reason),
+	                upstreamPath: successfulUpstreamPath,
+	              }) === 'retried') continue;
 	              return reply;
             }
 
@@ -1397,55 +1433,14 @@ export async function handleOpenAiResponsesSurfaceRequest(
             upstreamPath: successfulUpstreamPath,
             upstreamHeaders: upstream.headers,
 	          });
-	          const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-	            && canRetryInPlaceForRecoveringFailure(retryCount, failure.status, failure.reason, config.proxyFailoverBackoffMs);
-	          const terminalFailureOutcome = failureOutcome.action === 'retry'
-	            ? (
-	              canFailoverToNextChannel(reply)
-	              && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, failure.reason))
-	                ? null
-	                : finalizeRetryAsUpstreamFailure(failure.status, failure.reason)
-	            )
-	            : failureOutcome;
-	          if (!terminalFailureOutcome) {
-	            if (!isRecoveringTransientFailure(failure.status, failure.reason)) {
-	              allFailuresRecovering = false;
-	            }
-	            // Grace window: stay on the same channel for a configurable grace
-	            // period on transient-recovering failures (WAF/429/5xx) before
-	            // failing over, so the upstream gets a chance to self-heal.
-	            if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, failure.status, failure.reason)) {
-                graceRetriedOnce = true;
-	              inPlaceRetryChannel = selected;
-	              await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
-	              continue;
-	            }
-	            // 空内容（含 pure-thinking 截断）失败：同站同账号原地重试一次，失败才切站。
-	            if (shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, failure.reason)) {
-	              emptyContentRetriedOnce = true;
-	              inPlaceRetryChannel = selected;
-	              continue;
-	            }
-	            if (inPlaceRecoveringRetry) {
-	              inPlaceRetryChannel = selected;
-	              await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
-	              retryCount += 1;
-	              continue;
-	            }
-	            if (failureOutcome.action === 'retry') {
-                rememberRetryFailure(failure.status, failure.reason);
-	              await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
-	            }
-	            await sleepMs(resolveFailoverBackoffMs(failure.status, failure.reason, config.proxyFailoverBackoffMs));
-	            retryCount += 1;
-	            continue;
-	          }
-	          await finalizeDebugFailure(
-	            terminalFailureOutcome.status,
-	            terminalFailureOutcome.payload,
-	            successfulUpstreamPath,
-	          );
-	          sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+	          if (await continueAttemptOrTerminate({
+	            selected,
+	            failureOutcome,
+	            status: failure.status,
+	            reason: failure.reason,
+	            finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, failure.reason),
+	            upstreamPath: successfulUpstreamPath,
+	          }) === 'retried') continue;
 	          return reply;
         }
         const normalized = openAiResponsesTransformer.transformFinalResponse(
@@ -1535,58 +1530,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
           latencyMs: Date.now() - startTime,
           retryCount,
         });
-            const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-              && canRetryInPlaceForRecoveringFailure(retryCount, endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs);
-            const terminalFailureOutcome = failureOutcome.action === 'retry'
-              ? (
-                canFailoverToNextChannel(reply)
-                && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, err?.message || null))
-                  ? null
-                  : finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err?.message || 'unknown error')
-              )
-              : failureOutcome;
-            if (!terminalFailureOutcome) {
-              if (!isRecoveringTransientFailure(endpointFailureStatus || 502, err?.message || null)) {
-                allFailuresRecovering = false;
-              }
-              // Grace window: stay on the same channel for a configurable grace
-              // period on transient-recovering failures (WAF/429/5xx) before
-              // failing over, so the upstream gets a chance to self-heal.
-              if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, endpointFailureStatus || 502, err?.message || null)) {
-                graceRetriedOnce = true;
-                inPlaceRetryChannel = selected;
-                await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
-                continue;
-              }
-              // 空内容（含 pure-thinking 截断）失败：同站同账号原地重试一次，失败才切站。
-              if (shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, err?.message || null)) {
-                emptyContentRetriedOnce = true;
-                inPlaceRetryChannel = selected;
-                continue;
-              }
-              if (inPlaceRecoveringRetry) {
-                inPlaceRetryChannel = selected;
-                await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
-                retryCount += 1;
-                continue;
-              }
-              if (failureOutcome.action === 'retry') {
-                rememberRetryFailure(
-                  endpointFailureStatus || 502,
-                  err?.message || 'unknown error',
-                );
-                await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
-              }
-              await sleepMs(resolveFailoverBackoffMs(endpointFailureStatus || 502, err?.message || null, config.proxyFailoverBackoffMs));
-              retryCount += 1;
-              continue;
-            }
-            await finalizeDebugFailure(
-              terminalFailureOutcome.status,
-              terminalFailureOutcome.payload,
-              null,
-            );
-            sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
+            if (await continueAttemptOrTerminate({
+              selected,
+              failureOutcome,
+              status: endpointFailureStatus || 502,
+              reason: err?.message || null,
+              retryFailureReason: err?.message || 'unknown error',
+              finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err?.message || 'unknown error'),
+              upstreamPath: null,
+            }) === 'retried') continue;
             return reply;
           }
 	        const failureOutcome = await failureToolkit.handleExecutionError({
@@ -1598,55 +1550,16 @@ export async function handleOpenAiResponsesSurfaceRequest(
             latencyMs: Date.now() - startTime,
             retryCount,
           });
-          const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
-            && canRetryInPlaceForRecoveringFailure(retryCount, 502, err?.message || null, config.proxyFailoverBackoffMs);
-          const terminalFailureOutcome = failureOutcome.action === 'retry'
-            ? (
-              canFailoverToNextChannel(reply)
-              && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, err?.message || null))
-                ? null
-                : finalizeRetryAsExecutionFailure(err?.message || 'network failure')
-            )
-            : failureOutcome;
-          if (!terminalFailureOutcome) {
-            if (!isRecoveringTransientFailure(502, err?.message || null)) {
-              allFailuresRecovering = false;
-            }
-            // Grace window: stay on the same channel for a configurable grace
-            // period on transient-recovering failures (WAF/429/5xx) before
-            // failing over, so the upstream gets a chance to self-heal.
-            if (shouldGraceRetryInPlaceOnce(graceRetriedOnce, Date.now() - requestStartedAtMs, config.proxyRecoveringGraceMs, 502, err?.message || null)) {
-                graceRetriedOnce = true;
-              inPlaceRetryChannel = selected;
-              await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
-              continue;
-            }
-            // 空内容（含 pure-thinking 截断）失败：同站同账号原地重试一次，失败才切站。
-            if (shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, err?.message || null)) {
-              emptyContentRetriedOnce = true;
-              inPlaceRetryChannel = selected;
-              continue;
-            }
-            if (inPlaceRecoveringRetry) {
-              inPlaceRetryChannel = selected;
-              await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
-              retryCount += 1;
-              continue;
-            }
-            if (failureOutcome.action === 'retry') {
-              await appendExcludedSiteChannels(failureOutcome.excludeSiteId);
-            }
-            await sleepMs(resolveFailoverBackoffMs(502, err?.message || null, config.proxyFailoverBackoffMs));
-            retryCount += 1;
-            continue;
-        }
-		        await finalizeDebugFailure(
-	            terminalFailureOutcome.status,
-	            terminalFailureOutcome.payload,
-	            null,
-          );
-		        sendReplyIfWritable(reply, terminalFailureOutcome.status, terminalFailureOutcome.payload);
-		        return reply;
+          if (await continueAttemptOrTerminate({
+            selected,
+            failureOutcome,
+            status: 502,
+            reason: err?.message || null,
+            finalizeTerminalRetry: () => finalizeRetryAsExecutionFailure(err?.message || 'network failure'),
+            upstreamPath: null,
+            rememberFailure: false,
+          }) === 'retried') continue;
+          return reply;
 	      } finally {
 	        channelLease.release();
 	        // A hijacked SSE response that fails before any terminal write (idle
