@@ -763,7 +763,7 @@ export class TokenRouter {
         );
         if (!hasFreshCandidate && layerIndex < sortedPriorities.length - 1) continue;
         const candidates = filterRecentlyFailedCandidates(breakerFiltered.candidates, nowMs);
-        const selected = this.selectRoundRobinCandidate(candidates);
+        const selected = getRoundRobinCandidates(candidates)[0] ?? null;
         if (!selected) continue;
         const resolvedRoundRobin = await this.finalizeSelectedCandidateForDispatch(
           selected,
@@ -816,13 +816,14 @@ export class TokenRouter {
       const selectionPool = shouldUseObservation
         ? poolPlan.observationCandidates
         : (poolPlan.primaryCandidates.length > 0 ? poolPlan.primaryCandidates : poolPlan.observationCandidates);
-      const selected = this.stableFirstSelect(
+      const selected = calculateWeightedSelection(
         selectionPool,
         requestedByDisplayName ? runtimeModelResolver : mappedModel,
         downstreamPolicy,
         nowMs,
+        'stable_first',
         shouldUseObservation ? `${rotationKey}:observe` : rotationKey,
-      );
+      ).selected;
       if (!selected) return null;
       const resolvedStable = await this.finalizeSelectedCandidateForDispatch(
         selected,
@@ -1149,12 +1150,6 @@ export class TokenRouter {
     return await loadRouteMatch(route);
   }
 
-  private selectRoundRobinCandidate(candidates: RouteChannelCandidate[]): RouteChannelCandidate | null {
-    return getRoundRobinCandidates(candidates)[0] ?? null;
-  }
-
-  
-
   private async recordChannelSelection(channelId: number): Promise<void> {
     const nowIso = new Date().toISOString();
     await db.update(schema.routeChannels).set({
@@ -1234,23 +1229,6 @@ export class TokenRouter {
       requestedModel || (typeof modelName === 'string' ? modelName : ''),
       connectivityLookup,
     );
-  }
-
-  private stableFirstSelect(
-    candidates: RouteChannelCandidate[],
-    modelName: string | ((candidate: RouteChannelCandidate) => string),
-    downstreamPolicy: DownstreamRoutingPolicy,
-    nowMs = Date.now(),
-    stableFirstRotationKey?: string,
-  ) {
-    return calculateWeightedSelection(
-      candidates,
-      modelName,
-      downstreamPolicy,
-      nowMs,
-      'stable_first',
-      stableFirstRotationKey,
-    ).selected;
   }
 
 }
