@@ -1,10 +1,14 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import {
   clearPerformanceShadowMetrics,
+  estimateFirstByteWindowMs,
   getPerformanceShadowMetrics,
   listPerformanceShadowMetricsByRouteId,
+  listPerformanceShadowAttempts,
   performanceShadowConstants,
+  recordPerformanceShadowAttempt,
   recordPerformanceShadowSample,
+  resolveAdaptiveFirstByteFloorMs,
 } from './performanceShadow.js';
 
 describe('performanceShadow', () => {
@@ -116,5 +120,103 @@ describe('performanceShadow', () => {
       e2eLatencyEwmaMs: 800,
     });
     expect(performanceShadowConstants.minTpsCompletionTokens).toBe(2);
+  });
+});
+
+describe('adaptive first-byte floor', () => {
+  const key = { routeId: 1, siteId: 2, modelName: 'jitter-site', isStream: true };
+  const base = Date.parse('2026-10-26T10:00:00Z');
+
+  function seed(
+    steps: Array<{ outcome: 'success' | 'timeout'; ttftMs?: number; budgetMs?: number }>,
+  ) {
+    steps.forEach((step, index) => {
+      recordPerformanceShadowAttempt({
+        key,
+        outcome: step.outcome,
+        firstByteLatencyMs: step.ttftMs ?? null,
+        budgetMs: step.budgetMs ?? null,
+        nowMs: base + index * 1_000,
+      });
+    });
+  }
+
+  const floorOf = (floorMs: number, ceilingMs = 30_000) => resolveAdaptiveFirstByteFloorMs({
+    attempts: listPerformanceShadowAttempts(key, base + 30_000),
+    floorMs,
+    ceilingMs,
+  });
+
+  beforeEach(() => clearPerformanceShadowMetrics());
+
+  it('lifts the floor one rung above an isolated censored timeout', () => {
+    seed([
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'timeout', budgetMs: 8_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+    ]);
+    // The timeout is evidence the tail is >= 8s; one ladder rung above it.
+    expect(floorOf(8_000)).toBe(12_000);
+  });
+
+  it('does not ratchet on a run of consecutive timeouts', () => {
+    seed([
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'timeout', budgetMs: 8_000 },
+      { outcome: 'timeout', budgetMs: 8_000 },
+      { outcome: 'timeout', budgetMs: 8_000 },
+      { outcome: 'timeout', budgetMs: 8_000 },
+    ]);
+    // Only the first timeout is isolated; a dead channel must not push the
+    // window toward the ceiling where every failure waits longer.
+    expect(floorOf(8_000)).toBe(12_000);
+  });
+
+  it('keeps the static floor for a fast, steady site', () => {
+    seed(Array.from({ length: 10 }, () => ({ outcome: 'success' as const, ttftMs: 2_000 })));
+    expect(floorOf(8_000)).toBe(8_000);
+  });
+
+  it('uses the success P90 when the site is genuinely slow', () => {
+    seed(Array.from({ length: 10 }, () => ({ outcome: 'success' as const, ttftMs: 9_000 })));
+    // 9000 * 1.35 = 12150 headroom above the observed P90.
+    expect(floorOf(8_000)).toBe(12_150);
+  });
+
+  it('respects the ceiling and an empty history', () => {
+    expect(floorOf(8_000, 10_000)).toBe(8_000);
+    seed([
+      { outcome: 'success', ttftMs: 1_000 },
+      { outcome: 'timeout', budgetMs: 9_000 },
+    ]);
+    expect(floorOf(8_000, 10_000)).toBe(10_000);
+  });
+
+  it('returns a window above the old 8s floor for a jittery site', () => {
+    seed([
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'timeout', budgetMs: 8_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+      { outcome: 'success', ttftMs: 2_000 },
+    ]);
+    const windowMs = estimateFirstByteWindowMs({
+      key,
+      floorMs: 8_000,
+      ceilingMs: 30_000,
+      nowMs: base + 30_000,
+    });
+    expect(windowMs).toBeGreaterThanOrEqual(12_000);
   });
 });

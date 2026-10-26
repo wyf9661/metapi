@@ -237,6 +237,65 @@ export function replayFirstByteWindowPolicy(input: {
 }
 
 /**
+ * How many recent attempts the adaptive floor reads. Long enough to keep a
+ * jitter sample in view, short enough that a link which recovered stops paying
+ * for an old timeout.
+ */
+export const FIRST_BYTE_WINDOW_FLOOR_LOOKBACK = 20;
+
+function percentileMs(values: number[], quantile: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(quantile * sorted.length) - 1),
+  );
+  return sorted[index] ?? 0;
+}
+
+/**
+ * Floor for the first-byte window, learned from the site's own attempt history.
+ *
+ * Observed successes alone cannot escape a window that censors the tail: a site
+ * answering in 2s nine times out of ten and 9s the tenth shows only 2s
+ * successes while the window sits at 8s, so their P90 never proves the tail
+ * exists. A censored timeout is the missing evidence — it says T >= its budget.
+ * An ISOLATED timeout (preceded by a success) therefore lifts the floor one
+ * ladder rung above the budget it was cut at. A run of consecutive timeouts
+ * does not: that is a dead channel, not a jittery one, and ratcheting there
+ * would pin the window at the ceiling and make every failure slow.
+ */
+export function resolveAdaptiveFirstByteFloorMs(input: {
+  attempts: PerformanceShadowAttempt[];
+  floorMs: number;
+  ceilingMs: number;
+}): number {
+  const ceilingMs = Math.max(0, Math.trunc(input.ceilingMs));
+  const floorMs = Math.max(0, Math.min(Math.trunc(input.floorMs), ceilingMs));
+  const recent = input.attempts.slice(-FIRST_BYTE_WINDOW_FLOOR_LOOKBACK);
+
+  const successLatencies = recent
+    .filter((attempt) => attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null)
+    .map((attempt) => attempt.firstByteLatencyMs as number);
+  const successFloorMs = successLatencies.length >= 3
+    ? Math.round(percentileMs(successLatencies, 0.9) * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER)
+    : 0;
+
+  let censoredFloorMs = 0;
+  for (let index = 1; index < recent.length; index += 1) {
+    const attempt = recent[index]!;
+    if (attempt.outcome !== 'timeout' || attempt.budgetMs === null) continue;
+    if (recent[index - 1]!.outcome !== 'success') continue;
+    censoredFloorMs = Math.max(
+      censoredFloorMs,
+      attempt.budgetMs + FIRST_BYTE_WINDOW_LADDER_STEP_MS,
+    );
+  }
+
+  return Math.min(ceilingMs, Math.max(floorMs, successFloorMs, censoredFloorMs));
+}
+
+/**
  * Pick the first-byte window that minimises **time per usable answer**:
  *
  *   cost(W) = E[min(T, W)] / P(T <= W)
@@ -290,13 +349,22 @@ export function estimateFirstByteWindowMs(input: {
     }
   }
 
+  // The static floor is a last resort; the site's own history decides where the
+  // floor really sits. See resolveAdaptiveFirstByteFloorMs for why a censored
+  // timeout — not a success percentile — is the evidence that breaks the loop.
+  const adaptiveFloorMs = resolveAdaptiveFirstByteFloorMs({
+    attempts: ttftAttempts,
+    floorMs,
+    ceilingMs,
+  });
+
   // Candidate windows. Headroom points above every observed success are what
   // let the window ever grow again: without them the candidate set tops out at
   // "the slowest answer we have ever seen", so the next slow answer is censored
   // before it can become a sample, and the ceiling silently becomes the largest
   // success instead of the configured one.
-  const points = new Set<number>([floorMs, ceilingMs]);
-  const clampWindow = (value: number) => Math.min(ceilingMs, Math.max(floorMs, Math.round(value)));
+  const points = new Set<number>([adaptiveFloorMs, ceilingMs]);
+  const clampWindow = (value: number) => Math.min(ceilingMs, Math.max(adaptiveFloorMs, Math.round(value)));
   for (const attempt of ttftAttempts) {
     if (attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null) {
       points.add(clampWindow(attempt.firstByteLatencyMs));
@@ -308,7 +376,7 @@ export function estimateFirstByteWindowMs(input: {
     // One ladder rung above the slowest healthy answer — the point the policy
     // lands on when it escalates from this sample set — so both paths agree on
     // where "wider" means.
-    points.add(clampWindow(Math.max(maxSuccessMs, floorMs) + FIRST_BYTE_WINDOW_LADDER_STEP_MS));
+    points.add(clampWindow(Math.max(maxSuccessMs, adaptiveFloorMs) + FIRST_BYTE_WINDOW_LADDER_STEP_MS));
   }
   const candidates = [...points].sort((a, b) => a - b);
 
@@ -351,7 +419,7 @@ export function estimateFirstByteWindowMs(input: {
   let optimumMs = bestMs;
   const currentMs = input.currentMs;
   if (typeof currentMs === 'number' && Number.isFinite(currentMs) && currentMs > 0) {
-    const currentClamped = Math.min(ceilingMs, Math.max(floorMs, Math.trunc(currentMs)));
+    const currentClamped = Math.min(ceilingMs, Math.max(adaptiveFloorMs, Math.trunc(currentMs)));
     const currentScore = score(currentClamped);
     // 15% improvement needed to move; avoids flapping on noisy samples.
     if (Number.isFinite(currentScore) && bestScore > currentScore * 0.85) optimumMs = currentClamped;
@@ -365,7 +433,7 @@ export function estimateFirstByteWindowMs(input: {
   // the policy ceiling.
   const policyWindowMs = replayFirstByteWindowPolicy({
     attempts: ttftAttempts,
-    floorMs,
+    floorMs: adaptiveFloorMs,
     ceilingMs: policyCeilingMs,
   });
   // The policy ceiling bounds *speculative* widening only. A width proven by
@@ -374,7 +442,7 @@ export function estimateFirstByteWindowMs(input: {
   // healthy first byte is 25-45s would 408 forever, and every 408 would then
   // "prove" the window should stay there. (100 of 1991 successful stream answers
   // in the week before this change arrived above 20s, so it is live config.)
-  return Math.min(ceilingMs, Math.max(floorMs, Math.max(optimumMs, policyWindowMs)));
+  return Math.min(ceilingMs, Math.max(adaptiveFloorMs, Math.max(optimumMs, policyWindowMs)));
 }
 
 function sweepPerformanceShadowMetrics(nowMs = Date.now()): void {
