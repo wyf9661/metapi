@@ -36,7 +36,7 @@ import type {
   RouteDecisionExplanation,
   WeightedSelectionMode,
   WeightedSelectionResult,
-} from './tokenRouter.js';
+} from './tokenRouterTypes.js';
 
 /** Default downstream policy, shared with the router's public entry points. */
 export const DEFAULT_DOWNSTREAM_POLICY: DownstreamRoutingPolicy = EMPTY_DOWNSTREAM_ROUTING_POLICY;

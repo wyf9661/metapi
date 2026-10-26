@@ -5,7 +5,24 @@ import { refreshModelPricingCatalog } from './modelPricingService.js';
 
 import { type SiteRuntimeFailureContext } from './siteFailureClassification.js';
 
-import type { RouteChannelCandidate, RouteMatch } from './tokenRouterTypes.js';
+import type {
+  CandidateEligibilityReason,
+  ExplainSelectionOptions,
+  RouteChannelCandidate,
+  RouteDecisionExplanation,
+  RouteMatch,
+} from './tokenRouterTypes.js';
+
+// Compatibility re-export: these types used to be declared here and a few
+// call sites still name `tokenRouter.js` as their source.
+export type {
+  CandidateEligibilityOptions,
+  CandidateEligibilityReason,
+  ExplainSelectionOptions,
+  RouteDecisionExplanation,
+  WeightedSelectionMode,
+  WeightedSelectionResult,
+} from './tokenRouterTypes.js';
 import {
   buildStableFirstPoolPlan,
   shouldUseStableFirstObservationCandidate,
@@ -56,7 +73,6 @@ import {
   normalizeChannelSourceModel,
   resolveMappedModel,
   resolveModelResolution,
-  type ModelResolution,
 } from './tokenRouterModelMatching.js';
 import { isExactRouteModelPattern, matchesModelPattern } from './tokenRouterModelPatterns.js';
 import {
@@ -72,8 +88,6 @@ import {
   type ConnectivitySignal,
 } from './routeConnectivityLookup.js';
 
-import { type RouteDecision, type RouteDecisionReasonCode } from '../../shared/tokenRouteContract.js';
-
 interface SelectedChannel {
   channel: typeof schema.routeChannels.$inferSelect;
   account: typeof schema.accounts.$inferSelect;
@@ -87,13 +101,6 @@ interface SelectedChannel {
 // 余额/配额耗尽（"Insufficient Balance" 等）的固定冷却：这类状态只能靠充值或
 // 人工解除，恢复探测对它无效。用一个小时量级的固定冷却把渠道从探测池里摘出去，
 // 同时保留路由层 1 小时后自动复检一次的机会（与「冷却上限 1 小时」的约定一致）。
-
-export type WeightedSelectionMode = 'weighted' | 'stable_first';
-export type WeightedSelectionResult = {
-  selected: RouteChannelCandidate | null;
-  details: Array<{ candidate: RouteChannelCandidate; probability: number; reason: string }>;
-  stableSiteCount: number;
-};
 
 const boundedGapStates = new Map<string, BoundedGapState>();
 attachBoundedGapStateMap(boundedGapStates);
@@ -116,23 +123,6 @@ function getBoundedGapState(requestedModel: string, siteId: number, channelId?: 
   return state;
 }
 
-export type RouteDecisionExplanation = RouteDecision & {
-  routeId?: number;
-  modelPattern?: string;
-  selectedAccountId?: number;
-  modelResolution?: ModelResolution;
-};
-
-export type ExplainSelectionOptions = {
-  excludeChannelIds?: number[];
-  bypassSourceModelCheck?: boolean;
-  useChannelSourceModelForCost?: boolean;
-  downstreamPolicy?: DownstreamRoutingPolicy;
-  /** Request's estimated context requirement — mirrors the live selection
-   * filter so the decision snapshot and the real choice agree. */
-  requiredContextTokens?: number;
-};
-
 /**
  * Options for concurrency-spread selection: pick a different channel while the
  * affinity channel (sticky / last-success) is already serving a request.
@@ -153,32 +143,6 @@ type PricingReferenceRefreshOptions = {
   useChannelSourceModelForCost?: boolean;
   downstreamPolicy?: DownstreamRoutingPolicy;
   refreshedKeys?: Set<string>;
-};
-
-export type CandidateEligibilityReason = {
-  code: RouteDecisionReasonCode;
-  message: string;
-  details?: Record<string, unknown>;
-};
-
-export type CandidateEligibilityOptions = {
-  requestedModel: string;
-  bypassSourceModelCheck?: boolean;
-  excludeChannelIds?: number[];
-  nowIso?: string;
-  downstreamPolicy?: DownstreamRoutingPolicy;
-  /** Request's estimated context requirement (input + output budget + margin). */
-  requiredContextTokens?: number;
-  /** Availability-first: relax a cooldown that came from a HEALTH PROBE when it
-   * would be the only reason the candidate set is empty. Real-failure and
-   * credential-scoped cooldowns stay hard exclusions (see
-   * isProbeAttributableCooldown). */
-  ignoreProbeCooldown?: boolean;
-  /** Availability-first: relax a real-failure cooldown when it is the ONLY
-   * reason the candidate pool is empty. A cooldown is a prediction, not a
-   * verdict; with a single-channel route it would otherwise turn one slow
-   * answer into guaranteed downtime for the whole route. */
-  ignoreChannelCooldown?: boolean;
 };
 
 import {
