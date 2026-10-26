@@ -59,10 +59,35 @@ export const FIRST_BYTE_WINDOW_MIN_SAMPLES = 8;
  * so the first answer slower than that gets censored and the window is stuck.
  */
 export const FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER = 1.35;
-/** Escalation target after a run of timeouts (relative to the slowest success). */
-export const FIRST_BYTE_WINDOW_RETRY_MULTIPLIER = 2;
-/** Trailing consecutive timeouts that force the window to widen. */
-export const FIRST_BYTE_WINDOW_TIMEOUT_STREAK_ESCALATE = 2;
+/**
+ * Recent TTFT attempts (oldest -> newest) inspected by the escalation trigger.
+ * A sliding ratio is used instead of a tail streak: peak-hour traffic
+ * interleaves fast and slow answers, so one 2s success used to reset a tail
+ * counter and the window never moved off the floor all through the peak.
+ */
+export const FIRST_BYTE_WINDOW_TRIGGER_WINDOW = 6;
+/** Timeouts inside that sliding window that make the window itself the suspect. */
+export const FIRST_BYTE_WINDOW_TRIGGER_TIMEOUTS = 2;
+/** Additive ladder step, used for both escalation and decay. */
+export const FIRST_BYTE_WINDOW_LADDER_STEP_MS = 4_000;
+/** Attempts a raised window is held for before any decay is considered. */
+export const FIRST_BYTE_WINDOW_HOLD_ATTEMPTS = 10;
+/** Consecutive fast answers required before the window steps one rung down. */
+export const FIRST_BYTE_WINDOW_DECAY_FAST_ATTEMPTS = 8;
+/** A success is "fast" (decay evidence) below this share of the window. */
+export const FIRST_BYTE_WINDOW_DECAY_FAST_RATIO = 0.6;
+/**
+ * Ceiling for the adaptive window, independent of the configured one.
+ *
+ * `proxy_first_byte_timeout_sec` is the operator's cap on how long a silent
+ * upstream may hold a request, and operators set it generously (120s here).
+ * Handing that number to the estimator makes every dead attempt hold the
+ * failover chain for two minutes. The measured healthy first-byte band of this
+ * relay fleet fits well inside 20s (5 days of production logs: per-site optimum
+ * 5-20s for 11 of 12 sites, one site needed 45s). Override per deployment with
+ * PROXY_FIRST_BYTE_WINDOW_MAX_MS.
+ */
+export const FIRST_BYTE_WINDOW_POLICY_CEILING_MS = 20_000;
 
 function sweepAttempts(nowMs = Date.now()): void {
   const cutoff = nowMs - ATTEMPT_TTL_MS;
@@ -112,6 +137,102 @@ export function listPerformanceShadowAttempts(
 }
 
 /**
+ * Policy ceiling for the adaptive window: the smaller of the operator's
+ * configured ceiling and the measured healthy band of the relay fleet.
+ */
+export function resolveFirstByteWindowPolicyCeilingMs(configuredCeilingMs: number): number {
+  const override = Number(process.env.PROXY_FIRST_BYTE_WINDOW_MAX_MS);
+  const policyCeilingMs = Number.isFinite(override) && override > 0
+    ? Math.trunc(override)
+    : FIRST_BYTE_WINDOW_POLICY_CEILING_MS;
+  if (!Number.isFinite(configuredCeilingMs) || configuredCeilingMs <= 0) return policyCeilingMs;
+  return Math.min(Math.trunc(configuredCeilingMs), policyCeilingMs);
+}
+
+/**
+ * Sequencing policy applied on top of the cost optimum below.
+ *
+ * The optimiser is a pure function of the sample set, so it has no memory: from
+ * the same samples it returns the same answer, and that answer is the floor
+ * whenever every success sits below it AND the timeouts were cut at it. In that
+ * state every window >= max(slowest success, censoring point) scores *identically*
+ * (a censored attempt is charged min(W, its own expiry), and no new success is
+ * unlocked), and the tie-break takes the smallest candidate — so the floor is an
+ * absorbing state, not an optimum. Leaving it then requires a success that got
+ * past the floor, which is exactly what the floor prevented.
+ *
+ * Production evidence (2026-10-26, one relay, one peak window): the window sat at
+ * the 8s floor for 21 of 33 attempts while 12% of that site's successful answers
+ * arrived above 8s.
+ *
+ * So the ordering is done here, by replaying the attempt series:
+ *  - escalate one *additive* rung once the sliding window holds enough timeouts
+ *    (interleaved fast answers no longer reset the counter);
+ *  - hold the raised window for a run of attempts, so a single fast answer
+ *    cannot undo it — the site is jittering, not fast again;
+ *  - step back down only after the hold expires AND the site has answered fast
+ *    repeatedly, i.e. escalation is immediate and decay is slow.
+ * Additive rungs are deliberate. A multiplicative ratchet (x1.5 per trigger)
+ * reaches the ceiling within a handful of triggers — measured on the same day's
+ * production series, it pinned 12 attempts at the 120s ceiling, at which point
+ * the ceiling is the de-facto window and there is no strategy left.
+ */
+export function replayFirstByteWindowPolicy(input: {
+  attempts: PerformanceShadowAttempt[];
+  floorMs: number;
+  ceilingMs: number;
+}): number {
+  const floorMs = Math.max(0, Math.trunc(input.floorMs));
+  const ceilingMs = Math.max(floorMs, Math.trunc(input.ceilingMs));
+  let windowMs = floorMs;
+  let holdRemaining = 0;
+  let fastRun = 0;
+  let maxSuccessMs = 0;
+  const recent: PerformanceShadowOutcome[] = [];
+  for (const attempt of input.attempts) {
+    if (attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null) {
+      maxSuccessMs = Math.max(maxSuccessMs, attempt.firstByteLatencyMs);
+    }
+    recent.push(attempt.outcome);
+    if (recent.length > FIRST_BYTE_WINDOW_TRIGGER_WINDOW) recent.shift();
+    const timeoutsInWindow = recent.filter((outcome) => outcome === 'timeout').length;
+    // Escalate only when THIS attempt is one of the timeouts: the sliding
+    // window keeps holding the earlier ones for a few more attempts, so
+    // triggering on the count alone would ratchet one rung per attempt —
+    // including on healthy answers — straight to the ceiling.
+    if (attempt.outcome === 'timeout' && timeoutsInWindow >= FIRST_BYTE_WINDOW_TRIGGER_TIMEOUTS) {
+      // The incumbent window is the suspect: give the site one attempt wide
+      // enough to prove itself, but never wider than the policy ceiling.
+      const anchored = Math.max(
+        windowMs + FIRST_BYTE_WINDOW_LADDER_STEP_MS,
+        maxSuccessMs * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER,
+      );
+      windowMs = Math.min(ceilingMs, Math.max(floorMs, Math.round(anchored)));
+      holdRemaining = FIRST_BYTE_WINDOW_HOLD_ATTEMPTS;
+      fastRun = 0;
+      continue;
+    }
+    if (holdRemaining > 0) {
+      holdRemaining -= 1;
+      fastRun = 0;
+      continue;
+    }
+    if (attempt.outcome === 'success'
+      && attempt.firstByteLatencyMs !== null
+      && attempt.firstByteLatencyMs < windowMs * FIRST_BYTE_WINDOW_DECAY_FAST_RATIO) {
+      fastRun += 1;
+      if (fastRun >= FIRST_BYTE_WINDOW_DECAY_FAST_ATTEMPTS) {
+        windowMs = Math.max(floorMs, windowMs - FIRST_BYTE_WINDOW_LADDER_STEP_MS);
+        fastRun = 0;
+      }
+      continue;
+    }
+    fastRun = 0;
+  }
+  return Math.min(ceilingMs, Math.max(floorMs, windowMs));
+}
+
+/**
  * Pick the first-byte window that minimises **time per usable answer**:
  *
  *   cost(W) = E[min(T, W)] / P(T <= W)
@@ -128,7 +249,10 @@ export function listPerformanceShadowAttempts(
  * instead of optimising, because at that point the window is the suspect.
  *
  * `currentMs` adds hysteresis: keep the incumbent unless the alternative is
- * measurably better, so the window does not oscillate request to request.
+ * measurably better, so the window does not oscillate request to request. The
+ * sequencing policy below (`replayFirstByteWindowPolicy`) supplies the memory
+ * this pure optimiser lacks, and can only ever raise the result — a holder
+ * window is not an optimum, so no amount of fast samples may undo it early.
  */
 export function estimateFirstByteWindowMs(input: {
   key: PerformanceShadowKey;
@@ -141,6 +265,7 @@ export function estimateFirstByteWindowMs(input: {
   const ceilingMs = Math.trunc(input.ceilingMs);
   if (!Number.isFinite(ceilingMs) || ceilingMs <= 0) return null;
   const floorMs = Math.max(0, Math.min(Math.trunc(input.floorMs), ceilingMs));
+  const policyCeilingMs = resolveFirstByteWindowPolicyCeilingMs(ceilingMs);
   const minSamples = Math.max(2, Math.trunc(input.minSamples ?? FIRST_BYTE_WINDOW_MIN_SAMPLES));
   const attempts = listPerformanceShadowAttempts(input.key, input.nowMs);
   if (attempts.length < minSamples) return null;
@@ -176,7 +301,10 @@ export function estimateFirstByteWindowMs(input: {
   }
   if (maxSuccessMs > 0) {
     points.add(clampWindow(maxSuccessMs * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER));
-    points.add(clampWindow(maxSuccessMs * FIRST_BYTE_WINDOW_RETRY_MULTIPLIER));
+    // One ladder rung above the slowest healthy answer — the point the policy
+    // lands on when it escalates from this sample set — so both paths agree on
+    // where "wider" means.
+    points.add(clampWindow(Math.max(maxSuccessMs, floorMs) + FIRST_BYTE_WINDOW_LADDER_STEP_MS));
   }
   const candidates = [...points].sort((a, b) => a - b);
 
@@ -203,22 +331,6 @@ export function estimateFirstByteWindowMs(input: {
     return (totalCost / n) / (successes / n);
   };
 
-  // Consecutive timeouts at the tail mean the incumbent window is what is
-  // failing — not the upstream. Cost optimisation cannot see this on its own
-  // (each timeout looks like "waiting longer is not worth it"), so escalate
-  // explicitly: give the site one attempt wide enough to prove itself.
-  let trailingTimeouts = 0;
-  for (let i = ttftAttempts.length - 1; i >= 0; i -= 1) {
-    if (ttftAttempts[i].outcome === 'timeout') trailingTimeouts += 1;
-    else break;
-  }
-  if (trailingTimeouts >= FIRST_BYTE_WINDOW_TIMEOUT_STREAK_ESCALATE) {
-    const escalationBase = maxSuccessMs > 0
-      ? maxSuccessMs * FIRST_BYTE_WINDOW_RETRY_MULTIPLIER
-      : floorMs * FIRST_BYTE_WINDOW_RETRY_MULTIPLIER;
-    return clampWindow(Math.max(escalationBase, floorMs));
-  }
-
   let bestMs = candidates[0];
   let bestScore = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
@@ -232,14 +344,26 @@ export function estimateFirstByteWindowMs(input: {
   // failing. Stay out of the way and let the caller keep its configured value.
   if (!Number.isFinite(bestScore)) return null;
 
+  let optimumMs = bestMs;
   const currentMs = input.currentMs;
   if (typeof currentMs === 'number' && Number.isFinite(currentMs) && currentMs > 0) {
     const currentClamped = Math.min(ceilingMs, Math.max(floorMs, Math.trunc(currentMs)));
     const currentScore = score(currentClamped);
     // 15% improvement needed to move; avoids flapping on noisy samples.
-    if (Number.isFinite(currentScore) && bestScore > currentScore * 0.85) return currentClamped;
+    if (Number.isFinite(currentScore) && bestScore > currentScore * 0.85) optimumMs = currentClamped;
   }
-  return Math.min(ceilingMs, Math.max(floorMs, bestMs));
+
+  // Ordering policy. The optimiser cannot leave a floor its own samples made
+  // absorbing — from the same samples it recomputes the same floor — so the
+  // sequence itself decides: escalate on the sliding timeout ratio, hold the
+  // raised window, decay only after a sustained fast run. It can only raise the
+  // optimiser's answer, never lower it, and never past the policy ceiling.
+  const policyWindowMs = replayFirstByteWindowPolicy({
+    attempts: ttftAttempts,
+    floorMs,
+    ceilingMs: policyCeilingMs,
+  });
+  return Math.min(policyCeilingMs, Math.max(floorMs, Math.max(optimumMs, policyWindowMs)));
 }
 
 function sweepPerformanceShadowMetrics(nowMs = Date.now()): void {

@@ -154,4 +154,66 @@ describe('performanceShadow survival-curve window', () => {
     seedSuccesses(Array.from({ length: 10 }, () => 2_000), BASE_NOW - 7 * 60 * 60 * 1000);
     expect(estimate()).toBeNull();
   });
+
+  // Regression: production 2026-10-26. A relay whose healthy first byte is
+  // 2-5s sat at the 8s floor for 21 of 33 attempts across a peak window, while
+  // 12% of that site's successful answers arrived above 8s. The cost curve is
+  // flat from the floor upward (every window >= max(slowest success, censoring
+  // point) scores identically) and the tie-break takes the smallest candidate,
+  // so the floor was an absorbing state. Lifting it required two *trailing*
+  // timeouts and one fast answer between them reset that counter.
+  it('lifts off the floor when two timeouts land inside the sliding window, interleaved with fast answers', () => {
+    seedSuccesses([2_000, 2_400, 2_800, 3_100, 2_600, 3_000]);
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: FLOOR, nowMs: BASE_NOW - 60 });
+    // The fast answer that used to reset a tail streak: the sliding ratio keeps
+    // counting the timeout, so the window still escalates on the next timeout.
+    seedSuccesses([1_900], BASE_NOW - 50);
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: FLOOR, nowMs: BASE_NOW - 40 });
+
+    const window = estimate();
+    expect(window).not.toBeNull();
+    expect(window!).toBeGreaterThan(FLOOR);
+  });
+
+  it('holds a raised window through a run of fast answers', () => {
+    seedSuccesses([2_000, 2_200, 2_400, 2_600, 2_800, 3_000]);
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: FLOOR, nowMs: BASE_NOW - 700 });
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: FLOOR, nowMs: BASE_NOW - 690 });
+    const raised = estimate();
+    expect(raised!).toBeGreaterThan(FLOOR);
+
+    // Five fast answers inside the hold: the site is jittering, not fast again.
+    seedSuccesses(Array.from({ length: 5 }, () => 1_500), BASE_NOW - 600);
+    expect(estimate()).toBe(raised);
+  });
+
+  it('steps back down only after the hold expires and the site stays fast', () => {
+    seedSuccesses([2_000, 2_200, 2_400, 2_600, 2_800, 3_000]);
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: FLOOR, nowMs: BASE_NOW - 900 });
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: FLOOR, nowMs: BASE_NOW - 890 });
+    expect(estimate()!).toBeGreaterThan(FLOOR);
+
+    // Hold (10 attempts) + a sustained fast run (8): only now does it decay.
+    seedSuccesses(Array.from({ length: 18 }, () => 1_500), BASE_NOW - 800);
+    expect(estimate()!).toBe(FLOOR);
+  });
+
+  it('never exceeds the policy ceiling, however long the site keeps timing out', () => {
+    seedSuccesses(Array.from({ length: 6 }, (_, index) => 3_000 + (index * 100)));
+    for (let i = 0; i < 20; i += 1) {
+      recordPerformanceShadowAttempt({
+        key: KEY,
+        outcome: 'timeout',
+        budgetMs: FLOOR,
+        nowMs: BASE_NOW - 600 + i,
+      });
+    }
+
+    const window = estimate();
+    expect(window).not.toBeNull();
+    expect(window!).toBeGreaterThan(FLOOR);
+    // Additive rungs must not reach the configured ceiling (900s here) in a
+    // handful of triggers, or the ceiling becomes the de-facto window.
+    expect(window!).toBeLessThanOrEqual(20_000);
+  });
 });
