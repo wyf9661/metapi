@@ -20,6 +20,7 @@ import {
   resolveEffectiveFailureCooldownMs as resolveEffectiveFailureCooldownMsMath,
   resolveFailureBackoffSec,
 } from './tokenRouterMath.js';
+import { resolveUpstreamInformedCooldownMs } from './upstreamRetryAfter.js';
 import {
   filterRecentlyFailedCandidates as filterRecentlyFailedCandidatesPure,
   isChannelRecentlyFailed as isChannelRecentlyFailedPure,
@@ -47,6 +48,28 @@ export function resolveEffectiveFailureCooldownMs(failCount?: number | null, wei
     : 1;
   // Apply weight BEFORE clamping so the ceiling cannot be exceeded by weight
   return clampFailureCooldownMsMath(rawBackoffMs * normalizedWeight, maxMs);
+}
+
+/**
+ * Cooldown for a failed channel, extended by the wait the upstream itself asked
+ * for (Retry-After / ratelimit-reset, already parsed into `retryAfterMs`).
+ *
+ * The hint can only lengthen the wait. Retrying earlier than the vendor allows
+ * is a guaranteed second refusal; shortening the backoff because a provider
+ * said "1s" is how a channel that has been failing all afternoon gets hammered
+ * once a second. The configured ceiling still bounds the result.
+ */
+export function resolveChannelCooldownMsWithUpstreamHint(
+  failCount: number | null | undefined,
+  weight: number,
+  retryAfterMs?: number | null,
+): number {
+  const localMs = resolveEffectiveFailureCooldownMs(failCount, weight);
+  return resolveUpstreamInformedCooldownMs(
+    localMs,
+    retryAfterMs,
+    resolveConfiguredFailureCooldownMaxMs(),
+  );
 }
 
 export function resolveFailureCooldownWeight(context: SiteRuntimeFailureContext = {}): {

@@ -934,6 +934,7 @@ export async function handleChatSurfaceRequest(
                 completionTokens: parsedUsage.completionTokens,
                 totalTokens: parsedUsage.totalTokens,
                 upstreamPath: successfulUpstreamPath,
+                upstreamHeaders: upstream.headers,
               });
               if (await continueAttemptOrTerminate({
                 selected,
@@ -1006,6 +1007,7 @@ export async function handleChatSurfaceRequest(
               completionTokens: parsedUsage.completionTokens,
               totalTokens: parsedUsage.totalTokens,
               upstreamPath: successfulUpstreamPath,
+              upstreamHeaders: upstream.headers,
             });
             const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
               && canRetryInPlaceForRecoveringFailure(retryCount, failure.status, failure.reason, config.proxyFailoverBackoffMs);
@@ -1090,6 +1092,7 @@ export async function handleChatSurfaceRequest(
               completionTokens: parsedUsage.completionTokens,
               totalTokens: parsedUsage.totalTokens,
               upstreamPath: successfulUpstreamPath,
+              upstreamHeaders: upstream.headers,
             });
             if (await continueAttemptOrTerminate({
               selected,
@@ -1179,6 +1182,7 @@ export async function handleChatSurfaceRequest(
               completionTokens: parsedUsage.completionTokens,
               totalTokens: parsedUsage.totalTokens,
               upstreamPath: successfulUpstreamPath,
+              upstreamHeaders: upstream.headers,
             });
             if (await continueAttemptOrTerminate({
               selected,
@@ -1265,6 +1269,7 @@ export async function handleChatSurfaceRequest(
           completionTokens: parsedUsage.completionTokens,
           totalTokens: parsedUsage.totalTokens,
           upstreamPath: successfulUpstreamPath,
+          upstreamHeaders: upstream.headers,
         });
         const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
           && canRetryInPlaceForRecoveringFailure(retryCount, failure.status, failure.reason, config.proxyFailoverBackoffMs);

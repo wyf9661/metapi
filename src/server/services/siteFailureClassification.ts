@@ -18,6 +18,13 @@ export type SiteRuntimeFailureContext = {
   status?: number | null;
   errorText?: string | null;
   modelName?: string | null;
+  /**
+   * Wait the upstream itself asked for in this response (Retry-After or a
+   * ratelimit-reset header), already parsed and clamped. Optional: callers
+   * that never see the response headers leave it unset, and the cooldown then
+   * falls back to the local backoff alone.
+   */
+  retryAfterMs?: number | null;
 };
 
 /** Timeout / first-byte patterns shared by retry and site health. */

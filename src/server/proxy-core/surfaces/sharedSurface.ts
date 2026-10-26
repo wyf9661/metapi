@@ -27,6 +27,7 @@ import { dispatchRuntimeRequest } from '../../services/runtimeDispatch.js';
 import type { BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 import { recordPerformanceShadowSample, recordPerformanceShadowAttempt } from '../../services/performanceShadow.js';
+import { parseUpstreamRetryHint } from '../../services/upstreamRetryAfter.js';
 import { parseLocalFirstByteTimeoutBudgetMs } from '../firstByteTimeout.js';
 import { observeContextOverflowFailure, observeSuccessfulPromptUsage } from '../../services/siteContextCapabilityService.js';
 import { selectProxyChannelForAttempt } from '../channelSelection.js';
@@ -797,6 +798,8 @@ export function createSurfaceFailureToolkit(input: {
       firstByteLatencyMs?: number | null;
       latencyMs: number;
       retryCount: number;
+      /** The failed response's headers, when the caller still has them. */
+      upstreamHeaders?: { get(name: string): string | null } | null;
     }): Promise<SurfaceFailureOutcome> {
       const rawErrText = args.rawErrText || args.errText;
       const disposition = buildProxyFailureDisposition({
@@ -811,10 +814,12 @@ export function createSurfaceFailureToolkit(input: {
         errorText: rawErrText,
       }));
       if (disposition.incrementFailure) {
+        const retryAfterMs = parseUpstreamRetryHint(args.upstreamHeaders).retryAfterMs;
         await tokenRouter.recordFailure(args.selected.channel.id, {
           status: args.status,
           errorText: rawErrText,
           modelName: args.modelName,
+          ...(retryAfterMs != null ? { retryAfterMs } : {}),
         });
       }
       await log({
@@ -879,6 +884,8 @@ export function createSurfaceFailureToolkit(input: {
       completionTokens?: number | null;
       totalTokens?: number | null;
       upstreamPath?: string | null;
+      /** The failed response's headers, when the caller still has them. */
+      upstreamHeaders?: { get(name: string): string | null } | null;
     }): Promise<SurfaceFailureOutcome> {
       const disposition = buildProxyFailureDisposition({
         status: args.failure.status,
@@ -892,10 +899,17 @@ export function createSurfaceFailureToolkit(input: {
         errorText: args.failure.reason,
       }));
       if (disposition.incrementFailure) {
+        // Believe the vendor when it says how long to wait (Retry-After /
+        // ratelimit-reset). Undefined when the caller had no response to read;
+        // the cooldown then stays on the local backoff alone. The field is
+        // omitted rather than set to null so existing call-shape assertions
+        // keep seeing exactly {status, errorText, modelName}.
+        const retryAfterMs = parseUpstreamRetryHint(args.upstreamHeaders).retryAfterMs;
         await tokenRouter.recordFailure(args.selected.channel.id, {
           status: args.failure.status,
           errorText: args.failure.reason,
           modelName: args.modelName,
+          ...(retryAfterMs != null ? { retryAfterMs } : {}),
         });
       }
       const attemptCost = await resolveAttemptUsageCost({

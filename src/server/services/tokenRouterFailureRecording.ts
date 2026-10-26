@@ -19,7 +19,7 @@ import {
 } from './siteFailureClassification.js';
 import {
   clampFailureCooldownMs,
-  resolveEffectiveFailureCooldownMs,
+  resolveChannelCooldownMsWithUpstreamHint,
   resolveFailureCooldownWeight,
   resolveShortWindowLimitCooldown,
 } from './tokenRouterFailurePolicy.js';
@@ -497,7 +497,13 @@ export async function recordFailure(
       // cooldown constant keeps both systems in sync without extra state.
       cooldownUntil = new Date(nowMs + SITE_API_ENDPOINT_COOLDOWN_MS).toISOString();
     } else {
-      cooldownUntil = new Date(nowMs + resolveEffectiveFailureCooldownMs(failCount, cooldownPolicy.weight)).toISOString();
+      cooldownUntil = new Date(
+        nowMs + resolveChannelCooldownMsWithUpstreamHint(
+          failCount,
+          cooldownPolicy.weight,
+          normalizedContext.retryAfterMs,
+        ),
+      ).toISOString();
     }
     consecutiveFailCount = 0;
     cooldownLevel = 0;
