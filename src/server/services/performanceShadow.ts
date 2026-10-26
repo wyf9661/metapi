@@ -86,6 +86,10 @@ export const FIRST_BYTE_WINDOW_DECAY_FAST_RATIO = 0.6;
  * relay fleet fits well inside 20s (5 days of production logs: per-site optimum
  * 5-20s for 11 of 12 sites, one site needed 45s). Override per deployment with
  * PROXY_FIRST_BYTE_WINDOW_MAX_MS.
+ *
+ * This caps the *speculative* widening done by the sequencing policy. A width
+ * justified by observed successes is never clamped to it — see the return of
+ * estimateFirstByteWindowMs.
  */
 export const FIRST_BYTE_WINDOW_POLICY_CEILING_MS = 20_000;
 
@@ -357,13 +361,20 @@ export function estimateFirstByteWindowMs(input: {
   // absorbing — from the same samples it recomputes the same floor — so the
   // sequence itself decides: escalate on the sliding timeout ratio, hold the
   // raised window, decay only after a sustained fast run. It can only raise the
-  // optimiser's answer, never lower it, and never past the policy ceiling.
+  // optimiser's answer, never lower it, and its speculative widening stops at
+  // the policy ceiling.
   const policyWindowMs = replayFirstByteWindowPolicy({
     attempts: ttftAttempts,
     floorMs,
     ceilingMs: policyCeilingMs,
   });
-  return Math.min(policyCeilingMs, Math.max(floorMs, Math.max(optimumMs, policyWindowMs)));
+  // The policy ceiling bounds *speculative* widening only. A width proven by
+  // observed successes is not speculation: clamping that would re-create the
+  // absorbing state this change removed, one ceiling higher — a bucket whose
+  // healthy first byte is 25-45s would 408 forever, and every 408 would then
+  // "prove" the window should stay there. (100 of 1991 successful stream answers
+  // in the week before this change arrived above 20s, so it is live config.)
+  return Math.min(ceilingMs, Math.max(floorMs, Math.max(optimumMs, policyWindowMs)));
 }
 
 function sweepPerformanceShadowMetrics(nowMs = Date.now()): void {

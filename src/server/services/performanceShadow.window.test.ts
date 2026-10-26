@@ -216,4 +216,19 @@ describe('performanceShadow survival-curve window', () => {
     // handful of triggers, or the ceiling becomes the de-facto window.
     expect(window!).toBeLessThanOrEqual(20_000);
   });
+
+  // Guard for the second form of the same defect: the speculative 20s cap must
+  // not clamp a width that observed successes justify, or the absorbing state
+  // simply moves up to 20s — the slow buckets (25-45s healthy first byte) would
+  // 408 forever and each 408 would "prove" the window belongs there.
+  it('keeps a width backed by observed successes above the speculative cap', () => {
+    seedSuccesses(Array.from({ length: 8 }, () => 27_000));
+    recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: 20_000, nowMs: BASE_NOW - 30 });
+
+    const window = estimate();
+    expect(window).not.toBeNull();
+    expect(window!).toBeGreaterThan(20_000);
+    expect(window!).toBeGreaterThanOrEqual(27_000);
+    expect(window!).toBeLessThanOrEqual(CEILING);
+  });
 });
