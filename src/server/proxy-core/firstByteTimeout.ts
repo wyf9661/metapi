@@ -22,6 +22,32 @@ function buildFirstByteTimeoutMessage(timeoutMs: number): string {
   return `first byte timeout (${seconds}s)`;
 }
 
+/**
+ * Read the censoring point of a first-byte timeout from a failure message.
+ *
+ * Only a window WE expired is a censored observation (`T >= W`) for the
+ * survival curve. A relay running this same code returns its own sentinel as an
+ * HTTP 408 response body, which arrives here as
+ * `Upstream returned HTTP 408: first byte timeout (8s)` — that is the
+ * *upstream's* wall, not ours. Charging it to our curve misattributes both the
+ * trigger (our window looks too tight when it is the peer that cut) and the
+ * budget (8s instead of the window we were actually running).
+ */
+export function parseLocalFirstByteTimeoutBudgetMs(
+  errorMessage: string | null | undefined,
+): number | null {
+  const text = errorMessage ?? '';
+  if (!text) return null;
+  // The `Upstream returned …` prefix is metapi's marker for "this text is the
+  // body of an upstream response", as opposed to a locally generated failure.
+  if (/\bupstream returned\b/i.test(text)) return null;
+  const match = /first byte timeout \((\d+)s\)/i.exec(text);
+  if (!match) return null;
+  const seconds = Number(match[1]);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return Math.max(1, Math.round(seconds)) * 1000;
+}
+
 function buildObservedTimeoutResponse(timeoutMs: number): Response {
   return setObservedResponseMeta(new Response(buildFirstByteTimeoutMessage(timeoutMs), {
     status: 408,

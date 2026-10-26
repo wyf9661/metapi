@@ -27,6 +27,7 @@ import { dispatchRuntimeRequest } from '../../services/runtimeDispatch.js';
 import type { BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
 import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 import { recordPerformanceShadowSample, recordPerformanceShadowAttempt } from '../../services/performanceShadow.js';
+import { parseLocalFirstByteTimeoutBudgetMs } from '../firstByteTimeout.js';
 import { observeContextOverflowFailure, observeSuccessfulPromptUsage } from '../../services/siteContextCapabilityService.js';
 import { selectProxyChannelForAttempt } from '../channelSelection.js';
 
@@ -638,12 +639,16 @@ export function createSurfaceFailureToolkit(input: {
       isStream: args.isStream === true,
     };
     if (key.siteId != null && key.siteId > 0) {
-      const timeoutMatch = /first byte timeout \((\d+)s\)/i.exec(args.errorMessage || '');
-      if (timeoutMatch) {
+      // Only a window WE expired is a censored observation. A peer running this
+      // same code answers with its own sentinel as an HTTP 408 body, which
+      // reaches here as `Upstream returned HTTP 408: first byte timeout (8s)`:
+      // that is the upstream's wall, so it must not feed our curve.
+      const budgetMs = parseLocalFirstByteTimeoutBudgetMs(args.errorMessage);
+      if (budgetMs !== null) {
         recordPerformanceShadowAttempt({
           key: { ...key, siteId: key.siteId },
           outcome: 'timeout',
-          budgetMs: Number(timeoutMatch[1]) * 1000,
+          budgetMs,
         });
       } else {
         recordPerformanceShadowAttempt({
