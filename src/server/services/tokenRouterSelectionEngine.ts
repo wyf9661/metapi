@@ -223,6 +223,45 @@ export async function explainSelectionFromMatch(
   }
 
   if (available.length === 0) {
+    // Availability-first: a cooldown is a prediction, not a verdict. When every
+    // other filter has already been relaxed and the only thing left is a
+    // real-failure cooldown, try the channel closest to revival instead of
+    // returning "no channels" without a single upstream attempt.
+    //
+    // This is the single-channel case in particular: cooling the only channel
+    // turns one slow answer into guaranteed downtime for the whole route, and
+    // the client's retry never reaches the upstream at all. With several
+    // channels all cooling, the same reasoning applies — one probe is better
+    // than a guaranteed 503 — but only the soonest-recovering one is released,
+    // so a genuinely dead pool is still probed one channel at a time.
+    const cooldownRelaxed = match.channels.filter((row) => (
+      getCandidateEligibilityReasons(row, {
+        requestedModel,
+        bypassSourceModelCheck,
+        excludeChannelIds,
+        nowIso,
+        downstreamPolicy,
+        requiredContextTokens: options.requiredContextTokens,
+        ignoreProbeCooldown: true,
+        ignoreChannelCooldown: true,
+      }).length === 0
+    ));
+    if (cooldownRelaxed.length > 0) {
+      const soonest = [...cooldownRelaxed].sort((left, right) => (
+        String(left.channel.cooldownUntil ?? '').localeCompare(String(right.channel.cooldownUntil ?? ''))
+      ))[0]!;
+      const candidate = candidateMap.get(soonest.channel.id);
+      if (candidate) {
+        candidate.eligible = true;
+        candidate.reason = '可用（冷却兜底放行 — 没有其他可用通道，宁可尝试一次也不直接失败）';
+        candidate.reasonCodes = ['eligible'];
+      }
+      available.push(soonest);
+      summary.push(`冷却兜底放行：${cooldownRelaxed.length} 个候选仅因冷却被排除，放行最早恢复的 1 个尝试`);
+    }
+  }
+
+  if (available.length === 0) {
     summary.push('没有可用通道（全部被禁用、站点不可用、冷却或令牌不可用）');
     return {
       requestedModel,
@@ -967,7 +1006,8 @@ export function getCandidateEligibilityReasons(
   }
 
   if (
-    candidate.channel.cooldownUntil
+    !options.ignoreChannelCooldown
+    && candidate.channel.cooldownUntil
     && candidate.channel.cooldownUntil > nowIso
     && !(options.ignoreProbeCooldown && isProbeAttributableCooldown(candidate.channel))
   ) {

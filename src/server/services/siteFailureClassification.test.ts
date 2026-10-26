@@ -369,3 +369,30 @@ describe('siteFailureClassification', () => {
     expect(noteFailoverFailureAndShouldStop(state, 0, 'fetch failed')).toBe(true);
   });
 });
+
+describe('timeout penalty and channel affinity', () => {
+  it('treats a first-byte timeout as a latency observation, not a 5xx', () => {
+    expect(resolveSiteRuntimeFailurePenalty({
+      status: 408,
+      errorText: 'first byte timeout (8s)',
+    })).toBe(0.4);
+    // A real gateway failure keeps the hard-5xx weight.
+    expect(resolveSiteRuntimeFailurePenalty({
+      status: 502,
+      errorText: 'bad gateway',
+    })).toBe(2.5);
+  });
+
+  it('keeps the sticky binding on a timeout while still failing over', () => {
+    const timeout = buildProxyFailureDisposition({
+      status: 408,
+      errorText: 'first byte timeout (8s)',
+    });
+    expect(timeout.class).toBe('timeout');
+    expect(timeout.retryAction).toBe('failover_channel');
+    expect(timeout.clearSticky).toBe(false);
+
+    // Other channel-scoped failures still drop the affinity.
+    expect(buildProxyFailureDisposition({ status: 502, errorText: 'bad gateway' }).clearSticky).toBe(true);
+  });
+});

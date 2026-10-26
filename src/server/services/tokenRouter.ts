@@ -175,6 +175,11 @@ export type CandidateEligibilityOptions = {
    * credential-scoped cooldowns stay hard exclusions (see
    * isProbeAttributableCooldown). */
   ignoreProbeCooldown?: boolean;
+  /** Availability-first: relax a real-failure cooldown when it is the ONLY
+   * reason the candidate pool is empty. A cooldown is a prediction, not a
+   * verdict; with a single-channel route it would otherwise turn one slow
+   * answer into guaranteed downtime for the whole route. */
+  ignoreChannelCooldown?: boolean;
 };
 
 import {

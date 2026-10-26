@@ -369,6 +369,16 @@ export function resolveSiteRuntimeFailurePenalty(context: SiteRuntimeFailureCont
     return 2.4;
   }
 
+  // A timeout is a latency observation, not proof that the channel is dead:
+  // the answer may simply have arrived a second after our window expired.
+  // Charging it the same 2.5 as a hard 5xx made one slow answer outweigh a
+  // genuinely faster site in the routing score. Repeated timeouts still
+  // escalate through the transient-failure streak below, so a channel that is
+  // truly stuck still opens its breaker.
+  if (isTimeoutFailure({ status, errorText })) {
+    return 0.4;
+  }
+
   if (status >= 500 || matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, errorText)) {
     return 2.5;
   }
@@ -893,7 +903,14 @@ export function buildProxyFailureDisposition(
       : (decision.retryChannel ? 'failover_channel' : 'terminal'));
   const incrementFailure = decision.cooldownScope !== 'none'
     || (status === 0 && retryAction === 'failover_channel');
-  const clearSticky = incrementFailure && retryAction !== 'cascade_endpoint';
+  // A single timeout must not drop the conversation's channel affinity. The
+  // request still fails over to another channel for THIS attempt, but the
+  // session's sticky binding survives; otherwise one slow answer permanently
+  // drifts the conversation onto whichever site happened to answer next,
+  // losing whatever prompt cache the original channel held.
+  const clearSticky = incrementFailure
+    && retryAction !== 'cascade_endpoint'
+    && decision.class !== 'timeout';
   const clearLastSuccess = decision.class === 'credential_invalid'
     || (retryAction === 'failover_channel' && incrementFailure);
   return {
