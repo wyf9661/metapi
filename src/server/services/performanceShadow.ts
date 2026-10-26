@@ -243,16 +243,6 @@ export function replayFirstByteWindowPolicy(input: {
  */
 export const FIRST_BYTE_WINDOW_FLOOR_LOOKBACK = 20;
 
-function percentileMs(values: number[], quantile: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  const index = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.ceil(quantile * sorted.length) - 1),
-  );
-  return sorted[index] ?? 0;
-}
-
 /**
  * Floor for the first-byte window, learned from the site's own attempt history.
  *
@@ -264,6 +254,10 @@ function percentileMs(values: number[], quantile: number): number {
  * ladder rung above the budget it was cut at. A run of consecutive timeouts
  * does not: that is a dead channel, not a jittery one, and ratcheting there
  * would pin the window at the ceiling and make every failure slow.
+ *
+ * Deliberately not derived from a success percentile: the cost optimiser
+ * already prices observed successes, and a bimodal relay's slow mode (45s) must
+ * stay a deliberate rejection, not become an unyielding floor.
  */
 export function resolveAdaptiveFirstByteFloorMs(input: {
   attempts: PerformanceShadowAttempt[];
@@ -273,13 +267,6 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
   const ceilingMs = Math.max(0, Math.trunc(input.ceilingMs));
   const floorMs = Math.max(0, Math.min(Math.trunc(input.floorMs), ceilingMs));
   const recent = input.attempts.slice(-FIRST_BYTE_WINDOW_FLOOR_LOOKBACK);
-
-  const successLatencies = recent
-    .filter((attempt) => attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null)
-    .map((attempt) => attempt.firstByteLatencyMs as number);
-  const successFloorMs = successLatencies.length >= 3
-    ? Math.round(percentileMs(successLatencies, 0.9) * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER)
-    : 0;
 
   let censoredFloorMs = 0;
   for (let index = 1; index < recent.length; index += 1) {
@@ -292,7 +279,7 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
     );
   }
 
-  return Math.min(ceilingMs, Math.max(floorMs, successFloorMs, censoredFloorMs));
+  return Math.min(ceilingMs, Math.max(floorMs, censoredFloorMs));
 }
 
 /**

@@ -183,10 +183,14 @@ describe('adaptive first-byte floor', () => {
     expect(floorOf(8_000)).toBe(8_000);
   });
 
-  it('uses the success P90 when the site is genuinely slow', () => {
-    seed(Array.from({ length: 10 }, () => ({ outcome: 'success' as const, ttftMs: 9_000 })));
-    // 9000 * 1.35 = 12150 headroom above the observed P90.
-    expect(floorOf(8_000)).toBe(12_150);
+  it('does not let an extreme success outlier lift the floor', () => {
+    // A bimodal relay: 90% at 2s, one 45s outlier. The cost optimiser is
+    // allowed to reject that tail deliberately; the floor must not pin it.
+    seed([
+      ...Array.from({ length: 9 }, () => ({ outcome: 'success' as const, ttftMs: 2_000 })),
+      { outcome: 'success', ttftMs: 45_000 },
+    ]);
+    expect(floorOf(8_000)).toBe(8_000);
   });
 
   it('respects the ceiling and an empty history', () => {
