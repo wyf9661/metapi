@@ -1051,6 +1051,39 @@ export async function handleOpenAiResponsesSurfaceRequest(
             promptTokensIncludeCache: null,
           };
           let upstreamUsagePresent = false;
+          // Every stream failure below happens after the SSE response has been
+          // hijacked: no new HTTP response can be sent and channel failover is
+          // over, so the only work left is the same bookkeeping — drop the
+          // affinity hints, record the channel failure and close the debug
+          // trace. Four call sites used to spell this out by hand and had
+          // drifted (one missed the affinity clear, two missed the 502 status).
+          const failStreamAttempt = async (errorMessage: string | null, latency: number) => {
+            clearSurfaceChannelAffinity({
+              stickySessionKey,
+              selected,
+              requestedModel,
+              downstreamApiKeyId,
+            });
+            await failureToolkit.recordStreamFailure({
+              selected,
+              requestedModel,
+              modelName,
+              errorMessage,
+              latencyMs: latency,
+              retryCount,
+              promptTokens: parsedUsage.promptTokens,
+              completionTokens: parsedUsage.completionTokens,
+              totalTokens: parsedUsage.totalTokens,
+              upstreamPath: successfulUpstreamPath,
+              runtimeFailureStatus: 502,
+            });
+            await finalizeDebugFailure(502, {
+              error: {
+                message: errorMessage,
+                type: 'stream_error',
+              },
+            }, successfulUpstreamPath);
+          };
           const writeLines = (lines: string[]) => {
             for (const line of lines) reply.raw.write(line);
           };
@@ -1083,31 +1116,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
               );
               const latency = Date.now() - startTime;
 	              if (streamResult.status === 'failed') {
-	                clearSurfaceChannelAffinity({
-	                  stickySessionKey,
-	                  selected,
-	                  requestedModel,
-	                  downstreamApiKeyId,
-	                });
-              await failureToolkit.recordStreamFailure({
-	                  selected,
-            requestedModel,
-                  modelName,
-                  errorMessage: streamResult.errorMessage,
-                  latencyMs: latency,
-                  retryCount,
-                  promptTokens: parsedUsage.promptTokens,
-                  completionTokens: parsedUsage.completionTokens,
-                  totalTokens: parsedUsage.totalTokens,
-                  upstreamPath: successfulUpstreamPath,
-                });
-                await finalizeDebugFailure(502, {
-                  error: {
-                    message: streamResult.errorMessage,
-                    type: 'stream_error',
-                  },
-                }, successfulUpstreamPath);
-                return;
+	                await failStreamAttempt(streamResult.errorMessage, latency);
+	                return;
 	              }
 
 	              await finalizeStreamSuccess(
@@ -1175,32 +1185,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
             startSseResponse();
             const streamResult = streamSession.consumeUpstreamFinalPayload(upstreamData, rawText, reply.raw);
 	            if (streamResult.status === 'failed') {
-	              clearSurfaceChannelAffinity({
-	                stickySessionKey,
-	                selected,
-	                requestedModel,
-	                downstreamApiKeyId,
-	              });
-              await failureToolkit.recordStreamFailure({
-	                selected,
-            requestedModel,
-                modelName,
-                errorMessage: streamResult.errorMessage,
-                latencyMs: latency,
-                retryCount,
-                promptTokens: parsedUsage.promptTokens,
-                completionTokens: parsedUsage.completionTokens,
-                totalTokens: parsedUsage.totalTokens,
-                upstreamPath: successfulUpstreamPath,
-                runtimeFailureStatus: 502,
-              });
-              await finalizeDebugFailure(502, {
-                error: {
-                  message: streamResult.errorMessage,
-                  type: 'stream_error',
-                },
-              }, successfulUpstreamPath);
-              return;
+	              await failStreamAttempt(streamResult.errorMessage, latency);
+	              return;
 	            }
 
 	            await finalizeStreamSuccess(
@@ -1270,25 +1256,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               );
               const latency = Date.now() - startTime;
               if (streamResult.status === 'failed') {
-                await failureToolkit.recordStreamFailure({
-                  selected,
-            requestedModel,
-                  modelName,
-                  errorMessage: streamResult.errorMessage,
-                  latencyMs: latency,
-                  retryCount,
-                  promptTokens: parsedUsage.promptTokens,
-                  completionTokens: parsedUsage.completionTokens,
-                  totalTokens: parsedUsage.totalTokens,
-                  upstreamPath: successfulUpstreamPath,
-                  runtimeFailureStatus: 502,
-                });
-                await finalizeDebugFailure(502, {
-                  error: {
-                    message: streamResult.errorMessage,
-                    type: 'stream_error',
-                  },
-                }, successfulUpstreamPath);
+                await failStreamAttempt(streamResult.errorMessage, latency);
                 return;
               }
 
@@ -1329,33 +1297,9 @@ export async function handleOpenAiResponsesSurfaceRequest(
 
           const latency = Date.now() - startTime;
 	          if (streamResult.status === 'failed') {
-	            clearSurfaceChannelAffinity({
-	              stickySessionKey,
-	              selected,
-	              requestedModel,
-	              downstreamApiKeyId,
-	            });
-	            await failureToolkit.recordStreamFailure({
-	              selected,
-            requestedModel,
-              modelName,
-              errorMessage: streamResult.errorMessage,
-              latencyMs: latency,
-              retryCount,
-              promptTokens: parsedUsage.promptTokens,
-              completionTokens: parsedUsage.completionTokens,
-              totalTokens: parsedUsage.totalTokens,
-              upstreamPath: successfulUpstreamPath,
-              runtimeFailureStatus: 502,
-            });
-            await finalizeDebugFailure(502, {
-              error: {
-                message: streamResult.errorMessage,
-                type: 'stream_error',
-              },
-            }, successfulUpstreamPath);
-            return;
-          }
+	            await failStreamAttempt(streamResult.errorMessage, latency);
+	            return;
+	          }
 
           // Once SSE has been hijacked and bytes may already be on the wire, we
           // must not attempt to convert stream failures into a fresh HTTP error
