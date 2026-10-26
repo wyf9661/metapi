@@ -63,6 +63,7 @@ import {
   bindSurfaceStickyChannel,
   buildSurfaceChannelBusyMessage,
   buildSurfaceStickySessionKey,
+  clearSurfaceChannelAffinity,
   clearSurfaceStickyChannel,
   createSurfaceFailureToolkit,
   createSurfaceDispatchRequest,
@@ -724,12 +725,12 @@ export async function handleChatSurfaceRequest(
       selected,
             });
     if (leaseResult.status === 'timeout') {
-      clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
+      clearSurfaceChannelAffinity({
+        stickySessionKey,
+        selected,
+        requestedModel,
+        downstreamApiKeyId,
+      });
       const busyMessage = buildSurfaceChannelBusyMessage(leaseResult.waitMs);
       await failureToolkit.log({
         selected,
@@ -914,12 +915,12 @@ export async function handleChatSurfaceRequest(
             );
             const latency = Date.now() - startTime;
             if (streamResult.status === 'failed') {
-              clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
+              clearSurfaceChannelAffinity({
+                stickySessionKey,
+                selected,
+                requestedModel,
+                downstreamApiKeyId,
+              });
               const failureReason = streamResult.errorMessage || 'stream processing failed';
               const failureOutcome = await failureToolkit.handleDetectedFailure({
                 selected,
@@ -980,21 +981,11 @@ export async function handleChatSurfaceRequest(
           const latency = Date.now() - startTime;
           const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
           if (failure) {
-            clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Failure invalidates last-success affinity for this channel:
-            // a channel that just failed should not keep its "preferred next
-            // hop" status (it may be persistently blocked / dead), so the
-            // next request re-enters the balanced pool instead of retrying
-            // the same failing channel first.
-            proxyChannelCoordinator.clearLastSuccessChannel({
+            clearSurfaceChannelAffinity({
+              stickySessionKey,
+              selected,
               requestedModel,
               downstreamApiKeyId,
-              channelId: selected.channel.id,
             });
             const failureOutcome = await failureToolkit.handleDetectedFailure({
               selected,
@@ -1066,17 +1057,11 @@ export async function handleChatSurfaceRequest(
 
           const streamResult = streamSession.consumeUpstreamFinalPayload(fallbackData, fallbackText, streamResponse);
           if (streamResult.status === 'failed') {
-            clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Same failure-invalidates-last-success rule as the non-stream path.
-            proxyChannelCoordinator.clearLastSuccessChannel({
+            clearSurfaceChannelAffinity({
+              stickySessionKey,
+              selected,
               requestedModel,
               downstreamApiKeyId,
-              channelId: selected.channel.id,
             });
             const failureReason = streamResult.errorMessage || 'stream processing failed';
             const failureOutcome = await failureToolkit.handleDetectedFailure({
@@ -1153,18 +1138,11 @@ export async function handleChatSurfaceRequest(
           // the client hangs on an empty 200 while the log claims success.
           const streamCommitted = isFastifyReplyCommitted(reply);
           if (streamResult.status === 'failed' || !streamCommitted) {
-            clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Same failure-invalidates-last-success rule as the non-stream path:
-            // a channel whose stream just died must not stay the preferred hop.
-            proxyChannelCoordinator.clearLastSuccessChannel({
+            clearSurfaceChannelAffinity({
+              stickySessionKey,
+              selected,
               requestedModel,
               downstreamApiKeyId,
-              channelId: selected.channel.id,
             });
             const failureReason = streamResult.status === 'failed'
               ? (streamResult.errorMessage || 'stream processing failed')
@@ -1252,12 +1230,12 @@ export async function handleChatSurfaceRequest(
       const upstreamUsagePresent = hasProxyUsagePayload(upstreamData);
       const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
       if (failure) {
-        clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
+        clearSurfaceChannelAffinity({
+          stickySessionKey,
+          selected,
+          requestedModel,
+          downstreamApiKeyId,
+        });
         const failureOutcome = await failureToolkit.handleDetectedFailure({
           selected,
             requestedModel,

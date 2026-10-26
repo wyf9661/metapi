@@ -1414,6 +1414,26 @@ describe('clearSurfaceStickyChannel', () => {
   });
 });
 
+describe('clearSurfaceChannelAffinity', () => {
+  it('drops the session sticky binding and the model-level last-success hint together', async () => {
+    const { clearSurfaceChannelAffinity } = await import('./sharedSurface.js');
+
+    clearSurfaceChannelAffinity({
+      stickySessionKey: 'session-1',
+      selected: { channel: { id: 55 } },
+      requestedModel: 'gpt-5.2',
+      downstreamApiKeyId: 7,
+    });
+
+    expect(clearStickyChannelMock).toHaveBeenCalledWith('session-1', 55);
+    expect(clearLastSuccessChannelMock).toHaveBeenCalledWith({
+      requestedModel: 'gpt-5.2',
+      downstreamApiKeyId: 7,
+      channelId: 55,
+    });
+  });
+});
+
 describe('wireStreamCancelOnClientDisconnect', () => {
   it('cancels the upstream reader when the client disconnects mid-stream', async () => {
     const { wireStreamCancelOnClientDisconnect } = await import('./sharedSurface.js');

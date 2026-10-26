@@ -164,18 +164,39 @@ export function clearSurfaceStickyChannel(input: {
   requestedModel?: string | null;
   downstreamApiKeyId?: number | null;
 }): void {
-  // Only drop the session-level sticky binding. Keep the model-level
-  // last-success memory intact: last-success is the "which channel worked
-  // most recently for this model" fallback, and a single failed attempt
-  // (even a fatal one) should not erase it — otherwise the recovery pass
-  // and subsequent hops lose their best-known-good channel. Fatal failures
-  // (401 token death, credential revoke) are already handled by the
-  // tokenRouter failure cooldown so last-success won't keep retrying a
-  // truly dead channel indefinitely.
+  // Only drop the session-level sticky binding; the model-level last-success
+  // memory is a separate hint and is not touched here. Failure paths that
+  // intend to invalidate BOTH hints must call clearSurfaceChannelAffinity()
+  // instead — keeping the two calls apart is how some chat branches ended up
+  // clearing only the sticky binding and leaving a failed channel as the
+  // preferred hop for the same model.
   proxyChannelCoordinator.clearStickyChannel(
     input.stickySessionKey,
     input.selected.channel.id,
   );
+}
+
+/**
+ * Invalidate every routing hint pointing at the channel an attempt just failed
+ * on: the session-level sticky binding and the model-level last-success
+ * memory. `bindSurfaceStickyChannel` writes both on success, so a failure has
+ * to drop both — otherwise the next request for the same model re-enters the
+ * pool anchored to the channel that just died.
+ */
+export function clearSurfaceChannelAffinity(input: {
+  stickySessionKey?: string | null;
+  selected: {
+    channel: { id: number };
+  };
+  requestedModel?: string | null;
+  downstreamApiKeyId?: number | null;
+}): void {
+  clearSurfaceStickyChannel(input);
+  proxyChannelCoordinator.clearLastSuccessChannel({
+    requestedModel: input.requestedModel,
+    downstreamApiKeyId: input.downstreamApiKeyId,
+    channelId: input.selected.channel.id,
+  });
 }
 
 export async function acquireSurfaceChannelLease(input: {

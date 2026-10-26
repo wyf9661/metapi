@@ -75,6 +75,7 @@ import {
   bindSurfaceStickyChannel,
   buildSurfaceChannelBusyMessage,
   buildSurfaceStickySessionKey,
+  clearSurfaceChannelAffinity,
   clearSurfaceStickyChannel,
   createSurfaceFailureToolkit,
   createSurfaceDispatchRequest,
@@ -842,18 +843,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
         selected,
             });
       if (leaseResult.status === 'timeout') {
-        clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Failure invalidates last-success affinity for this channel.
-            proxyChannelCoordinator.clearLastSuccessChannel({
-              requestedModel,
-              downstreamApiKeyId,
-              channelId: selected.channel.id,
-            });
+        clearSurfaceChannelAffinity({
+          stickySessionKey,
+          selected,
+          requestedModel,
+          downstreamApiKeyId,
+        });
       const busyMessage = buildSurfaceChannelBusyMessage(leaseResult.waitMs);
       await failureToolkit.log({
         selected,
@@ -1011,18 +1006,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
               );
               const latency = Date.now() - startTime;
 	              if (streamResult.status === 'failed') {
-	                clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Failure invalidates last-success affinity for this channel.
-            proxyChannelCoordinator.clearLastSuccessChannel({
-              requestedModel,
-              downstreamApiKeyId,
-              channelId: selected.channel.id,
-            });
+	                clearSurfaceChannelAffinity({
+	                  stickySessionKey,
+	                  selected,
+	                  requestedModel,
+	                  downstreamApiKeyId,
+	                });
               await failureToolkit.recordStreamFailure({
 	                  selected,
             requestedModel,
@@ -1076,18 +1065,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             const latency = Date.now() - startTime;
             const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
 	            if (failure) {
-	              clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Failure invalidates last-success affinity for this channel.
-            proxyChannelCoordinator.clearLastSuccessChannel({
-              requestedModel,
-              downstreamApiKeyId,
-              channelId: selected.channel.id,
-            });
+	              clearSurfaceChannelAffinity({
+	                stickySessionKey,
+	                selected,
+	                requestedModel,
+	                downstreamApiKeyId,
+	              });
 	              const failureOutcome = await failureToolkit.handleDetectedFailure({
 	                selected,
             requestedModel,
@@ -1156,18 +1139,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
             startSseResponse();
             const streamResult = streamSession.consumeUpstreamFinalPayload(upstreamData, rawText, reply.raw);
 	            if (streamResult.status === 'failed') {
-	              clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Failure invalidates last-success affinity for this channel.
-            proxyChannelCoordinator.clearLastSuccessChannel({
-              requestedModel,
-              downstreamApiKeyId,
-              channelId: selected.channel.id,
-            });
+	              clearSurfaceChannelAffinity({
+	                stickySessionKey,
+	                selected,
+	                requestedModel,
+	                downstreamApiKeyId,
+	              });
               await failureToolkit.recordStreamFailure({
 	                selected,
             requestedModel,
@@ -1316,18 +1293,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
 
           const latency = Date.now() - startTime;
 	          if (streamResult.status === 'failed') {
-	            clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Failure invalidates last-success affinity for this channel.
-            proxyChannelCoordinator.clearLastSuccessChannel({
-              requestedModel,
-              downstreamApiKeyId,
-              channelId: selected.channel.id,
-            });
+	            clearSurfaceChannelAffinity({
+	              stickySessionKey,
+	              selected,
+	              requestedModel,
+	              downstreamApiKeyId,
+	            });
 	            await failureToolkit.recordStreamFailure({
 	              selected,
             requestedModel,
@@ -1407,18 +1378,12 @@ export async function handleOpenAiResponsesSurfaceRequest(
         const upstreamUsagePresent = hasProxyUsagePayload(upstreamData);
         const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
 	        if (failure) {
-	          clearSurfaceStickyChannel({
-            stickySessionKey,
-            selected,
-            requestedModel,
-            downstreamApiKeyId,
-          });
-            // Failure invalidates last-success affinity for this channel.
-            proxyChannelCoordinator.clearLastSuccessChannel({
-              requestedModel,
-              downstreamApiKeyId,
-              channelId: selected.channel.id,
-            });
+	          clearSurfaceChannelAffinity({
+	            stickySessionKey,
+	            selected,
+	            requestedModel,
+	            downstreamApiKeyId,
+	          });
 	          const failureOutcome = await failureToolkit.handleDetectedFailure({
 	            selected,
             requestedModel,
