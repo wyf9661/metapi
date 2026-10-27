@@ -11,6 +11,7 @@ import { tokenRouter } from '../../services/tokenRouter.js';
 import { resolveChannelProxyUrl, withSiteRecordProxyRequestInit } from '../../services/siteProxy.js';
 import * as routeRefreshWorkflow from '../../services/routeRefreshWorkflow.js';
 import { getDownstreamRoutingPolicy } from '../../services/downstreamPolicyRequest.js';
+import { getProxyAuthContext } from '../../middleware/auth.js';
 import { executeEndpointFlow, type BuiltEndpointRequest } from '../orchestration/endpointFlow.js';
 import { composeProxyLogMessage, proxyLogFailureLocator } from '../../services/proxyLogMessage.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
@@ -43,7 +44,7 @@ import { fetchWithObservedFirstByte, getObservedResponseMeta, parseLocalFirstByt
 import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
 import { recordPerformanceShadowAttempt, recordPerformanceShadowSample } from '../../services/performanceShadow.js';
 import { createIdleGuardedStreamReader } from '../streamIdleTimeout.js';
-import { wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal } from './sharedSurface.js';
+import { wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal, acquireSurfaceChannelLease, bindSurfaceStickyChannel, buildSurfaceChannelBusyMessage, buildSurfaceStickySessionKey, clearSurfaceChannelAffinity, getSurfaceStickyPreferredChannelId } from './sharedSurface.js';
 import {
   getProxyMaxChannelRetries,
 } from '../../services/proxyChannelRetry.js';
@@ -588,6 +589,15 @@ export async function geminiProxyRoute(app: FastifyInstance) {
       headers: request.headers as Record<string, unknown>,
       body: request.body,
     });
+    const downstreamApiKeyId = getProxyAuthContext(request)?.keyId ?? null;
+    // Same session affinity key as the chat/responses doors: only clients with
+    // a stable session identity (and a bound channel) take the sticky path.
+    const stickySessionKey = buildSurfaceStickySessionKey({
+      clientContext,
+      requestedModel,
+      downstreamPath,
+      downstreamApiKeyId,
+    });
     const requestTraceId = createRequestTraceId();
     const debugTrace = await startSurfaceProxyDebugTrace({
       downstreamPath,
@@ -638,13 +648,22 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     let lastContentType = 'application/json';
 
     while (retryCount <= maxRetries) {
+      const stickyPreferredId = retryCount === 0 ? getSurfaceStickyPreferredChannelId(stickySessionKey) : null;
       const selected = forcedChannelId !== null
         ? (retryCount === 0
           ? await tokenRouter.selectPreferredChannel(requestedModel, forcedChannelId, policy, excludeChannelIds)
           : null)
         : (retryCount === 0
-          ? await tokenRouter.selectChannel(requestedModel, policy)
+          ? (
+            (stickyPreferredId !== null
+              ? await tokenRouter.selectPreferredChannel(requestedModel, stickyPreferredId, policy, excludeChannelIds)
+              : null)
+            ?? await tokenRouter.selectChannel(requestedModel, policy)
+          )
           : await tokenRouter.selectNextChannel(requestedModel, excludeChannelIds, policy));
+      const stickyHitChannelId = selected && stickyPreferredId !== null && selected.channel.id === stickyPreferredId
+        ? stickyPreferredId
+        : null;
       if (!selected) {
         if (forcedChannelId !== null) {
           lastStatus = 503;
@@ -662,8 +681,8 @@ export async function geminiProxyRoute(app: FastifyInstance) {
 
       excludeChannelIds.push(selected.channel.id);
       await safeUpdateSurfaceProxyDebugSelection(debugTrace, {
-        stickySessionKey: null,
-        stickyHitChannelId: null,
+        stickySessionKey,
+        stickyHitChannelId,
         selectedChannelId: selected.channel.id,
         selectedRouteId: selected.channel.routeId ?? null,
         selectedAccountId: selected.account.id,
@@ -690,6 +709,61 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         retryCount,
       });
       let upstreamPath = '';
+      // Guarded per-session lease, same as the chat/responses doors: a
+      // saturated channel queues here instead of being hammered in parallel.
+      const leaseResult = await acquireSurfaceChannelLease({
+        stickySessionKey,
+        selected,
+      });
+      if (leaseResult.status === 'timeout') {
+        clearSurfaceChannelAffinity({
+          stickySessionKey,
+          selected,
+          requestedModel,
+          downstreamApiKeyId,
+        });
+        const busyMessage = buildSurfaceChannelBusyMessage(leaseResult.waitMs);
+        await tokenRouter.recordFailure?.(selected.channel.id, {
+          status: 503,
+          errorText: busyMessage,
+        });
+
+        await logProxy(
+          selected,
+          requestedModel,
+          'failed',
+          503,
+          leaseResult.waitMs,
+          busyMessage,
+          retryCount,
+          downstreamPath,
+          null,
+          clientContext,
+          0,
+          0,
+          0,
+          isStreamAction,
+          null,
+          requestTraceId,
+        );
+        if (
+          canFailoverToNextChannel(reply)
+          && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
+        ) {
+          retryCount += 1;
+          continue;
+        }
+        const busyPayload = {
+          error: {
+            message: busyMessage,
+            type: 'server_error' as const,
+          },
+        };
+        await finalizeDebugFailure(503, busyPayload, null);
+        sendReplyIfWritable(reply, 503, busyPayload);
+        return reply;
+      }
+      const channelLease = leaseResult.lease;
 
       try {
         if (isDirectGeminiFamily) {
@@ -833,6 +907,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               status: upstream.status,
               errorText: lastText,
             });
+            clearSurfaceChannelAffinity({
+              stickySessionKey,
+              selected,
+              requestedModel,
+              downstreamApiKeyId,
+            });
+
             await logProxy(
               selected,
               requestedModel,
@@ -880,6 +961,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 ? ''
                 : { stream: true, usage: EMPTY_PROXY_USAGE };
               await recordGeminiChannelSuccessBestEffort(selected.channel.id, latency, actualModel);
+              bindSurfaceStickyChannel({
+                stickySessionKey,
+                selected,
+                requestedModel,
+                downstreamApiKeyId,
+              });
+
               await logProxy(
                 selected,
                 requestedModel,
@@ -977,6 +1065,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 ? rawStreamText
                 : { stream: true, usage: parsedUsage };
               await recordGeminiChannelSuccessBestEffort(selected.channel.id, latency, actualModel);
+              bindSurfaceStickyChannel({
+                stickySessionKey,
+                selected,
+                requestedModel,
+                downstreamApiKeyId,
+              });
+
               await logProxy(
                 selected,
                 requestedModel,
@@ -1031,6 +1126,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
                 status: 502,
                 errorText: errorMessage,
               });
+              clearSurfaceChannelAffinity({
+                stickySessionKey,
+                selected,
+                requestedModel,
+                downstreamApiKeyId,
+              });
+
               await logProxy(
                 selected,
                 requestedModel,
@@ -1098,6 +1200,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             parsedUsage = parseProxyUsage(aggregateState);
             const latency = Date.now() - startTime;
             await recordGeminiChannelSuccessBestEffort(selected.channel.id, latency, actualModel);
+            bindSurfaceStickyChannel({
+              stickySessionKey,
+              selected,
+              requestedModel,
+              downstreamApiKeyId,
+            });
+
             await logProxy(
               selected,
               requestedModel,
@@ -1148,6 +1257,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           } catch {
             const latency = Date.now() - startTime;
             await recordGeminiChannelSuccessBestEffort(selected.channel.id, latency, actualModel);
+            bindSurfaceStickyChannel({
+              stickySessionKey,
+              selected,
+              requestedModel,
+              downstreamApiKeyId,
+            });
+
             await logProxy(
               selected,
               requestedModel,
@@ -1392,6 +1508,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             status: endpointResult.status,
             errorText: endpointResult.rawErrText || endpointResult.errText,
           });
+          clearSurfaceChannelAffinity({
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
+
           await logProxy(
             selected,
             requestedModel,
@@ -1439,6 +1562,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         });
         const latency = Date.now() - startTime;
         await recordGeminiChannelSuccessBestEffort(selected.channel.id, latency, actualModel);
+        bindSurfaceStickyChannel({
+          stickySessionKey,
+          selected,
+          requestedModel,
+          downstreamApiKeyId,
+        });
+
         await logProxy(
           selected,
           requestedModel,
@@ -1486,6 +1616,13 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         await tokenRouter.recordFailure?.(selected.channel.id, {
           errorText: error instanceof Error ? error.message : 'Gemini upstream request failed',
         });
+        clearSurfaceChannelAffinity({
+          stickySessionKey,
+          selected,
+          requestedModel,
+          downstreamApiKeyId,
+        });
+
         await logProxy(
           selected,
           requestedModel,
@@ -1513,6 +1650,8 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         await finalizeDebugFailure(lastStatus, parseSurfaceProxyDebugTextPayload(lastText), upstreamPath || null);
         sendReplyIfWritable(reply, lastStatus, lastText);
         return reply;
+      } finally {
+        channelLease.release();
       }
     }
   };
