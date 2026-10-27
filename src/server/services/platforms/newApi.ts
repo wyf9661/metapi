@@ -10,6 +10,36 @@ import { fetchJsonWithShieldCookieRetry, classifyShieldGateFailureText, NewApiSh
 import { getTurnstileSolverSettings, solveTurnstileToken, isTurnstileRequiredMessage } from '../turnstileSolver.js';
 import { CODEX_CLI_USER_AGENT } from '../../shared/codexClientFamily.js';
 import { locateTokenInKeys } from '../../shared/tokenMask.js';
+import {
+  tryDecodeUserId,
+  authHeaders,
+  userIdHeaders,
+  buildCookieCandidates,
+  extractLikelyUserIds,
+  buildUserIdProbeCandidates,
+  parseTokenItems,
+  isTokenListResponse,
+  normalizeTokenKeyForCompare,
+  parseGroupKeys,
+  resolveGroupFetchErrorMessage,
+  normalizeTokenItems,
+  parseUserInfo,
+  parseBalance,
+  extractLoginAccessToken,
+  buildDefaultTokenPayload,
+  formatRequestErrorMessage,
+  extractResponseMessage,
+  isHtmlJsonParseErrorMessage,
+  hasUsableSessionCookie,
+  isAlreadyCheckedInMessage,
+  looksLikeCookiePairCredential,
+  isSessionLikeCredential,
+  rememberCheckinFailureMessage,
+  shouldFallbackToCookieCheckin,
+  isMissingCheckinEndpointMessage,
+  isCookieSessionFailureMessage,
+  extractOpenAiModels,
+} from './newApiPure.js';
 
 // Codex CLI client fingerprint for model discovery calls on sites whose
 // protocol profile requires a Codex client ("Codex 兼容" site setting). Chat
@@ -23,6 +53,20 @@ const CODEX_DISCOVERY_FINGERPRINT_HEADERS: Record<string, string> = {
 };
 
 export class NewApiAdapter extends BasePlatformAdapter {
+
+  // Kept as thin instance wrappers: newApi.test.ts reaches these three through
+  // `(adapter as any)` to exercise the raw session-cookie decoding path.
+  isSessionLikeCredential(token: string): boolean {
+    return isSessionLikeCredential(token);
+  }
+
+  looksLikeCookiePairCredential(token: string): boolean {
+    return looksLikeCookiePairCredential(token);
+  }
+
+  extractLikelyUserIds(token: string): number[] {
+    return extractLikelyUserIds(token);
+  }
   readonly platformName: string = 'new-api';
 
   protected override async fetchJson<T>(url: string, options?: UndiciRequestInit): Promise<T> {
@@ -63,564 +107,39 @@ export class NewApiAdapter extends BasePlatformAdapter {
     }
   }
 
-  private tryDecodeUserId(token: string): number | null {
-    try {
-      const parts = token.split('.');
-      if (parts.length !== 3) return null;
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-      if (typeof payload?.id === 'number') return payload.id;
-      if (typeof payload?.sub === 'string' || typeof payload?.sub === 'number') {
-        const n = Number.parseInt(String(payload.sub), 10);
-        if (!Number.isNaN(n)) return n;
-      }
-    } catch {}
-    return null;
-  }
-
-  private authHeaders(accessToken: string, userId?: number): Record<string, string> {
-    return {
-      Authorization: `Bearer ${accessToken}`,
-      ...this.userIdHeaders(userId),
-    };
-  }
-
-  private userIdHeaders(userId?: number | null): Record<string, string> {
-    const headers: Record<string, string> = {};
-    if (userId) {
-      const value = String(userId);
-      headers['New-API-User'] = value;
-
-      headers['voapi-user'] = value;
-      headers['User-id'] = value;
-      headers['X-User-Id'] = value;
-      headers['Rix-Api-User'] = value;
-      headers['neo-api-user'] = value;
-    }
-    return headers;
-  }
-
-  private buildCookieCandidates(token: string): string[] {
-    const trimmed = (token || '').trim();
-    if (!trimmed) return [];
-
-    const raw = trimmed.startsWith('Bearer ') ? trimmed.slice(7).trim() : trimmed;
-    const candidates: string[] = [];
-
-    // Only treat as a full Cookie header when it looks like name=value pairs.
-    if (this.looksLikeCookiePairCredential(raw)) {
-      candidates.push(raw);
-    }
-
-    candidates.push(`session=${raw}`);
-    candidates.push(`token=${raw}`);
-
-    return Array.from(new Set(candidates));
-  }
 
 
-  private decodeBase64BufferLoose(value: string): Buffer | null {
-    if (!value) return null;
-    try {
-      return Buffer.from(value, 'base64');
-    } catch {}
-    try {
-      const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-      return Buffer.from(normalized, 'base64');
-    } catch {}
-    return null;
-  }
-
-  private decodeGobSignedInt(encoded: Buffer): number | null {
-    if (!encoded.length) return null;
-
-    let unsigned = 0n;
-    if (encoded[0] < 0x80) {
-      unsigned = BigInt(encoded[0]);
-    } else {
-      const width = 0x100 - encoded[0];
-      if (width <= 0 || encoded.length !== width + 1) return null;
-      for (let i = 1; i < encoded.length; i += 1) {
-        unsigned = (unsigned << 8n) | BigInt(encoded[i]);
-      }
-    }
-
-    const signed = (unsigned & 1n) === 0n
-      ? unsigned >> 1n
-      : -((unsigned >> 1n) + 1n);
-    if (signed <= 0n || signed > BigInt(Number.MAX_SAFE_INTEGER)) return null;
-    return Number(signed);
-  }
-
-  private extractGobFieldInts(payload: Buffer, fieldName: string): number[] {
-    const ids: number[] = [];
-    const push = (value: number | null) => {
-      if (typeof value !== 'number' || Number.isNaN(value)) return;
-      if (value <= 0 || value > 10_000_000) return;
-      if (!ids.includes(value)) ids.push(value);
-    };
-
-    const marker = Buffer.concat([
-      Buffer.from(fieldName, 'utf8'),
-      Buffer.from([0x03]),
-      Buffer.from('int', 'utf8'),
-      Buffer.from([0x04]),
-    ]);
-
-    let start = 0;
-    while (start < payload.length) {
-      const position = payload.indexOf(marker, start);
-      if (position < 0) break;
-
-      const encodedLength = payload[position + marker.length];
-      const delimiter = payload[position + marker.length + 1];
-      if (typeof encodedLength === 'number' && delimiter === 0x00) {
-        const byteLength = encodedLength - 1;
-        const valueStart = position + marker.length + 2;
-        const valueEnd = valueStart + byteLength;
-        if (byteLength > 0 && valueEnd <= payload.length) {
-          push(this.decodeGobSignedInt(payload.subarray(valueStart, valueEnd)));
-        }
-      }
-
-      start = position + marker.length;
-    }
-
-    return ids;
-  }
-
-  private extractLikelyUserIds(token: string): number[] {
-    const ids: number[] = [];
-    const push = (value: unknown) => {
-      const n = Number.parseInt(String(value), 10);
-      if (Number.isNaN(n)) return;
-      if (n <= 0 || n > 10_000_000) return;
-      if (!ids.includes(n)) ids.push(n);
-    };
-
-    const raw = (token || '').trim();
-    if (!raw) return ids;
-
-    const cookieCandidates = this.buildCookieCandidates(raw);
-    const sessionValues = new Set<string>();
-    for (const candidate of cookieCandidates) {
-      const match = candidate.match(/(?:^|;\s*)session=([^;]+)/i);
-      if (match?.[1]) sessionValues.add(match[1].trim());
-    }
-
-    if (raw && !raw.includes('=')) {
-      sessionValues.add(raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw);
-    }
-
-    for (const sessionValue of sessionValues) {
-      const decodedBuffer = this.decodeBase64BufferLoose(sessionValue);
-      if (!decodedBuffer) continue;
-
-      const decoded = decodedBuffer.toString('utf8');
-
-      const payloadCandidates: string[] = [decoded];
-      const payloadBuffers: Buffer[] = [decodedBuffer];
-      const parts = decoded.split('|');
-      if (parts.length >= 2) {
-        const middlePayloadBuffer = this.decodeBase64BufferLoose(parts[1]);
-        if (middlePayloadBuffer) {
-          payloadCandidates.push(middlePayloadBuffer.toString('utf8'));
-          payloadBuffers.push(middlePayloadBuffer);
-        }
-      }
-
-      for (const payload of payloadCandidates) {
-        for (const m of payload.matchAll(/_(\d{4,8})(?!\d)/g)) {
-          push(m[1]);
-        }
-        for (const m of payload.matchAll(/(?:user(?:name)?|uid|id)[^\d]{0,16}(\d{4,8})(?!\d)/gi)) {
-          push(m[1]);
-        }
-      }
-
-      for (const payload of payloadBuffers) {
-        for (const value of this.extractGobFieldInts(payload, 'id')) {
-          push(value);
-        }
-      }
-    }
-
-    return ids;
-  }
-
-  private buildUserIdProbeCandidates(token: string): number[] {
-    const candidates: number[] = [];
-    const push = (value: number | null) => {
-      if (typeof value !== 'number' || Number.isNaN(value) || value <= 0) return;
-      if (!candidates.includes(value)) candidates.push(value);
-    };
-
-    push(this.tryDecodeUserId(token));
-    for (const guessed of this.extractLikelyUserIds(token)) {
-      push(guessed);
-    }
-    for (const id of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 50, 100, 8899, 11494]) {
-      push(id);
-    }
-
-    return candidates;
-  }
-
-  private parseTokenItems(payload: any): any[] {
-    if (Array.isArray(payload?.data)) return payload.data;
-    if (Array.isArray(payload?.data?.items)) return payload.data.items;
-    if (Array.isArray(payload?.data?.data)) return payload.data.data;
-    if (Array.isArray(payload?.items)) return payload.items;
-    if (Array.isArray(payload?.list)) return payload.list;
-    if (Array.isArray(payload?.data?.list)) return payload.data.list;
-    return [];
-  }
-
-  private isTokenListResponse(payload: any): boolean {
-    if (!payload || typeof payload !== 'object') return false;
-    if (payload?.success === true) return true;
-    return (
-      Array.isArray(payload?.data)
-      || Array.isArray(payload?.data?.items)
-      || Array.isArray(payload?.data?.data)
-      || Array.isArray(payload?.items)
-      || Array.isArray(payload?.list)
-      || Array.isArray(payload?.data?.list)
-    );
-  }
-
-  private normalizeTokenKeyForCompare(value?: string | null): string {
-    const trimmed = (value || '').trim();
-    return trimmed.startsWith('Bearer ') ? trimmed.slice(7).trim() : trimmed;
-  }
-
-  private parseGroupKeys(payload: any): string[] {
-    if (payload && typeof payload === 'object' && payload?.success === false) {
-      return [];
-    }
-
-    const source = payload?.data ?? payload;
-    if (Array.isArray(source)) {
-      return source
-        .map((item) => String(item || '').trim())
-        .filter(Boolean);
-    }
-
-    if (source && typeof source === 'object') {
-      return Object.keys(source)
-        .map((key) => key.trim())
-        .filter((key) => !['success', 'message', 'code', 'data', 'error'].includes(key.toLowerCase()))
-        .filter(Boolean);
-    }
-
-    return [];
-  }
-
-  private resolveGroupFetchErrorMessage(payload: any): string {
-    const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
-    const normalized = message.toLowerCase();
-    const indicatesExpired = normalized.includes('expired')
-      || normalized.includes('invalid token')
-      || normalized.includes('access token')
-      || normalized.includes('unauthorized')
-      || normalized.includes('forbidden')
-      || normalized.includes('未登录')
-      || normalized.includes('登录')
-      || normalized.includes('过期');
-    if (indicatesExpired) return '账号会话可能已过期，请重新登录后再拉取分组';
-    return message || '拉取分组失败';
-  }
-
-  private normalizeTokenItems(items: any[]): ApiTokenInfo[] {
-    const normalized: ApiTokenInfo[] = [];
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      const key = typeof item?.key === 'string' ? item.key.trim() : '';
-      if (!key) continue;
-      const rawName = typeof item?.name === 'string' ? item.name.trim() : '';
-      const rawGroup = typeof item?.group === 'string'
-        ? item.group.trim()
-        : (typeof item?.group_name === 'string'
-          ? item.group_name.trim()
-          : (typeof item?.token_group === 'string' ? item.token_group.trim() : ''));
-      const status = typeof item?.status === 'number' ? item.status : undefined;
-      const tokenInfo: ApiTokenInfo = {
-        name: rawName || (index === 0 ? 'default' : `token-${index + 1}`),
-        key,
-        enabled: status === undefined ? true : status === 1,
-      };
-      if (rawGroup) tokenInfo.tokenGroup = rawGroup;
-      normalized.push(tokenInfo);
-    }
-    return normalized;
-  }
-
-  private parseUserInfo(data: any): UserInfo {
-    return {
-      username: data?.username || data?.display_name || '',
-      displayName: data?.display_name,
-      email: data?.email,
-      role: data?.role,
-    };
-  }
-
-  private parseBalance(data: any): BalanceInfo {
-    const quota = (data?.quota || 0) / 500000;
-    const used = (data?.used_quota || 0) / 500000;
-    const total = quota + used;
-    const todayIncome = Number.isFinite(data?.today_income) ? (data.today_income / 500000) : undefined;
-    const todayQuotaConsumption = Number.isFinite(data?.today_quota_consumption) ? (data.today_quota_consumption / 500000) : undefined;
-    return { balance: quota, used, quota: total, todayIncome, todayQuotaConsumption };
-  }
-
-  private extractLoginAccessToken(payload: any): string | null {
-    const candidates: unknown[] = [
-      payload?.data,
-      payload?.token,
-      payload?.accessToken,
-      payload?.access_token,
-      payload?.data?.token,
-      payload?.data?.accessToken,
-      payload?.data?.access_token,
-    ];
-    for (const candidate of candidates) {
-      if (typeof candidate !== 'string') continue;
-      const token = candidate.trim();
-      if (token) return token;
-    }
-    return null;
-  }
-
-  private buildDefaultTokenPayload(options?: CreateApiTokenOptions): Record<string, unknown> {
-    const normalizedName = (options?.name || '').trim() || 'metapi';
-    const unlimitedQuota = options?.unlimitedQuota ?? true;
-    const remainQuota = Number.isFinite(options?.remainQuota)
-      ? Math.max(0, Math.trunc(options?.remainQuota as number))
-      : 0;
-    const expiredTime = Number.isFinite(options?.expiredTime)
-      ? Math.trunc(options?.expiredTime as number)
-      : -1;
-    return {
-      name: normalizedName,
-      unlimited_quota: unlimitedQuota,
-      expired_time: expiredTime,
-      remain_quota: remainQuota,
-      allow_ips: (options?.allowIps || '').trim(),
-      model_limits_enabled: options?.modelLimitsEnabled ?? false,
-      model_limits: (options?.modelLimits || '').trim(),
-      group: (options?.group || '').trim(),
-    };
-  }
-
-  private parseJsonSafe<T>(text: string): T | null {
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      return null;
-    }
-  }
-
-  private extractHtmlErrorSummary(payloadRaw: string): string | null {
-    const text = (payloadRaw || '').trim();
-    if (!text || !/<html|<!doctype/i.test(text)) return null;
-
-    const titleMatch = text.match(/<title>\s*([^<]+?)\s*<\/title>/i);
-    let title = titleMatch?.[1]?.trim() || '';
-    if (title.includes('|')) {
-      title = title.split('|')[0]?.trim() || title;
-    }
-    if (!title && /cloudflare tunnel error/i.test(text)) {
-      title = 'Cloudflare Tunnel error';
-    }
-    if (!title) return null;
-
-    const codeMatch = text.match(/<span[^>]*>\s*Error\s*<\/span>\s*<span[^>]*>\s*(\d{3,4})\s*<\/span>/i)
-      || text.match(/\bError\s*(\d{3,4})\b/i);
-    const code = codeMatch?.[1];
-    return code ? `${title} (Error ${code})` : title;
-  }
-
-  private formatRequestErrorMessage(err: unknown): string | null {
-    const raw = typeof (err as { message?: unknown })?.message === 'string'
-      ? (err as { message: string }).message.trim()
-      : '';
-    if (!raw) return null;
-
-    const httpMatch = raw.match(/^(HTTP\s+\d+):\s*([\s\S]+)$/);
-    if (!httpMatch) return raw;
-
-    const [, prefix, payloadRaw] = httpMatch;
-    const payload = this.parseJsonSafe<any>(payloadRaw);
-    const bodyMessage = this.extractResponseMessage(payload);
-    if (bodyMessage) return `${prefix}: ${bodyMessage}`;
-    const htmlSummary = this.extractHtmlErrorSummary(payloadRaw);
-    if (htmlSummary) return `${prefix}: ${htmlSummary}`;
-    return raw;
-  }
-
-  private extractResponseMessage(payload: any): string {
-    if (typeof payload?.message === 'string' && payload.message.trim()) {
-      return payload.message.trim();
-    }
-    if (typeof payload?.error?.message === 'string' && payload.error.message.trim()) {
-      return payload.error.message.trim();
-    }
-    if (typeof payload?.msg === 'string' && payload.msg.trim()) {
-      return payload.msg.trim();
-    }
-    return '';
-  }
-
-  private isHtmlJsonParseErrorMessage(message?: string | null): boolean {
-    if (!message) return false;
-    const text = message.toLowerCase();
-    return (
-      text.includes("unexpected token '<'")
-      || (text.includes('not valid json') && (text.includes('<html') || text.includes('<script')))
-    );
-  }
-
-  private hasUsableSessionCookie(cookieHeader: string): boolean {
-    if (!cookieHeader) return false;
-    const ignored = new Set(['acw_tc', 'acw_sc__v2', 'cdn_sec_tc']);
-    const pairs = cookieHeader.split(';').map((part) => part.trim()).filter(Boolean);
-    for (const pair of pairs) {
-      const eq = pair.indexOf('=');
-      if (eq <= 0) continue;
-      const name = pair.slice(0, eq).trim().toLowerCase();
-      if (!name || ignored.has(name)) continue;
-      if (
-        name === 'session'
-        || name === 'token'
-        || name === 'auth_token'
-        || name === 'access_token'
-        || name === 'jwt'
-        || name === 'jwt_token'
-        || name.includes('session')
-        || name.includes('token')
-        || name.includes('auth')
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
 
 
-  private isAlreadyCheckedInMessage(message?: string | null): boolean {
-    if (!message) return false;
-    const text = message.trim();
-    if (!text) return false;
-    const normalized = text.toLowerCase();
-    return (
-      normalized.includes('already checked in') ||
-      normalized.includes('already signed') ||
-      normalized.includes('already sign in') ||
-      text.includes('今日已签到') ||
-      text.includes('今天已签到') ||
-      text.includes('今天已经签到') ||
-      text.includes('今日已经签到') ||
-      text.includes('已经签到') ||
-      text.includes('已签到') ||
-      text.includes('重复签到') ||
-      text.includes('签到过')
-    );
-  }
 
-  private looksLikeCookiePairCredential(token: string): boolean {
-    const raw = (token || '').trim();
-    if (!raw || !raw.includes('=')) return false;
-    // Real cookie header values contain name=value pairs, often with "; " separators.
-    // NewAPI session values are long base64 strings that may only end with padding "=".
-    if (raw.includes(';')) {
-      return /(?:^|;\s*)[A-Za-z_][A-Za-z0-9_-]*=/.test(raw);
-    }
-    const eq = raw.indexOf('=');
-    if (eq <= 0) return false;
-    const name = raw.slice(0, eq);
-    // Cookie names are short identifiers. Long base64 blobs before "=" are not cookie names.
-    if (name.length > 40) return false;
-    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(name)) return false;
-    // Require a non-empty value after the first "=" (allow value padding equals).
-    return raw.length > eq + 1;
-  }
 
-  private isSessionLikeCredential(token: string): boolean {
-    const raw = (token || '').trim();
-    if (!raw) return false;
-    if (this.looksLikeCookiePairCredential(raw)) return true;
-    // NewAPI session cookies are typically long base64-ish values, not sk-/eyJ tokens.
-    if (raw.startsWith('sk-') || raw.startsWith('eyJ')) return false;
-    return raw.length >= 80;
-  }
 
-  private rememberCheckinFailureMessage(current: string | undefined, next?: string | null): string | undefined {
-    const incoming = typeof next === 'string' ? next.trim() : '';
-    if (!incoming) return current;
-    if (!current) return incoming;
-    // Never let later auth noise override an already-checked-in result.
-    if (this.isAlreadyCheckedInMessage(current)) return current;
-    if (this.isAlreadyCheckedInMessage(incoming)) return incoming;
-    // Prefer non-auth business errors over generic unauthorized once we have something better.
-    if (this.isCookieSessionFailureMessage(current) && !this.isCookieSessionFailureMessage(incoming)) {
-      return incoming;
-    }
-    return incoming;
-  }
 
-  private shouldFallbackToCookieCheckin(message?: string | null): boolean {
-    if (!message) return true;
-    if (this.isAlreadyCheckedInMessage(message)) return false;
-    const text = message.toLowerCase();
-    return (
-      text.includes('unexpected token') ||
-      text.includes('not valid json') ||
-      text.includes('<html') ||
-      text.includes('new-api-user') ||
-      text.includes('access token') ||
-      text.includes('unauthorized') ||
-      text.includes('forbidden') ||
-      text.includes('not login') ||
-      text.includes('not logged') ||
-      text.includes('invalid url (post /api/user/checkin)') ||
-      (text.includes('http 404') && text.includes('/api/user/checkin')) ||
-      text.includes('未登录') ||
-      text.includes('未提供')
-    );
-  }
 
-  private isMissingCheckinEndpointMessage(message?: string | null): boolean {
-    if (!message) return false;
-    const text = message.toLowerCase();
-    return (
-      text.includes('invalid url (post /api/user/checkin)') ||
-      (text.includes('http 404') && text.includes('/api/user/checkin')) ||
-      text.includes('checkin endpoint not found') ||
-      text.includes('check-in is not supported') ||
-      text.includes('checkin is not supported') ||
-      text.includes('does not support checkin') ||
-      text.includes('not support checkin')
-    );
-  }
 
-  private isCookieSessionFailureMessage(message?: string | null): boolean {
-    if (!message) return false;
-    const text = message.toLowerCase();
-    return (
-      text.includes('access token') ||
-      text.includes('unauthorized') ||
-      text.includes('forbidden') ||
-      text.includes('new-api-user') ||
-      text.includes('user id') ||
-      text.includes('invalid token') ||
-      text.includes('expired') ||
-      text.includes('无权') ||
-      text.includes('未登录') ||
-      text.includes('未提供') ||
-      text.includes('未授权') ||
-      text.includes('not login') ||
-      text.includes('not logged')
-    );
-  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   private async detectCookieSessionFailureMessage(
     baseUrl: string,
@@ -631,7 +150,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
     const rememberFailure = (message: string) => {
       if (failureMessage) return;
       const text = message.trim();
-      if (!this.isCookieSessionFailureMessage(text)) return;
+      if (!isCookieSessionFailureMessage(text)) return;
       failureMessage = text;
     };
 
@@ -689,10 +208,10 @@ export class NewApiAdapter extends BasePlatformAdapter {
     onFailureMessage?: (message: string) => void,
   ): Promise<any | null> {
     const failures: PlatformVariantFailure[] = [];
-    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
+    for (const [cookieIndex, cookie] of buildCookieCandidates(token).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
-        Object.assign(headers, this.userIdHeaders(platformUserId));
+        Object.assign(headers, userIdHeaders(platformUserId));
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self`, { headers });
         if (res?.success && res?.data) return res;
         if (typeof res?.message === 'string' && res.message.trim()) {
@@ -711,14 +230,14 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   private async probeUserIdByCookie(baseUrl: string, token: string): Promise<number | null> {
-    const candidates = this.buildUserIdProbeCandidates(token);
-    const cookieCandidates = this.buildCookieCandidates(token);
+    const candidates = buildUserIdProbeCandidates(token);
+    const cookieCandidates = buildCookieCandidates(token);
     const failures: PlatformVariantFailure[] = [];
     for (const [cookieIndex, cookie] of cookieCandidates.entries()) {
       for (const id of candidates) {
         try {
           const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self`, {
-            headers: { Cookie: cookie, ...this.userIdHeaders(id) },
+            headers: { Cookie: cookie, ...userIdHeaders(id) },
           });
           if (res?.success && res?.data) return id;
           failures.push({ variant: `cookie#${cookieIndex + 1}/uid${id}`, reason: describeUnusableVariantResponse() });
@@ -749,12 +268,12 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
   private async getApiTokensByCookie(baseUrl: string, token: string, userId?: number | null): Promise<ApiTokenInfo[]> {
     const failures: PlatformVariantFailure[] = [];
-    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
+    for (const [cookieIndex, cookie] of buildCookieCandidates(token).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
-        Object.assign(headers, this.userIdHeaders(userId));
+        Object.assign(headers, userIdHeaders(userId));
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/token/?p=0&size=100`, { headers });
-        const normalized = this.normalizeTokenItems(this.parseTokenItems(res));
+        const normalized = normalizeTokenItems(parseTokenItems(res));
         if (normalized.length > 0) return normalized;
         failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
       } catch (error) {
@@ -769,10 +288,10 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
   private async getSessionModelsByCookie(baseUrl: string, token: string, userId?: number | null): Promise<string[]> {
     const failures: PlatformVariantFailure[] = [];
-    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
+    for (const [cookieIndex, cookie] of buildCookieCandidates(token).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
-        Object.assign(headers, this.userIdHeaders(userId));
+        Object.assign(headers, userIdHeaders(userId));
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/models`, { headers });
         if (Array.isArray(res?.data) && res.data.length > 0) return res.data.filter(Boolean);
         if (res?.data && typeof res.data === 'object') {
@@ -790,14 +309,10 @@ export class NewApiAdapter extends BasePlatformAdapter {
     return [];
   }
 
-  private extractOpenAiModels(payload: any): string[] {
-    if (!Array.isArray(payload?.data)) return [];
-    return payload.data.map((m: any) => m?.id).filter(Boolean);
-  }
 
   private async getOpenAiModelsViaShieldCookie(baseUrl: string, token: string, options?: ModelDiscoveryOptions): Promise<string[]> {
     const failures: PlatformVariantFailure[] = [];
-    for (const [cookieIndex, cookie] of this.buildCookieCandidates(token).entries()) {
+    for (const [cookieIndex, cookie] of buildCookieCandidates(token).entries()) {
       try {
         const { data } = await fetchJsonWithShieldCookieRetry<any>(`${baseUrl}/v1/models`, {
           headers: {
@@ -806,7 +321,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
             ...(options?.requireCodexClient ? CODEX_DISCOVERY_FINGERPRINT_HEADERS : {}),
           },
         });
-        const models = this.extractOpenAiModels(data);
+        const models = extractOpenAiModels(data);
         if (models.length > 0) return models;
         failures.push({ variant: `cookie#${cookieIndex + 1}`, reason: describeUnusableVariantResponse() });
       } catch (error) {
@@ -821,14 +336,14 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
   private async getOpenAiModels(baseUrl: string, token: string, options?: ModelDiscoveryOptions): Promise<string[]> {
     // Session base64 values often end with "=" padding; that must NOT trigger the
-    const shouldTryShieldCookie = this.looksLikeCookiePairCredential(token);
+    const shouldTryShieldCookie = looksLikeCookiePairCredential(token);
     if (shouldTryShieldCookie) {
       const shieldModels = await this.getOpenAiModelsViaShieldCookie(baseUrl, token, options);
       if (shieldModels.length > 0) return shieldModels;
     }
 
     // API keys only: session cookies are not valid OpenAI bearer tokens.
-    if (this.isSessionLikeCredential(token) && !token.trim().startsWith('sk-')) {
+    if (isSessionLikeCredential(token) && !token.trim().startsWith('sk-')) {
       return [];
     }
 
@@ -839,7 +354,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
           ...(options?.requireCodexClient ? CODEX_DISCOVERY_FINGERPRINT_HEADERS : {}),
         },
       });
-      return this.extractOpenAiModels(res);
+      return extractOpenAiModels(res);
     } catch {
       return [];
     }
@@ -847,11 +362,11 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
   private async discoverUserId
 (baseUrl: string, accessToken: string): Promise<number | null> {
-    const jwtId = this.tryDecodeUserId(accessToken);
+    const jwtId = tryDecodeUserId(accessToken);
     if (jwtId) {
       try {
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self`, {
-          headers: this.authHeaders(accessToken, jwtId),
+          headers: authHeaders(accessToken, jwtId),
         });
         if (res?.success && res?.data) return jwtId;
       } catch (error) {
@@ -888,7 +403,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (directRes?.success && directRes?.data) {
-        return this.parseUserInfo(directRes.data);
+        return parseUserInfo(directRes.data);
       }
       failures.push({ variant: 'bearer', reason: describeUnusableVariantResponse() });
     } catch (error) {
@@ -898,7 +413,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
     try {
       const cookieRes = await this.fetchUserSelfByCookie(baseUrl, accessToken, platformUserId);
       if (cookieRes?.success && cookieRes?.data) {
-        return this.parseUserInfo(cookieRes.data);
+        return parseUserInfo(cookieRes.data);
       }
       failures.push({ variant: 'cookie', reason: describeUnusableVariantResponse() });
     } catch (error) {
@@ -910,7 +425,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
       if (fallbackUserId) {
         const cookieRetry = await this.fetchUserSelfByCookie(baseUrl, accessToken, fallbackUserId);
         if (cookieRetry?.success && cookieRetry?.data) {
-          return this.parseUserInfo(cookieRetry.data);
+          return parseUserInfo(cookieRetry.data);
         }
       }
       failures.push({ variant: 'cookie+alternate-uid', reason: describeUnusableVariantResponse() });
@@ -941,7 +456,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
         return { success: false, message: 'shield challenge blocked login' };
       }
 
-      const accessToken = this.extractLoginAccessToken(res);
+      const accessToken = extractLoginAccessToken(res);
       if (res?.success && accessToken) {
         return {
           success: true,
@@ -949,7 +464,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
           username,
         };
       }
-      if (res?.success && this.hasUsableSessionCookie(cookieHeader)) {
+      if (res?.success && hasUsableSessionCookie(cookieHeader)) {
         return {
           success: true,
           accessToken: cookieHeader,
@@ -959,13 +474,13 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
       return {
         success: false,
-        message: this.extractResponseMessage(res) || '登录失败：未获取到可用会话凭据，请改用 Cookie/Token 导入',
+        message: extractResponseMessage(res) || '登录失败：未获取到可用会话凭据，请改用 Cookie/Token 导入',
       };
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       return {
         success: false,
-        message: this.formatRequestErrorMessage(err) || errMessage || '登录请求失败',
+        message: formatRequestErrorMessage(err) || errMessage || '登录请求失败',
       };
     }
   }
@@ -973,7 +488,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
   override async verifyToken(baseUrl: string, token: string, platformUserId?: number): Promise<TokenVerifyResult> {
     // Session cookies (NewAPI gorilla securecookie) must not start with a slow
     // OpenAI /v1/models probe — that path is for sk- API keys and used to hang the UI.
-    if (!this.isSessionLikeCredential(token) || token.trim().startsWith('sk-')) {
+    if (!isSessionLikeCredential(token) || token.trim().startsWith('sk-')) {
       const openAiModels = await this.getOpenAiModels(baseUrl, token);
       if (openAiModels.length > 0) {
         return { tokenType: 'apikey', models: openAiModels };
@@ -981,8 +496,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     }
 
     // Fast path: decode user id from session payload, then cookie + New-API-User.
-    if (this.isSessionLikeCredential(token)) {
-      const guessedIds = this.extractLikelyUserIds(token);
+    if (isSessionLikeCredential(token)) {
+      const guessedIds = extractLikelyUserIds(token);
       const orderedIds = [
         ...(typeof platformUserId === 'number' && platformUserId > 0 ? [platformUserId] : []),
         ...guessedIds,
@@ -990,8 +505,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
       for (const userId of orderedIds) {
         const cookieRes = await this.fetchUserSelfByCookie(baseUrl, token, userId);
         if (cookieRes?.success && cookieRes?.data) {
-          const userInfo = this.parseUserInfo(cookieRes.data);
-          const balance = this.parseBalance(cookieRes.data);
+          const userInfo = parseUserInfo(cookieRes.data);
+          const balance = parseBalance(cookieRes.data);
           let apiToken: string | null = null;
           try { apiToken = await this.getApiTokenWithUser(baseUrl, token, userId); } catch {}
           return { tokenType: 'session', userInfo, balance, apiToken };
@@ -1005,8 +520,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
       });
       if (directRes?.success && directRes?.data) {
         const userId = directRes.data.id;
-        const userInfo = this.parseUserInfo(directRes.data);
-        const balance = this.parseBalance(directRes.data);
+        const userInfo = parseUserInfo(directRes.data);
+        const balance = parseBalance(directRes.data);
         let apiToken: string | null = null;
         try { apiToken = await this.getApiTokenWithUser(baseUrl, token, userId); } catch {}
         return { tokenType: 'session', userInfo, balance, apiToken };
@@ -1016,11 +531,11 @@ export class NewApiAdapter extends BasePlatformAdapter {
         const userId = platformUserId || await this.probeUserId(baseUrl, token);
         if (userId) {
           const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self`, {
-            headers: this.authHeaders(token, userId),
+            headers: authHeaders(token, userId),
           });
           if (res?.success && res?.data) {
-            const userInfo = this.parseUserInfo(res.data);
-            const balance = this.parseBalance(res.data);
+            const userInfo = parseUserInfo(res.data);
+            const balance = parseBalance(res.data);
             let apiToken: string | null = null;
             try { apiToken = await this.getApiTokenWithUser(baseUrl, token, userId); } catch {}
             return { tokenType: 'session', userInfo, balance, apiToken };
@@ -1039,8 +554,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     const cookieRes = await this.fetchUserSelfByCookie(baseUrl, token, platformUserId);
     if (cookieRes?.success && cookieRes?.data) {
       const userId = cookieRes.data.id;
-      const userInfo = this.parseUserInfo(cookieRes.data);
-      const balance = this.parseBalance(cookieRes.data);
+      const userInfo = parseUserInfo(cookieRes.data);
+      const balance = parseBalance(cookieRes.data);
       let apiToken: string | null = null;
       try { apiToken = await this.getApiTokenWithUser(baseUrl, token, userId); } catch {}
       return { tokenType: 'session', userInfo, balance, apiToken };
@@ -1050,8 +565,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
     if (cookieUserId) {
       const cookieRetry = await this.fetchUserSelfByCookie(baseUrl, token, cookieUserId);
       if (cookieRetry?.success && cookieRetry?.data) {
-        const userInfo = this.parseUserInfo(cookieRetry.data);
-        const balance = this.parseBalance(cookieRetry.data);
+        const userInfo = parseUserInfo(cookieRetry.data);
+        const balance = parseBalance(cookieRetry.data);
         let apiToken: string | null = null;
         try { apiToken = await this.getApiTokenWithUser(baseUrl, token, cookieUserId); } catch {}
         return { tokenType: 'session', userInfo, balance, apiToken };
@@ -1067,13 +582,13 @@ export class NewApiAdapter extends BasePlatformAdapter {
   }
 
   private async probeUserId(baseUrl: string, accessToken: string): Promise<number | null> {
-    const jwtId = this.tryDecodeUserId(accessToken);
+    const jwtId = tryDecodeUserId(accessToken);
     if (jwtId) {
       const valid = await this.testUserId(baseUrl, accessToken, jwtId);
       if (valid) return jwtId;
     }
 
-    for (const id of this.buildUserIdProbeCandidates(accessToken)) {
+    for (const id of buildUserIdProbeCandidates(accessToken)) {
       if (id === jwtId) continue;
       if (await this.testUserId(baseUrl, accessToken, id)) return id;
     }
@@ -1084,7 +599,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
   private async testUserId(baseUrl: string, accessToken: string, userId: number): Promise<boolean> {
     try {
       const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self`, {
-        headers: this.authHeaders(accessToken, userId),
+        headers: authHeaders(accessToken, userId),
       });
       return res?.success === true && !!res?.data;
     } catch {
@@ -1100,7 +615,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
       throw error;
     }
     let firstFailureMessage: string | undefined;
-    const preferCookieFirst = this.isSessionLikeCredential(accessToken);
+    const preferCookieFirst = isSessionLikeCredential(accessToken);
 
     const finalizeFailure = (message?: string) => ({
       success: false as const,
@@ -1109,7 +624,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     const tryBearerCheckin = async (): Promise<CheckinResult | null> => {
       try {
-        const headers = this.authHeaders(accessToken, resolvedUserId || undefined);
+        const headers = authHeaders(accessToken, resolvedUserId || undefined);
         const res = await this.fetchJson<any>(`${baseUrl}/api/user/checkin`, {
           method: 'POST',
           headers,
@@ -1117,29 +632,29 @@ export class NewApiAdapter extends BasePlatformAdapter {
         if (res?.success) {
           return { success: true, message: res.message || 'checkin success', reward: res.data?.reward?.toString() };
         }
-        const directMessage = this.extractResponseMessage(res);
-        if (this.isAlreadyCheckedInMessage(directMessage)) {
+        const directMessage = extractResponseMessage(res);
+        if (isAlreadyCheckedInMessage(directMessage)) {
           return { success: false, message: directMessage };
         }
         // Cloudflare Turnstile gate (new-api: "Turnstile token 为空"): solve the
         // widget via the configured solver and retry with the token as the
         // `turnstile` URL query param (the new-api middleware reads c.Query).
         if (isTurnstileRequiredMessage(directMessage)) {
-          const solved = await this.tryTurnstileCheckin(baseUrl, () => this.authHeaders(accessToken, resolvedUserId || undefined));
+          const solved = await this.tryTurnstileCheckin(baseUrl, () => authHeaders(accessToken, resolvedUserId || undefined));
           if (solved) return solved;
         }
-        firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, directMessage);
+        firstFailureMessage = rememberCheckinFailureMessage(firstFailureMessage, directMessage);
       } catch (err) {
         if (err instanceof NewApiShieldError && err.failure.terminal) return finalizeFailure(err.message);
-        const parsed = this.formatRequestErrorMessage(err);
+        const parsed = formatRequestErrorMessage(err);
         // Aliyun WAF (acw_sc__v2) answers 200 + HTML to plain JSON fetches:
         // solve the challenge and resend the same Bearer checkin through the
         // shield-cookie flow (mirrors the balance-path recovery). Without
         // this, a challenged checkin surfaced as a raw JSON.parse error.
-        if (parsed && this.isHtmlJsonParseErrorMessage(parsed)) {
+        if (parsed && isHtmlJsonParseErrorMessage(parsed)) {
           const shielded = await this.fetchJsonViaShield<any>(`${baseUrl}/api/user/checkin`, {
             method: 'POST',
-            headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+            headers: authHeaders(accessToken, resolvedUserId || undefined),
           });
           if (shielded?.success) {
             return {
@@ -1148,24 +663,24 @@ export class NewApiAdapter extends BasePlatformAdapter {
               reward: shielded.data?.reward?.toString(),
             };
           }
-          const shieldedMessage = this.extractResponseMessage(shielded);
-          if (this.isAlreadyCheckedInMessage(shieldedMessage)) {
+          const shieldedMessage = extractResponseMessage(shielded);
+          if (isAlreadyCheckedInMessage(shieldedMessage)) {
             return { success: false, message: shieldedMessage };
           }
-          firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, shieldedMessage);
+          firstFailureMessage = rememberCheckinFailureMessage(firstFailureMessage, shieldedMessage);
         }
-        firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, parsed);
+        firstFailureMessage = rememberCheckinFailureMessage(firstFailureMessage, parsed);
       }
       return null;
     };
 
     const tryCookieCheckin = async (cookieUserId?: number | null): Promise<CheckinResult | null> => {
-      for (const cookie of this.buildCookieCandidates(accessToken)) {
+      for (const cookie of buildCookieCandidates(accessToken)) {
         // Prefer the real NewAPI checkin endpoint first. /api/user/sign_in is a legacy alias and
         // often 404s, which previously polluted the final failure message.
         try {
           const headers: Record<string, string> = { Cookie: cookie };
-          Object.assign(headers, this.userIdHeaders(cookieUserId));
+          Object.assign(headers, userIdHeaders(cookieUserId));
           const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/checkin`, {
             method: 'POST',
             headers,
@@ -1173,22 +688,22 @@ export class NewApiAdapter extends BasePlatformAdapter {
           if (res?.success) {
             return { success: true, message: res.message || 'checkin success', reward: res.data?.reward?.toString() };
           }
-          const cookieMessage = this.extractResponseMessage(res);
-          if (this.isAlreadyCheckedInMessage(cookieMessage)) {
+          const cookieMessage = extractResponseMessage(res);
+          if (isAlreadyCheckedInMessage(cookieMessage)) {
             return { success: false, message: cookieMessage };
           }
           if (isTurnstileRequiredMessage(cookieMessage)) {
             const solved = await this.tryTurnstileCheckin(baseUrl, () => ({
               Cookie: cookie,
-              ...this.userIdHeaders(cookieUserId),
+              ...userIdHeaders(cookieUserId),
             }));
             if (solved) return solved;
           }
-          firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, cookieMessage);
+          firstFailureMessage = rememberCheckinFailureMessage(firstFailureMessage, cookieMessage);
         } catch (err) {
           if (err instanceof NewApiShieldError && err.failure.terminal) return finalizeFailure(err.message);
-          const parsed = this.formatRequestErrorMessage(err);
-          firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, parsed);
+          const parsed = formatRequestErrorMessage(err);
+          firstFailureMessage = rememberCheckinFailureMessage(firstFailureMessage, parsed);
         }
 
         try {
@@ -1198,7 +713,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
             headers: {
               Cookie: cookie,
               'X-Requested-With': 'XMLHttpRequest',
-              ...this.userIdHeaders(cookieUserId),
+              ...userIdHeaders(cookieUserId),
             },
           });
           if (signInRes?.success) {
@@ -1208,19 +723,19 @@ export class NewApiAdapter extends BasePlatformAdapter {
               reward: signInRes.data?.reward?.toString(),
             };
           }
-          const signInMessage = this.extractResponseMessage(signInRes);
-          if (this.isAlreadyCheckedInMessage(signInMessage)) {
+          const signInMessage = extractResponseMessage(signInRes);
+          if (isAlreadyCheckedInMessage(signInMessage)) {
             return { success: false, message: signInMessage };
           }
           // Only keep sign_in message when we have nothing better; ignore pure missing-endpoint noise.
-          if (!this.isMissingCheckinEndpointMessage(signInMessage)) {
-            firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, signInMessage);
+          if (!isMissingCheckinEndpointMessage(signInMessage)) {
+            firstFailureMessage = rememberCheckinFailureMessage(firstFailureMessage, signInMessage);
           }
         } catch (err) {
           if (err instanceof NewApiShieldError && err.failure.terminal) return finalizeFailure(err.message);
-          const parsed = this.formatRequestErrorMessage(err);
-          if (!this.isMissingCheckinEndpointMessage(parsed)) {
-            firstFailureMessage = this.rememberCheckinFailureMessage(firstFailureMessage, parsed);
+          const parsed = formatRequestErrorMessage(err);
+          if (!isMissingCheckinEndpointMessage(parsed)) {
+            firstFailureMessage = rememberCheckinFailureMessage(firstFailureMessage, parsed);
           }
         }
       }
@@ -1231,7 +746,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
     if (!preferCookieFirst) {
       const bearerResult = await tryBearerCheckin();
       if (bearerResult) return bearerResult;
-      if (firstFailureMessage && !this.shouldFallbackToCookieCheckin(firstFailureMessage)) {
+      if (firstFailureMessage && !shouldFallbackToCookieCheckin(firstFailureMessage)) {
         return finalizeFailure(firstFailureMessage);
       }
     }
@@ -1246,12 +761,12 @@ export class NewApiAdapter extends BasePlatformAdapter {
     }
 
     // Session credentials: cookie path is authoritative. Only try Bearer afterwards as a last resort.
-    if (preferCookieFirst && !this.isAlreadyCheckedInMessage(firstFailureMessage)) {
+    if (preferCookieFirst && !isAlreadyCheckedInMessage(firstFailureMessage)) {
       const bearerResult = await tryBearerCheckin();
       if (bearerResult) return bearerResult;
     }
 
-    if (this.isMissingCheckinEndpointMessage(firstFailureMessage)) {
+    if (isMissingCheckinEndpointMessage(firstFailureMessage)) {
       const cookieSessionFailureMessage = await this.detectCookieSessionFailureMessage(
         baseUrl,
         accessToken,
@@ -1311,8 +826,8 @@ export class NewApiAdapter extends BasePlatformAdapter {
           reward: res.data?.reward?.toString(),
         };
       }
-      const retryMessage = this.extractResponseMessage(res);
-      if (this.isAlreadyCheckedInMessage(retryMessage)) {
+      const retryMessage = extractResponseMessage(res);
+      if (isAlreadyCheckedInMessage(retryMessage)) {
         return { success: false, message: retryMessage };
       }
     } catch {
@@ -1331,32 +846,32 @@ export class NewApiAdapter extends BasePlatformAdapter {
         failureMessage = text;
         return;
       }
-      if ((this.isHtmlJsonParseErrorMessage(failureMessage) || /上游.*风控挑战/.test(failureMessage)) && !this.isHtmlJsonParseErrorMessage(text)) {
+      if ((isHtmlJsonParseErrorMessage(failureMessage) || /上游.*风控挑战/.test(failureMessage)) && !isHtmlJsonParseErrorMessage(text)) {
         failureMessage = text;
       }
     };
 
     try {
       const res = await this.fetchJson<any>(`${baseUrl}/api/user/self`, {
-        headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+        headers: authHeaders(accessToken, resolvedUserId || undefined),
       });
       if (res?.success && res?.data) {
-        return this.parseBalance(res.data);
+        return parseBalance(res.data);
       }
       rememberFailure(typeof res?.message === 'string' ? res.message : null);
     } catch (err) {
       if (err instanceof NewApiShieldError && err.failure.terminal) throw err;
-      const message = this.formatRequestErrorMessage(err);
+      const message = formatRequestErrorMessage(err);
       rememberFailure(message);
       // Aliyun WAF (acw_sc__v2) answers 200 + HTML to plain JSON fetches. Solve
       // the challenge and resend the same Bearer probe through the shield-cookie
       // flow (covers managed management tokens on WAF-protected New API sites).
-      if (message && this.isHtmlJsonParseErrorMessage(message)) {
+      if (message && isHtmlJsonParseErrorMessage(message)) {
         const shielded = await this.fetchJsonViaShield<any>(`${baseUrl}/api/user/self`, {
-          headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+          headers: authHeaders(accessToken, resolvedUserId || undefined),
         });
         if (shielded?.success && shielded?.data) {
-          return this.parseBalance(shielded.data);
+          return parseBalance(shielded.data);
         }
       }
     }
@@ -1368,14 +883,14 @@ export class NewApiAdapter extends BasePlatformAdapter {
       rememberFailure,
     );
     if (cookieRes?.success && cookieRes?.data) {
-      return this.parseBalance(cookieRes.data);
+      return parseBalance(cookieRes.data);
     }
 
     const cookieUserId = await this.probeAlternateUserIdByCookie(baseUrl, accessToken, resolvedUserId);
     if (cookieUserId) {
       const cookieRetry = await this.fetchUserSelfByCookie(baseUrl, accessToken, cookieUserId, rememberFailure);
       if (cookieRetry?.success && cookieRetry?.data) {
-        return this.parseBalance(cookieRetry.data);
+        return parseBalance(cookieRetry.data);
       }
     }
 
@@ -1391,7 +906,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
     if (userId) {
       try {
         const res = await this.fetchJson<any>(`${baseUrl}/api/user/models`, {
-          headers: this.authHeaders(token, userId),
+          headers: authHeaders(token, userId),
         });
         if (Array.isArray(res?.data)) {
           return res.data.filter(Boolean);
@@ -1426,10 +941,10 @@ export class NewApiAdapter extends BasePlatformAdapter {
   ): Promise<string | null> {
     const resolvedUserId = platformUserId || await this.probeUserIdByCookie(baseUrl, sessionCredential);
     const failures: PlatformVariantFailure[] = [];
-    for (const [cookieIndex, cookie] of this.buildCookieCandidates(sessionCredential).entries()) {
+    for (const [cookieIndex, cookie] of buildCookieCandidates(sessionCredential).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
-        Object.assign(headers, this.userIdHeaders(resolvedUserId));
+        Object.assign(headers, userIdHeaders(resolvedUserId));
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/token`, { headers });
         const token = typeof res?.data === 'string' ? res.data.trim() : '';
         if (res?.success && token) return token;
@@ -1466,13 +981,13 @@ export class NewApiAdapter extends BasePlatformAdapter {
     platformUserId?: number,
     options?: CreateApiTokenOptions,
   ): Promise<boolean> {
-    const payload = JSON.stringify(this.buildDefaultTokenPayload(options));
+    const payload = JSON.stringify(buildDefaultTokenPayload(options));
     const resolvedUserId = platformUserId || await this.discoverUserId(baseUrl, accessToken);
 
     try {
       const res = await this.fetchJson<any>(`${baseUrl}/api/token/`, {
         method: 'POST',
-        headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+        headers: authHeaders(accessToken, resolvedUserId || undefined),
         body: payload,
       });
       if (res?.success) return true;
@@ -1480,10 +995,10 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     const cookieUserId = resolvedUserId || await this.probeUserIdByCookie(baseUrl, accessToken);
     const failures: PlatformVariantFailure[] = [];
-    for (const [cookieIndex, cookie] of this.buildCookieCandidates(accessToken).entries()) {
+    for (const [cookieIndex, cookie] of buildCookieCandidates(accessToken).entries()) {
       try {
         const headers: Record<string, string> = { Cookie: cookie };
-        Object.assign(headers, this.userIdHeaders(cookieUserId));
+        Object.assign(headers, userIdHeaders(cookieUserId));
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/token/`, {
           method: 'POST',
           headers,
@@ -1509,12 +1024,12 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     try {
       const res = await this.fetchJson<any>(`${baseUrl}/api/user/self/groups`, {
-        headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+        headers: authHeaders(accessToken, resolvedUserId || undefined),
       });
       if (res?.success === false) {
-        terminalError = terminalError || this.resolveGroupFetchErrorMessage(res);
+        terminalError = terminalError || resolveGroupFetchErrorMessage(res);
       }
-      const parsed = dedupe(this.parseGroupKeys(res));
+      const parsed = dedupe(parseGroupKeys(res));
       if (parsed.length > 0) return parsed;
     } catch (error) {
       if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
@@ -1522,28 +1037,28 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     try {
       const res = await this.fetchJson<any>(`${baseUrl}/api/user_group_map`, {
-        headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+        headers: authHeaders(accessToken, resolvedUserId || undefined),
       });
       if (res?.success === false) {
-        terminalError = terminalError || this.resolveGroupFetchErrorMessage(res);
+        terminalError = terminalError || resolveGroupFetchErrorMessage(res);
       }
-      const parsed = dedupe(this.parseGroupKeys(res));
+      const parsed = dedupe(parseGroupKeys(res));
       if (parsed.length > 0) return parsed;
     } catch (error) {
       if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
     }
 
     const cookieUserId = resolvedUserId || await this.probeUserIdByCookie(baseUrl, accessToken);
-    for (const cookie of this.buildCookieCandidates(accessToken)) {
+    for (const cookie of buildCookieCandidates(accessToken)) {
       const headers: Record<string, string> = { Cookie: cookie };
-      Object.assign(headers, this.userIdHeaders(cookieUserId));
+      Object.assign(headers, userIdHeaders(cookieUserId));
 
       try {
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user/self/groups`, { headers });
         if (res?.success === false) {
-          terminalError = terminalError || this.resolveGroupFetchErrorMessage(res);
+          terminalError = terminalError || resolveGroupFetchErrorMessage(res);
         }
-        const parsed = dedupe(this.parseGroupKeys(res));
+        const parsed = dedupe(parseGroupKeys(res));
         if (parsed.length > 0) return parsed;
       } catch (error) {
       if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
@@ -1552,9 +1067,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
       try {
         const res = await this.fetchJsonRaw<any>(`${baseUrl}/api/user_group_map`, { headers });
         if (res?.success === false) {
-          terminalError = terminalError || this.resolveGroupFetchErrorMessage(res);
+          terminalError = terminalError || resolveGroupFetchErrorMessage(res);
         }
-        const parsed = dedupe(this.parseGroupKeys(res));
+        const parsed = dedupe(parseGroupKeys(res));
         if (parsed.length > 0) return parsed;
       } catch (error) {
       if (error instanceof NewApiShieldError && error.failure.terminal) throw error;
@@ -1576,7 +1091,7 @@ export class NewApiAdapter extends BasePlatformAdapter {
     tokenKey: string,
     platformUserId?: number,
   ): Promise<DeleteApiTokenResult> {
-    const targetKey = this.normalizeTokenKeyForCompare(tokenKey);
+    const targetKey = normalizeTokenKeyForCompare(tokenKey);
     if (!targetKey) return 'unconfirmed';
     const resolvedUserId = platformUserId || await this.discoverUserId(baseUrl, accessToken);
 
@@ -1628,13 +1143,13 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     try {
       const list = await this.fetchJson<any>(`${baseUrl}/api/token/?p=0&size=100`, {
-        headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+        headers: authHeaders(accessToken, resolvedUserId || undefined),
       });
       observeTokenList(list);
       if (tokenId) {
         const res = await this.fetchJson<any>(`${baseUrl}/api/token/${tokenId}`, {
           method: 'DELETE',
-          headers: this.authHeaders(accessToken, resolvedUserId || undefined),
+          headers: authHeaders(accessToken, resolvedUserId || undefined),
         });
         return res?.success ? 'deleted' : 'unconfirmed';
       }
@@ -1644,9 +1159,9 @@ export class NewApiAdapter extends BasePlatformAdapter {
 
     const cookieUserId = resolvedUserId || await this.probeUserIdByCookie(baseUrl, accessToken);
     const failures: PlatformVariantFailure[] = [];
-    for (const [cookieIndex, cookie] of this.buildCookieCandidates(accessToken).entries()) {
+    for (const [cookieIndex, cookie] of buildCookieCandidates(accessToken).entries()) {
       const headers: Record<string, string> = { Cookie: cookie };
-      Object.assign(headers, this.userIdHeaders(cookieUserId));
+      Object.assign(headers, userIdHeaders(cookieUserId));
 
       try {
         if (!tokenId) {
@@ -1682,11 +1197,11 @@ export class NewApiAdapter extends BasePlatformAdapter {
     const failures: PlatformVariantFailure[] = [];
     try {
       const res = await this.fetchJson<any>(`${baseUrl}/api/token/?p=0&size=100`, {
-        headers: this.authHeaders(accessToken, userId || undefined),
+        headers: authHeaders(accessToken, userId || undefined),
       });
-      const normalized = this.normalizeTokenItems(this.parseTokenItems(res));
+      const normalized = normalizeTokenItems(parseTokenItems(res));
       if (normalized.length > 0) return normalized;
-      if (this.isTokenListResponse(res)) return [];
+      if (isTokenListResponse(res)) return [];
     } catch (error) {
       failures.push({ variant: 'bearer/user-id', reason: describeVariantError(error) });
     }
