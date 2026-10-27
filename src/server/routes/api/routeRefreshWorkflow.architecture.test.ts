@@ -33,18 +33,21 @@ describe('route refresh workflow architecture boundaries', () => {
     // reach modelService directly.
     const settingsMaintenanceSource = readSource('./settingsMaintenance.ts');
     const statsSource = readSource('./stats.ts');
+    // Same story for statsRoutes: the marketplace / model-check endpoints (and
+    // their rebuild calls) moved into modelsRoutes.ts.
+    const modelsRoutesSource = readSource('./modelsRoutes.ts');
 
-    for (const source of [tokensSource, settingsMaintenanceSource, statsSource]) {
+    for (const source of [tokensSource, settingsMaintenanceSource, modelsRoutesSource]) {
       expectImportsRouteRefreshWorkflow(source);
     }
 
-    for (const source of [tokensSource, settingsSource, settingsMaintenanceSource, statsSource]) {
+    for (const source of [tokensSource, settingsSource, settingsMaintenanceSource, statsSource, modelsRoutesSource]) {
       expectNoDirectModelServiceRouteRefresh(source);
     }
 
     expectCallsRebuildRoutesOnly(tokensSource);
     expectCallsRebuildRoutesOnly(settingsMaintenanceSource);
-    expectCallsRebuildRoutesOnly(statsSource);
+    expectCallsRebuildRoutesOnly(modelsRoutesSource);
   });
 
   it('keeps exact-route pattern sync detection behind the pattern sync service', () => {
