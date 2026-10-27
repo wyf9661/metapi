@@ -231,3 +231,26 @@ export function resolveUserIdFailureReason(
 
   return null;
 }
+
+/**
+ * Race a promise against a wall-clock deadline. Shared by the accounts route
+ * modules (token verification, model fetch and health refresh) so there is a
+ * single implementation of the timeout contract.
+ */
+export async function withTimeout<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
