@@ -1,5 +1,5 @@
 ﻿import { FastifyInstance } from 'fastify';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { insertAndGetById } from '../../db/insertHelpers.js';
 import {
@@ -16,6 +16,7 @@ import {
   setDefaultToken,
 } from '../../services/accountTokenService.js';
 import { getAdapter } from '../../services/platforms/index.js';
+import { classifyTokenValue } from '../../shared/tokenMask.js';
 import { getCredentialModeFromExtraConfig, getProxyUrlFromExtraConfig, resolvePlatformUserId } from '../../services/accountExtraConfig.js';
 import { formatUtcSqlDateTime } from '../../services/localTimeService.js';
 import { startBackgroundTask } from '../../services/backgroundTaskService.js';
@@ -663,6 +664,8 @@ export async function accountTokensRoutes(app: FastifyInstance) {
   type DeleteAccountTokenResult = {
     success: boolean;
     message?: string;
+    /** Local row removed, but the upstream key was kept because another row still references it. */
+    upstreamSkipped?: boolean;
   };
 
   const deleteAccountTokenById = async (tokenId: number): Promise<DeleteAccountTokenResult> => {
@@ -684,7 +687,22 @@ export async function accountTokensRoutes(app: FastifyInstance) {
     const account = row.accounts;
     const site = row.sites;
     const adapter = getAdapter(site.platform);
-    const shouldDeleteUpstream = !isMaskedPendingAccountToken(existing)
+    // A sibling local row may still point at the same upstream key (e.g. a
+    // masked placeholder left over from an upstream group change). Revoking
+    // the key would silently break that row, so the upstream delete only runs
+    // when this row is the last local reference to it.
+    const siblingRows = await db.select()
+      .from(schema.accountTokens)
+      .where(and(
+        eq(schema.accountTokens.accountId, existing.accountId),
+        ne(schema.accountTokens.id, existing.id),
+      ))
+      .all();
+    const hasSiblingReference = siblingRows.some((sibling: any) => (
+      classifyTokenValue(sibling.token, existing.token) === 'match'
+    ));
+    const shouldDeleteUpstream = !hasSiblingReference
+      && !isMaskedPendingAccountToken(existing)
       && !isSiteDisabled(site.status)
       && !!account.accessToken?.trim()
       && !!adapter;
@@ -722,7 +740,7 @@ export async function accountTokensRoutes(app: FastifyInstance) {
       repairDefaultToken(existing.accountId);
     }
 
-    return { success: true };
+    return { success: true, ...(hasSiblingReference ? { upstreamSkipped: true } : {}) };
   };
 
   app.post<{ Body: unknown }>('/api/account-tokens/batch', async (request, reply) => {
@@ -1038,7 +1056,7 @@ export async function accountTokensRoutes(app: FastifyInstance) {
         : (result.message === 'API Key 连接不支持管理账号令牌' ? 400 : 502);
       return reply.code(statusCode).send({ success: false, message: result.message });
     }
-    return { success: true };
+    return { success: true, ...(result.upstreamSkipped ? { upstreamSkipped: true } : {}) };
   });
 
   app.post<{ Params: { accountId: string } }>('/api/account-tokens/sync/:accountId', async (request, reply) => {

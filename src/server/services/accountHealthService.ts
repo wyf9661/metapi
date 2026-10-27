@@ -5,6 +5,8 @@ import {
   hasOauthProvider,
   mergeAccountExtraConfig,
 } from './accountExtraConfig.js';
+import { deleteAdminSnapshot } from './adminSnapshotStore.js';
+import { clearSnapshotCache } from './snapshotCacheService.js';
 
 export type RuntimeHealthState = 'healthy' | 'unhealthy' | 'degraded' | 'unknown' | 'disabled';
 
@@ -213,9 +215,34 @@ export async function setAccountRuntimeHealth(
       .where(eq(schema.accounts.id, accountId))
       .run();
 
+    await invalidateRuntimeHealthSnapshots();
+
     return health;
-  } catch {
+  } catch (error) {
+    // A silently swallowed write failure here looks exactly like "the status
+    // never recovers" from the UI — leave a trace instead of guessing.
+    console.warn('[accountHealth] failed to persist runtime health', accountId, error);
     return null;
+  }
+}
+
+/**
+ * Runtime health is embedded in the accounts overview snapshot, and the
+ * dashboard / site summaries are built from the same account rows, so every
+ * health write must drop those snapshots — in-memory and persisted — or a
+ * fresh recovery stays hidden behind a cached `degraded` until the TTL
+ * expires.  Mirrors accountsOverviewService.invalidateAccountsSnapshot().
+ */
+async function invalidateRuntimeHealthSnapshots(): Promise<void> {
+  clearSnapshotCache('accounts-snapshot');
+  clearSnapshotCache('dashboard-summary');
+  clearSnapshotCache('dashboard-insights');
+  clearSnapshotCache('site-stats');
+  try {
+    await deleteAdminSnapshot({ namespace: 'accounts-snapshot', key: 'all' });
+  } catch (error) {
+    // Best-effort: the in-memory clear above already forces a rebuild.
+    console.warn('[accountHealth] failed to drop persisted accounts snapshot', error);
   }
 }
 

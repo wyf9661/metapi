@@ -1233,4 +1233,95 @@ it('does not reuse a different ready token when another logical token shares the
     expect(remaining.some((r) => r.source === 'manual')).toBe(true);
     expect(remaining.some((r) => r.source === 'sync')).toBe(true);
   });
+
+  it('rebinds a unique classifiable masked match even when the display name differs', async () => {
+    const { account } = await seedAccount({ siteStatus: 'active' });
+    const fullToken = 'sk-9zUtoyPabcdefghijklmnopqrstuvwxyzHgWQ8I';
+    const upstreamMask = 'sk-9zUtoyP**********HgWQ8I';
+
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'glm-key',
+      token: fullToken,
+      source: 'sync',
+      enabled: true,
+      isDefault: true,
+      tokenGroup: 'glm',
+      valueStatus: 'ready' as any,
+    }).run();
+
+    await syncTokensFromUpstream(account.id, [
+      { name: 'GLM', key: upstreamMask, enabled: true, tokenGroup: 'claude' },
+    ]);
+
+    const tokenRows = await db.select()
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .all();
+    // The upstream rename (or a diverging local name) must not fork a second
+    // masked placeholder next to the plaintext row: the mask pins the key down
+    // (enough visible characters), so the row is updated in place.
+    expect(tokenRows).toHaveLength(1);
+    expect(tokenRows[0]).toMatchObject({
+      name: 'GLM',
+      token: fullToken,
+      tokenGroup: 'claude',
+      enabled: true,
+      source: 'sync',
+    });
+    expect((tokenRows[0] as any).valueStatus).toBe('ready');
+  });
+
+  it('keeps the upstream key when deleting a row a sibling row still references', async () => {
+    const { account } = await seedAccount({ siteStatus: 'active' });
+    const fullToken = 'sk-9zUtoyPabcdefghijklmnopqrstuvwxyzHgWQ8I';
+    const siblingMask = 'sk-9zUtoyP**********HgWQ8I';
+
+    const primary = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'GLM',
+      token: fullToken,
+      source: 'sync',
+      enabled: true,
+      isDefault: true,
+      tokenGroup: 'glm',
+      valueStatus: 'ready' as any,
+    }).returning().get();
+    await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'GLM',
+      token: siblingMask,
+      source: 'sync',
+      enabled: false,
+      isDefault: false,
+      tokenGroup: 'claude',
+      valueStatus: 'masked_pending' as any,
+    }).run();
+    deleteApiTokenMock.mockResolvedValue('deleted');
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/account-tokens/${primary.id}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      upstreamSkipped: true,
+    });
+    // Deleting one of two local rows for the same upstream key must not revoke
+    // the key on the site — the sibling row would be orphaned otherwise.
+    expect(deleteApiTokenMock).not.toHaveBeenCalled();
+
+    const removed = await db.select()
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.id, primary.id))
+      .get();
+    expect(removed).toBeUndefined();
+    const remaining = await db.select()
+      .from(schema.accountTokens)
+      .where(eq(schema.accountTokens.accountId, account.id))
+      .all();
+    expect(remaining).toHaveLength(1);
+  });
 });

@@ -2,7 +2,7 @@
 import { db, schema } from '../db/index.js';
 import { getInsertedRowId } from '../db/insertHelpers.js';
 import { getCredentialModeFromExtraConfig } from './accountExtraConfig.js';
-import { locateTokenInKeys } from '../shared/tokenMask.js';
+import { isClassifiableTokenKey, locateTokenInKeys } from '../shared/tokenMask.js';
 
 type UpstreamApiToken = {
   name?: string | null;
@@ -418,11 +418,27 @@ export async function syncTokensFromUpstream(accountId: number, upstreamTokens: 
     const sameGroupReady = matchingReadyByMaskedValue.filter((row: AccountTokenRow) => (
       sameTokenGroup(row.tokenGroup, row.name, tokenGroup, tokenName)
     ));
+    // A classifiable mask (enough visible characters — see tokenMask.ts) that
+    // points at exactly one ready row is specific enough to trust even when
+    // the display name differs: an upstream rename / group switch (or a
+    // diverging local name) must not fork a duplicate masked placeholder next
+    // to the plaintext row.  Short or opaque masks keep the conservative name
+    // rules above — two different keys can share those.
+    const uniqueMaskValueMatch = nextValueStatus === ACCOUNT_TOKEN_VALUE_STATUS_MASKED_PENDING
+      ? existing.filter((row: AccountTokenRow) => (
+        resolveAccountTokenValueStatus(row) === ACCOUNT_TOKEN_VALUE_STATUS_READY
+        && matchesMaskedTokenValue(row.token, tokenValue)
+      ))
+      : [];
     const readyMaskedMatch = sameNameReady.length === 1
       ? sameNameReady[0]
       : (sameGroupReady.length === 1
         ? sameGroupReady[0]
-        : (matchingReadyByMaskedValue.length === 1 ? matchingReadyByMaskedValue[0] : null));
+        : (matchingReadyByMaskedValue.length === 1
+          ? matchingReadyByMaskedValue[0]
+          : (isClassifiableTokenKey(tokenValue) && uniqueMaskValueMatch.length === 1
+            ? uniqueMaskValueMatch[0]
+            : null)));
     if (readyMaskedMatch) {
       // Drop any pending placeholder for the same secret, even if the name differs.
       // Only delete placeholders whose own masked token matches the ready row's
