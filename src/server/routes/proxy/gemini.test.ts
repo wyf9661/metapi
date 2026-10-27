@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetUpstreamEndpointRuntimeState } from '../../services/upstreamEndpointRuntimeMemory.js';
+import { resetProxyChannelCoordinatorState } from '../../services/proxyChannelCoordinator.js';
 
 const fetchMock = vi.fn();
 const fetchModelPricingCatalogMock = vi.fn();
@@ -98,6 +99,10 @@ vi.mock('../../db/index.js', () => ({
   hasProxyLogStreamTimingColumns: async () => false,
   schema: {
     proxyLogs: {},
+    settings: {
+      key: Symbol('settings.key'),
+      value: Symbol('settings.value'),
+    },
     modelAvailability: {
       modelName: Symbol('modelAvailability.modelName'),
       accountId: Symbol('modelAvailability.accountId'),
@@ -182,6 +187,7 @@ describe('gemini native proxy routes', () => {
   });
 
   beforeEach(() => {
+    resetProxyChannelCoordinatorState();
     fetchMock.mockReset();
     fetchModelPricingCatalogMock.mockReset();
     refreshModelsAndRebuildRoutesMock.mockReset();

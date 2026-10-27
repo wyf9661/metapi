@@ -44,7 +44,7 @@ import { fetchWithObservedFirstByte, getObservedResponseMeta, parseLocalFirstByt
 import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
 import { recordPerformanceShadowAttempt, recordPerformanceShadowSample } from '../../services/performanceShadow.js';
 import { createIdleGuardedStreamReader } from '../streamIdleTimeout.js';
-import { wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal, acquireSurfaceChannelLease, bindSurfaceStickyChannel, buildSurfaceChannelBusyMessage, buildSurfaceStickySessionKey, clearSurfaceChannelAffinity, getSurfaceStickyPreferredChannelId } from './sharedSurface.js';
+import { wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal, acquireSurfaceChannelLease, bindSurfaceStickyChannel, buildSurfaceChannelBusyMessage, buildSurfaceStickySessionKey, clearSurfaceChannelAffinity, getSurfaceStickyPreferredChannelId, selectSurfaceChannelForAttempt } from './sharedSurface.js';
 import {
   getProxyMaxChannelRetries,
 } from '../../services/proxyChannelRetry.js';
@@ -648,21 +648,20 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     let lastContentType = 'application/json';
 
     while (retryCount <= maxRetries) {
-      const stickyPreferredId = retryCount === 0 ? getSurfaceStickyPreferredChannelId(stickySessionKey) : null;
-      const selected = forcedChannelId !== null
-        ? (retryCount === 0
-          ? await tokenRouter.selectPreferredChannel(requestedModel, forcedChannelId, policy, excludeChannelIds)
-          : null)
-        : (retryCount === 0
-          ? (
-            (stickyPreferredId !== null
-              ? await tokenRouter.selectPreferredChannel(requestedModel, stickyPreferredId, policy, excludeChannelIds)
-              : null)
-            ?? await tokenRouter.selectChannel(requestedModel, policy)
-          )
-          : await tokenRouter.selectNextChannel(requestedModel, excludeChannelIds, policy));
-      const stickyHitChannelId = selected && stickyPreferredId !== null && selected.channel.id === stickyPreferredId
-        ? stickyPreferredId
+      // One selection path for every surface: sticky/last-success affinity,
+      // probe-rate rebalancing, concurrency spread, forced tester channel and
+      // the first-attempt route refresh all live in the shared selector.
+      const selected = await selectSurfaceChannelForAttempt({
+        requestedModel,
+        downstreamPolicy: policy,
+        excludeChannelIds,
+        retryCount,
+        stickySessionKey,
+        forcedChannelId,
+        downstreamApiKeyId,
+      });
+      const stickyHitChannelId = selected && stickySessionKey && getSurfaceStickyPreferredChannelId(stickySessionKey) === selected.channel.id
+        ? selected.channel.id
         : null;
       if (!selected) {
         if (forcedChannelId !== null) {
