@@ -12,10 +12,17 @@ import {
   registerCompressedRequestBodySupport,
 } from './requestBodyCompression.js';
 import {
+  REQUEST_BODY_UPLOAD_ENCODING_HEADER,
   REQUEST_BODY_UPLOAD_ID_HEADER,
+  REQUEST_BODY_UPLOAD_PART_COUNT_HEADER,
+  REQUEST_BODY_UPLOAD_PART_INDEX_HEADER,
+  REQUEST_BODY_UPLOAD_ROUTE_PREFIX,
+  REQUEST_BODY_UPLOAD_SHA256_HEADER,
   __resetChunkedBodyUploadForTests,
+  registerChunkedBodyUploadRoutes,
   storeUploadedBodyPart,
 } from './requestBodyChunkedUpload.js';
+import { config } from '../config.js';
 
 /**
  * Receiver side of the cascade-hop body compression: a cascaded instance sends
@@ -322,5 +329,79 @@ describe('compressed request body support (receiver)', () => {
     // A chain would need reverse-order decoding; we must not do half of it.
     expect(parseRequestBodyEncoding('gzip, zstd')).toBeNull();
     expect(parseRequestBodyEncoding(undefined)).toBeNull();
+  });
+
+  /**
+   * Regression: production mounts both plugins on one app (index.ts registers
+   * compression support, then the upload routes). The compression hook keys on
+   * the upload-id header — the placeholder request's signal — and used to
+   * intercept striped-upload parts carrying that header (any sender built
+   * before the header was dropped) and reject every one of them with 400
+   * "Uploaded request body is missing or incomplete". Parts must go straight
+   * to their route in both header shapes; only the placeholder may assemble.
+   */
+  it('keeps striped-upload parts out of the compression hook in both header shapes', async () => {
+    (config as { authToken: string }).authToken = 'striped-route-regression-token';
+    const app = Fastify();
+    registerCompressedRequestBodySupport(app);
+    registerChunkedBodyUploadRoutes(app);
+    app.post('/v1/chat/completions', async (request) => ({ ok: true, body: request.body ?? null }));
+    apps.push(app);
+    await app.ready();
+
+    const original = { model: 'm', messages: [{ role: 'user', content: `分片 ${'x'.repeat(4000)}` }] };
+    const compressed = gzipSync(Buffer.from(JSON.stringify(original)));
+    const sha = createHash('sha256').update(compressed).digest('hex');
+    const uploadId = randomBytes(16).toString('hex');
+    const half = Math.ceil(compressed.length / 2);
+    const parts = [
+      { index: 0, bytes: compressed.subarray(0, half), withIdHeader: true },
+      { index: 1, bytes: compressed.subarray(half), withIdHeader: false },
+    ];
+    for (const part of parts) {
+      const headers: Record<string, string> = {
+        authorization: 'Bearer striped-route-regression-token',
+        'content-type': 'application/octet-stream',
+        [REQUEST_BODY_UPLOAD_PART_INDEX_HEADER]: String(part.index),
+        [REQUEST_BODY_UPLOAD_PART_COUNT_HEADER]: '2',
+        [REQUEST_BODY_UPLOAD_SHA256_HEADER]: sha,
+        [REQUEST_BODY_UPLOAD_ENCODING_HEADER]: 'gzip',
+      };
+      if (part.withIdHeader) headers[REQUEST_BODY_UPLOAD_ID_HEADER] = uploadId;
+      const response = await app.inject({
+        method: 'POST',
+        url: `${REQUEST_BODY_UPLOAD_ROUTE_PREFIX}/${uploadId}/${part.index}`,
+        headers,
+        payload: part.bytes,
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    // The placeholder still reassembles: the route sees the decoded JSON body.
+    const assembled = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: {
+        authorization: 'Bearer striped-route-regression-token',
+        'content-type': 'application/json',
+        [REQUEST_BODY_UPLOAD_ID_HEADER]: uploadId,
+      },
+      payload: '',
+    });
+    expect(assembled.statusCode).toBe(200);
+    expect(assembled.json()).toEqual({ ok: true, body: original });
+
+    // Unknown id still fails loudly instead of reaching the route body-less.
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: {
+        'content-type': 'application/json',
+        [REQUEST_BODY_UPLOAD_ID_HEADER]: 'deadbeef'.repeat(4),
+      },
+      payload: '',
+    });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json().message).toBe('Uploaded request body is missing or incomplete');
   });
 });

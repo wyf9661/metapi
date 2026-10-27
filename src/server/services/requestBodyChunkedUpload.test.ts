@@ -397,7 +397,10 @@ describe('striped request body upload', () => {
       );
       for (const [index, call] of ordered.entries()) {
         expect(call.url).toBe(`${ORIGIN}${REQUEST_BODY_UPLOAD_ROUTE_PREFIX}/${uploadId}/${index}`);
-        expect(call.headers[REQUEST_BODY_UPLOAD_ID_HEADER]).toBe(uploadId);
+        // The id travels in the URL only: stamping it on a part made the
+        // receiver's compression hook treat every part as the placeholder and
+        // reject it with 400 "Uploaded request body is missing or incomplete".
+        expect(call.headers[REQUEST_BODY_UPLOAD_ID_HEADER]).toBeUndefined();
         expect(call.headers[REQUEST_BODY_UPLOAD_PART_INDEX_HEADER]).toBe(String(index));
         expect(call.headers[REQUEST_BODY_UPLOAD_PART_COUNT_HEADER]).toBe('4');
         expect(call.headers[REQUEST_BODY_UPLOAD_SHA256_HEADER]).toBe(sha256(compressedBody));

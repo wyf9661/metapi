@@ -38,13 +38,15 @@ export const REQUEST_BODY_UPLOAD_ENCODING_HEADER = 'x-metapi-body-upload-encodin
 
 /**
  * Minimum compressed body size that is worth splitting. Measured on the real
- * cascade link (Cloudflare tunnel, ~1 MiB/s-class uplink): at ~195 KB a
- * four-part upload lost to the single request (2.3-3.0 s vs ~1.8 s), while every
- * size measured from ~459 KB up won (1.25x at 459 KB, 1.45x at 703 KB, 1.85x at
- * 1.07 MB). 384 KB keeps splitting on the winning side of that crossover and off
- * the losing side, including the ~250-350 KB range that has not been measured.
+ * cascade link (US edge -> Cloudflare quick tunnel -> peer) on 2026-10-27 with
+ * paired single-stream/parallel runs: at 192-256 KB two streams tie with the
+ * single request (median delta -15 ms), at 384 KB splitting LOSES ~210 ms, at
+ * 512 KB it wins in 6/6 paired runs (median -411 ms), and at 768 KB two parts
+ * are a wash while three parts (~256 KB each) are better. 512 KB therefore puts
+ * the threshold on the winning side of the crossover and leaves the losing
+ * 384-511 KB band on a single stream.
  */
-export const REQUEST_BODY_UPLOAD_MIN_BYTES = 384 * 1024;
+export const REQUEST_BODY_UPLOAD_MIN_BYTES = 512 * 1024;
 
 /** Four parallel streams already reach the tunnel's aggregate rate. */
 export const REQUEST_BODY_UPLOAD_MAX_PARTS = 4;
@@ -168,6 +170,12 @@ function sliceBody(body: Buffer, partCount: number): Buffer[] {
  * compressed body, so leaving `content-encoding: gzip` on it would make the
  * receiver try to decode the part itself, and the whole body's length is wrong
  * for a part. The encoding travels in its own header instead.
+ *
+ * The upload id travels in the URL only. Its header is the placeholder
+ * request's signal — the receiver's compression hook keys on exactly that
+ * header to reassemble a body — so stamping it on a part makes the receiver
+ * try to assemble a body whose parts are still arriving, and it rejects every
+ * part with 400 "Uploaded request body is missing or incomplete".
  */
 function buildPartHeaders(
   callerHeaders: Record<string, string>,
@@ -176,13 +184,17 @@ function buildPartHeaders(
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(callerHeaders)) {
     const name = key.toLowerCase();
-    if (name === 'content-length' || name === 'content-encoding' || name === 'content-type') {
+    if (
+      name === 'content-length'
+      || name === 'content-encoding'
+      || name === 'content-type'
+      || name === REQUEST_BODY_UPLOAD_ID_HEADER
+    ) {
       continue;
     }
     headers[key] = value;
   }
   headers['content-type'] = 'application/octet-stream';
-  headers[REQUEST_BODY_UPLOAD_ID_HEADER] = meta.uploadId;
   headers[REQUEST_BODY_UPLOAD_PART_COUNT_HEADER] = String(meta.partCount);
   headers[REQUEST_BODY_UPLOAD_SHA256_HEADER] = meta.sha256;
   headers[REQUEST_BODY_UPLOAD_ENCODING_HEADER] = meta.encoding;

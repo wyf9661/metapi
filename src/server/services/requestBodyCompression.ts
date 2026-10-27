@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import type { FastifyInstance } from 'fastify';
 import {
   REQUEST_BODY_UPLOAD_ID_HEADER,
+  REQUEST_BODY_UPLOAD_ROUTE_PREFIX,
   assembleUploadedBody,
 } from './requestBodyChunkedUpload.js';
 
@@ -373,6 +374,12 @@ export function registerCompressedRequestBodySupport(app: FastifyInstance): void
   });
 
   app.addHook('preParsing', async (request, _reply, payload) => {
+    // Parts of a striped upload are transport fragments, not placeholders: the
+    // route stores the raw bytes as they arrive. Leave them untouched — a
+    // sender that stamps the upload id on its parts would otherwise have every
+    // part rejected here while the body is still being uploaded.
+    if (request.url.startsWith(REQUEST_BODY_UPLOAD_ROUTE_PREFIX)) return payload;
+
     // Striped upload: the sender moved the (already compressed) body out of the
     // request itself and uploaded it as parallel parts, leaving only the id
     // behind. Reassemble it here and decode it exactly like the single-request
