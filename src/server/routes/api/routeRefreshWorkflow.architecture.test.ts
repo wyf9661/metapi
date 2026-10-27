@@ -28,14 +28,22 @@ describe('route refresh workflow architecture boundaries', () => {
   it('keeps api controllers on the shared route refresh workflow instead of modelService', () => {
     const tokensSource = readSource('./tokens.ts');
     const settingsSource = readSource('./settings.ts');
+    // settingsRoutes is split: the maintenance module owns the rebuild call,
+    // so the workflow import lives there while settings.ts must still never
+    // reach modelService directly.
+    const settingsMaintenanceSource = readSource('./settingsMaintenance.ts');
     const statsSource = readSource('./stats.ts');
 
-    for (const source of [tokensSource, settingsSource, statsSource]) {
+    for (const source of [tokensSource, settingsMaintenanceSource, statsSource]) {
       expectImportsRouteRefreshWorkflow(source);
+    }
+
+    for (const source of [tokensSource, settingsSource, settingsMaintenanceSource, statsSource]) {
       expectNoDirectModelServiceRouteRefresh(source);
     }
 
     expectCallsRebuildRoutesOnly(tokensSource);
+    expectCallsRebuildRoutesOnly(settingsMaintenanceSource);
     expectCallsRebuildRoutesOnly(statsSource);
   });
 
