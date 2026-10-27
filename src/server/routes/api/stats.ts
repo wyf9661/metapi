@@ -32,11 +32,6 @@ import {
 } from '../../services/proxyLogStore.js';
 import { proxyLogEventBus, type ProxyLogEvent } from '../../services/proxyLogEventBus.js';
 import { calculateProxyRequestLevelMetricsFromAggregates } from '../../services/proxyRequestAggregateMetrics.js';
-import {
-  clearAllProxyDebugTraces,
-  getProxyDebugTraceDetail,
-  listProxyDebugTraces,
-} from '../../services/proxyDebugTraceStore.js';
 import { parseProxyLogMessageMeta } from '../../services/proxyLogMessage.js';
 import { requiresManagedAccountTokens } from '../../services/accountExtraConfig.js';
 import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from '../../services/accountTokenService.js';
@@ -56,7 +51,7 @@ import {
   runUsageAggregationProjectionPass,
 } from '../../services/usageAggregationService.js';
 
-
+import { registerStatsProxyDebugRoutes } from './statsProxyDebug.js';
 import {
   parseBooleanFlag,
   normalizeDashboardView,
@@ -146,7 +141,6 @@ function writeModelsMarketplaceCache(
     models,
   });
 }
-
 
 type ProxyLogStatusFilter = 'all' | 'success' | 'failed';
 type ProxyLogClientFilter = {
@@ -370,11 +364,6 @@ function buildProxyLogClientOptions(
   ];
 }
 
-
-
-
-
-
 function mapProxyLogRow(
   row: {
     proxy_logs: Record<string, unknown> & { billingDetails?: string | null };
@@ -436,8 +425,6 @@ function mapProxyLogRow(
     downstreamKeyTags: parseDownstreamKeyTags(row.downstream_api_keys?.tags),
   };
 }
-
-
 
 export async function statsRoutes(app: FastifyInstance) {
 
@@ -1210,45 +1197,6 @@ export async function statsRoutes(app: FastifyInstance) {
           0,
         ),
         requestLevel,
-      };
-    },
-  );
-
-  app.get<{ Querystring: { limit?: string } }>(
-    '/api/stats/proxy-debug/traces',
-    async (request) => {
-      const limit = normalizeProxyLogPageSize(request.query.limit);
-      const items = await listProxyDebugTraces({ limit });
-      return { items };
-    },
-  );
-
-  app.get<{ Params: { id: string } }>(
-    '/api/stats/proxy-debug/traces/:id',
-    async (request, reply) => {
-      const id = Number.parseInt(request.params.id, 10);
-      if (!Number.isFinite(id) || id <= 0) {
-        return reply
-          .code(400)
-          .send({ message: 'proxy debug trace id is invalid' });
-      }
-
-      const detail = await getProxyDebugTraceDetail(id);
-      if (!detail) {
-        return reply.code(404).send({ message: 'proxy debug trace not found' });
-      }
-
-      return detail;
-    },
-  );
-
-  app.delete(
-    '/api/stats/proxy-debug/traces',
-    async () => {
-      const result = await clearAllProxyDebugTraces();
-      return {
-        ok: true,
-        ...result,
       };
     },
   );
@@ -2424,4 +2372,6 @@ export async function statsRoutes(app: FastifyInstance) {
       return { models };
     },
   );
+
+  registerStatsProxyDebugRoutes(app);
 }
