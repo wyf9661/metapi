@@ -198,9 +198,9 @@ describe('performanceShadow survival-curve window', () => {
     expect(estimate()!).toBe(FLOOR);
   });
 
-  it('never exceeds the policy ceiling, however long the site keeps timing out', () => {
+  it('never exceeds the configured ceiling, however long the site keeps timing out', () => {
     seedSuccesses(Array.from({ length: 6 }, (_, index) => 3_000 + (index * 100)));
-    for (let i = 0; i < 20; i += 1) {
+    for (let i = 0; i < 50; i += 1) {
       recordPerformanceShadowAttempt({
         key: KEY,
         outcome: 'timeout',
@@ -211,17 +211,38 @@ describe('performanceShadow survival-curve window', () => {
 
     const window = estimate();
     expect(window).not.toBeNull();
-    expect(window!).toBeGreaterThan(FLOOR);
-    // Additive rungs must not reach the configured ceiling (900s here) in a
-    // handful of triggers, or the ceiling becomes the de-facto window.
-    expect(window!).toBeLessThanOrEqual(20_000);
+    // A long timeout run may cross the old 20s speculative cap...
+    expect(window!).toBeGreaterThan(20_000);
+    // ...but the operator's configured ceiling still bounds the ladder.
+    expect(window!).toBeLessThanOrEqual(CEILING);
   });
 
-  // Guard for the second form of the same defect: the speculative 20s cap must
-  // not clamp a width that observed successes justify, or the absorbing state
-  // simply moves up to 20s — the slow buckets (25-45s healthy first byte) would
-  // 408 forever and each 408 would "prove" the window belongs there.
-  it('keeps a width backed by observed successes above the speculative cap', () => {
+  it('stops at a narrow configured ceiling', () => {
+    seedSuccesses(Array.from({ length: 6 }, (_, index) => 3_000 + (index * 100)));
+    for (let i = 0; i < 20; i += 1) {
+      recordPerformanceShadowAttempt({
+        key: KEY,
+        outcome: 'timeout',
+        budgetMs: FLOOR,
+        nowMs: BASE_NOW - 600 + i,
+      });
+    }
+
+    const window = estimateFirstByteWindowMs({
+      key: KEY,
+      floorMs: FLOOR,
+      ceilingMs: 12_000,
+      nowMs: BASE_NOW,
+    });
+    expect(window).not.toBeNull();
+    expect(window!).toBeLessThanOrEqual(12_000);
+  });
+
+  // Guard for the second form of the same defect: the adaptive window must not
+  // clamp a width that observed successes justify, or the absorbing state simply
+  // moves up to the cap — slow buckets (25-45s healthy first byte) would 408
+  // forever and each 408 would "prove" the window belongs there.
+  it('keeps a width backed by observed successes above 20s', () => {
     seedSuccesses(Array.from({ length: 8 }, () => 27_000));
     recordPerformanceShadowAttempt({ key: KEY, outcome: 'timeout', budgetMs: 20_000, nowMs: BASE_NOW - 30 });
 

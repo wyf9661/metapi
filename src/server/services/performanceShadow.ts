@@ -76,23 +76,6 @@ export const FIRST_BYTE_WINDOW_HOLD_ATTEMPTS = 10;
 export const FIRST_BYTE_WINDOW_DECAY_FAST_ATTEMPTS = 8;
 /** A success is "fast" (decay evidence) below this share of the window. */
 export const FIRST_BYTE_WINDOW_DECAY_FAST_RATIO = 0.6;
-/**
- * Ceiling for the adaptive window, independent of the configured one.
- *
- * `proxy_first_byte_timeout_sec` is the operator's cap on how long a silent
- * upstream may hold a request, and operators set it generously (120s here).
- * Handing that number to the estimator makes every dead attempt hold the
- * failover chain for two minutes. The measured healthy first-byte band of this
- * relay fleet fits well inside 20s (5 days of production logs: per-site optimum
- * 5-20s for 11 of 12 sites, one site needed 45s). Override per deployment with
- * PROXY_FIRST_BYTE_WINDOW_MAX_MS.
- *
- * This caps the *speculative* widening done by the sequencing policy. A width
- * justified by observed successes is never clamped to it — see the return of
- * estimateFirstByteWindowMs.
- */
-export const FIRST_BYTE_WINDOW_POLICY_CEILING_MS = 20_000;
-
 function sweepAttempts(nowMs = Date.now()): void {
   const cutoff = nowMs - ATTEMPT_TTL_MS;
   for (const [key, list] of attemptsByKey.entries()) {
@@ -138,19 +121,6 @@ export function listPerformanceShadowAttempts(
   sweepAttempts(nowMs);
   const storeKey = buildPerformanceShadowKey(key);
   return (attemptsByKey.get(storeKey) ?? []).map((attempt) => ({ ...attempt }));
-}
-
-/**
- * Policy ceiling for the adaptive window: the smaller of the operator's
- * configured ceiling and the measured healthy band of the relay fleet.
- */
-export function resolveFirstByteWindowPolicyCeilingMs(configuredCeilingMs: number): number {
-  const override = Number(process.env.PROXY_FIRST_BYTE_WINDOW_MAX_MS);
-  const policyCeilingMs = Number.isFinite(override) && override > 0
-    ? Math.trunc(override)
-    : FIRST_BYTE_WINDOW_POLICY_CEILING_MS;
-  if (!Number.isFinite(configuredCeilingMs) || configuredCeilingMs <= 0) return policyCeilingMs;
-  return Math.min(Math.trunc(configuredCeilingMs), policyCeilingMs);
 }
 
 /**
@@ -315,7 +285,6 @@ export function estimateFirstByteWindowMs(input: {
   const ceilingMs = Math.trunc(input.ceilingMs);
   if (!Number.isFinite(ceilingMs) || ceilingMs <= 0) return null;
   const floorMs = Math.max(0, Math.min(Math.trunc(input.floorMs), ceilingMs));
-  const policyCeilingMs = resolveFirstByteWindowPolicyCeilingMs(ceilingMs);
   const minSamples = Math.max(2, Math.trunc(input.minSamples ?? FIRST_BYTE_WINDOW_MIN_SAMPLES));
   const attempts = listPerformanceShadowAttempts(input.key, input.nowMs);
   if (attempts.length < minSamples) return null;
@@ -416,19 +385,18 @@ export function estimateFirstByteWindowMs(input: {
   // absorbing — from the same samples it recomputes the same floor — so the
   // sequence itself decides: escalate on the sliding timeout ratio, hold the
   // raised window, decay only after a sustained fast run. It can only raise the
-  // optimiser's answer, never lower it, and its speculative widening stops at
-  // the policy ceiling.
+  // optimiser's answer, never lower it, and its widening is bounded by the same
+  // configured first-byte timeout that bounds every single attempt.
   const policyWindowMs = replayFirstByteWindowPolicy({
     attempts: ttftAttempts,
     floorMs: adaptiveFloorMs,
-    ceilingMs: policyCeilingMs,
+    ceilingMs,
   });
-  // The policy ceiling bounds *speculative* widening only. A width proven by
-  // observed successes is not speculation: clamping that would re-create the
-  // absorbing state this change removed, one ceiling higher — a bucket whose
-  // healthy first byte is 25-45s would 408 forever, and every 408 would then
-  // "prove" the window should stay there. (100 of 1991 successful stream answers
-  // in the week before this change arrived above 20s, so it is live config.)
+  // Both the cost optimum and the sequencing policy stay inside the operator's
+  // configured ceiling. There is no separate speculative cap: a narrower one
+  // would silently override the operator and re-create the absorbing state one
+  // ceiling higher — a bucket whose healthy first byte is 25-45s would 408
+  // forever, and every 408 would then "prove" the window should stay there.
   return Math.min(ceilingMs, Math.max(adaptiveFloorMs, Math.max(optimumMs, policyWindowMs)));
 }
 
