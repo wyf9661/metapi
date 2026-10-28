@@ -222,7 +222,8 @@ export const FIRST_BYTE_WINDOW_FLOOR_LOOKBACK = 20;
  * censored rows sliding out of the lookback, which on a low-traffic bucket
  * means hours of every answer waiting for a tail that is gone. A sustained run
  * of answers well below the lifted floor is the missing evidence in the other
- * direction, so it retires the lift outright.
+ * direction, so it releases the lift — to the site's own tail (P90 x headroom
+ * of the successes since the newest censored sample), not to the static floor.
  */
 export const FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS = 6;
 

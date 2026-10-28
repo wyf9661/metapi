@@ -61,7 +61,7 @@ describe('adaptive first-byte floor: lift, and release after recovery', () => {
       ...run(6, (i) => success(12_000 + (i * 200), B + 5 + i)),
     ];
     // successes sorted: 2000 2000 2000 12000 12200 12400 12600 12800 13000
-    // P90 (interpolated on n-1) = 12800, x1.35 = 17280.
+    // P90 = rank floor((n-1)*0.9) = 12800, x1.35 = 17280.
     expect(floorOf(attempts)).toBe(17_280);
   });
 
