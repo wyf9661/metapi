@@ -19,21 +19,48 @@ function secret(): string {
   return (config.accountCredentialSecret || '').trim() || config.authToken || 'change-me-admin-token';
 }
 
+// Derivation is deterministic and the secret is process-wide, so cache the
+// subkeys. This sits on the request path (every downstream key check and every
+// credential row read); HKDF per call is avoidable work.
+let cachedSecret: string | null = null;
+const purposeKeyCache = new Map<CredentialPurpose, Buffer>();
+let legacyKeyCache: Buffer | null = null;
+
+function refreshKeyCache(): void {
+  const current = secret();
+  if (current !== cachedSecret) {
+    resetKeyCache();
+    cachedSecret = current;
+  }
+}
+
+function resetKeyCache(): void {
+  purposeKeyCache.clear();
+  legacyKeyCache = null;
+}
+
 /** Legacy v1 derivation: one SHA-256 key for everything (still needed to read old rows). */
 function legacyKey(): Buffer {
-  return createHash('sha256').update(secret()).digest();
+  refreshKeyCache();
+  if (!legacyKeyCache) legacyKeyCache = createHash('sha256').update(cachedSecret as string).digest();
+  return legacyKeyCache;
 }
 
 /** v2 derivation: one subkey per purpose, so one column's key cannot unwrap another. */
 function purposeKey(purpose: CredentialPurpose): Buffer {
+  refreshKeyCache();
+  const cached = purposeKeyCache.get(purpose);
+  if (cached) return cached;
   const derived = hkdfSync(
     'sha256',
-    Buffer.from(secret(), 'utf8'),
+    Buffer.from(cachedSecret as string, 'utf8'),
     Buffer.from(HKDF_SALT, 'utf8'),
     Buffer.from(purpose, 'utf8'),
     32,
   );
-  return Buffer.from(derived);
+  const key = Buffer.from(derived);
+  purposeKeyCache.set(purpose, key);
+  return key;
 }
 
 function sealWith(key: Buffer, plain: string, iv: Buffer, version: string): string {
