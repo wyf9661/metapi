@@ -39,6 +39,7 @@ import { startScheduler, stopScheduler } from './services/checkinScheduler.js';
 import * as routeRefreshWorkflow from './services/routeRefreshWorkflow.js';
 import { startProxyFileRetentionService, stopProxyFileRetentionService } from './services/proxyFileRetentionService.js';
 import { encryptLegacyProxyVideoTaskTokens } from './services/proxyVideoTaskStore.js';
+import { encryptLegacyCredentials } from './services/credentialEncryptionMigration.js';
 import { setLegacyProxyLogRetentionFallbackEnabled, stopProxyLogRetentionService } from './services/proxyLogRetentionService.js';
 import { buildStartupSummaryLines } from './services/startupInfo.js';
 import { repairStoredCreatedAtValues } from './services/storedTimestampRepairService.js';
@@ -418,6 +419,11 @@ if (existsSync(webDir)) {
 const migratedVideoTaskTokens = await encryptLegacyProxyVideoTaskTokens();
 if (migratedVideoTaskTokens > 0) {
   console.info(`[proxy-video-tasks] encrypted ${migratedVideoTaskTokens} legacy task credentials`);
+}
+
+const migratedCredentials = await encryptLegacyCredentials();
+if (migratedCredentials > 0) {
+  console.info(`[credentials] encrypted ${migratedCredentials} legacy credential values`);
 }
 
 // Start scheduler

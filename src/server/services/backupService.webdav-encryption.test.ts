@@ -54,7 +54,7 @@ describe('webdav config password encryption at rest', () => {
     const stored = await readStoredRaw();
     expect(stored?.password).toBeTruthy();
     // AES-GCM envelope shape: v1:<iv>:<tag>:<data>, no plaintext fragment.
-    expect(String(stored?.password)).toMatch(/^v1:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/);
+    expect(String(stored?.password)).toMatch(/^v\d+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/);
     expect(String(stored?.password)).not.toContain('secret-pass');
 
     // The stored value decrypts back to the original password with the app key.
@@ -83,13 +83,13 @@ describe('webdav config password encryption at rest', () => {
 
     // After the load the row is rewritten encrypted; it still works.
     const migrated = await readStoredRaw();
-    expect(String(migrated?.password)).toMatch(/^v1:/);
+    expect(String(migrated?.password)).toMatch(/^v\d+:/);
     expect(String(migrated?.password)).not.toContain('legacy-plain');
 
     // Idempotent: a second load keeps a valid cipher, no double-encryption.
     await backup.getBackupWebdavConfig();
     const again = await readStoredRaw();
-    expect(String(again?.password)).toMatch(/^v1:/);
+    expect(String(again?.password)).toMatch(/^v\d+:/);
     expect(credentials.decryptAccountPassword(String(again?.password))).toBe('legacy-plain');
   });
 
@@ -247,7 +247,7 @@ describe('webdav config decrypt failure fail-closed', () => {
     // Editable: re-entering the password succeeds and restores a valid cipher.
     await backup.saveBackupWebdavConfig({ password: 're-entered-secret' });
     const stored = await readStoredRaw();
-    expect(String(stored?.password)).toMatch(/^v1:/);
+    expect(String(stored?.password)).toMatch(/^v\d+:/);
     expect(stored?.password).not.toBe('re-entered-secret');
     expect(credentials.decryptAccountPassword(String(stored?.password))).toBe('re-entered-secret');
   });

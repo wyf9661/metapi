@@ -1,5 +1,33 @@
-import { sqliteTable, text, integer, real, uniqueIndex, index, check } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex, index, check, customType } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { encryptCredential, readCredential } from '../shared/credentialCrypto.js';
+
+/**
+ * Transparent at-rest encryption for credential columns. Legacy plaintext
+ * values pass through on read (forward compatibility) and are re-encrypted by
+ * the boot migration; every new write is sealed.
+ */
+function encryptedText(purpose: import('../shared/credentialCrypto.js').CredentialPurpose, deterministic = false) {
+  return customType<{ data: string; driverData: string }>({
+    dataType() {
+      return 'text';
+    },
+    toDriver(value: string): string {
+      return value === '' ? value : encryptCredential(value, purpose, { deterministic });
+    },
+    fromDriver(value: string): string {
+      return value === '' ? value : readCredential(value, purpose);
+    },
+  });
+}
+
+const siteApiKeyText = encryptedText('site.api_key');
+const accountAccessTokenText = encryptedText('account.access_token');
+const accountApiTokenText = encryptedText('account.api_token');
+const accountTokenText = encryptedText('account_token.token');
+// Downstream keys are looked up by equality on every request; deterministic
+// ciphertext keeps that query indexable without a separate hash column.
+const downstreamKeyText = encryptedText('downstream.key', true);
 
 export const sites = sqliteTable('sites', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -16,7 +44,7 @@ export const sites = sqliteTable('sites', {
   isPinned: integer('is_pinned', { mode: 'boolean' }).default(false),
   sortOrder: integer('sort_order').default(0),
   globalWeight: real('global_weight').default(1),
-  apiKey: text('api_key'),
+  apiKey: siteApiKeyText('api_key'),
   postRefreshProbeEnabled: integer('post_refresh_probe_enabled', { mode: 'boolean' }).default(false),
   postRefreshProbeModel: text('post_refresh_probe_model').default(''),
   postRefreshProbeScope: text('post_refresh_probe_scope').default('single'),
@@ -84,8 +112,8 @@ export const accounts = sqliteTable('accounts', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   siteId: integer('site_id').notNull().references(() => sites.id, { onDelete: 'cascade' }),
   username: text('username'),
-  accessToken: text('access_token').notNull(),
-  apiToken: text('api_token'),
+  accessToken: accountAccessTokenText('access_token').notNull(),
+  apiToken: accountApiTokenText('api_token'),
   balance: real('balance').default(0),
   balanceUsed: real('balance_used').default(0),
   quota: real('quota').default(0),
@@ -110,7 +138,7 @@ export const accountTokens = sqliteTable('account_tokens', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   accountId: integer('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  token: text('token').notNull(),
+  token: accountTokenText('token').notNull(),
   tokenGroup: text('token_group'),
   valueStatus: text('value_status').notNull().default('ready'),
   source: text('source').default('manual'), // 'manual' | 'sync' | 'legacy'
@@ -524,7 +552,7 @@ export const modelDayUsage = sqliteTable('model_day_usage', {
 export const downstreamApiKeys = sqliteTable('downstream_api_keys', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
-  key: text('key').notNull(),
+  key: downstreamKeyText('key').notNull(),
   description: text('description'),
   groupName: text('group_name'),
   tags: text('tags'), // JSON array<string>

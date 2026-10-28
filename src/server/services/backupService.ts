@@ -1156,9 +1156,9 @@ function normalizeBackupWebdavConfig(raw: unknown): BackupWebdavConfig {
   };
 }
 
-/** The stored password is an AES-GCM envelope (`v1:iv:tag:data`) written by encryptAccountPassword. */
+/** The stored password is an AES-GCM envelope (`vN:iv:tag:data`) written by encryptAccountPassword. */
 function isWebdavPasswordCipher(value: string): boolean {
-  return /^v1:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/.test(value);
+  return /^v\d+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/.test(value);
 }
 
 /** In-memory marker for a cipher-shaped password that failed to decrypt (e.g. key changed). */

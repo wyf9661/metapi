@@ -65,7 +65,7 @@ describe('proxyVideoTaskStore', () => {
 
     const raw = await dbModule.db.select().from(dbModule.schema.proxyVideoTasks)
       .where(eq(dbModule.schema.proxyVideoTasks.publicId, saved.publicId)).get();
-    expect(raw?.tokenValue).toMatch(/^v1:/);
+    expect(raw?.tokenValue).toMatch(/^v\d+:/);
     expect(raw?.tokenValue).not.toContain(token);
     expect(raw?.tokenValue).not.toBe(token);
 
@@ -107,7 +107,7 @@ describe('proxyVideoTaskStore', () => {
     await expect(store.encryptLegacyProxyVideoTaskTokens()).resolves.toBe(1);
     const raw = await dbModule.db.select().from(dbModule.schema.proxyVideoTasks)
       .where(eq(dbModule.schema.proxyVideoTasks.publicId, 'vid_startup_legacy')).get();
-    expect(raw?.tokenValue).toMatch(/^v1:/);
+    expect(raw?.tokenValue).toMatch(/^v\d+:/);
     expect(raw?.tokenValue).not.toContain('legacy-task-token');
     expect(raw?.createdAt).toBe(createdAt);
     expect(raw?.updatedAt).toBe(createdAt);
