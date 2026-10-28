@@ -71,7 +71,12 @@ jobs:
             runner: windows-latest
             artifactLabel: windows-x64
           - platform: mac-arm64
-            runner: macos-15
+            # macos-15 (arm64) runners are scarce; jobs sat queued for 15 min
+            # and were cancelled on 2026-10-28 while the Intel label ran fine.
+            # electron-builder cross-builds the arm64 bundle on Intel (verified
+            # by verifyMacArchitecture.mjs below), so use the reliably available
+            # Intel image instead of depending on Apple Silicon capacity.
+            runner: macos-15-intel
             artifactLabel: mac-arm64
             packageCommand: npx electron-builder --config electron-builder.yml --publish never --mac --arm64
             expectedMacArch: arm64
@@ -354,7 +359,11 @@ jobs:
 
   publish-docker-arch:
     name: Publish Docker Image (${{ matrix.arch }})
-    needs: build-packages
+    # Docker images are built from source and do not consume desktop packages.
+    # Keep them independent of build-packages so a scarce/queued macOS runner
+    # cannot block the server image release (2026-10-28 incident: mac-arm64
+    # stayed queued and the whole tag produced no image).
+    needs: verify
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     # Fork-friendly: only push Docker images when the operator has configured
