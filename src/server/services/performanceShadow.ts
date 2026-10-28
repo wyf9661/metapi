@@ -271,6 +271,33 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
   if (censoredFloorMs <= 0) return floorMs;
 
   const liftedMs = Math.min(ceilingMs, Math.max(floorMs, censoredFloorMs));
+  // Release target. Falling back to the static floor would hand the recovered
+  // answers' upper half straight back to the censoring zone — a site that now
+  // answers in 12-13s does not want an 8s floor, it wants its own tail. P90 of
+  // the successes seen since the newest timeout, with the same 1.35 headroom the
+  // estimator uses, clamped to [static floor, ceiling]. P95 is deliberately not
+  // used: the lookback holds at most 20 attempts, where P95 is the second
+  // largest sample, so one 45s outlier would set the floor.
+  const successSinceCensor: number[] = [];
+  for (let index = lastCensoredIndex + 1; index < recent.length; index += 1) {
+    const attempt = recent[index]!;
+    if (attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null) {
+      successSinceCensor.push(attempt.firstByteLatencyMs);
+    }
+  }
+  successSinceCensor.sort((a, b) => a - b);
+  const releaseTargetMs = successSinceCensor.length > 0
+    ? Math.min(ceilingMs, Math.max(
+      floorMs,
+      Math.round(
+        successSinceCensor[Math.min(
+          successSinceCensor.length - 1,
+          Math.floor((successSinceCensor.length - 1) * 0.9),
+        )]! * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER,
+      ),
+    ))
+    : floorMs;
+
   let fastRun = 0;
   for (let index = lastCensoredIndex + 1; index < recent.length; index += 1) {
     const attempt = recent[index]!;
@@ -279,7 +306,7 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
       && attempt.firstByteLatencyMs < liftedMs * FIRST_BYTE_WINDOW_DECAY_FAST_RATIO;
     fastRun = isFast ? fastRun + 1 : 0;
   }
-  if (fastRun >= FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS) return floorMs;
+  if (fastRun >= FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS) return releaseTargetMs;
 
   return liftedMs;
 }

@@ -50,16 +50,28 @@ describe('adaptive first-byte floor: lift, and release after recovery', () => {
     expect(floorOf(attempts)).toBe(FLOOR);
   });
 
-  it('comes back down after a slow period even while the censored sample is still on record', () => {
-    // 90s timeouts, then the link recovers to ~12s answers. Waiting for those
-    // timeout rows to slide out of the lookback means hours of dead air on a
-    // low-traffic bucket; the recovered distribution has to be able to release
-    // the lift itself.
+  it('releases to the site own tail, not to the static floor', () => {
+    // 90s timeouts, then the link recovers to ~12-13s answers. Dropping the
+    // floor all the way to 8s would put the recovered answers' upper half back
+    // inside the censoring zone; the release target is the site's own P90 with
+    // headroom, clamped to the static floor and the configured ceiling.
     const attempts = [
       success(2_000, B), timeout(90_000, B + 1), success(2_000, B + 2),
       timeout(90_000, B + 3), success(2_000, B + 4),
       ...run(6, (i) => success(12_000 + (i * 200), B + 5 + i)),
     ];
+    // successes sorted: 2000 2000 2000 12000 12200 12400 12600 12800 13000
+    // P90 (interpolated on n-1) = 12800, x1.35 = 17280.
+    expect(floorOf(attempts)).toBe(17_280);
+  });
+
+  it('never releases below the static floor for a genuinely fast site', () => {
+    const attempts = [
+      ...run(4, (i) => success(2_000, B + i)),
+      timeout(8_000, B + 4),
+      ...run(6, (i) => success(2_000, B + 5 + i)),
+    ];
+    // P90 = 2s, x1.35 = 2.7s — the static floor still wins.
     expect(floorOf(attempts)).toBe(FLOOR);
   });
 
