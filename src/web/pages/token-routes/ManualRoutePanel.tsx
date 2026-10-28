@@ -39,6 +39,10 @@ type ManualRoutePanelProps = {
   previewModelSamples: string[];
   exactSourceRouteOptions: RouteSummaryRow[];
   sourceEndpointTypesByRouteId: Record<number, string[]>;
+  /** Every route row, used to tell which name/groups already exist. */
+  knownRoutes?: RouteSummaryRow[];
+  /** Jump to editing the group that already owns the typed name. */
+  onEditGroup?: (route: RouteSummaryRow) => void;
   onSave: () => void;
   onCancel: () => void;
 };
@@ -124,6 +128,8 @@ export default function ManualRoutePanel({
   previewModelSamples,
   exactSourceRouteOptions,
   sourceEndpointTypesByRouteId,
+  knownRoutes,
+  onEditGroup,
   onSave,
   onCancel,
 }: ManualRoutePanelProps) {
@@ -299,6 +305,57 @@ export default function ManualRoutePanel({
     sourceSearch,
   ]);
 
+  // Advisory duplicate-name check for the dialog. Deliberately an exact
+  // (case-insensitive) name match: the API compares canonicalized aliases and
+  // answers 409, so a missed hint here can never create a duplicate — the
+  // worst case is that the user sees the rejection as a toast instead.
+  // Only a same-name ENABLED group blocks; a same-name exact route is the
+  // normal "fold this model into a group" shape and only gets a note.
+  const groupOwnersByRouteId = useMemo(() => {
+    const map = new Map<number, RouteSummaryRow[]>();
+    for (const route of knownRoutes || []) {
+      if (normalizeRouteMode(route.routeMode) !== 'explicit_group') continue;
+      for (const sourceRouteId of route.sourceRouteIds || []) {
+        const list = map.get(sourceRouteId);
+        if (list) list.push(route);
+        else map.set(sourceRouteId, [route]);
+      }
+    }
+    return map;
+  }, [knownRoutes]);
+
+  const nameConflict = useMemo(() => {
+    const empty = { blockingGroup: null as RouteSummaryRow | null, sameNameRoutes: [] as RouteSummaryRow[] };
+    const target = form.displayName.trim().toLowerCase();
+    if (routeMode !== 'explicit_group' || !target) return empty;
+
+    let blockingGroup: RouteSummaryRow | null = null;
+    const sameNameRoutes: RouteSummaryRow[] = [];
+    for (const route of knownRoutes || []) {
+      if (editingRouteId !== null && route.id === editingRouteId) continue;
+      const exposed = ((route.displayName || '').trim() || (route.modelPattern || '').trim()).toLowerCase();
+      if (exposed !== target) continue;
+      const isGroup = normalizeRouteMode(route.routeMode) === 'explicit_group';
+      if (isGroup && route.enabled && (route.sourceRouteIds || []).length > 0 && !blockingGroup) {
+        blockingGroup = route;
+        continue;
+      }
+      sameNameRoutes.push(route);
+    }
+    return { blockingGroup, sameNameRoutes };
+  }, [editingRouteId, form.displayName, knownRoutes, routeMode]);
+
+  // The name is also a model the upstream still serves: rebuild will stop
+  // creating an exact route for it once the group owns the alias, so that
+  // upstream model's channels are only reachable if the user folds it in as a
+  // source here. Say so before creating rather than after.
+  const upstreamAlreadyServesName = useMemo(() => {
+    const target = form.displayName.trim().toLowerCase();
+    if (routeMode !== 'explicit_group' || !target) return false;
+    if (nameConflict.sameNameRoutes.length > 0) return false;
+    return previewModelSamples.some((modelName) => modelName.trim().toLowerCase() === target);
+  }, [form.displayName, nameConflict.sameNameRoutes.length, previewModelSamples, routeMode]);
+
   const selectedSourceRoutes = useMemo(() => {
     const routeById = new Map(exactSourceRouteOptions.map((route) => [route.id, route]));
     return form.sourceRouteIds
@@ -429,37 +486,54 @@ export default function ManualRoutePanel({
                 {tr('该群组使用高级模型匹配规则创建，普通模式不可编辑；修改后会按当前可用模型重新匹配自动通道。')}
               </div>
             </div>
-          ) : routeMode === 'explicit_group' ? (
-            <div
-              style={{
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '12px 14px',
-                background: 'var(--color-bg-card)',
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 6 }}>
-                {tr('模型重定向')}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                {tr('将多个现有模型合并为一个对外模型名，实现模型重定向。')}
-              </div>
-            </div>
           ) : (
             <div
+              role="tablist"
+              aria-label={tr('群组类型')}
               style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+                gap: 6,
+                padding: 4,
                 border: '1px solid var(--color-border)',
                 borderRadius: 'var(--radius-md)',
-                padding: '12px 14px',
-                background: 'var(--color-bg-card)',
+                background: 'var(--color-bg-inset)',
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 6 }}>
-                {tr('高级规则群组')}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                {tr('使用模型匹配规则创建群组，适合需要 regex / glob 的高级场景。')}
-              </div>
+              {[
+                { mode: 'explicit_group' as const, label: tr('聚合已有模型'), hint: tr('选现有模型，合成一个对外名') },
+                { mode: 'pattern' as const, label: tr('按规则匹配'), hint: tr('精确名 / 通配符 / 正则') },
+              ].map((item) => {
+                const active = routeMode === item.mode;
+                return (
+                  <button
+                    key={item.mode}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setForm((current) => ({
+                      ...current,
+                      routeMode: item.mode,
+                      advancedOpen: item.mode === 'pattern',
+                    }))}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 3,
+                      padding: '9px 12px',
+                      border: `1px solid ${active ? 'var(--color-primary)' : 'transparent'}`,
+                      borderRadius: 'var(--radius-sm)',
+                      background: active ? 'var(--color-bg-card)' : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.label}</span>
+                    <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{item.hint}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -486,6 +560,47 @@ export default function ManualRoutePanel({
                 </label>
               </div>
 
+              {nameConflict.blockingGroup ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    border: '1px solid var(--color-danger)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '9px 11px',
+                    background: 'color-mix(in srgb, var(--color-danger) 8%, transparent)',
+                  }}
+                >
+                  <span style={{ flex: '1 1 240px', fontSize: 12, color: 'var(--color-danger)', lineHeight: 1.5 }}>
+                    {`已有群组 #${nameConflict.blockingGroup.id}「${(nameConflict.blockingGroup.displayName || nameConflict.blockingGroup.modelPattern || '').trim()}」对外使用这个名字；同一个名字再建一个，只会得到两张分不清的卡。`}
+                  </span>
+                  {onEditGroup ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ border: '1px solid var(--color-border)', fontSize: 12, padding: '5px 10px' }}
+                      onClick={() => onEditGroup(nameConflict.blockingGroup!)}
+                    >
+                      {tr('改为编辑')}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {nameConflict.sameNameRoutes.length > 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+                  {`同名路由：${nameConflict.sameNameRoutes.map((route) => `#${route.id}`).join('、')}。建群组不会删掉它们，只有你把它选为来源才会并进来。`}
+                </div>
+              ) : null}
+
+              {upstreamAlreadyServesName ? (
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+                  {tr('注意：上游当前也提供这个名字的模型。群组占用该名字后，上游这条模型不会再单独生成路由，只有在下面把它选为来源才走得到。')}
+                </div>
+              ) : null}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div>
@@ -497,15 +612,6 @@ export default function ManualRoutePanel({
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {!editingRouteId && (
-                      <button
-                        type="button"
-                        className="btn btn-link"
-                        onClick={() => setForm((current) => ({ ...current, routeMode: 'pattern', advancedOpen: true }))}
-                      >
-                        {tr('改用高级规则')}
-                      </button>
-                    )}
                     <button
                       type="button"
                       className="btn btn-ghost"
@@ -611,21 +717,6 @@ export default function ManualRoutePanel({
             </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {!editingLegacyPatternGroup && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    type="button"
-                    className="btn btn-link"
-                    onClick={() => setForm((current) => ({
-                      ...current,
-                      routeMode: 'explicit_group',
-                      advancedOpen: false,
-                    }))}
-                  >
-                    {tr('返回简单模式')}
-                  </button>
-                </div>
-              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: 12 }}>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -950,9 +1041,16 @@ export default function ManualRoutePanel({
                               </div>
                             </div>
                           </div>
-                          <span className={selected ? 'badge badge-info' : 'badge badge-muted'} style={{ fontSize: 10, flexShrink: 0 }}>
-                            {selected ? tr('已选中') : tr('可选择')}
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                            <span className={selected ? 'badge badge-info' : 'badge badge-muted'} style={{ fontSize: 10 }}>
+                              {selected ? tr('已选中') : tr('可选择')}
+                            </span>
+                            {(groupOwnersByRouteId.get(route.id) || []).length > 0 ? (
+                              <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                                {`已在 #${groupOwnersByRouteId.get(route.id)![0]!.id}`}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

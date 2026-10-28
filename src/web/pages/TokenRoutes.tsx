@@ -512,13 +512,28 @@ export default function TokenRoutes() {
     [routeSummaries, showZeroChannelRoutes, zeroChannelPlaceholderRoutes],
   );
 
+  // Name collision the dialog must show and the save button must respect.
+  // Exact (case-insensitive) match: the API compares canonicalized aliases and
+  // returns 409, so this is a fast local guard, not the source of truth.
+  const groupNameConflict = useMemo(() => {
+    const target = form.displayName.trim().toLowerCase();
+    if (normalizeRouteMode(form.routeMode) !== 'explicit_group' || !target) return null;
+    return routeSummaries.find((route) => (
+      normalizeRouteMode(route.routeMode) === 'explicit_group'
+      && route.enabled
+      && (route.sourceRouteIds || []).length > 0
+      && route.id !== editingRouteId
+      && (((route.displayName || '').trim() || (route.modelPattern || '').trim()).toLowerCase() === target)
+    )) ?? null;
+  }, [editingRouteId, form.displayName, form.routeMode, routeSummaries]);
+
   const canSaveRoute = useMemo(() => {
     if (saving) return false;
     if (form.routeMode === 'explicit_group') {
-      return !!form.displayName.trim() && form.sourceRouteIds.length > 0;
+      return !!form.displayName.trim() && form.sourceRouteIds.length > 0 && !groupNameConflict;
     }
     return !!form.modelPattern.trim() && !getModelPatternError(form.modelPattern);
-  }, [form.displayName, form.modelPattern, form.routeMode, form.sourceRouteIds.length, saving]);
+  }, [form.displayName, form.modelPattern, form.routeMode, form.sourceRouteIds.length, groupNameConflict, saving]);
 
   const previewModelSamples = useMemo(() => {
     if (!showManual) return [];
@@ -1836,6 +1851,8 @@ export default function TokenRoutes() {
         previewModelSamples={previewModelSamples}
         exactSourceRouteOptions={exactSourceRouteOptions}
         sourceEndpointTypesByRouteId={sourceEndpointTypesByRouteId}
+        knownRoutes={routeSummaries}
+        onEditGroup={(route) => handleEditRoute(route)}
         onSave={handleAddRoute}
         onCancel={handleCancelEditRoute}
       />

@@ -1267,7 +1267,9 @@ describe('TokenRoutes grouped source models', () => {
       });
       await flushMicrotasks();
 
-      expect(collectText(root.root)).toContain('模型重定向');
+      // The dialog names the selected group type in a segmented control now;
+      // the old static "模型重定向" blurb is gone.
+      expect(collectText(root.root)).toContain('聚合已有模型');
       expect(apiMock.addRoute).toHaveBeenCalledWith(expect.objectContaining({
         routeMode: 'explicit_group',
         displayName: 'claude-opus-4-6',
