@@ -23,6 +23,7 @@ import {
 } from './siteApiEndpointService.js';
 import { probeRuntimeModel, type RuntimeModelProbeStatus } from './runtimeModelProbe.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
+import { canonicalRouteAlias, collectGroupNameOwners, resolveExposedRouteName } from '../shared/routeGroupName.js';
 import { isCodexGatedPlatform } from '../shared/codexGatedPlatforms.js';
 import {
   isModelDisabledForSite,
@@ -1162,26 +1163,29 @@ export async function rebuildTokenRoutesFromAvailability() {
   // through its source routes and its own route_channels stay empty, so the
   // byte-equal lookup below cannot see it — the old behavior inserted an exact
   // twin for the same public name (the "duplicate group" symptom: the twin
-  // hides under the group card, gets deleted, and rebuilds it back). Alias
-  // identity (canonicalize) not byte equality: the router already treats
-  // z-ai/Merged-X:free and Merged-X as the same exposed model.
-  // A group without any source rows does NOT own the name — that is the
-  // recovery path when all of its sources die upstream.
-  const groupSourceCounts = new Map<number, number>();
+  // hides under the group card, gets deleted, and rebuilds it back).
+  // Ownership/alias rules live in shared/routeGroupName.ts so this rebuild, the
+  // API guard and the editor dialog cannot drift apart. A group without any
+  // source rows does NOT own the name — that is the recovery path when all of
+  // its sources died upstream.
+  const groupSourceIdsByRouteId = new Map<number, number[]>();
   for (const row of await db.select().from(schema.routeGroupSources).all()) {
-    groupSourceCounts.set(row.groupRouteId, (groupSourceCounts.get(row.groupRouteId) ?? 0) + 1);
+    const list = groupSourceIdsByRouteId.get(row.groupRouteId);
+    if (list) list.push(row.sourceRouteId);
+    else groupSourceIdsByRouteId.set(row.groupRouteId, [row.sourceRouteId]);
   }
-  const groupOwnedModelNames = new Set<string>();
-  for (const route of routes as any[]) {
-    if ((route.routeMode || 'pattern') !== 'explicit_group' || !route.enabled) continue;
-    if ((groupSourceCounts.get(route.id) ?? 0) === 0) continue;
-    const owned = canonicalizeModelName(String(route.displayName || route.modelPattern || '').trim());
-    if (owned) groupOwnedModelNames.add(owned);
-  }
+  const groupOwnedModelNames = new Set(
+    collectGroupNameOwners((routes as any[]).map((route) => ({
+      ...route,
+      sourceRouteIds: groupSourceIdsByRouteId.get(route.id) ?? [],
+    })))
+      .map((route) => canonicalRouteAlias(resolveExposedRouteName(route)))
+      .filter((alias) => alias.length > 0),
+  );
 
   for (const [modelName, candidateMap] of modelCandidates.entries()) {
     let route = routes.find((r: any) => (r.routeMode || 'pattern') !== 'explicit_group' && r.modelPattern === modelName);
-    if (!route && groupOwnedModelNames.has(canonicalizeModelName(modelName))) {
+    if (!route && groupOwnedModelNames.has(canonicalRouteAlias(modelName))) {
       // The live group already answers for this alias; creating an exact route
       // would fork a second card with the same public name and double-register
       // channels. Its candidates stay reachable through the group's sources.
