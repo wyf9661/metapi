@@ -28,6 +28,7 @@ import {
   ROUTE_DECISION_REFRESH_TASK_TYPE,
 } from '../../services/routeDecisionRefreshService.js';
 import { normalizeTokenRouteMode, type RouteMode } from '../../../shared/tokenRouteContract.js';
+import { canonicalRouteAlias, findGroupNameConflict } from '../../shared/routeGroupName.js';
 import {
   parseRouteChannelBatchCreatePayload,
   parseRouteChannelCreatePayload,
@@ -173,6 +174,20 @@ async function validateExplicitGroupSourceRoutes(sourceRouteIds: number[], curre
   }
 
   return { ok: true };
+}
+
+// Group-name guard for the create/update handlers. The rule lives in the
+// shared layer so the editor dialog's warning and this rejection can never
+// drift apart. Only an ENABLED group that actually holds sources owns a public
+// name; a same-name exact route is the normal merge shape (group folds the
+// exact route in) and is deliberately not a conflict, and a disabled or
+// sourceless group must not hold a name hostage.
+async function findGroupDisplayNameConflict(
+  displayName: string,
+  currentRouteId: number | null,
+): Promise<RouteRow | null> {
+  const routes = await listRoutesWithSources();
+  return findGroupNameConflict(routes, displayName, currentRouteId).blockingGroup;
 }
 
 async function replaceRouteSourceRouteIds(routeId: number, sourceRouteIds: number[]): Promise<void> {
@@ -941,6 +956,14 @@ export async function tokensRoutes(app: FastifyInstance) {
       if (!validation.ok) {
         return reply.code(400).send({ success: false, message: validation.message });
       }
+      const conflict = await findGroupDisplayNameConflict(displayName, null);
+      if (conflict) {
+        return reply.code(409).send({
+          success: false,
+          message: `已有群组「${conflict.displayName || conflict.modelPattern}」(${conflict.id}) 对外使用这个名字，请直接编辑它或换个名字`,
+          conflictRouteId: conflict.id,
+        });
+      }
     } else if (!modelPattern) {
       return reply.code(400).send({ success: false, message: '模型匹配不能为空' });
     }
@@ -1014,6 +1037,22 @@ export async function tokensRoutes(app: FastifyInstance) {
       const validation = await validateExplicitGroupSourceRoutes(nextSourceRouteIds, id);
       if (!validation.ok) {
         return reply.code(400).send({ success: false, message: validation.message });
+      }
+      // Rename guard. Compare aliases so a no-op edit that merely restates the
+      // current name (or writes it in another vendor-prefixed shape) does not
+      // collide with the row being edited; only a real rename into an owned
+      // name is refused.
+      const renamedIntoOwnedName = canonicalRouteAlias(nextDisplayName)
+        !== canonicalRouteAlias(existingRoute.displayName || existingRoute.modelPattern);
+      if (renamedIntoOwnedName) {
+        const conflict = await findGroupDisplayNameConflict(nextDisplayName, id);
+        if (conflict) {
+          return reply.code(409).send({
+            success: false,
+            message: `已有群组「${conflict.displayName || conflict.modelPattern}」(${conflict.id}) 对外使用这个名字，请直接编辑它或换个名字`,
+            conflictRouteId: conflict.id,
+          });
+        }
       }
     } else if (body.modelPattern !== undefined) {
       nextModelPattern = String(body.modelPattern);
