@@ -27,6 +27,8 @@ interface SealSummary {
   sealed: number;
   /** v1 envelopes re-sealed under the purpose-scoped v2 key. */
   upgraded: number;
+  /** Legacy token rows copied from `accounts.api_token` under the wrong key. */
+  resealed: number;
   /** Rows that could not be read with any configured key. Left untouched. */
   unreadable: number;
 }
@@ -73,6 +75,35 @@ async function verifyAccessTokenSeals(): Promise<number> {
 }
 
 /**
+ * Repair `account_tokens.token` rows that were copied from a *sealed*
+ * `accounts.api_token` by the legacy schema bootstrap (raw SQL copies the
+ * ciphertext verbatim, so the row is a valid envelope under the wrong purpose).
+ * Re-seal them under the token purpose so they stay readable.
+ */
+async function resealMisScopedAccountTokens(summary: SealSummary): Promise<void> {
+  let rows: unknown[];
+  try {
+    rows = await db.all(sql.raw('SELECT id, token AS value FROM account_tokens')) as unknown[];
+  } catch {
+    return;
+  }
+  for (const raw of rows) {
+    const id = rowId(raw);
+    const value = rowValue(raw);
+    if (id === null || value === null || !isEncryptedCredential(value)) continue;
+    if (decryptCredential(value, 'account_token.token') !== null) continue;
+    const plain = decryptCredential(value, 'account.api_token');
+    if (plain === null) continue;
+    summary.resealed += await updateValue(
+      'account_tokens',
+      'token',
+      id,
+      encryptCredential(plain, 'account_token.token'),
+    );
+  }
+}
+
+/**
  * Seal every legacy plaintext credential still present in the database and
  * upgrade v1 envelopes to purpose-scoped v2. Returns counters for the boot log.
  */
@@ -80,9 +111,11 @@ export async function encryptLegacyCredentials(): Promise<SealSummary> {
   // The raw statements below assume SQLite's `db.all` / `db.run` surface. The
   // production deployment is SQLite; other dialects keep plaintext reads and
   // are left to a dialect-specific migration.
-  if (config.dbType !== 'sqlite') return { sealed: 0, upgraded: 0, unreadable: 0 };
+  if (config.dbType !== 'sqlite') return { sealed: 0, upgraded: 0, resealed: 0, unreadable: 0 };
 
-  const summary: SealSummary = { sealed: 0, upgraded: 0, unreadable: 0 };
+  const summary: SealSummary = { sealed: 0, upgraded: 0, resealed: 0, unreadable: 0 };
+
+  await resealMisScopedAccountTokens(summary);
 
   for (const { table, column, purpose } of TARGETS) {
     if (table === 'accounts' && column === 'access_token') continue;

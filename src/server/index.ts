@@ -428,6 +428,9 @@ if (migratedCredentials.sealed > 0) {
 if (migratedCredentials.upgraded > 0) {
   console.info(`[credentials] upgraded ${migratedCredentials.upgraded} v1 envelopes to purpose-scoped keys`);
 }
+if (migratedCredentials.resealed > 0) {
+  console.info(`[credentials] re-sealed ${migratedCredentials.resealed} token rows copied under the account purpose`);
+}
 if (migratedCredentials.unreadable > 0) {
   console.warn(`[credentials] ${migratedCredentials.unreadable} sealed values could not be opened with the configured secret and were left untouched`);
 }

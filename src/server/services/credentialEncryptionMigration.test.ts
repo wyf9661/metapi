@@ -55,7 +55,7 @@ describe('credential encryption migration', () => {
     expect(crypto.decryptCredential(rawValue, 'site.api_key')).toBe(legacyKeyValue);
 
     // Second pass finds nothing left to migrate.
-    expect(await migration.encryptLegacyCredentials()).toEqual({ sealed: 0, upgraded: 0, unreadable: 0 });
+    expect(await migration.encryptLegacyCredentials()).toEqual({ sealed: 0, upgraded: 0, resealed: 0, unreadable: 0 });
   });
 
   it('upgrades v1 envelopes to purpose-scoped v2 in place', async () => {
@@ -86,5 +86,34 @@ describe('credential encryption migration', () => {
     const rawValue = (Array.isArray(rows[0]) ? rows[0][0] : (rows[0] as { api_key?: string }).api_key) as string;
     expect(rawValue.startsWith('v2:')).toBe(true);
     expect(crypto.decryptCredential(rawValue, 'site.api_key')).toBe('legacy-v1-value');
+  });
+
+  it('re-seals token rows copied from a sealed account api_token', async () => {
+    const token = `tok-${randomUUID()}`;
+    const misScoped = crypto.encryptCredential(token, 'account.api_token');
+    const siteRows = await dbModule.db.all(sql`
+      INSERT INTO sites (name, url, platform)
+      VALUES (${`fk-site-${randomUUID()}`}, ${`https://fk-${randomUUID()}.example`}, 'openai')
+      RETURNING id
+    `) as unknown[];
+    const siteId = (Array.isArray(siteRows[0]) ? siteRows[0][0] : (siteRows[0] as { id?: number }).id) as number;
+    const accountRows = await dbModule.db.all(sql`
+      INSERT INTO accounts (site_id, access_token) VALUES (${siteId}, 'placeholder')
+      RETURNING id
+    `) as unknown[];
+    const accountId = (Array.isArray(accountRows[0]) ? accountRows[0][0] : (accountRows[0] as { id?: number }).id) as number;
+    await dbModule.db.run(sql`
+      INSERT INTO account_tokens (account_id, name, token, source, enabled, is_default)
+      VALUES (${accountId}, 'legacy', ${misScoped}, 'legacy', 1, 1)
+    `);
+
+    const summary = await migration.encryptLegacyCredentials();
+    expect(summary.resealed).toBeGreaterThan(0);
+
+    const rows = await dbModule.db.all(sql`
+      SELECT token FROM account_tokens WHERE account_id = ${accountId}
+    `) as unknown[];
+    const rawValue = (Array.isArray(rows[0]) ? rows[0][0] : (rows[0] as { token?: string }).token) as string;
+    expect(crypto.decryptCredential(rawValue, 'account_token.token')).toBe(token);
   });
 });

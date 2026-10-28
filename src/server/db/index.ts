@@ -222,6 +222,8 @@ function ensureTokenManagementSchema() {
     WHERE
       a.api_token IS NOT NULL
       AND trim(a.api_token) <> ''
+      AND a.api_token NOT LIKE 'v1:%'
+      AND a.api_token NOT LIKE 'v2:%'
       AND a.access_token IS NOT NULL
       AND trim(a.access_token) <> ''
       AND NOT EXISTS (
