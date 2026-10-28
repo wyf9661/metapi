@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 vi.mock('../db/insertHelpers.js', async () => {
   const actual = await vi.importActual<typeof import('../db/insertHelpers.js')>('../db/insertHelpers.js');
@@ -55,6 +55,9 @@ describe('siteApiKeyMigrationService insert boundary', () => {
       platform: 'new-api',
       apiKey: 'sk-boundary-site-token',
     }).returning().get();
+    // Rewrite the sealed value back to plaintext: the migration is defined over
+    // pre-encryption rows and must still leave them intact on failure.
+    await db.run(sql`UPDATE sites SET api_key = ${site.apiKey} WHERE id = ${site.id}`);
 
     await expect(migrateSiteApiKeysToAccounts()).rejects.toThrow('failed to create migrated site account');
 
