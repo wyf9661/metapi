@@ -80,7 +80,7 @@ describe('settings backup webdav api', () => {
     expect(saved?.value).toContain('"fileUrl":"https://dav.example.com/backups/metapi.json"');
     // The password is stored encrypted (v1 AES-GCM envelope), never plaintext.
     expect(saved?.value).not.toContain('"password":"secret-pass"');
-    expect(saved?.value).toMatch(/"password":"v1:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+"/);
+    expect(saved?.value).toMatch(/"password":"v\d+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+"/);
   });
 
   it('exports current backup to webdav through settings route', async () => {

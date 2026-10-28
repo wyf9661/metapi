@@ -37,7 +37,7 @@ export async function encryptLegacyCredentials(): Promise<number> {
       // too so the same code survives a driver swap.
       const id = Array.isArray(raw) ? raw[0] : (raw as { id?: number }).id;
       const value = Array.isArray(raw) ? raw[1] : (raw as { value?: string | null }).value;
-      if (typeof value !== 'string' || value === '' || isEncryptedCredential(value)) continue;
+      if (typeof value !== 'string' || value.trim() === '' || isEncryptedCredential(value)) continue;
       if (typeof id !== 'number' && typeof id !== 'string') continue;
       const encrypted = encryptCredential(value, purpose, { deterministic: purpose === 'downstream.key' });
       const result = await db.run(sql`

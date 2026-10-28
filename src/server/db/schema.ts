@@ -13,10 +13,10 @@ function encryptedText(purpose: import('../shared/credentialCrypto.js').Credenti
       return 'text';
     },
     toDriver(value: string): string {
-      return value === '' ? value : encryptCredential(value, purpose, { deterministic });
+      return value.trim() === '' ? value : encryptCredential(value, purpose, { deterministic });
     },
     fromDriver(value: string): string {
-      return value === '' ? value : readCredential(value, purpose);
+      return value.trim() === '' ? value : readCredential(value, purpose);
     },
   });
 }
