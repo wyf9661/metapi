@@ -212,6 +212,19 @@ export function replayFirstByteWindowPolicy(input: {
  * for an old timeout.
  */
 export const FIRST_BYTE_WINDOW_FLOOR_LOOKBACK = 20;
+/**
+ * Consecutive fast answers that retire a lifted floor.
+ *
+ * The lift is one-way by construction: it reads a censored timeout as
+ * "T >= budget" and raises the floor one rung above the window that cut it.
+ * Since that window is the floor, each further timeout raises the floor again —
+ * on a link that has recovered there is nothing left to lower it except the
+ * censored rows sliding out of the lookback, which on a low-traffic bucket
+ * means hours of every answer waiting for a tail that is gone. A sustained run
+ * of answers well below the lifted floor is the missing evidence in the other
+ * direction, so it retires the lift outright.
+ */
+export const FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS = 6;
 
 /**
  * Floor for the first-byte window, learned from the site's own attempt history.
@@ -224,6 +237,10 @@ export const FIRST_BYTE_WINDOW_FLOOR_LOOKBACK = 20;
  * ladder rung above the budget it was cut at. A run of consecutive timeouts
  * does not: that is a dead channel, not a jittery one, and ratcheting there
  * would pin the window at the ceiling and make every failure slow.
+ *
+ * The lift is released again after a run of fast answers (see
+ * FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS), so a recovered link does not
+ * keep paying for a timeout it already outlived.
  *
  * Deliberately not derived from a success percentile: the cost optimiser
  * already prices observed successes, and a bimodal relay's slow mode (45s) must
@@ -239,18 +256,34 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
   const recent = input.attempts.slice(-FIRST_BYTE_WINDOW_FLOOR_LOOKBACK);
 
   let censoredFloorMs = 0;
+  let lastCensoredIndex = -1;
   for (let index = 1; index < recent.length; index += 1) {
     const attempt = recent[index]!;
     if (attempt.outcome !== 'timeout' || attempt.budgetMs === null) continue;
     if (recent[index - 1]!.outcome !== 'success') continue;
-    censoredFloorMs = Math.max(
-      censoredFloorMs,
-      attempt.budgetMs + FIRST_BYTE_WINDOW_LADDER_STEP_MS,
-    );
+    const candidate = attempt.budgetMs + FIRST_BYTE_WINDOW_LADDER_STEP_MS;
+    if (candidate >= censoredFloorMs) {
+      censoredFloorMs = candidate;
+      lastCensoredIndex = index;
+    }
   }
 
-  return Math.min(ceilingMs, Math.max(floorMs, censoredFloorMs));
+  if (censoredFloorMs <= 0) return floorMs;
+
+  const liftedMs = Math.min(ceilingMs, Math.max(floorMs, censoredFloorMs));
+  let fastRun = 0;
+  for (let index = lastCensoredIndex + 1; index < recent.length; index += 1) {
+    const attempt = recent[index]!;
+    const isFast = attempt.outcome === 'success'
+      && attempt.firstByteLatencyMs !== null
+      && attempt.firstByteLatencyMs < liftedMs * FIRST_BYTE_WINDOW_DECAY_FAST_RATIO;
+    fastRun = isFast ? fastRun + 1 : 0;
+  }
+  if (fastRun >= FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS) return floorMs;
+
+  return liftedMs;
 }
+
 
 /**
  * Pick the first-byte window that minimises **time per usable answer**:
