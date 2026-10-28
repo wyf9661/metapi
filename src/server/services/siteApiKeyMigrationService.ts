@@ -45,6 +45,10 @@ export async function hasPendingLegacySiteApiKeys(): Promise<boolean> {
     .where(and(
       isNotNull(schema.sites.apiKey),
       ne(sql`trim(${schema.sites.apiKey})`, ''),
+      // Credential columns are now sealed as `vN:` envelopes. Without this
+      // predicate the ciphertext itself looks like a non-empty legacy key and
+      // the boot migration would re-run on every start.
+      sql`${schema.sites.apiKey} not like 'v1:%' and ${schema.sites.apiKey} not like 'v2:%'`,
     ))
     .limit(1)
     .get();

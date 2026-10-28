@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 type DbModule = typeof import('../db/index.js');
 type MigrationModule = typeof import('./siteApiKeyMigrationService.js');
@@ -27,6 +27,18 @@ describe('siteApiKeyMigrationService', () => {
     hasPendingLegacySiteApiKeys = migrationModule.hasPendingLegacySiteApiKeys;
   });
 
+
+  async function insertLegacySite<T extends { apiKey?: unknown }>(values: T) {
+    const site = await db.insert(schema.sites).values(values as any).returning().get();
+    const rawKey = (values as { apiKey?: unknown }).apiKey;
+    // The ORM seals apiKey on write; recreate the pre-upgrade plaintext row so
+    // the legacy-migration path is exercised rather than the encrypted one.
+    if (typeof rawKey === 'string' && rawKey.trim() !== '') {
+      await db.run(sql`UPDATE sites SET api_key = ${rawKey} WHERE id = ${site.id}`);
+    }
+    return site;
+  }
+
   beforeEach(async () => {
     vi.restoreAllMocks();
     await db.delete(schema.accountTokens).run();
@@ -39,12 +51,12 @@ describe('siteApiKeyMigrationService', () => {
   });
 
   it('migrates site apiKey into an apikey connection, clears the site field, and removes a mirrored token row', async () => {
-    const site = await db.insert(schema.sites).values({
+    const site = await insertLegacySite({
       name: 'legacy-site',
       url: 'https://legacy.example.com',
       platform: 'new-api',
       apiKey: 'sk-legacy-site-token',
-    }).returning().get();
+    });
 
     const existing = await db.insert(schema.accounts).values({
       siteId: site.id,
@@ -88,12 +100,12 @@ describe('siteApiKeyMigrationService', () => {
   });
 
   it('creates a new apikey connection from site apiKey when no matching connection exists', async () => {
-    const site = await db.insert(schema.sites).values({
+    const site = await insertLegacySite({
       name: 'new-site',
       url: 'https://new-site.example.com',
       platform: 'new-api',
       apiKey: 'sk-new-site-token',
-    }).returning().get();
+    });
 
     const summary = await migrateSiteApiKeysToAccounts();
 
@@ -115,12 +127,12 @@ describe('siteApiKeyMigrationService', () => {
 
   it('warns and keeps token rows intact when an apikey connection has multiple child tokens', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const site = await db.insert(schema.sites).values({
+    const site = await insertLegacySite({
       name: 'warn-site',
       url: 'https://warn.example.com',
       platform: 'new-api',
       apiKey: 'sk-warn-site-token',
-    }).returning().get();
+    });
 
     const account = await db.insert(schema.accounts).values({
       siteId: site.id,
@@ -160,27 +172,27 @@ describe('siteApiKeyMigrationService', () => {
   it('probes for a pending legacy site api key without loading every site and account', async () => {
     expect(await hasPendingLegacySiteApiKeys()).toBe(false);
 
-    await db.insert(schema.sites).values({
+    await insertLegacySite({
       name: 'keyless',
       url: 'https://keyless.example.com',
       platform: 'new-api',
-    }).run();
+    });
     expect(await hasPendingLegacySiteApiKeys()).toBe(false);
 
-    await db.insert(schema.sites).values({
+    await insertLegacySite({
       name: 'blank-key',
       url: 'https://blank.example.com',
       platform: 'new-api',
       apiKey: '   ',
-    }).run();
+    });
     expect(await hasPendingLegacySiteApiKeys()).toBe(false);
 
-    await db.insert(schema.sites).values({
+    await insertLegacySite({
       name: 'legacy-key',
       url: 'https://legacy-key.example.com',
       platform: 'new-api',
       apiKey: 'sk-legacy',
-    }).run();
+    });
     expect(await hasPendingLegacySiteApiKeys()).toBe(true);
   });
 
