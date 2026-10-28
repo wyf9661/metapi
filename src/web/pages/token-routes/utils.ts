@@ -29,6 +29,17 @@ export function isRouteExactModel(route: Pick<RouteRow | RouteSummaryRow, 'model
   return !isExplicitGroupRoute(route) && isExactModelPattern(route.modelPattern);
 }
 
+/**
+ * Route-list sort buckets: 0 = wildcard/regex patterns, 1 = explicit group
+ * aggregation, 2 = single exact model. Groups are structural containers, so a
+ * group with few channels must not sink below hundreds of single-model rows
+ * just because the secondary sort key is channel count.
+ */
+export function routeKindRank(route: Pick<RouteRow | RouteSummaryRow, 'modelPattern' | 'routeMode'>): number {
+  if (isExplicitGroupRoute(route)) return 1;
+  return isExactModelPattern(route.modelPattern) ? 2 : 0;
+}
+
 export function parseRegexModelPattern(modelPattern: string): { regex: { test(value: string): boolean } | null; error: string | null } {
   return parseTokenRouteRegexPattern(modelPattern);
 }

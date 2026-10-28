@@ -40,6 +40,7 @@ import {
   isExplicitGroupRoute,
   isExactModelPattern,
   isRouteExactModel,
+  routeKindRank,
   matchesModelPattern,
   normalizeRouteMode,
   resolveRouteTitle,
@@ -837,6 +838,11 @@ export default function TokenRoutes() {
 
   const sortedRoutes = useMemo(() => (
     [...listVisibleRoutes].sort((a, b) => {
+      // Category order is fixed (wildcard → group → single model) regardless of
+      // sort direction; the chosen key only orders rows inside a category.
+      const kindCmp = routeKindRank(a) - routeKindRank(b);
+      if (kindCmp !== 0) return kindCmp;
+
       if (sortBy === 'channelCount') {
         const countCmp = a.channelCount - b.channelCount;
         if (countCmp !== 0) return sortDir === 'asc' ? countCmp : -countCmp;
