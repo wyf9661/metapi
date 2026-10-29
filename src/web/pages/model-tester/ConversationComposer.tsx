@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ConversationDraftFile } from '../helpers/modelTesterSession.js';
+import { tr } from '../../i18n.js';
 
 type ConversationCapability = {
   supported: boolean;
@@ -73,7 +74,7 @@ export default function ConversationComposer({
               disabled={sending || customRequestMode || !conversationFileSupported}
               onClick={() => conversationFileInputRef.current?.click()}
             >
-              添加文件
+              {tr('添加文件')}
             </button>
             <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
               {customRequestMode
@@ -193,14 +194,14 @@ export default function ConversationComposer({
         {sending ? (
           <>
             <span style={{ fontSize: 18, lineHeight: 1 }}>■</span>
-            <span style={{ fontSize: 11 }}>停止</span>
+            <span style={{ fontSize: 11 }}>{tr('停止')}</span>
           </>
         ) : (
           <>
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
-            <span style={{ fontSize: 11 }}>发送</span>
+            <span style={{ fontSize: 11 }}>{tr('发送')}</span>
           </>
         )}
       </button>

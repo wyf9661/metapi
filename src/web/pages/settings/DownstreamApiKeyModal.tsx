@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { tr } from '../../i18n.js';
 
 type ModalPresence = {
   shouldRender: boolean;
@@ -71,7 +72,7 @@ export default function DownstreamApiKeyModal({
             <input
               value={downstreamCreate.maxCost}
               onChange={(e) => onChange((prev) => ({ ...prev, maxCost: e.target.value }))}
-              placeholder="最大费用（可选）"
+              placeholder={tr('最大费用（可选）')}
               type="number"
               min={0}
               step={0.000001}
@@ -80,7 +81,7 @@ export default function DownstreamApiKeyModal({
             <input
               value={downstreamCreate.maxRequests}
               onChange={(e) => onChange((prev) => ({ ...prev, maxRequests: e.target.value }))}
-              placeholder="最大请求数（可选）"
+              placeholder={tr('最大请求数（可选）')}
               type="number"
               min={0}
               step={1}
@@ -90,13 +91,13 @@ export default function DownstreamApiKeyModal({
               value={downstreamCreate.expiresAt}
               onChange={(e) => onChange((prev) => ({ ...prev, expiresAt: e.target.value }))}
               type="datetime-local"
-              placeholder="过期时间（可选）"
+              placeholder={tr('过期时间（可选）')}
               style={inputStyle}
             />
             <input
               value={downstreamCreate.description}
               onChange={(e) => onChange((prev) => ({ ...prev, description: e.target.value }))}
-              placeholder="备注（可选）"
+              placeholder={tr('备注（可选）')}
               style={inputStyle}
             />
           </div>
@@ -111,24 +112,22 @@ export default function DownstreamApiKeyModal({
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)' }}
               >
-                勾选模型和群组
+                {tr('勾选模型和群组')}
               </button>
               {(downstreamCreate.selectedModels.length > 0 || downstreamCreate.selectedGroupRouteIds.length > 0) ? (
                 <button
                   onClick={() => onChange((prev) => ({ ...prev, selectedModels: [], selectedGroupRouteIds: [] }))}
                   className="btn btn-link btn-link-warning"
-                >
-                  清空选择
-                </button>
+                >{tr('清空选择')}</button>
               ) : null}
             </div>
           </div>
         </div>
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-ghost">取消</button>
+          <button onClick={onClose} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={() => void onSave()} disabled={downstreamSaving} className="btn btn-primary">
             {downstreamSaving
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</>
+              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</>
               : (editingDownstreamId ? '更新 API Key' : '新增 API Key')}
           </button>
         </div>

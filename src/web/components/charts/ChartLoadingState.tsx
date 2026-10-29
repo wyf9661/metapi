@@ -8,6 +8,8 @@
  * only "loading"; the reserved height keeps the card from jumping when the
  * chart arrives.
  */
+import { tr } from '../../i18n.js';
+
 interface ChartLoadingStateProps {
   /** Plot-area height in px; reserved so the layout never shifts. */
   height?: number;
@@ -25,7 +27,7 @@ export default function ChartLoadingState({ height = 280 }: ChartLoadingStatePro
       data-chart-loading
       aria-busy="true"
     >
-      <span className="spinner" role="status" aria-label="加载中" />
+      <span className="spinner" role="status" aria-label={tr('加载中')} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import ResponsiveFormGrid from '../../components/ResponsiveFormGrid.js';
 import ModernSelect from '../../components/ModernSelect.js';
 import { api } from '../../api.js';
 import { useToast } from '../../components/Toast.js';
+import { tr } from '../../i18n.js';
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -175,13 +176,13 @@ export default function EditAccountModal({
     <CenteredModal
       open={open}
       onClose={handleClose}
-      title="编辑账号"
+      title={tr('编辑账号')}
       maxWidth={860}
       bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       footer={
         <>
           <button onClick={handleClose} className="btn btn-ghost">
-            取消
+            {tr('取消')}
           </button>
           <button
             onClick={handleSave}
@@ -209,7 +210,7 @@ export default function EditAccountModal({
       {account ? (
         <ResponsiveFormGrid>
           <input
-            placeholder="账号名称"
+            placeholder={tr('账号名称')}
             value={editForm.username}
             onChange={(e) =>
               setEditForm((prev) => ({
@@ -234,10 +235,10 @@ export default function EditAccountModal({
               { value: 'disabled', label: 'disabled' },
               { value: 'expired', label: 'expired' },
             ]}
-            placeholder="状态"
+            placeholder={tr('状态')}
           />
           <input
-            placeholder="单位成本（可选）"
+            placeholder={tr('单位成本（可选）')}
             value={editForm.unitCost}
             onChange={(e) =>
               setEditForm((prev) => ({
@@ -265,10 +266,10 @@ export default function EditAccountModal({
                 }))
               }
             />
-            启用签到
+            {tr('启用签到')}
           </label>
           <input
-            placeholder="Access Token（留空保持不变）"
+            placeholder={tr('Access Token（留空保持不变）')}
             value={editForm.accessToken}
             onChange={(e) =>
               setEditForm((prev) => ({
@@ -280,7 +281,7 @@ export default function EditAccountModal({
           />
           {(account?.site?.platform || '').toLowerCase() === 'new-api' && (
             <input
-              placeholder="用户 ID"
+              placeholder={tr('用户 ID')}
               value={editForm.platformUserId}
               onChange={(e) =>
                 setEditForm((prev) => ({
@@ -292,7 +293,7 @@ export default function EditAccountModal({
             />
           )}
           <input
-            placeholder="API Token（可选，留空保持不变）"
+            placeholder={tr('API Token（可选，留空保持不变）')}
             value={editForm.apiToken}
             onChange={(e) =>
               setEditForm((prev) => ({

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import CenteredModal from '../../components/CenteredModal.js';
+import { tr } from '../../i18n.js';
 
 export type TokenRouteConfirmState = {
   title: string;
@@ -35,7 +36,7 @@ export default function TokenRouteConfirmModal({
       bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 16 }}
       footer={(
         <>
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>取消</button>
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>{tr('取消')}</button>
           <button
             type="button"
             className={`btn ${state?.tone === 'danger' ? 'btn-danger' : 'btn-warning'}`}

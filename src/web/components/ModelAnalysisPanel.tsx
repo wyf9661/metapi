@@ -6,6 +6,7 @@ import { formatCompactTokenMetric } from '../numberFormat.js';
 import { useThemeLabelColor } from './useThemeLabelColor.js';
 import { useIsMobile } from './useIsMobile.js';
 import { availabilityRgb, buildHorizontalBarSpec, CHART_BAR_GRADIENTS, formatMoney } from './charts/chartShared.js';
+import { tr } from '../i18n.js';
 
 type TabKey = 'spend' | 'trend' | 'calls' | 'rank';
 
@@ -189,10 +190,10 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
             <thead>
               <tr>
                 <th style={{ width: 36, textAlign: 'center' }}>#</th>
-                <th>模型</th>
+                <th>{tr('模型')}</th>
                 <th style={{ textAlign: 'center' }}>调用</th>
-                <th style={{ textAlign: 'center' }}>成功率</th>
-                <th style={{ textAlign: 'center' }}>平均延迟</th>
+                <th style={{ textAlign: 'center' }}>{tr('成功率')}</th>
+                <th style={{ textAlign: 'center' }}>{tr('平均延迟')}</th>
                 <th style={{ textAlign: 'right' }}>消耗</th>
               </tr>
             </thead>

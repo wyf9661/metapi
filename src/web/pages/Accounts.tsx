@@ -1270,9 +1270,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     onClick={() => setShowMobileTools(true)}
                     className="btn btn-ghost"
                     style={{ border: '1px solid var(--color-border)' }}
-                  >
-                    排序与操作
-                  </button>
+                  >{tr('排序与操作')}</button>
                 )}
               </>
             ) : (
@@ -1291,7 +1289,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         { value: 'balance-desc', label: '余额高到低' },
                         { value: 'balance-asc', label: '余额低到高' },
                       ]}
-                      placeholder="默认排序"
+                      placeholder={tr('默认排序')}
                     />
                   </div>
                 )}
@@ -1366,7 +1364,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                排序方式
+                {tr('排序方式')}
               </div>
               <ModernSelect
                 value={sortMode}
@@ -1376,7 +1374,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   { value: 'balance-desc', label: '余额高到低' },
                   { value: 'balance-asc', label: '余额低到高' },
                 ]}
-                placeholder="自定义排序"
+                placeholder={tr('自定义排序')}
               />
             </div>
             {activeSegment === 'session' && (
@@ -1473,7 +1471,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         open={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
-        title="确认删除连接"
+        title={tr('确认删除连接')}
         confirmText="确认删除"
         loading={Boolean(
           deleteConfirm?.accountId &&
@@ -1512,7 +1510,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
             footer={
               <button onClick={closeAddPanel} className="btn btn-ghost">
-                取消
+                {tr('取消')}
               </button>
             }
           >
@@ -1582,9 +1580,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         boxShadow:
                           addMode === 'login' ? 'var(--shadow-sm)' : 'none',
                       }}
-                    >
-                      账号密码登录
-                    </button>
+                    >{tr('账号密码登录')}</button>
                   )}
                 </div>
 
@@ -1602,7 +1598,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           当前分段仅创建 Session 连接
                         </div>
                         <div>
-                          <strong>推荐</strong> 使用系统访问令牌（Access
+                          <strong>{tr('推荐')}</strong> 使用系统访问令牌（Access
                           Token）；浏览器 Cookie 仅用于兼容场景。
                         </div>
                         <div style={{ marginTop: 2 }}>
@@ -1641,9 +1637,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               color: 'var(--color-primary)',
                               textDecoration: 'underline',
                             }}
-                          >
-                            查看认证方式与特殊站点说明文档
-                          </a>
+                          >{tr('查看认证方式与特殊站点说明文档')}</a>
                         </div>
                       </div>
                     </div>
@@ -1662,7 +1656,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         : '当前站点'}
                     </div>
                     <input
-                      placeholder="连接名称（可选）"
+                      placeholder={tr('连接名称（可选）')}
                       value={tokenForm.username}
                       onChange={(e) =>
                         setTokenForm((f) => ({
@@ -1673,7 +1667,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       style={inputStyle}
                     />
                     <textarea
-                      placeholder="粘贴 Session Access Token 或浏览器 Cookie"
+                      placeholder={tr('粘贴 Session Access Token 或浏览器 Cookie')}
                       value={tokenForm.accessToken}
                       onChange={(e) => {
                         setTokenForm((f) => ({
@@ -1698,7 +1692,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         }}
                       >
                         <input
-                          placeholder="用户 ID（可选）"
+                          placeholder={tr('用户 ID（可选）')}
                           value={tokenForm.platformUserId}
                           onChange={(e) => {
                             setTokenForm((f) => ({
@@ -1729,7 +1723,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           }}
                         >
                           <input
-                            placeholder="Sub2API refresh_token（可选，用于托管自动续期）"
+                            placeholder={tr('Sub2API refresh_token（可选，用于托管自动续期）')}
                             value={tokenForm.refreshToken}
                             onChange={(e) =>
                               setTokenForm((f) => ({
@@ -1763,7 +1757,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           }}
                         >
                           <input
-                            placeholder="token_expires_at（可选，毫秒时间戳）"
+                            placeholder={tr('token_expires_at（可选，毫秒时间戳）')}
                             value={tokenForm.tokenExpiresAt}
                             onChange={(e) =>
                               setTokenForm((f) => ({
@@ -1977,7 +1971,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         : '当前站点'}
                     </div>
                     <input
-                      placeholder="用户名"
+                      placeholder={tr('用户名')}
                       value={loginForm.username}
                       onChange={(e) =>
                         setLoginForm((f) => ({
@@ -1989,7 +1983,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     />
                     <input
                       type="password"
-                      placeholder="密码"
+                      placeholder={tr('密码')}
                       value={loginForm.password}
                       onChange={(e) =>
                         setLoginForm((f) => ({
@@ -2111,12 +2105,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     }
                   }}
                   options={siteSelectOptions}
-                  placeholder="选择站点"
+                  placeholder={tr('选择站点')}
                   searchable
                   searchPlaceholder={SITE_SELECT_SEARCH_PLACEHOLDER}
                 />
                 <input
-                  placeholder="连接名称（可选）"
+                  placeholder={tr('连接名称（可选）')}
                   value={tokenForm.username}
                   onChange={(e) =>
                     setTokenForm((f) => ({
@@ -2128,7 +2122,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   style={inputStyle}
                 />
                 <textarea
-                  placeholder="粘贴 API Key（无需认证时可留空）"
+                  placeholder={tr('粘贴 API Key（无需认证时可留空）')}
                   value={tokenForm.accessToken}
                   onChange={(e) => {
                     setTokenForm((f) => ({

@@ -225,7 +225,7 @@ export default function ModelTester() {
             <input
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
-              placeholder="https://api.example.com 或 …/v1"
+              placeholder={tr('https://api.example.com 或 …/v1')}
               style={inputBaseStyle}
               autoComplete="off"
               spellCheck={false}
@@ -234,12 +234,12 @@ export default function ModelTester() {
 
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-              API Key（可选）
+              {tr('API Key（可选）')}
             </div>
             <input
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder="不需要认证时可留空"
+              placeholder={tr('不需要认证时可留空')}
               style={inputBaseStyle}
               autoComplete="off"
               spellCheck={false}
@@ -249,7 +249,7 @@ export default function ModelTester() {
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-              协议
+              {tr('协议')}
             </div>
             <ModernSelect
               value={protocol}
@@ -261,7 +261,7 @@ export default function ModelTester() {
                 }
               }}
               options={PROTOCOL_OPTIONS}
-              placeholder="选择协议"
+              placeholder={tr('选择协议')}
             />
           </div>
 
@@ -281,7 +281,7 @@ export default function ModelTester() {
               style={{ border: '1px solid var(--color-border)', flex: '0 0 auto' }}
               onClick={clearAll}
             >
-              清空
+              {tr('清空')}
             </button>
           </div>
 
@@ -300,7 +300,7 @@ export default function ModelTester() {
 
         <div className="card" style={{ padding: 16 }}>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-            模型
+            {tr('模型')}
           </div>
           <ModernSelect
             value={model && models.includes(model) ? model : ''}
@@ -338,24 +338,20 @@ export default function ModelTester() {
 
         <div className="card" style={{ padding: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 15 }}>结果</h3>
+            <h3 style={{ margin: 0, fontSize: 15 }}>{tr('结果')}</h3>
             <div style={{ fontSize: 14, fontWeight: 700, color: statusColor(probeOk, probing) }}>
               {probing ? '检测中' : probeOk === true ? '可用' : probeOk === false ? '不可用' : '未检测'}
             </div>
           </div>
 
           {!probeResult && !probeError && !probing ? (
-            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-              拉取模型并点击「检测模型」后显示结果。
-            </div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{tr('拉取模型并点击「检测模型」后显示结果。')}</div>
           ) : null}
 
           {(probeResult || probeError) && !probing ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                <div>
-                  状态：
-                  <strong style={{ color: statusColor(probeOk, false), marginLeft: 6 }}>
+                <div>{tr('状态：')}<strong style={{ color: statusColor(probeOk, false), marginLeft: 6 }}>
                     {probeOk ? '可用' : '不可用'}
                   </strong>
                 </div>
@@ -394,9 +390,7 @@ export default function ModelTester() {
 
               {probeResult ? (
                 <details>
-                  <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    响应详情
-                  </summary>
+                  <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('响应详情')}</summary>
                   <pre
                     style={{
                       margin: '8px 0 0',

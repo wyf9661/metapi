@@ -186,6 +186,22 @@ export {
 } from './tokenRouterRuntimeHealthStore.js';
 import { recordNoChannelDiagnostic } from './proxyNoChannelDiagnostics.js';
 
+/**
+ * Number of literal characters in a route pattern: `*`, `?` and `re:` syntax
+ * do not pin a model down, so a pattern with more literals is the more
+ * specific match. Used to order pattern candidates; `*` scores 0 and becomes
+ * the last resort.
+ */
+function patternSpecificity(modelPattern: string): number {
+  const pattern = (modelPattern || '').trim();
+  if (pattern.startsWith('re:')) return pattern.length;
+  let literals = 0;
+  for (const ch of pattern) {
+    if (ch !== '*' && ch !== '?') literals += 1;
+  }
+  return literals;
+}
+
 export class TokenRouter {
   /**
    * Find matching route and select a channel for the given model.
@@ -1126,18 +1142,34 @@ export class TokenRouter {
       routes = routes.filter((route) => allowSet.has(route.id));
     }
 
-    const matchedRoute = routes.find((route) => isExplicitGroupRoute(route) && isRouteDisplayNameMatch(model, route.displayName))
+    const namedRoute = routes.find((route) => isExplicitGroupRoute(route) && isRouteDisplayNameMatch(model, route.displayName))
       || routes.find((route) => (
         !isExplicitGroupRoute(route)
         && isExactRouteModelPattern(route.modelPattern)
         && (route.modelPattern || '').trim() === model
       ))
-      || routes.find((route) => !isExplicitGroupRoute(route) && isRouteDisplayNameMatch(model, route.displayName))
-      || routes.find((route) => !isExplicitGroupRoute(route) && matchesModelPattern(model, route.modelPattern));
+      || routes.find((route) => !isExplicitGroupRoute(route) && isRouteDisplayNameMatch(model, route.displayName));
 
-    if (!matchedRoute) return null;
+    if (namedRoute) return await loadRouteMatch(namedRoute);
 
-    return await loadRouteMatch(matchedRoute);
+    // Pattern routes: most specific first. `find()` used to return whichever
+    // glob the table happened to list first, and a catch-all `*` route (usually
+    // the oldest row) matches everything, so every other glob was dead code.
+    // Literal characters decide specificity; a route with no live channel is
+    // skipped so a stale shell cannot shadow the fallback that actually serves.
+    const patternRoutes = routes
+      .filter((route) => !isExplicitGroupRoute(route) && matchesModelPattern(model, route.modelPattern))
+      .sort((a, b) => {
+        const bySpecificity = patternSpecificity(b.modelPattern) - patternSpecificity(a.modelPattern);
+        return bySpecificity !== 0 ? bySpecificity : (b.modelPattern || '').length - (a.modelPattern || '').length;
+      });
+    if (patternRoutes.length === 0) return null;
+
+    for (const route of patternRoutes) {
+      const match = await loadRouteMatch(route);
+      if (match.channels.some((candidate) => candidate.channel.enabled)) return match;
+    }
+    return await loadRouteMatch(patternRoutes[0]);
   }
 
   private async findRouteById(routeId: number, downstreamPolicy: DownstreamRoutingPolicy): Promise<RouteMatch | null> {

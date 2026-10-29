@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { tr } from '../../i18n.js';
 
 type ModalPresence = {
   shouldRender: boolean;
@@ -39,7 +40,7 @@ export default function FactoryResetModal({
         style={{ maxWidth: 720, border: '1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border))' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header" style={{ color: 'var(--color-danger)' }}>确认重新初始化系统</div>
+        <div className="modal-header" style={{ color: 'var(--color-danger)' }}>{tr('确认重新初始化系统')}</div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ padding: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', fontSize: 12, lineHeight: 1.8 }}>
             这是不可逆操作。系统会清空当前 metapi 使用中的全部数据库内容，并在成功后立即退出当前登录状态。
@@ -52,7 +53,7 @@ export default function FactoryResetModal({
           </div>
         </div>
         <div className="modal-footer">
-          <button onClick={onClose} disabled={factoryResetting} className="btn btn-ghost">取消</button>
+          <button onClick={onClose} disabled={factoryResetting} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={onConfirm} disabled={factoryResetting || factoryResetSecondsLeft > 0} className="btn btn-danger">
             {factoryResetting
               ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {confirmLabel}</>

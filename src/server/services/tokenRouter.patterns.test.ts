@@ -139,6 +139,32 @@ describe('TokenRouter patterns and model mapping', () => {
     expect(selected?.channel.id).not.toBe(invalid.channel.id);
   });
 
+  it('prefers the most specific glob over a catch-all route', async () => {
+    const catchAll = await createRouteWithSingleChannel('*');
+    const glob = await createRouteWithSingleChannel('claude-*');
+    const router = new TokenRouter();
+
+    const selected = await router.selectChannel('claude-opus-4-6');
+    expect(selected?.channel.id).toBe(glob.channel.id);
+    expect(selected?.channel.id).not.toBe(catchAll.channel.id);
+  });
+
+  it('skips a glob route with no live channel instead of shadowing the catch-all', async () => {
+    const catchAll = await createRouteWithSingleChannel('*');
+    // A pattern route whose channels were all removed (the stale
+    // gemini-*-thinking-* shells in production): it matches, but it serves
+    // nothing and must not take the request down with it.
+    await db.insert(schema.tokenRoutes).values({
+      modelPattern: 'claude-*',
+      enabled: true,
+    }).run();
+    invalidateTokenRouterCache();
+    const router = new TokenRouter();
+
+    const selected = await router.selectChannel('claude-opus-4-6');
+    expect(selected?.channel.id).toBe(catchAll.channel.id);
+  });
+
   it('supports exact, glob and re: keys in modelMapping with exact taking precedence', async () => {
     const mapping = JSON.stringify({
       'claude-sonnet-4-6': 'target-exact',

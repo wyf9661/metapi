@@ -48,6 +48,7 @@ import {
   type RouteCooldownUnit,
   type ShorthandConnection,
 } from './settings/settingsConfig.js';
+import { tr } from '../i18n.js';
 
 const FACTORY_RESET_ADMIN_TOKEN = 'change-me-admin-token';
 const FACTORY_RESET_CONFIRM_SECONDS = 3;
@@ -988,15 +989,13 @@ export default function Settings() {
   return (
     <div className="animate-fade-in" style={{ width: '100%', maxWidth: 1320, margin: '0 auto' }}>
       <div className="page-header">
-        <h2 className="page-title">系统设置</h2>
+        <h2 className="page-title">{tr('系统设置')}</h2>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: 16 }}>
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 1, height: '100%' }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>重置操作</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 12 }}>
-            重新拉取站点模型列表并重建路由通道，不影响账号、令牌数据。
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 12 }}>{tr('重新拉取站点模型列表并重建路由通道，不影响账号、令牌数据。')}</div>
           <button onClick={handleClearCache} disabled={clearingCache} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>
             {clearingCache ? <><span className="spinner spinner-sm" /> 清理中...</> : '清除缓存并重建路由'}
           </button>
@@ -1021,17 +1020,15 @@ export default function Settings() {
               whiteSpace: 'nowrap',
               cursor: isTunnelClientView ? 'not-allowed' : 'pointer',
             }}
-          >
-            重新初始化系统
-          </button>
+          >{tr('重新初始化系统')}</button>
         </div>
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>管理员登录令牌</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>{tr('管理员登录令牌')}</div>
           <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 12 }}>
             {maskedToken || '****'}
           </code>
-          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? '公网隧道访问时不可修改' : undefined}>修改登录令牌</button>
+          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? '公网隧道访问时不可修改' : undefined}>{tr('修改登录令牌')}</button>
           <ChangeKeyModal
             open={showChangeKey}
             onClose={() => {
@@ -1042,7 +1039,7 @@ export default function Settings() {
         </div>
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 2 }} data-settings-card="public-tunnel">
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>公网隧道访问</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{tr('公网隧道访问')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
             对应仪表盘「创建隧道」。默认公网只允许 API；开启后才可通过隧道 URL 打开控制台（仍需管理员登录令牌）。
             {isTunnelClientView ? ' 当前为公网隧道访问，此开关已锁定。' : ''}
@@ -1060,9 +1057,7 @@ export default function Settings() {
             opacity: isTunnelClientView ? 0.55 : 1,
           }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                允许通过隧道访问控制台
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('允许通过隧道访问控制台')}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
                 关闭：仅 /v1/* API　｜　开启：控制台 + 管理 API
               </div>
@@ -1094,7 +1089,7 @@ export default function Settings() {
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 3, gridColumn: '1 / -1' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>定时任务</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{tr('定时任务')}</div>
             <button
               onClick={triggerScheduleCheckin}
               disabled={testingCheckin}
@@ -1106,7 +1101,7 @@ export default function Settings() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(140px, 180px) minmax(140px, 180px)', gap: 12, marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到方式</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('签到方式')}</div>
               <ModernSelect
                 value={runtime.checkinScheduleMode}
                 onChange={(value) => setRuntime((prev) => ({
@@ -1135,7 +1130,7 @@ export default function Settings() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到 Cron</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('签到 Cron')}</div>
               <input
                 value={runtime.checkinCron}
                 onChange={(e) => setRuntime((prev) => ({ ...prev, checkinCron: e.target.value }))}
@@ -1144,7 +1139,7 @@ export default function Settings() {
               />
             </div>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>余额刷新 Cron</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('余额刷新 Cron')}</div>
               <input
                 value={runtime.balanceRefreshCron}
                 onChange={(e) => setRuntime((prev) => ({ ...prev, balanceRefreshCron: e.target.value }))}
@@ -1170,7 +1165,7 @@ export default function Settings() {
                   onChange={(e) => setRuntime((prev) => ({ ...prev, turnstileSolverEnabled: e.target.checked }))}
                   style={{ width: 16, height: 16, marginTop: 0, flexShrink: 0 }}
                 />
-                启用
+                {tr('启用')}
               </label>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, lineHeight: 1.45 }}>
@@ -1183,7 +1178,7 @@ export default function Settings() {
                 <input
                   value={runtime.turnstileSolverBaseUrl}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, turnstileSolverBaseUrl: e.target.value }))}
-                  placeholder="http://127.0.0.1:5091（自建求解器）"
+                  placeholder={tr('http://127.0.0.1:5091（自建求解器）')}
                   style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
                   disabled={!runtime.turnstileSolverEnabled}
                 />
@@ -1228,10 +1223,10 @@ export default function Settings() {
               gap: 12,
             }}
           >
-            <div style={{ fontWeight: 600, fontSize: 13 }}>自动清理日志</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{tr('自动清理日志')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 160px', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>清理 Cron</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('清理 Cron')}</div>
                 <input
                   value={runtime.logCleanupCron}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, logCleanupCron: e.target.value }))}
@@ -1239,7 +1234,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>保留天数</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('保留天数')}</div>
                 <input
                   type="number"
                   min={1}
@@ -1263,17 +1258,13 @@ export default function Settings() {
                   type="checkbox"
                   checked={runtime.logCleanupUsageLogsEnabled}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, logCleanupUsageLogsEnabled: e.target.checked }))}
-                />
-                清理使用日志
-              </label>
+                />{tr('清理使用日志')}</label>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 <input
                   type="checkbox"
                   checked={runtime.logCleanupProgramLogsEnabled}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, logCleanupProgramLogsEnabled: e.target.checked }))}
-                />
-                清理程序日志
-              </label>
+                />{tr('清理程序日志')}</label>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
               默认每天早上 6 点执行。按每次定时任务执行时间，清理早于“保留天数”的日志；两个选项都不勾选时不会实际删除日志。
@@ -1281,20 +1272,18 @@ export default function Settings() {
           </div>
           <div style={{ marginTop: 12 }}>
             <button onClick={saveSchedule} disabled={savingSchedule} className="btn btn-primary">
-              {savingSchedule ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存定时任务'}
+              {savingSchedule ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存定时任务'}
             </button>
           </div>
         </div>
 
         <div className="card animate-slide-up stagger-5" style={{ padding: 20, order: 4 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>代理失败判定</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            命中任一关键词或空内容时判定失败，可触发重试。
-          </div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{tr('代理失败判定')}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>{tr('命中任一关键词或空内容时判定失败，可触发重试。')}</div>
           <textarea
             value={proxyErrorKeywordsText}
             onChange={(e) => setProxyErrorKeywordsText(e.target.value)}
-            placeholder="一行一个关键词，或逗号分隔"
+            placeholder={tr('一行一个关键词，或逗号分隔')}
             style={{
               ...inputStyle,
               fontFamily: 'var(--font-mono)',
@@ -1409,7 +1398,7 @@ export default function Settings() {
                         value={rule.action}
                         onChange={(value) => updatePayloadVisualRule(rule.id, { action: value as PayloadRuleAction })}
                         options={PAYLOAD_RULE_ACTION_OPTIONS}
-                        placeholder="选择动作"
+                        placeholder={tr('选择动作')}
                       />
                     </div>
                     <div>
@@ -1420,7 +1409,7 @@ export default function Settings() {
                         value={rule.protocol}
                         onChange={(value) => updatePayloadVisualRule(rule.id, { protocol: String(value || '') })}
                         options={PAYLOAD_RULE_PROTOCOL_OPTIONS}
-                        placeholder="全部协议"
+                        placeholder={tr('全部协议')}
                       />
                     </div>
                     <div>
@@ -1430,7 +1419,7 @@ export default function Settings() {
                         aria-label={`Payload 规则可视化模型 ${index + 1}`}
                         value={rule.modelPattern}
                         onChange={(e) => updatePayloadVisualRule(rule.id, { modelPattern: e.target.value })}
-                        placeholder="例如 gpt-*"
+                        placeholder={tr('例如 gpt-*')}
                         style={inputStyle}
                       />
                     </div>
@@ -1441,7 +1430,7 @@ export default function Settings() {
                         aria-label={`Payload 规则可视化路径 ${index + 1}`}
                         value={rule.path}
                         onChange={(e) => updatePayloadVisualRule(rule.id, { path: e.target.value })}
-                        placeholder="例如 reasoning.effort"
+                        placeholder={tr('例如 reasoning.effort')}
                         style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
                       />
                     </div>
@@ -1466,7 +1455,7 @@ export default function Settings() {
                                 : rule.value,
                             })}
                             options={PAYLOAD_RULE_VALUE_MODE_OPTIONS}
-                            placeholder="值类型"
+                            placeholder={tr('值类型')}
                           />
                         </div>
                       )}
@@ -1499,7 +1488,7 @@ export default function Settings() {
                             aria-label={`Payload 规则可视化值 ${index + 1}`}
                             value={rule.value}
                             onChange={(e) => updatePayloadVisualRule(rule.id, { value: e.target.value })}
-                            placeholder="例如 high"
+                            placeholder={tr('例如 high')}
                             style={inputStyle}
                           />
                         )}
@@ -1767,7 +1756,7 @@ export default function Settings() {
                 { value: 'round_robin', label: '轮询' },
                 { value: 'stable_first', label: '稳定优先' },
               ]}
-              placeholder="选择路由策略"
+              placeholder={tr('选择路由策略')}
             />
             <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 6 }}>
               轮询：公平轮转，最久未选中的通道优先；稳定优先：按近期成功率加权，低成功率站点每 24 次请求灰度试探一次。
@@ -1782,7 +1771,7 @@ export default function Settings() {
               min={0}
               max={1}
               step={0.01}
-              aria-label="路由探测率"
+              aria-label={tr('路由探测率')}
               value={runtime.proxyRouteProbeRate}
               onChange={(e) => {
                 const nextValue = Number(e.target.value);
@@ -1847,7 +1836,7 @@ export default function Settings() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
               <input
                 type="number"
-                aria-label="路由失败冷却上限数值"
+                aria-label={tr('路由失败冷却上限数值')}
                 min={1}
                 step={1}
                 value={runtime.routeFailureCooldownMaxValue}
@@ -1875,7 +1864,7 @@ export default function Settings() {
                     value: option.value,
                     label: option.label,
                   }))}
-                  placeholder="选择单位"
+                  placeholder={tr('选择单位')}
                 />
               </div>
             </div>
@@ -1896,7 +1885,7 @@ export default function Settings() {
               type="number"
               min={0}
               step={1}
-              aria-label="首字超时秒数"
+              aria-label={tr('首字超时秒数')}
               value={runtime.proxyFirstByteTimeoutSec}
               onChange={(e) => {
                 const nextValue = Number(e.target.value);
@@ -1979,7 +1968,7 @@ export default function Settings() {
                     min={0.03}
                     max={0.15}
                     step={0.01}
-                    aria-label="概率保底下限"
+                    aria-label={tr('概率保底下限')}
                     value={runtime.routeProbabilityFloor ?? 0.05}
                     onChange={(e) => {
                       const v = Number(e.target.value);

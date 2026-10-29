@@ -170,7 +170,7 @@ export default function SiteAnnouncements() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {refreshing ? <><span className="spinner spinner-sm" /> 刷新中...</> : '刷新'}
+            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
           </button>
           <button
             onClick={markAllRead}
@@ -178,21 +178,19 @@ export default function SiteAnnouncements() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {markingAll ? <><span className="spinner spinner-sm" /> 标记中...</> : '全部已读'}
+            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : '全部已读'}
           </button>
           <button
             onClick={triggerSync}
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
-          >
-            手动同步
-          </button>
+          >{tr('手动同步')}</button>
           <button
             onClick={clearAll}
             disabled={clearing}
             className="btn btn-link btn-link-danger"
           >
-            {clearing ? <><span className="spinner spinner-sm" /> 清空中...</> : '清空公告'}
+            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : '清空公告'}
           </button>
         </div>
       </div>
@@ -204,8 +202,8 @@ export default function SiteAnnouncements() {
           </div>
         ) : rows.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center' }}>
-            <div className="empty-state-title">暂无公告</div>
-            <div className="empty-state-desc">当前没有可显示的站点公告。</div>
+            <div className="empty-state-title">{tr('暂无公告')}</div>
+            <div className="empty-state-desc">{tr('当前没有可显示的站点公告。')}</div>
           </div>
         ) : (
           rows.map((row, index) => (

@@ -528,13 +528,11 @@ export default function ImportExport() {
       <div className="page-header" style={{ alignItems: 'flex-end', marginBottom: 18 }}>
         <div>
           <h2 className="page-title" style={{ marginBottom: 6 }}>{tr('备份 / 恢复')}</h2>
-          <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-            支持配置型备份、分区备份与手动恢复。
-          </div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{tr('支持配置型备份、分区备份与手动恢复。')}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <StatusPill tone="muted" style={{ fontSize: 11 }}>Schema v2.1</StatusPill>
-          <StatusPill tone="warning" style={{ fontSize: 11 }}>敏感数据请离线保管</StatusPill>
+          <StatusPill tone="warning" style={{ fontSize: 11 }}>{tr('敏感数据请离线保管')}</StatusPill>
         </div>
       </div>
 
@@ -545,7 +543,7 @@ export default function ImportExport() {
             <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            <span style={{ fontSize: 16, fontWeight: 700 }}>导出数据</span>
+            <span style={{ fontSize: 16, fontWeight: 700 }}>{tr('导出数据')}</span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
             将连接、路由策略与设置导出为 JSON 文件进行备份
@@ -558,7 +556,7 @@ export default function ImportExport() {
               className="btn btn-primary"
               style={{ justifyContent: 'space-between', padding: '28px 16px' }}
             >
-              <span>导出全部（连接 + 路由 + 策略 + 设置）</span>
+              <span>{tr('导出全部（连接 + 路由 + 策略 + 设置）')}</span>
               {exportingType === 'all' ? <span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> : null}
             </button>
             <button
@@ -567,7 +565,7 @@ export default function ImportExport() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)', justifyContent: 'space-between', padding: '28px 16px' }}
             >
-              <span>仅导出连接与路由策略</span>
+              <span>{tr('仅导出连接与路由策略')}</span>
               {exportingType === 'accounts' ? <span className="spinner spinner-sm" /> : null}
             </button>
             <button
@@ -576,7 +574,7 @@ export default function ImportExport() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)', justifyContent: 'space-between', padding: '28px 16px' }}
             >
-              <span>仅导出系统设置</span>
+              <span>{tr('仅导出系统设置')}</span>
               {exportingType === 'preferences' ? <span className="spinner spinner-sm" /> : null}
             </button>
           </div>
@@ -588,11 +586,9 @@ export default function ImportExport() {
             <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span style={{ fontSize: 16, fontWeight: 700 }}>导入数据</span>
+            <span style={{ fontSize: 16, fontWeight: 700 }}>{tr('导入数据')}</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
-            从备份文件恢复数据
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>{tr('从备份文件恢复数据')}</div>
 
           <div style={{ display: 'grid', gap: 12 }}>
             {/* ---- 拖拽上传区 ---- */}
@@ -627,9 +623,7 @@ export default function ImportExport() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                     {selectedFileName}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    点击重新选择文件
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('点击重新选择文件')}</div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -639,8 +633,7 @@ export default function ImportExport() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: dragOver ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
                     {dragOver ? '松开以导入文件' : '拖拽 JSON 备份文件到此处'}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    或 <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>点击选择文件</span>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('或')} <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>{tr('点击选择文件')}</span>
                   </div>
                 </div>
               )}
@@ -648,11 +641,11 @@ export default function ImportExport() {
 
             {/* ---- 数据预览 ---- */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 6 }}>数据预览</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 6 }}>{tr('数据预览')}</div>
               <textarea
                 value={importData}
                 onChange={(e) => setImportData(e.target.value)}
-                placeholder="粘贴 JSON 数据或通过上面的拖拽区域导入..."
+                placeholder={tr('粘贴 JSON 数据或通过上面的拖拽区域导入...')}
                 style={{
                   width: '100%',
                   minHeight: 100,
@@ -765,7 +758,7 @@ export default function ImportExport() {
             <input
               value={webdavConfig.username}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, username: e.target.value }))}
-              placeholder="可留空"
+              placeholder={tr('可留空')}
               style={settingsInputStyle}
             />
           </div>

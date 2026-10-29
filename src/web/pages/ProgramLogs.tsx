@@ -197,7 +197,7 @@ export default function ProgramLogs() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {refreshing ? <><span className="spinner spinner-sm" /> 刷新中...</> : '刷新'}
+            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
           </button>
           <button
             onClick={markAllRead}
@@ -205,14 +205,14 @@ export default function ProgramLogs() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {markingAll ? <><span className="spinner spinner-sm" /> 标记中...</> : '全部已读'}
+            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : '全部已读'}
           </button>
           <button
             onClick={clearAll}
             disabled={clearing}
             className="btn btn-link btn-link-danger"
           >
-            {clearing ? <><span className="spinner spinner-sm" /> 清空中...</> : '清空日志'}
+            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : '清空日志'}
           </button>
         </div>
       </div>
@@ -236,7 +236,7 @@ export default function ProgramLogs() {
                 value: item.value,
                 label: item.label,
               }))}
-              placeholder="全部类型"
+              placeholder={tr('全部类型')}
             />
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
               <input
@@ -247,7 +247,7 @@ export default function ProgramLogs() {
                   setOnlyUnread(e.target.checked);
                 }}
               />
-              仅看未读
+              {tr('仅看未读')}
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
               共 {total} 条
@@ -268,7 +268,7 @@ export default function ProgramLogs() {
                   value: item.value,
                   label: item.label,
                 }))}
-                placeholder="全部类型"
+                placeholder={tr('全部类型')}
               />
             </div>
 
@@ -281,7 +281,7 @@ export default function ProgramLogs() {
                   setOnlyUnread(e.target.checked);
                 }}
               />
-              仅看未读
+              {tr('仅看未读')}
             </label>
 
             <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
@@ -314,7 +314,7 @@ export default function ProgramLogs() {
                   )}
                   footerActions={(
                     row.read ? (
-                      <span className="badge badge-muted" style={{ fontSize: 11 }}>已读</span>
+                      <span className="badge badge-muted" style={{ fontSize: 11 }}>{tr('已读')}</span>
                     ) : (
                       <button
                         type="button"
@@ -339,8 +339,8 @@ export default function ProgramLogs() {
                 <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <div className="empty-state-title">暂无日志</div>
-                <div className="empty-state-desc">当前筛选条件下没有程序日志。</div>
+                <div className="empty-state-title">{tr('暂无日志')}</div>
+                <div className="empty-state-desc">{tr('当前筛选条件下没有程序日志。')}</div>
               </div>
             )}
           </div>
@@ -357,13 +357,13 @@ export default function ProgramLogs() {
             </colgroup>
             <thead>
               <tr>
-                <th>时间</th>
-                <th>类型</th>
-                <th>级别</th>
-                <th>标题</th>
-                <th>内容</th>
-                <th>状态</th>
-                <th>操作</th>
+                <th>{tr('时间')}</th>
+                <th>{tr('类型')}</th>
+                <th>{tr('级别')}</th>
+                <th>{tr('标题')}</th>
+                <th>{tr('内容')}</th>
+                <th>{tr('状态')}</th>
+                <th>{tr('操作')}</th>
               </tr>
             </thead>
             <tbody>
@@ -399,9 +399,9 @@ export default function ProgramLogs() {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         {row.read ? (
-                          <span className="badge badge-muted" style={{ fontSize: 11 }}>已读</span>
+                          <span className="badge badge-muted" style={{ fontSize: 11 }}>{tr('已读')}</span>
                         ) : (
-                          <StatusText tone="warning" style={{ fontSize: 11 }}>未读</StatusText>
+                          <StatusText tone="warning" style={{ fontSize: 11 }}>{tr('未读')}</StatusText>
                         )}
                         {!row.read && (
                           <button
@@ -424,8 +424,8 @@ export default function ProgramLogs() {
             <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <div className="empty-state-title">暂无日志</div>
-            <div className="empty-state-desc">当前筛选条件下没有程序日志。</div>
+            <div className="empty-state-title">{tr('暂无日志')}</div>
+            <div className="empty-state-desc">{tr('当前筛选条件下没有程序日志。')}</div>
           </div>
         )}
       </div>

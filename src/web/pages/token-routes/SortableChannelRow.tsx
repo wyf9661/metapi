@@ -9,6 +9,7 @@ import {
 } from './tokenBindingPresentation.js';
 import { getChannelDecisionState, getPriorityTagStyle, getProbabilityColor } from './utils.js';
 import { StatusPill } from '../../components/StatusText.js';
+import { tr } from '../../i18n.js';
 
 export function SortableChannelRow({
   channel,
@@ -102,7 +103,7 @@ export function SortableChannelRow({
               ...dragHandleStyle,
             }}
             data-tooltip={suppressTooltips ? undefined : (managementLocked ? '该路由当前不可编辑优先级' : '拖拽调整优先级桶')}
-            aria-label="拖拽调整优先级桶"
+            aria-label={tr('拖拽调整优先级桶')}
           >
             <svg width="12" height="12" fill="currentColor" viewBox="0 0 12 12" aria-hidden>
               <circle cx="3" cy="2" r="1" />
@@ -139,7 +140,7 @@ export function SortableChannelRow({
               </span>
 
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
-                成功/失败 <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
+                {tr('成功/失败')} <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
                 <span style={{ color: 'var(--color-text-muted)', margin: '0 2px' }}>/</span>
                 <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{channel.failCount || 0}</span>
               </span>
@@ -200,15 +201,13 @@ export function SortableChannelRow({
                 <StatusPill tone="warning"
                   style={{ fontSize: 10 }}
                   data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
-                >
-                  手动配置
-                </StatusPill>
+                >{tr('手动配置')}</StatusPill>
               ) : null}
 
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>选中概率</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>{tr('选中概率')}</span>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
                 <div
                   data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
@@ -279,7 +278,7 @@ export function SortableChannelRow({
                         description: buildFixedTokenOptionDescription(token),
                       })),
                     ]}
-                    placeholder="选择令牌绑定方式"
+                    placeholder={tr('选择令牌绑定方式')}
                   />
                   <div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--color-text-muted)', lineHeight: 1.35 }}>
                     {tokenBinding.helperText}
@@ -307,7 +306,7 @@ export function SortableChannelRow({
                       onClick={onSiteBlockModel}
                       className="btn btn-link btn-link-warning"
                     >
-                      屏蔽模型
+                      {tr('屏蔽模型')}
                     </button>
                   ) : null}
 
@@ -316,17 +315,13 @@ export function SortableChannelRow({
                       onClick={onResetChannel}
                       className="btn btn-link"
                       data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
-                    >
-                      恢复默认
-                    </button>
+                    >{tr('恢复默认')}</button>
                   ) : null}
 
                   <button
                     onClick={onDeleteChannel}
                     className="btn btn-link btn-link-danger"
-                  >
-                    移除
-                  </button>
+                  >{tr('移除')}</button>
                 </div>
               </div>
             )}
@@ -347,7 +342,7 @@ export function SortableChannelRow({
           className="btn btn-ghost"
           style={dragHandleStyle}
           data-tooltip={suppressTooltips ? undefined : (managementLocked ? '该路由当前不可编辑优先级' : '拖拽调整优先级桶')}
-          aria-label="拖拽调整优先级桶"
+          aria-label={tr('拖拽调整优先级桶')}
         >
           <svg width="12" height="12" fill="currentColor" viewBox="0 0 12 12" aria-hidden>
             <circle cx="3" cy="2" r="1" />
@@ -414,7 +409,7 @@ export function SortableChannelRow({
               fontWeight: 600,
             }}
           >
-            冷却中
+            {tr('冷却中')}
           </span>
         ) : null}
         {channel.sourceModel ? (
@@ -427,17 +422,15 @@ export function SortableChannelRow({
           <StatusPill tone="warning"
             style={{ fontSize: 10 }}
             data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
-          >
-            手动配置
-          </StatusPill>
+          >{tr('手动配置')}</StatusPill>
         ) : null}
 
         {channel.enabled === false ? (
-          <span className="badge badge-muted" style={{ fontSize: 10 }}>已禁用</span>
+          <span className="badge badge-muted" style={{ fontSize: 10 }}>{tr('已禁用')}</span>
         ) : null}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginTop: mobile ? 0 : 1, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>选中概率</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>{tr('选中概率')}</span>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
             <div
               data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
@@ -476,7 +469,7 @@ export function SortableChannelRow({
             </span>
           </div>
 
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>成功/失败</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{tr('成功/失败')}</span>
           <span style={{ fontSize: 11 }}>
             <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
             <span style={{ color: 'var(--color-text-muted)', margin: '0 2px' }}>/</span>
@@ -506,7 +499,7 @@ export function SortableChannelRow({
                     description: buildFixedTokenOptionDescription(token),
                   })),
                 ]}
-                placeholder="选择令牌绑定方式"
+                placeholder={tr('选择令牌绑定方式')}
               />
               <div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--color-text-muted)', lineHeight: 1.35 }}>
                 {tokenBinding.helperText}
@@ -535,9 +528,7 @@ export function SortableChannelRow({
                 onClick={onResetChannel}
                 className="btn btn-link"
                 data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
-              >
-                恢复默认
-              </button>
+              >{tr('恢复默认')}</button>
             ) : null}
 
             {onSiteBlockModel && channel.accountId ? (
@@ -546,16 +537,14 @@ export function SortableChannelRow({
                 className="btn btn-link btn-link-warning"
                 data-tooltip={suppressTooltips ? undefined : `将此模型加入该账号（站点「${channel.site?.name || '未知'}」）的禁用列表，rebuild 后该账号的此模型通道将不再生成，同站点其他账号不受影响`}
               >
-                屏蔽模型
+                {tr('屏蔽模型')}
               </button>
             ) : null}
 
             <button
               onClick={onDeleteChannel}
               className="btn btn-link btn-link-danger"
-            >
-              移除
-            </button>
+            >{tr('移除')}</button>
           </div>
         </>
       ) : null}

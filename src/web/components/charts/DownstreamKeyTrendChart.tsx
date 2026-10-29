@@ -3,6 +3,7 @@ import { VChart } from '@visactor/react-vchart';
 import { formatDateTimeMinuteLocal } from '../../pages/helpers/checkinLogTime.js';
 import { useIsMobile } from '../useIsMobile.js';
 import { useThemeVar } from '../useThemeLabelColor.js';
+import { tr } from '../../i18n.js';
 
 type Metric = 'tokens' | 'requests' | 'cost';
 
@@ -89,8 +90,8 @@ export default function DownstreamKeyTrendChart({
           <MetricToggle metric={metric} onChange={setMetric} />
         </div>
         <div className="empty-state" style={{ padding: 32 }}>
-          <div className="empty-state-title">暂无趋势数据</div>
-          <div className="empty-state-desc">该 Key 在所选时间范围内没有可用的 tokens 记录</div>
+          <div className="empty-state-title">{tr('暂无趋势数据')}</div>
+          <div className="empty-state-desc">{tr('该 Key 在所选时间范围内没有可用的 tokens 记录')}</div>
         </div>
       </div>
     );

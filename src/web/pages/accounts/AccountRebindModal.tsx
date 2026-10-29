@@ -1,5 +1,6 @@
 import React from 'react';
 import CenteredModal from '../../components/CenteredModal.js';
+import { tr } from '../../i18n.js';
 
 type RebindForm = {
   accessToken: string;
@@ -47,12 +48,12 @@ export default function AccountRebindModal({
     <CenteredModal
               open={open}
               onClose={closeRebindPanel}
-              title="重新绑定 Session Token"
+              title={tr('重新绑定 Session Token')}
               maxWidth={820}
               bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               footer={
                 <button onClick={closeRebindPanel} className="btn btn-ghost">
-                  取消
+                  {tr('取消')}
                 </button>
               }
             >
@@ -79,7 +80,7 @@ export default function AccountRebindModal({
                     }}
                   >
                     <textarea
-                      placeholder="粘贴新的 Session Token"
+                      placeholder={tr('粘贴新的 Session Token')}
                       value={rebindForm.accessToken}
                       onChange={(e) => {
                         setRebindForm((prev) => ({
@@ -97,7 +98,7 @@ export default function AccountRebindModal({
                     />
                     {showUserId && (
                       <input
-                        placeholder="用户 ID（可选）"
+                        placeholder={tr('用户 ID（可选）')}
                         value={rebindForm.platformUserId}
                         onChange={(e) => {
                           setRebindForm((prev) => ({
@@ -121,7 +122,7 @@ export default function AccountRebindModal({
                         }}
                       >
                         <input
-                          placeholder="Sub2API refresh_token（可选）"
+                          placeholder={tr('Sub2API refresh_token（可选）')}
                           value={rebindForm.refreshToken}
                           onChange={(e) =>
                             setRebindForm((prev) => ({
@@ -135,7 +136,7 @@ export default function AccountRebindModal({
                           }}
                         />
                         <input
-                          placeholder="token_expires_at（可选）"
+                          placeholder={tr('token_expires_at（可选）')}
                           value={rebindForm.tokenExpiresAt}
                           onChange={(e) =>
                             setRebindForm((prev) => ({
@@ -202,7 +203,7 @@ export default function AccountRebindModal({
                       {rebindVerifying ? (
                         <>
                           <span className="spinner spinner-sm" />
-                          验证中...
+                          {tr('验证中...')}
                         </>
                       ) : (
                         '验证 Token'

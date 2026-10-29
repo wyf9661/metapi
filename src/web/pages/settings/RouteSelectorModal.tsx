@@ -6,6 +6,7 @@ import {
   resolveRouteIcon,
   resolveRouteTitle,
 } from '../token-routes/utils.js';
+import { tr } from '../../i18n.js';
 
 type RouteSelectorItem = {
   id: number;
@@ -71,7 +72,7 @@ export default function RouteSelectorModal({
         style={{ maxWidth: 860 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header">勾选模型和群组</div>
+        <div className="modal-header">{tr('勾选模型和群组')}</div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             选择结果会保存到当前下游 API Key：精确模型用于模型白名单，群组用于路由范围限制。
@@ -92,14 +93,14 @@ export default function RouteSelectorModal({
                 <input
                   value={selectorModelSearch}
                   onChange={(e) => onSelectorModelSearchChange(e.target.value)}
-                  placeholder="搜索精确模型（支持模糊匹配）"
+                  placeholder={tr('搜索精确模型（支持模糊匹配）')}
                   style={{ ...inputStyle, padding: '8px 10px', fontSize: 12, marginBottom: 8 }}
                 />
                 <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {exactModelOptions.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可选精确模型</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('暂无可选精确模型')}</div>
                   ) : filteredExactModelOptions.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>没有匹配的精确模型</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('没有匹配的精确模型')}</div>
                   ) : filteredExactModelOptions.map((modelName) => {
                     const checked = selection.selectedModels.includes(modelName);
                     const brand = getBrand(modelName);
@@ -191,9 +192,9 @@ export default function RouteSelectorModal({
                 />
                 <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {groupRouteOptions.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可选群组</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('暂无可选群组')}</div>
                   ) : filteredGroupRouteOptions.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>没有匹配的群组</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('没有匹配的群组')}</div>
                   ) : filteredGroupRouteOptions.map((route) => {
                     const checked = selection.selectedGroupRouteIds.includes(route.id);
                     const routeTitle = resolveRouteTitle(route);
@@ -280,7 +281,7 @@ export default function RouteSelectorModal({
                                   color: 'var(--color-danger)',
                                 }}
                               >
-                                已禁用
+                                {tr('已禁用')}
                               </span>
                             ) : null}
                           </code>
@@ -297,7 +298,7 @@ export default function RouteSelectorModal({
           )}
         </div>
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-ghost">关闭</button>
+          <button onClick={onClose} className="btn btn-ghost">{tr('关闭')}</button>
         </div>
       </div>
     </div>

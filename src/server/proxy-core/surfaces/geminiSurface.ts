@@ -49,6 +49,7 @@ import {
   getProxyMaxChannelRetries,
 } from '../../services/proxyChannelRetry.js';
 import { shouldAbortSameSiteEndpointFallback } from '../../services/proxyRetryPolicy.js';
+import { shouldRetryChannelForFailure } from '../../services/siteFailureClassification.js';
 import {
   buildSurfaceProxyDebugResponseHeaders,
   captureSurfaceProxyDebugSuccessResponseBody,
@@ -511,7 +512,8 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             status: upstream.status,
             errorText: text,
           });
-          if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
+          if (shouldRetryChannelForFailure({ status: upstream.status, errorText: text })
+            && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount += 1;
             continue;
           }
@@ -964,7 +966,8 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               isStreamAction,
               firstByteLatencyMs,
           requestTraceId,);
-            if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
+            if (shouldRetryChannelForFailure({ status: lastStatus, errorText: lastText, modelName: requestedModel })
+              && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
               retryCount += 1;
               continue;
             }
@@ -1569,7 +1572,11 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             isStreamAction,
             null,
           requestTraceId,);
-          if (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
+          if (shouldRetryChannelForFailure({
+            status: endpointResult.status,
+            errorText: endpointResult.rawErrText || endpointResult.errText,
+            modelName: requestedModel,
+          }) && canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })) {
             retryCount += 1;
             continue;
           }

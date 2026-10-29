@@ -847,7 +847,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)' }}
           >
-            同步与筛选
+            {tr('同步与筛选')}
           </button>
         </>
       ) : embedded ? (
@@ -858,7 +858,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
+            {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步站点令牌'}
           </button>
         </>
       ) : (
@@ -872,7 +872,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 { value: '0', label: '选择账号后同步站点令牌' },
                 ...activeAccountSelectOptions,
               ]}
-              placeholder="选择账号后同步站点令牌"
+              placeholder={tr('选择账号后同步站点令牌')}
               searchable
               searchPlaceholder={ACCOUNT_SELECT_SEARCH_PLACEHOLDER}
             />
@@ -883,7 +883,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {syncing ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
+            {syncing ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步站点令牌'}
           </button>
           <button
             onClick={handleSyncAll}
@@ -891,7 +891,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步全部账号'}
+            {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步全部账号'}
           </button>
         </>
       )}
@@ -929,7 +929,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>同步账号</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('同步账号')}</div>
               <ModernSelect
                 value={String(syncingAccountId || 0)}
                 onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
@@ -937,7 +937,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                   { value: '0', label: '选择账号后同步站点令牌' },
                   ...activeAccountSelectOptions,
                 ]}
-                placeholder="选择账号后同步站点令牌"
+                placeholder={tr('选择账号后同步站点令牌')}
                 searchable
                 searchPlaceholder={ACCOUNT_SELECT_SEARCH_PLACEHOLDER}
               />
@@ -948,7 +948,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {syncing ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步站点令牌'}
+              {syncing ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步站点令牌'}
             </button>
             <button
               onClick={handleSyncAll}
@@ -956,7 +956,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {syncingAll ? <><span className="spinner spinner-sm" /> 同步中...</> : '同步全部账号'}
+              {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步全部账号'}
             </button>
           </div>
         )}
@@ -970,23 +970,23 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         open={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
-        title="确认删除令牌"
+        title={tr('确认删除令牌')}
         confirmText="确认删除"
         loading={Boolean(deleteConfirm?.tokenId && rowLoading[`token-${deleteConfirm.tokenId}-delete`])}
-        description={<>确定要删除令牌 <strong>{deleteConfirm?.tokenName || `#${deleteConfirm?.tokenId}`}</strong> 吗？</>}
+        description={<>{tr('确定要删除令牌')} <strong>{deleteConfirm?.tokenName || `#${deleteConfirm?.tokenId}`}</strong> 吗？</>}
       />
 
       <CenteredModal
         open={Boolean(editingToken)}
         onClose={closeEditPanel}
-        title="编辑令牌"
+        title={tr('编辑令牌')}
         maxWidth={760}
         bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
         footer={(
           <>
-            <button onClick={closeEditPanel} className="btn btn-ghost">取消</button>
+            <button onClick={closeEditPanel} className="btn btn-ghost">{tr('取消')}</button>
             <button onClick={saveEditPanel} disabled={savingEdit || editingTokenValueLoading} className="btn btn-primary">
-              {savingEdit ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存修改'}
+              {savingEdit ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存修改'}
             </button>
           </>
         )}
@@ -1020,19 +1020,19 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               </div>
             ) : null}
             <div style={sectionCardStyle}>
-              <div style={sectionLabelStyle}>基本信息</div>
+              <div style={sectionLabelStyle}>{tr('基本信息')}</div>
               <ResponsiveFormGrid>
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>令牌名称</div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('令牌名称')}</div>
                   <input
-                    placeholder="令牌名称"
+                    placeholder={tr('令牌名称')}
                     value={editForm.name}
                     onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
                     style={inputStyle}
                   />
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>分组</div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('分组')}</div>
                   <ModernSelect
                     value={editForm.group || 'default'}
                     onChange={(nextValue) => setEditForm((prev) => ({ ...prev, group: nextValue || 'default' }))}
@@ -1045,7 +1045,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                   />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>令牌值</div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('令牌值')}</div>
                   <textarea
                     placeholder={editingTokenValueLoading ? '令牌加载中...' : '令牌值'}
                     value={editForm.token}
@@ -1098,7 +1098,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       <CenteredModal
         open={showAdd}
         onClose={handleToggleAdd}
-        title="新增令牌"
+        title={tr('新增令牌')}
         maxWidth={820}
         bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       >
@@ -1118,7 +1118,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 { value: '0', label: '选择账号' },
                 ...activeAccountSelectOptions,
               ]}
-              placeholder="选择账号"
+              placeholder={tr('选择账号')}
               searchable
               searchPlaceholder={ACCOUNT_SELECT_SEARCH_PLACEHOLDER}
             />
@@ -1143,7 +1143,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             <input
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="例如 metapi"
+              placeholder={tr('例如 metapi')}
               style={inputStyle}
             />
           </div>
@@ -1173,7 +1173,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               <input
                 value={form.remainQuota}
                 onChange={(e) => setForm((prev) => ({ ...prev, remainQuota: e.target.value.replace(/[^\d]/g, '') }))}
-                placeholder="额度（正整数）"
+                placeholder={tr('额度（正整数）')}
                 style={{ ...inputStyle, maxWidth: 220 }}
               />
             )}
@@ -1192,7 +1192,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             <input
               value={form.allowIps}
               onChange={(e) => setForm((prev) => ({ ...prev, allowIps: e.target.value }))}
-              placeholder="多个用英文逗号分隔"
+              placeholder={tr('多个用英文逗号分隔')}
               style={inputStyle}
             />
           </div>

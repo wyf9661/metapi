@@ -299,13 +299,11 @@ function PriorityDragPreview({
           </span>
         ) : null}
         {channel.manualOverride ? (
-          <StatusPill tone="warning" style={{ fontSize: 10 }}>
-      手动配置
-     </StatusPill>
+          <StatusPill tone="warning" style={{ fontSize: 10 }}>{tr('手动配置')}</StatusPill>
         ) : null}
       </div>
       <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-        成功/失败 <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
+        {tr('成功/失败')} <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
         <span style={{ color: 'var(--color-text-muted)', margin: '0 2px' }}>/</span>
         <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{channel.failCount || 0}</span>
       </div>
@@ -758,10 +756,8 @@ function RouteCardInner({
                     color: 'var(--color-text-primary)',
                     fontWeight: 600,
                   }}
-                  data-tooltip="单通道路由：无冗余，该通道冷却即整路由不可用"
-                >
-                  单通道
-                </span>
+                  data-tooltip={tr('单通道路由：无冗余，该通道冷却即整路由不可用')}
+                >{tr('单通道')}</span>
               ) : null}
               {(route.cooldownChannelCount || 0) > 0 ? (
                 <span

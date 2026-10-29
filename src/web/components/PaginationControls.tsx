@@ -4,6 +4,7 @@ import PageJumpInput from './PageJumpInput.js';
 import ModernSelect from './ModernSelect.js';
 import { MOBILE_PAGE_SIZE_OPTIONS, PAGE_SIZE_OPTIONS } from './usePersistedPageSize.js';
 import { useIsMobile } from './useIsMobile.js';
+import { tr } from '../i18n.js';
 
 type PaginationControlsProps = {
   page: number;
@@ -98,9 +99,7 @@ export default function PaginationControls({
                 className="pagination-btn"
                 disabled={page <= 1}
                 onClick={() => goTo(page - 1)}
-              >
-                上一页
-              </button>
+              >{tr('上一页')}</button>
               <span className="pagination-info">
                 第 {page} / {totalPages} 页
               </span>
@@ -109,9 +108,7 @@ export default function PaginationControls({
                 className="pagination-btn"
                 disabled={page >= totalPages}
                 onClick={() => goTo(page + 1)}
-              >
-                下一页
-              </button>
+              >{tr('下一页')}</button>
             </div>
             <div className="pagination-compact-numbers">
               {firstPageOutsideWindow && (
@@ -119,11 +116,9 @@ export default function PaginationControls({
                   type="button"
                   className="pagination-btn"
                   onClick={() => goTo(1)}
-                  aria-label="回到第一页"
-                  title="回到第一页"
-                >
-                  首页
-                </button>
+                  aria-label={tr('回到第一页')}
+                  title={tr('回到第一页')}
+                >{tr('首页')}</button>
               )}
               {pageNumbers.map((n) => (
                 <button
@@ -158,19 +153,15 @@ export default function PaginationControls({
             className="pagination-btn"
             disabled={page <= 1}
             onClick={() => goTo(page - 1)}
-          >
-            上一页
-          </button>
+          >{tr('上一页')}</button>
           {firstPageOutsideWindow && (
             <button
               type="button"
               className="pagination-btn"
               onClick={() => goTo(1)}
-              aria-label="回到第一页"
-              title="回到第一页"
-            >
-              首页
-            </button>
+              aria-label={tr('回到第一页')}
+              title={tr('回到第一页')}
+            >{tr('首页')}</button>
           )}
           {pageNumbers.map((n) => (
             <button
@@ -191,9 +182,7 @@ export default function PaginationControls({
             className="pagination-btn"
             disabled={page >= totalPages}
             onClick={() => goTo(page + 1)}
-          >
-            下一页
-          </button>
+          >{tr('下一页')}</button>
         </>
       )}
       {pageSizeControl}

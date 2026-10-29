@@ -322,7 +322,7 @@ export function renderProxyLogClientCell(
               color: 'var(--color-text-muted)',
             }}
           >
-            推测
+            {tr('推测')}
           </span>
         ) : null}
       </div>
@@ -356,8 +356,8 @@ export function StreamModeIcon({
     return (
       <span
         data-testid="proxy-log-stream-icon"
-        title="流式"
-        aria-label="流式"
+        title={tr('流式')}
+        aria-label={tr('流式')}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -395,8 +395,8 @@ export function StreamModeIcon({
   return (
     <span
       data-testid="proxy-log-nonstream-icon"
-      title="非流"
-      aria-label="非流"
+      title={tr('非流')}
+      aria-label={tr('非流')}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

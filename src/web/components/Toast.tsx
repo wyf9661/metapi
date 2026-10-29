@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
+import { tr } from '../i18n.js';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -73,7 +74,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           >
             <span style={{ flexShrink: 0, marginTop: 1 }}>{icons[t.type]}</span>
             <span style={{ fontSize: 13, lineHeight: 1.5 }}>{t.message}</span>
-            <button type="button" className="toast-close" aria-label="关闭通知" onClick={() => removeToast(t.id)}>×</button>
+            <button type="button" className="toast-close" aria-label={tr('关闭通知')} onClick={() => removeToast(t.id)}>×</button>
             <div className="toast-progress" />
           </div>
         ))}

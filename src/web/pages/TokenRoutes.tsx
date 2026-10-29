@@ -57,6 +57,7 @@ import ManualRoutePanel from './token-routes/ManualRoutePanel.js';
 import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
 import TokenRouteConfirmModal, { type TokenRouteConfirmState } from './token-routes/TokenRouteConfirmModal.js';
+import RouteCompareModal from './token-routes/RouteCompareModal.js';
 import { StatusText, StatusPill } from '../components/StatusText.js';
 import PaginationControls from '../components/PaginationControls.js';
 import { useClientPagination } from '../components/useClientPagination.js';
@@ -197,6 +198,7 @@ export default function TokenRoutes() {
   const [filterCollapsed, setFilterCollapsed] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showZeroChannelRoutes, setShowZeroChannelRoutes] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [sortBy, setSortBy] = useState<RouteSortBy>('channelCount');
   const [sortDir, setSortDir] = useState<RouteSortDir>('desc');
 
@@ -1092,10 +1094,7 @@ export default function TokenRoutes() {
       const result = await requestConfirmation({
         title: '确认移除通道',
         description: (
-          <>
-            移除的通道会在定时模型刷新时被自动重建恢复，但<strong>它的累计统计（成功/失败、成本、冷却）会丢失</strong>，
-            重建出来的是全新的一条。<br />
-            想恢复系统默认配置、又保留统计，请用<strong>「恢复默认」</strong>；只是临时停用则用<strong>禁用开关</strong>。
+          <>{tr('移除的通道会在定时模型刷新时被自动重建恢复，但')}<strong>它的累计统计（成功/失败、成本、冷却）会丢失</strong>{tr('， 重建出来的是全新的一条。')}<br />{tr('想恢复系统默认配置、又保留统计，请用')}<strong>「恢复默认」</strong>；只是临时停用则用<strong>{tr('禁用开关')}</strong>。
           </>
         ),
         confirmText: '确认移除',
@@ -1122,11 +1121,8 @@ export default function TokenRoutes() {
     const confirmed = await requestConfirmation({
       title: '确认恢复默认',
       description: (
-        <>
-          将清除该通道的手动配置（优先级、权重、启用状态、来源模型、绑定令牌、请求改写规则），
-          交回系统按当前账号与模型重新派生。<br />
-          <strong>累计统计（成功/失败、成本、延迟、冷却）会保留</strong>，通道也不会被移除。
-        </>
+        <>{tr('将清除该通道的手动配置（优先级、权重、启用状态、来源模型、绑定令牌、请求改写规则）， 交回系统按当前账号与模型重新派生。')}<br />
+          <strong>累计统计（成功/失败、成本、延迟、冷却）会保留</strong>{tr('，通道也不会被移除。')}</>
       ),
       confirmText: '恢复默认',
       tone: 'warning',
@@ -1282,10 +1278,7 @@ export default function TokenRoutes() {
     const result = await requestConfirmation({
       title: '确认屏蔽模型',
       description: (
-        <>
-          将模型「<strong>{modelName}</strong>」加入账号「<strong>{accountLabel}</strong>」（站点 {siteName}）的禁用列表。<br />
-          执行后将自动触发路由重建，该账号下此模型的通道将不再生成，同一站点的其他账号不受影响。
-        </>
+        <>{tr('将模型「')}<strong>{modelName}</strong>」加入账号「<strong>{accountLabel}</strong>」（站点 {siteName}）的禁用列表。<br />{tr('执行后将自动触发路由重建，该账号下此模型的通道将不再生成，同一站点的其他账号不受影响。')}</>
       ),
       confirmText: '确认屏蔽',
       tone: 'warning',
@@ -1729,6 +1722,15 @@ export default function TokenRoutes() {
           >
             {showZeroChannelRoutes ? tr('隐藏 0 通道路由') : tr('显示 0 通道路由')}
           </button>
+
+          <button
+            type="button"
+            onClick={() => setCompareOpen(true)}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
+          >
+            {tr('路由比对')}
+          </button>
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0, maxWidth: '100%' }}>
@@ -1741,7 +1743,7 @@ export default function TokenRoutes() {
                 type="button"
                 className="badge"
                 onClick={() => setEnabledFilter(enabledFilter === 'cooling' ? 'all' : 'cooling')}
-                title="点击筛选/取消筛选冷却中的路由"
+                title={tr('点击筛选/取消筛选冷却中的路由')}
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
@@ -2250,6 +2252,12 @@ export default function TokenRoutes() {
         state={confirmState}
         onCancel={() => resolveConfirmation(false)}
         onConfirm={(dismissChecked) => resolveConfirmation(true, dismissChecked)}
+      />
+
+      <RouteCompareModal
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        routes={routeSummaries}
       />
     </div>
   );

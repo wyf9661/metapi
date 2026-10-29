@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import CenteredModal from '../../components/CenteredModal.js';
 import { generateDownstreamSkKey } from '../helpers/generateDownstreamSkKey.js';
+import { tr } from '../../i18n.js';
 
 const DOWNSTREAM_KEY_PREFIX = 'sk-';
 
@@ -359,26 +360,24 @@ export default function DownstreamKeyEditorModal({
       bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       footer={(
         <>
-          <button onClick={onClose} className="btn btn-ghost" disabled={saving}>取消</button>
+          <button onClick={onClose} className="btn btn-ghost" disabled={saving}>{tr('取消')}</button>
           <button onClick={onSave} className="btn btn-primary" disabled={saving}>
             {saving
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</>
+              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</>
               : (editingItem ? '保存修改' : '创建密钥')}
           </button>
         </>
       )}
     >
-      <div className="info-tip" style={{ marginBottom: 0 }}>
-        支持为每个下游密钥独立配置分组、标签、额度与有效期。高级限制项可按需展开。
-      </div>
+      <div className="info-tip" style={{ marginBottom: 0 }}>{tr('支持为每个下游密钥独立配置分组、标签、额度与有效期。高级限制项可按需展开。')}</div>
 
       <div className="downstream-key-modal-grid" style={{ gridTemplateColumns: '1fr' }}>
         <div className="downstream-key-modal-field downstream-key-modal-field-full">
-          <div className="downstream-key-modal-label">名称</div>
-          <input value={form.name} onChange={(e) => onChange((prev) => ({ ...prev, name: e.target.value }))} placeholder="例如：项目 A / 移动端" style={inputStyle} />
+          <div className="downstream-key-modal-label">{tr('名称')}</div>
+          <input value={form.name} onChange={(e) => onChange((prev) => ({ ...prev, name: e.target.value }))} placeholder={tr('例如：项目 A / 移动端')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">下游密钥</div>
+          <div className="downstream-key-modal-label">{tr('下游密钥')}</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', minWidth: 0 }}>
             <input
               value={form.key}
@@ -391,63 +390,61 @@ export default function DownstreamKeyEditorModal({
               className="btn btn-ghost"
               style={{ flexShrink: 0, whiteSpace: 'nowrap', alignSelf: 'stretch' }}
               onClick={() => onChange((prev) => ({ ...prev, key: generateDownstreamSkKey(DOWNSTREAM_KEY_PREFIX) }))}
-            >
-              随机
-            </button>
+            >{tr('随机')}</button>
           </div>
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">主分组</div>
+          <div className="downstream-key-modal-label">{tr('主分组')}</div>
           <input
             value={form.groupName}
             onChange={(e) => onChange((prev) => ({ ...prev, groupName: e.target.value }))}
-            placeholder="例如：VIP / 内部项目 / A组"
+            placeholder={tr('例如：VIP / 内部项目 / A组')}
             list="downstream-group-suggestions"
             style={inputStyle}
           />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">请求额度</div>
-          <input value={form.maxRequests} onChange={(e) => onChange((prev) => ({ ...prev, maxRequests: e.target.value }))} placeholder="留空表示不限" style={inputStyle} />
+          <div className="downstream-key-modal-label">{tr('请求额度')}</div>
+          <input value={form.maxRequests} onChange={(e) => onChange((prev) => ({ ...prev, maxRequests: e.target.value }))} placeholder={tr('留空表示不限')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">每分钟请求上限 (RPM)</div>
-          <input value={form.maxRpm} onChange={(e) => onChange((prev) => ({ ...prev, maxRpm: e.target.value }))} placeholder="留空表示不限" style={inputStyle} />
+          <div className="downstream-key-modal-label">{tr('每分钟请求上限 (RPM)')}</div>
+          <input value={form.maxRpm} onChange={(e) => onChange((prev) => ({ ...prev, maxRpm: e.target.value }))} placeholder={tr('留空表示不限')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
           <div className="downstream-key-modal-label">最大并发请求数 (In-Flight)</div>
-          <input value={form.maxInflight} onChange={(e) => onChange((prev) => ({ ...prev, maxInflight: e.target.value }))} placeholder="留空表示不限" style={inputStyle} />
+          <input value={form.maxInflight} onChange={(e) => onChange((prev) => ({ ...prev, maxInflight: e.target.value }))} placeholder={tr('留空表示不限')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">每日请求额度</div>
-          <input value={form.maxDailyRequests} onChange={(e) => onChange((prev) => ({ ...prev, maxDailyRequests: e.target.value }))} placeholder="留空表示不限，按天自动重置" style={inputStyle} />
+          <div className="downstream-key-modal-label">{tr('每日请求额度')}</div>
+          <input value={form.maxDailyRequests} onChange={(e) => onChange((prev) => ({ ...prev, maxDailyRequests: e.target.value }))} placeholder={tr('留空表示不限，按天自动重置')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">每日成本额度</div>
-          <input value={form.maxDailyCost} onChange={(e) => onChange((prev) => ({ ...prev, maxDailyCost: e.target.value }))} placeholder="留空表示不限，按天自动重置" style={inputStyle} />
+          <div className="downstream-key-modal-label">{tr('每日成本额度')}</div>
+          <input value={form.maxDailyCost} onChange={(e) => onChange((prev) => ({ ...prev, maxDailyCost: e.target.value }))} placeholder={tr('留空表示不限，按天自动重置')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">成本额度</div>
-          <input value={form.maxCost} onChange={(e) => onChange((prev) => ({ ...prev, maxCost: e.target.value }))} placeholder="留空表示不限" style={inputStyle} />
+          <div className="downstream-key-modal-label">{tr('成本额度')}</div>
+          <input value={form.maxCost} onChange={(e) => onChange((prev) => ({ ...prev, maxCost: e.target.value }))} placeholder={tr('留空表示不限')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">过期时间</div>
+          <div className="downstream-key-modal-label">{tr('过期时间')}</div>
           <input type="datetime-local" value={form.expiresAt} onChange={(e) => onChange((prev) => ({ ...prev, expiresAt: e.target.value }))} style={inputStyle} />
         </div>
         <label className="downstream-key-modal-toggle">
           <input type="checkbox" checked={form.enabled} onChange={(e) => onChange((prev) => ({ ...prev, enabled: e.target.checked }))} />
           <div>
-            <div className="downstream-key-modal-toggle-title">创建后立即启用</div>
-            <div className="downstream-key-modal-help">关闭后该密钥将无法继续分发请求</div>
+            <div className="downstream-key-modal-toggle-title">{tr('创建后立即启用')}</div>
+            <div className="downstream-key-modal-help">{tr('关闭后该密钥将无法继续分发请求')}</div>
           </div>
         </label>
         <label className="downstream-key-modal-field">
           <div>
-            <div className="downstream-key-modal-toggle-title">敏感词检测（反探活）</div>
-            <div className="downstream-key-modal-help">可跟随全局策略，也可为当前密钥强制开启或关闭。</div>
+            <div className="downstream-key-modal-toggle-title">{tr('敏感词检测（反探活）')}</div>
+            <div className="downstream-key-modal-help">{tr('可跟随全局策略，也可为当前密钥强制开启或关闭。')}</div>
           </div>
           <select
-            aria-label="敏感词检测策略"
+            aria-label={tr('敏感词检测策略')}
             value={form.sensitiveWordDetection}
             onChange={(event) => onChange((prev) => ({
               ...prev,
@@ -455,19 +452,19 @@ export default function DownstreamKeyEditorModal({
             }))}
             style={inputStyle}
           >
-            <option value="inherit">跟随全局</option>
-            <option value="on">强制开启</option>
-            <option value="off">强制关闭</option>
+            <option value="inherit">{tr('跟随全局')}</option>
+            <option value="on">{tr('强制开启')}</option>
+            <option value="off">{tr('强制关闭')}</option>
           </select>
         </label>
       </div>
 
       <div className="downstream-key-modal-field downstream-key-modal-field-full">
-        <div className="downstream-key-modal-label">备注说明</div>
+        <div className="downstream-key-modal-label">{tr('备注说明')}</div>
         <textarea
           value={form.description}
           onChange={(e) => onChange((prev) => ({ ...prev, description: e.target.value }))}
-          placeholder="填写业务场景、负责人或限制说明"
+          placeholder={tr('填写业务场景、负责人或限制说明')}
           style={{ ...inputStyle, minHeight: 84, resize: 'vertical' }}
         />
       </div>
@@ -478,7 +475,7 @@ export default function DownstreamKeyEditorModal({
           tags={form.tags}
           onChange={(tags) => onChange((prev) => ({ ...prev, tags }))}
           suggestions={tagSuggestions}
-          placeholder="输入标签后按回车或逗号，例如：移动端、VIP、项目A"
+          placeholder={tr('输入标签后按回车或逗号，例如：移动端、VIP、项目A')}
         />
         <div className="downstream-key-modal-help">标签用于搜索、筛选和辅助归类，不影响路由与权限。</div>
       </div>
@@ -518,7 +515,7 @@ export default function DownstreamKeyEditorModal({
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
-                  <input value={modelSearch} onChange={(e) => setModelSearch(e.target.value)} placeholder="搜索模型" />
+                  <input value={modelSearch} onChange={(e) => setModelSearch(e.target.value)} placeholder={tr('搜索模型')} />
                 </div>
                 <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {filteredModels.length === 0 ? (
@@ -558,7 +555,7 @@ export default function DownstreamKeyEditorModal({
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
-                  <input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="搜索群组或模型模式" />
+                  <input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder={tr('搜索群组或模型模式')} />
                 </div>
                 <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {filteredGroups.length === 0 ? (
@@ -607,7 +604,7 @@ export default function DownstreamKeyEditorModal({
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
-                  <input value={siteSearch} onChange={(e) => setSiteSearch(e.target.value)} placeholder="搜索站点" />
+                  <input value={siteSearch} onChange={(e) => setSiteSearch(e.target.value)} placeholder={tr('搜索站点')} />
                 </div>
                 <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {exclusionSourceLoading ? (
@@ -656,7 +653,7 @@ export default function DownstreamKeyEditorModal({
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
-                  <input value={credentialSearch} onChange={(e) => setCredentialSearch(e.target.value)} placeholder="搜索站点 / 账号 / 令牌" />
+                  <input value={credentialSearch} onChange={(e) => setCredentialSearch(e.target.value)} placeholder={tr('搜索站点 / 账号 / 令牌')} />
                 </div>
                 <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {exclusionSourceLoading ? (
