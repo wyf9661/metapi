@@ -182,6 +182,38 @@ describe('TokenRouter runtime cache', () => {
     expect(thirdCooldownMs).toBeLessThanOrEqual(35_000);
   });
 
+  it('does not shorten a live database cooldown on a later validation failure', async () => {
+    const site = await db.insert(schema.sites).values({
+      name: 'monotonic-cooldown-site',
+      url: 'https://monotonic-cooldown.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id, username: 'monotonic-cooldown-user',
+      accessToken: 'monotonic-cooldown-access', apiToken: 'monotonic-cooldown-api', status: 'active',
+    }).returning().get();
+    const token = await db.insert(schema.accountTokens).values({
+      accountId: account.id, name: 'monotonic-cooldown-token', token: '***', enabled: true, isDefault: true,
+    }).returning().get();
+    const route = await db.insert(schema.tokenRoutes).values({ modelPattern: 'gpt-4o-mini', enabled: true }).returning().get();
+    const initialUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const channel = await db.insert(schema.routeChannels).values({
+      routeId: route.id, accountId: account.id, tokenId: token.id,
+      priority: 0, weight: 10, enabled: true,
+      cooldownUntil: initialUntil, failCount: 4, consecutiveFailCount: 2,
+    }).returning().get();
+
+    // 400 validation is cooldownScope=none: it must not clear an unrelated live quota cooldown.
+    await new TokenRouter().recordFailure(channel.id, {
+      status: 400, errorText: 'invalid request schema',
+    });
+    const current = await db.select().from(schema.routeChannels)
+      .where(eq(schema.routeChannels.id, channel.id)).get();
+    expect(Date.parse(String(current?.cooldownUntil))).toBeGreaterThanOrEqual(Date.parse(initialUntil));
+    expect(current?.consecutiveFailCount).toBe(3);
+  });
+
   it('caps generic failure cooldowns at the configured maximum', async () => {
     config.tokenRouterFailureCooldownMaxSec = 20;
 
