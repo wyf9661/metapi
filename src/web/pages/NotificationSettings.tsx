@@ -240,7 +240,7 @@ export default function NotificationSettings() {
             setServerChanKey('');
             setTelegramBotToken('');
             setSmtpPass('');
-            toast.success('通知设置已保存');
+            toast.success(tr('通知设置已保存'));
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : String(err);
             toast.error(errMessage || '保存失败');

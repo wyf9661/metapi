@@ -431,7 +431,7 @@ export default function TokenRoutes() {
         // Selection snapshots are maintained by the server scheduler (startup + every 5 min).
         // Entering this page is read-only and must not trigger expensive route recomputation.
       } catch {
-        toast.error('加载路由配置失败');
+        toast.error(tr('加载路由配置失败'));
       }
       setInitialLoading(false);
       // Preload candidates in background after first paint
@@ -572,11 +572,11 @@ export default function TokenRoutes() {
     const routeMode = normalizeRouteMode(form.routeMode);
     if (routeMode === 'explicit_group') {
       if (!trimmedDisplayName) {
-        toast.error('请填写对外模型名');
+        toast.error(tr('请填写对外模型名'));
         return;
       }
       if (form.sourceRouteIds.length === 0) {
-        toast.error('请至少选择一个来源模型');
+        toast.error(tr('请至少选择一个来源模型'));
         return;
       }
     } else {
@@ -645,7 +645,7 @@ export default function TokenRoutes() {
   const handleDeleteRoute = async (routeId: number) => {
     try {
       await api.deleteRoute(routeId);
-      toast.success('路由已删除');
+      toast.success(tr('路由已删除'));
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -974,7 +974,7 @@ export default function TokenRoutes() {
   const handleBatchUpdateRoutes = async (action: 'enable' | 'disable') => {
     const ids = Array.from(selectedRouteIds).filter((id) => selectableRouteIds.has(id));
     if (ids.length === 0) {
-      toast.info('请先选择要操作的路由');
+      toast.info(tr('请先选择要操作的路由'));
       return;
     }
     const actionLabel = action === 'disable' ? '禁用' : '启用';
@@ -1106,7 +1106,7 @@ export default function TokenRoutes() {
     }
     try {
       await api.deleteChannel(channelId);
-      toast.success('通道已移除');
+      toast.success(tr('通道已移除'));
       await loadChannels(routeId, true);
       setRouteSummaries((prev) =>
         prev.map((r) => r.id === routeId ? { ...r, channelCount: Math.max(0, r.channelCount - 1) } : r),
@@ -1130,7 +1130,7 @@ export default function TokenRoutes() {
     if (!confirmed.confirmed) return;
     try {
       await api.resetChannel(channelId);
-      toast.success('已恢复为系统默认配置');
+      toast.success(tr('已恢复为系统默认配置'));
       await loadChannels(routeId, true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -1158,14 +1158,14 @@ export default function TokenRoutes() {
     const tokenOptions = getRouteCandidateView(routeId).tokenOptionsByAccountId[accountId] || [];
 
     if (tokenId && tokenOptions.length > 0 && !tokenOptions.some((token) => token.id === tokenId)) {
-      toast.error('该令牌不支持当前模型');
+      toast.error(tr('该令牌不支持当前模型'));
       return;
     }
 
     setUpdatingChannel((prev) => ({ ...prev, [channelId]: true }));
     try {
       await api.updateChannel(channelId, { tokenId: tokenId || null });
-      toast.success('通道令牌已更新');
+      toast.success(tr('通道令牌已更新'));
       await loadChannels(routeId, true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -1263,13 +1263,13 @@ export default function TokenRoutes() {
     const channels = channelsByRouteId[routeId] || [];
     const channel = channels.find((c) => c.id === channelId);
     if (!channel?.accountId || !channel?.site?.id) {
-      toast.error('找不到通道对应的账号信息');
+      toast.error(tr('找不到通道对应的账号信息'));
       return;
     }
     const route = routeSummaries.find((r) => r.id === routeId);
     const modelName = channel.sourceModel || (route && isExactModelPattern(route.modelPattern) ? route.modelPattern : '') || '';
     if (!modelName) {
-      toast.error('该通道没有精确模型名，无法屏蔽（通配符路由请在账号的模型列表里手动禁用）');
+      toast.error(tr('该通道没有精确模型名，无法屏蔽（通配符路由请在账号的模型列表里手动禁用）'));
       return;
     }
     const siteName = channel.site.name || '未知站点';
@@ -1310,7 +1310,7 @@ export default function TokenRoutes() {
     setClearingCooldownByRoute((prev) => ({ ...prev, [routeId]: true }));
     try {
       await api.clearRouteCooldown(routeId);
-      toast.success('路由冷却已清除');
+      toast.success(tr('路由冷却已清除'));
 
       try {
         await loadChannels(routeId, true);
@@ -1331,7 +1331,7 @@ export default function TokenRoutes() {
           }
         }
       } catch {
-        toast.error('已清除，但刷新失败');
+        toast.error(tr('已清除，但刷新失败'));
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -1400,7 +1400,7 @@ export default function TokenRoutes() {
         try {
           await loadChannels(routeId);
         } catch {
-          toast.error('加载通道失败');
+          toast.error(tr('加载通道失败'));
         }
       }
     }

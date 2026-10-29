@@ -568,7 +568,7 @@ export default function Settings() {
         logCleanupProgramLogsEnabled: runtime.logCleanupProgramLogsEnabled,
         logCleanupRetentionDays: runtime.logCleanupRetentionDays,
       });
-      toast.success('定时任务设置已保存');
+      toast.success(tr('定时任务设置已保存'));
       setTurnstileSolverApiKeyDraft('');
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
@@ -582,7 +582,7 @@ export default function Settings() {
     setTestingCheckin(true);
     try {
       await api.triggerCheckinAll();
-      toast.success('已开始全部签到，请稍后查看签到日志');
+      toast.success(tr('已开始全部签到，请稍后查看签到日志'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '触发签到失败');
@@ -631,7 +631,7 @@ export default function Settings() {
           ? Math.trunc(Number(res.proxySessionChannelQueueWaitMs))
           : prev.proxySessionChannelQueueWaitMs,
       }));
-      toast.success('传输与会话并发设置已保存');
+      toast.success(tr('传输与会话并发设置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存失败');
@@ -659,7 +659,7 @@ export default function Settings() {
           : prev.proxyEmptyContentFailEnabled,
       }));
       setProxyErrorKeywordsText(nextKeywords.join('\n'));
-      toast.success('代理失败规则已保存');
+      toast.success(tr('代理失败规则已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存失败');
@@ -684,7 +684,7 @@ export default function Settings() {
       });
       syncPayloadRuleDraftsFromObject(res?.payloadRules);
       syncPayloadVisualRulesFromObject(res?.payloadRules);
-      toast.success('Payload 规则已保存');
+      toast.success(tr('Payload 规则已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存 Payload 规则失败');
@@ -699,7 +699,7 @@ export default function Settings() {
       ...createCodexDefaultHighReasoningVisualPreset(),
     ]);
     setShowPayloadRulesEditor(true);
-    toast.success('已填入 Codex 默认高推理预设');
+    toast.success(tr('已填入 Codex 默认高推理预设'));
   };
 
   const addPayloadVisualRule = () => {
@@ -740,7 +740,7 @@ export default function Settings() {
     }
     syncPayloadVisualRulesFromObject(parsedPayloadRules.value);
     setPayloadAdvancedDirty(false);
-    toast.success('已将高级 JSON 同步到可视化规则');
+    toast.success(tr('已将高级 JSON 同步到可视化规则'));
   };
 
   const saveRouting = async () => {
@@ -767,7 +767,7 @@ export default function Settings() {
         routeQuotaExhaustionExclude: runtime.routeQuotaExhaustionExclude !== false,
         disableCrossProtocolFallback: runtime.disableCrossProtocolFallback,
       });
-      toast.success('路由策略已保存');
+      toast.success(tr('路由策略已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存失败');
@@ -785,7 +785,7 @@ export default function Settings() {
 
   const saveSecuritySettings = async () => {
     if (isTunnelClientView) {
-      toast.error('通过公网隧道时不允许修改会话与安全设置');
+      toast.error(tr('通过公网隧道时不允许修改会话与安全设置'));
       return;
     }
     setSavingSecurity(true);
@@ -804,7 +804,7 @@ export default function Settings() {
           ? res.currentAdminIp
           : prev.currentAdminIp,
       }));
-      toast.success('安全设置已保存');
+      toast.success(tr('安全设置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存失败');
@@ -843,7 +843,7 @@ export default function Settings() {
           ? Math.trunc(Number(res.antiProbeMinTextLength))
           : prev.antiProbeMinTextLength,
       }));
-      toast.success('反探测设置已保存');
+      toast.success(tr('反探测设置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存失败');
@@ -1064,7 +1064,7 @@ export default function Settings() {
               disabled={isTunnelClientView}
               onChange={async (e) => {
                 if (isTunnelClientView) {
-                  toast.error('通过公网隧道时不允许修改该选项');
+                  toast.error(tr('通过公网隧道时不允许修改该选项'));
                   return;
                 }
                 const next = e.target.checked;

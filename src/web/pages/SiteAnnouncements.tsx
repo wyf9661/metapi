@@ -123,7 +123,7 @@ export default function SiteAnnouncements() {
     try {
       await api.clearSiteAnnouncements();
       setRows([]);
-      toast.success('公告已清空');
+      toast.success(tr('公告已清空'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error(errorMessage || '清空公告失败');
@@ -140,7 +140,7 @@ export default function SiteAnnouncements() {
         ...row,
         readAt: row.readAt || new Date().toISOString(),
       })));
-      toast.success('已标记全部为已读');
+      toast.success(tr('已标记全部为已读'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error(errorMessage || '标记失败');
@@ -152,7 +152,7 @@ export default function SiteAnnouncements() {
   const triggerSync = async () => {
     try {
       await api.syncSiteAnnouncements();
-      toast.success('公告同步任务已启动');
+      toast.success(tr('公告同步任务已启动'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error(errorMessage || '启动同步失败');

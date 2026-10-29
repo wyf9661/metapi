@@ -381,7 +381,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     }));
 
     if (!preferredAccount) {
-      toast.info('指定账号不可用，已自动切换到首个可用账号');
+      toast.info(tr('指定账号不可用，已自动切换到首个可用账号'));
     }
 
     params.delete('create');
@@ -464,7 +464,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     await withRowLoading(`token-${target.tokenId}-delete`, async () => {
       try {
         await api.deleteAccountToken(target.tokenId!);
-        toast.success('令牌已删除');
+        toast.success(tr('令牌已删除'));
         await load();
       } catch (error) {
         // The site could not confirm that the token is gone; the local row is
@@ -535,7 +535,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
   const saveEditPanel = async () => {
     if (!editingToken) return;
     if (isMaskedPendingToken(editingToken) && !editForm.token.trim()) {
-      toast.error('请粘贴完整明文 token 后再保存');
+      toast.error(tr('请粘贴完整明文 token 后再保存'));
       return;
     }
     setSavingEdit(true);
@@ -547,7 +547,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         enabled: editForm.enabled,
         isDefault: editForm.isDefault,
       });
-      toast.success('令牌已更新');
+      toast.success(tr('令牌已更新'));
       closeEditPanel();
       await load();
     } catch (e) {
@@ -573,7 +573,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         const res = await api.getAccountTokenValue(tokenId);
         const tokenValue = (res?.token || '').trim();
         if (!tokenValue) {
-          toast.error('令牌为空，无法复制');
+          toast.error(tr('令牌为空，无法复制'));
           return;
         }
 
@@ -591,7 +591,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     if (!form.unlimitedQuota) {
       const remainQuota = Number.parseInt(form.remainQuota, 10);
       if (!Number.isFinite(remainQuota) || remainQuota <= 0) {
-        toast.error('有限额度令牌请填写正整数额度');
+        toast.error(tr('有限额度令牌请填写正整数额度'));
         return;
       }
     }
@@ -609,7 +609,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         expiredTime: form.expiredTime || undefined,
         allowIps: form.allowIps,
       });
-      toast.success('已在站点创建并同步令牌');
+      toast.success(tr('已在站点创建并同步令牌'));
       setForm(initialCreateForm);
       setShowAdd(false);
       setCreateHintModelName('');
@@ -724,7 +724,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         } else if (status === 'skipped') {
           toast.info(`全部同步已跳过：${resolveSyncMessage(res, '没有可同步的账号')}`);
         } else {
-          toast.success('全部账号同步完成');
+          toast.success(tr('全部账号同步完成'));
         }
       } else {
         const failedRows = syncResults.filter((item) => resolveSyncStatus(item) === 'failed');
@@ -1297,7 +1297,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                             <button
                               onClick={() => withRowLoading(`${loadingPrefix}-default`, async () => {
                                 await api.setDefaultAccountToken(token.id);
-                                toast.success('默认令牌已更新');
+                                toast.success(tr('默认令牌已更新'));
                                 await load();
                               })}
                               disabled={!!rowLoading[`${loadingPrefix}-default`]}
@@ -1407,7 +1407,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                           <button
                             onClick={() => withRowLoading(`${loadingPrefix}-default`, async () => {
                               await api.setDefaultAccountToken(token.id);
-                              toast.success('默认令牌已更新');
+                              toast.success(tr('默认令牌已更新'));
                               await load();
                             })}
                             disabled={!!rowLoading[`${loadingPrefix}-default`]}

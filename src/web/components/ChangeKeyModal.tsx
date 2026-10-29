@@ -43,7 +43,7 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
     try {
       const res = await api.changeAuthToken(oldToken, newToken);
       if (res.success) {
-        toast.success('Token 已更新，请使用新 Token 重新登录');
+        toast.success(tr('Token 已更新，请使用新 Token 重新登录'));
         persistAuthSession(localStorage, newToken);
         onClose();
         setOldToken('');

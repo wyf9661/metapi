@@ -223,7 +223,7 @@ export default function ProbeLogs() {
   const loading = logsQuery.isFetching;
 
   useEffect(() => {
-    if (logsQuery.isError) toast.error('获取测活日志失败');
+    if (logsQuery.isError) toast.error(tr('获取测活日志失败'));
   }, [logsQuery.isError, logsQuery.errorUpdatedAt]);
 
   const updateSearchParams = (key: string, value: string) => {

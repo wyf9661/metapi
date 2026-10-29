@@ -449,7 +449,7 @@ export default function Sites() {
       const rows = await api.getSites();
       setSites(rows || []);
     } catch {
-      toast.error('加载站点列表失败');
+      toast.error(tr('加载站点列表失败'));
     } finally {
       setLoaded(true);
     }
@@ -664,7 +664,7 @@ export default function Sites() {
         ? { ...s, postRefreshProbeEnabled: probeEnabled, postRefreshProbeModel: String(probeModel ?? '').trim(), postRefreshProbeScope: probeScope, postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0) }
         : s,
       ));
-      toast.success('刷新后探测设置已保存');
+      toast.success(tr('刷新后探测设置已保存'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       toast.error(eMessage || '保存失败');
@@ -771,7 +771,7 @@ export default function Sites() {
               .catch((err: unknown) => {
                 // Silent before: the model list silently kept stale data.
                 console.warn('[sites] failed to refresh available models after probe', err);
-                toast.error('刷新可用模型失败');
+                toast.error(tr('刷新可用模型失败'));
               })
               .finally(() => setProbeCompleted(true));
           } else if (type === 'error') {
@@ -785,7 +785,7 @@ export default function Sites() {
               .catch((err: unknown) => {
                 // Silent before: the model list silently kept stale data.
                 console.warn('[sites] failed to refresh available models after probe', err);
-                toast.error('刷新可用模型失败');
+                toast.error(tr('刷新可用模型失败'));
               })
               .finally(() => setProbeCompleted(true));
           }
@@ -826,7 +826,7 @@ export default function Sites() {
     if (!editor) return;
     const parsedGlobalWeight = Number(form.globalWeight);
     if (!Number.isFinite(parsedGlobalWeight) || parsedGlobalWeight <= 0) {
-      toast.error('全局权重必须是大于 0 的数字');
+      toast.error(tr('全局权重必须是大于 0 的数字'));
       return;
     }
     const serializedCustomHeaders = serializeSiteCustomHeaders(form.customHeaders);
@@ -860,11 +860,11 @@ export default function Sites() {
       postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0),
     };
     if (!payload.name || !payload.url) {
-      toast.error('请填写站点名称和 URL');
+      toast.error(tr('请填写站点名称和 URL'));
       return;
     }
     if (editor.mode === 'add' && !payload.platform) {
-      toast.error('无法自动识别站点类型，请手动选择站点类型后再保存');
+      toast.error(tr('无法自动识别站点类型，请手动选择站点类型后再保存'));
       return;
     }
 
@@ -1036,7 +1036,7 @@ export default function Sites() {
     const requestedInitializationPresetId = selectedInitializationPresetId;
     const requestedSignature = `${requestedUrl}\n${requestedProxyUrl}`;
     if (!requestedUrl) {
-      if (!options?.silent) toast.error('请先输入 URL');
+      if (!options?.silent) toast.error(tr('请先输入 URL'));
       return;
     }
     const requestedPrimarySiteUrl = analyzePrimarySiteUrl(requestedUrl);
@@ -1276,7 +1276,7 @@ export default function Sites() {
       !!activeSite.isPinned !== !!overSite.isPinned
       || (activeSite.status === 'disabled') !== (overSite.status === 'disabled')
     ) {
-      toast.info('置顶、普通和禁用站点需在各自分组内排序');
+      toast.info(tr('置顶、普通和禁用站点需在各自分组内排序'));
       return;
     }
 
@@ -1391,7 +1391,7 @@ export default function Sites() {
                 if (res?.queued) {
                   toast.info(res.message || '已开始同步令牌，请稍后查看日志');
                 } else {
-                  toast.success('同步全部账号令牌完成');
+                  toast.success(tr('同步全部账号令牌完成'));
                 }
               } catch (e) {
                 const eMessage = e instanceof Error ? e.message : String(e);

@@ -526,7 +526,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       !verifyResult?.success &&
       !tokenForm.skipModelFetch
     ) {
-      toast.error('请先验证 Token 成功后再添加账号');
+      toast.error(tr('请先验证 Token 成功后再添加账号'));
       return;
     }
     const credentialMode = activeSegment === 'apikey' ? 'apikey' : 'session';
@@ -618,7 +618,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           })();
         }
       } else if (result.tokenType === 'apikey') {
-        toast.success('已添加为 API Key 账号（可用于代理转发）');
+        toast.success(tr('已添加为 API Key 账号（可用于代理转发）'));
       } else {
         const parts: string[] = [];
         if (result.usernameDetected) parts.push('用户名已自动识别');
@@ -760,9 +760,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       );
       try {
         await api.rebuildRoutes(false, false);
-        toast.success('模型禁用设置已保存，路由已重建');
+        toast.success(tr('模型禁用设置已保存，路由已重建'));
       } catch {
-        toast.error('模型禁用设置已保存，但路由重建失败，请手动刷新路由');
+        toast.error(tr('模型禁用设置已保存，但路由重建失败，请手动刷新路由'));
       }
       closeModelModal();
     } catch (e) {
@@ -788,7 +788,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         modelsToAdd,
       );
       if (res.success) {
-        toast.success('模型已手动添加');
+        toast.success(tr('模型已手动添加'));
         setModelModal((s) => ({ ...s, manualModelsInput: '' }));
         await loadModelModalModels(modelModal.account, {
           refreshUpstream: false,
@@ -1020,7 +1020,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       !!active.isPinned !== !!over.isPinned
       || (active.status === 'disabled') !== (over.status === 'disabled')
     ) {
-      toast.info('置顶、普通和禁用账号需在各自分组内排序');
+      toast.info(tr('置顶、普通和禁用账号需在各自分组内排序'));
       return;
     }
 
@@ -1125,9 +1125,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       });
       setRebindVerifyResult(result);
       if (result.success && result.tokenType === 'session') {
-        toast.success('Session Token 验证成功，可以重新绑定');
+        toast.success(tr('Session Token 验证成功，可以重新绑定'));
       } else if (result.success && result.tokenType !== 'session') {
-        toast.error('当前是 API Key，不是 Session Token');
+        toast.error(tr('当前是 API Key，不是 Session Token'));
       } else {
         toast.error(
           normalizeVerifyFailureMessage(result.message || 'Token 无效'),
@@ -1150,7 +1150,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         rebindVerifyResult?.tokenType === 'session'
       )
     ) {
-      toast.error('请先验证新的 Session Token 成功');
+      toast.error(tr('请先验证新的 Session Token 成功'));
       return;
     }
     const isSub2ApiRebindTarget =
@@ -1171,7 +1171,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             ? Number.parseInt(rebindForm.tokenExpiresAt, 10)
             : undefined,
       });
-      toast.success('账号重新绑定成功，状态已恢复');
+      toast.success(tr('账号重新绑定成功，状态已恢复'));
       closeRebindPanel();
       load(true);
     } catch (e) {

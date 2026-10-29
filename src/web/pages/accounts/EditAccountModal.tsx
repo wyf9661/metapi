@@ -131,7 +131,7 @@ export default function EditAccountModal({
             ? Number.parseInt(editForm.tokenExpiresAt.trim(), 10)
             : undefined,
         });
-        toast.success('账号已重新绑定');
+        toast.success(tr('账号已重新绑定'));
       } else {
         const isSub2ApiAccount =
           (account?.site?.platform || '').toLowerCase() === 'sub2api';
@@ -160,7 +160,7 @@ export default function EditAccountModal({
             ? Number.parseInt(editForm.platformUserId.trim(), 10)
             : null,
         });
-        toast.success('账号已更新');
+        toast.success(tr('账号已更新'));
       }
       handleClose();
       onSaved();

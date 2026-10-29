@@ -375,7 +375,7 @@ export default function ImportExport() {
         preferences: `metapi-preferences-${date}.json`,
       };
       downloadJsonFile(data, fileName[type]);
-      toast.success('导出成功');
+      toast.success(tr('导出成功'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '导出失败');
@@ -386,7 +386,7 @@ export default function ImportExport() {
 
   const readFile = (file: File) => {
     if (!file.name.endsWith('.json') && file.type !== 'application/json') {
-      toast.error('请选择 JSON 格式的备份文件');
+      toast.error(tr('请选择 JSON 格式的备份文件'));
       return;
     }
     setSelectedFileName(file.name);
@@ -394,7 +394,7 @@ export default function ImportExport() {
     reader.onload = (e) => {
       setImportData(String(e.target?.result || ''));
     };
-    reader.onerror = () => toast.error('读取文件失败');
+    reader.onerror = () => toast.error(tr('读取文件失败'));
     reader.readAsText(file);
   };
 
@@ -426,15 +426,15 @@ export default function ImportExport() {
 
   const handleImport = async () => {
     if (isTunnelClientView) {
-      toast.error('公网隧道访问时不允许导入备份，请在本机/内网控制台操作');
+      toast.error(tr('公网隧道访问时不允许导入备份，请在本机/内网控制台操作'));
       return;
     }
     if (!importData.trim()) {
-      toast.error('请先选择或粘贴 JSON 备份内容');
+      toast.error(tr('请先选择或粘贴 JSON 备份内容'));
       return;
     }
     if (!summary?.valid) {
-      toast.error('当前 JSON 结构无法识别');
+      toast.error(tr('当前 JSON 结构无法识别'));
       return;
     }
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
@@ -478,7 +478,7 @@ export default function ImportExport() {
       }
       const result = await api.saveBackupWebdavConfig(payload as any);
       applyWebdavResponse(result);
-      toast.success('WebDAV 配置已保存');
+      toast.success(tr('WebDAV 配置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       toast.error(errMessage || '保存 WebDAV 配置失败');
@@ -503,7 +503,7 @@ export default function ImportExport() {
 
   const handleImportFromWebdav = async () => {
     if (isTunnelClientView) {
-      toast.error('公网隧道访问时不允许从 WebDAV 拉取备份，请在本机/内网控制台操作');
+      toast.error(tr('公网隧道访问时不允许从 WebDAV 拉取备份，请在本机/内网控制台操作'));
       return;
     }
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'

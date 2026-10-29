@@ -161,7 +161,7 @@ export default function ProgramLogs() {
       } else {
         setEvents((prev) => prev.map((item) => ({ ...item, read: true })));
       }
-      toast.success('已标记全部为已读');
+      toast.success(tr('已标记全部为已读'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       toast.error(eMessage || '标记失败');
@@ -177,7 +177,7 @@ export default function ProgramLogs() {
       setEvents([]);
       setPage(1);
       setTotal(0);
-      toast.success('日志已清空');
+      toast.success(tr('日志已清空'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       toast.error(eMessage || '清空失败');

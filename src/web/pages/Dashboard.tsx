@@ -485,7 +485,7 @@ export default function Dashboard({
 
   const handleToggleTunnel = async () => {
     if (isTunnelClientView) {
-      toast.error('通过公网隧道时不允许关闭/创建隧道，请在本机控制台操作');
+      toast.error(tr('通过公网隧道时不允许关闭/创建隧道，请在本机控制台操作'));
       return;
     }
     setTunnelBusy(true);
@@ -494,13 +494,13 @@ export default function Dashboard({
       if (tunnel?.running || tunnel?.enabled) {
         const res = await api.disableTunnel() as any;
         setTunnel(res?.tunnel || null);
-        toast.success('隧道已关闭');
+        toast.success(tr('隧道已关闭'));
       } else {
-        toast.info('正在创建公网隧道，首次可能需要下载 cloudflared...');
+        toast.info(tr('正在创建公网隧道，首次可能需要下载 cloudflared...'));
         const res = await api.enableTunnel() as any;
         setTunnel(res?.tunnel || null);
         if (res?.tunnel?.publicUrl || res?.tunnel?.tunnelUrl) {
-          toast.success('隧道已启用');
+          toast.success(tr('隧道已启用'));
         } else {
           toast.info(res?.message || '隧道启动中');
         }
@@ -965,8 +965,8 @@ export default function Dashboard({
                 className="btn btn-ghost dashboard-endpoint-copy"
                 onClick={() => {
                   copyText(localAddress.baseUrl)
-                    .then(() => { toast.success('地址已复制'); })
-                    .catch(() => { toast.error('复制失败'); });
+                    .then(() => { toast.success(tr('地址已复制')); })
+                    .catch(() => { toast.error(tr('复制失败')); });
                 }}
               >
                 {tr('复制')}
@@ -997,9 +997,9 @@ export default function Dashboard({
                   const url = `${tunnel.publicUrl || tunnel.tunnelUrl}`;
                   try {
                     await copyText(url);
-                    toast.success('已复制隧道地址');
+                    toast.success(tr('已复制隧道地址'));
                   } catch {
-                    toast.error('复制失败');
+                    toast.error(tr('复制失败'));
                   }
                 }}
               >
@@ -1025,8 +1025,8 @@ export default function Dashboard({
                 className="btn btn-ghost dashboard-endpoint-copy"
                 onClick={() => {
                   copyText(tunnel.tunnelUrl as string)
-                    .then(() => { toast.success('已复制直连地址'); })
-                    .catch(() => { toast.error('复制失败'); });
+                    .then(() => { toast.success(tr('已复制直连地址')); })
+                    .catch(() => { toast.error(tr('复制失败')); });
                 }}
               >
                 {tr('复制')}

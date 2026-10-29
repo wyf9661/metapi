@@ -39,7 +39,7 @@ export default function SiteDetail() {
       const data = await api.getSite(Number(id));
       setSite(data);
     } catch {
-      toast.error('加载站点失败');
+      toast.error(tr('加载站点失败'));
       navigate('/sites');
     } finally {
       setLoading(false);

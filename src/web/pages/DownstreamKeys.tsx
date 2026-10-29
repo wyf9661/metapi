@@ -281,14 +281,14 @@ function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined 
         e.stopPropagation();
         const full = fullKey?.trim();
         if (!full) {
-          toast.info('完整密钥暂不可用，请刷新页面后重试');
+          toast.info(tr('完整密钥暂不可用，请刷新页面后重试'));
           return;
         }
         try {
           await copyText(full);
-          toast.success('已复制到剪贴板');
+          toast.success(tr('已复制到剪贴板'));
         } catch {
-          toast.error('复制失败');
+          toast.error(tr('复制失败'));
         }
       }}
     >
@@ -773,15 +773,15 @@ export default function DownstreamKeys() {
     const name = editorForm.name.trim();
     const key = editorForm.key.trim();
     if (!name) {
-      toast.info('请填写密钥名称');
+      toast.info(tr('请填写密钥名称'));
       return;
     }
     if (!key) {
-      toast.info('请填写下游密钥');
+      toast.info(tr('请填写下游密钥'));
       return;
     }
     if (!key.startsWith('sk-')) {
-      toast.info('下游密钥必须以 sk- 开头');
+      toast.info(tr('下游密钥必须以 sk- 开头'));
       return;
     }
 
@@ -791,7 +791,7 @@ export default function DownstreamKeys() {
       try {
         const parsed = JSON.parse(rawWeights);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          toast.info('站点倍率必须是 JSON 对象');
+          toast.info(tr('站点倍率必须是 JSON 对象'));
           return;
         }
         siteWeightMultipliers = Object.fromEntries(
@@ -800,7 +800,7 @@ export default function DownstreamKeys() {
             .filter(([siteId, value]) => Number.isFinite(siteId) && siteId > 0 && Number.isFinite(value) && value > 0),
         ) as Record<number, number>;
       } catch {
-        toast.info('站点倍率 JSON 解析失败');
+        toast.info(tr('站点倍率 JSON 解析失败'));
         return;
       }
     }
@@ -832,10 +832,10 @@ export default function DownstreamKeys() {
       };
       if (editingId) {
         await api.updateDownstreamApiKey(editingId, payload);
-        toast.success('下游密钥已更新');
+        toast.success(tr('下游密钥已更新'));
       } else {
         await api.createDownstreamApiKey(payload);
-        toast.success('下游密钥已创建');
+        toast.success(tr('下游密钥已创建'));
       }
       closeEditor();
       await load();
@@ -918,7 +918,7 @@ export default function DownstreamKeys() {
     await withRowLoading(`reset-${item.id}`, async () => {
       await api.resetDownstreamApiKeyUsage(item.id);
       await load();
-      toast.success('已清零该密钥用量');
+      toast.success(tr('已清零该密钥用量'));
     });
   };
 
@@ -930,7 +930,7 @@ export default function DownstreamKeys() {
     if (target.mode === 'single') {
       await withRowLoading(`delete-${target.item.id}`, async () => {
         await api.deleteDownstreamApiKey(target.item.id);
-        toast.success('下游密钥已删除');
+        toast.success(tr('下游密钥已删除'));
         await load();
       });
       return;
@@ -953,11 +953,11 @@ export default function DownstreamKeys() {
 
   const runBatchMetadata = async () => {
     if (batchMetadataForm.groupOperation === 'set' && !batchMetadataForm.groupName.trim()) {
-      toast.info('请填写批量主分组');
+      toast.info(tr('请填写批量主分组'));
       return;
     }
     if (batchMetadataForm.tagOperation === 'append' && normalizeTags(batchMetadataForm.tags).length === 0) {
-      toast.info('请至少填写一个批量标签');
+      toast.info(tr('请至少填写一个批量标签'));
       return;
     }
     await batchRun('批量归类', selectedIds);
