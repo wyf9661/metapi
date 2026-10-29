@@ -1,4 +1,5 @@
 import { normalizeUpstreamFinalResponse, toClaudeStopReason, type NormalizedFinalResponse } from '../../shared/normalized.js';
+import { parseToolUseInput } from './toolUseInput.js';
 import { decodeAnthropicReasoningSignature } from '../../shared/reasoningTransport.js';
 import { toAnthropicUsagePayload } from './usage.js';
 import { asTrimmedString } from '../../../shared/trimString.js';
@@ -29,13 +30,7 @@ function cloneJsonValue<T>(value: T): T {
 }
 
 function parseJsonLike(raw: string): unknown {
-  const trimmed = raw.trim();
-  if (!trimmed) return {};
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return { value: raw };
-  }
+  return parseToolUseInput(raw);
 }
 
 function buildClaudeMessageId(sourceId: string): string {
