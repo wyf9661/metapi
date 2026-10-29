@@ -9,8 +9,8 @@ type Metric = 'tokens' | 'requests' | 'cost';
 
 const METRIC_OPTIONS: Array<{ key: Metric; label: string }> = [
   { key: 'tokens', label: 'Tokens' },
-  { key: 'requests', label: '请求数' },
-  { key: 'cost', label: '成本' },
+  { key: 'requests', label: tr('请求数') },
+  { key: 'cost', label: tr('成本') },
 ];
 
 export type DownstreamKeyTrendBucket = {

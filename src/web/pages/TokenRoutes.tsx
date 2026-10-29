@@ -71,7 +71,7 @@ const EMPTY_ROUTE_CANDIDATE_VIEW: RouteCandidateView = {
 const EMPTY_MISSING_ITEMS: MissingTokenRouteSiteActionItem[] = [];
 const EMPTY_MISSING_GROUP_ITEMS: MissingTokenGroupRouteSiteActionItem[] = [];
 const ROUTE_ICON_OPTIONS: RouteIconOption[] = [
-  { value: '', label: '自动品牌图标', description: '按模型匹配规则自动识别品牌', iconText: '✦' },
+  { value: '', label: tr('自动品牌图标'), description: '按模型匹配规则自动识别品牌', iconText: '✦' },
 ];
 
 type RouteEditorForm = {

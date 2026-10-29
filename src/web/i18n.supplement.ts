@@ -1564,5 +1564,7 @@ export const zhToEnSupplemental: Record<string, string> = {
   '请求': 'Request',
   '响应': 'Response',
   '移除': 'Remove',
+  '备份/恢复': 'Backup/Restore',
+  '已是最新': 'Up to date',
 
 };

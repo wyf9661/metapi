@@ -81,9 +81,9 @@ const DEFAULT_WEBDAV_SNAPSHOT: WebdavConfigSnapshot = {
 };
 
 const WEBDAV_EXPORT_TYPE_OPTIONS = [
-  { value: 'all', label: '全部' },
-  { value: 'accounts', label: '连接与路由策略' },
-  { value: 'preferences', label: '系统设置' },
+  { value: 'all', label: tr('全部') },
+  { value: 'accounts', label: tr('连接与路由策略') },
+  { value: 'preferences', label: tr('系统设置') },
 ] as const;
 
 const formFieldLabelStyle: React.CSSProperties = {

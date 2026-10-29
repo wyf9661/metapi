@@ -25,7 +25,7 @@ export default function SiteCreatedModal({
   const primaryAction = apiKeyFirst
     ? {
       choice: 'apikey' as const,
-      label: '添加 API Key（推荐）',
+      label: tr('添加 API Key（推荐）'),
     }
     : {
       choice: 'session' as const,
@@ -38,7 +38,7 @@ export default function SiteCreatedModal({
     }
     : {
       choice: 'apikey' as const,
-      label: '添加 API Key',
+      label: tr('添加 API Key'),
     };
 
   return (

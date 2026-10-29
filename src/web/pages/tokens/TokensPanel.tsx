@@ -869,7 +869,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               value={String(syncingAccountId || 0)}
               onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
               options={[
-                { value: '0', label: '选择账号后同步站点令牌' },
+                { value: '0', label: tr('选择账号后同步站点令牌') },
                 ...activeAccountSelectOptions,
               ]}
               placeholder={tr('选择账号后同步站点令牌')}
@@ -934,7 +934,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 value={String(syncingAccountId || 0)}
                 onChange={(nextValue) => setSyncingAccountId(Number.parseInt(nextValue, 10) || 0)}
                 options={[
-                  { value: '0', label: '选择账号后同步站点令牌' },
+                  { value: '0', label: tr('选择账号后同步站点令牌') },
                   ...activeAccountSelectOptions,
                 ]}
                 placeholder={tr('选择账号后同步站点令牌')}
@@ -1113,7 +1113,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 }));
               }}
               options={[
-                { value: '0', label: '选择账号' },
+                { value: '0', label: tr('选择账号') },
                 ...activeAccountSelectOptions,
               ]}
               placeholder={tr('选择账号')}

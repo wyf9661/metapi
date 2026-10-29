@@ -242,10 +242,10 @@ export default function CheckinLog() {
   const filterTabs = (
     <div className="pill-tabs">
       {[
-        { key: 'all' as const, label: '全部', count: timeFilteredLogs.length },
-        { key: 'success' as const, label: '成功', count: statusCounts.success },
-        { key: 'failed' as const, label: '失败', count: statusCounts.failed },
-        { key: 'skipped' as const, label: '跳过', count: statusCounts.skipped },
+        { key: 'all' as const, label: tr('全部'), count: timeFilteredLogs.length },
+        { key: 'success' as const, label: tr('成功'), count: statusCounts.success },
+        { key: 'failed' as const, label: tr('失败'), count: statusCounts.failed },
+        { key: 'skipped' as const, label: tr('跳过'), count: statusCounts.skipped },
       ].map((tab) => (
         <button
           key={tab.key}

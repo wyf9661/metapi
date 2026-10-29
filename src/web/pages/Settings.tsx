@@ -1701,9 +1701,9 @@ export default function Settings() {
                 }));
               }}
               options={[
-                { value: 'weighted', label: '权重随机' },
-                { value: 'round_robin', label: '轮询' },
-                { value: 'stable_first', label: '稳定优先' },
+                { value: 'weighted', label: tr('权重随机') },
+                { value: 'round_robin', label: tr('轮询') },
+                { value: 'stable_first', label: tr('稳定优先') },
               ]}
               placeholder={tr('选择路由策略')}
             />

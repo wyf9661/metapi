@@ -392,8 +392,8 @@ function InlineToggle({
   onChange: (value: TagMatchMode) => void;
 }) {
   const options: Array<{ value: TagMatchMode; label: string }> = [
-    { value: 'any', label: '匹配任一标签' },
-    { value: 'all', label: '匹配全部标签' },
+    { value: 'any', label: tr('匹配任一标签') },
+    { value: 'all', label: tr('匹配全部标签') },
   ];
 
   const base: React.CSSProperties = {
@@ -555,7 +555,7 @@ export default function DownstreamKeys() {
           ref: { kind: 'default_api_key', siteId: Math.trunc(siteId), accountId: Math.trunc(accountId) },
           siteName: String(account?.site?.name || `站点 ${siteId}`).trim() || `站点 ${siteId}`,
           accountName: String(account?.username || `账号 ${accountId}`).trim() || `账号 ${accountId}`,
-          label: '默认 API Key',
+          label: tr('默认 API Key'),
           detail: `使用账号默认 API Key (${apiToken.slice(0, 6)}...)`,
         });
       }
@@ -644,8 +644,8 @@ export default function DownstreamKeys() {
 
   const groupFilterOptions = useMemo(
     () => [
-      { value: '__all__', label: '全部主分组' },
-      { value: '__ungrouped__', label: '未分组' },
+      { value: '__all__', label: tr('全部主分组') },
+      { value: '__ungrouped__', label: tr('未分组') },
       ...groupSuggestions.map((group) => ({ value: group, label: group })),
     ],
     [groupSuggestions],
@@ -720,9 +720,9 @@ export default function DownstreamKeys() {
   );
 
   const statusOptions = useMemo(() => [
-    { value: 'all', label: '全部状态' },
-    { value: 'enabled', label: '仅启用' },
-    { value: 'disabled', label: '仅禁用' },
+    { value: 'all', label: tr('全部状态') },
+    { value: 'enabled', label: tr('仅启用') },
+    { value: 'disabled', label: tr('仅禁用') },
   ], []);
 
   const totals = useMemo(() => visibleItems.reduce((acc, item) => {
@@ -1326,9 +1326,9 @@ export default function DownstreamKeys() {
               value={batchMetadataForm.groupOperation}
               onChange={(value) => setBatchMetadataForm((prev) => ({ ...prev, groupOperation: String(value) as BatchMetadataForm['groupOperation'] }))}
               options={[
-                { value: 'keep', label: '不改动主分组' },
-                { value: 'set', label: '统一设为主分组' },
-                { value: 'clear', label: '清空主分组' },
+                { value: 'keep', label: tr('不改动主分组') },
+                { value: 'set', label: tr('统一设为主分组') },
+                { value: 'clear', label: tr('清空主分组') },
               ]}
             />
             <input
@@ -1346,8 +1346,8 @@ export default function DownstreamKeys() {
               value={batchMetadataForm.tagOperation}
               onChange={(value) => setBatchMetadataForm((prev) => ({ ...prev, tagOperation: String(value) as BatchMetadataForm['tagOperation'] }))}
               options={[
-                { value: 'keep', label: '不改动标签' },
-                { value: 'append', label: '追加标签' },
+                { value: 'keep', label: tr('不改动标签') },
+                { value: 'append', label: tr('追加标签') },
               ]}
             />
             <div style={{ opacity: batchMetadataForm.tagOperation === 'append' ? 1 : 0.6, pointerEvents: batchMetadataForm.tagOperation === 'append' ? 'auto' : 'none' }}>

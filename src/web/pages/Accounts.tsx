@@ -74,21 +74,21 @@ const ACCOUNT_SEGMENTS: Array<{
 }> = [
   {
     value: 'session',
-    label: '账号管理',
+    label: tr('账号管理'),
     tooltip: '用于签到、余额、状态维护',
     tooltipSide: 'bottom',
     tooltipAlign: 'start',
   },
   {
     value: 'apikey',
-    label: 'API Key管理',
+    label: tr('API Key管理'),
     tooltip: '只有 Base URL + Key 时使用，只负责代理调用',
     tooltipSide: 'bottom',
     tooltipAlign: 'center',
   },
   {
     value: 'tokens',
-    label: '账号令牌管理',
+    label: tr('账号令牌管理'),
     tooltip: '从账号同步或手动维护，供路由实际调用',
     tooltipSide: 'bottom',
     tooltipAlign: 'end',
@@ -270,7 +270,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     activeSegment === 'apikey' && parsedApiKeys.length > 1;
   const siteSelectOptions = useMemo(
     () => [
-      { value: '0', label: '选择站点' },
+      { value: '0', label: tr('选择站点') },
       ...sites.map((site: any) => ({
         value: String(site.id),
         label: `${site.name} (${site.platform})`,
@@ -850,31 +850,31 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     }
   > = {
     healthy: {
-      label: '健康',
+      label: tr('健康'),
       cls: 'badge-success',
       dotClass: 'status-dot-success',
       pulse: true,
     },
     unhealthy: {
-      label: '异常',
+      label: tr('异常'),
       cls: 'badge-error',
       dotClass: 'status-dot-error',
       pulse: true,
     },
     degraded: {
-      label: '降级',
+      label: tr('降级'),
       cls: 'badge-warning',
       dotClass: 'status-dot-pending',
       pulse: true,
     },
     disabled: {
-      label: '已禁用',
+      label: tr('已禁用'),
       cls: 'badge-muted',
       dotClass: 'status-dot-muted',
       pulse: false,
     },
     unknown: {
-      label: '未知',
+      label: tr('未知'),
       cls: 'badge-muted',
       dotClass: 'status-dot-pending',
       pulse: false,
@@ -885,7 +885,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     if (account.status === 'expired') {
       return {
         ...runtimeHealthMap.unhealthy,
-        label: '已过期',
+        label: tr('已过期'),
         reason: account.runtimeHealth?.reason || '连接凭证已过期，请更新凭证',
       };
     }
@@ -1285,9 +1285,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       value={sortMode}
                       onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                       options={[
-                        { value: 'custom', label: '默认排序' },
-                        { value: 'balance-desc', label: '余额高到低' },
-                        { value: 'balance-asc', label: '余额低到高' },
+                        { value: 'custom', label: tr('默认排序') },
+                        { value: 'balance-desc', label: tr('余额高到低') },
+                        { value: 'balance-asc', label: tr('余额低到高') },
                       ]}
                       placeholder={tr('默认排序')}
                     />
@@ -1370,9 +1370,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 value={sortMode}
                 onChange={(nextValue) => setSortMode(nextValue as SortMode)}
                 options={[
-                  { value: 'custom', label: '自定义排序' },
-                  { value: 'balance-desc', label: '余额高到低' },
-                  { value: 'balance-asc', label: '余额低到高' },
+                  { value: 'custom', label: tr('自定义排序') },
+                  { value: 'balance-desc', label: tr('余额高到低') },
+                  { value: 'balance-asc', label: tr('余额低到高') },
                 ]}
                 placeholder={tr('自定义排序')}
               />

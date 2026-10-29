@@ -29,10 +29,10 @@ interface ModelAnalysisPanelProps {
 }
 
 const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
-  { key: 'spend', label: '花费分布', icon: '💰' },
-  { key: 'trend', label: '用量分布', icon: '📊' },
-  { key: 'calls', label: '调用分布', icon: '🔄' },
-  { key: 'rank', label: '模型排行', icon: '🏆' },
+  { key: 'spend', label: tr('花费分布'), icon: '💰' },
+  { key: 'trend', label: tr('用量分布'), icon: '📊' },
+  { key: 'calls', label: tr('调用分布'), icon: '🔄' },
+  { key: 'rank', label: tr('模型排行'), icon: '🏆' },
 ];
 
 function toSafeNumber(value: unknown): number {

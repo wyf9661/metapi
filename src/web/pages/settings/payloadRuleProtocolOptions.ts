@@ -1,5 +1,7 @@
+import { tr } from '../../i18n.js';
+
 export const PAYLOAD_RULE_PROTOCOL_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: '全部平台' },
+  { value: '', label: tr('全部平台') },
   { value: 'codex', label: 'Codex' },
   { value: 'sub2api', label: 'Sub2API' },
   { value: 'new-api', label: 'New API' },

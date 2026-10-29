@@ -1344,9 +1344,9 @@ export default function Sites() {
             value={sortMode}
             onChange={handleSortModeChange}
             options={[
-            { value: 'custom', label: '默认排序' },
-            { value: 'balance-desc', label: '余额高到低' },
-            { value: 'balance-asc', label: '余额低到高' },
+            { value: 'custom', label: tr('默认排序') },
+            { value: 'balance-desc', label: tr('余额高到低') },
+            { value: 'balance-asc', label: tr('余额低到高') },
             ]}
             placeholder={tr('默认排序')}
             />
@@ -1421,9 +1421,9 @@ export default function Sites() {
                 value={sortMode}
                 onChange={handleSortModeChange}
                 options={[
-                  { value: 'custom', label: '默认排序' },
-                  { value: 'balance-desc', label: '余额高到低' },
-                  { value: 'balance-asc', label: '余额低到高' },
+                  { value: 'custom', label: tr('默认排序') },
+                  { value: 'balance-desc', label: tr('余额高到低') },
+                  { value: 'balance-asc', label: tr('余额低到高') },
                 ]}
                 placeholder={tr('默认排序')}
               />

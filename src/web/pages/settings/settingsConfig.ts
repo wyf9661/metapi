@@ -7,19 +7,20 @@ import type {
   PayloadRuleAction,
   VisualPayloadRuleValueMode,
 } from './payloadRulesVisual.js';
+import { tr } from '../../i18n.js';
 
 export const SECONDS_PER_DAY = 24 * 60 * 60;
 
 export const ROUTE_COOLDOWN_UNIT_OPTIONS = [
-  { value: 'second', label: '秒', multiplierSec: 1 },
-  { value: 'minute', label: '分钟', multiplierSec: 60 },
-  { value: 'hour', label: '小时', multiplierSec: 60 * 60 },
-  { value: 'day', label: '天', multiplierSec: SECONDS_PER_DAY },
+  { value: 'second', label: tr('秒'), multiplierSec: 1 },
+  { value: 'minute', label: tr('分钟'), multiplierSec: 60 },
+  { value: 'hour', label: tr('小时'), multiplierSec: 60 * 60 },
+  { value: 'day', label: tr('天'), multiplierSec: SECONDS_PER_DAY },
 ] as const;
 
 export const CHECKIN_SCHEDULE_MODE_OPTIONS = [
   { value: 'cron', label: 'Cron' },
-  { value: 'interval', label: '间隔签到' },
+  { value: 'interval', label: tr('间隔签到') },
 ] as const;
 
 export const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) => {
@@ -115,15 +116,15 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
 }>;
 
 export const PAYLOAD_RULE_ACTION_OPTIONS: Array<{ value: PayloadRuleAction; label: string }> = [
-  { value: 'default', label: '默认注入' },
-  { value: 'default-raw', label: '默认注入 JSON' },
-  { value: 'override', label: '强制覆盖' },
-  { value: 'override-raw', label: '强制覆盖 JSON' },
-  { value: 'filter', label: '删除字段' },
+  { value: 'default', label: tr('默认注入') },
+  { value: 'default-raw', label: tr('默认注入 JSON') },
+  { value: 'override', label: tr('强制覆盖') },
+  { value: 'override-raw', label: tr('强制覆盖 JSON') },
+  { value: 'filter', label: tr('删除字段') },
 ];
 
 export const PAYLOAD_RULE_VALUE_MODE_OPTIONS: Array<{ value: VisualPayloadRuleValueMode; label: string }> = [
-  { value: 'text', label: '文本' },
+  { value: 'text', label: tr('文本') },
   { value: 'json', label: 'JSON' },
 ];
 

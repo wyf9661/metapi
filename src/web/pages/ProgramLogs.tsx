@@ -13,19 +13,19 @@ import type { ProgramEvent } from '../eventsTypes.js';
 import { StatusText } from '../components/StatusText.js';
 
 const TYPE_OPTIONS = [
-  { value: '', label: '全部类型' },
-  { value: 'checkin', label: '签到' },
-  { value: 'balance', label: '余额' },
-  { value: 'token', label: '令牌' },
-  { value: 'proxy', label: '代理' },
-  { value: 'status', label: '状态' },
-  { value: 'site_notice', label: '站点公告' },
+  { value: '', label: tr('全部类型') },
+  { value: 'checkin', label: tr('签到') },
+  { value: 'balance', label: tr('余额') },
+  { value: 'token', label: tr('令牌') },
+  { value: 'proxy', label: tr('代理') },
+  { value: 'status', label: tr('状态') },
+  { value: 'site_notice', label: tr('站点公告') },
 ];
 
 function levelLabel(level: string) {
-  if (level === 'error') return { label: '错误', cls: 'badge-error' };
-  if (level === 'warning') return { label: '警告', cls: 'badge-warning' };
-  return { label: '信息', cls: 'badge-info' };
+  if (level === 'error') return { label: tr('错误'), cls: 'badge-error' };
+  if (level === 'warning') return { label: tr('警告'), cls: 'badge-warning' };
+  return { label: tr('信息'), cls: 'badge-info' };
 }
 
 function eventStatusLabel(row: ProgramEvent) {
@@ -46,33 +46,33 @@ function eventStatusLabel(row: ProgramEvent) {
 
   if (summary.failed !== undefined || summary.success !== undefined || summary.skipped !== undefined) {
     if ((summary.failed ?? 0) > 0) {
-      return { label: '失败', cls: 'badge-error' };
+      return { label: tr('失败'), cls: 'badge-error' };
     }
     if ((summary.success ?? 0) > 0) {
-      return { label: '成功', cls: 'badge-success' };
+      return { label: tr('成功'), cls: 'badge-success' };
     }
     if ((summary.skipped ?? 0) > 0) {
-      return { label: '跳过', cls: 'badge-warning' };
+      return { label: tr('跳过'), cls: 'badge-warning' };
     }
-    return { label: '成功', cls: 'badge-success' };
+    return { label: tr('成功'), cls: 'badge-success' };
   }
 
   if (text.includes('失败') || text.includes('failed') || text.includes('error')) {
-    return { label: '失败', cls: 'badge-error' };
+    return { label: tr('失败'), cls: 'badge-error' };
   }
   if (text.includes('跳过') || text.includes('skipped')) {
-    return { label: '跳过', cls: 'badge-warning' };
+    return { label: tr('跳过'), cls: 'badge-warning' };
   }
   if (text.includes('进行中') || text.includes('已开始') || text.includes('running') || text.includes('pending')) {
-    return { label: '进行中', cls: 'badge-info' };
+    return { label: tr('进行中'), cls: 'badge-info' };
   }
   if (text.includes('成功') || text.includes('已完成') || text.includes('completed') || text.includes('finished')) {
-    return { label: '成功', cls: 'badge-success' };
+    return { label: tr('成功'), cls: 'badge-success' };
   }
 
-  if (row.level === 'error') return { label: '异常', cls: 'badge-error' };
-  if (row.level === 'warning') return { label: '警告', cls: 'badge-warning' };
-  return { label: '信息', cls: 'badge-info' };
+  if (row.level === 'error') return { label: tr('异常'), cls: 'badge-error' };
+  if (row.level === 'warning') return { label: tr('警告'), cls: 'badge-warning' };
+  return { label: tr('信息'), cls: 'badge-info' };
 }
 
 export default function ProgramLogs() {

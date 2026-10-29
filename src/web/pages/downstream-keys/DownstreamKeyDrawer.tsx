@@ -226,7 +226,7 @@ export default function DownstreamKeyDrawer({
                 {[
                   { label: '24h', data: overview.usage.last24h },
                   { label: '7d', data: overview.usage.last7d },
-                  { label: '全部', data: overview.usage.all },
+                  { label: tr('全部'), data: overview.usage.all },
                 ].map((section) => (
                   <div key={section.label} style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
                     <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, marginBottom: 8 }}>{section.label}</div>

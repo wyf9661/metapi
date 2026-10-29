@@ -19,10 +19,10 @@ type NotifyChannelRow = {
 };
 
 const NOTIFY_KIND_OPTIONS = [
-    { value: 'dingtalk', label: '钉钉' },
-    { value: 'feishu', label: '飞书' },
-    { value: 'wecom', label: '企业微信' },
-    { value: 'custom', label: '自定义' },
+    { value: 'dingtalk', label: tr('钉钉') },
+    { value: 'feishu', label: tr('飞书') },
+    { value: 'wecom', label: tr('企业微信') },
+    { value: 'custom', label: tr('自定义') },
 ];
 
 /** Mirrors the server-side host detection so a pasted URL preselects the platform. */

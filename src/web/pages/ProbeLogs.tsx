@@ -162,7 +162,7 @@ export default function ProbeLogs() {
     if (siteId && !opts.some((o) => o.value === siteId)) {
       opts.unshift({ value: siteId, label: `站点 #${siteId}` });
     }
-    return [{ value: '', label: '全部站点' }, ...opts];
+    return [{ value: '', label: tr('全部站点') }, ...opts];
   }, [filterOptions.sites, siteId]);
 
   const accountOptions = useMemo(() => {
@@ -170,7 +170,7 @@ export default function ProbeLogs() {
     if (accountId && !opts.some((o) => o.value === accountId)) {
       opts.unshift({ value: accountId, label: `账号 #${accountId}` });
     }
-    return [{ value: '', label: '全部账号' }, ...opts];
+    return [{ value: '', label: tr('全部账号') }, ...opts];
   }, [filterOptions.accounts, accountId]);
 
   const modelOptions = useMemo(() => {
@@ -178,7 +178,7 @@ export default function ProbeLogs() {
     if (modelName && !opts.some((o) => o.value === modelName)) {
       opts.unshift({ value: modelName, label: modelName });
     }
-    return [{ value: '', label: '全部模型' }, ...opts];
+    return [{ value: '', label: tr('全部模型') }, ...opts];
   }, [filterOptions.models, modelName]);
 
   const logsParams = useMemo(() => {
@@ -329,10 +329,10 @@ export default function ProbeLogs() {
               <div className="probe-filter-label" style={{ marginBottom: 6 }}>{tr('状态')}</div>
               <div className="pill-tabs">
                 {[
-                  { key: '', label: '全部' },
-                  { key: 'success', label: '成功' },
-                  { key: 'failed', label: '失败' },
-                  { key: 'timeout', label: '超时' },
+                  { key: '', label: tr('全部') },
+                  { key: 'success', label: tr('成功') },
+                  { key: 'failed', label: tr('失败') },
+                  { key: 'timeout', label: tr('超时') },
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -391,10 +391,10 @@ export default function ProbeLogs() {
           <div className="toolbar probe-filter-toolbar" style={{ marginBottom: 12 }}>
             <div className="pill-tabs">
               {[
-                { key: '', label: '全部' },
-                { key: 'success', label: '成功' },
-                { key: 'failed', label: '失败' },
-                { key: 'timeout', label: '超时' },
+                { key: '', label: tr('全部') },
+                { key: 'success', label: tr('成功') },
+                { key: 'failed', label: tr('失败') },
+                { key: 'timeout', label: tr('超时') },
               ].map((tab) => (
                 <button
                   key={tab.key}

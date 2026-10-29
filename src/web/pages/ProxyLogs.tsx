@@ -263,7 +263,7 @@ export default function ProxyLogs() {
         label: `站点 #${siteFilter}（已删除）`,
       });
     }
-    return [{ value: '', label: '全部站点' }, ...options];
+    return [{ value: '', label: tr('全部站点') }, ...options];
   }, [siteFilter, sites]);
 
   const modelSelectOptions = useMemo(() => {
@@ -277,7 +277,7 @@ export default function ProxyLogs() {
         label: modelFilter,
       });
     }
-    return [{ value: '', label: '全部模型' }, ...options];
+    return [{ value: '', label: tr('全部模型') }, ...options];
   }, [modelFilter, modelOptions]);
 
   const resolvedDownstreamKeyOptions = useMemo(() => {
@@ -285,7 +285,7 @@ export default function ProxyLogs() {
       value: String(k.id),
       label: k.name + (k.groupName ? ` (${k.groupName})` : ''),
     }));
-    return [{ value: '', label: '全部密钥' }, ...options];
+    return [{ value: '', label: tr('全部密钥') }, ...options];
   }, [downstreamKeyOptions]);
 
   const activeSiteLabel = useMemo(() => {
@@ -805,17 +805,17 @@ export default function ProxyLogs() {
         {[
           {
             key: 'all' as ProxyLogStatusFilter,
-            label: '全部',
+            label: tr('全部'),
             count: summary.totalCount,
           },
           {
             key: 'success' as ProxyLogStatusFilter,
-            label: '成功',
+            label: tr('成功'),
             count: summary.successCount,
           },
           {
             key: 'failed' as ProxyLogStatusFilter,
-            label: '失败',
+            label: tr('失败'),
             count: summary.failedCount,
           },
         ].map((tab) => (

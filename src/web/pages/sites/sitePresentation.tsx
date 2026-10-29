@@ -6,6 +6,7 @@
 
 import { BanIcon, FileTextIcon, GlobeIcon, KeyIcon, SlidersIcon, UserIcon } from '../../components/MiniIcons.js';
 import HoverPopover from '../../components/HoverPopover.js';
+import { tr } from '../../i18n.js';
 
 export type SiteSubscriptionSummary = {
   activeCount: number;
@@ -128,9 +129,9 @@ export function SiteConnectionStats(props: {
       .join('；')}`
     : '禁用模型';
   const markers = [
-    { key: 'sessions', label: 'Session 账号', count: stats?.sessions || 0, Icon: UserIcon },
+    { key: 'sessions', label: tr('Session 账号'), count: stats?.sessions || 0, Icon: UserIcon },
     { key: 'apiKeys', label: 'API Key', count: stats?.apiKeys || 0, Icon: KeyIcon },
-    { key: 'tokens', label: '令牌', count: stats?.tokens || 0, Icon: FileTextIcon },
+    { key: 'tokens', label: tr('令牌'), count: stats?.tokens || 0, Icon: FileTextIcon },
     { key: 'disabledModels', label: disabledLabel, count: disabled?.total || 0, Icon: BanIcon },
   ].filter((marker) => marker.count > 0);
 
@@ -313,7 +314,7 @@ export const platformColors: Record<string, string> = {
 };
 
 export const SITE_PLATFORM_OPTIONS = [
-  { value: '', label: '平台类型（可自动检测）' },
+  { value: '', label: tr('平台类型（可自动检测）') },
   { value: 'new-api', label: 'new-api', description: '聚合面板，多渠道统一管理' },
   { value: 'one-api', label: 'one-api', description: '经典聚合面板，通用 OpenAI 中转' },
   { value: 'sub2api', label: 'sub2api', description: '订阅式中转面板，可同步套餐与余额' },
