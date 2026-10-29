@@ -1,3 +1,4 @@
+import { toOpenAiFinishReason } from '../../shared/finishReason.js';
 import {
   buildSyntheticOpenAiChunks,
   normalizeUpstreamFinalResponse,
@@ -118,7 +119,7 @@ export function buildNormalizedFinalToOpenAiChatPayload(
     return {
       index: choice.index,
       message,
-      finish_reason: choice.finishReason || (choice.toolCalls?.length ? 'tool_calls' : 'stop'),
+      finish_reason: toOpenAiFinishReason(choice.finishReason || (choice.toolCalls?.length ? 'tool_calls' : 'stop')),
     };
   }).sort((left, right) => left.index - right.index);
 
@@ -187,7 +188,7 @@ export function buildNormalizedFinalToOpenAiChatChunks(normalized: NormalizedFin
           return {
             index: choice.index,
             delta: {},
-            finish_reason: choice.finishReason || (toolCalls.length > 0 ? 'tool_calls' : 'stop'),
+            finish_reason: toOpenAiFinishReason(choice.finishReason || (toolCalls.length > 0 ? 'tool_calls' : 'stop')),
           };
         }).sort((left, right) => left.index - right.index),
       },
