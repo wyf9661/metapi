@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
@@ -34,14 +35,8 @@ type ProbeLog = {
   accountUsername?: string;
 };
 
-type ProbeLogStats = {
-  total: number;
-  success: number;
-  failed: number;
-  timeout: number;
-  avgLatencyMs: number;
-  totalTokens: number;
-};
+const EMPTY_LOGS: ProbeLog[] = [];
+const EMPTY_FILTER_OPTIONS = { sites: [], accounts: [], models: [] };
 
 const CATEGORY_LABELS: Record<string, string> = {
   math: '数学',
@@ -142,10 +137,6 @@ export default function ProbeLogs() {
   const { language } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [logs, setLogs] = useState<ProbeLog[]>([]);
-  const [stats, setStats] = useState<ProbeLogStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [selectedLog, setSelectedLog] = useState<ProbeLog | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -159,16 +150,12 @@ export default function ProbeLogs() {
 
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1'));
   const [pageSize, setPageSize] = usePersistedPageSize('probeLogs');
-  // Monotonic request sequence guards: only the newest fetch may apply its result.
-  const logsRequestSeqRef = useRef(0);
-  const statsRequestSeqRef = useRef(0);
-
   // 筛选选项数据
-  const [filterOptions, setFilterOptions] = useState<{
-    sites: { id: number; name: string }[];
-    accounts: { id: number; username: string }[];
-    models: string[];
-  }>({ sites: [], accounts: [], models: [] });
+  const { data: filterOptions = EMPTY_FILTER_OPTIONS } = useQuery({
+    queryKey: ['probe-log-filters'],
+    queryFn: () => api.getProbeLogFilters(),
+    staleTime: Infinity,
+  });
 
   const siteOptions = useMemo(() => {
     const opts = filterOptions.sites.map((s) => ({ value: String(s.id), label: s.name }));
@@ -194,66 +181,50 @@ export default function ProbeLogs() {
     return [{ value: '', label: '全部模型' }, ...opts];
   }, [filterOptions.models, modelName]);
 
-  const fetchLogs = async () => {
-    // Fast filter/page changes fire overlapping fetches; only the newest
-    // response may land, or a slow earlier answer overwrites the fresh list.
-    const requestSeq = ++logsRequestSeqRef.current;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (siteId) params.set('siteId', siteId);
-      if (accountId) params.set('accountId', accountId);
-      if (modelName) params.set('modelName', modelName);
-      if (status) params.set('status', status);
-      if (startTime) params.set('startTime', new Date(startTime).toISOString());
-      if (endTime) params.set('endTime', new Date(endTime).toISOString());
-      params.set('limit', pageSize.toString());
-      params.set('offset', ((page - 1) * pageSize).toString());
-
-      const data = await api.getProbeLogs(params.toString());
-      if (requestSeq !== logsRequestSeqRef.current) return;
-      setLogs(data.logs);
-      setTotal(data.total);
-    } catch (error) {
-      if (requestSeq !== logsRequestSeqRef.current) return;
-      toast.error('获取测活日志失败');
-    } finally {
-      if (requestSeq === logsRequestSeqRef.current) setLoading(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    const requestSeq = ++statsRequestSeqRef.current;
-    try {
-      const params = new URLSearchParams();
-      if (startTime) params.set('startTime', new Date(startTime).toISOString());
-      if (endTime) params.set('endTime', new Date(endTime).toISOString());
-      const data = await api.getProbeLogStats(params.toString());
-      if (requestSeq !== statsRequestSeqRef.current) return;
-      setStats(data);
-    } catch (error) {
-      console.error('获取统计失败', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
+  const logsParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (siteId) params.set('siteId', siteId);
+    if (accountId) params.set('accountId', accountId);
+    if (modelName) params.set('modelName', modelName);
+    if (status) params.set('status', status);
+    if (startTime) params.set('startTime', new Date(startTime).toISOString());
+    if (endTime) params.set('endTime', new Date(endTime).toISOString());
+    params.set('limit', pageSize.toString());
+    params.set('offset', ((page - 1) * pageSize).toString());
+    return params.toString();
   }, [siteId, accountId, modelName, status, startTime, endTime, page, pageSize]);
 
-  // Stats only depend on the time range — paging/site/status flips must not
-  // re-fetch them (they previously shared the list effect's deps).
-  useEffect(() => {
-    fetchStats();
+  const logsQuery = useQuery({
+    queryKey: ['probe-logs', logsParams],
+    queryFn: () => api.getProbeLogs(logsParams),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+
+  const statsParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (startTime) params.set('startTime', new Date(startTime).toISOString());
+    if (endTime) params.set('endTime', new Date(endTime).toISOString());
+    return params.toString();
   }, [startTime, endTime]);
 
-  // 初始化加载筛选选项
+  // Stats only depend on the time range — paging/site/status flips must not
+  // re-fetch them.
+  const statsQuery = useQuery({
+    queryKey: ['probe-log-stats', statsParams],
+    queryFn: () => api.getProbeLogStats(statsParams),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+
+  const logs = logsQuery.data?.logs ?? EMPTY_LOGS;
+  const total = logsQuery.data?.total ?? 0;
+  const stats = statsQuery.data ?? null;
+  const loading = logsQuery.isFetching;
+
   useEffect(() => {
-    api.getProbeLogFilters().then((data) => {
-      setFilterOptions(data);
-    }).catch(() => {
-      // 静默失败，不影响页面使用
-    });
-  }, []);
+    if (logsQuery.isError) toast.error('获取测活日志失败');
+  }, [logsQuery.isError, logsQuery.errorUpdatedAt]);
 
   const updateSearchParams = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams);
@@ -307,8 +278,8 @@ export default function ProbeLogs() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
             onClick={() => {
-              fetchLogs();
-              fetchStats();
+              logsQuery.refetch();
+              statsQuery.refetch();
             }}
           >
             {tr('刷新')}
