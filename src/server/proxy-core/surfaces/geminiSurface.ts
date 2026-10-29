@@ -44,7 +44,7 @@ import { fetchWithObservedFirstByte, getObservedResponseMeta, parseLocalFirstByt
 import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
 import { recordPerformanceShadowAttempt, recordPerformanceShadowSample } from '../../services/performanceShadow.js';
 import { createIdleGuardedStreamReader } from '../streamIdleTimeout.js';
-import { wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal, acquireSurfaceChannelLease, bindSurfaceStickyChannel, buildSurfaceChannelBusyMessage, buildSurfaceStickySessionKey, clearSurfaceChannelAffinity, getSurfaceStickyPreferredChannelId, selectSurfaceChannelForAttempt } from './sharedSurface.js';
+import { createSurfaceFailureToolkit, wireStreamCancelOnClientDisconnect, wireReplyGoneAbortSignal, acquireSurfaceChannelLease, bindSurfaceStickyChannel, buildSurfaceChannelBusyMessage, buildSurfaceStickySessionKey, clearSurfaceChannelAffinity, getSurfaceStickyPreferredChannelId, selectSurfaceChannelForAttempt } from './sharedSurface.js';
 import {
   getProxyMaxChannelRetries,
 } from '../../services/proxyChannelRetry.js';
@@ -647,6 +647,19 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     let lastText = 'No available channels for this model';
     let lastContentType = 'application/json';
 
+    // One failure policy for every surface, built after the budget resolution above settles
+    // `maxRetries`. It currently backs the recording calls only; the retry decision still
+    // lives in the loop and moves here in the next step.
+    const failureToolkit = createSurfaceFailureToolkit({
+      warningScope: 'gemini',
+      downstreamPath,
+      maxRetries,
+      clientContext,
+      downstreamApiKeyId,
+      traceId: requestTraceId,
+      backoffMs: config.proxyFailoverBackoffMs,
+    });
+
     while (retryCount <= maxRetries) {
       // One selection path for every surface: sticky/last-success affinity,
       // probe-rate rebalancing, concurrency spread, forced tester channel and
@@ -1121,7 +1134,9 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               const responseBody = captureStreamChunks
                 ? rawStreamText
                 : { stream: true, usage: parsedUsage, error: errorMessage };
-              await tokenRouter.recordFailure?.(selected.channel.id, {
+              await failureToolkit.recordChannelFailure({
+                selected,
+                modelName: requestedModel,
                 status: 502,
                 errorText: errorMessage,
               });

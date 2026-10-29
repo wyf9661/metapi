@@ -33,7 +33,7 @@ import { observeContextOverflowFailure, observeSuccessfulPromptUsage } from '../
 import { selectProxyChannelForAttempt } from '../channelSelection.js';
 
 type SelectedChannel = Awaited<ReturnType<typeof tokenRouter.selectChannel>>;
-type SurfaceWarningScope = 'chat' | 'responses';
+type SurfaceWarningScope = 'chat' | 'responses' | 'gemini';
 
 type SurfaceSelectedChannel = {
   channel: { routeId: number | null; id: number };

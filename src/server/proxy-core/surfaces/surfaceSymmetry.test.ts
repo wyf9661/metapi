@@ -34,10 +34,11 @@ describe('failure handling is centralised, not per-surface', () => {
   });
 
   it('keeps gemini at or below its recorded migration debt', () => {
-    // KNOWN DEBT (audit step 4): 7 direct call sites bypass the toolkit's disposition gate,
-    // so client-side 400s burn the channel fail counter and credential failures still rotate.
-    // This bound may only go down; raising it means a new bypass was introduced.
-    expect(recordFailureCalls('geminiSurface.ts')).toBeLessThanOrEqual(7);
+    // KNOWN DEBT (audit step 4): 6 direct call sites still bypass the toolkit's disposition
+    // gate, so client-side 400s burn the channel fail counter and credential failures still
+    // rotate. One site (the streaming catch, 502) is already migrated. This bound may only
+    // go down; raising it means a new bypass was introduced.
+    expect(recordFailureCalls('geminiSurface.ts')).toBeLessThanOrEqual(6);
   });
 
   it('keeps the toolkit as the single implementation', () => {
