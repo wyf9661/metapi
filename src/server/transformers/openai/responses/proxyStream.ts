@@ -1,4 +1,5 @@
 import { createProxyStreamLifecycle } from '../../shared/protocolLifecycle.js';
+import { resolveProxyStreamIdleTimeoutMs } from '../../../config.js';
 import { type ParsedSseEvent } from '../../shared/normalized.js';
 import { completeResponsesStream, createOpenAiResponsesAggregateState, failResponsesStream, serializeConvertedResponsesEvents } from './aggregator.js';
 import {
@@ -293,6 +294,7 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
         pullEvents: (buffer) => openAiResponsesStream.pullSseEvents(buffer),
         handleEvent: handleEventBlock,
         onEof: closeOut,
+        idleTimeoutMs: resolveProxyStreamIdleTimeoutMs(),
       });
       await lifecycle.run();
       return terminalResult;

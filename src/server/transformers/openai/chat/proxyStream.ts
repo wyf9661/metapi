@@ -7,7 +7,7 @@ import {
   normalizeOpenAiChatFinalToNormalized,
 } from './responseBridge.js';
 import { openAiChatStream } from './streamBridge.js';
-import { config } from '../../../config.js';
+import { config, resolveProxyStreamIdleTimeoutMs } from '../../../config.js';
 
 type StreamReader = {
   read(): Promise<{ done: boolean; value?: Uint8Array }>;
@@ -382,6 +382,7 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
         pullEvents: (buffer) => downstreamTransformer.pullSseEvents(buffer),
         handleEvent: handleEventBlock,
         onEof: finalize,
+        idleTimeoutMs: resolveProxyStreamIdleTimeoutMs(),
       });
       await lifecycle.run();
       return terminalResult;

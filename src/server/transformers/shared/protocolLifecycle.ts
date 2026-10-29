@@ -15,6 +15,26 @@ type ProxyStreamLifecycleInput<TEvent> = {
   pullEvents(buffer: string): PulledEventBatch<TEvent>;
   handleEvent(event: TEvent): Promise<boolean | void> | boolean | void;
   onEof?: () => Promise<void> | void;
+  /**
+   * Deadline for a single upstream read. An upstream that opens the stream and then stops
+   * sending leaves `reader.read()` pending forever, holding the client connection, the
+   * channel lease and a retry slot; 0 disables the deadline.
+   */
+  idleTimeoutMs?: number;
+}
+
+const IDLE_TIMEOUT = Symbol('proxy-stream-idle-timeout');
+
+function readWithIdleTimeout<T>(read: Promise<T>, idleTimeoutMs: number): Promise<T | typeof IDLE_TIMEOUT> {
+  if (idleTimeoutMs <= 0) return read;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof IDLE_TIMEOUT>((resolve) => {
+    timer = setTimeout(() => resolve(IDLE_TIMEOUT), idleTimeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([read, deadline]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 };
 
 export function createProxyStreamLifecycle<TEvent>(input: ProxyStreamLifecycleInput<TEvent>) {
@@ -48,13 +68,28 @@ export function createProxyStreamLifecycle<TEvent>(input: ProxyStreamLifecycleIn
       }
 
       const decoder = new TextDecoder();
+      const idleTimeoutMs = Math.max(0, Math.trunc(input.idleTimeoutMs ?? 0));
       let sseBuffer = '';
       let shouldStop = false;
 
       try {
+        // Only the wait for the FIRST byte is bounded. Mid-stream silence is not the same
+        // signal: a reasoning model may think for minutes between deltas while the request
+        // is healthy, and the configured value is a first-byte budget. Cutting those would
+        // truncate good answers; a genuinely dead mid-stream connection is caught by the
+        // client-abort signal instead.
+        let receivedAny = false;
         while (true) {
-          const { done, value } = await reader.read();
+          const next = await readWithIdleTimeout(reader.read(), receivedAny ? 0 : idleTimeoutMs);
+          if (next === IDLE_TIMEOUT) {
+            // Treat it as an upstream stall: stop reading and let onEof synthesise the
+            // terminal state from what was actually delivered.
+            await reader.cancel().catch(() => {});
+            break;
+          }
+          const { done, value } = next;
           if (done) break;
+          if (value) receivedAny = true;
           if (!value) continue;
 
           sseBuffer += decoder.decode(value, { stream: true });
