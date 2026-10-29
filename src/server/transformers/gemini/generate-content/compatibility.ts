@@ -1,4 +1,5 @@
 import { toOpenAiChatFileBlock } from '../../shared/inputFile.js';
+import { toGeminiFinishReason } from '../../shared/finishReason.js';
 import type { NormalizedFinalResponse } from '../../shared/normalized.js';
 import { extractReasoningMetadataFromGeminiRequest } from './convert.js';
 import { asTrimmedString } from '../../../shared/trimString.js';
@@ -283,12 +284,11 @@ export function buildOpenAiBodyFromGeminiRequest(input: {
 }
 
 function mapFinishReason(finishReason: string): string {
-  const normalized = finishReason.trim().toLowerCase();
-  if (!normalized) return 'STOP';
-  if (normalized === 'stop' || normalized === 'completed' || normalized === 'tool_calls') return 'STOP';
-  if (normalized === 'length' || normalized === 'max_tokens' || normalized === 'max_output_tokens') return 'MAX_TOKENS';
-  if (normalized === 'content_filter' || normalized === 'safety') return 'SAFETY';
-  return normalized.toUpperCase().replace(/[^A-Z0-9_]+/g, '_');
+  // Delegate to the one canonical vocabulary. This table had its own spellings, so a value
+  // the canonical layer could produce (e.g. content_filter) only reached SAFETY by luck of
+  // overlap, and an errored stream fell through to an invented uppercase token.
+  if (!finishReason.trim()) return 'STOP';
+  return toGeminiFinishReason(finishReason);
 }
 
 function buildUsageMetadata(usage?: {
