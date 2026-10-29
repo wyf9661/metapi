@@ -467,6 +467,12 @@ export async function recordFailure(
   let cooldownUntil: string | null = null;
   let consecutiveFailCount = Math.max(0, ch.consecutiveFailCount ?? 0) + 1;
   let cooldownLevel = Math.max(0, ch.cooldownLevel ?? 0);
+  // Cooldown writes are monotonic: a later failure may extend a channel's cooldown but must
+  // never shorten one that another (possibly concurrent) failure just set. Without this the
+  // skipCooldown branch wiped a 1h provider-quota cooldown with one uncategorised error, and
+  // round-robin's "three strikes" was cleared by the second and third in-flight failure.
+  const existingCooldownMs = ch.cooldownUntil ? Date.parse(String(ch.cooldownUntil)) : NaN;
+  const existingCooldownActive = Number.isFinite(existingCooldownMs) && existingCooldownMs > nowMs;
 
   const cooldownPolicy = resolveFailureCooldownWeight(normalizedContext);
   if (shortWindowLimitCooldownUntil) {
@@ -474,8 +480,10 @@ export async function recordFailure(
     consecutiveFailCount = 0;
     cooldownLevel = 0;
   } else if (cooldownPolicy.skipCooldown) {
-    cooldownUntil = null;
-    consecutiveFailCount = 0;
+    // No cooldown signal in this failure is not evidence that the previous one was wrong:
+    // keep whatever is still running, and keep the streak (the probe-cooldown attribution
+    // in isProbeAttributableCooldown depends on consecutiveFailCount staying non-zero).
+    cooldownUntil = existingCooldownActive ? String(ch.cooldownUntil) : null;
     cooldownLevel = 0;
   } else if (routeStrategy === 'round_robin') {
     if (consecutiveFailCount >= ROUND_ROBIN_FAILURE_THRESHOLD) {
@@ -485,6 +493,8 @@ export async function recordFailure(
         ? new Date(nowMs + clampFailureCooldownMs(cooldownSec * 1000 * cooldownPolicy.weight)).toISOString()
         : null;
       consecutiveFailCount = 0;
+    } else if (existingCooldownActive) {
+      cooldownUntil = String(ch.cooldownUntil);
     }
   } else {
     const failureDecision = classifyProxyFailure(normalizedContext);
@@ -507,6 +517,10 @@ export async function recordFailure(
     }
     consecutiveFailCount = 0;
     cooldownLevel = 0;
+  }
+
+  if (existingCooldownActive && (!cooldownUntil || Date.parse(cooldownUntil) < existingCooldownMs)) {
+    cooldownUntil = String(ch.cooldownUntil);
   }
 
   await db.update(schema.routeChannels).set({
