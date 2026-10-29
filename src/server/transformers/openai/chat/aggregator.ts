@@ -6,6 +6,7 @@ import type {
   OpenAiChatUsageDetails,
 } from './model.js';
 import { mergeChatUsageDetails } from './helpers.js';
+import { createToolCallIndexState, resolveToolCallIndex, type ToolCallIndexState } from '../../shared/toolCallIndex.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -30,6 +31,8 @@ type ChoiceAggregate = {
   content: string[];
   reasoning: string[];
   toolCalls: Array<{ id: string; name: string; arguments: string }>;
+  /** Slot assignment for fragments that arrive without an `index` (see toolCallIndex.ts). */
+  toolCallIndexState?: ToolCallIndexState;
   finishReason: string | null;
   annotations: Array<Record<string, unknown>>;
   annotationUrls: Set<string>;
@@ -72,7 +75,15 @@ function applyChoiceDelta(choice: ChoiceAggregate, event: OpenAiChatChoiceDelta)
   if (Array.isArray(event.toolCallDeltas)) {
     for (const delta of event.toolCallDeltas) {
       if (!delta.id && !delta.name && !delta.argumentsDelta) continue;
-      const index = Number.isFinite(delta.index) ? Math.max(0, Math.trunc(delta.index)) : choice.toolCalls.length;
+      // An index-less fragment used to be numbered by array length, which turned the
+      // several argument fragments of one call into n unparseable "parallel" calls.
+      choice.toolCallIndexState ??= createToolCallIndexState();
+      const index = resolveToolCallIndex(
+        Number.isFinite(delta.index) ? Math.max(0, Math.trunc(delta.index)) : undefined,
+        delta.id,
+        delta.name,
+        choice.toolCallIndexState,
+      );
       while (choice.toolCalls.length <= index) {
         choice.toolCalls.push({ id: '', name: '', arguments: '' });
       }
