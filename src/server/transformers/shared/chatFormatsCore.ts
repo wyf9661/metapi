@@ -32,6 +32,15 @@ export type StreamTransformContext = {
   nextResponsesToolCallIndex: number;
   responsesTextByIndex: Record<number, string>;
   responsesReasoningByIndex: Record<number, string>;
+  /**
+   * Anthropic content-block index -> tool slot. Anthropic numbers every block (thinking=0,
+   * text=1, tool_use=2), so the raw block index is NOT a tool ordinal; using it directly
+   * handed clients a sparse tool_calls array. Only populated for tool_use blocks.
+   */
+  anthropicToolSlotByBlockIndex: Record<number, number>;
+  /** Gemini streams each call whole; key it by id (else name+args) so a repeat is a no-op. */
+  geminiToolSlotByKey: Record<string, number>;
+  nextGeminiToolSlot: number;
   thinkTagParser: ThinkTagParserState;
 };
 
@@ -226,6 +235,67 @@ function extractStreamingTextAndReasoning(
   };
 }
 
+/**
+ * Map an Anthropic content-block index to a dense tool slot.
+ *
+ * Anthropic numbers every block, not every tool: `thinking=0, text=1, tool_use=2`. Passing
+ * that index straight through as the OpenAI `tool_calls[].index` handed clients a sparse
+ * array (one element at position 2), which every client-side consumer then indexed wrongly.
+ * Only `tool_use` blocks get a slot, and they get them in opening order.
+ */
+function anthropicToolSlotForBlockIndex(
+  context: StreamTransformContext,
+  blockIndex: number,
+): number {
+  const known = context.anthropicToolSlotByBlockIndex[blockIndex];
+  if (typeof known === 'number') return known;
+  const slot = Object.keys(context.anthropicToolSlotByBlockIndex).length;
+  context.anthropicToolSlotByBlockIndex[blockIndex] = slot;
+  return slot;
+}
+
+/**
+ * Collect Gemini `functionCall` parts from one streamed candidate into tool-call deltas.
+ *
+ * Gemini sends the complete `args` object in a single part, so each first sighting of a
+ * call becomes one delta with the whole argument JSON; a repeat of the same call (same id,
+ * or same name+args when the upstream omits ids) is skipped so the downstream accumulator
+ * cannot append a snapshot twice.
+ */
+function collectGeminiFunctionCallsForStream(
+  candidate: unknown,
+  context: StreamTransformContext,
+): NonNullable<NormalizedStreamEvent['toolCallDeltas']> {
+  if (!isRecord(candidate)) return [];
+  const parts = (candidate as any).content?.parts;
+  if (!Array.isArray(parts)) return [];
+
+  const deltas: NonNullable<NormalizedStreamEvent['toolCallDeltas']> = [];
+  for (const part of parts) {
+    if (!isRecord(part) || !isRecord((part as any).functionCall)) continue;
+    const functionCall = (part as any).functionCall as Record<string, unknown>;
+    const name = asTrimmedString(functionCall.name);
+    const id = asTrimmedString(functionCall.id);
+    const argumentsText = stringifyUnknownValue(functionCall.args);
+    const key = id ? `id:${id}` : `sig:${name}:${argumentsText}`;
+
+    const known = context.geminiToolSlotByKey[key];
+    if (typeof known === 'number') continue; // repeated snapshot, already emitted
+
+    const slot = context.nextGeminiToolSlot;
+    context.nextGeminiToolSlot += 1;
+    context.geminiToolSlotByKey[key] = slot;
+
+    deltas.push({
+      index: slot,
+      ...(id ? { id } : {}),
+      ...(name ? { name } : {}),
+      ...(argumentsText ? { argumentsDelta: argumentsText } : {}),
+    });
+  }
+  return deltas;
+}
+
 export function normalizeStopReason(raw: unknown): string | null {
   // Single source of truth: shared/finishReason.ts. Exact matching only — the previous
   // `includes('max')` / `includes('tool')` heuristics mis-read `nomatch` as tool_calls and
@@ -250,6 +320,9 @@ export function createStreamTransformContext(modelName: string): StreamTransform
     nextResponsesToolCallIndex: 0,
     responsesTextByIndex: {},
     responsesReasoningByIndex: {},
+    anthropicToolSlotByBlockIndex: {},
+    geminiToolSlotByKey: {},
+    nextGeminiToolSlot: 0,
     thinkTagParser: createThinkTagParserState(),
   };
 }
@@ -1747,6 +1820,7 @@ export function normalizeUpstreamStreamEvent(
     );
     const contentBlock = isRecord(payload.content_block) ? payload.content_block : {};
     if (contentBlock.type === 'tool_use') {
+      const toolSlot = anthropicToolSlotForBlockIndex(context, index);
       const id = typeof contentBlock.id === 'string' && contentBlock.id.trim().length > 0
         ? contentBlock.id
         : undefined;
@@ -1768,7 +1842,7 @@ export function normalizeUpstreamStreamEvent(
 
       return {
         toolCallDeltas: [{
-          index,
+          index: toolSlot,
           id,
           name,
           argumentsDelta,
@@ -1789,7 +1863,7 @@ export function normalizeUpstreamStreamEvent(
     const parsed = extractStreamingTextAndReasoning(delta, context.thinkTagParser);
 
     if (deltaType === 'input_json_delta') {
-      const index = (
+      const blockIndex = (
         typeof (payload as any).index === 'number' && Number.isFinite((payload as any).index)
           ? Math.max(0, Math.trunc((payload as any).index))
           : 0
@@ -1799,7 +1873,7 @@ export function normalizeUpstreamStreamEvent(
         : undefined;
       return {
         toolCallDeltas: [{
-          index,
+          index: anthropicToolSlotForBlockIndex(context, blockIndex),
           argumentsDelta: partialJson,
         }],
       };
@@ -1841,9 +1915,15 @@ export function normalizeUpstreamStreamEvent(
       context.model = fallbackModel;
     }
 
+    // Gemini delivers a functionCall whole (not as argument fragments), and until now this
+    // streaming branch dropped it entirely: only the non-streaming collector picked calls
+    // up. Emit it once per call — a repeated identical frame is a no-op, not a second
+    // append, because the payload is a snapshot rather than a delta.
+    const streamedToolCalls = collectGeminiFunctionCallsForStream(candidate, context);
     return {
       contentDelta: parsed.content || undefined,
       reasoningDelta: parsed.reasoning || undefined,
+      ...(streamedToolCalls.length > 0 ? { toolCallDeltas: streamedToolCalls } : {}),
       finishReason: normalizeStopReason((candidate as any).finishReason || (payload as any).finishReason),
     };
   }
