@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { zhToEnSupplemental } from './i18n.supplement.js';
 
 export type Language = 'zh' | 'en';
@@ -373,7 +373,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute('lang', language === 'zh' ? 'zh-CN' : 'en');
   }, [language]);
 
-  useEffect(() => {
+  // Layout effect, not effect: the first translation pass has to run before the
+  // browser paints. With useEffect the English UI painted every Chinese string
+  // once and the observer rewrote it afterwards (the flash of untranslated text).
+  useLayoutEffect(() => {
     const root = document.body;
     if (!root) return;
 
