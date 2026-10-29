@@ -1645,10 +1645,9 @@ describe('gemini native proxy routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({
-      status: 400,
-      errorText: JSON.stringify({ error: { message: 'bad request on first channel' } }),
-    }));
+    // 400 is retried for this ambiguous upstream body, but its disposition has
+    // cooldownScope='none'; the shared toolkit must not penalize the channel.
+    expect(recordFailureMock).not.toHaveBeenCalled();
     const [firstUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
     const [secondUrl] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(firstUrl).toContain('key=gemini-key');
