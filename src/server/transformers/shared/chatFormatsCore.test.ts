@@ -749,4 +749,24 @@ describe('chatFormatsCore claude→chat tool conversion', () => {
     ]));
     expect(out.payload.tools).toBeUndefined();
   });
+
+  it('classifies reasoning-typed content parts as reasoning on the core path', () => {
+    // The chat-side reader (helpers.ts) has always treated {type:'reasoning'} as reasoning;
+    // the core normalizer only knew 'thinking'/'thought', so the same upstream payload that
+    // produced a thinking block for OpenAI clients leaked into the answer text for
+    // Claude/Responses clients.
+    const context = createStreamTransformContext('gpt-test');
+    const event = normalizeUpstreamStreamEvent({
+      id: 'chatcmpl-reasoning-part',
+      model: 'gpt-test',
+      choices: [{
+        index: 0,
+        delta: { content: [{ type: 'reasoning', text: 'internal chain' }] },
+        finish_reason: null,
+      }],
+    }, context, 'gpt-test');
+
+    expect(event.contentDelta).toBeUndefined();
+    expect(event.reasoningDelta).toBe('internal chain');
+  });
 });

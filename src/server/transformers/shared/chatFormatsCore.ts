@@ -178,6 +178,16 @@ function extractTextAndReasoning(value: unknown): { content: string; reasoning: 
         reasoningParts.push(item.thinking);
         continue;
       }
+      // Same rule as the chat-side reader: a part explicitly typed reasoning/thinking is
+      // reasoning, never answer text, whatever field carries the string.
+      if ((type === 'reasoning' || type === 'thinking') && typeof item.text === 'string') {
+        reasoningParts.push(item.text);
+        continue;
+      }
+      if ((type === 'reasoning' || type === 'thinking') && typeof item.reasoning === 'string') {
+        reasoningParts.push(item.reasoning);
+        continue;
+      }
       if (type === 'thinking_delta' && typeof item.text === 'string') {
         reasoningParts.push(item.text);
         continue;
