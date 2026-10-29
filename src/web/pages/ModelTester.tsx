@@ -210,9 +210,7 @@ export default function ModelTester() {
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div>
           <h2 className="page-title">{tr('模型检测')}</h2>
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
-            用临时 Base URL + Key 拉取模型，检测该模型在选定协议下是否可用。
-          </p>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>{tr('用临时 Base URL + Key 拉取模型，检测该模型在选定协议下是否可用。')}</p>
         </div>
       </div>
 

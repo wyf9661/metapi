@@ -273,9 +273,7 @@ export default function CheckinLog() {
         >
           {triggering ? (
             <>
-              <span className="spinner spinner-sm" />
-              触发中...
-            </>
+              <span className="spinner spinner-sm" />{tr('触发中...')}</>
           ) : (
             '运行所有签到'
           )}
@@ -580,7 +578,7 @@ export default function CheckinLog() {
               />
             </svg>
             <div className="empty-state-title">{tr('暂无签到记录')}</div>
-            <div className="empty-state-desc">点击“运行所有签到”开始执行</div>
+            <div className="empty-state-desc">{tr('点击“运行所有签到”开始执行')}</div>
           </div>
         )}
       </div>

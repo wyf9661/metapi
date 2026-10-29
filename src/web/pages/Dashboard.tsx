@@ -825,7 +825,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">今日调用</div>
+              <div className="stat-label">{tr('今日调用')}</div>
               <div className="stat-value animate-count-up">{Math.round(todayCalls).toLocaleString()}</div>
             </div>
             <StatSparkline values={dailyCallsSeries} color="var(--color-primary)" />
@@ -848,7 +848,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">今日 Tokens</div>
+              <div className="stat-label">{tr('今日 Tokens')}</div>
               <div className="stat-value animate-count-up">{formatCompactTokenMetric(todayModelTokens)}</div>
             </div>
           </div>
@@ -890,7 +890,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">24h 成功率</div>
+              <div className="stat-label">{tr('24h 成功率')}</div>
               <div className="stat-value animate-count-up">
                 {qualitySuccessRate == null ? '—' : `${qualitySuccessRate.toFixed(1)}%`}
               </div>
@@ -923,22 +923,20 @@ export default function Dashboard({
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{tr('首次配置引导')}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
-            按顺序完成下面几步，即可用下游 Key 调通模型：
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>{tr('按顺序完成下面几步，即可用下游 Key 调通模型：')}</div>
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--color-text-primary)' }}>
             <li>
               {sites.length === 0 ? (
                 <><strong>{tr('添加站点')}</strong> → <Link to="/sites">{tr('连接管理 / 站点')}</Link></>
               ) : (
-                <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有站点</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>{tr('✓ 已有站点')}</span>
               )}
             </li>
             <li>
               {totalAccounts === 0 ? (
-                <><strong>{tr('添加账号凭证')}</strong>(API Key 或 Session)并验证 → <Link to="/sites">站点连接</Link></>
+                <><strong>{tr('添加账号凭证')}</strong>(API Key 或 Session)并验证 → <Link to="/sites">{tr('站点连接')}</Link></>
               ) : (
-                <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有账号</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>{tr('✓ 已有账号')}</span>
               )}
             </li>
             <li>
@@ -946,20 +944,16 @@ export default function Dashboard({
             <li>
               <strong>{tr('生成下游 Key')}</strong> → <Link to="/downstream-keys">{tr('下游密钥')}</Link>
             </li>
-            <li>
-              用 Key 调用 <code>/v1/chat/completions</code> 试打
-            </li>
+            <li>{tr('用 Key 调用')} <code>/v1/chat/completions</code> {tr('试打')}</li>
           </ol>
         </div>
       )}
       <div className="card dashboard-endpoint-card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>{tr('服务地址')}</div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
-          在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用
-        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>{tr('在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用')}</div>
         <div className="dashboard-endpoint-rows">
           <div className="dashboard-endpoint-row">
-            <span className="dashboard-endpoint-label">本地</span>
+            <span className="dashboard-endpoint-label">{tr('本地')}</span>
             {localAddress ? (
               <code className="dashboard-endpoint-value">{localAddress.baseUrl}</code>
             ) : (
@@ -983,7 +977,7 @@ export default function Dashboard({
           <div className="dashboard-endpoint-row">
             <span className={`dashboard-endpoint-label ${
               (tunnel?.running || tunnel?.enabled) ? 'is-active' : ''
-            }`}>隧道</span>
+            }`}>{tr('隧道')}</span>
             {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
               <code className="dashboard-endpoint-value">
                 {`${tunnel.publicUrl || tunnel.tunnelUrl}`}
@@ -1024,7 +1018,7 @@ export default function Dashboard({
           </div>
           {tunnel?.tunnelUrl && tunnel?.publicUrl && tunnel.tunnelUrl !== tunnel.publicUrl ? (
             <div className="dashboard-endpoint-row">
-              <span className="dashboard-endpoint-label">直连</span>
+              <span className="dashboard-endpoint-label">{tr('直连')}</span>
               <code className="dashboard-endpoint-value">{tunnel.tunnelUrl}</code>
               <button
                 type="button"

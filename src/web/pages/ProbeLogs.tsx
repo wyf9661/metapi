@@ -116,7 +116,7 @@ function ProbeDetailFields({
 
       {log.errorMessage ? (
         <div className="probe-detail-item probe-detail-wide">
-          <div className="probe-detail-label">错误信息</div>
+          <div className="probe-detail-label">{tr('错误信息')}</div>
           <div className="probe-detail-error">{log.errorMessage}</div>
         </div>
       ) : null}
@@ -128,7 +128,7 @@ function ProbeDetailFields({
 
       {log.responseText ? (
         <div className="probe-detail-item probe-detail-wide">
-          <div className="probe-detail-label">回答</div>
+          <div className="probe-detail-label">{tr('回答')}</div>
           <div className="probe-detail-block probe-detail-answer" dangerouslySetInnerHTML={{ __html: renderResponseText(log.responseText) }} />
         </div>
       ) : null}
@@ -299,7 +299,7 @@ export default function ProbeLogs() {
       <div className="page-header">
         <div>
           <h2 className="page-title">{tr('测活日志')}</h2>
-          <p className="page-subtitle">记录每次模型可用性探测的结果与耗时。</p>
+          <p className="page-subtitle">{tr('记录每次模型可用性探测的结果与耗时。')}</p>
         </div>
         <div className="page-actions">
           <button
@@ -320,7 +320,7 @@ export default function ProbeLogs() {
       {stats && (
         <div className="probe-stats-grid">
           <div className="probe-stat-card">
-            <div className="probe-stat-label">总数</div>
+            <div className="probe-stat-label">{tr('总数')}</div>
             <div className="probe-stat-value">{stats.total}</div>
           </div>
           <div className="probe-stat-card">
@@ -340,7 +340,7 @@ export default function ProbeLogs() {
             <div className="probe-stat-value">{formatLatency(stats.avgLatencyMs)}</div>
           </div>
           <div className="probe-stat-card">
-            <div className="probe-stat-label">总 Token</div>
+            <div className="probe-stat-label">{tr('总 Token')}</div>
             <div className="probe-stat-value">{stats.totalTokens || 0}</div>
           </div>
         </div>
@@ -510,8 +510,8 @@ export default function ProbeLogs() {
             <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <div className="empty-state-title">暂无测活记录</div>
-            <div className="empty-state-desc">当前筛选条件下没有测活日志。</div>
+            <div className="empty-state-title">{tr('暂无测活记录')}</div>
+            <div className="empty-state-desc">{tr('当前筛选条件下没有测活日志。')}</div>
           </div>
         ) : (
           <>
@@ -523,7 +523,7 @@ export default function ProbeLogs() {
                     title={log.modelName}
                     headerActions={<StatusText badgeClass={STATUS_COLORS[log.status]} style={{ fontSize: 11 }}>{STATUS_LABELS[log.status]}</StatusText>}
                     footerActions={
-                      <button type="button" className="btn btn-link btn-link-primary" onClick={() => setSelectedLog(log)}>查看详情</button>
+                      <button type="button" className="btn btn-link btn-link-primary" onClick={() => setSelectedLog(log)}>{tr('查看详情')}</button>
                     }
                   >
                     <MobileField label="时间" value={fmtDateTime(log.createdAt)} />
@@ -552,7 +552,7 @@ export default function ProbeLogs() {
                     <th>{tr('状态')}</th>
                     <th>{tr('时间')}</th>
                     <th>{tr('模型')}</th>
-                    <th>站点/账号</th>
+                    <th>{tr('站点/账号')}</th>
                     <th>{tr('分类')}</th>
                     <th>{tr('延迟')}</th>
                     <th>Token</th>

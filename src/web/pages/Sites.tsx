@@ -1443,7 +1443,7 @@ export default function Sites() {
         title={tr('确认删除站点')}
         confirmText="确认删除"
         loading={Boolean(deleteConfirm?.siteId && deleting === deleteConfirm.siteId)}
-        description={<>{tr('确定要删除站点')} <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> 吗？</>}
+        description={<>{tr('确定要删除站点')} <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> {tr('吗？')}</>}
       />
 
       {createdSiteForChoice && (
@@ -1606,21 +1606,15 @@ export default function Sites() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                API 请求地址池
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{tr('API 请求地址池')}</div>
               <button
                 type="button"
                 onClick={addApiEndpointRow}
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)' }}
-              >
-                + 添加 API 地址
-              </button>
+              >{tr('+ 添加 API 地址')}</button>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-              仅用于 `/v1/*`、模型发现和 API Key 验证。不填时跟随主站点 URL；多条地址按列表顺序轮询，禁用的地址不参与调度。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>{tr('仅用于 `/v1/*`、模型发现和 API Key 验证。不填时跟随主站点 URL；多条地址按列表顺序轮询，禁用的地址不参与调度。')}</div>
             {form.apiEndpoints.map((endpoint, index) => (
               <div
                 key={endpoint.draftId || `site-api-endpoint-draft-${index}`}
@@ -1699,9 +1693,7 @@ export default function Sites() {
                 onClick={addCustomHeaderRow}
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)' }}
-              >
-                + 添加请求头
-              </button>
+              >{tr('+ 添加请求头')}</button>
             </div>
             {form.customHeaders.map((header, index) => (
               <div
@@ -1770,11 +1762,8 @@ export default function Sites() {
 
           <div style={{ display: selectedOauthProvider ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
             <div style={{ padding: 14, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'color-mix(in srgb, var(--color-surface) 82%, transparent)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>请求体参数覆盖（paramOverride）</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>
-                JSON 对象，转发请求时合并进上游请求体（顶层字段覆盖客户端传参）。例如：
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{'{"max_tokens": 64, "temperature": 0}'}</code>。留空表示不覆盖。
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{tr('请求体参数覆盖（paramOverride）')}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>{tr('JSON 对象，转发请求时合并进上游请求体（顶层字段覆盖客户端传参）。例如：')}<code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{'{"max_tokens": 64, "temperature": 0}'}</code>{tr('。留空表示不覆盖。')}</div>
               <textarea
                 placeholder='{"max_tokens": 64, "temperature": 0}'
                 value={form.paramOverride}
@@ -1793,10 +1782,8 @@ export default function Sites() {
 
           {isEditing && (
             <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>刷新后自动测试请求</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                开启后，每次自动获取模型列表成功后，会对指定模型发送一次真实测试请求。若判定不可用，自动加入该 key 的禁用列表并重建路由。
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{tr('刷新后自动测试请求')}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>{tr('开启后，每次自动获取模型列表成功后，会对指定模型发送一次真实测试请求。若判定不可用，自动加入该 key 的禁用列表并重建路由。')}</div>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
@@ -1804,7 +1791,7 @@ export default function Sites() {
                   onChange={(e) => setProbeEnabled(e.target.checked)}
                   style={{ width: 15, height: 15, marginTop: 2, flexShrink: 0 }}
                 />
-                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>开启刷新后自动探测</span>
+                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{tr('开启刷新后自动探测')}</span>
               </label>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', opacity: probeEnabled ? 1 : 0.5 }}>
                 {([['single', '指定模型'] , ['all', '全部模型']] as const).map(([val, label]) => (
@@ -1849,7 +1836,7 @@ export default function Sites() {
                 />
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>延迟阈值</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{tr('延迟阈值')}</span>
                 <input
                   type="number"
                   min="0"
@@ -1872,7 +1859,7 @@ export default function Sites() {
                   className="btn btn-ghost"
                   style={{ fontSize: 12, padding: '6px 16px', border: '1px solid var(--color-border)' }}
                 >
-                  {probeSaving ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存探测设置'}
+                  {probeSaving ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : '保存探测设置'}
                 </button>
                 <button
                   onClick={() => void handleProbeNow()}
@@ -1880,16 +1867,14 @@ export default function Sites() {
                   className="btn btn-primary"
                   style={{ fontSize: 12, padding: '6px 16px' }}
                 >
-                  {probing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 探测中...</> : '立即探测'}
+                  {probing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('探测中...')}</> : '立即探测'}
                 </button>
                 {probing && (
                   <button
                     onClick={() => { probeAbortRef.current?.abort(); }}
                     className="btn btn-ghost"
                     style={{ fontSize: 12, padding: '6px 16px', border: '1px solid var(--color-danger)', color: 'var(--color-danger)' }}
-                  >
-                    停止
-                  </button>
+                  >{tr('停止')}</button>
                 )}
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                   {probeEnabled ? '实际探测超时复用「模型探测超时」设置' : '当前已关闭'}
@@ -1914,9 +1899,7 @@ export default function Sites() {
               )}
               {probeCompleted && brandGroups.length > 0 && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
-                    探测后可用模型
-                    <span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-secondary)' }}>{tr('探测后可用模型')}<span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>
                       — 共 {availableModels.length} 个
                     </span>
                   </div>
@@ -1962,9 +1945,7 @@ export default function Sites() {
                 onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
                 style={formInputStyle}
               />
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                HTTP/SOCKS 代理地址，填写后该站点的出站请求将通过此代理。留空则直连。
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('HTTP/SOCKS 代理地址，填写后该站点的出站请求将通过此代理。留空则直连。')}</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input
@@ -1973,9 +1954,7 @@ export default function Sites() {
                 onChange={(e) => setForm((prev) => ({ ...prev, globalWeight: e.target.value }))}
                 style={formInputStyle}
               />
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                越大越容易被路由选中。建议 0.5-3，默认 1。
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('越大越容易被路由选中。建议 0.5-3，默认 1。')}</div>
             </div>
           </ResponsiveFormGrid>
         </CenteredModal>
@@ -2056,9 +2035,7 @@ export default function Sites() {
                           type="button"
                           onClick={() => navigate(`/sites/${site.id}`, { state: { fromSearch: location.search } })}
                           className="btn btn-link btn-link-primary"
-                        >
-                          详情
-                        </button>
+                        >{tr('详情')}</button>
                         <button
                           type="button"
                           onClick={() => toggleSiteDetails(site.id)}
@@ -2069,15 +2046,11 @@ export default function Sites() {
                         <button
                           onClick={() => handleOpenSiteApiKey(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          添加 Key
-                        </button>
+                        >{tr('添加 Key')}</button>
                         <button
                           onClick={() => openEdit(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          编辑
-                        </button>
+                        >{tr('编辑')}</button>
                         <button
                           onClick={() => handleToggleStatus(site)}
                           disabled={togglingSiteId === site.id}
@@ -2245,15 +2218,15 @@ export default function Sites() {
             <table className="data-table sites-table">
               <thead>
                 <tr>
-                  <th>名称</th>
-                  <th>创建时间</th>
-                  <th>余额</th>
-                  <th>状态</th>
-                  <th>健康</th>
-                  <th>权重</th>
-                  <th>平台</th>
-                  <th>连接</th>
-                  <th className="sites-actions-col">操作</th>
+                  <th>{tr('名称')}</th>
+                  <th>{tr('创建时间')}</th>
+                  <th>{tr('余额')}</th>
+                  <th>{tr('状态')}</th>
+                  <th>{tr('健康')}</th>
+                  <th>{tr('权重')}</th>
+                  <th>{tr('平台')}</th>
+                  <th>{tr('连接')}</th>
+                  <th className="sites-actions-col">{tr('操作')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2368,9 +2341,7 @@ export default function Sites() {
                         <button
                           onClick={() => navigate(`/sites/${site.id}`, { state: { fromSearch: location.search } })}
                           className="btn btn-link btn-link-primary"
-                        >
-                          详情
-                        </button>
+                        >{tr('详情')}</button>
                         <button
                           onClick={() => handleTogglePin(site)}
                           disabled={pinningSiteId === site.id}
@@ -2381,15 +2352,11 @@ export default function Sites() {
                         <button
                           onClick={() => handleOpenSiteApiKey(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          添加 Key
-                        </button>
+                        >{tr('添加 Key')}</button>
                         <button
                           onClick={() => openEdit(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          编辑
-                        </button>
+                        >{tr('编辑')}</button>
                         <button
                           onClick={() => handleToggleStatus(site)}
                           disabled={togglingSiteId === site.id}
@@ -2431,8 +2398,8 @@ export default function Sites() {
                 d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"
               />
             </svg>
-            <div className="empty-state-title">暂无站点</div>
-            <div className="empty-state-desc">点击“+ 添加站点”开始使用。</div>
+            <div className="empty-state-title">{tr('暂无站点')}</div>
+            <div className="empty-state-desc">{tr('点击“+ 添加站点”开始使用。')}</div>
           </div>
         )}
         <PaginationControls

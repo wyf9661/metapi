@@ -994,14 +994,12 @@ export default function Settings() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: 16 }}>
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 1, height: '100%' }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>重置操作</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>{tr('重置操作')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 12 }}>{tr('重新拉取站点模型列表并重建路由通道，不影响账号、令牌数据。')}</div>
           <button onClick={handleClearCache} disabled={clearingCache} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>
-            {clearingCache ? <><span className="spinner spinner-sm" /> 清理中...</> : '清除缓存并重建路由'}
+            {clearingCache ? <><span className="spinner spinner-sm" /> {tr('清理中...')}</> : '清除缓存并重建路由'}
           </button>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, margin: '14px 0 12px' }}>
-            清空全部数据库内容并切回默认 SQLite；管理员 Token 保留，完成后自动刷新。
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, margin: '14px 0 12px' }}>{tr('清空全部数据库内容并切回默认 SQLite；管理员 Token 保留，完成后自动刷新。')}</div>
           <button
             onClick={() => setFactoryResetOpen(true)}
             disabled={isTunnelClientView}
@@ -1058,9 +1056,7 @@ export default function Settings() {
           }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('允许通过隧道访问控制台')}</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-                关闭：仅 /v1/* API　｜　开启：控制台 + 管理 API
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>{tr('关闭：仅 /v1/* API ｜ 开启：控制台 + 管理 API')}</div>
             </div>
             <input
               type="checkbox"
@@ -1114,7 +1110,7 @@ export default function Settings() {
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
                 签到间隔{runtime.checkinScheduleMode !== 'interval' && (
-                  <span style={{ color: 'var(--color-text-muted)', opacity: 0.75 }}>（间隔方式可用）</span>
+                  <span style={{ color: 'var(--color-text-muted)', opacity: 0.75 }}>{tr('（间隔方式可用）')}</span>
                 )}
               </div>
               <ModernSelect
@@ -1155,9 +1151,7 @@ export default function Settings() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-text-primary)' }}>
-                Turnstile 过盾求解器
-              </span>
+              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-text-primary)' }}>{tr('Turnstile 过盾求解器')}</span>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
@@ -1168,13 +1162,10 @@ export default function Settings() {
                 {tr('启用')}
               </label>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, lineHeight: 1.45 }}>
-              自动签到被站点 Turnstile 校验拦截时，实时调用求解器获取 token 后重放签到。
-              默认关闭，未配置时签到行为与历史版本完全一致。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, lineHeight: 1.45 }}>{tr('自动签到被站点 Turnstile 校验拦截时，实时调用求解器获取 token 后重放签到。 默认关闭，未配置时签到行为与历史版本完全一致。')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(160px, 180px)', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>求解器地址</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('求解器地址')}</div>
                 <input
                   value={runtime.turnstileSolverBaseUrl}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, turnstileSolverBaseUrl: e.target.value }))}
@@ -1184,7 +1175,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>API Key（可留空）</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('API Key（可留空）')}</div>
                 <input
                   type="password"
                   value={turnstileSolverApiKeyDraft}
@@ -1198,7 +1189,7 @@ export default function Settings() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(160px, 180px)', gap: 12, marginTop: 12 }}>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>求解超时（秒）</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('求解超时（秒）')}</div>
                 <input
                   type="number"
                   value={runtime.turnstileSolverTimeoutSeconds}
@@ -1208,9 +1199,7 @@ export default function Settings() {
                 />
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.45 }}>
-                  云端求解服务需填 API Key；自建求解器（如 turnstile-solver）通常无需鉴权，留空即可。
-                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.45 }}>{tr('云端求解服务需填 API Key；自建求解器（如 turnstile-solver）通常无需鉴权，留空即可。')}</div>
               </div>
             </div>
           </div>
@@ -1266,9 +1255,7 @@ export default function Settings() {
                   onChange={(e) => setRuntime((prev) => ({ ...prev, logCleanupProgramLogsEnabled: e.target.checked }))}
                 />{tr('清理程序日志')}</label>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-              默认每天早上 6 点执行。按每次定时任务执行时间，清理早于“保留天数”的日志；两个选项都不勾选时不会实际删除日志。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>{tr('默认每天早上 6 点执行。按每次定时任务执行时间，清理早于“保留天数”的日志；两个选项都不勾选时不会实际删除日志。')}</div>
           </div>
           <div style={{ marginTop: 12 }}>
             <button onClick={saveSchedule} disabled={savingSchedule} className="btn btn-primary">
@@ -1302,7 +1289,7 @@ export default function Settings() {
           </label>
           <div>
             <button onClick={saveProxyFailureRules} disabled={savingProxyFailureRules} className="btn btn-primary">
-              {savingProxyFailureRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存失败规则'}
+              {savingProxyFailureRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存失败规则'}
             </button>
           </div>
         </div>
@@ -1310,7 +1297,7 @@ export default function Settings() {
         <div className="card animate-slide-up stagger-7" style={{ ...settingsModernCardStyle, order: 7, gridColumn: '1 / -1' }} data-settings-card="payload-rules">
           <div style={settingsModernHeaderStyle}>
             <div style={settingsModernTitleBlockStyle}>
-              <div style={settingsModernTitleStyle}>Payload 规则</div>
+              <div style={settingsModernTitleStyle}>{tr('Payload 规则')}</div>
               <div style={settingsModernDescriptionStyle}>
                 对匹配模型的上游请求做默认注入、强制覆盖或字段过滤。规则结构参考 CPA 的 payload 配置，常见场景可直接注入
                 {' '}
@@ -1331,10 +1318,8 @@ export default function Settings() {
           <div style={settingsModernFieldCardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>
-                <div style={settingsModernFieldLabelStyle}>常用预设</div>
-                <div style={settingsModernFieldHintStyle}>
-                  先用预设快速填充，再通过下面的可视化规则编辑器细调。复杂场景仍可回退到高级 JSON。
-                </div>
+                <div style={settingsModernFieldLabelStyle}>{tr('常用预设')}</div>
+                <div style={settingsModernFieldHintStyle}>{tr('先用预设快速填充，再通过下面的可视化规则编辑器细调。复杂场景仍可回退到高级 JSON。')}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
@@ -1342,17 +1327,13 @@ export default function Settings() {
                   className="btn btn-ghost"
                   style={{ border: '1px solid var(--color-border)' }}
                   onClick={applyCodexDefaultHighReasoningPreset}
-                >
-                  Codex 默认高推理
-                </button>
+                >{tr('Codex 默认高推理')}</button>
                 <button
                   type="button"
                   className="btn btn-ghost"
                   style={{ border: '1px solid var(--color-border)' }}
                   onClick={addPayloadVisualRule}
-                >
-                  新增规则
-                </button>
+                >{tr('新增规则')}</button>
                 <button
                   type="button"
                   className="btn btn-ghost"
@@ -1366,10 +1347,8 @@ export default function Settings() {
           </div>
           {payloadVisualRules.length <= 0 ? (
             <div style={settingsModernFieldCardStyle}>
-              <div style={settingsModernFieldLabelStyle}>还没有可视化规则</div>
-              <div style={settingsModernFieldHintStyle}>
-                可以先点上面的预设，也可以直接新增一条规则：选择动作、协议、模型匹配、字段路径和值即可。
-              </div>
+              <div style={settingsModernFieldLabelStyle}>{tr('还没有可视化规则')}</div>
+              <div style={settingsModernFieldHintStyle}>{tr('可以先点上面的预设，也可以直接新增一条规则：选择动作、协议、模型匹配、字段路径和值即可。')}</div>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
@@ -1385,13 +1364,11 @@ export default function Settings() {
                       className="btn btn-ghost"
                       style={{ border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
                       onClick={() => removePayloadVisualRule(rule.id)}
-                    >
-                      删除
-                    </button>
+                    >{tr('删除')}</button>
                   </div>
                   <ResponsiveFormGrid columns={2}>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>动作</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('动作')}</div>
                       <ModernSelect
                         size="sm"
                         data-testid={`payload-rule-action-${index + 1}`}
@@ -1402,7 +1379,7 @@ export default function Settings() {
                       />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>协议</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('协议')}</div>
                       <ModernSelect
                         size="sm"
                         data-testid={`payload-rule-protocol-${index + 1}`}
@@ -1413,7 +1390,7 @@ export default function Settings() {
                       />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>模型匹配</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('模型匹配')}</div>
                       <input
                         type="text"
                         aria-label={`Payload 规则可视化模型 ${index + 1}`}
@@ -1424,7 +1401,7 @@ export default function Settings() {
                       />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>字段路径</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('字段路径')}</div>
                       <input
                         type="text"
                         aria-label={`Payload 规则可视化路径 ${index + 1}`}
@@ -1436,14 +1413,12 @@ export default function Settings() {
                     </div>
                   </ResponsiveFormGrid>
                   {rule.action === 'filter' ? (
-                    <div style={settingsModernFieldHintStyle}>
-                      删除字段规则不需要填写值，命中后会从请求中移除这条路径。
-                    </div>
+                    <div style={settingsModernFieldHintStyle}>{tr('删除字段规则不需要填写值，命中后会从请求中移除这条路径。')}</div>
                   ) : (
                     <div style={{ display: 'grid', gap: 8 }}>
                       {(rule.action === 'default' || rule.action === 'override') && (
                         <div style={{ width: isMobile ? '100%' : 180 }}>
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>值类型</div>
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('值类型')}</div>
                           <ModernSelect
                             size="sm"
                             data-testid={`payload-rule-value-mode-${index + 1}`}
@@ -1504,19 +1479,15 @@ export default function Settings() {
               <div style={settingsModernFieldCardStyle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'grid', gap: 6 }}>
-                    <div style={settingsModernFieldLabelStyle}>高级 JSON 编辑</div>
-                    <div style={settingsModernFieldHintStyle}>
-                      适合直接粘贴 CPA 风格规则。手动改完后，可点击“同步到可视化规则”回到上面的低门槛编辑器。
-                    </div>
+                    <div style={settingsModernFieldLabelStyle}>{tr('高级 JSON 编辑')}</div>
+                    <div style={settingsModernFieldHintStyle}>{tr('适合直接粘贴 CPA 风格规则。手动改完后，可点击“同步到可视化规则”回到上面的低门槛编辑器。')}</div>
                   </div>
                   <button
                     type="button"
                     className="btn btn-ghost"
                     style={{ border: '1px solid var(--color-border)' }}
                     onClick={syncVisualRulesFromAdvancedJson}
-                  >
-                    同步到可视化规则
-                  </button>
+                  >{tr('同步到可视化规则')}</button>
                 </div>
               </div>
               <ResponsiveFormGrid columns={2}>
@@ -1552,7 +1523,7 @@ export default function Settings() {
           </div>
           <div style={settingsModernActionsStyle}>
             <button onClick={savePayloadRules} disabled={savingPayloadRules} className="btn btn-primary">
-              {savingPayloadRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存 Payload 规则'}
+              {savingPayloadRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存 Payload 规则'}
             </button>
           </div>
         </div>
@@ -1560,10 +1531,8 @@ export default function Settings() {
         <div className="card animate-slide-up stagger-4" style={{ ...settingsModernCardStyle, order: 6, gridColumn: '1 / -1' }} data-settings-card="proxy-transport">
           <div style={settingsModernHeaderStyle}>
             <div style={settingsModernTitleBlockStyle}>
-              <div style={settingsModernTitleStyle}>Codex 上游传输与会话并发</div>
-              <div style={settingsModernDescriptionStyle}>
-                默认采用 HTTP 优先。只有这里开启后，metapi 才会在 Codex 请求上尝试把上游升级为 WebSocket。下游 Codex 客户端也必须同时启用 `/v1/responses` websocket，单开这里不会生效。
-              </div>
+              <div style={settingsModernTitleStyle}>{tr('Codex 上游传输与会话并发')}</div>
+              <div style={settingsModernDescriptionStyle}>{tr('默认采用 HTTP 优先。只有这里开启后，metapi 才会在 Codex 请求上尝试把上游升级为 WebSocket。下游 Codex 客户端也必须同时启用 `/v1/responses` websocket，单开这里不会生效。')}</div>
             </div>
             <div style={settingsModernPillRowStyle}>
               <span style={getSettingsPillStyle(runtime.codexUpstreamWebsocketEnabled ? 'primary' : 'neutral')}>
@@ -1576,10 +1545,8 @@ export default function Settings() {
           </div>
           <label style={settingsModernToggleStyle}>
             <div style={settingsModernToggleCopyStyle}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>允许 metapi 到 Codex 上游使用 WebSocket</span>
-              <span style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--color-text-muted)' }}>
-                仅在下游 Codex 客户端已同步开启 `/v1/responses` websocket 时启用；否则仍按 HTTP 优先执行。
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>{tr('允许 metapi 到 Codex 上游使用 WebSocket')}</span>
+              <span style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--color-text-muted)' }}>{tr('仅在下游 Codex 客户端已同步开启 `/v1/responses` websocket 时启用；否则仍按 HTTP 优先执行。')}</span>
             </div>
             <input
               type="checkbox"
@@ -1590,10 +1557,8 @@ export default function Settings() {
           </label>
           <label style={settingsModernToggleStyle}>
             <div style={settingsModernToggleCopyStyle}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>Compact 明确不支持时回退到普通 Responses</span>
-              <span style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--color-text-muted)' }}>
-                仅对 `/v1/responses/compact` 生效。当上游明确返回 compact 不支持时，允许自动回退到普通 `/responses`。
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>{tr('Compact 明确不支持时回退到普通 Responses')}</span>
+              <span style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--color-text-muted)' }}>{tr('仅对 `/v1/responses/compact` 生效。当上游明确返回 compact 不支持时，允许自动回退到普通 `/responses`。')}</span>
             </div>
             <input
               type="checkbox"
@@ -1604,10 +1569,8 @@ export default function Settings() {
           </label>
           <label style={settingsModernToggleStyle}>
             <div style={settingsModernToggleCopyStyle}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>流式请求索引用量帧（stream_options.include_usage）</span>
-              <span style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--color-text-muted)' }}>
-                开启后，metapi 会在发往 OpenAI 兼容上游的流式请求中附带 include_usage，让上游在流式结束时返回用量，用于使用日志的 token 统计；关闭后部分站点的流式请求将记录不到 token。
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>{tr('流式请求索引用量帧（stream_options.include_usage）')}</span>
+              <span style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--color-text-muted)' }}>{tr('开启后，metapi 会在发往 OpenAI 兼容上游的流式请求中附带 include_usage，让上游在流式结束时返回用量，用于使用日志的 token 统计；关闭后部分站点的流式请求将记录不到 token。')}</span>
             </div>
             <input
               type="checkbox"
@@ -1617,7 +1580,7 @@ export default function Settings() {
             />
           </label>
           <div style={settingsModernFieldCardStyle}>
-            <div style={settingsModernFieldLabelStyle}>上下文感知路由</div>
+            <div style={settingsModernFieldLabelStyle}>{tr('上下文感知路由')}</div>
             <select
               value={runtime.contextAwareRouting}
               onChange={(e) => {
@@ -1627,17 +1590,15 @@ export default function Settings() {
               }}
               style={inputStyle}
             >
-              <option value="exclude_known">仅排除已知不足（推荐）</option>
-              <option value="strict">严格：只用已知足够</option>
-              <option value="off">关闭</option>
+              <option value="exclude_known">{tr('仅排除已知不足（推荐）')}</option>
+              <option value="strict">{tr('严格：只用已知足够')}</option>
+              <option value="off">{tr('关闭')}</option>
             </select>
-            <div style={settingsModernFieldHintStyle}>
-              按请求大小（输入估算 + 输出预算 + 余量）过滤候选站点：站点已知上下文不足时不再选中；未知站点保留，首次超限失败自动学习真实上限并在下次跳过。
-            </div>
+            <div style={settingsModernFieldHintStyle}>{tr('按请求大小（输入估算 + 输出预算 + 余量）过滤候选站点：站点已知上下文不足时不再选中；未知站点保留，首次超限失败自动学习真实上限并在下次跳过。')}</div>
           </div>
           <ResponsiveFormGrid columns={2}>
             <div style={settingsModernFieldCardStyle}>
-              <div style={settingsModernFieldLabelStyle}>上下文安全余量（%）</div>
+              <div style={settingsModernFieldLabelStyle}>{tr('上下文安全余量（%）')}</div>
               <input
                 type="number"
                 min={0}
@@ -1654,12 +1615,10 @@ export default function Settings() {
                 }}
                 style={inputStyle}
               />
-              <div style={settingsModernFieldHintStyle}>
-                在「输入 + 输出预算」上附加的安全系数，吸收估算误差。
-              </div>
+              <div style={settingsModernFieldHintStyle}>{tr('在「输入 + 输出预算」上附加的安全系数，吸收估算误差。')}</div>
             </div>
             <div style={settingsModernFieldCardStyle}>
-              <div style={settingsModernFieldLabelStyle}>默认输出预算（tokens）</div>
+              <div style={settingsModernFieldLabelStyle}>{tr('默认输出预算（tokens）')}</div>
               <input
                 type="number"
                 min={0}
@@ -1676,14 +1635,12 @@ export default function Settings() {
                 }}
                 style={inputStyle}
               />
-              <div style={settingsModernFieldHintStyle}>
-                请求未携带 max_tokens 时，按此预算计入上下文需求。
-              </div>
+              <div style={settingsModernFieldHintStyle}>{tr('请求未携带 max_tokens 时，按此预算计入上下文需求。')}</div>
             </div>
           </ResponsiveFormGrid>
           <ResponsiveFormGrid columns={2}>
             <div style={settingsModernFieldCardStyle}>
-              <div style={settingsModernFieldLabelStyle}>会话通道并发上限</div>
+              <div style={settingsModernFieldLabelStyle}>{tr('会话通道并发上限')}</div>
               <input
                 type="number"
                 min={0}
@@ -1699,12 +1656,10 @@ export default function Settings() {
                 }}
                 style={inputStyle}
               />
-              <div style={settingsModernFieldHintStyle}>
-                只作用于能识别稳定 `session_id` 的会话型请求；普通请求不会进入这组 lease 池。
-              </div>
+              <div style={settingsModernFieldHintStyle}>{tr('只作用于能识别稳定 `session_id` 的会话型请求；普通请求不会进入这组 lease 池。')}</div>
             </div>
             <div style={settingsModernFieldCardStyle}>
-              <div style={settingsModernFieldLabelStyle}>排队等待时间（毫秒）</div>
+              <div style={settingsModernFieldLabelStyle}>{tr('排队等待时间（毫秒）')}</div>
               <input
                 type="number"
                 min={0}
@@ -1721,28 +1676,22 @@ export default function Settings() {
                 }}
                 style={inputStyle}
               />
-              <div style={settingsModernFieldHintStyle}>
-                超过该时间仍拿不到会话通道时，本次请求会直接放弃排队，避免长期挂起。
-              </div>
+              <div style={settingsModernFieldHintStyle}>{tr('超过该时间仍拿不到会话通道时，本次请求会直接放弃排队，避免长期挂起。')}</div>
             </div>
           </ResponsiveFormGrid>
           <div style={settingsModernActionsStyle}>
             <button onClick={saveProxyTransportSettings} disabled={savingProxyTransport} className="btn btn-primary">
-              {savingProxyTransport ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存传输与并发'}
+              {savingProxyTransport ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存传输与并发'}
             </button>
           </div>
         </div>
         <div className="card animate-slide-up stagger-8" style={{ padding: 20, gridColumn: '1 / -1', order: 8 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>路由策略</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            先选择预设策略，只有需要精调时再展开高级参数。
-          </div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{tr('路由策略')}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>{tr('先选择预设策略，只有需要精调时再展开高级参数。')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
           <div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              全局路由策略（所有路由统一生效）
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('全局路由策略（所有路由统一生效）')}</div>
             <ModernSelect
               value={runtime.defaultRoutingStrategy || 'weighted'}
               onChange={(nextValue) => {
@@ -1758,14 +1707,10 @@ export default function Settings() {
               ]}
               placeholder={tr('选择路由策略')}
             />
-            <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 6 }}>
-              轮询：公平轮转，最久未选中的通道优先；稳定优先：按近期成功率加权，低成功率站点每 24 次请求灰度试探一次。
-            </div>
+            <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 6 }}>{tr('轮询：公平轮转，最久未选中的通道优先；稳定优先：按近期成功率加权，低成功率站点每 24 次请求灰度试探一次。')}</div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              路由探测率（跳过亲和性，直接走加权随机）
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('路由探测率（跳过亲和性，直接走加权随机）')}</div>
             <input
               type="number"
               min={0}
@@ -1784,14 +1729,10 @@ export default function Settings() {
               }}
               style={inputStyle}
             />
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
-              默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>{tr('默认 0.15（15%）。首次请求有一定概率跳过会话粘性和上次成功记录，直接进入加权均衡选路。设为 0 关闭探测、1 每次都探测。')}</div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              并发分散路由（并发请求避开占用中的通道）
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('并发分散路由（并发请求避开占用中的通道）')}</div>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -1801,19 +1742,13 @@ export default function Settings() {
                   proxyConcurrencySpreadEnabled: e.target.checked,
                 }))}
                 style={{ width: 15, height: 15, accentColor: 'var(--color-primary)' }}
-              />
-              并发大于 1 时，第二路请求改挑空闲的另一条通道（不同站点优先）
-            </label>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
-              默认开启。粘性/上次成功通道正在服务请求时，第二路并发改走空闲候选，避免单站点瞬时 RPM 过高；并发为 1 时行为完全不变。
-            </div>
+              />{tr('并发大于 1 时，第二路请求改挑空闲的另一条通道（不同站点优先）')}</label>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>{tr('默认开启。粘性/上次成功通道正在服务请求时，第二路并发改走空闲候选，避免单站点瞬时 RPM 过高；并发为 1 时行为完全不变。')}</div>
           </div>
           </div>
           <div>
           <div style={{ marginBottom: 12, maxWidth: 280 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-                无实测/配置/目录价时默认单价
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('无实测/配置/目录价时默认单价')}</div>
             <input
               type="number"
               min={0.000001}
@@ -1830,9 +1765,7 @@ export default function Settings() {
             />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              普通失败冷却上限
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('普通失败冷却上限')}</div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
               <input
                 type="number"
@@ -1868,9 +1801,7 @@ export default function Settings() {
                 />
               </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6, lineHeight: 1.6 }}>
-              支持秒、分钟、小时、天。只封顶普通失败与轮询分级冷却；429 限额类冷却仍优先遵循上游 reset 提示，避免过早重试。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6, lineHeight: 1.6 }}>{tr('支持秒、分钟、小时、天。只封顶普通失败与轮询分级冷却；429 限额类冷却仍优先遵循上游 reset 提示，避免过早重试。')}</div>
           </div>
           </div>
           </div>
@@ -1878,9 +1809,7 @@ export default function Settings() {
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
           <div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-              首字超时上限（无首包 / 首 token）
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('首字超时上限（无首包 / 首 token）')}</div>
             <input
               type="number"
               min={0}
@@ -1898,9 +1827,7 @@ export default function Settings() {
               }}
               style={inputStyle}
             />
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>
-              这是上限，不是固定等待：实际窗口按站点近期首字速度自适应（最快 30 秒），不会超过该值；无历史样本时按该值等待。`0` 表示关闭。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>{tr('这是上限，不是固定等待：实际窗口按站点近期首字速度自适应（最快 30 秒），不会超过该值；无历史样本时按该值等待。`0` 表示关闭。')}</div>
           </div>
           </div>
           <div style={{ paddingTop: 2 }}>
@@ -1915,12 +1842,8 @@ export default function Settings() {
               style={{ marginTop: 2 }}
             />
             <span>
-              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                失败时不尝试其他协议
-              </span>
-              <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                仅影响 chat / messages / responses 之间的协议切换；不会关闭同协议兼容重试、OAuth 刷新或通道级重试。
-              </span>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('失败时不尝试其他协议')}</span>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>{tr('仅影响 chat / messages / responses 之间的协议切换；不会关闭同协议兼容重试、OAuth 刷新或通道级重试。')}</span>
             </span>
           </label>
           </div>
@@ -1960,9 +1883,7 @@ export default function Settings() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginTop: 12 }}>
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-                    概率保底下限（0.03-0.15）
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('概率保底下限（0.03-0.15）')}</div>
                   <input
                     type="number"
                     min={0.03}
@@ -1981,14 +1902,10 @@ export default function Settings() {
                     }}
                     style={inputStyle}
                   />
-                  <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                    每个健康候选通道至少保留的流量占比，新站/低分站借此获得真实调用机会；随成功率提升自动衰减。
-                  </div>
+                  <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('每个健康候选通道至少保留的流量占比，新站/低分站借此获得真实调用机会；随成功率提升自动衰减。')}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-                    quota 超限即时排除
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('quota 超限即时排除')}</div>
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -1998,12 +1915,8 @@ export default function Settings() {
                         routeQuotaExhaustionExclude: e.target.checked,
                       }))}
                       style={{ width: 15, height: 15, accentColor: 'var(--color-primary)' }}
-                    />
-                    会话账号遇 402/余额不足时立即置余额为 0 并核实，恢复前不进路由
-                  </label>
-                  <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                    直连 API Key 不受影响（无法获取余额，默认 0 不视为耗尽）。
-                  </div>
+                    />{tr('会话账号遇 402/余额不足时立即置余额为 0 并核实，恢复前不进路由')}</label>
+                  <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('直连 API Key 不受影响（无法获取余额，默认 0 不视为耗尽）。')}</div>
                 </div>
               </div>
             </div>
@@ -2017,9 +1930,7 @@ export default function Settings() {
                 border: activeRoutingProfile === 'balanced' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
                 color: activeRoutingProfile === 'balanced' ? 'var(--color-primary)' : undefined,
               }}
-            >
-              均衡
-            </button>
+            >{tr('均衡')}</button>
             <button
               onClick={() => applyRoutingPreset('stable')}
               className="btn btn-ghost"
@@ -2027,9 +1938,7 @@ export default function Settings() {
                 border: activeRoutingProfile === 'stable' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
                 color: activeRoutingProfile === 'stable' ? 'var(--color-primary)' : undefined,
               }}
-            >
-              稳定优先
-            </button>
+            >{tr('稳定优先')}</button>
             <button
               onClick={() => applyRoutingPreset('cost')}
               className="btn btn-ghost"
@@ -2037,9 +1946,7 @@ export default function Settings() {
                 border: activeRoutingProfile === 'cost' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
                 color: activeRoutingProfile === 'cost' ? 'var(--color-primary)' : undefined,
               }}
-            >
-              成本优先
-            </button>
+            >{tr('成本优先')}</button>
             <button
               onClick={() => setShowAdvancedRouting((prev) => !prev)}
               className="btn btn-ghost"
@@ -2051,16 +1958,14 @@ export default function Settings() {
 
           <div style={{ marginTop: 12 }}>
             <button onClick={saveRouting} disabled={savingRouting} className="btn btn-primary">
-              {savingRouting ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存路由策略'}
+              {savingRouting ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存路由策略'}
             </button>
           </div>
         </div>
 
         <div className="card animate-slide-up stagger-8" style={{ padding: 20, order: 8 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>数据库迁移（SQLite / MySQL / PostgreSQL）</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            可先测试连接，再迁移数据；迁移完成后可保存为运行数据库配置（重启容器后生效）。
-          </div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{tr('数据库迁移（SQLite / MySQL / PostgreSQL）')}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>{tr('可先测试连接，再迁移数据；迁移完成后可保存为运行数据库配置（重启容器后生效）。')}</div>
 
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '180px 1fr', gap: 10, marginBottom: 10, alignItems: 'center' }}>
             <ModernSelect
@@ -2162,9 +2067,7 @@ export default function Settings() {
                 checked={migrationSsl}
                 onChange={(e) => setMigrationSsl(e.target.checked)}
                 style={{ width: 14, height: 14, accentColor: 'var(--color-primary)' }}
-              />
-              启用 SSL/TLS 加密连接
-            </label>
+              />{tr('启用 SSL/TLS 加密连接')}</label>
           )}
 
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
@@ -2173,9 +2076,7 @@ export default function Settings() {
               checked={migrationOverwrite}
               onChange={(e) => setMigrationOverwrite(e.target.checked)}
               style={{ width: 14, height: 14, accentColor: 'var(--color-primary)' }}
-            />
-            允许覆盖目标数据库现有数据
-          </label>
+            />{tr('允许覆盖目标数据库现有数据')}</label>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
             <button
@@ -2184,7 +2085,7 @@ export default function Settings() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {testingMigrationConnection ? <><span className="spinner spinner-sm" /> 测试中...</> : '测试连接'}
+              {testingMigrationConnection ? <><span className="spinner spinner-sm" /> {tr('测试中...')}</> : '测试连接'}
             </button>
             <button
               onClick={handleMigrateToExternalDatabase}
@@ -2192,7 +2093,7 @@ export default function Settings() {
               title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
               className="btn btn-primary"
             >
-              {migratingDatabase ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 迁移中...</> : '开始迁移'}
+              {migratingDatabase ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('迁移中...')}</> : '开始迁移'}
             </button>
             <button
               onClick={handleSaveRuntimeDatabaseConfig}
@@ -2201,7 +2102,7 @@ export default function Settings() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {savingRuntimeDatabase ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存为运行数据库（重启后生效）'}
+              {savingRuntimeDatabase ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : '保存为运行数据库（重启后生效）'}
             </button>
           </div>
 
@@ -2215,7 +2116,7 @@ export default function Settings() {
                   : ' 未保存'}
               </div>
               {runtimeDatabaseState.restartRequired && (
-                <div style={{ color: 'var(--color-warning)' }}>检测到待生效数据库配置，请重启容器使其生效。</div>
+                <div style={{ color: 'var(--color-warning)' }}>{tr('检测到待生效数据库配置，请重启容器使其生效。')}</div>
               )}
             </div>
           )}
@@ -2232,16 +2133,10 @@ export default function Settings() {
         <div style={{ order: 0, height: '100%', display: 'flex' }}><UpdateCenterSection /></div>
 
         <div className="card animate-slide-up stagger-7" style={{ padding: 20, order: 9 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>会话与安全</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            登录会话默认 12 小时自动过期。可选配置管理端 IP 白名单，支持每行一个 IP 或 IPv4 CIDR 网段。
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
-            公网隧道控制台访问开关已移到本页顶部「公网隧道访问」，仪表盘隧道卡片也可直接切换。
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-            当前识别到的管理端 IP（由服务端判定）：
-          </div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{tr('会话与安全')}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>{tr('登录会话默认 12 小时自动过期。可选配置管理端 IP 白名单，支持每行一个 IP 或 IPv4 CIDR 网段。')}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>{tr('公网隧道控制台访问开关已移到本页顶部「公网隧道访问」，仪表盘隧道卡片也可直接切换。')}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('当前识别到的管理端 IP（由服务端判定）：')}</div>
           <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 10 }}>
             {runtime.currentAdminIp || '未知'}
           </code>
@@ -2260,7 +2155,7 @@ export default function Settings() {
               title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
               className="btn btn-primary"
             >
-              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存安全设置'}
+              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存安全设置'}
             </button>
             <button
               onClick={() => {
@@ -2281,21 +2176,15 @@ export default function Settings() {
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
               }}
-            >
-              退出登录
-            </button>
+            >{tr('退出登录')}</button>
           </div>
         </div>
 
         <div className="card animate-slide-up stagger-6" style={{ padding: 20, order: 5 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>反探测（敏感词检测）</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
-            用于伪装成内容审核以拦截探活请求。开启后，短文本（低于下方阈值）的非继续对话请求会被 400 拦截；多轮对话中的简短后续消息不受影响。可在每个下游 Key 上单独覆盖。
-          </div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{tr('反探测（敏感词检测）')}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>{tr('用于伪装成内容审核以拦截探活请求。开启后，短文本（低于下方阈值）的非继续对话请求会被 400 拦截；多轮对话中的简短后续消息不受影响。可在每个下游 Key 上单独覆盖。')}</div>
           {isTunnelClientView && (
-            <div style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 12 }}>
-              通过公网隧道时不允许修改安全设置。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 12 }}>{tr('通过公网隧道时不允许修改安全设置。')}</div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
@@ -2304,12 +2193,8 @@ export default function Settings() {
                 disabled={isTunnelClientView}
                 checked={runtime.sensitiveWordDetectionEnabled}
                 onChange={(e) => setRuntime((prev) => ({ ...prev, sensitiveWordDetectionEnabled: e.target.checked }))}
-              />
-              启用敏感词检测（反探活）
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              短文本阈值
-              <input
+              />{tr('启用敏感词检测（反探活）')}</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>{tr('短文本阈值')}<input
                 type="number"
                 min={1}
                 max={64}
@@ -2325,7 +2210,7 @@ export default function Settings() {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={saveAntiProbeSettings} disabled={savingSecurity} className="btn btn-primary">
-              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存反探测设置'}
+              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存反探测设置'}
             </button>
           </div>
         </div>

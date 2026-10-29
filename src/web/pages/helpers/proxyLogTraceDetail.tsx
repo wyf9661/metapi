@@ -191,9 +191,7 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
 
   if (detail?.loading) {
     return (
-      <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-        加载追踪详情中...
-      </div>
+      <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{tr('加载追踪详情中...')}</div>
     );
   }
 
@@ -281,9 +279,7 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
       >
         <div style={{ padding: 12, display: 'grid', gap: 8 }}>
           {detail.data.attempts.length === 0 ? (
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-              暂无 attempt 记录
-            </div>
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{tr('暂无 attempt 记录')}</div>
           ) : (
             detail.data.attempts.map((attempt) => (
               <ProxyDebugAttemptDetail key={attempt.id} attempt={attempt} />

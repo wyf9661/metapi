@@ -1594,17 +1594,10 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   >
                     <div className="info-tip">
                       <div>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                          当前分段仅创建 Session 连接
-                        </div>
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{tr('当前分段仅创建 Session 连接')}</div>
                         <div>
-                          <strong>{tr('推荐')}</strong> 使用系统访问令牌（Access
-                          Token）；浏览器 Cookie 仅用于兼容场景。
-                        </div>
-                        <div style={{ marginTop: 2 }}>
-                          以 NewAPI 为例：控制台 → 个人设置 → 安全设置 →
-                          生成「系统访问令牌」
-                        </div>
+                          <strong>{tr('推荐')}</strong> {tr('使用系统访问令牌（Access Token）；浏览器 Cookie 仅用于兼容场景。')}</div>
+                        <div style={{ marginTop: 2 }}>{tr('以 NewAPI 为例：控制台 → 个人设置 → 安全设置 → 生成「系统访问令牌」')}</div>
                         <div
                           style={{
                             opacity: 0.7,
@@ -1708,9 +1701,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             fontSize: 12,
                             color: 'var(--color-text-muted)',
                           }}
-                        >
-                          若站点要求 New-Api-User / User-ID，请在这里提前填写。
-                        </div>
+                        >{tr('若站点要求 New-Api-User / User-ID，请在这里提前填写。')}</div>
                       </div>
                     )}
                     {isSub2ApiSelected && (
@@ -1775,10 +1766,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               fontSize: 12,
                               color: 'var(--color-text-muted)',
                             }}
-                          >
-                            配置 refresh_token 后，metapi 会在 JWT 临近过期或
-                            401 时自动续期并回写新 token。
-                          </div>
+                          >{tr('配置 refresh_token 后，metapi 会在 JWT 临近过期或 401 时自动续期并回写新 token。')}</div>
                         </div>
                       </>
                     )}
@@ -1807,9 +1795,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 strokeWidth={2}
                                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                               />
-                            </svg>
-                            Session 凭证有效（Access Token / Cookie）
-                          </div>
+                            </svg>{tr('Session 凭证有效（Access Token / Cookie）')}</div>
                           <div style={{ fontSize: 12, lineHeight: 1.8 }}>
                             <div>
                               用户名:{' '}
@@ -1850,19 +1836,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       verifyResult.success &&
                       verifyResult.tokenType === 'apikey' && (
                         <div className="alert alert-warning animate-scale-in">
-                          <div className="alert-title">
-                            当前分段仅接受 Session 凭证，请切到「API Key
-                            连接」分段创建。
-                          </div>
+                          <div className="alert-title">{tr('当前分段仅接受 Session 凭证，请切到「API Key 连接」分段创建。')}</div>
                         </div>
                       )}
                     {verifyResult &&
                       !verifyResult.success &&
                       verifyResult.needsUserId && (
                         <div className="alert alert-warning animate-scale-in">
-                          <div className="alert-title">
-                            此站点要求用户 ID，请补充后重新验证
-                          </div>
+                          <div className="alert-title">{tr('此站点要求用户 ID，请补充后重新验证')}</div>
                         </div>
                       )}
                     {verifyResult &&
@@ -1901,9 +1882,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       >
                         {verifying ? (
                           <>
-                            <span className="spinner spinner-sm" />
-                            验证中...
-                          </>
+                            <span className="spinner spinner-sm" />{tr('验证中...')}</>
                         ) : (
                           '验证 Token'
                         )}
@@ -1926,9 +1905,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 borderTopColor: 'white',
                                 borderColor: 'rgba(255,255,255,0.3)',
                               }}
-                            />
-                            添加中...
-                          </>
+                            />{tr('添加中...')}</>
                         ) : (
                           '添加连接'
                         )}
@@ -1953,9 +1930,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       gap: 12,
                     }}
                   >
-                    <div className="info-tip">
-                      输入目标站点的账号密码，将自动登录并获取访问令牌和 API Key
-                    </div>
+                    <div className="info-tip">{tr('输入目标站点的账号密码，将自动登录并获取访问令牌和 API Key')}</div>
                     <div
                       style={{
                         padding: '9px 12px',
@@ -2013,9 +1988,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               borderTopColor: 'white',
                               borderColor: 'rgba(255,255,255,0.3)',
                             }}
-                          />
-                          登录并添加...
-                        </>
+                          />{tr('登录并添加...')}</>
                       ) : (
                         '登录并添加'
                       )}
@@ -2027,11 +2000,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
               <div
                 style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               >
-                <div className="info-tip">
-                  API Key
-                  连接只用于代理转发，不会自动派生账号令牌。系统会按站点平台能力自动引导到
-                  Session 或 API Key 创建流程。
-                </div>
+                <div className="info-tip">{tr('API Key 连接只用于代理转发，不会自动派生账号令牌。系统会按站点平台能力自动引导到 Session 或 API Key 创建流程。')}</div>
                 {createIntentPreset && (
                   <div className="alert alert-info animate-scale-in">
                     <div className="alert-title">
@@ -2051,10 +2020,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         {createIntentPreset.recommendedModels.join(' / ')}
                       </div>
                       {createIntentPreset.recommendedSkipModelFetch && (
-                        <div>
-                          建议直接跳过模型验证，先保存 Base URL +
-                          Key，再补入推荐模型完成初始化。
-                        </div>
+                        <div>{tr('建议直接跳过模型验证，先保存 Base URL + Key，再补入推荐模型完成初始化。')}</div>
                       )}
                     </div>
                     {createIntentPreset.recommendedModels.length > 0 && (
@@ -2076,7 +2042,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           }
                           style={{ width: 14, height: 14 }}
                         />
-                        <span>添加后自动补入推荐模型并重建路由</span>
+                        <span>{tr('添加后自动补入推荐模型并重建路由')}</span>
                       </label>
                     )}
                   </div>
@@ -2149,9 +2115,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       : ''}
                   </div>
                 )}
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  支持换行、空格、逗号批量粘贴多个 API Key。
-                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('支持换行、空格、逗号批量粘贴多个 API Key。')}</div>
                 <label
                   style={{
                     display: 'flex',
@@ -2173,7 +2137,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     }
                     style={{ width: 14, height: 14 }}
                   />
-                  <span>跳过模型验证（直接添加 API Key）</span>
+                  <span>{tr('跳过模型验证（直接添加 API Key）')}</span>
                 </label>
                 {verifyResult &&
                   verifyResult.success &&
@@ -2200,9 +2164,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             strokeWidth={2}
                             d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
                           />
-                        </svg>
-                        API Key 验证成功
-                      </div>
+                        </svg>{tr('API Key 验证成功')}</div>
                       <div style={{ fontSize: 12, lineHeight: 1.8 }}>
                         <div>
                           可用模型:{' '}
@@ -2221,18 +2183,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   verifyResult.success &&
                   verifyResult.tokenType === 'session' && (
                     <div className="alert alert-warning animate-scale-in">
-                      <div className="alert-title">
-                        当前分段仅接受 API Key，请切到「Session 连接」分段创建。
-                      </div>
+                      <div className="alert-title">{tr('当前分段仅接受 API Key，请切到「Session 连接」分段创建。')}</div>
                     </div>
                   )}
                 {verifyResult &&
                   !verifyResult.success &&
                   verifyResult.needsUserId && (
                     <div className="alert alert-warning animate-scale-in">
-                      <div className="alert-title">
-                        此站点要求用户 ID，请补充后重新验证
-                      </div>
+                      <div className="alert-title">{tr('此站点要求用户 ID，请补充后重新验证')}</div>
                     </div>
                   )}
                 {verifyResult &&
@@ -2270,9 +2228,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   >
                     {verifying ? (
                       <>
-                        <span className="spinner spinner-sm" />
-                        验证中...
-                      </>
+                        <span className="spinner spinner-sm" />{tr('验证中...')}</>
                     ) : isBatchApiKeyInput ? (
                       '批量添加时校验'
                     ) : (
@@ -2296,9 +2252,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             borderTopColor: 'white',
                             borderColor: 'rgba(255,255,255,0.3)',
                           }}
-                        />
-                        添加中...
-                      </>
+                        />{tr('添加中...')}</>
                     ) : isBatchApiKeyInput ? (
                       '批量添加连接'
                     ) : (
@@ -2389,16 +2343,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             <button
                               onClick={() => openEditPanel(a)}
                               className="btn btn-link btn-link-info"
-                            >
-                              编辑
-                            </button>
+                            >{tr('编辑')}</button>
                             <button
                               onClick={() => openModelModal(a)}
                               disabled={actionLoading[`models-${a.id}`]}
                               className="btn btn-link btn-link-info"
-                            >
-                              模型
-                            </button>
+                            >{tr('模型')}</button>
                           </>
                         }
                       >
@@ -2486,7 +2436,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     tooltipOff="点击开启签到"
                                   />
                                 ) : (
-                                  <StatusPill tone="muted" style={{ fontSize: 11 }}>不支持</StatusPill>
+                                  <StatusPill tone="muted" style={{ fontSize: 11 }}>{tr('不支持')}</StatusPill>
                                 )
                               }
                             />
@@ -2573,9 +2523,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   <button
                                     onClick={() => openRebindPanel(a)}
                                     className="btn btn-link btn-link-warning"
-                                  >
-                                    重新绑定
-                                  </button>
+                                  >{tr('重新绑定')}</button>
                                 )}
                               <button
                                 onClick={() =>
@@ -2618,14 +2566,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 <table className="data-table accounts-table">
                   <thead>
                     <tr>
-                      <th>连接名称</th>
-                      <th>站点</th>
-                      <th>运行健康状态</th>
-                      <th style={{ textAlign: 'left' }}>余额</th>
-                      <th>签到</th>
-                      <th className="accounts-actions-col">
-                        操作
-                      </th>
+                      <th>{tr('连接名称')}</th>
+                      <th>{tr('站点')}</th>
+                      <th>{tr('运行健康状态')}</th>
+                      <th style={{ textAlign: 'left' }}>{tr('余额')}</th>
+                      <th>{tr('签到')}</th>
+                      <th className="accounts-actions-col">{tr('操作')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2742,7 +2688,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 tooltipOff="点击开启签到"
                               />
                             ) : (
-                              <StatusPill tone="muted" style={{ fontSize: 11 }}>不支持</StatusPill>
+                              <StatusPill tone="muted" style={{ fontSize: 11 }}>{tr('不支持')}</StatusPill>
                             )}
                           </td>
                           <td className="accounts-actions-cell">
@@ -2783,9 +2729,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 onClick={() => openModelModal(a)}
                                 disabled={actionLoading[`models-${a.id}`]}
                                 className="btn btn-link btn-link-info"
-                              >
-                                模型
-                              </button>
+                              >{tr('模型')}</button>
                               {capabilities.canCheckin && (
                                 <button
                                   onClick={() =>
@@ -2810,16 +2754,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   <button
                                     onClick={() => openRebindPanel(a)}
                                     className="btn btn-link btn-link-warning"
-                                  >
-                                    重新绑定
-                                  </button>
+                                  >{tr('重新绑定')}</button>
                                 )}
                               <button
                                 onClick={() => openEditPanel(a)}
                                 className="btn btn-link btn-link-info"
-                              >
-                                编辑
-                              </button>
+                              >{tr('编辑')}</button>
                               <button
                                 onClick={() =>
                                   setDeleteConfirm({

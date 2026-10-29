@@ -96,7 +96,7 @@ export default function AccountModelsModal({
               borderRadius: 8,
             }}
           >
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>上游新增模型：</span>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('上游新增模型：')}</span>
             {(['auto', 'disable'] as const).map((policy) => (
               <button
                 key={policy}
@@ -284,9 +284,7 @@ export default function AccountModelsModal({
                   );
                 })}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                💡 禁用的模型只对这个 key 生效，同一站点的其他 key 不受影响。
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('💡 禁用的模型只对这个 key 生效，同一站点的其他 key 不受影响。')}</div>
             </>
           )}
 

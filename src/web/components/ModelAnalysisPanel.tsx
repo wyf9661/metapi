@@ -47,8 +47,8 @@ function formatPercent(value: number): string {
 function EmptyBlock() {
   return (
     <div className="empty-state" style={{ padding: 28 }}>
-      <div className="empty-state-title">今日暂无模型调用数据</div>
-      <div className="empty-state-desc">今日有代理流量进入后会自动生成统计图表</div>
+      <div className="empty-state-title">{tr('今日暂无模型调用数据')}</div>
+      <div className="empty-state-desc">{tr('今日有代理流量进入后会自动生成统计图表')}</div>
     </div>
   );
 }
@@ -191,10 +191,10 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
               <tr>
                 <th style={{ width: 36, textAlign: 'center' }}>#</th>
                 <th>{tr('模型')}</th>
-                <th style={{ textAlign: 'center' }}>调用</th>
+                <th style={{ textAlign: 'center' }}>{tr('调用')}</th>
                 <th style={{ textAlign: 'center' }}>{tr('成功率')}</th>
                 <th style={{ textAlign: 'center' }}>{tr('平均延迟')}</th>
-                <th style={{ textAlign: 'right' }}>消耗</th>
+                <th style={{ textAlign: 'right' }}>{tr('消耗')}</th>
               </tr>
             </thead>
             <tbody>

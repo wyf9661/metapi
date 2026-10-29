@@ -545,9 +545,7 @@ export default function ImportExport() {
             </svg>
             <span style={{ fontSize: 16, fontWeight: 700 }}>{tr('导出数据')}</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
-            将连接、路由策略与设置导出为 JSON 文件进行备份
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.6 }}>{tr('将连接、路由策略与设置导出为 JSON 文件进行备份')}</div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
             <button
@@ -684,7 +682,7 @@ export default function ImportExport() {
                     <div>包含分区：{summary.hasAccounts ? '连接与路由策略' : ''}{summary.hasAccounts && summary.hasPreferences ? ' + ' : ''}{summary.hasPreferences ? '系统设置' : ''}</div>
                     {summary.isAllApiHubV2 ? (
                       <>
-                        <div>检测到 ALL-API-Hub V2 兼容备份：将离线迁移可用连接。</div>
+                        <div>{tr('检测到 ALL-API-Hub V2 兼容备份：将离线迁移可用连接。')}</div>
                         <div>
                           统计：账号 {summary.accountsCount} / 书签 {summary.bookmarksCount} / 独立 API 凭据 {summary.profilesCount}
                         </div>
@@ -706,10 +704,10 @@ export default function ImportExport() {
                         统计：站点 {summary.sitesCount} / 账号 {summary.accountsCount} / 令牌 {summary.tokensCount} / 路由 {summary.routesCount} / 通道 {summary.channelsCount} / 禁用模型 {summary.siteDisabledModelsCount} / 手工模型 {summary.manualModelsCount} / 下游 Key {summary.downstreamApiKeysCount} / 设置 {summary.settingsCount}
                       </div>
                     ) : null}
-                    {summary.hasLegacyData ? <div>检测到兼容结构：将按兼容模式导入。</div> : null}
+                    {summary.hasLegacyData ? <div>{tr('检测到兼容结构：将按兼容模式导入。')}</div> : null}
                   </>
                 ) : (
-                  <div>JSON 可解析，但结构不受支持。</div>
+                  <div>{tr('JSON 可解析，但结构不受支持。')}</div>
                 )}
               </div>
             ) : null}
@@ -722,7 +720,7 @@ export default function ImportExport() {
               className="btn btn-primary"
               style={{ width: '100%', padding: '10px 0', fontSize: 14, fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
             >
-              {importing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 导入中...</> : '导入'}
+              {importing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('导入中...')}</> : '导入'}
             </button>
           </div>
         </div>
@@ -733,19 +731,17 @@ export default function ImportExport() {
           <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--color-primary)">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999A5.002 5.002 0 006 9a4 4 0 00-3 6z" />
           </svg>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>WebDAV 同步</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{tr('WebDAV 同步')}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, fontSize: 12, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
             <span>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未同步'}</span>
             <span>最近错误：{webdavState.lastError || '无'}</span>
           </div>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
-          支持手动推送、手动拉取，以及定时自动导出到 WebDAV。
-        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>{tr('支持手动推送、手动拉取，以及定时自动导出到 WebDAV。')}</div>
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: '16px 20px' }}>
           <div style={{ gridColumn: '1 / -1' }}>
-            <div style={formFieldLabelStyle}>文件 URL</div>
+            <div style={formFieldLabelStyle}>{tr('文件 URL')}</div>
             <input
               value={webdavConfig.fileUrl}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, fileUrl: e.target.value }))}
@@ -754,7 +750,7 @@ export default function ImportExport() {
             />
           </div>
           <div>
-            <div style={formFieldLabelStyle}>用户名</div>
+            <div style={formFieldLabelStyle}>{tr('用户名')}</div>
             <input
               value={webdavConfig.username}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, username: e.target.value }))}
@@ -763,7 +759,7 @@ export default function ImportExport() {
             />
           </div>
           <div>
-            <div style={formFieldLabelStyle}>密码</div>
+            <div style={formFieldLabelStyle}>{tr('密码')}</div>
             <input
               type="password"
               value={webdavConfig.password}
@@ -793,13 +789,11 @@ export default function ImportExport() {
                     }
                   }}
                   style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
-                />
-                清空已保存密码
-              </label>
+                />{tr('清空已保存密码')}</label>
             ) : null}
           </div>
           <div>
-            <div style={formFieldLabelStyle}>导出分区</div>
+            <div style={formFieldLabelStyle}>{tr('导出分区')}</div>
             <ModernSelect
               value={webdavConfig.exportType}
               onChange={(value) => setWebdavConfig((prev) => ({ ...prev, exportType: value as BackupType }))}
@@ -807,7 +801,7 @@ export default function ImportExport() {
             />
           </div>
           <div>
-            <div style={formFieldLabelStyle}>自动同步 Cron</div>
+            <div style={formFieldLabelStyle}>{tr('自动同步 Cron')}</div>
             <input
               value={webdavConfig.autoSyncCron}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, autoSyncCron: e.target.value }))}
@@ -829,9 +823,7 @@ export default function ImportExport() {
               checked={webdavConfig.enabled}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
               style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
-            />
-            启用 WebDAV
-          </label>
+            />{tr('启用 WebDAV')}</label>
           <label
             style={{
               ...webdavToggleStyle,
@@ -843,9 +835,7 @@ export default function ImportExport() {
               checked={webdavConfig.autoSyncEnabled}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, autoSyncEnabled: e.target.checked }))}
               style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
-            />
-            自动同步
-          </label>
+            />{tr('自动同步')}</label>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -877,19 +867,17 @@ export default function ImportExport() {
         </div>
 
         {webdavConfigDirty ? (
-          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-warning)' }}>
-            当前 WebDAV 配置有未保存改动，请先保存后再执行导入或导出。
-          </div>
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-warning)' }}>{tr('当前 WebDAV 配置有未保存改动，请先保存后再执行导入或导出。')}</div>
         ) : null}
       </div>
 
       <div className="card animate-slide-up stagger-4" style={{ marginTop: 14, padding: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>注意事项</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{tr('注意事项')}</div>
         <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.75 }}>
-          <div>1. 导入连接分区会覆盖备份中的站点、账号、令牌、路由、禁用模型、手工模型和下游 Key 配置。</div>
-          <div>2. 覆盖备份中的连接/路由/策略配置，但会保留本机日志、公告、缓存和统计。</div>
-          <div>3. 为避免锁死管理界面，管理员登录令牌（`auth_token`）不会从备份导入。</div>
-          <div>4. 建议先导出一份"全部备份"再执行导入操作。</div>
+          <div>{tr('1. 导入连接分区会覆盖备份中的站点、账号、令牌、路由、禁用模型、手工模型和下游 Key 配置。')}</div>
+          <div>{tr('2. 覆盖备份中的连接/路由/策略配置，但会保留本机日志、公告、缓存和统计。')}</div>
+          <div>{tr('3. 为避免锁死管理界面，管理员登录令牌（`auth_token`）不会从备份导入。')}</div>
+          <div>{tr('4. 建议先导出一份"全部备份"再执行导入操作。')}</div>
         </div>
       </div>
     </div>

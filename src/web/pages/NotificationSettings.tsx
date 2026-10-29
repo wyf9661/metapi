@@ -462,7 +462,7 @@ export default function NotificationSettings() {
                             </div>
                             <div>
                                 <div style={{ fontWeight: 600, fontSize: 15 }}>Telegram Bot</div>
-                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>通过 Telegram 机器人推送消息通知</div>
+                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('通过 Telegram 机器人推送消息通知')}</div>
                             </div>
                         </div>
 
@@ -489,9 +489,7 @@ export default function NotificationSettings() {
                                 style={inputStyle}
                                 disabled={!runtime.telegramEnabled}
                             />
-                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>
-                                留空或使用默认值时直连官方 Telegram API；如需国内反代，可填写反代前缀。
-                            </div>
+                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('留空或使用默认值时直连官方 Telegram API；如需国内反代，可填写反代前缀。')}</div>
                         </div>
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Telegram Chat ID</div>
@@ -557,7 +555,7 @@ export default function NotificationSettings() {
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: '16px 20px', opacity: runtime.smtpEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
                         {/* Host */}
                         <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>SMTP 服务器</div>
+                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>{tr('SMTP 服务器')}</div>
                             <input
                                 value={runtime.smtpHost}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpHost: e.target.value }))}
@@ -585,9 +583,7 @@ export default function NotificationSettings() {
                                     checked={runtime.smtpSecure}
                                     onChange={(e) => setRuntime((prev) => ({ ...prev, smtpSecure: e.target.checked }))}
                                     disabled={!runtime.smtpEnabled}
-                                />
-                                启用 TLS/SSL
-                            </label>
+                                />{tr('启用 TLS/SSL')}</label>
                         </div>
                         {/* User */}
                         <div>

@@ -153,10 +153,7 @@ export default function AccountRebindModal({
                           color: 'var(--color-text-muted)',
                           marginBottom: 10,
                         }}
-                      >
-                        留空将保持原有 refresh_token
-                        不变。配置后可用于托管自动续期。
-                      </div>
+                      >{tr('留空将保持原有 refresh_token 不变。配置后可用于托管自动续期。')}</div>
                     </>
                   )}
 
@@ -167,7 +164,7 @@ export default function AccountRebindModal({
                         className="alert alert-success animate-scale-in"
                         style={{ marginBottom: 10 }}
                       >
-                        <div className="alert-title">Session Token 有效</div>
+                        <div className="alert-title">{tr('Session Token 有效')}</div>
                         <div style={{ fontSize: 12, marginTop: 4 }}>
                           用户:{' '}
                           {rebindVerifyResult.userInfo?.username || '未知'}
@@ -228,9 +225,7 @@ export default function AccountRebindModal({
                               borderTopColor: 'white',
                               borderColor: 'rgba(255,255,255,0.3)',
                             }}
-                          />
-                          绑定中...
-                        </>
+                          />{tr('绑定中...')}</>
                       ) : (
                         '确认重新绑定'
                       )}

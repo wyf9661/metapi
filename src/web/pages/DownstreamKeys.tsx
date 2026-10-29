@@ -1044,7 +1044,7 @@ export default function DownstreamKeys() {
           <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void load()} disabled={loading}>
             {loading ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
           </button>
-          <button className="btn btn-primary" onClick={openCreate}>+ 新增下游密钥</button>
+          <button className="btn btn-primary" onClick={openCreate}>{tr('+ 新增下游密钥')}</button>
         </div>
       </div>
 
@@ -1370,8 +1370,8 @@ export default function DownstreamKeys() {
         confirmText="确认删除"
         loading={batchActionLoading || (deleteConfirm?.mode === 'single' && !!rowLoading[`delete-${deleteConfirm.item.id}`])}
         description={deleteConfirm?.mode === 'single'
-          ? <>{tr('确定要删除密钥')} <strong>{deleteConfirm.item.name}</strong> 吗？</>
-          : <>{tr('确定要删除选中的')} <strong>{deleteConfirm?.ids.length || 0}</strong> 个密钥吗？</>}
+          ? <>{tr('确定要删除密钥')} <strong>{deleteConfirm.item.name}</strong> {tr('吗？')}</>
+          : <>{tr('确定要删除选中的')} <strong>{deleteConfirm?.ids.length || 0}</strong> {tr('个密钥吗？')}</>}
       />
 
       <DownstreamKeyDrawer

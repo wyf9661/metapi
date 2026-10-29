@@ -1257,9 +1257,7 @@ export default function ProxyLogs() {
                   fontSize: 13,
                   paddingBottom: 12,
                 }}
-              >
-                加载调试追踪中...
-              </div>
+              >{tr('加载调试追踪中...')}</div>
             ) : debugTraces.length === 0 ? (
               <div
                 style={{
@@ -1780,7 +1778,7 @@ export default function ProxyLogs() {
                         />
                       ) : null}
                       {detailState?.loading && (
-                        <div className="mobile-note">加载详情中...</div>
+                        <div className="mobile-note">{tr('加载详情中...')}</div>
                       )}
                       {detailState?.error && (
                         <div className="mobile-note is-error">
@@ -1813,7 +1811,7 @@ export default function ProxyLogs() {
                                 {line}
                               </span>
                             ))}
-                            <span>仅供参考，以实际扣费为准</span>
+                            <span>{tr('仅供参考，以实际扣费为准')}</span>
                           </div>
                         ) : (
                           <div className="mobile-billing-lines">
@@ -2309,9 +2307,7 @@ export default function ProxyLogs() {
                                         style={{
                                           color: 'var(--color-text-muted)',
                                         }}
-                                      >
-                                        加载详情中...
-                                      </div>
+                                      >{tr('加载详情中...')}</div>
                                     )}
                                     {detailState?.error && (
                                       <div
@@ -2391,9 +2387,7 @@ export default function ProxyLogs() {
                                           color: 'var(--color-warning)',
                                           flexShrink: 0,
                                         }}
-                                      >
-                                        缓存 Tokens
-                                      </span>
+                                      >{tr('缓存 Tokens')}</span>
                                       <span>
                                         {detailLog.billingDetails.usage.cacheReadTokens.toLocaleString()}
                                       </span>
@@ -2410,9 +2404,7 @@ export default function ProxyLogs() {
                                           color: 'var(--color-warning)',
                                           flexShrink: 0,
                                         }}
-                                      >
-                                        缓存创建 Tokens
-                                      </span>
+                                      >{tr('缓存创建 Tokens')}</span>
                                       <span>
                                         {detailLog.billingDetails.usage.cacheCreationTokens.toLocaleString()}
                                       </span>
