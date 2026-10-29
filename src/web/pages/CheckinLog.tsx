@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../api.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
@@ -11,6 +12,8 @@ import {
 } from './helpers/checkinLogTime.js';
 import { tr } from '../i18n.js';
 import { StatusPill, StatusText } from '../components/StatusText.js';
+
+const EMPTY_LOGS: any[] = [];
 
 type LogFilter = 'all' | 'success' | 'failed' | 'skipped';
 
@@ -67,8 +70,6 @@ function parseLocalDateTimeInput(value: string): Date | null {
 }
 
 export default function CheckinLog() {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [filter, setFilter] = useState<LogFilter>('all');
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
@@ -76,6 +77,22 @@ export default function CheckinLog() {
   const [showFilters, setShowFilters] = useState(false);
   const isMobile = useIsMobile();
   const toast = useToast();
+
+  const logsQuery = useQuery({
+    queryKey: ['checkin-logs'],
+    queryFn: () => api.getCheckinLogs('limit=100'),
+    retry: false,
+  });
+
+  const logs = Array.isArray(logsQuery.data) ? logsQuery.data : EMPTY_LOGS;
+  const loading = logsQuery.isFetching;
+
+  useEffect(() => {
+    if (!logsQuery.isError) return;
+    const eMessage = logsQuery.error instanceof Error ? logsQuery.error.message : String(logsQuery.error);
+    toast.error(eMessage || '加载签到记录失败');
+  }, [logsQuery.isError, logsQuery.errorUpdatedAt]);
+
 
   function getStatus(log: any): 'success' | 'failed' | 'skipped' {
     const raw = (log.checkin_logs?.status || log.status || 'failed') as string;
@@ -147,23 +164,6 @@ export default function CheckinLog() {
     setToInput('');
   };
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getCheckinLogs('limit=100');
-      setLogs(Array.isArray(data) ? data : []);
-    } catch (e) {
-      const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '加载签到记录失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
   const handleTriggerAll = async () => {
     setTriggering(true);
     try {
@@ -173,7 +173,7 @@ export default function CheckinLog() {
       } else {
         toast.success(res?.message || '签到已执行');
       }
-      await load();
+      await logsQuery.refetch();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       toast.error(eMessage || '触发签到失败');
