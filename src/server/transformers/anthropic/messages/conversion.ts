@@ -1,4 +1,5 @@
 import { normalizeInputFileBlock, toAnthropicDocumentBlock } from '../../shared/inputFile.js';
+import { parseToolUseInput } from './toolUseInput.js';
 import {
   decodeAnthropicReasoningSignature,
 } from '../../shared/reasoningTransport.js';
@@ -42,13 +43,9 @@ function cloneJsonValue<T>(value: T): T | undefined {
 }
 
 function parseJsonString(raw: string): unknown {
-  const trimmed = raw.trim();
-  if (!trimmed) return {};
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return { value: raw };
-  }
+  // Truncated arguments must not become { value: "<broken json>" }: the client then runs
+  // the tool with one fake parameter and no real ones, which looks like a successful call.
+  return parseToolUseInput(raw);
 }
 
 function toPositiveInteger(value: unknown): number | null {
@@ -969,7 +966,9 @@ export function convertOpenAiBodyToAnthropicMessagesBody(
       const toolCall = rawToolCalls[index];
       if (!isRecord(toolCall)) continue;
       const functionPart = isRecord(toolCall.function) ? toolCall.function : {};
-      const id = asTrimmedString(toolCall.id) || `toolu_${Date.now()}_${index}`;
+      // Deterministic so a tool_result coming back on the next turn matches the id we emitted;
+      // a Date.now() id changed on every replay.
+      const id = asTrimmedString(toolCall.id) || `toolu_${index}`;
       const name = getShortToolName((
         asTrimmedString(functionPart.name)
         || asTrimmedString(toolCall.name)

@@ -10,6 +10,7 @@ import {
   type NormalizedStreamEvent,
   type StreamTransformContext,
 } from '../../shared/normalized.js';
+import { parseToolUseInput } from './toolUseInput.js';
 import { decodeAnthropicReasoningSignature } from '../../shared/reasoningTransport.js';
 import { isErrorFinish } from '../../shared/finishReason.js';
 import { type AnthropicExtendedStreamEvent } from './aggregator.js';
@@ -137,14 +138,7 @@ function buildAnthropicFinalContentBlocks(
         type: 'tool_use',
         id: toolCall.id || `toolu_${index}`,
         name: toolCall.name || `tool_${index}`,
-        input: (() => {
-          const rawArguments = toolCall.arguments || '';
-          try {
-            return rawArguments ? JSON.parse(rawArguments) : {};
-          } catch {
-            return { value: rawArguments };
-          }
-        })(),
+        input: parseToolUseInput(toolCall.arguments || ''),
       });
     }
   }
