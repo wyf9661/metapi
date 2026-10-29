@@ -55,7 +55,7 @@ export function resolveToolCallIndex(
   // A name opens a call; so does an id the active slot has not claimed yet. A bare
   // argument fragment continues the active call — treating it as a new one is exactly
   // what shredded these streams into per-fragment "parallel" calls.
-  const opensCall = !!name || (!!id && !state.idByIndex.has(state.activeIndex));
+  const opensCall = !!name || (!!id && state.idByIndex.get(state.activeIndex) !== id);
   if (!opensCall) return state.activeIndex;
   const fresh = state.nextIndex;
   state.nextIndex += 1;
