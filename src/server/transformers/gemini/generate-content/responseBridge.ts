@@ -12,6 +12,7 @@ import {
   resolveGeminiModelsUrl,
   resolveGeminiNativeBaseUrl,
 } from './urlResolver.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
 type GeminiRecord = Record<string, unknown>;
 
@@ -19,17 +20,7 @@ function isRecord(value: unknown): value is GeminiRecord {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function isAggregateState(value: unknown): value is GeminiGenerateContentAggregateState {
   return isRecord(value) && Array.isArray(value.parts) && Array.isArray(value.groundingMetadata) && Array.isArray(value.citations);

@@ -1,20 +1,11 @@
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 type GeminiRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is GeminiRecord {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function stableSerialize(value: unknown): string {
   return JSON.stringify(value);

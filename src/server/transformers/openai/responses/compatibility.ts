@@ -13,10 +13,8 @@ import {
   hasEndpointMismatchHint,
   inferRequiredEndpointFromProtocolError,
 } from '../../shared/endpointCompatibility.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object';
-}
 
 export function buildResponsesCompatibilityBodies(
   body: Record<string, unknown>,
@@ -217,17 +215,7 @@ function toFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function fingerprintCompatibilityValue(value: unknown): string {
   if (value === undefined) return '__undefined__';

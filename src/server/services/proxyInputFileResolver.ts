@@ -6,22 +6,13 @@ import {
   isSupportedConversationFileMimeType,
   resolveConversationFileMimeType,
 } from '../../shared/conversationFileTypes.js';
+import { cloneJsonDeep } from '../transformers/shared/cloneJson.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function isSupportedMimeType(mimeType: string): boolean {
   return isSupportedConversationFileMimeType(mimeType);

@@ -19,22 +19,13 @@ import {
   normalizeOpenAiResponsesFinalToNormalized,
   type ResponsesUsageSummary,
 } from './responseBridge.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
 }
 
-function cloneJson<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJson(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJson(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJson = cloneJsonDeep;
 
 function hasNonEmptyString(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;

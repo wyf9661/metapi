@@ -19,6 +19,7 @@ export {
   type ParsedSseEvent,
   type StreamTransformContext,
 } from './chatFormatsCore.js';
+import { cloneJsonDeep } from './cloneJson.js';
 
 export type NormalizedContentBlockType =
   | 'text'
@@ -140,17 +141,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 const TRANSFORMER_METADATA_PASSTHROUGH_KEYS = new Set([
   'systemInstruction',

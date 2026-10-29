@@ -1,6 +1,7 @@
 import { type StreamTransformContext } from '../../shared/normalized.js';
 import type { OpenAiResponsesStreamEvent } from './streamBridge.js';
 import { asTrimmedString } from '../../../shared/trimString.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -12,17 +13,7 @@ function cloneRecord(value: unknown): Record<string, unknown> | null {
   return { ...value };
 }
 
-function cloneJson<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJson(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJson(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJson = cloneJsonDeep;
 
 function ensureResponseId(rawId: string): string {
   const trimmed = rawId.trim() || `resp_${Date.now()}`;

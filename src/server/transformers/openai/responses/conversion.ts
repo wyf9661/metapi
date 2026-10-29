@@ -7,6 +7,7 @@ import {
 import { normalizeInputFileBlock, toOpenAiChatFileBlock } from '../../shared/inputFile.js';
 import { buildShortToolNameMap, getShortToolName } from '../../shared/toolNameShortener.js';
 import { asTrimmedString } from '../../../shared/trimString.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,17 +54,7 @@ function cloneRecord(value: unknown): Record<string, unknown> | null {
   return { ...value };
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 const OPENAI_WEB_SEARCH_TOOL_TYPES = new Set([
   'web_search',

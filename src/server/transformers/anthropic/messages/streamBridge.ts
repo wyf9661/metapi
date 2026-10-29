@@ -15,6 +15,7 @@ import { decodeAnthropicReasoningSignature } from '../../shared/reasoningTranspo
 import { isErrorFinish } from '../../shared/finishReason.js';
 import { type AnthropicExtendedStreamEvent } from './aggregator.js';
 import { asTrimmedString } from '../../../shared/trimString.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
 
 type AnthropicStreamPayload = Record<string, unknown>;
@@ -69,17 +70,7 @@ function serializeSse(event: string, payload: Record<string, unknown>): string {
   return `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function cleanAnthropicReasoningSignature(value: unknown): string | null {
   const raw = typeof value === 'string' ? value.trim() : '';

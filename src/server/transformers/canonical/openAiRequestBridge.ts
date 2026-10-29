@@ -22,6 +22,7 @@ import type {
 } from './types.js';
 import { toOpenAiChatFileBlock } from '../shared/inputFile.js';
 import { asTrimmedString } from '../../shared/trimString.js';
+import { cloneJsonDeep } from '../shared/cloneJson.js';
 
 
 type CanonicalRequestFromOpenAiBodyInput = {
@@ -38,17 +39,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function safeJsonStringify(value: unknown): string {
   try {

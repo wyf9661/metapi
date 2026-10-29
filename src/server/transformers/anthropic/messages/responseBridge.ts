@@ -3,6 +3,7 @@ import { parseToolUseInput } from './toolUseInput.js';
 import { decodeAnthropicReasoningSignature } from '../../shared/reasoningTransport.js';
 import { toAnthropicUsagePayload } from './usage.js';
 import { asTrimmedString } from '../../../shared/trimString.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
 
 type AnthropicRecord = Record<string, unknown>;
@@ -17,17 +18,7 @@ function isRecord(value: unknown): value is AnthropicRecord {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function parseJsonLike(raw: string): unknown {
   return parseToolUseInput(raw);

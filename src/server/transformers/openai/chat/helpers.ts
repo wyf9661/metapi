@@ -10,6 +10,7 @@ import type {
 import { fromTransformerMetadataRecord } from '../../shared/normalized.js';
 import { extractInlineThinkTags } from '../../shared/thinkTagParser.js';
 import { createToolCallIndexState, resolveToolCallIndex, type ToolCallIndexState } from '../../shared/toolCallIndex.js';
+import { cloneJsonDeep } from '../../shared/cloneJson.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -19,17 +20,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return isRecord(value) ? value : null;
 }
 
-function cloneJson<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJson(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJson(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJson = cloneJsonDeep;
 
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];

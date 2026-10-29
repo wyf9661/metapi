@@ -1,5 +1,6 @@
 import { minimatch } from 'minimatch';
 import { asTrimmedString } from '../shared/trimString.js';
+import { cloneJsonDeep } from '../transformers/shared/cloneJson.js';
 
 
 export type PayloadRuleModel = {
@@ -41,17 +42,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJsonValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as T;
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
-    ) as T;
-  }
-  return value;
-}
+const cloneJsonValue = cloneJsonDeep;
 
 function toPathSegments(path: string): string[] {
   const normalized = asTrimmedString(path).replace(/^\.+/, '');
