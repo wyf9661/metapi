@@ -1,5 +1,6 @@
 import React from 'react';
 import CenteredModal from '../../components/CenteredModal.js';
+import { tr } from '../../i18n.js';
 
 type RebindForm = {
   accessToken: string;
@@ -52,7 +53,7 @@ export default function AccountRebindModal({
               bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               footer={
                 <button onClick={closeRebindPanel} className="btn btn-ghost">
-                  取消
+                  {tr('取消')}
                 </button>
               }
             >
@@ -202,7 +203,7 @@ export default function AccountRebindModal({
                       {rebindVerifying ? (
                         <>
                           <span className="spinner spinner-sm" />
-                          验证中...
+                          {tr('验证中...')}
                         </>
                       ) : (
                         '验证 Token'

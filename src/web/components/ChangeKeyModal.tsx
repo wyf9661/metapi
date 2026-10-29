@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useToast } from './Toast.js';
 import { persistAuthSession } from '../authSession.js';
 import { useAnimatedVisibility } from './useAnimatedVisibility.js';
+import { tr } from '../i18n.js';
 
 export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const presence = useAnimatedVisibility(open, 200);
@@ -112,9 +113,9 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
         </div>
 
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-ghost">取消</button>
+          <button onClick={onClose} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={handleSubmit} disabled={saving} className="btn btn-primary">
-            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />更新中...</> : '确认修改'}
+            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />{tr('更新中...')}</> : '确认修改'}
           </button>
         </div>
       </div>

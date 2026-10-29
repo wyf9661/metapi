@@ -1095,7 +1095,7 @@ export default function TokenRoutes() {
           <>
             移除的通道会在定时模型刷新时被自动重建恢复，但<strong>它的累计统计（成功/失败、成本、冷却）会丢失</strong>，
             重建出来的是全新的一条。<br />
-            想恢复系统默认配置、又保留统计，请用<strong>「恢复默认」</strong>；只是临时停用则用<strong>禁用开关</strong>。
+            想恢复系统默认配置、又保留统计，请用<strong>「恢复默认」</strong>；只是临时停用则用<strong>{tr('禁用开关')}</strong>。
           </>
         ),
         confirmText: '确认移除',

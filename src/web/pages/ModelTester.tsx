@@ -234,7 +234,7 @@ export default function ModelTester() {
 
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-              API Key（可选）
+              {tr('API Key（可选）')}
             </div>
             <input
               value={apiKey}
@@ -249,7 +249,7 @@ export default function ModelTester() {
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-              协议
+              {tr('协议')}
             </div>
             <ModernSelect
               value={protocol}
@@ -281,7 +281,7 @@ export default function ModelTester() {
               style={{ border: '1px solid var(--color-border)', flex: '0 0 auto' }}
               onClick={clearAll}
             >
-              清空
+              {tr('清空')}
             </button>
           </div>
 
@@ -300,7 +300,7 @@ export default function ModelTester() {
 
         <div className="card" style={{ padding: 16 }}>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>
-            模型
+            {tr('模型')}
           </div>
           <ModernSelect
             value={model && models.includes(model) ? model : ''}
@@ -338,7 +338,7 @@ export default function ModelTester() {
 
         <div className="card" style={{ padding: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 15 }}>结果</h3>
+            <h3 style={{ margin: 0, fontSize: 15 }}>{tr('结果')}</h3>
             <div style={{ fontSize: 14, fontWeight: 700, color: statusColor(probeOk, probing) }}>
               {probing ? '检测中' : probeOk === true ? '可用' : probeOk === false ? '不可用' : '未检测'}
             </div>

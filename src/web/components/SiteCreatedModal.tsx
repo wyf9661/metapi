@@ -1,4 +1,5 @@
 import CenteredModal from './CenteredModal.js';
+import { tr } from '../i18n.js';
 
 type NextStepChoice = 'session' | 'apikey' | 'later';
 
@@ -73,7 +74,7 @@ export default function SiteCreatedModal({
       <div className="alert alert-success animate-scale-in" style={{ margin: 0 }}>
         <div className="alert-title">站点已添加成功</div>
         <div className="site-created-summary">
-          站点 <strong>"{siteName}"</strong> 已加入列表，您现在可以继续补充连接信息。
+          {tr('站点')} <strong>"{siteName}"</strong> 已加入列表，您现在可以继续补充连接信息。
         </div>
       </div>
 

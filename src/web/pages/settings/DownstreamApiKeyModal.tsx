@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { tr } from '../../i18n.js';
 
 type ModalPresence = {
   shouldRender: boolean;
@@ -111,7 +112,7 @@ export default function DownstreamApiKeyModal({
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)' }}
               >
-                勾选模型和群组
+                {tr('勾选模型和群组')}
               </button>
               {(downstreamCreate.selectedModels.length > 0 || downstreamCreate.selectedGroupRouteIds.length > 0) ? (
                 <button
@@ -125,10 +126,10 @@ export default function DownstreamApiKeyModal({
           </div>
         </div>
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-ghost">取消</button>
+          <button onClick={onClose} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={() => void onSave()} disabled={downstreamSaving} className="btn btn-primary">
             {downstreamSaving
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</>
+              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</>
               : (editingDownstreamId ? '更新 API Key' : '新增 API Key')}
           </button>
         </div>
