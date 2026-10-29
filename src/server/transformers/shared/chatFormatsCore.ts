@@ -4,6 +4,7 @@ import {
 import { toOpenAiChatFileBlock } from './inputFile.js';
 import { asTrimmedString } from '../../shared/trimString.js';
 import { createToolCallIndexState, resolveToolCallIndex } from './toolCallIndex.js';
+import { normalizeFinishReason, toAnthropicStopReason, toOpenAiFinishReason } from './finishReason.js';
 import {
 
   consumeThinkTaggedText,
@@ -226,48 +227,14 @@ function extractStreamingTextAndReasoning(
 }
 
 export function normalizeStopReason(raw: unknown): string | null {
-  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-  if (!value) return null;
-
-  if (value === 'failed' || value === 'error') {
-    return 'error';
-  }
-
-  if (
-    value === 'end_turn'
-    || value === 'stop'
-    || value === 'end'
-    || value === 'eos'
-    || value === 'finished'
-    || value === 'completed'
-    || value === 'stop_sequence'
-  ) {
-    return 'stop';
-  }
-
-  if (
-    value === 'incomplete'
-    || value === 'max_tokens'
-    || value === 'length'
-    || value === 'max_output_tokens'
-    || value === 'max_tokens_exceeded'
-    || value.includes('max')
-  ) {
-    return 'length';
-  }
-
-  if (value === 'tool_use' || value === 'tool_calls' || value.includes('tool')) {
-    return 'tool_calls';
-  }
-
-  return null;
+  // Single source of truth: shared/finishReason.ts. Exact matching only — the previous
+  // `includes('max')` / `includes('tool')` heuristics mis-read `nomatch` as tool_calls and
+  // dropped `content_filter` entirely (a safety stop looked like a clean finish).
+  return normalizeFinishReason(raw);
 }
 
 export function toClaudeStopReason(finishReason: string | null | undefined): string {
-  const value = normalizeStopReason(finishReason);
-  if (value === 'length') return 'max_tokens';
-  if (value === 'tool_calls') return 'tool_use';
-  return 'end_turn';
+  return toAnthropicStopReason(finishReason);
 }
 
 export function createStreamTransformContext(modelName: string): StreamTransformContext {
@@ -426,10 +393,16 @@ function responsesStatusToChatFinishReason(
         ? asTrimmedString(incompleteDetails.reason).toLowerCase()
         : ''
     );
+    // OpenAI's incomplete_details.reason is max_output_tokens | content_filter. Only the
+    // safety stop needs its own value; an undocumented or missing reason keeps the legacy
+    // default so the "reasoning exhausted the budget" diagnosis stays unaffected.
+    if (reason === 'content_filter') return 'content_filter';
     return reason === 'max_output_tokens' ? 'length' : 'stop';
   }
-  if (normalizedStatus === 'failed') {
-    return 'stop';
+  if (normalizedStatus === 'failed' || normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
+    // A failed response is not a clean end: keep the canonical error so the Anthropic and
+    // Gemini exits can surface it instead of reporting end_turn.
+    return 'error';
   }
   return hasToolCalls ? 'tool_calls' : 'stop';
 }
@@ -1977,7 +1950,9 @@ function buildOpenAiStreamChunk(
     choices: [{
       index: 0,
       delta,
-      finish_reason: finishReason,
+      // Wire boundary: null stays null (mid-stream chunk), a terminal value is projected
+      // into the OpenAI enum, which has no "error" member.
+      finish_reason: finishReason == null ? null : toOpenAiFinishReason(finishReason),
     }],
   };
 }
@@ -2350,7 +2325,7 @@ export function serializeFinalResponse(
     choices: [{
       index: 0,
       message,
-      finish_reason: finishReason,
+      finish_reason: finishReason == null ? null : toOpenAiFinishReason(finishReason),
     }],
     usage: {
       prompt_tokens: usage.promptTokens,
@@ -2406,7 +2381,7 @@ export function buildSyntheticOpenAiChunks(normalized: NormalizedFinalResponse):
     choices: [{
       index: 0,
       delta: {},
-      finish_reason: finishReason,
+      finish_reason: finishReason == null ? null : toOpenAiFinishReason(finishReason),
     }],
   };
 

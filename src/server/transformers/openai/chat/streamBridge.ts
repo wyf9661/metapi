@@ -9,6 +9,7 @@ import {
   type StreamTransformContext,
 } from '../../shared/normalized.js';
 import { extractChatChoiceEvents, extractChatResponseExtras } from './helpers.js';
+import { toOpenAiFinishReason } from '../../shared/finishReason.js';
 import type { OpenAiChatNormalizedStreamEvent } from './model.js';
 
 const multiChoiceToolCallState = new WeakMap<
@@ -146,7 +147,11 @@ export const openAiChatStream = {
             return {
               index: choiceEvent.index,
               delta,
-              finish_reason: choiceEvent.finishReason ?? null,
+              // Mid-stream chunks must keep finish_reason null; only a terminal value is
+              // projected into the OpenAI enum (which has no "error" member).
+              finish_reason: choiceEvent.finishReason == null
+                ? null
+                : toOpenAiFinishReason(choiceEvent.finishReason),
             };
           })
           .sort((left, right) => left.index - right.index),

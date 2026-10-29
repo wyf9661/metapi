@@ -4,12 +4,14 @@ import {
   normalizeStopReason,
   normalizeUpstreamStreamEvent,
   pullSseEventsWithDone,
+  toClaudeStopReason,
   type ClaudeDownstreamContext,
   type NormalizedFinalResponse,
   type NormalizedStreamEvent,
   type StreamTransformContext,
 } from '../../shared/normalized.js';
 import { decodeAnthropicReasoningSignature } from '../../shared/reasoningTransport.js';
+import { isErrorFinish } from '../../shared/finishReason.js';
 import { type AnthropicExtendedStreamEvent } from './aggregator.js';
 import { asTrimmedString } from '../../../shared/trimString.js';
 
@@ -565,6 +567,14 @@ function buildDoneEvents(
     ...ensureClaudeStartEvents(streamContext, context),
     ...closeAllBlocks(context),
     ...emitPendingSignatureAsThinkingBlock(context),
+    // Anthropic has no error stop_reason, so a failed upstream must surface as an error
+    // event; otherwise a broken stream reads as a clean end_turn to the client.
+    ...(isErrorFinish(finishReason)
+      ? [serializeSse('error', {
+          type: 'error',
+          error: { type: 'api_error', message: 'upstream stream ended with an error' },
+        })]
+      : []),
     serializeSse('message_delta', {
       type: 'message_delta',
       delta: {
@@ -751,13 +761,6 @@ export function serializeAnthropicUpstreamFinalAsStream(
 ): string[] {
   const normalizedFinal = normalizeFinal(payload, modelName, fallbackText);
   return serializeAnthropicFinalAsStream(normalizedFinal, streamContext, downstreamContext);
-}
-
-function toClaudeStopReason(finishReason: string | null | undefined): string {
-  const normalized = normalizeStopReason(finishReason);
-  if (normalized === 'length') return 'max_tokens';
-  if (normalized === 'tool_calls') return 'tool_use';
-  return 'end_turn';
 }
 
 function asUntouchedString(value: unknown): string {

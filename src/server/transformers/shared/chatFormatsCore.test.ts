@@ -368,9 +368,12 @@ describe('chatFormatsCore inline think parsing', () => {
     });
   });
 
-  it('maps response.failed to a stop finish reason instead of inventing a chat error finish reason', () => {
+  it('keeps response.failed distinguishable from a clean stop at the canonical layer', () => {
     const context = createStreamTransformContext('gpt-test');
 
+    // Canonical value is `error` so the Anthropic/Gemini exits can surface it; the OpenAI
+    // wire projection still yields `stop` because that enum has no error member (covered
+    // in finishReason.test.ts and openai/chat/index.test.ts).
     expect(normalizeUpstreamStreamEvent({
       type: 'response.failed',
       response: {
@@ -378,7 +381,7 @@ describe('chatFormatsCore inline think parsing', () => {
         status: 'failed',
       },
     }, context, 'gpt-test')).toEqual({
-      finishReason: 'stop',
+      finishReason: 'error',
       done: true,
     });
   });
@@ -645,7 +648,8 @@ describe('chatFormatsCore inline think parsing', () => {
       status: 'failed',
       output: [],
     }, 'gpt-test')).toMatchObject({
-      finishReason: 'stop',
+      // Canonical error; the OpenAI wire projection collapses it to `stop` (no enum member).
+      finishReason: 'error',
     });
   });
 });
