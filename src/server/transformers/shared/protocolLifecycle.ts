@@ -21,6 +21,11 @@ type ProxyStreamLifecycleInput<TEvent> = {
    * channel lease and a retry slot; 0 disables the deadline.
    */
   idleTimeoutMs?: number;
+  /**
+   * Called when the first-byte deadline fires, so the stall leaves a trace naming the model
+   * instead of looking like an upstream that simply ended the stream.
+   */
+  onFirstByteTimeout?: (elapsedMs: number) => void;
 }
 
 const IDLE_TIMEOUT = Symbol('proxy-stream-idle-timeout');
@@ -84,6 +89,7 @@ export function createProxyStreamLifecycle<TEvent>(input: ProxyStreamLifecycleIn
           if (next === IDLE_TIMEOUT) {
             // Treat it as an upstream stall: stop reading and let onEof synthesise the
             // terminal state from what was actually delivered.
+            input.onFirstByteTimeout?.(idleTimeoutMs);
             await reader.cancel().catch(() => {});
             break;
           }

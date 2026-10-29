@@ -28,6 +28,25 @@ describe('proxy stream idle deadline', () => {
     expect(ended).toBe(true);
   });
 
+  it('reports the stall so it is not mistaken for a clean early EOF', async () => {
+    const reported: number[] = [];
+    const lifecycle = createProxyStreamLifecycle<{ data: string }>({
+      reader: {
+        read: () => new Promise<{ done: boolean; value?: Uint8Array }>(() => {}),
+        cancel: async () => {},
+        releaseLock: () => {},
+      },
+      response: { end: () => {} },
+      pullEvents: () => ({ events: [], rest: '' }),
+      handleEvent: () => false,
+      idleTimeoutMs: 15,
+      onFirstByteTimeout: (elapsedMs) => { reported.push(elapsedMs); },
+    });
+
+    await lifecycle.run();
+    expect(reported).toEqual([15]);
+  });
+
   it('still reads normally when data keeps arriving', async () => {
     const seen: string[] = [];
     const chunk = new TextEncoder().encode('data: {"a":1}\n\n');
