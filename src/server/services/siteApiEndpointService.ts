@@ -144,6 +144,13 @@ export function classifySiteApiEndpointFailure(
       return { retryable: true, rotateToNextEndpoint: true, failureReason };
     }
     if (NON_RETRYABLE_STATUS_CODES.has(status)) {
+      // A 404 means "this path does not exist on this host" (the site speaks another
+      // protocol), not a permanent auth/validation failure. Rotating once stops every later
+      // request from re-selecting the same dead path first. 403 keeps its deliberate
+      // WAF-vs-credential split above; 400/401/422 stay terminal.
+      if (status === 404) {
+        return { retryable: true, rotateToNextEndpoint: true, failureReason };
+      }
       return { retryable: false, rotateToNextEndpoint: false, failureReason };
     }
   }
