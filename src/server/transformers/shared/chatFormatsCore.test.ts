@@ -366,6 +366,20 @@ describe('chatFormatsCore inline think parsing', () => {
       finishReason: 'length',
       done: true,
     });
+
+    for (const reason of ['max_completion_tokens', 'max_tokens']) {
+      expect(normalizeUpstreamStreamEvent({
+        type: 'response.incomplete',
+        response: {
+          id: `resp_incomplete_${reason}`,
+          status: 'incomplete',
+          incomplete_details: { reason },
+        },
+      }, context, 'gpt-test')).toEqual({
+        finishReason: 'length',
+        done: true,
+      });
+    }
   });
 
   it('keeps response.failed distinguishable from a clean stop at the canonical layer', () => {
