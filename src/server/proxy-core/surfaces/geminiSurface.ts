@@ -410,6 +410,16 @@ export async function geminiProxyRoute(app: FastifyInstance) {
     let lastText = 'No available channels for Gemini models';
     let lastContentType = 'application/json';
 
+    // Model listing probes real channels, so its failures must obey the same disposition
+    // gate as generateContent: a 400/401 on a probe should not burn the channel counter.
+    const failureToolkit = createSurfaceFailureToolkit({
+      warningScope: 'gemini',
+      downstreamPath,
+      maxRetries,
+      clientContext,
+      backoffMs: config.proxyFailoverBackoffMs,
+    });
+
     while (retryCount <= maxRetries) {
       const selected = forcedChannelId !== null
         ? (retryCount === 0
@@ -494,7 +504,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           lastStatus = upstream.status;
           lastText = text;
           lastContentType = upstream.headers.get('content-type') || 'application/json';
-          await tokenRouter.recordFailure?.(selected.channel.id, {
+          await failureToolkit.recordChannelFailure({
+            selected,
+            // Listing probes no specific model, so no model-scoped disposition rule applies.
+            modelName: '',
             status: upstream.status,
             errorText: text,
           });
@@ -516,7 +529,11 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           return reply.code(upstream.status).type(upstream.headers.get('content-type') || 'application/json').send(text);
         }
       } catch (error) {
-        await tokenRouter.recordFailure?.(selected.channel.id, {
+        await failureToolkit.recordChannelFailure({
+          selected,
+          // Listing probes no specific model, so no model-scoped disposition rule applies.
+          modelName: '',
+          status: 502,
           errorText: error instanceof Error ? error.message : 'Gemini upstream request failed',
         });
         lastStatus = 502;
@@ -735,7 +752,9 @@ export async function geminiProxyRoute(app: FastifyInstance) {
           downstreamApiKeyId,
         });
         const busyMessage = buildSurfaceChannelBusyMessage(leaseResult.waitMs);
-        await tokenRouter.recordFailure?.(selected.channel.id, {
+        await failureToolkit.recordChannelFailure({
+          selected,
+          modelName: requestedModel,
           status: 503,
           errorText: busyMessage,
         });
@@ -915,7 +934,9 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               downgradeReason: null,
               memoryWrite: null,
             });
-            await tokenRouter.recordFailure?.(selected.channel.id, {
+            await failureToolkit.recordChannelFailure({
+              selected,
+              modelName: requestedModel,
               status: upstream.status,
               errorText: lastText,
             });
@@ -1518,7 +1539,9 @@ export async function geminiProxyRoute(app: FastifyInstance) {
               type: 'upstream_error',
             },
           });
-          await tokenRouter.recordFailure?.(selected.channel.id, {
+          await failureToolkit.recordChannelFailure({
+            selected,
+            modelName: requestedModel,
             status: endpointResult.status,
             errorText: endpointResult.rawErrText || endpointResult.errText,
           });
@@ -1627,7 +1650,10 @@ export async function geminiProxyRoute(app: FastifyInstance) {
             type: 'upstream_error',
           },
         });
-        await tokenRouter.recordFailure?.(selected.channel.id, {
+        await failureToolkit.recordChannelFailure({
+          selected,
+          modelName: requestedModel,
+          status: 502,
           errorText: error instanceof Error ? error.message : 'Gemini upstream request failed',
         });
         clearSurfaceChannelAffinity({

@@ -33,12 +33,11 @@ describe('failure handling is centralised, not per-surface', () => {
     expect(recordFailureCalls('openAiResponsesSurface.ts')).toBe(0);
   });
 
-  it('keeps gemini at or below its recorded migration debt', () => {
-    // KNOWN DEBT (audit step 4): 6 direct call sites still bypass the toolkit's disposition
-    // gate, so client-side 400s burn the channel fail counter and credential failures still
-    // rotate. One site (the streaming catch, 502) is already migrated. This bound may only
-    // go down; raising it means a new bypass was introduced.
-    expect(recordFailureCalls('geminiSurface.ts')).toBeLessThanOrEqual(6);
+  it('keeps gemini free of direct failure recording', () => {
+    // Was the step-4 migration debt: seven call sites bypassed the disposition gate, so a
+    // client-side 400 burned the channel fail counter and a credential failure rotated.
+    // Both gemini handlers now build the shared toolkit; nothing may record directly.
+    expect(recordFailureCalls('geminiSurface.ts')).toBe(0);
   });
 
   it('keeps the toolkit as the single implementation', () => {
