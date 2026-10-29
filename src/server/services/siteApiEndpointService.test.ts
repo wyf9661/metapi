@@ -408,4 +408,21 @@ describe('siteApiEndpointService', () => {
       lastSelectedAt: '2026-03-31T12:02:00.000Z',
     });
   });
+
+  it('rotates away from a 404 path the host does not serve', () => {
+    // Regression: 404 was terminal with no cooldown, so the same dead endpoint stayed first
+    // in the selection order and every later request burned an attempt on it.
+    const disposition = classifySiteApiEndpointFailure({ status: 404, message: 'Not Found' });
+    expect(disposition.retryable).toBe(true);
+    expect(disposition.rotateToNextEndpoint).toBe(true);
+  });
+
+  it('keeps request and credential errors terminal', () => {
+    for (const status of [400, 401, 422]) {
+      const disposition = classifySiteApiEndpointFailure({ status, message: 'invalid' });
+      expect(disposition.retryable).toBe(false);
+      expect(disposition.rotateToNextEndpoint).toBe(false);
+    }
+    expect(classifySiteApiEndpointFailure({ status: 403, message: 'Invalid API key' }).retryable).toBe(false);
+  });
 });
