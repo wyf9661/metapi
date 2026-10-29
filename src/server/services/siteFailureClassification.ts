@@ -243,6 +243,9 @@ export const NETWORK_HOST_UNREACHABLE_PATTERNS: RegExp[] = [
   /enotfound|eai_again/i,
   /econnrefused|ehostunreach|enetunreach|enetdown|ehostdown/i,
   /cert_|unable_to_verify|certificate|self.signed|err_tls|ssl_|eproto/i,
+  // Seen in production when a host behind a CDN has a broken certificate chain:
+  // "tlsv1 alert internal error". Not covered by the cert_/ssl_ spellings above.
+  /tlsv1|tls\s+handshake/i,
   /und_err_connect_timeout/i,
 ];
 
@@ -354,6 +357,15 @@ export function resolveSiteRuntimeFailurePenalty(context: SiteRuntimeFailureCont
     return 0.25;
   }
 
+  if (isHostUnreachableNetworkFailure({ status, errorText })) {
+    // Unroutable / TLS-broken host: no channel on that site can work, so outrank a hard 5xx.
+    return 3;
+  }
+
+  if (isNetworkTransportFailure({ status, errorText })) {
+    return 2.5;
+  }
+
   // Dead endpoint pool is a site-wide outage signal: score like a hard 5xx so
   // three quick hits open the short breaker and stop burning failover budget.
   if (
@@ -433,6 +445,17 @@ export function isTransientSiteRuntimeFailure(context: SiteRuntimeFailureContext
     return true;
   }
   if (matchesAnyPattern(SITE_TRANSIENT_FAILURE_PATTERNS, errorText)) {
+    return true;
+  }
+  // Transport-level failures (DNS, TLS, connection refused) are site-wide: the host is
+  // unreachable for every model on it. Without this branch the pattern list above misses
+  // `fetch failed` / `ENOTFOUND`, so a site with a dead DNS never accumulated a streak and
+  // its breaker never opened — each channel burned its own attempt rediscovering the host.
+  if (isNetworkTransportFailure({ status, errorText })) {
+    return true;
+  }
+  // TLS / routing failures live in the host-unreachable list, not the transport one.
+  if (isHostUnreachableNetworkFailure({ status, errorText })) {
     return true;
   }
   return status >= 500 || status === 429;

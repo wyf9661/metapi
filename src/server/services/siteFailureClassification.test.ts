@@ -434,3 +434,26 @@ describe('a 5xx body that quotes the request is an origin failure, not a client 
     expect(resolveSiteRuntimeFailurePenalty({ status: 422, errorText: 'validation failed' })).toBe(0.25);
   });
 });
+
+describe('transport failures count toward the site breaker', () => {
+  it('treats a dead DNS or refused connection as site-transient', () => {
+    // Regression: SITE_TRANSIENT_FAILURE_PATTERNS does not contain these spellings, so a
+    // host that was broken for every model never advanced the breaker streak.
+    for (const text of ['fetch failed', 'getaddrinfo ENOTFOUND upstream.example',
+      'connect ECONNREFUSED 10.0.0.1:443', 'tls handshake failure']) {
+      expect(isTransientSiteRuntimeFailure({ status: 0, errorText: text })).toBe(true);
+    }
+  });
+
+  it('penalises an unreachable host harder than a mid-flight reset', () => {
+    expect(resolveSiteRuntimeFailurePenalty({ status: 0, errorText: 'fetch failed' })).toBe(2.5);
+    expect(resolveSiteRuntimeFailurePenalty({
+      status: 0,
+      errorText: 'getaddrinfo ENOTFOUND upstream.example',
+    })).toBe(3);
+  });
+
+  it('leaves a client-side validation error untouched', () => {
+    expect(isTransientSiteRuntimeFailure({ status: 422, errorText: 'validation failed' })).toBe(false);
+  });
+});
