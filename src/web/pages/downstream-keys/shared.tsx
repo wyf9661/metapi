@@ -1,5 +1,6 @@
 import React from 'react';
 import { StatusText } from '../../components/StatusText.js';
+import { tr } from '../../i18n.js';
 
 export type Range = '24h' | '7d' | 'all';
 
@@ -96,7 +97,7 @@ export function TagChips({
   maxVisible?: number;
 }) {
   if (!Array.isArray(tags) || tags.length === 0) {
-    return <span className="badge badge-muted" style={{ fontSize: 11 }}>无标签</span>;
+    return <span className="badge badge-muted" style={{ fontSize: 11 }}>{tr('无标签')}</span>;
   }
 
   const visible = tags.slice(0, maxVisible);
@@ -163,7 +164,7 @@ export function RangeToggle({ range, onChange }: { range: Range; onChange: (r: R
         7d
       </button>
       <button type="button" onClick={() => onChange('all')} style={{ ...base, ...(range === 'all' ? active : {}), borderTopRightRadius: 'var(--radius-sm)', borderBottomRightRadius: 'var(--radius-sm)' }}>
-        全部
+        {tr('全部')}
       </button>
     </div>
   );

@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { platformBadgeClass } from './sites/sitePresentation.js';
 import { StatusPill } from '../components/StatusText.js';
+import { tr } from '../i18n.js';
 
 const Accounts = lazy(() => import('./Accounts.js'));
 
@@ -48,7 +49,7 @@ export default function SiteDetail() {
   if (loading) {
     return (
       <div className="page-container">
-        <div style={{ textAlign: 'center', padding: '40px' }}>加载中...</div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>{tr('加载中...')}</div>
       </div>
     );
   }
@@ -56,7 +57,7 @@ export default function SiteDetail() {
   if (!site) {
     return (
       <div className="page-container">
-        <div style={{ textAlign: 'center', padding: '40px' }}>站点不存在</div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>{tr('站点不存在')}</div>
       </div>
     );
   }
@@ -70,7 +71,7 @@ export default function SiteDetail() {
             className="btn btn-ghost"
             style={{ padding: '6px 12px' }}
           >
-            ← 返回
+            {tr('← 返回')}
           </button>
           <h2 className="page-title" style={{ margin: 0 }}>
             {site.name}
@@ -89,7 +90,7 @@ export default function SiteDetail() {
         </div>
       </div>
 
-      <Suspense fallback={<div style={{ textAlign: 'center', padding: '40px' }}>加载中...</div>}>
+      <Suspense fallback={<div style={{ textAlign: 'center', padding: '40px' }}>{tr('加载中...')}</div>}>
         <Accounts siteId={site.id} />
       </Suspense>
     </div>

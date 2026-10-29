@@ -4,6 +4,7 @@ import ResponsiveFormGrid from '../../components/ResponsiveFormGrid.js';
 import ModernSelect from '../../components/ModernSelect.js';
 import { api } from '../../api.js';
 import { useToast } from '../../components/Toast.js';
+import { tr } from '../../i18n.js';
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -181,7 +182,7 @@ export default function EditAccountModal({
       footer={
         <>
           <button onClick={handleClose} className="btn btn-ghost">
-            取消
+            {tr('取消')}
           </button>
           <button
             onClick={handleSave}
@@ -265,7 +266,7 @@ export default function EditAccountModal({
                 }))
               }
             />
-            启用签到
+            {tr('启用签到')}
           </label>
           <input
             placeholder="Access Token（留空保持不变）"

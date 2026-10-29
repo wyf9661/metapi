@@ -322,7 +322,7 @@ export function renderProxyLogClientCell(
               color: 'var(--color-text-muted)',
             }}
           >
-            推测
+            {tr('推测')}
           </span>
         ) : null}
       </div>

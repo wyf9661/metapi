@@ -10,7 +10,7 @@ import {
   SITE_CHART_HEADER_MIN_HEIGHT,
 } from './chartShared.js';
 import { SegmentedToggle } from './SegmentedToggle.js';
-import { useI18nOptional } from '../../i18n.js';
+import { useI18nOptional, tr } from '../../i18n.js';
 
 interface SiteDistributionData {
   siteName: string;
@@ -314,7 +314,7 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
               d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
             />
           </svg>
-          站点 TOP 排行榜
+          {tr('站点 TOP 排行榜')}
         </div>
 
         <SegmentedToggle

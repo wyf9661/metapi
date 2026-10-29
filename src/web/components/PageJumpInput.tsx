@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { tr } from '../i18n.js';
 
 type PageJumpInputProps = {
   totalPages: number;
@@ -56,7 +57,7 @@ export default function PageJumpInput({ totalPages, onJump }: PageJumpInputProps
         onClick={jump}
         style={{ height: 28, fontSize: 12, padding: '0 8px', minWidth: 'auto' }}
       >
-        跳转
+        {tr('跳转')}
       </button>
     </span>
   );

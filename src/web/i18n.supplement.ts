@@ -1515,5 +1515,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）': 'This channel is manually configured and will not be rebuilt automatically; click "Restore default" to clear the manual override (stats are kept)',
   '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留': 'Clear the manual override and restore the system-derived default; cumulative stats are kept',
   '删除全部调试追踪，下一条从 #1 开始': 'Delete all debug traces; the next request starts from #1',
+  '跳转': 'Go',
+  '← 返回': '← Back',
+  '推测': 'Inferred',
 
 };
