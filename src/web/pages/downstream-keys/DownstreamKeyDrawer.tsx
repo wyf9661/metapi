@@ -198,9 +198,7 @@ export default function DownstreamKeyDrawer({
           </div>
 
           <div className="card" style={{ padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 10 }}>
-              当前范围汇总
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 10 }}>{tr('当前范围汇总')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12 }}>
               <div>
                 <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>Tokens</div>
@@ -223,9 +221,7 @@ export default function DownstreamKeyDrawer({
 
           {overview?.usage ? (
             <div className="card" style={{ padding: 16, marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 10 }}>
-                固定窗口对比
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 10 }}>{tr('固定窗口对比')}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12 }}>
                 {[
                   { label: '24h', data: overview.usage.last24h },

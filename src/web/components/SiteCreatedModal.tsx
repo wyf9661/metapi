@@ -52,9 +52,7 @@ export default function SiteCreatedModal({
       bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       footer={(
         <>
-          <button onClick={() => onChoice('later')} className="btn btn-ghost">
-            稍后配置
-          </button>
+          <button onClick={() => onChoice('later')} className="btn btn-ghost">{tr('稍后配置')}</button>
           <button
             onClick={() => onChoice(secondaryAction.choice)}
             className="btn btn-ghost"
@@ -74,8 +72,7 @@ export default function SiteCreatedModal({
       <div className="alert alert-success animate-scale-in" style={{ margin: 0 }}>
         <div className="alert-title">站点已添加成功</div>
         <div className="site-created-summary">
-          {tr('站点')} <strong>"{siteName}"</strong> 已加入列表，您现在可以继续补充连接信息。
-        </div>
+          {tr('站点')} <strong>"{siteName}"</strong> {tr('已加入列表，您现在可以继续补充连接信息。')}</div>
       </div>
 
       <p className="site-created-helper-text">

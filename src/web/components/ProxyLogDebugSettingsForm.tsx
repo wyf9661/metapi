@@ -48,18 +48,14 @@ export function ProxyLogDebugSettingsForm({
                       proxyDebugTraceEnabled: !!e.target.checked,
                     }))
                   }
-                />
-                开启调试追踪
-              </label>
+                />{tr('开启调试追踪')}</label>
               <div
                 style={{
                   fontSize: 12,
                   color: 'var(--color-text-muted)',
                   marginLeft: 24,
                 }}
-              >
-                后续新请求会写入调试追踪，不会回补旧请求。
-              </div>
+              >{tr('后续新请求会写入调试追踪，不会回补旧请求。')}</div>
             </div>
             <div style={{ display: 'grid', gap: 4 }}>
               <label style={debugCheckboxRowStyle}>
@@ -73,18 +69,14 @@ export function ProxyLogDebugSettingsForm({
                       proxyDebugCaptureHeaders: !!e.target.checked,
                     }))
                   }
-                />
-                采集原始请求/响应头
-              </label>
+                />{tr('采集原始请求/响应头')}</label>
               <div
                 style={{
                   fontSize: 12,
                   color: 'var(--color-text-muted)',
                   marginLeft: 24,
                 }}
-              >
-                保留下游原始头和上游响应头，方便直接对照。
-              </div>
+              >{tr('保留下游原始头和上游响应头，方便直接对照。')}</div>
             </div>
             <div style={{ display: 'grid', gap: 4 }}>
               <label style={debugCheckboxRowStyle}>
@@ -98,9 +90,7 @@ export function ProxyLogDebugSettingsForm({
                       proxyDebugCaptureBodies: !!e.target.checked,
                     }))
                   }
-                />
-                采集请求体和响应体
-              </label>
+                />{tr('采集请求体和响应体')}</label>
               <div
                 style={{
                   fontSize: 12,
@@ -123,9 +113,7 @@ export function ProxyLogDebugSettingsForm({
                       proxyDebugCaptureStreamChunks: !!e.target.checked,
                     }))
                   }
-                />
-                采集流式原始分片
-              </label>
+                />{tr('采集流式原始分片')}</label>
               <div
                 style={{
                   fontSize: 12,
@@ -161,9 +149,7 @@ export function ProxyLogDebugSettingsForm({
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                目标客户端
-              </span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('目标客户端')}</span>
               <input
                 type="text"
                 value={settings.proxyDebugTargetClientKind}
@@ -179,9 +165,7 @@ export function ProxyLogDebugSettingsForm({
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                目标模型
-              </span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('目标模型')}</span>
               <input
                 type="text"
                 value={settings.proxyDebugTargetModel}
@@ -201,9 +185,7 @@ export function ProxyLogDebugSettingsForm({
           <div style={formSectionStyle}>
             <div style={formSectionLabelStyle}>{tr('保留策略')}</div>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                保留时长（小时）
-              </span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('保留时长（小时）')}</span>
               <input
                 type="number"
                 min={1}
@@ -219,9 +201,7 @@ export function ProxyLogDebugSettingsForm({
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                抓取体积上限（字节）
-              </span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('抓取体积上限（字节）')}</span>
               <input
                 type="number"
                 min={1024}
@@ -268,9 +248,7 @@ export function ProxyLogDebugSettingsFooter({
           type="button"
           className="btn btn-ghost"
           onClick={() => onReset()}
-        >
-          重置为默认值
-        </button>
+        >{tr('重置为默认值')}</button>
         <button
           type="button"
           className="btn btn-primary"

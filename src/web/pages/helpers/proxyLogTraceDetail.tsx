@@ -61,9 +61,7 @@ export function renderStoredDebugDetails(
               event.stopPropagation();
               void onCopy(copyLabel, value);
             }}
-          >
-            复制当前保存内容
-          </button>
+          >{tr('复制当前保存内容')}</button>
         </div>
         {normalized.note ? (
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
@@ -187,9 +185,7 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
 }) {
   if (!selectedDebugTraceId) {
     return (
-      <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-        暂无追踪详情。请选择一条最近追踪后再查看。
-      </div>
+      <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{tr('暂无追踪详情。请选择一条最近追踪后再查看。')}</div>
     );
   }
 
@@ -211,9 +207,7 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
 
   if (!detail?.data) {
     return (
-      <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-        暂无追踪详情。
-      </div>
+      <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{tr('暂无追踪详情。')}</div>
     );
   }
 

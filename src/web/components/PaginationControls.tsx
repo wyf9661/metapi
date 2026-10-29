@@ -99,9 +99,7 @@ export default function PaginationControls({
                 className="pagination-btn"
                 disabled={page <= 1}
                 onClick={() => goTo(page - 1)}
-              >
-                上一页
-              </button>
+              >{tr('上一页')}</button>
               <span className="pagination-info">
                 第 {page} / {totalPages} 页
               </span>
@@ -110,9 +108,7 @@ export default function PaginationControls({
                 className="pagination-btn"
                 disabled={page >= totalPages}
                 onClick={() => goTo(page + 1)}
-              >
-                下一页
-              </button>
+              >{tr('下一页')}</button>
             </div>
             <div className="pagination-compact-numbers">
               {firstPageOutsideWindow && (
@@ -122,9 +118,7 @@ export default function PaginationControls({
                   onClick={() => goTo(1)}
                   aria-label={tr('回到第一页')}
                   title={tr('回到第一页')}
-                >
-                  首页
-                </button>
+                >{tr('首页')}</button>
               )}
               {pageNumbers.map((n) => (
                 <button
@@ -159,9 +153,7 @@ export default function PaginationControls({
             className="pagination-btn"
             disabled={page <= 1}
             onClick={() => goTo(page - 1)}
-          >
-            上一页
-          </button>
+          >{tr('上一页')}</button>
           {firstPageOutsideWindow && (
             <button
               type="button"
@@ -169,9 +161,7 @@ export default function PaginationControls({
               onClick={() => goTo(1)}
               aria-label={tr('回到第一页')}
               title={tr('回到第一页')}
-            >
-              首页
-            </button>
+            >{tr('首页')}</button>
           )}
           {pageNumbers.map((n) => (
             <button
@@ -192,9 +182,7 @@ export default function PaginationControls({
             className="pagination-btn"
             disabled={page >= totalPages}
             onClick={() => goTo(page + 1)}
-          >
-            下一页
-          </button>
+          >{tr('下一页')}</button>
         </>
       )}
       {pageSizeControl}

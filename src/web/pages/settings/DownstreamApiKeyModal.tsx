@@ -118,9 +118,7 @@ export default function DownstreamApiKeyModal({
                 <button
                   onClick={() => onChange((prev) => ({ ...prev, selectedModels: [], selectedGroupRouteIds: [] }))}
                   className="btn btn-link btn-link-warning"
-                >
-                  清空选择
-                </button>
+                >{tr('清空选择')}</button>
               ) : null}
             </div>
           </div>

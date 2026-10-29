@@ -528,9 +528,7 @@ export default function ImportExport() {
       <div className="page-header" style={{ alignItems: 'flex-end', marginBottom: 18 }}>
         <div>
           <h2 className="page-title" style={{ marginBottom: 6 }}>{tr('备份 / 恢复')}</h2>
-          <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-            支持配置型备份、分区备份与手动恢复。
-          </div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{tr('支持配置型备份、分区备份与手动恢复。')}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <StatusPill tone="muted" style={{ fontSize: 11 }}>Schema v2.1</StatusPill>
@@ -590,9 +588,7 @@ export default function ImportExport() {
             </svg>
             <span style={{ fontSize: 16, fontWeight: 700 }}>{tr('导入数据')}</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>
-            从备份文件恢复数据
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>{tr('从备份文件恢复数据')}</div>
 
           <div style={{ display: 'grid', gap: 12 }}>
             {/* ---- 拖拽上传区 ---- */}
@@ -627,9 +623,7 @@ export default function ImportExport() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                     {selectedFileName}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    点击重新选择文件
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('点击重新选择文件')}</div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -639,8 +633,7 @@ export default function ImportExport() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: dragOver ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
                     {dragOver ? '松开以导入文件' : '拖拽 JSON 备份文件到此处'}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    或 <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>{tr('点击选择文件')}</span>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('或')} <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>{tr('点击选择文件')}</span>
                   </div>
                 </div>
               )}

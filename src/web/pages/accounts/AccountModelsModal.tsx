@@ -126,9 +126,7 @@ export default function AccountModelsModal({
               <button
                 onClick={() => void onRefresh()}
                 className="btn btn-soft-primary"
-              >
-                立即获取模型
-              </button>
+              >{tr('立即获取模型')}</button>
             </div>
           ) : (
             <>
@@ -156,8 +154,7 @@ export default function AccountModelsModal({
                     }}
                     style={{ accentColor: 'var(--color-primary)', width: 15, height: 15 }}
                   />
-                  <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    已启用 <strong style={{ color: 'var(--color-text-primary)' }}>{enabledCount}</strong> / {modelModal.models.length} 个模型
+                  <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{tr('已启用')} <strong style={{ color: 'var(--color-text-primary)' }}>{enabledCount}</strong> / {modelModal.models.length} 个模型
                   </span>
                 </label>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -179,23 +176,17 @@ export default function AccountModelsModal({
                     }}
                     className="btn btn-ghost"
                     style={{ fontSize: 12, padding: '4px 10px' }}
-                  >
-                    反选
-                  </button>
+                  >{tr('反选')}</button>
                   <button
                     onClick={() => onSetPendingDisabled(new Set(modelModal.models.map((model) => model.name)))}
                     className="btn btn-ghost"
                     style={{ fontSize: 12, padding: '4px 10px' }}
-                  >
-                    全部禁用
-                  </button>
+                  >{tr('全部禁用')}</button>
                   <button
                     onClick={() => onSetPendingDisabled(new Set())}
                     className="btn btn-ghost"
                     style={{ fontSize: 12, padding: '4px 10px' }}
-                  >
-                    全部启用
-                  </button>
+                  >{tr('全部启用')}</button>
                 </div>
               </div>
 
@@ -301,9 +292,7 @@ export default function AccountModelsModal({
 
           <div style={{ marginTop: 16, padding: '12px', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)' }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-primary)' }}>{tr('手动添加可用模型')}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
-              如果您的账号支持某些未在上方列表中显示的模型，可以在此手动添加（多个以英文逗号分隔）。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>{tr('如果您的账号支持某些未在上方列表中显示的模型，可以在此手动添加（多个以英文逗号分隔）。')}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
                 placeholder={tr('例如: gpt-4-custom, claude-3-5-sonnet-20241022')}

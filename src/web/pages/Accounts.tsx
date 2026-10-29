@@ -1270,9 +1270,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     onClick={() => setShowMobileTools(true)}
                     className="btn btn-ghost"
                     style={{ border: '1px solid var(--color-border)' }}
-                  >
-                    排序与操作
-                  </button>
+                  >{tr('排序与操作')}</button>
                 )}
               </>
             ) : (
@@ -1582,9 +1580,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         boxShadow:
                           addMode === 'login' ? 'var(--shadow-sm)' : 'none',
                       }}
-                    >
-                      账号密码登录
-                    </button>
+                    >{tr('账号密码登录')}</button>
                   )}
                 </div>
 
@@ -1641,9 +1637,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               color: 'var(--color-primary)',
                               textDecoration: 'underline',
                             }}
-                          >
-                            查看认证方式与特殊站点说明文档
-                          </a>
+                          >{tr('查看认证方式与特殊站点说明文档')}</a>
                         </div>
                       </div>
                     </div>

@@ -184,9 +184,7 @@ export default function SiteAnnouncements() {
             onClick={triggerSync}
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
-          >
-            手动同步
-          </button>
+          >{tr('手动同步')}</button>
           <button
             onClick={clearAll}
             disabled={clearing}

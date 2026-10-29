@@ -942,8 +942,7 @@ export default function Dashboard({
               )}
             </li>
             <li>
-              <strong>{tr('重建路由')}</strong> → <Link to="/routes">{tr('模型路由')}</Link> 点「自动重建」
-            </li>
+              <strong>{tr('重建路由')}</strong> → <Link to="/routes">{tr('模型路由')}</Link> {tr('点「自动重建」')}</li>
             <li>
               <strong>{tr('生成下游 Key')}</strong> → <Link to="/downstream-keys">{tr('下游密钥')}</Link>
             </li>
@@ -954,9 +953,7 @@ export default function Dashboard({
         </div>
       )}
       <div className="card dashboard-endpoint-card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>
-          服务地址
-        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>{tr('服务地址')}</div>
         <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
           在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用
         </div>
@@ -1206,9 +1203,7 @@ export default function Dashboard({
                     strokeWidth={2}
                     d="M3 12h4l3 8 4-16 3 8h4"
                   />
-                </svg>
-                24 小时可用性
-              </div>
+                </svg>{tr('24 小时可用性')}</div>
               <AvailabilityLegend />
             </div>
           {insightsLoading && rawSiteAvailability.length === 0 ? (
@@ -1342,12 +1337,8 @@ export default function Dashboard({
           </div>
         ) : (
           <div className="site-observability-empty">
-            <div className="site-observability-empty-title">
-              暂无站点观测数据
-            </div>
-            <div className="site-observability-empty-note">
-              有代理请求后，这里会自动生成每个站点的可用性条和平均响应速度。
-            </div>
+            <div className="site-observability-empty-title">{tr('暂无站点观测数据')}</div>
+            <div className="site-observability-empty-note">{tr('有代理请求后，这里会自动生成每个站点的可用性条和平均响应速度。')}</div>
           </div>
         )}
           </div>
@@ -1398,9 +1389,7 @@ export default function Dashboard({
                     strokeWidth={2}
                     d="M3 12h4l3 8 4-16 3 8h4"
                   />
-                </svg>
-                24 小时可用性
-              </div>
+                </svg>{tr('24 小时可用性')}</div>
               <AvailabilityLegend />
             </div>
           {insightsLoading && rawModelAvailability.length === 0 ? (
@@ -1529,12 +1518,8 @@ export default function Dashboard({
           </div>
         ) : (
           <div className="site-observability-empty">
-            <div className="site-observability-empty-title">
-              暂无模型观测数据
-            </div>
-            <div className="site-observability-empty-note">
-              有代理请求后，这里会按使用模型生成最近 24 小时的可用性条。
-            </div>
+            <div className="site-observability-empty-title">{tr('暂无模型观测数据')}</div>
+            <div className="site-observability-empty-note">{tr('有代理请求后，这里会按使用模型生成最近 24 小时的可用性条。')}</div>
           </div>
           )}
           </div>

@@ -991,9 +991,7 @@ export default function DownstreamKeys() {
           onClick={() => { setSearchInput(''); setStatus('all'); setGroupFilter('__all__'); setSelectedTags([]); setTagMatchMode('any'); }}
           disabled={!hasActiveDownstreamKeyFilters}
           title={hasActiveDownstreamKeyFilters ? '重置全部筛选条件' : '当前没有筛选条件'}
-        >
-          重置筛选
-        </button>
+        >{tr('重置筛选')}</button>
       </div>
 
       {(activeTagFilters.length > 0 || tagSuggestions.length > 0) ? (
@@ -1054,9 +1052,7 @@ export default function DownstreamKeys() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('范围概览')}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-              基于当前筛选范围查看密钥规模、使用量和成本概况。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('基于当前筛选范围查看密钥规模、使用量和成本概况。')}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span className="kpi-chip">{tr('当前范围')}</span>

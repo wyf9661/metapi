@@ -491,9 +491,7 @@ export default function ProbeLogs() {
                 onClick={resetFilters}
                 disabled={!hasActiveFilters}
                 title={hasActiveFilters ? '清除全部筛选条件并回到第一页' : '当前没有筛选条件'}
-              >
-                清除筛选
-              </button>
+              >{tr('清除筛选')}</button>
             </div>
           </div>
         )}

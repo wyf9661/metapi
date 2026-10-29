@@ -62,9 +62,7 @@ export default function DebugPanel({
             color: activeDebugTab === DEBUG_TABS.PREVIEW ? 'var(--color-primary)' : 'var(--color-text-secondary)',
           }}
           onClick={() => onTabChange(DEBUG_TABS.PREVIEW)}
-        >
-          预览
-        </button>
+        >{tr('预览')}</button>
         <button
           className="btn btn-ghost"
           style={{
@@ -72,9 +70,7 @@ export default function DebugPanel({
             color: activeDebugTab === DEBUG_TABS.REQUEST ? 'var(--color-primary)' : 'var(--color-text-secondary)',
           }}
           onClick={() => onTabChange(DEBUG_TABS.REQUEST)}
-        >
-          请求
-        </button>
+        >{tr('请求')}</button>
         <button
           className="btn btn-ghost"
           style={{
@@ -82,9 +78,7 @@ export default function DebugPanel({
             color: activeDebugTab === DEBUG_TABS.RESPONSE ? 'var(--color-primary)' : 'var(--color-text-secondary)',
           }}
           onClick={() => onTabChange(DEBUG_TABS.RESPONSE)}
-        >
-          响应
-        </button>
+        >{tr('响应')}</button>
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)' }}>

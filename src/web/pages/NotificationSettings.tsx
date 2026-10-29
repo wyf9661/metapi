@@ -292,13 +292,9 @@ export default function NotificationSettings() {
 
                 <div className="card animate-slide-up stagger-1" style={{ padding: 20, order: isMobile ? undefined : 3 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{tr('告警去噪与冷静期')}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-                        相同告警在冷静期内不会重复推送；冷静期结束后会自动合并重复条数。
-                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>{tr('相同告警在冷静期内不会重复推送；冷静期结束后会自动合并重复条数。')}</div>
                     <div style={{ maxWidth: 260 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
-                            冷静期（秒）
-                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>{tr('冷静期（秒）')}</div>
                         <input
                             type="number"
                             min={0}

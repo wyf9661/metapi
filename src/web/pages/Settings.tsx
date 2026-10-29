@@ -995,9 +995,7 @@ export default function Settings() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: 16 }}>
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 1, height: '100%' }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>重置操作</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 12 }}>
-            重新拉取站点模型列表并重建路由通道，不影响账号、令牌数据。
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 12 }}>{tr('重新拉取站点模型列表并重建路由通道，不影响账号、令牌数据。')}</div>
           <button onClick={handleClearCache} disabled={clearingCache} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>
             {clearingCache ? <><span className="spinner spinner-sm" /> 清理中...</> : '清除缓存并重建路由'}
           </button>
@@ -1022,9 +1020,7 @@ export default function Settings() {
               whiteSpace: 'nowrap',
               cursor: isTunnelClientView ? 'not-allowed' : 'pointer',
             }}
-          >
-            重新初始化系统
-          </button>
+          >{tr('重新初始化系统')}</button>
         </div>
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 1 }}>
@@ -1061,9 +1057,7 @@ export default function Settings() {
             opacity: isTunnelClientView ? 0.55 : 1,
           }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                允许通过隧道访问控制台
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('允许通过隧道访问控制台')}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
                 关闭：仅 /v1/* API　｜　开启：控制台 + 管理 API
               </div>
@@ -1264,17 +1258,13 @@ export default function Settings() {
                   type="checkbox"
                   checked={runtime.logCleanupUsageLogsEnabled}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, logCleanupUsageLogsEnabled: e.target.checked }))}
-                />
-                清理使用日志
-              </label>
+                />{tr('清理使用日志')}</label>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 <input
                   type="checkbox"
                   checked={runtime.logCleanupProgramLogsEnabled}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, logCleanupProgramLogsEnabled: e.target.checked }))}
-                />
-                清理程序日志
-              </label>
+                />{tr('清理程序日志')}</label>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
               默认每天早上 6 点执行。按每次定时任务执行时间，清理早于“保留天数”的日志；两个选项都不勾选时不会实际删除日志。
@@ -1289,9 +1279,7 @@ export default function Settings() {
 
         <div className="card animate-slide-up stagger-5" style={{ padding: 20, order: 4 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{tr('代理失败判定')}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            命中任一关键词或空内容时判定失败，可触发重试。
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>{tr('命中任一关键词或空内容时判定失败，可触发重试。')}</div>
           <textarea
             value={proxyErrorKeywordsText}
             onChange={(e) => setProxyErrorKeywordsText(e.target.value)}

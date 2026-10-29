@@ -952,9 +952,7 @@ export default function ProxyLogs() {
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div>
           <h2 className="page-title">{tr('使用日志')}</h2>
-          <div className="page-subtitle">
-            按站点、客户端和时间筛选代理请求，并在需要时查看最近调试追踪。
-          </div>
+          <div className="page-subtitle">{tr('按站点、客户端和时间筛选代理请求，并在需要时查看最近调试追踪。')}</div>
         </div>
         <div
           className="page-actions"
@@ -1065,9 +1063,7 @@ export default function ProxyLogs() {
               strokeWidth={2}
               d="M9 5l7 7-7 7"
             />
-          </svg>
-          展开追踪面板
-        </button>
+          </svg>{tr('展开追踪面板')}</button>
       ) : (
       <>
       <div
@@ -1096,18 +1092,14 @@ export default function ProxyLogs() {
                 fontWeight: 600,
                 color: 'var(--color-text-primary)',
               }}
-            >
-              代理调试追踪
-            </div>
+            >{tr('代理调试追踪')}</div>
             <div
               style={{
                 fontSize: 12,
                 color: 'var(--color-text-muted)',
                 marginTop: 4,
               }}
-            >
-              未开启时不记录新追踪；追踪详情通过弹窗按需查看。
-            </div>
+            >{tr('未开启时不记录新追踪；追踪详情通过弹窗按需查看。')}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
@@ -1161,9 +1153,7 @@ export default function ProxyLogs() {
                 setDebugDraftSettings(debugSettings);
                 setShowDebugSettingsModal(true);
               }}
-            >
-              调试设置
-            </button>
+            >{tr('调试设置')}</button>
             <button
               type="button"
               className="btn btn-ghost"
@@ -1180,9 +1170,7 @@ export default function ProxyLogs() {
               onClick={() => void handleClearDebugTraces()}
               disabled={debugPanelSaving || debugPanelLoading}
               data-tooltip={tr('删除全部调试追踪，下一条从 #1 开始')}
-            >
-              删除追踪
-            </button>
+            >{tr('删除追踪')}</button>
           </div>
         </div>
 
@@ -1246,19 +1234,14 @@ export default function ProxyLogs() {
                     fontWeight: 600,
                     color: 'var(--color-text-primary)',
                   }}
-                >
-                  最近调试追踪
-                </div>
+                >{tr('最近调试追踪')}</div>
                 <div
                   style={{
                     fontSize: 12,
                     color: 'var(--color-text-muted)',
                     marginTop: 4,
                   }}
-                >
-                  最多抓最近 20 条，列表分页每页 5
-                  条；打开详情后各段内容可按需展开和收起。
-                </div>
+                >{tr('最多抓最近 20 条，列表分页每页 5 条；打开详情后各段内容可按需展开和收起。')}</div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 {debugSettings.proxyDebugTraceEnabled
@@ -1307,9 +1290,7 @@ export default function ProxyLogs() {
                         type="button"
                         className="btn btn-link"
                         onClick={() => openDebugTraceDetailModal(trace.id)}
-                      >
-                        查看详情
-                      </button>
+                      >{tr('查看详情')}</button>
                     }
                   >
                     <MobileField
@@ -1394,9 +1375,7 @@ export default function ProxyLogs() {
                           type="button"
                           className="btn btn-link"
                           onClick={() => openDebugTraceDetailModal(trace.id)}
-                        >
-                          查看详情
-                        </button>
+                        >{tr('查看详情')}</button>
                       </td>
                     </tr>
                   ))}
@@ -1544,9 +1523,7 @@ export default function ProxyLogs() {
       )}
 
       {hasInvalidTimeRange && (
-        <div className="alert alert-error" style={{ marginBottom: 12 }}>
-          结束时间必须晚于开始时间
-        </div>
+        <div className="alert alert-error" style={{ marginBottom: 12 }}>{tr('结束时间必须晚于开始时间')}</div>
       )}
 
       <div className="card" style={{ overflowX: 'auto' }}>
@@ -1828,9 +1805,7 @@ export default function ProxyLogs() {
                         />
                       ) : null}
                       <div className="mobile-billing-block">
-                        <div className="mobile-field-label" style={{ marginBottom: 2 }}>
-                          计费过程
-                        </div>
+                        <div className="mobile-field-label" style={{ marginBottom: 2 }}>{tr('计费过程')}</div>
                         {billingProcessLines.length > 0 ? (
                           <div className="mobile-billing-lines">
                             {billingProcessLines.map((line, index) => (
@@ -2211,9 +2186,7 @@ export default function ProxyLogs() {
                                       color: 'var(--color-warning)',
                                       flexShrink: 0,
                                     }}
-                                  >
-                                    日志详情
-                                  </span>
+                                  >{tr('日志详情')}</span>
                                   <div>
                                     <div>
                                       请求模型:{' '}
@@ -2363,9 +2336,7 @@ export default function ProxyLogs() {
                                         gap: 2,
                                       }}
                                     >
-                                      <div>
-                                        客户端：
-                                        <strong
+                                      <div>{tr('客户端：')}<strong
                                           title={clientDisplay.fullName || undefined}
                                           style={{ color: 'var(--color-text-primary)' }}
                                         >
@@ -2382,26 +2353,20 @@ export default function ProxyLogs() {
                                           </span>
                                         ) : null}
                                       </div>
-                                      <div>
-                                        推理强度：
-                                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                                      <div>{tr('推理强度：')}<strong style={{ color: 'var(--color-text-primary)' }}>
                                           {detailLog.reasoningEffort
                                             ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
                                             : '未指定'}
                                         </strong>
                                       </div>
-                                      <div>
-                                        用量来源：
-                                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                                      <div>{tr('用量来源：')}<strong style={{ color: 'var(--color-text-primary)' }}>
                                           {formatProxyLogUsageSource(
                                             detailLog.usageSource ??
                                               pathMeta.usageSource,
                                           ) || '未知'}
                                         </strong>
                                       </div>
-                                      <div>
-                                        密钥：
-                                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                                      <div>{tr('密钥：')}<strong style={{ color: 'var(--color-text-primary)' }}>
                                           {detailLog.downstreamKeyName || '未记录'}
                                         </strong>
                                         {detailLog.downstreamKeyGroupName
@@ -2461,9 +2426,7 @@ export default function ProxyLogs() {
                                       color: 'var(--color-info)',
                                       flexShrink: 0,
                                     }}
-                                  >
-                                    计费过程
-                                  </span>
+                                  >{tr('计费过程')}</span>
                                   {billingProcessLines.length > 0 ? (
                                     <div
                                       style={{
@@ -2485,9 +2448,7 @@ export default function ProxyLogs() {
                                         style={{
                                           color: 'var(--color-text-muted)',
                                         }}
-                                      >
-                                        仅供参考，以实际扣费为准
-                                      </span>
+                                      >{tr('仅供参考，以实际扣费为准')}</span>
                                     </div>
                                   ) : (
                                     <span>
@@ -2538,9 +2499,7 @@ export default function ProxyLogs() {
                                       color: 'var(--color-primary)',
                                       flexShrink: 0,
                                     }}
-                                  >
-                                    下游请求路径
-                                  </span>
+                                  >{tr('下游请求路径')}</span>
                                   {detail && pathMeta.downstreamPath ? (
                                     <code
                                       style={{
@@ -2560,9 +2519,7 @@ export default function ProxyLogs() {
                                       style={{
                                         color: 'var(--color-text-muted)',
                                       }}
-                                    >
-                                      未记录
-                                    </span>
+                                    >{tr('未记录')}</span>
                                   )}
                                 </div>
 
@@ -2579,9 +2536,7 @@ export default function ProxyLogs() {
                                       color: 'var(--color-primary)',
                                       flexShrink: 0,
                                     }}
-                                  >
-                                    上游请求路径
-                                  </span>
+                                  >{tr('上游请求路径')}</span>
                                   {detail && pathMeta.upstreamPath ? (
                                     <code
                                       style={{
@@ -2601,9 +2556,7 @@ export default function ProxyLogs() {
                                       style={{
                                         color: 'var(--color-text-muted)',
                                       }}
-                                    >
-                                      未记录
-                                    </span>
+                                    >{tr('未记录')}</span>
                                   )}
                                 </div>
 
@@ -2626,9 +2579,7 @@ export default function ProxyLogs() {
                                         color: 'var(--color-primary)',
                                         flexShrink: 0,
                                       }}
-                                    >
-                                      上游站点
-                                    </span>
+                                    >{tr('上游站点')}</span>
                                     <code
                                       style={{
                                         fontFamily: 'var(--font-mono)',
@@ -2659,9 +2610,7 @@ export default function ProxyLogs() {
                                         color: 'var(--color-primary)',
                                         flexShrink: 0,
                                       }}
-                                    >
-                                      上游状态码
-                                    </span>
+                                    >{tr('上游状态码')}</span>
                                     <code
                                       style={{
                                         fontFamily: 'var(--font-mono)',
@@ -2687,9 +2636,7 @@ export default function ProxyLogs() {
                                           color: 'var(--color-danger)',
                                           flexShrink: 0,
                                         }}
-                                      >
-                                        错误信息
-                                      </span>
+                                      >{tr('错误信息')}</span>
                                       <span
                                         style={{
                                           color: 'var(--color-danger)',
@@ -2729,9 +2676,7 @@ export default function ProxyLogs() {
               />
             </svg>
             <div className="empty-state-title">{tr('暂无使用日志')}</div>
-            <div className="empty-state-desc">
-              当请求通过代理时，日志将显示在这里
-            </div>
+            <div className="empty-state-desc">{tr('当请求通过代理时，日志将显示在这里')}</div>
           </div>
         )}
       </div>

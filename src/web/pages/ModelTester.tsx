@@ -345,17 +345,13 @@ export default function ModelTester() {
           </div>
 
           {!probeResult && !probeError && !probing ? (
-            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-              拉取模型并点击「检测模型」后显示结果。
-            </div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{tr('拉取模型并点击「检测模型」后显示结果。')}</div>
           ) : null}
 
           {(probeResult || probeError) && !probing ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                <div>
-                  状态：
-                  <strong style={{ color: statusColor(probeOk, false), marginLeft: 6 }}>
+                <div>{tr('状态：')}<strong style={{ color: statusColor(probeOk, false), marginLeft: 6 }}>
                     {probeOk ? '可用' : '不可用'}
                   </strong>
                 </div>
@@ -394,9 +390,7 @@ export default function ModelTester() {
 
               {probeResult ? (
                 <details>
-                  <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    响应详情
-                  </summary>
+                  <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('响应详情')}</summary>
                   <pre
                     style={{
                       margin: '8px 0 0',

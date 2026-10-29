@@ -1335,9 +1335,7 @@ export default function Sites() {
                 onClick={() => setShowMobileTools(true)}
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)' }}
-              >
-                排序与操作
-              </button>
+              >{tr('排序与操作')}</button>
             </>
           ) : (
             <div className="sites-sort-select" style={{ minWidth: 156, position: 'relative', zIndex: 20 }}>
@@ -1664,17 +1662,13 @@ export default function Sites() {
                       onClick={() => moveApiEndpointRow(index, 'up')}
                       disabled={index === 0}
                       className="btn btn-link btn-link-muted"
-                    >
-                      上移
-                    </button>
+                    >{tr('上移')}</button>
                     <button
                       type="button"
                       onClick={() => moveApiEndpointRow(index, 'down')}
                       disabled={index >= form.apiEndpoints.length - 1}
                       className="btn btn-link btn-link-muted"
-                    >
-                      下移
-                    </button>
+                    >{tr('下移')}</button>
                     <button
                       type="button"
                       onClick={() => removeApiEndpointRow(index)}
@@ -1699,9 +1693,7 @@ export default function Sites() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                站点自定义请求头
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{tr('站点自定义请求头')}</div>
               <button
                 type="button"
                 onClick={addCustomHeaderRow}

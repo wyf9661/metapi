@@ -369,9 +369,7 @@ export default function DownstreamKeyEditorModal({
         </>
       )}
     >
-      <div className="info-tip" style={{ marginBottom: 0 }}>
-        支持为每个下游密钥独立配置分组、标签、额度与有效期。高级限制项可按需展开。
-      </div>
+      <div className="info-tip" style={{ marginBottom: 0 }}>{tr('支持为每个下游密钥独立配置分组、标签、额度与有效期。高级限制项可按需展开。')}</div>
 
       <div className="downstream-key-modal-grid" style={{ gridTemplateColumns: '1fr' }}>
         <div className="downstream-key-modal-field downstream-key-modal-field-full">
@@ -392,9 +390,7 @@ export default function DownstreamKeyEditorModal({
               className="btn btn-ghost"
               style={{ flexShrink: 0, whiteSpace: 'nowrap', alignSelf: 'stretch' }}
               onClick={() => onChange((prev) => ({ ...prev, key: generateDownstreamSkKey(DOWNSTREAM_KEY_PREFIX) }))}
-            >
-              随机
-            </button>
+            >{tr('随机')}</button>
           </div>
         </div>
         <div className="downstream-key-modal-field">

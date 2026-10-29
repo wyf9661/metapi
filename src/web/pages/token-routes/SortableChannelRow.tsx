@@ -201,9 +201,7 @@ export function SortableChannelRow({
                 <StatusPill tone="warning"
                   style={{ fontSize: 10 }}
                   data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
-                >
-                  手动配置
-                </StatusPill>
+                >{tr('手动配置')}</StatusPill>
               ) : null}
 
             </div>
@@ -317,17 +315,13 @@ export function SortableChannelRow({
                       onClick={onResetChannel}
                       className="btn btn-link"
                       data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
-                    >
-                      恢复默认
-                    </button>
+                    >{tr('恢复默认')}</button>
                   ) : null}
 
                   <button
                     onClick={onDeleteChannel}
                     className="btn btn-link btn-link-danger"
-                  >
-                    移除
-                  </button>
+                  >{tr('移除')}</button>
                 </div>
               </div>
             )}
@@ -428,9 +422,7 @@ export function SortableChannelRow({
           <StatusPill tone="warning"
             style={{ fontSize: 10 }}
             data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
-          >
-            手动配置
-          </StatusPill>
+          >{tr('手动配置')}</StatusPill>
         ) : null}
 
         {channel.enabled === false ? (
@@ -536,9 +528,7 @@ export function SortableChannelRow({
                 onClick={onResetChannel}
                 className="btn btn-link"
                 data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
-              >
-                恢复默认
-              </button>
+              >{tr('恢复默认')}</button>
             ) : null}
 
             {onSiteBlockModel && channel.accountId ? (
@@ -554,9 +544,7 @@ export function SortableChannelRow({
             <button
               onClick={onDeleteChannel}
               className="btn btn-link btn-link-danger"
-            >
-              移除
-            </button>
+            >{tr('移除')}</button>
           </div>
         </>
       ) : null}

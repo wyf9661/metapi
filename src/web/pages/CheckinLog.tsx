@@ -292,9 +292,7 @@ export default function CheckinLog() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {timeRangeControls}
             {hasInvalidTimeRange && (
-              <div className="alert alert-error">
-                结束时间必须晚于开始时间
-              </div>
+              <div className="alert alert-error">{tr('结束时间必须晚于开始时间')}</div>
             )}
             {filterTabs}
           </div>
@@ -313,9 +311,7 @@ export default function CheckinLog() {
               {timeRangeControls}
             </div>
             {hasInvalidTimeRange && (
-              <div className="alert alert-error" style={{ width: '100%' }}>
-                结束时间必须晚于开始时间
-              </div>
+              <div className="alert alert-error" style={{ width: '100%' }}>{tr('结束时间必须晚于开始时间')}</div>
             )}
           </div>
         )}
