@@ -2102,24 +2102,6 @@ function ensureClaudeStartEvents(
   return [serializeSse('message_start', payload)];
 }
 
-function ensureClaudeTextBlockStart(
-  claudeContext: ClaudeDownstreamContext,
-): string[] {
-  if (claudeContext.contentBlockStarted && claudeContext.textBlockIndex !== null) return [];
-  const contentIndex = claudeContext.nextContentBlockIndex;
-  claudeContext.nextContentBlockIndex += 1;
-  claudeContext.contentBlockStarted = true;
-  claudeContext.textBlockIndex = contentIndex;
-
-  return [serializeSse('content_block_start', {
-    type: 'content_block_start',
-    index: contentIndex,
-    content_block: {
-      type: 'text',
-      text: '',
-    },
-  })];
-}
 
 function closeClaudeTextBlock(
   claudeContext: ClaudeDownstreamContext,
@@ -2135,59 +2117,7 @@ function closeClaudeTextBlock(
   })];
 }
 
-function normalizeToolContentIndex(raw: unknown): number {
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
-    return Math.max(0, Math.trunc(raw));
-  }
-  return 0;
-}
 
-function ensureClaudeToolBlockStart(
-  claudeContext: ClaudeDownstreamContext,
-  toolDelta: NonNullable<NormalizedStreamEvent['toolCallDeltas']>[number],
-): { events: string[]; contentIndex: number } {
-  const toolSlot = normalizeToolContentIndex(toolDelta.index);
-  let state = claudeContext.toolBlocks[toolSlot];
-  if (!state) {
-    const fallbackId = `toolu_meta_${toolSlot}`;
-    const fallbackName = `tool_${toolSlot}`;
-    state = {
-      contentIndex: claudeContext.nextContentBlockIndex,
-      id: toolDelta.id || fallbackId,
-      name: toolDelta.name || fallbackName,
-      open: false,
-    };
-    claudeContext.nextContentBlockIndex += 1;
-    claudeContext.toolBlocks[toolSlot] = state;
-  } else {
-    if (toolDelta.id && state.id !== toolDelta.id) {
-      state.id = toolDelta.id;
-    }
-    if (toolDelta.name && state.name !== toolDelta.name) {
-      state.name = toolDelta.name;
-    }
-  }
-
-  const events: string[] = [];
-  if (!state.open) {
-    state.open = true;
-    events.push(serializeSse('content_block_start', {
-      type: 'content_block_start',
-      index: state.contentIndex,
-      content_block: {
-        type: 'tool_use',
-        id: state.id,
-        name: state.name,
-        input: {},
-      },
-    }));
-  }
-
-  return {
-    events,
-    contentIndex: state.contentIndex,
-  };
-}
 
 function closeClaudeToolBlocks(
   claudeContext: ClaudeDownstreamContext,
@@ -2241,60 +2171,17 @@ export function serializeNormalizedStreamEvent(
   downstreamFormat: DownstreamFormat,
   event: NormalizedStreamEvent,
   context: StreamTransformContext,
-  claudeContext: ClaudeDownstreamContext,
+  _claudeContext: ClaudeDownstreamContext,
 ): string[] {
-  if (downstreamFormat === 'openai') {
-    const chunk = buildOpenAiStreamChunk(context, event);
-    return chunk ? [serializeSse('', chunk)] : [];
+  if (downstreamFormat !== 'openai') {
+    // Claude downstreams are NOT served from here: anthropic/messages/streamBridge owns
+    // that serializer (thinking blocks, signature ordering, block indices). This branch used
+    // to merge reasoning into the text block, i.e. a second, divergent Claude writer with no
+    // production caller. Fail closed instead of emitting answer text that looks right.
+    return [];
   }
-
-  const events: string[] = [];
-  if (event.role === 'assistant' || event.contentDelta || event.reasoningDelta) {
-    events.push(...ensureClaudeStartEvents(context, claudeContext));
-  }
-
-  const mergedText = joinNonEmpty([
-    event.reasoningDelta || '',
-    event.contentDelta || '',
-  ]);
-
-  if (Array.isArray(event.toolCallDeltas) && event.toolCallDeltas.length > 0) {
-    events.push(...closeClaudeTextBlock(claudeContext));
-    for (const toolDelta of event.toolCallDeltas) {
-      const toolBlock = ensureClaudeToolBlockStart(claudeContext, toolDelta);
-      events.push(...toolBlock.events);
-
-      if (toolDelta.argumentsDelta !== undefined && toolDelta.argumentsDelta.length > 0) {
-        events.push(serializeSse('content_block_delta', {
-          type: 'content_block_delta',
-          index: toolBlock.contentIndex,
-          delta: {
-            type: 'input_json_delta',
-            partial_json: toolDelta.argumentsDelta,
-          },
-        }));
-      }
-    }
-  }
-
-  if (mergedText) {
-    events.push(...closeClaudeToolBlocks(claudeContext));
-    events.push(...ensureClaudeTextBlockStart(claudeContext));
-    events.push(serializeSse('content_block_delta', {
-      type: 'content_block_delta',
-      index: claudeContext.textBlockIndex ?? 0,
-      delta: {
-        type: 'text_delta',
-        text: mergedText,
-      },
-    }));
-  }
-
-  if (event.done || event.finishReason) {
-    events.push(...buildClaudeDoneEvents(context, claudeContext, event.finishReason));
-  }
-
-  return events;
+  const chunk = buildOpenAiStreamChunk(context, event);
+  return chunk ? [serializeSse('', chunk)] : [];
 }
 
 export function serializeStreamDone(
