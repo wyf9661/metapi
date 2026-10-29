@@ -278,20 +278,20 @@ export default function NotificationSettings() {
                 <h2 className="page-title">{tr('通知设置')}</h2>
                 <div className="page-actions">
                     <button onClick={testNotify} disabled={testingNotify} className="btn btn-soft-primary">
-                        {testingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'var(--color-primary)', borderColor: 'color-mix(in srgb, var(--color-primary) 30%, transparent)' }} /> 发送中...</> : '发送测试通知'}
+                        {testingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'var(--color-primary)', borderColor: 'color-mix(in srgb, var(--color-primary) 30%, transparent)' }} /> {tr('发送中...')}</> : '发送测试通知'}
                     </button>
                     <button onClick={saveNotify} disabled={savingNotify} className="btn btn-primary">
-                        {savingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存通知设置'}
+                        {savingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存通知设置'}
                     </button>
                 </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
 
-                <div style={{ order: isMobile ? undefined : 1, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>告警策略</div>
+                <div style={{ order: isMobile ? undefined : 1, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('告警策略')}</div>
 
                 <div className="card animate-slide-up stagger-1" style={{ padding: 20, order: isMobile ? undefined : 3 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>告警去噪与冷静期</div>
+                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{tr('告警去噪与冷静期')}</div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
                         相同告警在冷静期内不会重复推送；冷静期结束后会自动合并重复条数。
                     </div>
@@ -312,7 +312,7 @@ export default function NotificationSettings() {
                     </div>
                 </div>
 
-                <div style={{ order: isMobile ? undefined : 2, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>推送通道</div>
+                <div style={{ order: isMobile ? undefined : 2, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('推送通道')}</div>
 
                 {/* 卡片：机器人推送（列表，每行一条独立通道） */}
                 <div
@@ -331,14 +331,14 @@ export default function NotificationSettings() {
                             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
                         </div>
                         <div>
-                            <div style={{ fontWeight: 600, fontSize: 15 }}>机器人推送</div>
-                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>钉钉、飞书、企业微信，每条通道独立地址与密钥，可同时启用</div>
+                            <div style={{ fontWeight: 600, fontSize: 15 }}>{tr('机器人推送')}</div>
+                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('钉钉、飞书、企业微信，每条通道独立地址与密钥，可同时启用')}</div>
                         </div>
                     </div>
 
                     {runtime.notifyChannels.length === 0 && (
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', padding: '4px 0 12px' }}>
-                            还没有推送通道，点下面的按钮添加一条。
+                            {tr('还没有推送通道，点下面的按钮添加一条。')}
                         </div>
                     )}
 
@@ -374,7 +374,7 @@ export default function NotificationSettings() {
                                             checked={row.enabled}
                                             onChange={(e) => updateChannel(row.id, { enabled: e.target.checked })}
                                         />
-                                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>启用</span>
+                                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('启用')}</span>
                                     </label>
                                 </div>
 
@@ -404,14 +404,14 @@ export default function NotificationSettings() {
                                     className="btn btn-link btn-link-warning"
                                     style={{ fontSize: 12, flex: isMobile ? 'none' : '0 0 auto' }}
                                 >
-                                    删除
+                                    {tr('删除')}
                                 </button>
                             </div>
                         ))}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
-                        <button type="button" onClick={addChannel} className="btn btn-soft-primary">添加通道</button>
+                        <button type="button" onClick={addChannel} className="btn btn-soft-primary">{tr('添加通道')}</button>
                         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                             {tr('加签密钥：钉钉「加签」与飞书「签名校验」都填这里，留空表示不需要。')}
                         </span>
@@ -427,12 +427,12 @@ export default function NotificationSettings() {
                             </div>
                             <div>
                                 <div style={{ fontWeight: 600, fontSize: 15 }}>Server酱 (SendKey)</div>
-                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>微信推送消息支持</div>
+                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('微信推送消息支持')}</div>
                             </div>
                         </div>
 
                         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                            <span style={{ fontSize: 13, fontWeight: 500, color: runtime.serverChanEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>启用 Server酱</span>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: runtime.serverChanEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{tr('启用 Server酱')}</span>
                             <input
                                 type="checkbox"
                                 style={{ width: 16, height: 16, cursor: 'pointer' }}
@@ -472,7 +472,7 @@ export default function NotificationSettings() {
 
                         <div style={{ display: 'flex', gap: 16 }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                                <span style={{ fontSize: 13, fontWeight: 500, color: runtime.telegramEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>启用 Telegram</span>
+                                <span style={{ fontSize: 13, fontWeight: 500, color: runtime.telegramEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{tr('启用 Telegram')}</span>
                                 <input
                                     type="checkbox"
                                     style={{ width: 16, height: 16, cursor: 'pointer' }}
@@ -542,13 +542,13 @@ export default function NotificationSettings() {
                                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                             </div>
                             <div>
-                                <div style={{ fontWeight: 600, fontSize: 15 }}>邮件服务 (SMTP)</div>
+                                <div style={{ fontWeight: 600, fontSize: 15 }}>{tr('邮件服务 (SMTP)')}</div>
                                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('通过电子邮件推送提醒')}</div>
                             </div>
                         </div>
 
                         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                            <span style={{ fontSize: 13, fontWeight: 500, color: runtime.smtpEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>启用 SMTP</span>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: runtime.smtpEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{tr('启用 SMTP')}</span>
                             <input
                                 type="checkbox"
                                 style={{ width: 16, height: 16, cursor: 'pointer' }}
@@ -573,7 +573,7 @@ export default function NotificationSettings() {
                         {/* Port & Secure */}
                         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>端口</div>
+                                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>{tr('端口')}</div>
                                 <input
                                     type="number"
                                     min={1}
@@ -595,7 +595,7 @@ export default function NotificationSettings() {
                         </div>
                         {/* User */}
                         <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>账号用户</div>
+                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>{tr('账号用户')}</div>
                             <input
                                 value={runtime.smtpUser}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpUser: e.target.value }))}
@@ -621,7 +621,7 @@ export default function NotificationSettings() {
                         </div>
                         {/* From */}
                         <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>发件人地址</div>
+                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>{tr('发件人地址')}</div>
                             <input
                                 value={runtime.smtpFrom}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpFrom: e.target.value }))}
@@ -632,7 +632,7 @@ export default function NotificationSettings() {
                         </div>
                         {/* To */}
                         <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>接收地址</div>
+                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>{tr('接收地址')}</div>
                             <input
                                 value={runtime.smtpTo}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpTo: e.target.value }))}

@@ -48,6 +48,7 @@ import {
   type RouteCooldownUnit,
   type ShorthandConnection,
 } from './settings/settingsConfig.js';
+import { tr } from '../i18n.js';
 
 const FACTORY_RESET_ADMIN_TOKEN = 'change-me-admin-token';
 const FACTORY_RESET_CONFIRM_SECONDS = 3;
@@ -988,7 +989,7 @@ export default function Settings() {
   return (
     <div className="animate-fade-in" style={{ width: '100%', maxWidth: 1320, margin: '0 auto' }}>
       <div className="page-header">
-        <h2 className="page-title">系统设置</h2>
+        <h2 className="page-title">{tr('系统设置')}</h2>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: 16 }}>
@@ -1027,11 +1028,11 @@ export default function Settings() {
         </div>
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>管理员登录令牌</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>{tr('管理员登录令牌')}</div>
           <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 12 }}>
             {maskedToken || '****'}
           </code>
-          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? '公网隧道访问时不可修改' : undefined}>修改登录令牌</button>
+          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? '公网隧道访问时不可修改' : undefined}>{tr('修改登录令牌')}</button>
           <ChangeKeyModal
             open={showChangeKey}
             onClose={() => {
@@ -1042,7 +1043,7 @@ export default function Settings() {
         </div>
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 2 }} data-settings-card="public-tunnel">
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>公网隧道访问</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{tr('公网隧道访问')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
             对应仪表盘「创建隧道」。默认公网只允许 API；开启后才可通过隧道 URL 打开控制台（仍需管理员登录令牌）。
             {isTunnelClientView ? ' 当前为公网隧道访问，此开关已锁定。' : ''}
@@ -1094,7 +1095,7 @@ export default function Settings() {
 
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 3, gridColumn: '1 / -1' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>定时任务</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{tr('定时任务')}</div>
             <button
               onClick={triggerScheduleCheckin}
               disabled={testingCheckin}
@@ -1106,7 +1107,7 @@ export default function Settings() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(140px, 180px) minmax(140px, 180px)', gap: 12, marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到方式</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('签到方式')}</div>
               <ModernSelect
                 value={runtime.checkinScheduleMode}
                 onChange={(value) => setRuntime((prev) => ({
@@ -1135,7 +1136,7 @@ export default function Settings() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>签到 Cron</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('签到 Cron')}</div>
               <input
                 value={runtime.checkinCron}
                 onChange={(e) => setRuntime((prev) => ({ ...prev, checkinCron: e.target.value }))}
@@ -1144,7 +1145,7 @@ export default function Settings() {
               />
             </div>
             <div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>余额刷新 Cron</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('余额刷新 Cron')}</div>
               <input
                 value={runtime.balanceRefreshCron}
                 onChange={(e) => setRuntime((prev) => ({ ...prev, balanceRefreshCron: e.target.value }))}
@@ -1170,7 +1171,7 @@ export default function Settings() {
                   onChange={(e) => setRuntime((prev) => ({ ...prev, turnstileSolverEnabled: e.target.checked }))}
                   style={{ width: 16, height: 16, marginTop: 0, flexShrink: 0 }}
                 />
-                启用
+                {tr('启用')}
               </label>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, lineHeight: 1.45 }}>
@@ -1228,10 +1229,10 @@ export default function Settings() {
               gap: 12,
             }}
           >
-            <div style={{ fontWeight: 600, fontSize: 13 }}>自动清理日志</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{tr('自动清理日志')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 160px', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>清理 Cron</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('清理 Cron')}</div>
                 <input
                   value={runtime.logCleanupCron}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, logCleanupCron: e.target.value }))}
@@ -1239,7 +1240,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>保留天数</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('保留天数')}</div>
                 <input
                   type="number"
                   min={1}
@@ -1281,13 +1282,13 @@ export default function Settings() {
           </div>
           <div style={{ marginTop: 12 }}>
             <button onClick={saveSchedule} disabled={savingSchedule} className="btn btn-primary">
-              {savingSchedule ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存定时任务'}
+              {savingSchedule ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存定时任务'}
             </button>
           </div>
         </div>
 
         <div className="card animate-slide-up stagger-5" style={{ padding: 20, order: 4 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>代理失败判定</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{tr('代理失败判定')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
             命中任一关键词或空内容时判定失败，可触发重试。
           </div>

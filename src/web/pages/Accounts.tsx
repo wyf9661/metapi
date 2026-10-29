@@ -1366,7 +1366,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                排序方式
+                {tr('排序方式')}
               </div>
               <ModernSelect
                 value={sortMode}
@@ -1512,7 +1512,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
             footer={
               <button onClick={closeAddPanel} className="btn btn-ghost">
-                取消
+                {tr('取消')}
               </button>
             }
           >
@@ -1602,7 +1602,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           当前分段仅创建 Session 连接
                         </div>
                         <div>
-                          <strong>推荐</strong> 使用系统访问令牌（Access
+                          <strong>{tr('推荐')}</strong> 使用系统访问令牌（Access
                           Token）；浏览器 Cookie 仅用于兼容场景。
                         </div>
                         <div style={{ marginTop: 2 }}>

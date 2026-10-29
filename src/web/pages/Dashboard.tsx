@@ -10,6 +10,7 @@ import { availabilityColor, availabilityRgb, availabilityColorDataUri } from '..
 import { PillTabBg } from '../components/PillTabBg.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import ChartLoadingState from '../components/charts/ChartLoadingState.js';
+import { tr } from '../i18n.js';
 
 const ModelAnalysisPanel = lazy(
   () => import('../components/ModelAnalysisPanel.js'),
@@ -120,11 +121,11 @@ function formatAvailabilityPercent(value: number | null | undefined): string {
 function AvailabilityLegend() {
   return (
     <div className="site-observability-legend">
-      <span className="site-observability-legend-text">低</span>
+      <span className="site-observability-legend-text">{tr('低')}</span>
       <span className="site-observability-legend-chip" style={{ backgroundImage: availabilityColorDataUri(availabilityRgb(0)), backgroundSize: '100% 100%' }} />
       <span className="site-observability-legend-chip" style={{ backgroundImage: availabilityColorDataUri(availabilityRgb(50)), backgroundSize: '100% 100%' }} />
       <span className="site-observability-legend-chip" style={{ backgroundImage: availabilityColorDataUri(availabilityRgb(100)), backgroundSize: '100% 100%' }} />
-      <span className="site-observability-legend-text">高</span>
+      <span className="site-observability-legend-text">{tr('高')}</span>
     </div>
   );
 }
@@ -598,7 +599,7 @@ export default function Dashboard({
               />
             </svg>
           </div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>加载失败</div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{tr('加载失败')}</div>
           <div
             style={{
               fontSize: 13,
@@ -609,7 +610,7 @@ export default function Dashboard({
             {error}
           </div>
           <button onClick={() => load()} className="btn btn-soft-primary">
-            重试
+            {tr('重试')}
           </button>
         </div>
       </div>
@@ -731,7 +732,7 @@ export default function Dashboard({
                 d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
               />
             </svg>
-            账户数据
+            {tr('账户数据')}
           </div>
           <div className="stat-card-row">
             <div className="stat-icon stat-icon-blue">
@@ -740,7 +741,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">当前余额</div>
+              <div className="stat-label">{tr('当前余额')}</div>
               <div className="stat-value animate-count-up">
                 ${totalBalance.toFixed(2)}
                 <span
@@ -759,7 +760,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">累计消耗</div>
+              <div className="stat-label">{tr('累计消耗')}</div>
               <div className="stat-value animate-count-up">
                 ${totalUsed.toFixed(2)}
                 <span
@@ -778,7 +779,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">今日签到</div>
+              <div className="stat-label">{tr('今日签到')}</div>
               <div className="stat-value animate-count-up">{Math.round(todaySuccess)}/{Math.round(todayTotal)}</div>
             </div>
           </div>
@@ -790,7 +791,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">签到成功率</div>
+              <div className="stat-label">{tr('签到成功率')}</div>
               <div className="stat-value animate-count-up">
                 {todayTotal > 0 ? Math.round((todaySuccess / todayTotal) * 100) : 0}%
               </div>
@@ -803,7 +804,7 @@ export default function Dashboard({
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            使用统计
+            {tr('使用统计')}
           </div>
           <div className="stat-card-row">
             <div className="stat-icon stat-icon-yellow">
@@ -812,7 +813,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">今日消耗</div>
+              <div className="stat-label">{tr('今日消耗')}</div>
               <div className="stat-value animate-count-up">${todaySpend.toFixed(2)}</div>
             </div>
             <StatSparkline values={dailySpendSeries} color="var(--color-warning)" />
@@ -836,7 +837,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">活跃账户</div>
+              <div className="stat-label">{tr('活跃账户')}</div>
               <div className="stat-value animate-count-up">{Math.round(activeAccounts)}/{Math.round(totalAccounts)}</div>
             </div>
           </div>
@@ -858,7 +859,7 @@ export default function Dashboard({
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 3v10h8M5 12h3m-3 4h6m-6 4h10a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-4.828-4.828A2 2 0 0010.172 2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
-            性能指标
+            {tr('性能指标')}
           </div>
           <div className="stat-card-row">
             <div className="stat-icon stat-icon-blue">
@@ -902,7 +903,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">P95 首包 / 总耗时</div>
+              <div className="stat-label">{tr('P95 首包 / 总耗时')}</div>
               <div className="stat-value animate-count-up" style={{ fontSize: 17 }}>
                 {formatDashboardLatency(p95FirstByteLatencyMs)} / {formatDashboardLatency(p95LatencyMs)}
               </div>
@@ -921,30 +922,30 @@ export default function Dashboard({
             background: 'var(--color-info-soft, var(--color-bg-card))',
           }}
         >
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>首次配置引导</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{tr('首次配置引导')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
             按顺序完成下面几步，即可用下游 Key 调通模型：
           </div>
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--color-text-primary)' }}>
             <li>
               {sites.length === 0 ? (
-                <><strong>添加站点</strong> → <Link to="/sites">连接管理 / 站点</Link></>
+                <><strong>{tr('添加站点')}</strong> → <Link to="/sites">{tr('连接管理 / 站点')}</Link></>
               ) : (
                 <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有站点</span>
               )}
             </li>
             <li>
               {totalAccounts === 0 ? (
-                <><strong>添加账号凭证</strong>(API Key 或 Session)并验证 → <Link to="/sites">站点连接</Link></>
+                <><strong>{tr('添加账号凭证')}</strong>(API Key 或 Session)并验证 → <Link to="/sites">站点连接</Link></>
               ) : (
                 <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有账号</span>
               )}
             </li>
             <li>
-              <strong>重建路由</strong> → <Link to="/routes">模型路由</Link> 点「自动重建」
+              <strong>{tr('重建路由')}</strong> → <Link to="/routes">{tr('模型路由')}</Link> 点「自动重建」
             </li>
             <li>
-              <strong>生成下游 Key</strong> → <Link to="/downstream-keys">下游密钥</Link>
+              <strong>{tr('生成下游 Key')}</strong> → <Link to="/downstream-keys">{tr('下游密钥')}</Link>
             </li>
             <li>
               用 Key 调用 <code>/v1/chat/completions</code> 试打
@@ -965,7 +966,7 @@ export default function Dashboard({
             {localAddress ? (
               <code className="dashboard-endpoint-value">{localAddress.baseUrl}</code>
             ) : (
-              <div className="dashboard-endpoint-value dashboard-endpoint-status">加载中...</div>
+              <div className="dashboard-endpoint-value dashboard-endpoint-status">{tr('加载中...')}</div>
             )}
             {localAddress ? (
               <button
@@ -977,7 +978,7 @@ export default function Dashboard({
                     .catch(() => { toast.error('复制失败'); });
                 }}
               >
-                复制
+                {tr('复制')}
               </button>
             ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
           </div>
@@ -1011,7 +1012,7 @@ export default function Dashboard({
                   }
                 }}
               >
-                复制
+                {tr('复制')}
               </button>
             ) : !isTunnelClientView ? (
               <button
@@ -1037,7 +1038,7 @@ export default function Dashboard({
                     .catch(() => { toast.error('复制失败'); });
                 }}
               >
-                复制
+                {tr('复制')}
               </button>
             </div>
           ) : null}
@@ -1062,7 +1063,7 @@ export default function Dashboard({
                   d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z"
                 />
               </svg>
-              站点与模型分析
+              {tr('站点与模型分析')}
               <span className="site-observability-count-badge">
                 {observabilityTab === 'sites'
                   ? activeSites.length

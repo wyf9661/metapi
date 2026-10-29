@@ -82,31 +82,31 @@ function ProbeDetailFields({
   return (
     <div className="probe-detail-grid">
       <div className="probe-detail-item">
-        <div className="probe-detail-label">状态</div>
+        <div className="probe-detail-label">{tr('状态')}</div>
         <StatusText badgeClass={STATUS_COLORS[log.status] || 'badge'}>{STATUS_LABELS[log.status] || log.status}</StatusText>
       </div>
       <div className="probe-detail-item">
-        <div className="probe-detail-label">时间</div>
+        <div className="probe-detail-label">{tr('时间')}</div>
         <div className="probe-detail-value">{formatDateTimeLocal(log.createdAt)}</div>
       </div>
       <div className="probe-detail-item">
-        <div className="probe-detail-label">模型</div>
+        <div className="probe-detail-label">{tr('模型')}</div>
         <div className="probe-detail-value">{log.modelName}</div>
       </div>
       <div className="probe-detail-item">
-        <div className="probe-detail-label">分类</div>
+        <div className="probe-detail-label">{tr('分类')}</div>
         <div className="probe-detail-value">{CATEGORY_LABELS[log.questionCategory] || '-'}</div>
       </div>
       <div className="probe-detail-item">
-        <div className="probe-detail-label">站点</div>
+        <div className="probe-detail-label">{tr('站点')}</div>
         <div className="probe-detail-value">{log.siteName || `#${log.siteId}`}</div>
       </div>
       <div className="probe-detail-item">
-        <div className="probe-detail-label">账号</div>
+        <div className="probe-detail-label">{tr('账号')}</div>
         <div className="probe-detail-value">{log.accountUsername || `#${log.accountId}`}</div>
       </div>
       <div className="probe-detail-item">
-        <div className="probe-detail-label">延迟</div>
+        <div className="probe-detail-label">{tr('延迟')}</div>
         <div className="probe-detail-value">{formatLatency(log.latencyMs)}</div>
       </div>
       <div className="probe-detail-item">
@@ -122,7 +122,7 @@ function ProbeDetailFields({
       ) : null}
 
       <div className="probe-detail-item probe-detail-wide">
-        <div className="probe-detail-label">问题</div>
+        <div className="probe-detail-label">{tr('问题')}</div>
         <div className="probe-detail-block">{log.questionText}</div>
       </div>
 
@@ -311,7 +311,7 @@ export default function ProbeLogs() {
               fetchStats();
             }}
           >
-            刷新
+            {tr('刷新')}
           </button>
         </div>
       </div>
@@ -324,19 +324,19 @@ export default function ProbeLogs() {
             <div className="probe-stat-value">{stats.total}</div>
           </div>
           <div className="probe-stat-card">
-            <div className="probe-stat-label">成功</div>
+            <div className="probe-stat-label">{tr('成功')}</div>
             <div className="probe-stat-value" style={{ color: 'var(--color-success)' }}>{stats.success}</div>
           </div>
           <div className="probe-stat-card">
-            <div className="probe-stat-label">失败</div>
+            <div className="probe-stat-label">{tr('失败')}</div>
             <div className="probe-stat-value" style={{ color: 'var(--color-danger)' }}>{stats.failed}</div>
           </div>
           <div className="probe-stat-card">
-            <div className="probe-stat-label">超时</div>
+            <div className="probe-stat-label">{tr('超时')}</div>
             <div className="probe-stat-value" style={{ color: 'var(--color-warning)' }}>{stats.timeout}</div>
           </div>
           <div className="probe-stat-card">
-            <div className="probe-stat-label">平均延迟</div>
+            <div className="probe-stat-label">{tr('平均延迟')}</div>
             <div className="probe-stat-value">{formatLatency(stats.avgLatencyMs)}</div>
           </div>
           <div className="probe-stat-card">
@@ -355,7 +355,7 @@ export default function ProbeLogs() {
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <div className="probe-filter-label" style={{ marginBottom: 6 }}>状态</div>
+              <div className="probe-filter-label" style={{ marginBottom: 6 }}>{tr('状态')}</div>
               <div className="pill-tabs">
                 {[
                   { key: '', label: '全部' },
@@ -437,7 +437,7 @@ export default function ProbeLogs() {
               ))}
             </div>
             <div className="probe-filter-select">
-              <span>站点 ID</span>
+              <span>{tr('站点 ID')}</span>
               <ModernSelect
                 value={siteId}
                 onChange={(v) => { setSiteId(v); setPage(1); updateSearchParams('siteId', v); }}
@@ -448,7 +448,7 @@ export default function ProbeLogs() {
               />
             </div>
             <div className="probe-filter-select">
-              <span>账号 ID</span>
+              <span>{tr('账号 ID')}</span>
               <ModernSelect
                 value={accountId}
                 onChange={(v) => { setAccountId(v); setPage(1); updateSearchParams('accountId', v); }}
@@ -459,7 +459,7 @@ export default function ProbeLogs() {
               />
             </div>
             <div className="probe-filter-select">
-              <span>模型名称</span>
+              <span>{tr('模型名称')}</span>
               <ModernSelect
                 value={modelName}
                 onChange={(v) => { setModelName(v); setPage(1); updateSearchParams('modelName', v); }}
@@ -551,14 +551,14 @@ export default function ProbeLogs() {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>状态</th>
-                    <th>时间</th>
-                    <th>模型</th>
+                    <th>{tr('状态')}</th>
+                    <th>{tr('时间')}</th>
+                    <th>{tr('模型')}</th>
                     <th>站点/账号</th>
-                    <th>分类</th>
-                    <th>延迟</th>
+                    <th>{tr('分类')}</th>
+                    <th>{tr('延迟')}</th>
                     <th>Token</th>
-                    <th>问题</th>
+                    <th>{tr('问题')}</th>
                   </tr>
                 </thead>
                 <tbody>

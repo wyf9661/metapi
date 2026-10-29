@@ -1366,7 +1366,7 @@ export default function Sites() {
             }}
             className="btn btn-soft-primary"
           >
-            全部签到
+            {tr('全部签到')}
           </button>
           <button
             onClick={async () => {
@@ -1384,7 +1384,7 @@ export default function Sites() {
             }}
             className="btn btn-soft-primary"
           >
-            刷新账户状态
+            {tr('刷新账户状态')}
           </button>
           <button
             onClick={async () => {
@@ -1402,7 +1402,7 @@ export default function Sites() {
             }}
             className="btn btn-soft-primary"
           >
-            同步全部账号
+            {tr('同步全部账号')}
           </button>
           <button onClick={openAdd} className="btn btn-primary">
             {isAdding ? '取消' : '+ 添加站点'}
@@ -1418,7 +1418,7 @@ export default function Sites() {
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>排序方式</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('排序方式')}</div>
               <ModernSelect
                 value={sortMode}
                 onChange={handleSortModeChange}
@@ -1445,7 +1445,7 @@ export default function Sites() {
         title="确认删除站点"
         confirmText="确认删除"
         loading={Boolean(deleteConfirm?.siteId && deleting === deleteConfirm.siteId)}
-        description={<>确定要删除站点 <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> 吗？</>}
+        description={<>{tr('确定要删除站点')} <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> 吗？</>}
       />
 
       {createdSiteForChoice && (
@@ -1482,14 +1482,14 @@ export default function Sites() {
           footer={(
             <>
               <button onClick={closeEditor} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
-                取消
+                {tr('取消')}
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !String(form.name ?? '').trim() || !String(form.url ?? '').trim()}
                 className="btn btn-primary"
               >
-                {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : (isEditing ? '保存修改' : '保存站点')}
+                {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : (isEditing ? '保存修改' : '保存站点')}
               </button>
             </>
           )}
@@ -1523,7 +1523,7 @@ export default function Sites() {
                   className="btn btn-ghost"
                   style={{ padding: '10px 14px', minWidth: 96, border: '1px solid var(--color-border)' }}
                 >
-                  {detecting ? <><span className="spinner spinner-sm" /> 检测中</> : '自动检测'}
+                  {detecting ? <><span className="spinner spinner-sm" /> {tr('检测中')}</> : '自动检测'}
                 </button>
               </div>
             )}
@@ -1574,7 +1574,7 @@ export default function Sites() {
           </div>
           {primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix' && primarySiteUrlAnalysis.persistedUrl ? (
             <div className="alert alert-info animate-scale-in">
-              <div className="alert-title">检测到常见 API 路径后缀</div>
+              <div className="alert-title">{tr('检测到常见 API 路径后缀')}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
                 保存或自动检测时会将主站点 URL 规范化为 {primarySiteUrlAnalysis.persistedUrl}。
               </div>
@@ -1582,17 +1582,17 @@ export default function Sites() {
           ) : null}
           {primarySiteUrlAnalysis.action === 'preserve_api_path' && primarySiteUrlAnalysis.persistedUrl ? (
             <div className="alert alert-warning animate-scale-in">
-              <div className="alert-title">请确认主站点 URL</div>
+              <div className="alert-title">{tr('请确认主站点 URL')}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                URL 已含 /api 路径，原样保留；请确认这是主站点地址而非 API 请求地址，后者请填到下方 API 请求地址池。
+                {tr('URL 已含 /api 路径，原样保留；请确认这是主站点地址而非 API 请求地址，后者请填到下方 API 请求地址池。')}
               </div>
             </div>
           ) : null}
           {primarySiteUrlAnalysis.action === 'preserve_unknown_path' && primarySiteUrlAnalysis.persistedUrl ? (
             <div className="alert alert-warning animate-scale-in">
-              <div className="alert-title">请确认主站点 URL</div>
+              <div className="alert-title">{tr('请确认主站点 URL')}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                URL 含额外路径，原样保留；请确认这是主站点地址而非 API 请求地址。
+                {tr('URL 含额外路径，原样保留；请确认这是主站点地址而非 API 请求地址。')}
               </div>
             </div>
           ) : null}
@@ -1649,7 +1649,7 @@ export default function Sites() {
                       checked={endpoint.enabled !== false}
                       onChange={(e) => updateApiEndpointRow(index, { enabled: e.target.checked })}
                     />
-                    启用
+                    {tr('启用')}
                   </label>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1680,7 +1680,7 @@ export default function Sites() {
                       onClick={() => removeApiEndpointRow(index)}
                       className="btn btn-link btn-link-danger"
                     >
-                      删除
+                      {tr('删除')}
                     </button>
                   </div>
                 </div>
@@ -1741,7 +1741,7 @@ export default function Sites() {
                   className="btn btn-link btn-link-danger"
                   style={isMobile ? { alignSelf: 'flex-end' } : undefined}
                 >
-                  删除
+                  {tr('删除')}
                 </button>
               </div>
             ))}
@@ -1765,14 +1765,14 @@ export default function Sites() {
                 style={{ marginTop: 2 }}
               />
               <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>浏览器 UA（绕过 Cloudflare / WAF 拦截）</span>
+                <span>{tr('浏览器 UA（绕过 Cloudflare / WAF 拦截）')}</span>
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                  用于被 Cloudflare/WAF 拦截（403/1010）的站点：自动添加浏览器 User-Agent，并允许覆盖同名出站请求头。
+                  {tr('用于被 Cloudflare/WAF 拦截（403/1010）的站点：自动添加浏览器 User-Agent，并允许覆盖同名出站请求头。')}
                 </span>
               </span>
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-              按 key/value 逐行填写；留空行自动忽略，同名请求头不可重复。
+              {tr('按 key/value 逐行填写；留空行自动忽略，同名请求头不可重复。')}
             </div>
           </div>
 

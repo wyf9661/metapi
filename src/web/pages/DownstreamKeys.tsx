@@ -29,6 +29,7 @@ import {
   type Range,
   type SummaryItem,
 } from './downstream-keys/shared.js';
+import { tr } from '../i18n.js';
 
 type Status = 'all' | 'enabled' | 'disabled';
 
@@ -1037,13 +1038,13 @@ export default function DownstreamKeys() {
     <div className="animate-fade-in" style={{ padding: 16, paddingBottom: (selectedIds.length > 0 && isMobile) ? 92 : 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div>
-          <h2 className="page-title">下游密钥</h2>
-          <div className="page-subtitle">统一管理分发给下游项目的密钥、主分组、标签、额度、模型白名单、群组范围与历史用量。</div>
+          <h2 className="page-title">{tr('下游密钥')}</h2>
+          <div className="page-subtitle">{tr('统一管理分发给下游项目的密钥、主分组、标签、额度、模型白名单、群组范围与历史用量。')}</div>
         </div>
         <div className="page-actions">
           <RangeToggle range={range} onChange={setRange} />
           <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void load()} disabled={loading}>
-            {loading ? <><span className="spinner spinner-sm" /> 刷新中...</> : '刷新'}
+            {loading ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>+ 新增下游密钥</button>
         </div>
@@ -1052,13 +1053,13 @@ export default function DownstreamKeys() {
       <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>范围概览</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('范围概览')}</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
               基于当前筛选范围查看密钥规模、使用量和成本概况。
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className="kpi-chip">当前范围</span>
+            <span className="kpi-chip">{tr('当前范围')}</span>
             <span className="kpi-chip kpi-chip-success">
               {range === '24h' ? '最近 24 小时' : range === '7d' ? '最近 7 天' : '全部历史'}
             </span>
@@ -1095,13 +1096,13 @@ export default function DownstreamKeys() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>筛选与列表</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>按名称、状态、主分组和标签快速定位下游密钥。</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('筛选与列表')}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('按名称、状态、主分组和标签快速定位下游密钥。')}</div>
             </div>
             {isMobile && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                 <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => setShowFilters(true)}>
-                  筛选
+                  {tr('筛选')}
                 </button>
                 <button
                   className="btn btn-ghost"
@@ -1127,14 +1128,14 @@ export default function DownstreamKeys() {
           <div className="skeleton" style={{ width: '100%', height: 280, borderRadius: 'var(--radius-sm)' }} />
         ) : loadError ? (
           <div className="empty-state" style={{ padding: 40 }}>
-            <div className="empty-state-title">加载下游密钥失败</div>
+            <div className="empty-state-title">{tr('加载下游密钥失败')}</div>
             <div className="empty-state-desc">{loadError}</div>
-            <button type="button" className="btn btn-primary" onClick={() => void load()}>重试</button>
+            <button type="button" className="btn btn-primary" onClick={() => void load()}>{tr('重试')}</button>
           </div>
         ) : empty ? (
           <div className="empty-state" style={{ padding: 40 }}>
-            <div className="empty-state-title">暂无下游密钥</div>
-            <div className="empty-state-desc">可以先新增一条密钥，或调整筛选条件查看已有数据。</div>
+            <div className="empty-state-title">{tr('暂无下游密钥')}</div>
+            <div className="empty-state-desc">{tr('可以先新增一条密钥，或调整筛选条件查看已有数据。')}</div>
           </div>
         ) : isMobile ? (
           <div className="mobile-card-list">
@@ -1160,8 +1161,8 @@ export default function DownstreamKeys() {
                   )}
                   footerActions={(
                     <>
-                      <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>查看</button>
-                      <button className="btn btn-link" onClick={() => openEdit(row)}>编辑</button>
+                      <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>{tr('查看')}</button>
+                      <button className="btn btn-link" onClick={() => openEdit(row)}>{tr('编辑')}</button>
                       <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? '处理中...' : (row.enabled ? '禁用' : '启用')}</button>
                       <button className="btn btn-link" onClick={() => void resetUsage(row)} disabled={loadingReset}>{loadingReset ? '处理中...' : '清零用量'}</button>
                       <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'single', item: row })} disabled={loadingDelete}>{loadingDelete ? '处理中...' : '删除'}</button>
@@ -1199,12 +1200,12 @@ export default function DownstreamKeys() {
                   <th style={{ width: 42 }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={(e) => toggleSelectAllVisible(e.target.checked)} />
                   </th>
-                  <th style={{ width: '26%' }}>密钥信息</th>
-                  <th>授权范围</th>
-                  <th>额度</th>
-                  <th>用量</th>
-                  <th>最近使用</th>
-                  <th>操作</th>
+                  <th style={{ width: '26%' }}>{tr('密钥信息')}</th>
+                  <th>{tr('授权范围')}</th>
+                  <th>{tr('额度')}</th>
+                  <th>{tr('用量')}</th>
+                  <th>{tr('最近使用')}</th>
+                  <th>{tr('操作')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1246,10 +1247,10 @@ export default function DownstreamKeys() {
                       </td>
                       <td>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', alignItems: 'start' }}>
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>模型：<span style={{ color: 'var(--color-text-primary)' }}>{summarizeModelLimit(row.supportedModels || [])}</span></div>
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>群组：<span style={{ color: 'var(--color-text-primary)' }}>{summarizeRouteLimit(row.allowedRouteIds || [], routeMap)}</span></div>
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>标签：<span style={{ color: 'var(--color-text-primary)' }}>{summarizeTags(row.tags || [])}</span></div>
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>倍率：<span style={{ color: 'var(--color-text-primary)' }}>{summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})}</span></div>
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('模型：')}<span style={{ color: 'var(--color-text-primary)' }}>{summarizeModelLimit(row.supportedModels || [])}</span></div>
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('群组：')}<span style={{ color: 'var(--color-text-primary)' }}>{summarizeRouteLimit(row.allowedRouteIds || [], routeMap)}</span></div>
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('标签：')}<span style={{ color: 'var(--color-text-primary)' }}>{summarizeTags(row.tags || [])}</span></div>
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('倍率：')}<span style={{ color: 'var(--color-text-primary)' }}>{summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})}</span></div>
                         </div>
                       </td>
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -1266,8 +1267,8 @@ export default function DownstreamKeys() {
                       <td style={{ color: 'var(--color-text-muted)' }}>{formatIso(row.lastUsedAt)}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="accounts-row-actions">
-                          <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>查看</button>
-                          <button className="btn btn-link" onClick={() => openEdit(row)}>编辑</button>
+                          <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>{tr('查看')}</button>
+                          <button className="btn btn-link" onClick={() => openEdit(row)}>{tr('编辑')}</button>
                           <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? '处理中...' : (row.enabled ? '禁用' : '启用')}</button>
                           <button className="btn btn-link" onClick={() => void resetUsage(row)} disabled={loadingReset}>{loadingReset ? '处理中...' : '清零用量'}</button>
                           <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'single', item: row })} disabled={loadingDelete}>{loadingDelete ? '处理中...' : '删除'}</button>
@@ -1312,9 +1313,9 @@ export default function DownstreamKeys() {
         bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
         footer={(
           <>
-            <button className="btn btn-ghost" onClick={() => { setBatchMetadataOpen(false); resetBatchMetadataForm(); }} disabled={batchActionLoading}>取消</button>
+            <button className="btn btn-ghost" onClick={() => { setBatchMetadataOpen(false); resetBatchMetadataForm(); }} disabled={batchActionLoading}>{tr('取消')}</button>
             <button className="btn btn-primary" onClick={() => void runBatchMetadata()} disabled={batchActionLoading}>
-              {batchActionLoading ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '应用到所选密钥'}
+              {batchActionLoading ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '应用到所选密钥'}
             </button>
           </>
         )}
@@ -1324,7 +1325,7 @@ export default function DownstreamKeys() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>主分组操作</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('主分组操作')}</div>
             <ModernSelect
               value={batchMetadataForm.groupOperation}
               onChange={(value) => setBatchMetadataForm((prev) => ({ ...prev, groupOperation: String(value) as BatchMetadataForm['groupOperation'] }))}
@@ -1344,7 +1345,7 @@ export default function DownstreamKeys() {
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>标签操作</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('标签操作')}</div>
             <ModernSelect
               value={batchMetadataForm.tagOperation}
               onChange={(value) => setBatchMetadataForm((prev) => ({ ...prev, tagOperation: String(value) as BatchMetadataForm['tagOperation'] }))}
@@ -1373,8 +1374,8 @@ export default function DownstreamKeys() {
         confirmText="确认删除"
         loading={batchActionLoading || (deleteConfirm?.mode === 'single' && !!rowLoading[`delete-${deleteConfirm.item.id}`])}
         description={deleteConfirm?.mode === 'single'
-          ? <>确定要删除密钥 <strong>{deleteConfirm.item.name}</strong> 吗？</>
-          : <>确定要删除选中的 <strong>{deleteConfirm?.ids.length || 0}</strong> 个密钥吗？</>}
+          ? <>{tr('确定要删除密钥')} <strong>{deleteConfirm.item.name}</strong> 吗？</>
+          : <>{tr('确定要删除选中的')} <strong>{deleteConfirm?.ids.length || 0}</strong> 个密钥吗？</>}
       />
 
       <DownstreamKeyDrawer
