@@ -1519,6 +1519,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '← 返回': '← Back',
   '推测': 'Inferred',
   '回到第一页': 'Back to first page',
+  '相同': 'Same',
+  '优先级': 'Priority',
   '上一页': 'Previous page',
   '下一页': 'Next page',
   '首页': 'First page',

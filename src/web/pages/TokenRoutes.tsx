@@ -57,6 +57,7 @@ import ManualRoutePanel from './token-routes/ManualRoutePanel.js';
 import RouteCard from './token-routes/RouteCard.js';
 import AddChannelModal from './token-routes/AddChannelModal.js';
 import TokenRouteConfirmModal, { type TokenRouteConfirmState } from './token-routes/TokenRouteConfirmModal.js';
+import RouteCompareModal from './token-routes/RouteCompareModal.js';
 import { StatusText, StatusPill } from '../components/StatusText.js';
 import PaginationControls from '../components/PaginationControls.js';
 import { useClientPagination } from '../components/useClientPagination.js';
@@ -197,6 +198,7 @@ export default function TokenRoutes() {
   const [filterCollapsed, setFilterCollapsed] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showZeroChannelRoutes, setShowZeroChannelRoutes] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [sortBy, setSortBy] = useState<RouteSortBy>('channelCount');
   const [sortDir, setSortDir] = useState<RouteSortDir>('desc');
 
@@ -1720,6 +1722,15 @@ export default function TokenRoutes() {
           >
             {showZeroChannelRoutes ? tr('隐藏 0 通道路由') : tr('显示 0 通道路由')}
           </button>
+
+          <button
+            type="button"
+            onClick={() => setCompareOpen(true)}
+            className="btn btn-ghost"
+            style={{ border: '1px solid var(--color-border)', padding: '7px 12px' }}
+          >
+            {tr('路由比对')}
+          </button>
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0, maxWidth: '100%' }}>
@@ -2241,6 +2252,12 @@ export default function TokenRoutes() {
         state={confirmState}
         onCancel={() => resolveConfirmation(false)}
         onConfirm={(dismissChecked) => resolveConfirmation(true, dismissChecked)}
+      />
+
+      <RouteCompareModal
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        routes={routeSummaries}
       />
     </div>
   );
