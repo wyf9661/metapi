@@ -466,11 +466,8 @@ function responsesStatusToChatFinishReason(
         ? asTrimmedString(incompleteDetails.reason).toLowerCase()
         : ''
     );
-    // OpenAI's incomplete_details.reason is max_output_tokens | content_filter. Only the
-    // safety stop needs its own value; an undocumented or missing reason keeps the legacy
-    // default so the "reasoning exhausted the budget" diagnosis stays unaffected.
     if (reason === 'content_filter') return 'content_filter';
-    return reason === 'max_output_tokens' ? 'length' : 'stop';
+    return ['max_output_tokens', 'max_completion_tokens', 'max_tokens'].includes(reason) ? 'length' : 'stop';
   }
   if (normalizedStatus === 'failed' || normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
     // A failed response is not a clean end: keep the canonical error so the Anthropic and
