@@ -20,6 +20,8 @@ type ChatProxyStreamSessionInput = {
   modelName: string;
   successfulUpstreamPath: string;
   onParsedPayload?: (payload: unknown) => void;
+  /** Frames that could not be parsed as JSON; dropped rather than forwarded. */
+  onDroppedFrame?: (eventBlock: ParsedSseEvent) => void;
   writeLines: (lines: string[]) => void;
   writeRaw: (chunk: string) => void;
 };
@@ -194,30 +196,6 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     pendingWrites.push(...lines);
   };
 
-  const emitRaw = (chunk: string, options?: { meaningful?: boolean; force?: boolean }) => {
-    if (!chunk) return;
-    if (input.downstreamFormat !== 'openai') {
-      input.writeRaw(chunk);
-      return;
-    }
-    if (forwardedDownstreamOutput) {
-      input.writeRaw(chunk);
-      return;
-    }
-    if (options?.force) {
-      pendingWrites.length = 0;
-      forwardedDownstreamOutput = true;
-      input.writeRaw(chunk);
-      return;
-    }
-    if (options?.meaningful) {
-      forwardedDownstreamOutput = true;
-      flushPendingWrites();
-      input.writeRaw(chunk);
-      return;
-    }
-    pendingWrites.push(chunk);
-  };
 
   const shouldFailEmptyChatCompletion = (): boolean => {
     if (!config.proxyEmptyContentFailEnabled) return false;
@@ -348,15 +326,13 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
       return input.downstreamFormat === 'claude' && claudeContext.doneSent;
     }
 
-    if (input.downstreamFormat === 'openai') {
-      emitRaw(`data: ${eventBlock.data}\n\n`, { meaningful: true });
-      return false;
-    }
-
-    input.writeLines(anthropicMessagesTransformer.serializeStreamEvent({
-      contentDelta: eventBlock.data,
-    }, streamContext, claudeContext));
-    return claudeContext.doneSent;
+    // Unparseable frame: a keep-alive, a provider-specific non-JSON line, or the tail of a
+    // response cut mid-JSON. Forwarding it verbatim hands the client `data: {"id":"x","cho`
+    // and it throws; turning it into a text delta injects raw JSON into the answer — the
+    // exact "答案里冒出 JSON" symptom when an upstream truncates a stream. Drop it and let
+    // finalize() decide the terminal state from what was actually delivered.
+    input.onDroppedFrame?.(eventBlock);
+    return false;
   };
 
   return {
