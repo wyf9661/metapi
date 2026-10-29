@@ -231,4 +231,44 @@ describe('anthropic messages stream bridge', () => {
     expect(serialized.indexOf('"type":"web_search_tool_result"')).toBeGreaterThan(serialized.indexOf('"type":"server_tool_use"'));
     expect(serialized).toContain('"text":"It is sunny."');
   });
+
+  it('reports real token counts on the start and delta frames', () => {
+    const streamContext = anthropicMessagesStream.createContext('claude-usage');
+    const downstreamContext = anthropicMessagesStream.createDownstreamContext();
+
+    const start = consumeAnthropicSseEvent(
+      {
+        event: 'message_start',
+        data: JSON.stringify({
+          type: 'message_start',
+          message: { id: 'msg_u1', model: 'claude-sonnet', usage: { input_tokens: 1000, output_tokens: 1 } },
+        }),
+      },
+      streamContext,
+      downstreamContext,
+    );
+    expect(start.lines.join('')).toContain('"input_tokens":1000');
+
+    consumeAnthropicSseEvent(
+      { event: 'message_delta', data: JSON.stringify({ type: 'message_delta', delta: {}, usage: { output_tokens: 250 } }) },
+      streamContext,
+      downstreamContext,
+    );
+
+    const done = [
+      consumeAnthropicSseEvent(
+        { event: 'message_delta', data: JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 250 } }) },
+        streamContext,
+        downstreamContext,
+      ).lines.join(''),
+      consumeAnthropicSseEvent(
+        { event: 'message_stop', data: JSON.stringify({ type: 'message_stop' }) },
+        streamContext,
+        downstreamContext,
+      ).lines.join(''),
+    ].join('');
+    // Regression: both frames hard-coded 0, so every streamed Anthropic response was billed
+    // as zero tokens regardless of what the upstream reported.
+    expect(done).toContain('"output_tokens":250');
+  });
 });

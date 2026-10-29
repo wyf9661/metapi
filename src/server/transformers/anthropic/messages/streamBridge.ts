@@ -40,6 +40,13 @@ type ExtendedClaudeDownstreamContext = ClaudeDownstreamContext & {
   textSourceIndex?: number | null;
   pendingSignature?: string | null;
   activeToolSlot?: number | null;
+  /**
+   * Latest usage snapshot seen on the upstream stream (message_start carries the input
+   * side, message_delta the output side). Held per-stream so the terminating message_delta
+   * can report real counts: they used to be hard-coded to 0, so every Anthropic-over-
+   * streaming response was billed as zero tokens.
+   */
+  usage?: { inputTokens?: number | null; outputTokens?: number | null };
 };
 
 export const ANTHROPIC_RAW_SSE_EVENT_NAMES = new Set([
@@ -182,6 +189,7 @@ function ensureContext(context: ClaudeDownstreamContext): ExtendedClaudeDownstre
   if (extended.textSourceIndex === undefined) extended.textSourceIndex = null;
   if (extended.pendingSignature === undefined) extended.pendingSignature = null;
   if (extended.activeToolSlot === undefined) extended.activeToolSlot = null;
+  if (extended.usage === undefined) extended.usage = {};
   return extended;
 }
 
@@ -202,6 +210,18 @@ export function syncAnthropicRawStreamStateFromEvent(
       if (typeof message.model === 'string' && message.model.trim().length > 0) {
         streamContext.model = message.model;
       }
+      if (isRecord(message.usage)) {
+        context.usage = { ...context.usage, ...usageSnapshot(message.usage) };
+      }
+    }
+    return;
+  }
+
+  if (eventName === 'message_delta') {
+    // Anthropic reports input on message_start and the running output count on every
+    // message_delta, so the later frame wins per field instead of the two being summed.
+    if (isRecord(parsedPayload) && isRecord(parsedPayload.usage)) {
+      context.usage = { ...context.usage, ...usageSnapshot(parsedPayload.usage) };
     }
     return;
   }
@@ -219,6 +239,20 @@ export function syncAnthropicRawStreamStateFromEvent(
   if (eventName === 'message_stop') {
     context.doneSent = true;
   }
+}
+
+function toTokenCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** Anthropic spells the input side `input_tokens` and, on message_delta, only `output_tokens`. */
+function usageSnapshot(usage: Record<string, unknown>): { inputTokens?: number | null; outputTokens?: number | null } {
+  const snapshot: { inputTokens?: number | null; outputTokens?: number | null } = {};
+  const input = toTokenCount(usage.input_tokens);
+  const output = toTokenCount(usage.output_tokens);
+  if (input !== null) snapshot.inputTokens = input;
+  if (output !== null) snapshot.outputTokens = output;
+  return snapshot;
 }
 
 function buildClaudeMessageId(sourceId: string): string {
@@ -245,7 +279,7 @@ function ensureClaudeStartEvents(
         stop_reason: null,
         stop_sequence: null,
         usage: {
-          input_tokens: 0,
+          input_tokens: context.usage?.inputTokens ?? 0,
           output_tokens: 0,
         },
       },
@@ -582,7 +616,7 @@ function buildDoneEvents(
         stop_sequence: null,
       },
       usage: {
-        output_tokens: 0,
+        output_tokens: context.usage?.outputTokens ?? 0,
       },
     }),
     serializeSse('message_stop', {
