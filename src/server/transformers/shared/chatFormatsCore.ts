@@ -679,11 +679,17 @@ function collectIndexedToolCallsFromResponsesPayload(
           ? item.input
           : stringifyUnknownValue(item.arguments ?? item.input))
     );
+    // Prefer the item's own position when the payload declares one: the array position
+    // drifts from the stream's output_index as soon as the completed payload omits or
+    // reorders items, and the slot table is keyed by output_index.
+    const declaredOutputIndex = typeof item.output_index === 'number' && Number.isFinite(item.output_index)
+      ? Math.max(0, Math.trunc(item.output_index))
+      : undefined;
     toolCalls.push({
       id,
       name,
       arguments: argumentsText,
-      outputIndex: index,
+      outputIndex: declaredOutputIndex ?? index,
     });
   }
 
