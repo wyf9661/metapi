@@ -2022,7 +2022,7 @@ function buildOpenAiStreamChunk(
     return null;
   }
 
-  return {
+  const chunk: Record<string, unknown> = {
     id: context.id,
     object: 'chat.completion.chunk',
     created: context.created,
@@ -2035,6 +2035,9 @@ function buildOpenAiStreamChunk(
       finish_reason: finishReason == null ? null : toOpenAiFinishReason(finishReason),
     }],
   };
+  const usage = mergeUsageForChunkPayload(event);
+  if (usage) chunk.usage = usage;
+  return chunk;
 }
 
 function mergeUsageForChunkPayload(event: NormalizedStreamEvent): Record<string, unknown> | null {
