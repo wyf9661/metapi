@@ -338,16 +338,16 @@ function mergeAnthropicUsage(
 
   return {
     ...mergedBase,
-    cacheReadInputTokens: toPositiveInt(baseUsage.cacheReadInputTokens) + toPositiveInt(nextUsage.cacheReadInputTokens),
-    cacheCreationInputTokens: toPositiveInt(baseUsage.cacheCreationInputTokens) + toPositiveInt(nextUsage.cacheCreationInputTokens),
-    ephemeral5mInputTokens: toPositiveInt(baseUsage.ephemeral5mInputTokens) + toPositiveInt(nextUsage.ephemeral5mInputTokens),
-    ephemeral1hInputTokens: toPositiveInt(baseUsage.ephemeral1hInputTokens) + toPositiveInt(nextUsage.ephemeral1hInputTokens),
-    promptTokensIncludingCache: basePromptTokensIncludingCache + nextPromptTokensIncludingCache,
+    cacheReadInputTokens: Math.max(toPositiveInt(baseUsage.cacheReadInputTokens), toPositiveInt(nextUsage.cacheReadInputTokens)),
+    cacheCreationInputTokens: Math.max(toPositiveInt(baseUsage.cacheCreationInputTokens), toPositiveInt(nextUsage.cacheCreationInputTokens)),
+    ephemeral5mInputTokens: Math.max(toPositiveInt(baseUsage.ephemeral5mInputTokens), toPositiveInt(nextUsage.ephemeral5mInputTokens)),
+    ephemeral1hInputTokens: Math.max(toPositiveInt(baseUsage.ephemeral1hInputTokens), toPositiveInt(nextUsage.ephemeral1hInputTokens)),
+    promptTokensIncludingCache: Math.max(basePromptTokensIncludingCache, nextPromptTokensIncludingCache),
     promptTokensIncludeCache: nextUsage.promptTokensIncludeCache ?? baseUsage.promptTokensIncludeCache ?? null,
     serviceTier: typeof nextUsage.serviceTier === 'string'
       ? nextUsage.serviceTier
       : (typeof baseUsage.serviceTier === 'string' ? baseUsage.serviceTier : null),
-    cachedTokens: toPositiveInt(baseUsage.cachedTokens) + toPositiveInt(nextUsage.cachedTokens),
+    cachedTokens: Math.max(toPositiveInt(baseUsage.cachedTokens), toPositiveInt(nextUsage.cachedTokens)),
   };
 }
 

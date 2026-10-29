@@ -102,24 +102,37 @@ export function createEmptyNormalizedUsage(): NormalizedUsage {
   };
 }
 
+/**
+ * Merge two usage readings of the SAME request.
+ *
+ * Every field is a snapshot of that request's totals, not an increment: Anthropic reports
+ * input tokens on `message_start` and output tokens on `message_delta`, OpenAI reports once
+ * at the end, Gemini on each candidate. Summing them counted the same tokens up to four
+ * times (the cache fields were summed here *and* summed again by the Anthropic merge), so
+ * the rule is per-field max — "the highest total any frame has reported so far".
+ */
 export function mergeNormalizedUsage(
   base: NormalizedUsage | undefined,
   next: NormalizedUsage | undefined,
 ): NormalizedUsage {
   const merged = { ...createEmptyNormalizedUsage(), ...(base || {}) };
   const incoming = next || {};
+  const max = (left: unknown, right: unknown): number => Math.max(
+    Number.isFinite(Number(left)) ? Number(left) : 0,
+    Number.isFinite(Number(right)) ? Number(right) : 0,
+  );
   return {
-    promptTokens: (merged.promptTokens || 0) + (incoming.promptTokens || 0),
-    completionTokens: (merged.completionTokens || 0) + (incoming.completionTokens || 0),
-    totalTokens: (merged.totalTokens || 0) + (incoming.totalTokens || 0),
-    cachedTokens: (merged.cachedTokens || 0) + (incoming.cachedTokens || 0),
-    cacheReadTokens: (merged.cacheReadTokens || 0) + (incoming.cacheReadTokens || 0),
-    cacheCreationTokens: (merged.cacheCreationTokens || 0) + (incoming.cacheCreationTokens || 0),
-    reasoningTokens: (merged.reasoningTokens || 0) + (incoming.reasoningTokens || 0),
-    audioInputTokens: (merged.audioInputTokens || 0) + (incoming.audioInputTokens || 0),
-    audioOutputTokens: (merged.audioOutputTokens || 0) + (incoming.audioOutputTokens || 0),
-    acceptedPredictionTokens: (merged.acceptedPredictionTokens || 0) + (incoming.acceptedPredictionTokens || 0),
-    rejectedPredictionTokens: (merged.rejectedPredictionTokens || 0) + (incoming.rejectedPredictionTokens || 0),
+    promptTokens: max(merged.promptTokens, incoming.promptTokens),
+    completionTokens: max(merged.completionTokens, incoming.completionTokens),
+    totalTokens: max(merged.totalTokens, incoming.totalTokens),
+    cachedTokens: max(merged.cachedTokens, incoming.cachedTokens),
+    cacheReadTokens: max(merged.cacheReadTokens, incoming.cacheReadTokens),
+    cacheCreationTokens: max(merged.cacheCreationTokens, incoming.cacheCreationTokens),
+    reasoningTokens: max(merged.reasoningTokens, incoming.reasoningTokens),
+    audioInputTokens: max(merged.audioInputTokens, incoming.audioInputTokens),
+    audioOutputTokens: max(merged.audioOutputTokens, incoming.audioOutputTokens),
+    acceptedPredictionTokens: max(merged.acceptedPredictionTokens, incoming.acceptedPredictionTokens),
+    rejectedPredictionTokens: max(merged.rejectedPredictionTokens, incoming.rejectedPredictionTokens),
   };
 }
 
