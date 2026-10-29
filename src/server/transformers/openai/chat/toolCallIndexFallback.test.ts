@@ -76,6 +76,22 @@ describe('tool-call index fallback for index-less fragments', () => {
     expect(deltas.map((delta) => delta.index)).toEqual([0, 1]);
   });
 
+  it('does not merge a new id into an active slot already owned by another call', () => {
+    const events = extractChatChoiceEvents({
+      choices: [{
+        index: 0,
+        delta: {
+          tool_calls: [
+            { id: 'call_a', function: { name: 'terminal', arguments: '{' } },
+            { id: 'call_b', function: { arguments: '}' } },
+          ],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    });
+    expect(events[0].toolCallDeltas?.map((delta) => delta.index)).toEqual([0, 1]);
+  });
+
   it('rejoins a fragment that repeats an earlier id instead of opening a new slot', () => {
     const events = extractChatChoiceEvents({
       choices: [{
