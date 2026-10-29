@@ -9,6 +9,7 @@ import type {
 } from './model.js';
 import { fromTransformerMetadataRecord } from '../../shared/normalized.js';
 import { extractInlineThinkTags } from '../../shared/thinkTagParser.js';
+import { createToolCallIndexState, resolveToolCallIndex, type ToolCallIndexState } from '../../shared/toolCallIndex.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -185,17 +186,21 @@ function collectToolCalls(value: unknown): OpenAiChatToolCall[] {
   return toolCalls;
 }
 
-function collectToolCallDeltas(value: unknown): OpenAiChatChoiceDelta['toolCallDeltas'] {
+function collectToolCallDeltas(
+  value: unknown,
+  state: ToolCallIndexState,
+): OpenAiChatChoiceDelta['toolCallDeltas'] {
   if (!Array.isArray(value)) return undefined;
   const deltas = value
-    .map((item, itemIndex) => {
+    .map((item) => {
       if (!isRecord(item)) return null;
       const functionPart = isRecord(item.function) ? item.function : {};
-      const index = toFiniteNumber(item.index);
+      const id = typeof item.id === 'string' && item.id.trim() ? item.id : undefined;
+      const name = typeof functionPart.name === 'string' && functionPart.name.trim() ? functionPart.name : undefined;
       const delta = {
-        index: index !== undefined ? Math.max(0, Math.trunc(index)) : itemIndex,
-        id: typeof item.id === 'string' && item.id.trim() ? item.id : undefined,
-        name: typeof functionPart.name === 'string' && functionPart.name.trim() ? functionPart.name : undefined,
+        index: resolveToolCallIndex(toFiniteNumber(item.index), id, name, state),
+        id,
+        name,
         argumentsDelta: typeof functionPart.arguments === 'string' ? functionPart.arguments : undefined,
       };
       if (!delta.id && !delta.name && !delta.argumentsDelta) return null;
@@ -304,6 +309,7 @@ export function extractChatChoices(payload: unknown): OpenAiChatChoice[] {
 
 export function extractChatChoiceEvents(payload: unknown): OpenAiChatChoiceDelta[] {
   const record = asRecord(payload);
+  const state = createToolCallIndexState();
   if (!record || !Array.isArray(record.choices)) return [];
 
   const sharedCitations = dedupeCitations(record.citations);
@@ -314,7 +320,7 @@ export function extractChatChoiceEvents(payload: unknown): OpenAiChatChoiceDelta
     if (!choiceRecord) continue;
     const delta = asRecord(choiceRecord.delta) ?? {};
     const parsed = extractTextAndReasoning(delta.content ?? delta);
-    const toolCallDeltas = collectToolCallDeltas(delta.tool_calls);
+    const toolCallDeltas = collectToolCallDeltas(delta.tool_calls, state);
     const annotations = extractChoiceAnnotations(choiceRecord);
     const citations = extractChoiceCitations(choiceRecord, sharedCitations);
     const choiceIndex = toFiniteNumber(choiceRecord.index) !== undefined

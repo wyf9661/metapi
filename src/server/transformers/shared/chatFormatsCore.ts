@@ -3,6 +3,7 @@ import {
 } from './reasoningTransport.js';
 import { toOpenAiChatFileBlock } from './inputFile.js';
 import { asTrimmedString } from '../../shared/trimString.js';
+import { createToolCallIndexState, resolveToolCallIndex } from './toolCallIndex.js';
 import {
 
   consumeThinkTaggedText,
@@ -1427,6 +1428,10 @@ export function normalizeUpstreamStreamEvent(
   if (!isRecord(payload)) return {};
 
   if (Array.isArray(payload.choices)) {
+    // Per-payload: fragments of one call never span two calls, and a chunk that omits all
+    // indices starts its first call at slot 0. Keeping this local also means the two
+    // normalizers that read one payload can never double-advance a shared counter.
+    const indexState = createToolCallIndexState();
     if (isNonEmptyString(payload.id)) context.id = payload.id;
     if (isNonEmptyString(payload.model)) context.model = payload.model;
     context.created = ensureIntegerTimestamp(payload.created, context.created);
@@ -1463,14 +1468,9 @@ export function normalizeUpstreamStreamEvent(
       ? ((delta as any).tool_calls as unknown[])
       : [];
     const toolCallDeltas = rawToolCalls
-      .map((item, itemIndex) => {
+      .map((item) => {
         if (!isRecord(item)) return null;
         const functionPart = isRecord(item.function) ? item.function : {};
-        const index = (
-          typeof item.index === 'number' && Number.isFinite(item.index)
-            ? Math.max(0, Math.trunc(item.index))
-            : itemIndex
-        );
         const id = typeof item.id === 'string' && item.id.trim().length > 0
           ? item.id
           : undefined;
@@ -1483,7 +1483,14 @@ export function normalizeUpstreamStreamEvent(
 
         if (!id && !name && argumentsDelta === undefined) return null;
         return {
-          index,
+          // Same rule as the stream path: a missing index means "this call's next fragment",
+          // never "a new parallel call at the array position" (see resolveToolCallIndex).
+          index: resolveToolCallIndex(
+            typeof item.index === 'number' && Number.isFinite(item.index) ? item.index : undefined,
+            id,
+            name,
+            indexState,
+          ),
           id,
           name,
           argumentsDelta,
