@@ -302,6 +302,13 @@ export function isSensitiveWordsFailure(context: SiteRuntimeFailureContext = {})
 }
 
 export function isValidationRuntimeFailure(context: SiteRuntimeFailureContext = {}): boolean {
+  // A 5xx body frequently quotes the request while describing the ORIGIN's failure
+  // ("malformed response, cannot parse JSON" from a flaky relay). Classifying that as a
+  // client-side validation error made the request terminal — no channel retry, no
+  // failover, and a 0.25 health penalty on a site that is actually broken — so the same
+  // origin was chosen again on the very next request. 4xx keeps the old behaviour.
+  const status = typeof context.status === 'number' ? context.status : 0;
+  if (status >= 500) return false;
   return matchesAnyPattern(SITE_VALIDATION_FAILURE_PATTERNS, context.errorText);
 }
 
