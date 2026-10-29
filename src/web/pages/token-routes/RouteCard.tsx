@@ -305,7 +305,7 @@ function PriorityDragPreview({
         ) : null}
       </div>
       <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-        成功/失败 <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
+        {tr('成功/失败')} <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
         <span style={{ color: 'var(--color-text-muted)', margin: '0 2px' }}>/</span>
         <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{channel.failCount || 0}</span>
       </div>

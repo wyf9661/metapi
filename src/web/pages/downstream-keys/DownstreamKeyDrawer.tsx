@@ -17,6 +17,7 @@ import {
   type Range,
   type SummaryItem,
 } from './shared.js';
+import { tr } from '../../i18n.js';
 
 const DownstreamKeyTrendChart = lazy(() => import('../../components/charts/DownstreamKeyTrendChart.js'));
 type DownstreamKeyTrendBucket = import('../../components/charts/DownstreamKeyTrendChart.js').DownstreamKeyTrendBucket;
@@ -149,8 +150,8 @@ export default function DownstreamKeyDrawer({
           <div className="card" style={{ padding: 16, marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>使用趋势</div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>按选定时间窗口查看请求、Tokens 与成本变化。</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{tr('使用趋势')}</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('按选定时间窗口查看请求、Tokens 与成本变化。')}</div>
               </div>
               <RangeToggle range={trendRange} onChange={setTrendRange} />
             </div>
@@ -162,34 +163,34 @@ export default function DownstreamKeyDrawer({
 
           <div className="card" style={{ padding: 16, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 10 }}>
-              基础信息
+              {tr('基础信息')}
             </div>
             {overviewLoading ? (
               <div className="skeleton" style={{ width: '100%', height: 72, borderRadius: 'var(--radius-sm)' }} />
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12 }}>
                 <div>
-                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>最近使用</div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('最近使用')}</div>
                   <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{formatIso(item?.lastUsedAt)}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>累计请求</div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('累计请求')}</div>
                   <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{(item?.usedRequests || 0).toLocaleString()}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>累计成本</div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('累计成本')}</div>
                   <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{formatMoney(Number(item?.usedCost || 0))}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>到期时间</div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('到期时间')}</div>
                   <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{formatIso(item?.expiresAt)}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>主分组</div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('主分组')}</div>
                   <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{item?.groupName || '未分组'}</div>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 6 }}>标签</div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('标签')}</div>
                   <TagChips tags={item?.tags || []} accent maxVisible={6} />
                 </div>
               </div>
@@ -206,15 +207,15 @@ export default function DownstreamKeyDrawer({
                 <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{formatCompactTokens(currentRangeUsage?.totalTokens || 0)}</div>
               </div>
               <div>
-                <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>请求数</div>
+                <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('请求数')}</div>
                 <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{(currentRangeUsage?.totalRequests || 0).toLocaleString()}</div>
               </div>
               <div>
-                <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>成功率</div>
+                <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('成功率')}</div>
                 <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{currentRangeUsage?.successRate == null ? '--' : `${currentRangeUsage.successRate}%`}</div>
               </div>
               <div>
-                <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>成本</div>
+                <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('成本')}</div>
                 <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{formatMoney(Number(currentRangeUsage?.totalCost || 0))}</div>
               </div>
             </div>
@@ -235,9 +236,9 @@ export default function DownstreamKeyDrawer({
                     <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, marginBottom: 8 }}>{section.label}</div>
                     <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>Tokens</div>
                     <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, marginBottom: 8 }}>{formatCompactTokens(section.data?.totalTokens || 0)}</div>
-                    <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>请求数</div>
+                    <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('请求数')}</div>
                     <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, marginBottom: 8 }}>{(section.data?.totalRequests || 0).toLocaleString()}</div>
-                    <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>成功率</div>
+                    <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('成功率')}</div>
                     <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{section.data?.successRate == null ? '--' : `${section.data.successRate}%`}</div>
                   </div>
                 ))}

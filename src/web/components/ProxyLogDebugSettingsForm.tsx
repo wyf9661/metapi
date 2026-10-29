@@ -7,6 +7,7 @@ import {
   formSectionLabelStyle,
   formSectionStyle,
 } from '../pages/helpers/proxyLogsUi.js';
+import { tr } from '../i18n.js';
 
 /**
  * Debug-trace settings form, split out of ProxyLogs.tsx: it is pure JSX driven
@@ -33,7 +34,7 @@ export function ProxyLogDebugSettingsForm({
         </div>
 
         <div style={formSectionStyle}>
-          <div style={formSectionLabelStyle}>记录内容</div>
+          <div style={formSectionLabelStyle}>{tr('记录内容')}</div>
           <div style={{ display: 'grid', gap: 10 }}>
             <div style={{ display: 'grid', gap: 4 }}>
               <label style={debugCheckboxRowStyle}>
@@ -140,7 +141,7 @@ export function ProxyLogDebugSettingsForm({
 
         <ResponsiveFormGrid columns={2}>
           <div style={formSectionStyle}>
-            <div style={formSectionLabelStyle}>定向过滤</div>
+            <div style={formSectionLabelStyle}>{tr('定向过滤')}</div>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 目标 Session ID
@@ -198,7 +199,7 @@ export function ProxyLogDebugSettingsForm({
           </div>
 
           <div style={formSectionStyle}>
-            <div style={formSectionLabelStyle}>保留策略</div>
+            <div style={formSectionLabelStyle}>{tr('保留策略')}</div>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 保留时长（小时）

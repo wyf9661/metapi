@@ -9,6 +9,7 @@ import {
 } from './tokenBindingPresentation.js';
 import { getChannelDecisionState, getPriorityTagStyle, getProbabilityColor } from './utils.js';
 import { StatusPill } from '../../components/StatusText.js';
+import { tr } from '../../i18n.js';
 
 export function SortableChannelRow({
   channel,
@@ -139,7 +140,7 @@ export function SortableChannelRow({
               </span>
 
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
-                成功/失败 <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
+                {tr('成功/失败')} <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
                 <span style={{ color: 'var(--color-text-muted)', margin: '0 2px' }}>/</span>
                 <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{channel.failCount || 0}</span>
               </span>
@@ -208,7 +209,7 @@ export function SortableChannelRow({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>选中概率</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>{tr('选中概率')}</span>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
                 <div
                   data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
@@ -307,7 +308,7 @@ export function SortableChannelRow({
                       onClick={onSiteBlockModel}
                       className="btn btn-link btn-link-warning"
                     >
-                      屏蔽模型
+                      {tr('屏蔽模型')}
                     </button>
                   ) : null}
 
@@ -414,7 +415,7 @@ export function SortableChannelRow({
               fontWeight: 600,
             }}
           >
-            冷却中
+            {tr('冷却中')}
           </span>
         ) : null}
         {channel.sourceModel ? (
@@ -433,11 +434,11 @@ export function SortableChannelRow({
         ) : null}
 
         {channel.enabled === false ? (
-          <span className="badge badge-muted" style={{ fontSize: 10 }}>已禁用</span>
+          <span className="badge badge-muted" style={{ fontSize: 10 }}>{tr('已禁用')}</span>
         ) : null}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginTop: mobile ? 0 : 1, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>选中概率</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', fontWeight: 600 }}>{tr('选中概率')}</span>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
             <div
               data-tooltip={suppressTooltips ? undefined : (decisionState.probability <= 0 ? decisionState.reasonText : undefined)}
@@ -476,7 +477,7 @@ export function SortableChannelRow({
             </span>
           </div>
 
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>成功/失败</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{tr('成功/失败')}</span>
           <span style={{ fontSize: 11 }}>
             <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{channel.successCount || 0}</span>
             <span style={{ color: 'var(--color-text-muted)', margin: '0 2px' }}>/</span>
@@ -546,7 +547,7 @@ export function SortableChannelRow({
                 className="btn btn-link btn-link-warning"
                 data-tooltip={suppressTooltips ? undefined : `将此模型加入该账号（站点「${channel.site?.name || '未知'}」）的禁用列表，rebuild 后该账号的此模型通道将不再生成，同站点其他账号不受影响`}
               >
-                屏蔽模型
+                {tr('屏蔽模型')}
               </button>
             ) : null}
 

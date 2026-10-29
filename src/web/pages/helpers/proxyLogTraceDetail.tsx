@@ -8,6 +8,7 @@
 import { DetailDisclosureCard, debugCodeBlockStyle, detailInfoGridStyle, detailInfoItemStyle, detailInfoLabelStyle, detailInfoValueStyle, detailSectionTitleStyle, formSectionStyle } from './proxyLogsUi.js';
 import { parseStoredDebugPreview, stringifyStoredDebugValue } from './proxyLogsHelpers.js';
 import type { ProxyDebugTraceDetail } from '../../api.js';
+import { tr } from '../../i18n.js';
 
 export type ProxyDebugTraceAttempt = ProxyDebugTraceDetail['attempts'][number];
 
@@ -118,7 +119,7 @@ export function ProxyDebugAttemptDetail({ attempt }: { attempt: ProxyDebugTraceA
       <div style={{ padding: 12, display: 'grid', gap: 12 }}>
         <div style={detailInfoGridStyle}>
           <div style={detailInfoItemStyle}>
-            <div style={detailInfoLabelStyle}>目标地址</div>
+            <div style={detailInfoLabelStyle}>{tr('目标地址')}</div>
             <div
               style={{
                 ...detailInfoValueStyle,
@@ -130,19 +131,19 @@ export function ProxyDebugAttemptDetail({ attempt }: { attempt: ProxyDebugTraceA
             </div>
           </div>
           <div style={detailInfoItemStyle}>
-            <div style={detailInfoLabelStyle}>执行器</div>
+            <div style={detailInfoLabelStyle}>{tr('执行器')}</div>
             <div style={detailInfoValueStyle}>
               {attempt.runtimeExecutor || '-'}
             </div>
           </div>
           <div style={detailInfoItemStyle}>
-            <div style={detailInfoLabelStyle}>恢复逻辑</div>
+            <div style={detailInfoLabelStyle}>{tr('恢复逻辑')}</div>
             <div style={detailInfoValueStyle}>
               {attempt.recoverApplied ? '已应用' : '未应用'}
             </div>
           </div>
           <div style={detailInfoItemStyle}>
-            <div style={detailInfoLabelStyle}>降级决策</div>
+            <div style={detailInfoLabelStyle}>{tr('降级决策')}</div>
             <div style={detailInfoValueStyle}>
               {attempt.downgradeDecision ? '已触发' : '未触发'}
             </div>
@@ -221,10 +222,10 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ ...formSectionStyle, gap: 10 }}>
-        <div style={detailSectionTitleStyle}>基础信息</div>
+        <div style={detailSectionTitleStyle}>{tr('基础信息')}</div>
         <div style={detailInfoGridStyle}>
           <div style={detailInfoItemStyle}>
-            <div style={detailInfoLabelStyle}>下游路径</div>
+            <div style={detailInfoLabelStyle}>{tr('下游路径')}</div>
             <div style={detailInfoValueStyle}>
               {traceDetail.downstreamPath || '-'}
             </div>
@@ -236,13 +237,13 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
             </div>
           </div>
           <div style={detailInfoItemStyle}>
-            <div style={detailInfoLabelStyle}>模型</div>
+            <div style={detailInfoLabelStyle}>{tr('模型')}</div>
             <div style={detailInfoValueStyle}>
               {traceDetail.requestedModel || '-'}
             </div>
           </div>
           <div style={detailInfoItemStyle}>
-            <div style={detailInfoLabelStyle}>最终上游路径</div>
+            <div style={detailInfoLabelStyle}>{tr('最终上游路径')}</div>
             <div style={detailInfoValueStyle}>
               {traceDetail.finalUpstreamPath || '-'}
             </div>

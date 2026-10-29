@@ -210,7 +210,7 @@ export default function CheckinLog() {
       }}
     >
       <label className="proxy-logs-time-field">
-        <span>开始</span>
+        <span>{tr('开始')}</span>
         <input
           type="datetime-local"
           value={fromInput}
@@ -219,7 +219,7 @@ export default function CheckinLog() {
         />
       </label>
       <label className="proxy-logs-time-field">
-        <span>结束</span>
+        <span>{tr('结束')}</span>
         <input
           type="datetime-local"
           value={toInput}
@@ -234,7 +234,7 @@ export default function CheckinLog() {
         disabled={!hasActiveTimeRange}
         title={hasActiveTimeRange ? '清空时间筛选' : '当前没有筛选条件'}
       >
-        清空筛选
+        {tr('清空筛选')}
       </button>
     </div>
   );
@@ -452,14 +452,14 @@ export default function CheckinLog() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>时间</th>
-                <th>账号</th>
-                <th>站点</th>
-                <th>状态</th>
-                <th>分类</th>
-                <th>信息</th>
-                <th>建议</th>
-                <th>奖励</th>
+                <th>{tr('时间')}</th>
+                <th>{tr('账号')}</th>
+                <th>{tr('站点')}</th>
+                <th>{tr('状态')}</th>
+                <th>{tr('分类')}</th>
+                <th>{tr('信息')}</th>
+                <th>{tr('建议')}</th>
+                <th>{tr('奖励')}</th>
               </tr>
             </thead>
             <tbody>
@@ -583,7 +583,7 @@ export default function CheckinLog() {
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <div className="empty-state-title">暂无签到记录</div>
+            <div className="empty-state-title">{tr('暂无签到记录')}</div>
             <div className="empty-state-desc">点击“运行所有签到”开始执行</div>
           </div>
         )}

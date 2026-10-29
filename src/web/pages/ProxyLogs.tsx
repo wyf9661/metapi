@@ -925,7 +925,7 @@ export default function ProxyLogs() {
         disabled={!hasActiveFilters}
         title={hasActiveFilters ? '清空全部筛选条件' : '当前没有筛选条件'}
       >
-        清空筛选
+        {tr('清空筛选')}
       </button>
     </>
   );
@@ -1335,14 +1335,14 @@ export default function ProxyLogs() {
               <table className="data-table" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th>时间</th>
+                    <th>{tr('时间')}</th>
                     <th>Session</th>
-                    <th>模型</th>
-                    <th>下游路径</th>
-                    <th>上游路径</th>
-                    <th>客户端</th>
+                    <th>{tr('模型')}</th>
+                    <th>{tr('下游路径')}</th>
+                    <th>{tr('上游路径')}</th>
+                    <th>{tr('客户端')}</th>
                     <th>{tr('状态')}</th>
-                    <th>操作</th>
+                    <th>{tr('操作')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1650,7 +1650,7 @@ export default function ProxyLogs() {
                   </div>
                   <div className="mobile-summary-grid">
                     <div className="mobile-summary-metric">
-                      <div className="mobile-summary-metric-label">吞吐率</div>
+                      <div className="mobile-summary-metric-label">{tr('吞吐率')}</div>
                       <div className="mobile-summary-metric-value">
                         {formatTokensPerSecond(
                           detailLog.completionTokens,
@@ -1694,7 +1694,7 @@ export default function ProxyLogs() {
                       </div>
                     </div>
                     <div className="mobile-summary-metric">
-                      <div className="mobile-summary-metric-label">花费</div>
+                      <div className="mobile-summary-metric-label">{tr('花费')}</div>
                       <div className="mobile-summary-metric-value">
                         {typeof log.estimatedCost === 'number'
                           ? `$${log.estimatedCost.toFixed(6)}`
@@ -1867,20 +1867,20 @@ export default function ProxyLogs() {
             <thead>
               <tr>
                 <th style={{ width: 28 }} />
-                <th>时间</th>
+                <th>{tr('时间')}</th>
                 <th>{tr('密钥')}</th>
-                <th>模型</th>
-                <th>站点</th>
+                <th>{tr('模型')}</th>
+                <th>{tr('站点')}</th>
                 <th>{tr('推理强度')}</th>
                 <th style={{ width: 48, minWidth: 48 }} title="流式 / 非流">
-                  模式
+                  {tr('模式')}
                 </th>
                 <th>{tr('状态')}</th>
-                <th>吞吐率</th>
+                <th>{tr('吞吐率')}</th>
                 <th>{tr('耗时')}</th>
                 <th>{tr('输入/输出')}</th>
-                <th>花费</th>
-                <th>重试</th>
+                <th>{tr('花费')}</th>
+                <th>{tr('重试')}</th>
               </tr>
             </thead>
             <tbody>
