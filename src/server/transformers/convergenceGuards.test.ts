@@ -37,6 +37,19 @@ describe('one tool-call index implementation', () => {
     expect(owners.map((f) => relative(TRANSFORMERS, f))).toEqual([join('shared', 'toolCallIndex.ts')]);
   });
 
+  it('never numbers a tool-call fragment by the array length', () => {
+    // The aggregator's variant of the same bug: `toolCalls.length` as the slot id, which
+    // split one call's argument fragments across n slots.
+    const offenders = sources.filter((file) => {
+      const code = read(file)
+        .split('\n')
+        .filter((line) => !/^\s*(\*|\/\/)/.test(line))
+        .join('\n');
+      return /toolCalls\.length\s*:/.test(code) || /===\s*\w+\.toolCalls\.length\b/.test(code);
+    });
+    expect(offenders.map((f) => relative(TRANSFORMERS, f))).toEqual([]);
+  });
+
   it('never falls back to the array position for a missing tool-call index', () => {
     // The original production bug: numbering argument fragments 0..n by their position in
     // the `tool_calls` array split one call into n unparseable "parallel" calls.
