@@ -769,4 +769,24 @@ describe('chatFormatsCore claude→chat tool conversion', () => {
     expect(event.contentDelta).toBeUndefined();
     expect(event.reasoningDelta).toBe('internal chain');
   });
+
+  it('honours a declared output_index when replaying tool calls from a completed payload', () => {
+    // The array position drifted from the stream's output_index once the payload omitted
+    // items; the slot table is keyed by output_index, so the call landed in the wrong slot.
+    const context = createStreamTransformContext('gpt-test');
+    const event = normalizeUpstreamStreamEvent({
+      type: 'response.completed',
+      response: {
+        id: 'resp_slot_1',
+        status: 'completed',
+        output: [
+          { type: 'message', id: 'msg_0', content: [{ type: 'output_text', text: 'hi' }] },
+          { type: 'function_call', id: 'fc_1', call_id: 'call_x', name: 'lookup', arguments: '{}', output_index: 3 },
+        ],
+      },
+    }, context, 'gpt-test');
+
+    expect(event.toolCallDeltas?.[0]?.index).toBe(context.responsesToolCallIndexByOutputIndex[3]);
+    expect(context.responsesToolCallIndexByOutputIndex[1]).toBeUndefined();
+  });
 });
